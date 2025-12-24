@@ -1,36 +1,98 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Scheduler App
+
+A modern web application for managing substitute teacher scheduling, built with Next.js 14, TypeScript, and Supabase.
+
+## Features
+
+- 🔐 Authentication with Supabase Auth
+- 👥 Teacher and Substitute management
+- 📅 Schedule management
+- 🔍 Sub Finder with contact sidebar
+- 📊 Dashboard view
+- 📱 Responsive design
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Node.js 18+ installed
+- A Supabase account (free tier works)
+
+### Setup Instructions
+
+1. **Clone and install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Set up Supabase:**
+   - Go to [supabase.com](https://supabase.com) and create a new project
+   - Wait for the project to be fully provisioned
+   - Go to Project Settings > API
+   - Copy your Project URL and Publishable API Key (formerly called "anon key")
+
+3. **Configure environment variables:**
+   ```bash
+   cp .env.local.example .env.local
+   ```
+   
+   Then edit `.env.local` and add your Supabase credentials:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_publishable_key
+   ```
+
+4. **Configure Supabase Auth:**
+   - In your Supabase dashboard, go to Authentication > URL Configuration
+   - Add `http://localhost:3000/auth/callback` to Redirect URLs
+   - Add `http://localhost:3000` to Site URL
+
+5. **Create your first user:**
+   - In Supabase dashboard, go to Authentication > Users
+   - Click "Add user" and create a director account
+   - Set a password for the user
+
+6. **Run the development server:**
+   ```bash
+   npm run dev
+   ```
+
+7. **Open your browser:**
+   Navigate to [http://localhost:3000](http://localhost:3000)
+
+## Project Structure
+
+```
+scheduler-app/
+├── app/                    # Next.js app router pages
+│   ├── (auth)/            # Auth-related pages
+│   ├── dashboard/         # Dashboard page
+│   └── api/              # API routes
+├── lib/
+│   └── supabase/         # Supabase client utilities
+└── components/           # React components
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Next Steps
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Set up the database schema (see `supabase/migrations/`)
+2. Build out the core features:
+   - Teacher management
+   - Substitute management
+   - Schedule views
+   - Sub Finder algorithm
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Tech Stack
+
+- **Framework:** Next.js 14 (App Router)
+- **Language:** TypeScript
+- **Styling:** Tailwind CSS
+- **Database:** PostgreSQL (via Supabase)
+- **Authentication:** Supabase Auth
+- **Deployment:** Vercel (recommended)
 
 ## Learn More
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Supabase Documentation](https://supabase.com/docs)
+- [Tailwind CSS Documentation](https://tailwindcss.com/docs)

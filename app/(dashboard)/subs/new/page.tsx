@@ -1,0 +1,48 @@
+'use client'
+
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import SubForm from '@/components/subs/SubForm'
+import ErrorMessage from '@/components/shared/ErrorMessage'
+
+export default function NewSubPage() {
+  const router = useRouter()
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async (data: any) => {
+    try {
+      setError(null)
+      const response = await fetch('/api/subs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to create sub')
+      }
+
+      router.push('/subs')
+      router.refresh()
+    } catch (err: any) {
+      setError(err.message)
+    }
+  }
+
+  return (
+    <div>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight">Add New Sub</h1>
+        <p className="text-muted-foreground mt-2">Create a new substitute teacher profile</p>
+      </div>
+
+      {error && <ErrorMessage message={error} className="mb-6" />}
+
+      <div className="max-w-2xl">
+        <SubForm onSubmit={handleSubmit} onCancel={() => router.push('/subs')} />
+      </div>
+    </div>
+  )
+}
+
