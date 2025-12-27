@@ -12,10 +12,18 @@ export default function NewSubPage() {
   const handleSubmit = async (data: any) => {
     try {
       setError(null)
+      // Convert empty email to null and exclude id (should not be sent for new subs)
+      const { id, ...subData } = data
+      const payload = {
+        ...subData,
+        email: data.email && data.email.trim() !== '' ? data.email : null,
+        is_sub: true, // Always true when creating from sub form
+        is_teacher: data.is_teacher ?? false, // Include the checkbox value
+      }
       const response = await fetch('/api/subs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       })
 
       if (!response.ok) {

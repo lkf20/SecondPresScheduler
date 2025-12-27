@@ -19,3 +19,5 @@ export default async function SubDetailPage({
   return <SubFormClient sub={sub} />
 }
 
+
+

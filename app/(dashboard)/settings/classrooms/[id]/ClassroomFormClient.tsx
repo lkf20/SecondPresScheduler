@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -9,13 +9,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import FormField from '@/components/shared/FormField'
 import ErrorMessage from '@/components/shared/ErrorMessage'
+import ClassSelector from '@/components/settings/ClassSelector'
 import { Database } from '@/types/database'
 
 type Classroom = Database['public']['Tables']['classrooms']['Row']
 
 const classroomSchema = z.object({
   name: z.string().min(1, 'Classroom name is required'),
-  capacity: z.coerce.number().int().positive().optional().or(z.literal('')),
+  capacity: z.string().optional(),
+  allowed_classes: z.array(z.string()).optional(),
 })
 
 type ClassroomFormData = z.infer<typeof classroomSchema>
@@ -27,6 +29,9 @@ interface ClassroomFormClientProps {
 export default function ClassroomFormClient({ classroom }: ClassroomFormClientProps) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
+  const [allowedClassIds, setAllowedClassIds] = useState<string[]>([])
+  const [loadingAllowedClasses, setLoadingAllowedClasses] = useState(true)
+
   const {
     register,
     handleSubmit,
@@ -39,13 +44,32 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
     },
   })
 
+  // Load allowed classes on mount
+  useEffect(() => {
+    fetch(`/api/classrooms/${classroom.id}/allowed-classes`)
+      .then((r) => r.json())
+      .then((data) => {
+        setAllowedClassIds(data || [])
+        setLoadingAllowedClasses(false)
+      })
+      .catch((err) => {
+        console.error('Failed to load allowed classes:', err)
+        setLoadingAllowedClasses(false)
+      })
+  }, [classroom.id])
+
   const onSubmit = async (data: ClassroomFormData) => {
     try {
       setError(null)
       const payload: any = { name: data.name }
       if (data.capacity && data.capacity !== '') {
-        payload.capacity = Number(data.capacity)
+        const capacityNum = Number(data.capacity)
+        if (!isNaN(capacityNum) && capacityNum > 0) {
+          payload.capacity = capacityNum
+        }
       }
+      // Order is managed by drag-and-drop, don't update it here
+      payload.allowed_classes = allowedClassIds
       const response = await fetch(`/api/classrooms/${classroom.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -104,6 +128,17 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
             <Input type="number" {...register('capacity')} placeholder="Optional" />
           </FormField>
 
+          <FormField label="Allowed Classes" error={errors.allowed_classes?.message}>
+            {loadingAllowedClasses ? (
+              <div className="text-sm text-muted-foreground">Loading...</div>
+            ) : (
+              <ClassSelector
+                selectedClassIds={allowedClassIds}
+                onSelectionChange={setAllowedClassIds}
+              />
+            )}
+          </FormField>
+
           <div className="flex justify-end gap-4">
             <Button type="button" variant="outline" onClick={() => router.push('/settings/classrooms')}>
               Cancel
@@ -125,4 +160,6 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
     </div>
   )
 }
+
+
 

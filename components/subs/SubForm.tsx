@@ -17,8 +17,12 @@ const subSchema = z.object({
   last_name: z.string().min(1, 'Last name is required'),
   display_name: z.string().optional(),
   phone: z.string().optional(),
-  email: z.string().email('Invalid email address'),
+  email: z
+    .union([z.string().email('Invalid email address'), z.literal('')])
+    .optional()
+    .transform((val) => (val === '' ? undefined : val)),
   active: z.boolean().default(true),
+  is_teacher: z.boolean().default(false),
 })
 
 type SubFormData = z.infer<typeof subSchema>
@@ -44,15 +48,18 @@ export default function SubForm({ sub, onSubmit, onCancel }: SubFormProps) {
           last_name: sub.last_name,
           display_name: sub.display_name || '',
           phone: sub.phone || '',
-          email: sub.email,
+          email: sub.email || '',
           active: sub.active ?? true,
+          is_teacher: sub.is_teacher ?? false,
         }
       : {
           active: true,
+          is_teacher: false,
         },
   })
 
   const active = watch('active')
+  const isTeacher = watch('is_teacher')
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -69,8 +76,8 @@ export default function SubForm({ sub, onSubmit, onCancel }: SubFormProps) {
           <Input {...register('display_name')} placeholder="Optional" />
         </FormField>
 
-        <FormField label="Email" error={errors.email?.message} required>
-          <Input type="email" {...register('email')} />
+        <FormField label="Email" error={errors.email?.message}>
+          <Input type="email" {...register('email')} placeholder="Optional" />
         </FormField>
 
         <FormField label="Phone" error={errors.phone?.message}>
@@ -85,6 +92,17 @@ export default function SubForm({ sub, onSubmit, onCancel }: SubFormProps) {
           />
           <Label htmlFor="active" className="font-normal cursor-pointer">
             Active
+          </Label>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="is_teacher"
+            checked={isTeacher}
+            onCheckedChange={(checked) => setValue('is_teacher', checked === true)}
+          />
+          <Label htmlFor="is_teacher" className="font-normal cursor-pointer">
+            Is also a teacher
           </Label>
         </div>
       </div>

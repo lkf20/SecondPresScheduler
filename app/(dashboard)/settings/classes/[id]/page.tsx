@@ -19,3 +19,5 @@ export default async function ClassDetailPage({
   return <ClassFormClient classData={classData} />
 }
 
+
+

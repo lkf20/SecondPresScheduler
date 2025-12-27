@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getTimeOffRequests, createTimeOffRequest } from '@/lib/api/time-off'
+import { createTimeOffShifts, getTeacherScheduledShifts } from '@/lib/api/time-off-shifts'
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,10 +20,41 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const requestData = await createTimeOffRequest(body)
-    return NextResponse.json(requestData, { status: 201 })
+    const { shifts, ...requestData } = body
+    
+    // Create the time off request
+    const createdRequest = await createTimeOffRequest(requestData)
+    
+    // If shifts are provided, create them
+    if (shifts && Array.isArray(shifts) && shifts.length > 0) {
+      await createTimeOffShifts(createdRequest.id, shifts)
+    } else if (requestData.shift_selection_mode === 'all_scheduled') {
+      // If "all_scheduled" mode, fetch all scheduled shifts and create them
+      const scheduledShifts = await getTeacherScheduledShifts(
+        requestData.teacher_id,
+        requestData.start_date,
+        requestData.end_date
+      )
+      
+      const shiftsToCreate = scheduledShifts.map((shift) => ({
+        date: shift.date,
+        day_of_week_id: shift.day_of_week_id,
+        time_slot_id: shift.time_slot_id,
+        is_partial: false,
+        start_time: null,
+        end_time: null,
+      }))
+      
+      if (shiftsToCreate.length > 0) {
+        await createTimeOffShifts(createdRequest.id, shiftsToCreate)
+      }
+    }
+    
+    return NextResponse.json(createdRequest, { status: 201 })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
+
+
 

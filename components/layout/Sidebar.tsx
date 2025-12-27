@@ -10,6 +10,8 @@ import {
   Calendar,
   FileText,
   Settings,
+  CalendarOff,
+  CalendarDays,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +19,9 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Teachers', href: '/teachers', icon: Users },
   { name: 'Subs', href: '/subs', icon: UserCheck },
+  { name: 'Schedules', href: '/schedules', icon: CalendarDays },
+  { name: 'Weekly Schedule', href: '/schedules/weekly', icon: Calendar },
+  { name: 'Time Off', href: '/time-off', icon: CalendarOff },
   { name: 'Sub Finder', href: '/sub-finder', icon: Search },
   { name: 'Assignments', href: '/assignments', icon: Calendar },
   { name: 'Reports', href: '/reports', icon: FileText },
@@ -60,4 +65,6 @@ export default function Sidebar() {
     </aside>
   )
 }
+
+
 

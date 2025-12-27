@@ -19,3 +19,5 @@ export default async function TeacherDetailPage({
   return <TeacherFormClient teacher={teacher} />
 }
 
+
+

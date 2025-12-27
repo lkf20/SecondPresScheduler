@@ -7,7 +7,7 @@ export async function getTimeOffRequests(filters?: { teacher_id?: string; start_
   const supabase = await createClient()
   let query = supabase
     .from('time_off_requests')
-    .select('*, teacher:staff!time_off_requests_teacher_id_fkey(*), time_slot:time_slots(*)')
+    .select('*, teacher:staff!time_off_requests_teacher_id_fkey(*)')
     .order('start_date', { ascending: false })
 
   if (filters?.teacher_id) {
@@ -26,12 +26,25 @@ export async function getTimeOffRequests(filters?: { teacher_id?: string; start_
   return data as any[]
 }
 
+export async function getTimeOffRequestById(id: string) {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('time_off_requests')
+    .select('*, teacher:staff!time_off_requests_teacher_id_fkey(*), shifts:time_off_shifts(*)')
+    .eq('id', id)
+    .single()
+
+  if (error) throw error
+  return data as any
+}
+
 export async function createTimeOffRequest(request: {
   teacher_id: string
   start_date: string
   end_date: string
-  time_slot_id?: string
+  reason?: string
   notes?: string
+  shift_selection_mode?: string
 }) {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -63,4 +76,6 @@ export async function deleteTimeOffRequest(id: string) {
 
   if (error) throw error
 }
+
+
 

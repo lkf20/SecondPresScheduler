@@ -9,10 +9,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import FormField from '@/components/shared/FormField'
 import ErrorMessage from '@/components/shared/ErrorMessage'
+import ClassSelector from '@/components/settings/ClassSelector'
 
 const classroomSchema = z.object({
   name: z.string().min(1, 'Classroom name is required'),
-  capacity: z.coerce.number().int().positive().optional().or(z.literal('')),
+  capacity: z.string().optional(),
+  allowed_classes: z.array(z.string()).optional(),
 })
 
 type ClassroomFormData = z.infer<typeof classroomSchema>
@@ -20,6 +22,7 @@ type ClassroomFormData = z.infer<typeof classroomSchema>
 export default function NewClassroomPage() {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
+  const [allowedClassIds, setAllowedClassIds] = useState<string[]>([])
   const {
     register,
     handleSubmit,
@@ -33,7 +36,14 @@ export default function NewClassroomPage() {
       setError(null)
       const payload: any = { name: data.name }
       if (data.capacity && data.capacity !== '') {
-        payload.capacity = Number(data.capacity)
+        const capacityNum = Number(data.capacity)
+        if (!isNaN(capacityNum) && capacityNum > 0) {
+          payload.capacity = capacityNum
+        }
+      }
+      // Order will be set automatically to the end (highest order + 1)
+      if (allowedClassIds.length > 0) {
+        payload.allowed_classes = allowedClassIds
       }
       const response = await fetch('/api/classrooms', {
         method: 'POST',
@@ -72,6 +82,13 @@ export default function NewClassroomPage() {
             <Input type="number" {...register('capacity')} placeholder="Optional" />
           </FormField>
 
+          <FormField label="Allowed Classes" error={errors.allowed_classes?.message}>
+            <ClassSelector
+              selectedClassIds={allowedClassIds}
+              onSelectionChange={setAllowedClassIds}
+            />
+          </FormField>
+
           <div className="flex justify-end gap-4">
             <Button type="button" variant="outline" onClick={() => router.push('/settings/classrooms')}>
               Cancel
@@ -85,4 +102,6 @@ export default function NewClassroomPage() {
     </div>
   )
 }
+
+
 

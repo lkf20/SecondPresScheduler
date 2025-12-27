@@ -19,3 +19,5 @@ export default async function TimeSlotDetailPage({
   return <TimeSlotFormClient timeslot={timeslot} />
 }
 
+
+

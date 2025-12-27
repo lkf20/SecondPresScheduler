@@ -49,6 +49,22 @@ CREATE POLICY "Time slots are deletable by authenticated users"
   TO authenticated
   USING (true);
 
+-- Days of week policies
+CREATE POLICY "Days of week are manageable by authenticated users"
+  ON days_of_week FOR INSERT
+  TO authenticated
+  WITH CHECK (true);
+
+CREATE POLICY "Days of week are updatable by authenticated users"
+  ON days_of_week FOR UPDATE
+  TO authenticated
+  USING (true);
+
+CREATE POLICY "Days of week are deletable by authenticated users"
+  ON days_of_week FOR DELETE
+  TO authenticated
+  USING (true);
+
 -- Staff policies (for creating/updating staff records)
 -- Drop the restrictive policy first, then add permissive ones
 DROP POLICY IF EXISTS "Users can update their own staff profile" ON staff;

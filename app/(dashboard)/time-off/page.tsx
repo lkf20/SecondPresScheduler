@@ -1,20 +1,42 @@
 import Link from 'next/link'
 import { getTimeOffRequests } from '@/lib/api/time-off'
+import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
 import { getTeachers } from '@/lib/api/teachers'
 import DataTable, { Column } from '@/components/shared/DataTable'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 
 export default async function TimeOffPage() {
-  const requests = await getTimeOffRequests()
+  let requests = await getTimeOffRequests()
   const teachers = await getTeachers()
+
+  // Fetch shifts for each request and add computed fields for display
+  requests = await Promise.all(
+    requests.map(async (request: any) => {
+      const shifts = await getTimeOffShifts(request.id)
+      const shiftCount = shifts.length
+      const shiftMode = request.shift_selection_mode || 'all_scheduled'
+      
+      return {
+        ...request,
+        teacher_name: request.teacher?.display_name || 
+                      (request.teacher?.first_name && request.teacher?.last_name 
+                        ? `${request.teacher.first_name} ${request.teacher.last_name}` 
+                        : '—'),
+        shifts_display: shiftMode === 'all_scheduled' 
+          ? 'All scheduled' 
+          : `${shiftCount} shift${shiftCount !== 1 ? 's' : ''}`,
+        reason_display: request.reason || '—',
+      }
+    })
+  )
 
   const columns: Column<any>[] = [
     {
-      key: 'teacher',
+      key: 'teacher_name',
       header: 'Teacher',
-      cell: (row) => row.teacher?.display_name || `${row.teacher?.first_name} ${row.teacher?.last_name}`,
       sortable: true,
+      linkBasePath: '/time-off',
     },
     {
       key: 'start_date',
@@ -27,9 +49,14 @@ export default async function TimeOffPage() {
       sortable: true,
     },
     {
-      key: 'time_slot',
-      header: 'Time Slot',
-      cell: (row) => row.time_slot?.name || 'All Day',
+      key: 'shifts_display',
+      header: 'Shifts',
+      sortable: true,
+    },
+    {
+      key: 'reason_display',
+      header: 'Reason',
+      sortable: true,
     },
     {
       key: 'notes',
@@ -62,4 +89,6 @@ export default async function TimeOffPage() {
     </div>
   )
 }
+
+
 

@@ -2,17 +2,25 @@ import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
 
 type Staff = Database['public']['Tables']['staff']['Row']
+type StaffRoleType = Database['public']['Tables']['staff_role_types']['Row']
+
+export type StaffWithRole = Staff & {
+  staff_role_types?: StaffRoleType | null
+}
 
 export async function getTeachers() {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('staff')
-    .select('*')
+    .select(`
+      *,
+      staff_role_types (*)
+    `)
     .eq('is_teacher', true)
     .order('last_name', { ascending: true })
 
   if (error) throw error
-  return data as Staff[]
+  return data as StaffWithRole[]
 }
 
 export async function getTeacherById(id: string) {
@@ -35,6 +43,7 @@ export async function createTeacher(teacher: {
   display_name?: string
   phone?: string
   email?: string
+  role_type_id?: string
   is_teacher: boolean
   is_sub?: boolean
   active?: boolean
@@ -47,6 +56,8 @@ export async function createTeacher(teacher: {
     ...teacherData,
     email: teacher.email && teacher.email.trim() !== '' ? teacher.email : null,
     is_teacher: true,
+    is_sub: teacher.is_sub ?? false, // Preserve is_sub flag
+    role_type_id: teacher.role_type_id, // Include role_type_id
   }
   
   // Generate UUID if not provided

@@ -112,6 +112,38 @@ export interface Database {
           created_at?: string
         }
       }
+      staff_role_types: {
+        Row: {
+          id: string
+          code: string
+          label: string
+          is_system: boolean
+          sort_order: number | null
+          active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          code: string
+          label: string
+          is_system?: boolean
+          sort_order?: number | null
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          code?: string
+          label?: string
+          is_system?: boolean
+          sort_order?: number | null
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
       staff: {
         Row: {
           id: string
@@ -120,6 +152,7 @@ export interface Database {
           display_name: string | null
           phone: string | null
           email: string
+          role_type_id: string | null
           is_teacher: boolean
           is_sub: boolean
           active: boolean
@@ -133,6 +166,7 @@ export interface Database {
           display_name?: string | null
           phone?: string | null
           email: string
+          role_type_id?: string | null
           is_teacher?: boolean
           is_sub?: boolean
           active?: boolean
@@ -146,6 +180,7 @@ export interface Database {
           display_name?: string | null
           phone?: string | null
           email?: string
+          role_type_id?: string | null
           is_teacher?: boolean
           is_sub?: boolean
           active?: boolean
@@ -388,8 +423,9 @@ export interface Database {
           teacher_id: string
           start_date: string
           end_date: string
-          time_slot_id: string | null
+          reason: string | null
           notes: string | null
+          shift_selection_mode: string | null
           created_at: string
           updated_at: string
         }
@@ -398,8 +434,9 @@ export interface Database {
           teacher_id: string
           start_date: string
           end_date: string
-          time_slot_id?: string | null
+          reason?: string | null
           notes?: string | null
+          shift_selection_mode?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -408,10 +445,46 @@ export interface Database {
           teacher_id?: string
           start_date?: string
           end_date?: string
-          time_slot_id?: string | null
+          reason?: string | null
           notes?: string | null
+          shift_selection_mode?: string | null
           created_at?: string
           updated_at?: string
+        }
+      }
+      time_off_shifts: {
+        Row: {
+          id: string
+          time_off_request_id: string
+          date: string
+          day_of_week_id: string | null
+          time_slot_id: string
+          is_partial: boolean
+          start_time: string | null
+          end_time: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          time_off_request_id: string
+          date: string
+          day_of_week_id?: string | null
+          time_slot_id: string
+          is_partial?: boolean
+          start_time?: string | null
+          end_time?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          time_off_request_id?: string
+          date?: string
+          day_of_week_id?: string | null
+          time_slot_id?: string
+          is_partial?: boolean
+          start_time?: string | null
+          end_time?: string | null
+          created_at?: string
         }
       }
       sub_assignments: {

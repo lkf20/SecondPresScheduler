@@ -34,18 +34,33 @@ export async function createSub(sub: {
   last_name: string
   display_name?: string
   phone?: string
-  email: string
+  email?: string
   is_teacher?: boolean
   is_sub: boolean
   active?: boolean
 }) {
   const supabase = await createClient()
+  
+  // Exclude id from the insert if it's undefined or empty
+  const { id, ...subData } = sub
+  const insertData: any = {
+    ...subData,
+    email: sub.email && sub.email.trim() !== '' ? sub.email : null,
+    is_sub: true,
+    is_teacher: sub.is_teacher ?? false, // Preserve is_teacher flag
+  }
+  
+  // Generate UUID if not provided
+  if (id && id.trim() !== '') {
+    insertData.id = id
+  } else {
+    // Generate UUID - using crypto.randomUUID() which is available in Node.js
+    insertData.id = crypto.randomUUID()
+  }
+  
   const { data, error } = await supabase
     .from('staff')
-    .insert({
-      ...sub,
-      is_sub: true,
-    })
+    .insert(insertData)
     .select()
     .single()
 

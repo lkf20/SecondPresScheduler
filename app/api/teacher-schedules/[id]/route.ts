@@ -1,0 +1,43 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getTeacherScheduleById, updateTeacherSchedule, deleteTeacherSchedule } from '@/lib/api/schedules'
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const schedule = await getTeacherScheduleById(id)
+    return NextResponse.json(schedule)
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 404 })
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const body = await request.json()
+    const schedule = await updateTeacherSchedule(id, body)
+    return NextResponse.json(schedule)
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    await deleteTeacherSchedule(id)
+    return NextResponse.json({ success: true })
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
+

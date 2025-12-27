@@ -23,6 +23,9 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
       const payload = {
         ...data,
         email: data.email && data.email.trim() !== '' ? data.email : null,
+        is_teacher: true, // Always true when updating from teacher form
+        is_sub: data.is_sub ?? false, // Include the checkbox value
+        role_type_id: data.role_type_id, // Include the role type
       }
       const response = await fetch(`/api/teachers/${teacher.id}`, {
         method: 'PUT',

@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { BookOpen, Building2, Clock } from 'lucide-react'
+import { BookOpen, Building2, Clock, Calendar } from 'lucide-react'
 
 const settingsCategories = [
   {
@@ -20,6 +20,12 @@ const settingsCategories = [
     description: 'Configure time periods and default times',
     href: '/settings/timeslots',
     icon: Clock,
+  },
+  {
+    name: 'Schedule Structure',
+    description: 'Configure class-classroom mappings by day and time slot',
+    href: '/settings/schedule-structure',
+    icon: Calendar,
   },
 ]
 
@@ -49,4 +55,6 @@ export default function SettingsPage() {
     </div>
   )
 }
+
+
 

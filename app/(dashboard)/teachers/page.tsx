@@ -1,25 +1,27 @@
 import Link from 'next/link'
-import { getTeachers } from '@/lib/api/teachers'
+import { getTeachers, StaffWithRole } from '@/lib/api/teachers'
 import DataTable, { Column } from '@/components/shared/DataTable'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
-import { Database } from '@/types/database'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 
-type Staff = Database['public']['Tables']['staff']['Row']
-
 export default async function TeachersPage() {
-  let teachers: Staff[] = []
+  let teachers: StaffWithRole[] = []
   let error: string | null = null
 
   try {
     teachers = await getTeachers()
+    // Add computed field for role type label
+    teachers = teachers.map((teacher) => ({
+      ...teacher,
+      role_type_label: teacher.staff_role_types?.label || '—',
+    }))
   } catch (err: any) {
     error = err.message || 'Failed to load teachers'
     console.error('Error loading teachers:', err)
   }
 
-  const columns: Column<Staff>[] = [
+  const columns: Column<StaffWithRole & { role_type_label?: string }>[] = [
     {
       key: 'display_name',
       header: 'Name',
@@ -34,6 +36,11 @@ export default async function TeachersPage() {
     {
       key: 'phone',
       header: 'Phone',
+    },
+    {
+      key: 'role_type_label',
+      header: 'Staff Role',
+      sortable: true,
     },
     {
       key: 'active',

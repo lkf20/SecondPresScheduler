@@ -212,3 +212,5 @@ Once basic CRUD operations work:
 
 **Last Updated:** After initial app setup and RLS policy fixes
 
+
+

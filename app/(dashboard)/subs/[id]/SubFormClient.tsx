@@ -19,10 +19,17 @@ export default function SubFormClient({ sub }: SubFormClientProps) {
   const handleSubmit = async (data: any) => {
     try {
       setError(null)
+      // Convert empty email to null
+      const payload = {
+        ...data,
+        email: data.email && data.email.trim() !== '' ? data.email : null,
+        is_sub: true, // Always true when updating from sub form
+        is_teacher: data.is_teacher ?? false, // Include the checkbox value
+      }
       const response = await fetch(`/api/subs/${sub.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       })
 
       if (!response.ok) {
