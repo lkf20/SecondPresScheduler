@@ -27,7 +27,7 @@ export default function WeeklySchedulePage() {
           // Ensure layout defaults to 'classrooms-x-days' if not set
           return {
             ...parsed,
-            layout: parsed.layout || 'classrooms-x-days'
+            layout: parsed.layout || 'classrooms-x-days',
           }
         } catch (e) {
           console.error('Error parsing saved filters:', e)
@@ -50,7 +50,7 @@ export default function WeeklySchedulePage() {
   const fetchData = () => {
     // Fetch schedule settings for selected days first
     fetch('/api/schedule-settings')
-      .then(async (r) => {
+      .then(async r => {
         if (!r.ok) {
           const text = await r.text()
           throw new Error(`HTTP error! status: ${r.status}, response: ${text.substring(0, 100)}`)
@@ -58,23 +58,26 @@ export default function WeeklySchedulePage() {
         const contentType = r.headers.get('content-type')
         if (!contentType || !contentType.includes('application/json')) {
           const text = await r.text()
-          throw new Error(`Expected JSON but got ${contentType}. Response: ${text.substring(0, 100)}`)
+          throw new Error(
+            `Expected JSON but got ${contentType}. Response: ${text.substring(0, 100)}`
+          )
         }
         return r.json()
       })
-      .then((settings) => {
-        const dayIds = settings.selected_day_ids && Array.isArray(settings.selected_day_ids) 
-          ? settings.selected_day_ids 
-          : []
+      .then(settings => {
+        const dayIds =
+          settings.selected_day_ids && Array.isArray(settings.selected_day_ids)
+            ? settings.selected_day_ids
+            : []
         setSelectedDayIds(dayIds)
         setSettingsLoaded(true)
-        
+
         // Fetch weekly schedule data after we have selectedDayIds
         // The API will use these to filter, but we also filter in the component as backup
         // Add cache-busting to ensure fresh data
         return fetch(`/api/weekly-schedule?t=${Date.now()}`)
       })
-      .then(async (r) => {
+      .then(async r => {
         if (!r.ok) {
           const text = await r.text()
           throw new Error(`HTTP error! status: ${r.status}, response: ${text.substring(0, 100)}`)
@@ -82,15 +85,17 @@ export default function WeeklySchedulePage() {
         const contentType = r.headers.get('content-type')
         if (!contentType || !contentType.includes('application/json')) {
           const text = await r.text()
-          throw new Error(`Expected JSON but got ${contentType}. Response: ${text.substring(0, 100)}`)
+          throw new Error(
+            `Expected JSON but got ${contentType}. Response: ${text.substring(0, 100)}`
+          )
         }
         return r.json()
       })
-      .then((data) => {
+      .then(data => {
         setData(data)
         setLoading(false)
       })
-      .catch((err) => {
+      .catch(err => {
         setError(err.message || 'Failed to load weekly schedule')
         setLoading(false)
         console.error('Error loading weekly schedule:', err)
@@ -125,7 +130,7 @@ export default function WeeklySchedulePage() {
         setAvailableTimeSlots(timeSlots || [])
         setAvailableClassrooms(classrooms || [])
       })
-      .catch((err) => {
+      .catch(err => {
         console.error('Error fetching filter options:', err)
         setError(`Failed to load filter options: ${err.message}`)
       })
@@ -137,9 +142,10 @@ export default function WeeklySchedulePage() {
 
   // Sort days - only show days selected in Settings > Days and Time Slots
   const sortedDays = useMemo(() => {
-    const filtered = selectedDayIds.length > 0
-      ? availableDays.filter(day => selectedDayIds.includes(day.id))
-      : availableDays
+    const filtered =
+      selectedDayIds.length > 0
+        ? availableDays.filter(day => selectedDayIds.includes(day.id))
+        : availableDays
     return filtered.sort((a, b) => {
       const aNum = a.day_number === 0 ? 7 : a.day_number
       const bNum = b.day_number === 0 ? 7 : b.day_number
@@ -169,7 +175,11 @@ export default function WeeklySchedulePage() {
                 if (isInactive) return filters.displayFilters.inactive
 
                 // Calculate staffing status
-                if (!scheduleCell.class_groups || scheduleCell.class_groups.length === 0 || !scheduleCell.enrollment_for_staffing) {
+                if (
+                  !scheduleCell.class_groups ||
+                  scheduleCell.class_groups.length === 0 ||
+                  !scheduleCell.enrollment_for_staffing
+                ) {
                   return filters.displayFilters.inactive
                 }
 
@@ -187,21 +197,28 @@ export default function WeeklySchedulePage() {
                 })
 
                 const requiredTeachers = classGroupForRatio.required_ratio
-                  ? Math.ceil(scheduleCell.enrollment_for_staffing / classGroupForRatio.required_ratio)
+                  ? Math.ceil(
+                      scheduleCell.enrollment_for_staffing / classGroupForRatio.required_ratio
+                    )
                   : undefined
                 const preferredTeachers = classGroupForRatio.preferred_ratio
-                  ? Math.ceil(scheduleCell.enrollment_for_staffing / classGroupForRatio.preferred_ratio)
+                  ? Math.ceil(
+                      scheduleCell.enrollment_for_staffing / classGroupForRatio.preferred_ratio
+                    )
                   : undefined
 
                 // Get class group IDs for filtering assignments
                 const classGroupIds = classGroups.map(cg => cg.id)
-                const assignedCount = slot.assignments.filter(a => 
-                  a.teacher_id && a.class_id && classGroupIds.includes(a.class_id)
+                const assignedCount = slot.assignments.filter(
+                  a => a.teacher_id && a.class_id && classGroupIds.includes(a.class_id)
                 ).length
 
-                const belowRequired = requiredTeachers !== undefined && assignedCount < requiredTeachers
-                const belowPreferred = preferredTeachers !== undefined && assignedCount < preferredTeachers
-                const fullyStaffed = requiredTeachers !== undefined && 
+                const belowRequired =
+                  requiredTeachers !== undefined && assignedCount < requiredTeachers
+                const belowPreferred =
+                  preferredTeachers !== undefined && assignedCount < preferredTeachers
+                const fullyStaffed =
+                  requiredTeachers !== undefined &&
                   assignedCount >= requiredTeachers &&
                   (preferredTeachers === undefined || assignedCount >= preferredTeachers)
 
@@ -209,8 +226,8 @@ export default function WeeklySchedulePage() {
                 if (belowPreferred) return filters.displayFilters.belowPreferred
                 if (fullyStaffed) return filters.displayFilters.fullyStaffed
                 return false
-              })
-          }))
+              }),
+          })),
       }))
       .filter(classroom => classroom.days.length > 0)
   }, [data, filters])
@@ -219,20 +236,22 @@ export default function WeeklySchedulePage() {
   const slotCounts = useMemo(() => {
     // Count actual slots currently shown
     const totalShown = filteredData.reduce((sum, classroom) => {
-      return sum + classroom.days.reduce((daySum, day) => {
-        return daySum + day.time_slots.length
-      }, 0)
+      return (
+        sum +
+        classroom.days.reduce((daySum, day) => {
+          return daySum + day.time_slots.length
+        }, 0)
+      )
     }, 0)
 
     // Calculate total slots if all filters were selected
     // Only use days that are selected in Settings (not all available days)
-    const totalIfAllSelected = sortedDays.length * 
-                               availableTimeSlots.length * 
-                               availableClassrooms.length
+    const totalIfAllSelected =
+      sortedDays.length * availableTimeSlots.length * availableClassrooms.length
 
     return {
       shown: totalShown,
-      total: totalIfAllSelected
+      total: totalIfAllSelected,
     }
   }, [filteredData, sortedDays, availableTimeSlots, availableClassrooms])
 
@@ -266,11 +285,11 @@ export default function WeeklySchedulePage() {
               Showing {slotCounts.shown} of {slotCounts.total} slots
             </p>
           </div>
-          <WeeklyScheduleGridNew 
-            data={filteredData} 
+          <WeeklyScheduleGridNew
+            data={filteredData}
             selectedDayIds={filters?.selectedDayIds ?? selectedDayIds}
             layout={filters?.layout ?? 'classrooms-x-days'}
-            onRefresh={() => setRefreshKey((prev) => prev + 1)}
+            onRefresh={() => setRefreshKey(prev => prev + 1)}
             onFilterPanelOpenChange={setFilterPanelOpen}
             filterPanelOpen={filterPanelOpen}
           />
@@ -279,7 +298,7 @@ export default function WeeklySchedulePage() {
             onClose={() => {
               setFilterPanelOpen(false)
             }}
-            onFiltersChange={(newFilters) => {
+            onFiltersChange={newFilters => {
               setFilters(newFilters)
             }}
             availableDays={availableDays}
@@ -296,4 +315,3 @@ export default function WeeklySchedulePage() {
     </div>
   )
 }
-

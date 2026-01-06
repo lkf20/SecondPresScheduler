@@ -76,17 +76,17 @@ export default function TimeSlotsPage() {
   // Helper function to convert 24-hour time to 12-hour format with AM/PM
   const formatTime12Hour = (time24: string | null | undefined): string => {
     if (!time24) return '-'
-    
+
     try {
       const [hours, minutes] = time24.split(':')
       const hour24 = parseInt(hours, 10)
       const mins = minutes || '00'
-      
+
       if (isNaN(hour24)) return time24
-      
+
       const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24
       const ampm = hour24 >= 12 ? 'PM' : 'AM'
-      
+
       return `${hour12}:${mins} ${ampm}`
     } catch {
       return time24
@@ -108,12 +108,12 @@ export default function TimeSlotsPage() {
     {
       key: 'default_start_time',
       header: 'Start Time',
-      cell: (row) => formatTime12Hour(row.default_start_time),
+      cell: row => formatTime12Hour(row.default_start_time),
     },
     {
       key: 'default_end_time',
       header: 'End Time',
-      cell: (row) => formatTime12Hour(row.default_end_time),
+      cell: row => formatTime12Hour(row.default_end_time),
     },
   ]
 
@@ -122,7 +122,9 @@ export default function TimeSlotsPage() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Days and Time Slots</h1>
-          <p className="text-muted-foreground mt-2">Configure which days appear in the weekly schedule and manage time periods</p>
+          <p className="text-muted-foreground mt-2">
+            Configure which days appear in the weekly schedule and manage time periods
+          </p>
         </div>
         <Link href="/settings/timeslots/new">
           <Button>
@@ -136,10 +138,7 @@ export default function TimeSlotsPage() {
 
       <div className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Days</h2>
-        <DaySelector
-          selectedDayIds={selectedDayIds}
-          onSelectionChange={handleDaySelectionChange}
-        />
+        <DaySelector selectedDayIds={selectedDayIds} onSelectionChange={handleDaySelectionChange} />
       </div>
 
       <div className="mb-6">
@@ -159,4 +158,3 @@ export default function TimeSlotsPage() {
     </div>
   )
 }
-

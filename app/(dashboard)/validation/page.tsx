@@ -14,9 +14,7 @@ export default function ValidationPage() {
           <CardDescription>This feature is coming soon</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">
-            Schedule validation will check for:
-          </p>
+          <p className="text-muted-foreground">Schedule validation will check for:</p>
           <ul className="list-disc list-inside mt-4 space-y-2 text-muted-foreground">
             <li>Conflicts (double bookings, overlapping shifts)</li>
             <li>Missing assignments (time off without subs)</li>
@@ -28,6 +26,3 @@ export default function ValidationPage() {
     </div>
   )
 }
-
-
-

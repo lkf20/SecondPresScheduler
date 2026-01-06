@@ -25,26 +25,26 @@ export default function SubFormClient({ sub }: SubFormClientProps) {
   const [activeTab, setActiveTab] = useState('overview')
   const [allSubs, setAllSubs] = useState<Staff[]>([])
   const [currentIndex, setCurrentIndex] = useState<number>(-1)
-  
+
   // Get return page and search from URL params
   const returnPage = searchParams.get('returnPage') || '1'
   const returnSearch = searchParams.get('returnSearch')
-  
+
   // Fetch all subs to enable navigation
   useEffect(() => {
     fetch('/api/subs')
-      .then((r) => r.json())
-      .then((data) => {
+      .then(r => r.json())
+      .then(data => {
         setAllSubs(data)
         // Find current sub's index
         const index = data.findIndex((s: Staff) => s.id === sub.id)
         setCurrentIndex(index)
       })
-      .catch((err) => {
+      .catch(err => {
         console.error('Error fetching subs for navigation:', err)
       })
   }, [sub.id])
-  
+
   // Build return URL with preserved pagination
   const getReturnUrl = () => {
     const params = new URLSearchParams()
@@ -134,7 +134,11 @@ export default function SubFormClient({ sub }: SubFormClientProps) {
               size="icon"
               onClick={handlePrevious}
               disabled={!hasPrevious}
-              title={hasPrevious ? `Previous: ${allSubs[currentIndex - 1]?.display_name || `${allSubs[currentIndex - 1]?.first_name} ${allSubs[currentIndex - 1]?.last_name}`}` : 'No previous sub'}
+              title={
+                hasPrevious
+                  ? `Previous: ${allSubs[currentIndex - 1]?.display_name || `${allSubs[currentIndex - 1]?.first_name} ${allSubs[currentIndex - 1]?.last_name}`}`
+                  : 'No previous sub'
+              }
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -146,7 +150,11 @@ export default function SubFormClient({ sub }: SubFormClientProps) {
               size="icon"
               onClick={handleNext}
               disabled={!hasNext}
-              title={hasNext ? `Next: ${allSubs[currentIndex + 1]?.display_name || `${allSubs[currentIndex + 1]?.first_name} ${allSubs[currentIndex + 1]?.last_name}`}` : 'No next sub'}
+              title={
+                hasNext
+                  ? `Next: ${allSubs[currentIndex + 1]?.display_name || `${allSubs[currentIndex + 1]?.first_name} ${allSubs[currentIndex + 1]?.last_name}`}`
+                  : 'No next sub'
+              }
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -175,7 +183,11 @@ export default function SubFormClient({ sub }: SubFormClientProps) {
             </CardHeader>
             <CardContent>
               <div className="max-w-2xl">
-                <SubForm sub={sub} onSubmit={handleSubmit} onCancel={() => router.push(getReturnUrl())} />
+                <SubForm
+                  sub={sub}
+                  onSubmit={handleSubmit}
+                  onCancel={() => router.push(getReturnUrl())}
+                />
                 <div className="mt-6 pt-6 border-t">
                   <button
                     onClick={handleDelete}
@@ -222,4 +234,3 @@ export default function SubFormClient({ sub }: SubFormClientProps) {
     </div>
   )
 }
-

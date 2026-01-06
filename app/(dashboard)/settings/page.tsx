@@ -32,7 +32,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {settingsCategories.map((category) => (
+        {settingsCategories.map(category => (
           <Link key={category.name} href={category.href}>
             <Card className="hover:bg-accent transition-colors cursor-pointer h-full flex flex-col">
               <CardHeader className="flex-1">
@@ -49,6 +49,3 @@ export default function SettingsPage() {
     </div>
   )
 }
-
-
-

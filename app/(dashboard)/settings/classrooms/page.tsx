@@ -23,9 +23,10 @@ export default async function ClassroomsPage() {
   // Add computed fields for display
   const classroomsWithComputed = classrooms.map((classroom: any) => ({
     ...classroom,
-    allowed_classes_display: classroom.allowed_classes_count > 0
-      ? `${classroom.allowed_classes_names} (${classroom.allowed_classes_count})`
-      : 'None',
+    allowed_classes_display:
+      classroom.allowed_classes_count > 0
+        ? `${classroom.allowed_classes_names} (${classroom.allowed_classes_count})`
+        : 'None',
   }))
 
   return (
@@ -53,4 +54,3 @@ export default async function ClassroomsPage() {
     </div>
   )
 }
-

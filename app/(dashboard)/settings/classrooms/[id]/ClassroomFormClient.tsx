@@ -60,12 +60,12 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
   // Load allowed classes on mount
   useEffect(() => {
     fetch(`/api/classrooms/${classroom.id}/allowed-classes`)
-      .then((r) => r.json())
-      .then((data) => {
+      .then(r => r.json())
+      .then(data => {
         setAllowedClassIds(data || [])
         setLoadingAllowedClasses(false)
       })
-      .catch((err) => {
+      .catch(err => {
         console.error('Failed to load allowed class groups:', err)
         setLoadingAllowedClasses(false)
       })
@@ -109,7 +109,6 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
     }
   }
 
-
   return (
     <div>
       <div className="mb-8">
@@ -129,18 +128,15 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
             <Input type="number" {...register('capacity')} placeholder="Optional" />
           </FormField>
 
-          <FormField 
+          <FormField
             label={
               <span>
                 Color <span className="text-muted-foreground font-normal">(Optional)</span>
               </span>
-            } 
+            }
             error={errors.color?.message}
           >
-            <ClassroomColorPicker
-              value={selectedColor}
-              onChange={setSelectedColor}
-            />
+            <ClassroomColorPicker value={selectedColor} onChange={setSelectedColor} />
           </FormField>
 
           <FormField label="Allowed Class Groups" error={errors.allowed_classes?.message}>
@@ -165,7 +161,7 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
               <Checkbox
                 id="is_active"
                 checked={isActive}
-                onCheckedChange={(checked) => setValue('is_active', checked === true)}
+                onCheckedChange={checked => setValue('is_active', checked === true)}
               />
               <Label htmlFor="is_active" className="font-normal cursor-pointer">
                 Active (appears in dropdowns)
@@ -174,7 +170,11 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
           </div>
 
           <div className="flex justify-end gap-4">
-            <Button type="button" variant="outline" onClick={() => router.push('/settings/classrooms')}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push('/settings/classrooms')}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>
@@ -186,6 +186,3 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
     </div>
   )
 }
-
-
-

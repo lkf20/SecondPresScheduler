@@ -2,9 +2,7 @@ import { notFound } from 'next/navigation'
 import { getTimeSlotById } from '@/lib/api/timeslots'
 import TimeSlotFormClient from './TimeSlotFormClient'
 
-export default async function TimeSlotDetailPage(props: {
-  params: Promise<{ id: string }>
-}) {
+export default async function TimeSlotDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params
 
   let timeslot
@@ -16,6 +14,3 @@ export default async function TimeSlotDetailPage(props: {
 
   return <TimeSlotFormClient timeslot={timeslot} />
 }
-
-
-

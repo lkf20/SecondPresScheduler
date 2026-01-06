@@ -11,14 +11,15 @@ export default async function SchedulesPage() {
 
   try {
     schedules = await getAllTeacherSchedules()
-    
+
     // Add computed fields for display
     schedules = schedules.map((schedule: any) => ({
       ...schedule,
-      teacher_name: schedule.teacher?.display_name || 
-                    (schedule.teacher?.first_name && schedule.teacher?.last_name
-                      ? `${schedule.teacher.first_name} ${schedule.teacher.last_name}`
-                      : '—'),
+      teacher_name:
+        schedule.teacher?.display_name ||
+        (schedule.teacher?.first_name && schedule.teacher?.last_name
+          ? `${schedule.teacher.first_name} ${schedule.teacher.last_name}`
+          : '—'),
       day_name: schedule.day_of_week?.name || '—',
       time_slot_name: schedule.time_slot?.name || schedule.time_slot?.code || '—',
       class_name: schedule.class?.name || '—',
@@ -85,4 +86,3 @@ export default async function SchedulesPage() {
     </div>
   )
 }
-

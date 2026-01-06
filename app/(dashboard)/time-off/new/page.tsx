@@ -7,7 +7,13 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
@@ -30,15 +36,17 @@ export default function NewTimeOffPage() {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [teachers, setTeachers] = useState<any[]>([])
-  const [selectedShifts, setSelectedShifts] = useState<Array<{ date: string; day_of_week_id: string; time_slot_id: string }>>([])
+  const [selectedShifts, setSelectedShifts] = useState<
+    Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
+  >([])
   const [endDateCorrected, setEndDateCorrected] = useState(false)
   const justCorrectedRef = useRef(false)
   const [isPastDate, setIsPastDate] = useState(false)
 
   useEffect(() => {
     fetch('/api/teachers')
-      .then((r) => r.json())
-      .then((data) => {
+      .then(r => r.json())
+      .then(data => {
         // Sort teachers alphabetically by display_name, fallback to first_name
         const sorted = data.sort((a: any, b: any) => {
           const nameA = a.display_name || `${a.first_name} ${a.last_name}`.trim() || ''
@@ -112,7 +120,7 @@ export default function NewTimeOffPage() {
       setError(null)
       // If end_date is not provided, use start_date (single day time off)
       const effectiveEndDate = data.end_date || data.start_date
-      
+
       const payload: any = {
         teacher_id: data.teacher_id,
         start_date: data.start_date,
@@ -157,12 +165,12 @@ export default function NewTimeOffPage() {
       <div className="max-w-2xl">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <FormField label="Teacher" error={errors.teacher_id?.message} required>
-            <Select onValueChange={(value) => setValue('teacher_id', value)}>
+            <Select onValueChange={value => setValue('teacher_id', value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Select a teacher" />
               </SelectTrigger>
               <SelectContent>
-                {teachers.map((teacher) => (
+                {teachers.map(teacher => (
                   <SelectItem key={teacher.id} value={teacher.id}>
                     {teacher.display_name || `${teacher.first_name} ${teacher.last_name}`}
                   </SelectItem>
@@ -181,9 +189,9 @@ export default function NewTimeOffPage() {
           </FormField>
 
           <FormField label="End Date" error={errors.end_date?.message}>
-            <Input 
-              type="date" 
-              {...register('end_date')} 
+            <Input
+              type="date"
+              {...register('end_date')}
               placeholder="Optional - leave blank for single day"
             />
             {endDateCorrected && (
@@ -201,7 +209,9 @@ export default function NewTimeOffPage() {
           <FormField label="Shifts" error={errors.shift_selection_mode?.message}>
             <RadioGroup
               value={shiftMode || 'all_scheduled'}
-              onValueChange={(value) => setValue('shift_selection_mode', value as 'all_scheduled' | 'select_shifts')}
+              onValueChange={value =>
+                setValue('shift_selection_mode', value as 'all_scheduled' | 'select_shifts')
+              }
             >
               <div className="flex items-center space-x-6">
                 <div className="flex items-center space-x-2">
@@ -224,7 +234,8 @@ export default function NewTimeOffPage() {
           <div className="space-y-4">
             {shiftMode === 'all_scheduled' && teacherId && (
               <p className="text-sm text-muted-foreground">
-                All scheduled shifts will be logged. Switch to &quot;Select shifts&quot; to make changes.
+                All scheduled shifts will be logged. Switch to &quot;Select shifts&quot; to make
+                changes.
               </p>
             )}
             <ShiftSelectionTable
@@ -244,7 +255,9 @@ export default function NewTimeOffPage() {
               <div className="space-y-6">
                 <FormField label="Reason" error={errors.reason?.message}>
                   <RadioGroup
-                    onValueChange={(value) => setValue('reason', value as 'Vacation' | 'Sick Day' | 'Training' | 'Other')}
+                    onValueChange={value =>
+                      setValue('reason', value as 'Vacation' | 'Sick Day' | 'Training' | 'Other')
+                    }
                   >
                     <div className="flex items-center space-x-6">
                       <div className="flex items-center space-x-2">
@@ -295,6 +308,3 @@ export default function NewTimeOffPage() {
     </div>
   )
 }
-
-
-

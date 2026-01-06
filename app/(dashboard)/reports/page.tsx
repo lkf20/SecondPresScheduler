@@ -32,7 +32,7 @@ export default function ReportsPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {reports.map((report) => (
+        {reports.map(report => (
           <Link key={report.name} href={report.href}>
             <Card className="hover:bg-accent transition-colors cursor-pointer">
               <CardHeader>
@@ -49,6 +49,3 @@ export default function ReportsPage() {
     </div>
   )
 }
-
-
-

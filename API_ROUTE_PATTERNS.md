@@ -20,6 +20,7 @@ export async function GET() {
 ```
 
 **Benefits:**
+
 - Consistent error format
 - User-friendly error messages
 - Structured logging with context
@@ -36,13 +37,13 @@ import { createResourceSchema } from '@/lib/validations/resource'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    
+
     // Validate request body
     const validation = validateRequest(createResourceSchema, body)
     if (!validation.success) {
       return validation.error
     }
-    
+
     // Use validated data
     const resource = await createResource(validation.data)
     return NextResponse.json(resource, { status: 201 })
@@ -62,12 +63,14 @@ export async function POST(request: NextRequest) {
 ## Response Patterns
 
 ### Success Responses
+
 - **GET**: `NextResponse.json(data)` (200)
 - **POST**: `NextResponse.json(data, { status: 201 })`
 - **PUT**: `NextResponse.json(data)` (200)
 - **DELETE**: `NextResponse.json({ success: true })` (200)
 
 ### Error Responses
+
 - Use `createErrorResponse()` for all errors
 - 400: Validation errors
 - 404: Resource not found
@@ -84,12 +87,12 @@ import { resourceFiltersSchema } from '@/lib/validations/resource'
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    
+
     const validation = validateQueryParams(resourceFiltersSchema, searchParams)
     if (!validation.success) {
       return validation.error
     }
-    
+
     const resources = await getResources(validation.data)
     return NextResponse.json(resources)
   } catch (error) {
@@ -107,22 +110,16 @@ import { z } from 'zod'
 
 const uuidSchema = z.string().uuid({ message: 'Invalid ID format' })
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    
+
     // Validate ID format
     const idValidation = uuidSchema.safeParse(id)
     if (!idValidation.success) {
-      return NextResponse.json(
-        { error: 'Invalid resource ID format' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid resource ID format' }, { status: 400 })
     }
-    
+
     // ... route logic
   } catch (error) {
     return createErrorResponse(error, 'Failed to fetch resource', 500, 'GET /api/resources/[id]')
@@ -139,5 +136,3 @@ export async function GET(
 - ✅ Time Slots routes - Updated
 - ✅ Days of Week routes - Updated
 - ⏳ Other routes - To be updated as needed
-
-

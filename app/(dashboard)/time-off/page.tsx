@@ -16,16 +16,18 @@ export default async function TimeOffPage() {
       const shifts = await getTimeOffShifts(request.id)
       const shiftCount = shifts.length
       const shiftMode = request.shift_selection_mode || 'all_scheduled'
-      
+
       return {
         ...request,
-        teacher_name: request.teacher?.display_name || 
-                      (request.teacher?.first_name && request.teacher?.last_name 
-                        ? `${request.teacher.first_name} ${request.teacher.last_name}` 
-                        : '—'),
-        shifts_display: shiftMode === 'all_scheduled' 
-          ? 'All scheduled' 
-          : `${shiftCount} shift${shiftCount !== 1 ? 's' : ''}`,
+        teacher_name:
+          request.teacher?.display_name ||
+          (request.teacher?.first_name && request.teacher?.last_name
+            ? `${request.teacher.first_name} ${request.teacher.last_name}`
+            : '—'),
+        shifts_display:
+          shiftMode === 'all_scheduled'
+            ? 'All scheduled'
+            : `${shiftCount} shift${shiftCount !== 1 ? 's' : ''}`,
         reason_display: request.reason || '—',
       }
     })
@@ -89,6 +91,3 @@ export default async function TimeOffPage() {
     </div>
   )
 }
-
-
-

@@ -60,22 +60,23 @@ export default function ScheduleFormClient({ schedule }: ScheduleFormClientProps
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Edit Schedule</h1>
         <p className="text-muted-foreground mt-2">
-          {schedule.teacher?.display_name || 
-           (schedule.teacher?.first_name && schedule.teacher?.last_name
-             ? `${schedule.teacher.first_name} ${schedule.teacher.last_name}`
-             : 'Schedule Entry')}
+          {schedule.teacher?.display_name ||
+            (schedule.teacher?.first_name && schedule.teacher?.last_name
+              ? `${schedule.teacher.first_name} ${schedule.teacher.last_name}`
+              : 'Schedule Entry')}
         </p>
       </div>
 
       {error && <ErrorMessage message={error} className="mb-6" />}
 
       <div className="max-w-2xl">
-        <TeacherScheduleForm schedule={schedule} onSubmit={handleSubmit} onCancel={() => router.push('/schedules')} />
+        <TeacherScheduleForm
+          schedule={schedule}
+          onSubmit={handleSubmit}
+          onCancel={() => router.push('/schedules')}
+        />
         <div className="mt-6 pt-6 border-t">
-          <button
-            onClick={handleDelete}
-            className="text-sm text-destructive hover:underline"
-          >
+          <button onClick={handleDelete} className="text-sm text-destructive hover:underline">
             Delete Schedule
           </button>
         </div>
@@ -83,4 +84,3 @@ export default function ScheduleFormClient({ schedule }: ScheduleFormClientProps
     </div>
   )
 }
-

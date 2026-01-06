@@ -15,13 +15,11 @@ export default function SubAvailabilityReportPage() {
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground">
-            This report will display a matrix of all subs and their availability by day and time slot.
+            This report will display a matrix of all subs and their availability by day and time
+            slot.
           </p>
         </CardContent>
       </Card>
     </div>
   )
 }
-
-
-

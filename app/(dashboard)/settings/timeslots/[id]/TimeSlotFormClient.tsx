@@ -66,16 +66,23 @@ export default function TimeSlotFormClient({ timeslot }: TimeSlotFormClientProps
         default_start_time: data.default_start_time || null,
         default_end_time: data.default_end_time || null,
       }
-      
+
       // Handle display_order - allow 0 as a valid value
       // The form field can be a number (from coercion) or empty string
-      if (data.display_order === '' || data.display_order === null || data.display_order === undefined) {
+      if (
+        data.display_order === '' ||
+        data.display_order === null ||
+        data.display_order === undefined
+      ) {
         payload.display_order = null
       } else {
         // Convert to number, handling both string and number inputs
-        const numValue = typeof data.display_order === 'string' 
-          ? (data.display_order.trim() === '' ? null : Number(data.display_order))
-          : Number(data.display_order)
+        const numValue =
+          typeof data.display_order === 'string'
+            ? data.display_order.trim() === ''
+              ? null
+              : Number(data.display_order)
+            : Number(data.display_order)
         payload.display_order = isNaN(numValue) ? null : numValue
       }
       const response = await fetch(`/api/timeslots/${timeslot.id}`, {
@@ -149,7 +156,11 @@ export default function TimeSlotFormClient({ timeslot }: TimeSlotFormClientProps
           </FormField>
 
           <div className="flex justify-end gap-4">
-            <Button type="button" variant="outline" onClick={() => router.push('/settings/timeslots')}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push('/settings/timeslots')}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>
@@ -158,15 +169,11 @@ export default function TimeSlotFormClient({ timeslot }: TimeSlotFormClientProps
           </div>
         </form>
         <div className="mt-6 pt-6 border-t">
-          <button
-            onClick={handleDelete}
-            className="text-sm text-destructive hover:underline"
-          >
+          <button onClick={handleDelete} className="text-sm text-destructive hover:underline">
             Delete Time Slot
           </button>
-          </div>
+        </div>
       </div>
     </div>
   )
 }
-

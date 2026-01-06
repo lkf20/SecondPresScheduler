@@ -8,7 +8,7 @@ export default async function TeachersPage() {
   try {
     teachers = await getTeachers()
     // Add computed fields
-    teachers = teachers.map((teacher) => ({
+    teachers = teachers.map(teacher => ({
       ...teacher,
       role_type_label: teacher.staff_role_types?.label || '—',
       full_name: `${teacher.first_name || ''} ${teacher.last_name || ''}`.trim() || '—',
@@ -20,4 +20,3 @@ export default async function TeachersPage() {
 
   return <TeachersPageClient teachers={teachers} error={error} />
 }
-

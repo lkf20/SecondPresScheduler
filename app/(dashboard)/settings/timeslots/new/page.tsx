@@ -93,7 +93,11 @@ export default function NewTimeSlotPage() {
           </FormField>
 
           <div className="flex justify-end gap-4">
-            <Button type="button" variant="outline" onClick={() => router.push('/settings/timeslots')}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push('/settings/timeslots')}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>
@@ -105,6 +109,3 @@ export default function NewTimeSlotPage() {
     </div>
   )
 }
-
-
-

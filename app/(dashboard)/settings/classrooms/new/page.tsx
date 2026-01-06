@@ -94,18 +94,15 @@ export default function NewClassroomPage() {
             <Input type="number" {...register('capacity')} placeholder="Optional" />
           </FormField>
 
-          <FormField 
+          <FormField
             label={
               <span>
                 Color <span className="text-muted-foreground font-normal">(Optional)</span>
               </span>
-            } 
+            }
             error={errors.color?.message}
           >
-            <ClassroomColorPicker
-              value={selectedColor}
-              onChange={setSelectedColor}
-            />
+            <ClassroomColorPicker value={selectedColor} onChange={setSelectedColor} />
           </FormField>
 
           <FormField label="Allowed Class Groups" error={errors.allowed_classes?.message}>
@@ -116,7 +113,11 @@ export default function NewClassroomPage() {
           </FormField>
 
           <div className="flex justify-end gap-4">
-            <Button type="button" variant="outline" onClick={() => router.push('/settings/classrooms')}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push('/settings/classrooms')}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>
@@ -128,6 +129,3 @@ export default function NewClassroomPage() {
     </div>
   )
 }
-
-
-

@@ -2,9 +2,7 @@ import { notFound } from 'next/navigation'
 import { getClassGroupById } from '@/lib/api/class-groups'
 import ClassFormClient from './ClassFormClient'
 
-export default async function ClassDetailPage(props: {
-  params: Promise<{ id: string }>
-}) {
+export default async function ClassDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params
 
   let classData
@@ -16,6 +14,3 @@ export default async function ClassDetailPage(props: {
 
   return <ClassFormClient classData={classData} />
 }
-
-
-

@@ -103,7 +103,7 @@ export default function SubFinderPage() {
   }
 
   // Filter absences based on search query
-  const filteredAbsences = absences.filter((absence) => {
+  const filteredAbsences = absences.filter(absence => {
     if (!searchQuery) return true
     const query = searchQuery.toLowerCase()
     return (
@@ -120,7 +120,7 @@ export default function SubFinderPage() {
       <div className="w-80 border-r bg-gray-50 flex flex-col">
         <div className="p-4 border-b bg-white">
           <h1 className="text-2xl font-bold mb-4">Sub Finder</h1>
-          
+
           {/* Mode Toggle */}
           <div className="flex gap-2 mb-4">
             <Button
@@ -150,7 +150,7 @@ export default function SubFinderPage() {
                   type="text"
                   placeholder="Search absences..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={e => setSearchQuery(e.target.value)}
                   className="flex-1 text-sm border rounded-md px-2 py-1"
                 />
               </div>
@@ -168,17 +168,11 @@ export default function SubFinderPage() {
               </div>
               <div>
                 <Label className="text-sm">Start Date</Label>
-                <input
-                  type="date"
-                  className="w-full mt-1 text-sm border rounded-md px-2 py-1.5"
-                />
+                <input type="date" className="w-full mt-1 text-sm border rounded-md px-2 py-1.5" />
               </div>
               <div>
                 <Label className="text-sm">End Date</Label>
-                <input
-                  type="date"
-                  className="w-full mt-1 text-sm border rounded-md px-2 py-1.5"
-                />
+                <input type="date" className="w-full mt-1 text-sm border rounded-md px-2 py-1.5" />
               </div>
               <Button size="sm" className="w-full">
                 Load Scheduled Shifts
@@ -208,16 +202,11 @@ export default function SubFinderPage() {
           <div className="border-b bg-white p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <Button
-                  onClick={handleRerunFinder}
-                  disabled={loading}
-                  size="sm"
-                  variant="outline"
-                >
+                <Button onClick={handleRerunFinder} disabled={loading} size="sm" variant="outline">
                   <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                   Rerun Finder
                 </Button>
-                
+
                 <div className="flex items-center gap-2">
                   <Switch
                     id="include-partial"
@@ -246,9 +235,8 @@ export default function SubFinderPage() {
                   <span className="font-medium">{selectedAbsence.teacher_name}</span>
                   {' - '}
                   {new Date(selectedAbsence.start_date).toLocaleDateString()}
-                  {selectedAbsence.end_date && 
-                    ` to ${new Date(selectedAbsence.end_date).toLocaleDateString()}`
-                  }
+                  {selectedAbsence.end_date &&
+                    ` to ${new Date(selectedAbsence.end_date).toLocaleDateString()}`}
                 </div>
               )}
             </div>
@@ -267,7 +255,9 @@ export default function SubFinderPage() {
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <div className="text-center">
                 <p className="text-lg mb-2">Select an absence to find recommended subs</p>
-                <p className="text-sm">Choose an absence from the left panel to see available substitutes</p>
+                <p className="text-sm">
+                  Choose an absence from the left panel to see available substitutes
+                </p>
               </div>
             </div>
           )}

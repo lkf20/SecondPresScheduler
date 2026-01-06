@@ -17,40 +17,37 @@ type ClassGroup = Database['public']['Tables']['class_groups']['Row']
 
 const classSchema = z.object({
   name: z.string().min(1, 'Class group name is required'),
-  min_age: z.union([
-    z.string(),
-    z.number(),
-    z.null(),
-    z.undefined()
-  ]).transform((val): number | null => {
-    if (val === '' || val === null || val === undefined || isNaN(Number(val))) return null
-    const num = Number(val)
-    if (num < 0 || num > 18 || !Number.isInteger(num)) return null
-    return num
-  }).nullable().optional(),
-  max_age: z.union([
-    z.string(),
-    z.number(),
-    z.null(),
-    z.undefined()
-  ]).transform((val): number | null => {
-    if (val === '' || val === null || val === undefined || isNaN(Number(val))) return null
-    const num = Number(val)
-    if (num < 0 || num > 18 || !Number.isInteger(num)) return null
-    return num
-  }).nullable().optional(),
+  min_age: z
+    .union([z.string(), z.number(), z.null(), z.undefined()])
+    .transform((val): number | null => {
+      if (val === '' || val === null || val === undefined || isNaN(Number(val))) return null
+      const num = Number(val)
+      if (num < 0 || num > 18 || !Number.isInteger(num)) return null
+      return num
+    })
+    .nullable()
+    .optional(),
+  max_age: z
+    .union([z.string(), z.number(), z.null(), z.undefined()])
+    .transform((val): number | null => {
+      if (val === '' || val === null || val === undefined || isNaN(Number(val))) return null
+      const num = Number(val)
+      if (num < 0 || num > 18 || !Number.isInteger(num)) return null
+      return num
+    })
+    .nullable()
+    .optional(),
   required_ratio: z.number().int().min(1, 'Required ratio must be at least 1'),
-  preferred_ratio: z.union([
-    z.string(),
-    z.number(),
-    z.null(),
-    z.undefined()
-  ]).transform((val): number | null => {
-    if (val === '' || val === null || val === undefined || isNaN(Number(val))) return null
-    const num = Number(val)
-    if (num < 1 || !Number.isInteger(num)) return null
-    return num
-  }).nullable().optional(),
+  preferred_ratio: z
+    .union([z.string(), z.number(), z.null(), z.undefined()])
+    .transform((val): number | null => {
+      if (val === '' || val === null || val === undefined || isNaN(Number(val))) return null
+      const num = Number(val)
+      if (num < 1 || !Number.isInteger(num)) return null
+      return num
+    })
+    .nullable()
+    .optional(),
   diaper_changing_required: z.boolean().optional(),
   lifting_children_required: z.boolean().optional(),
   toileting_assistance_required: z.boolean().optional(),
@@ -100,7 +97,10 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
         ...data,
         min_age: data.min_age === undefined || data.min_age === null ? null : data.min_age,
         max_age: data.max_age === undefined || data.max_age === null ? null : data.max_age,
-        preferred_ratio: data.preferred_ratio === undefined || data.preferred_ratio === null ? null : data.preferred_ratio,
+        preferred_ratio:
+          data.preferred_ratio === undefined || data.preferred_ratio === null
+            ? null
+            : data.preferred_ratio,
         diaper_changing_required: data.diaper_changing_required ?? false,
         lifting_children_required: data.lifting_children_required ?? false,
         toileting_assistance_required: data.toileting_assistance_required ?? false,
@@ -123,7 +123,6 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
       setError(err.message)
     }
   }
-
 
   return (
     <div>
@@ -149,9 +148,7 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
                 {...register('min_age')}
                 placeholder="Optional"
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                Age in years
-              </p>
+              <p className="text-xs text-muted-foreground mt-1">Age in years</p>
             </FormField>
 
             <FormField label="Max Age" error={errors.max_age?.message as string | undefined}>
@@ -162,9 +159,7 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
                 {...register('max_age')}
                 placeholder="Optional"
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                Age in years
-              </p>
+              <p className="text-xs text-muted-foreground mt-1">Age in years</p>
             </FormField>
           </div>
 
@@ -206,7 +201,9 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
                 <Checkbox
                   id="diaper_changing_required"
                   checked={diaperChanging}
-                  onCheckedChange={(checked) => setValue('diaper_changing_required', checked === true)}
+                  onCheckedChange={checked =>
+                    setValue('diaper_changing_required', checked === true)
+                  }
                 />
                 <Label htmlFor="diaper_changing_required" className="font-normal cursor-pointer">
                   Diaper changing required
@@ -217,7 +214,9 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
                 <Checkbox
                   id="lifting_children_required"
                   checked={liftingChildren}
-                  onCheckedChange={(checked) => setValue('lifting_children_required', checked === true)}
+                  onCheckedChange={checked =>
+                    setValue('lifting_children_required', checked === true)
+                  }
                 />
                 <Label htmlFor="lifting_children_required" className="font-normal cursor-pointer">
                   Lifting children required
@@ -228,9 +227,14 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
                 <Checkbox
                   id="toileting_assistance_required"
                   checked={toiletingAssistance}
-                  onCheckedChange={(checked) => setValue('toileting_assistance_required', checked === true)}
+                  onCheckedChange={checked =>
+                    setValue('toileting_assistance_required', checked === true)
+                  }
                 />
-                <Label htmlFor="toileting_assistance_required" className="font-normal cursor-pointer">
+                <Label
+                  htmlFor="toileting_assistance_required"
+                  className="font-normal cursor-pointer"
+                >
                   Toileting assistance required
                 </Label>
               </div>
@@ -248,7 +252,7 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
               <Checkbox
                 id="is_active"
                 checked={isActive}
-                onCheckedChange={(checked) => setValue('is_active', checked === true)}
+                onCheckedChange={checked => setValue('is_active', checked === true)}
               />
               <Label htmlFor="is_active" className="font-normal cursor-pointer">
                 Active (appears in dropdowns)
@@ -257,7 +261,11 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
           </div>
 
           <div className="flex justify-end gap-4">
-            <Button type="button" variant="outline" onClick={() => router.push('/settings/classes')}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push('/settings/classes')}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>
@@ -269,6 +277,3 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
     </div>
   )
 }
-
-
-

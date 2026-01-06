@@ -32,13 +32,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    
+
     // Check if it's a bulk operation
     if (Array.isArray(body.mappings)) {
       const mappings = await bulkCreateClassClassroomMappings(body.mappings)
       return NextResponse.json(mappings, { status: 201 })
     }
-    
+
     // Single mapping
     const mapping = await createClassClassroomMapping(body)
     return NextResponse.json(mapping, { status: 201 })
@@ -46,4 +46,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
-

@@ -16,11 +16,11 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
-  
+
   // Get return page and search from URL params
   const returnPage = searchParams.get('returnPage') || '1'
   const returnSearch = searchParams.get('returnSearch')
-  
+
   // Build return URL with preserved pagination
   const getReturnUrl = () => {
     const params = new URLSearchParams()
@@ -96,12 +96,13 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
       {error && <ErrorMessage message={error} className="mb-6" />}
 
       <div className="max-w-2xl">
-        <TeacherForm teacher={teacher} onSubmit={handleSubmit} onCancel={() => router.push(getReturnUrl())} />
+        <TeacherForm
+          teacher={teacher}
+          onSubmit={handleSubmit}
+          onCancel={() => router.push(getReturnUrl())}
+        />
         <div className="mt-6 pt-6 border-t">
-          <button
-            onClick={handleDelete}
-            className="text-sm text-destructive hover:underline"
-          >
+          <button onClick={handleDelete} className="text-sm text-destructive hover:underline">
             Delete Teacher
           </button>
         </div>
@@ -109,4 +110,3 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
     </div>
   )
 }
-

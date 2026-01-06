@@ -5,7 +5,9 @@ export default function WeeklyScheduleWithSubsReportPage() {
     <div>
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Weekly Schedule with Subs</h1>
-        <p className="text-muted-foreground mt-2">Generate weekly schedule including sub assignments</p>
+        <p className="text-muted-foreground mt-2">
+          Generate weekly schedule including sub assignments
+        </p>
       </div>
 
       <Card>
@@ -15,13 +17,11 @@ export default function WeeklyScheduleWithSubsReportPage() {
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground">
-            This report will generate a printable weekly schedule showing all teacher and sub assignments.
+            This report will generate a printable weekly schedule showing all teacher and sub
+            assignments.
           </p>
         </CardContent>
       </Card>
     </div>
   )
 }
-
-
-

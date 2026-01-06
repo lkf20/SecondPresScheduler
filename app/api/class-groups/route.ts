@@ -20,4 +20,3 @@ export async function POST(request: NextRequest) {
     return createErrorResponse(error, 'Failed to create class group', 500, 'POST /api/class-groups')
   }
 }
-

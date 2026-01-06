@@ -52,7 +52,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {quickActions.map((action) => (
+        {quickActions.map(action => (
           <Link key={action.name} href={action.href}>
             <Card className="hover:bg-accent transition-colors cursor-pointer">
               <CardHeader>
@@ -69,6 +69,3 @@ export default async function DashboardPage() {
     </div>
   )
 }
-
-
-
