@@ -1089,8 +1089,8 @@ export default function ScheduleSidePanel({
                 
                 {/* Info message when teachers are assigned without class groups */}
                 {classGroupIds.length === 0 && selectedTeachers.length > 0 && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mt-4">
-                    <p className="text-sm text-blue-800">
+                  <div className="bg-amber-50 border border-amber-200 rounded-md p-3 mt-4">
+                    <p className="text-sm text-amber-800">
                       Teachers are assigned. Add class groups to filter by qualifications and calculate staffing requirements.
                     </p>
                   </div>
