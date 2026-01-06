@@ -99,6 +99,10 @@ export default function ScheduleSidePanel({
   const initialClassGroupIdsRef = useRef<string[] | null>(null)
   // Track previous classGroupIds to detect when class groups are removed
   const previousClassGroupIdsRef = useRef<string[]>([])
+  // Flag to preserve teachers when class groups are removed
+  const preserveTeachersRef = useRef(false)
+  // Store teachers in ref so we can preserve them even if state hasn't updated
+  const selectedTeachersRef = useRef<Teacher[]>([])
 
   // Format time range for header
   const timeRange = timeSlotStartTime && timeSlotEndTime
@@ -127,6 +131,7 @@ export default function ScheduleSidePanel({
       // Reset the refs when drawer closes
       hasLoadedInitialDataRef.current = false
       initialClassGroupIdsRef.current = null
+      preserveTeachersRef.current = false
       return
     }
 
@@ -145,6 +150,7 @@ export default function ScheduleSidePanel({
       console.log('[ScheduleSidePanel] Initial load - cellData.class_groups:', cellData.class_groups)
       initialClassGroupIdsRef.current = classGroupIds
       previousClassGroupIdsRef.current = classGroupIds
+      preserveTeachersRef.current = false
       setClassGroupIds(classGroupIds)
       // Set classGroups from cell data initially (will be updated by useEffect when allAvailableClassGroups loads)
       if (cellData.class_groups && cellData.class_groups.length > 0) {
@@ -191,6 +197,8 @@ export default function ScheduleSidePanel({
           console.log('[ScheduleSidePanel] API fetch - classGroupIds:', classGroupIds)
           console.log('[ScheduleSidePanel] API fetch - cellData.class_groups:', cellData.class_groups)
           initialClassGroupIdsRef.current = classGroupIds
+          previousClassGroupIdsRef.current = classGroupIds
+          preserveTeachersRef.current = false
           setClassGroupIds(classGroupIds)
           // Set classGroups from cell data initially (will be updated by useEffect when allAvailableClassGroups loads)
           if (cellData.class_groups && cellData.class_groups.length > 0) {
@@ -226,6 +234,7 @@ export default function ScheduleSidePanel({
           setIsActive(false)
           initialClassGroupIdsRef.current = []
           previousClassGroupIdsRef.current = []
+          preserveTeachersRef.current = false
           setClassGroupIds([])
           setClassGroups([])
           setEnrollment(null)
@@ -399,6 +408,38 @@ export default function ScheduleSidePanel({
   useEffect(() => {
     if (!isOpen) return
 
+    // Update ref whenever selectedTeachers changes
+    selectedTeachersRef.current = selectedTeachers
+
+    // If we should preserve teachers (class groups were just removed), skip fetching
+    console.log('[ScheduleSidePanel] Teacher fetch useEffect - checking preserve flag', {
+      preserveFlag: preserveTeachersRef.current,
+      selectedTeachersLength: selectedTeachers.length,
+      selectedTeachersRefLength: selectedTeachersRef.current.length,
+      classGroupIds,
+      willPreserve: preserveTeachersRef.current && selectedTeachersRef.current.length > 0
+    })
+
+    if (preserveTeachersRef.current && selectedTeachersRef.current.length > 0) {
+      console.log('[ScheduleSidePanel] ✓ Skipping teacher fetch - preserving teachers after class group removal', {
+        previousClassGroupIds: previousClassGroupIdsRef.current,
+        currentClassGroupIds: classGroupIds,
+        existingTeachersCount: selectedTeachersRef.current.length,
+        existingTeachers: selectedTeachersRef.current.map(t => t.name),
+        preserveFlag: preserveTeachersRef.current
+      })
+      // Reset the flag after preserving (but keep teachers)
+      preserveTeachersRef.current = false
+      previousClassGroupIdsRef.current = classGroupIds
+      return
+    }
+
+    console.log('[ScheduleSidePanel] Fetching teachers', {
+      classGroupIds,
+      preserveFlag: preserveTeachersRef.current,
+      existingTeachersCount: selectedTeachers.length
+    })
+
     // Fetch directly from teacher-schedules API for most up-to-date data
     fetch('/api/teacher-schedules')
       .then((r) => {
@@ -432,36 +473,31 @@ export default function ScheduleSidePanel({
           is_floater: schedule.is_floater ?? false,
         }))
         
-        // If classGroupIds became empty (was not empty before) and we have existing teachers, preserve them
-        // This prevents teachers from being cleared when class groups are removed
-        const previousClassGroupIds = previousClassGroupIdsRef.current
-        const classGroupsWereRemoved = previousClassGroupIds.length > 0 && classGroupIds.length === 0
-        
-        if (classGroupsWereRemoved && selectedTeachers.length > 0) {
-          // Keep existing teachers when class groups are removed
-          previousClassGroupIdsRef.current = classGroupIds
-          return
-        }
+        console.log('[ScheduleSidePanel] Fetched teachers', {
+          classGroupIds,
+          fetchedCount: teachers.length,
+          filteredCount: filtered.length
+        })
         
         // Update the ref before setting teachers
         previousClassGroupIdsRef.current = classGroupIds
+        preserveTeachersRef.current = false // Reset flag
         setSelectedTeachers(teachers)
       })
       .catch((err) => {
         console.error('Error fetching teacher assignments:', err)
-        // Don't clear teachers on error if we have existing ones and classGroupIds is empty
-        const previousClassGroupIds = previousClassGroupIdsRef.current
-        const classGroupsWereRemoved = previousClassGroupIds.length > 0 && classGroupIds.length === 0
-        
-        if (classGroupsWereRemoved && selectedTeachers.length > 0) {
+        // Don't clear teachers on error if we should preserve them
+        if (preserveTeachersRef.current && selectedTeachers.length > 0) {
+          preserveTeachersRef.current = false
           previousClassGroupIdsRef.current = classGroupIds
           return
         }
         
         previousClassGroupIdsRef.current = classGroupIds
+        preserveTeachersRef.current = false
         setSelectedTeachers([])
       })
-  }, [isOpen, classroomId, dayId, timeSlotId, classGroupIds])
+  }, [isOpen, classroomId, dayId, timeSlotId, classGroupIds, selectedTeachers.length])
 
   // Determine if cell has data (current state)
   const hasData = !!(classGroupIds.length > 0 || enrollment !== null || selectedTeachers.length > 0)
@@ -930,6 +966,26 @@ export default function ScheduleSidePanel({
                 <ClassGroupMultiSelect
                   selectedClassGroupIds={classGroupIds}
                   onSelectionChange={(newClassGroupIds) => {
+                    // If class groups are being removed (fewer groups than before), preserve teachers
+                    // This handles both: removing all groups, and removing some groups
+                    const hadGroups = classGroupIds.length > 0
+                    const groupsRemoved = newClassGroupIds.length < classGroupIds.length
+                    const shouldPreserve = hadGroups && groupsRemoved && selectedTeachersRef.current.length > 0
+                    
+                    console.log('[ScheduleSidePanel] Class groups changed', {
+                      previous: classGroupIds,
+                      new: newClassGroupIds,
+                      hadGroups,
+                      groupsRemoved,
+                      shouldPreserve,
+                      currentTeachersCount: selectedTeachers.length,
+                      currentTeachersRefCount: selectedTeachersRef.current.length,
+                      currentTeachers: selectedTeachers.map(t => t.name),
+                      currentTeachersFromRef: selectedTeachersRef.current.map(t => t.name)
+                    })
+                    
+                    preserveTeachersRef.current = shouldPreserve
+                    console.log('[ScheduleSidePanel] Set preserveTeachersRef to:', shouldPreserve, 'with', selectedTeachersRef.current.length, 'teachers in ref')
                     previousClassGroupIdsRef.current = classGroupIds
                     setClassGroupIds(newClassGroupIds)
                   }}
@@ -1023,42 +1079,33 @@ export default function ScheduleSidePanel({
               {/* Section E: Assigned Teachers */}
               <div className={`rounded-lg bg-white border-l-4 border-l-primary/40 border border-gray-200 p-6 space-y-2 ${fieldsDisabled ? 'opacity-60' : ''}`}>
                 <Label className="text-base font-medium text-foreground block mb-6">Assigned Teachers</Label>
-                {classGroupIds.length === 0 ? (
-                  <div className="space-y-4">
-                    <TeacherMultiSelect
-                      selectedTeachers={[]}
-                      onTeachersChange={() => {}}
-                      requiredCount={undefined}
-                      preferredCount={undefined}
-                      disabled={true}
-                    />
-                    <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
-                      <p className="text-sm text-amber-800">
-                        At least one class group must be added first before teachers can be assigned.
-                      </p>
-                    </div>
+                <TeacherMultiSelect
+                  selectedTeachers={selectedTeachers}
+                  onTeachersChange={setSelectedTeachers}
+                  requiredCount={classGroupIds.length > 0 ? requiredTeachers : undefined}
+                  preferredCount={classGroupIds.length > 0 ? preferredTeachers : undefined}
+                  disabled={fieldsDisabled}
+                />
+                
+                {/* Info message when teachers are assigned without class groups */}
+                {classGroupIds.length === 0 && selectedTeachers.length > 0 && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mt-4">
+                    <p className="text-sm text-blue-800">
+                      Teachers are assigned. Add class groups to filter by qualifications and calculate staffing requirements.
+                    </p>
                   </div>
-                ) : (
-                  <>
-                    <TeacherMultiSelect
-                      selectedTeachers={selectedTeachers}
-                      onTeachersChange={setSelectedTeachers}
-                      requiredCount={requiredTeachers}
-                      preferredCount={preferredTeachers}
-                      disabled={fieldsDisabled}
+                )}
+                
+                {/* Conflict Banner */}
+                {conflicts.length > 0 && (
+                  <div className="mt-4">
+                    <ConflictBanner
+                      conflicts={conflicts}
+                      onResolution={handleConflictResolution}
+                      onApply={handleApplyConflictResolutions}
+                      onCancel={handleCancelConflictResolution}
                     />
-                    {/* Conflict Banner */}
-                    {conflicts.length > 0 && (
-                      <div className="mt-4">
-                        <ConflictBanner
-                          conflicts={conflicts}
-                          onResolution={handleConflictResolution}
-                          onApply={handleApplyConflictResolutions}
-                          onCancel={handleCancelConflictResolution}
-                        />
-                      </div>
-                    )}
-                  </>
+                  </div>
                 )}
               </div>
 
