@@ -243,7 +243,7 @@ export default function TeacherMultiSelect({
                 className={`flex items-center gap-2 rounded px-2 py-1 text-sm ${
                   isFloater
                     ? 'bg-purple-100 text-purple-800 border border-purple-300 border-dashed'
-                    : 'bg-primary/10 text-primary'
+                    : 'bg-blue-100 text-blue-800'
                 }`}
               >
                 <span>
@@ -272,7 +272,7 @@ export default function TeacherMultiSelect({
                 </Select>
                 <button
                   onClick={() => handleRemove(teacher.id)}
-                  className="hover:bg-primary/20 rounded"
+                  className="hover:bg-primary/20 rounded ml-2"
                   disabled={disabled}
                   type="button"
                 >
