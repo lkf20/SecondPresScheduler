@@ -97,6 +97,8 @@ export default function ScheduleSidePanel({
   const hasLoadedInitialDataRef = useRef(false)
   // Track the initial classGroupIds to prevent useEffect from running with stale empty state
   const initialClassGroupIdsRef = useRef<string[] | null>(null)
+  // Track previous classGroupIds to detect when class groups are removed
+  const previousClassGroupIdsRef = useRef<string[]>([])
 
   // Format time range for header
   const timeRange = timeSlotStartTime && timeSlotEndTime
@@ -142,6 +144,7 @@ export default function ScheduleSidePanel({
       console.log('[ScheduleSidePanel] Initial load - classGroupIds:', classGroupIds)
       console.log('[ScheduleSidePanel] Initial load - cellData.class_groups:', cellData.class_groups)
       initialClassGroupIdsRef.current = classGroupIds
+      previousClassGroupIdsRef.current = classGroupIds
       setClassGroupIds(classGroupIds)
       // Set classGroups from cell data initially (will be updated by useEffect when allAvailableClassGroups loads)
       if (cellData.class_groups && cellData.class_groups.length > 0) {
@@ -222,6 +225,7 @@ export default function ScheduleSidePanel({
           // No cell exists, create default
           setIsActive(false)
           initialClassGroupIdsRef.current = []
+          previousClassGroupIdsRef.current = []
           setClassGroupIds([])
           setClassGroups([])
           setEnrollment(null)
@@ -428,10 +432,33 @@ export default function ScheduleSidePanel({
           is_floater: schedule.is_floater ?? false,
         }))
         
+        // If classGroupIds became empty (was not empty before) and we have existing teachers, preserve them
+        // This prevents teachers from being cleared when class groups are removed
+        const previousClassGroupIds = previousClassGroupIdsRef.current
+        const classGroupsWereRemoved = previousClassGroupIds.length > 0 && classGroupIds.length === 0
+        
+        if (classGroupsWereRemoved && selectedTeachers.length > 0) {
+          // Keep existing teachers when class groups are removed
+          previousClassGroupIdsRef.current = classGroupIds
+          return
+        }
+        
+        // Update the ref before setting teachers
+        previousClassGroupIdsRef.current = classGroupIds
         setSelectedTeachers(teachers)
       })
       .catch((err) => {
         console.error('Error fetching teacher assignments:', err)
+        // Don't clear teachers on error if we have existing ones and classGroupIds is empty
+        const previousClassGroupIds = previousClassGroupIdsRef.current
+        const classGroupsWereRemoved = previousClassGroupIds.length > 0 && classGroupIds.length === 0
+        
+        if (classGroupsWereRemoved && selectedTeachers.length > 0) {
+          previousClassGroupIdsRef.current = classGroupIds
+          return
+        }
+        
+        previousClassGroupIdsRef.current = classGroupIds
         setSelectedTeachers([])
       })
   }, [isOpen, classroomId, dayId, timeSlotId, classGroupIds])
@@ -902,7 +929,10 @@ export default function ScheduleSidePanel({
               <div className={`rounded-lg bg-white border border-gray-200 p-6 space-y-2 ${fieldsDisabled ? 'opacity-60' : ''}`}>
                 <ClassGroupMultiSelect
                   selectedClassGroupIds={classGroupIds}
-                  onSelectionChange={setClassGroupIds}
+                  onSelectionChange={(newClassGroupIds) => {
+                    previousClassGroupIdsRef.current = classGroupIds
+                    setClassGroupIds(newClassGroupIds)
+                  }}
                   allowedClassGroupIds={allowedClassGroupIds.length > 0 ? allowedClassGroupIds : undefined}
                   disabled={fieldsDisabled}
                   existingClassGroups={classGroups}

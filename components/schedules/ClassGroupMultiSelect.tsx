@@ -133,7 +133,7 @@ export default function ClassGroupMultiSelect({
       </Label>
       
       {/* Selected class groups as chips */}
-      <div className="flex flex-wrap gap-2 min-h-[2.5rem]">
+      <div className="flex flex-wrap items-center gap-2 min-h-[2.5rem]">
         {selectedClassGroupsList.map((cg) => {
           const isInactive = cg.is_active === false
           return (
