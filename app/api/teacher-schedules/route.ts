@@ -1,28 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAllTeacherSchedules, createTeacherSchedule } from '@/lib/api/schedules'
+import { createErrorResponse } from '@/lib/utils/errors'
+import { teacherScheduleFiltersSchema, createTeacherScheduleSchema } from '@/lib/validations/teacher-schedules'
+import { validateQueryParams, validateRequest } from '@/lib/utils/validation'
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
-    const filters: any = {}
-    if (searchParams.get('teacher_id')) {
-      filters.teacher_id = searchParams.get('teacher_id')
+    
+    // Validate query parameters
+    const validation = validateQueryParams(teacherScheduleFiltersSchema, searchParams)
+    if (!validation.success) {
+      return validation.error
     }
     
-    const schedules = await getAllTeacherSchedules(filters)
+    const schedules = await getAllTeacherSchedules(validation.data)
     return NextResponse.json(schedules)
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error) {
+    return createErrorResponse(error, 'Failed to fetch teacher schedules', 500, 'GET /api/teacher-schedules')
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const schedule = await createTeacherSchedule(body)
+    
+    // Validate request body
+    const validation = validateRequest(createTeacherScheduleSchema, body)
+    if (!validation.success) {
+      return validation.error
+    }
+    
+    const schedule = await createTeacherSchedule(validation.data)
     return NextResponse.json(schedule, { status: 201 })
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error) {
+    return createErrorResponse(error, 'Failed to create teacher schedule', 500, 'POST /api/teacher-schedules')
   }
 }
 

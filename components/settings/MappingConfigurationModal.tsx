@@ -51,7 +51,7 @@ export default function MappingConfigurationModal({
     const fetchData = async () => {
       try {
         const [classesRes, classroomsRes] = await Promise.all([
-          fetch('/api/classes'),
+          fetch('/api/class-groups'),
           fetch('/api/classrooms'),
         ])
 

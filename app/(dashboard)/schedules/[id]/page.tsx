@@ -2,12 +2,10 @@ import { notFound } from 'next/navigation'
 import { getTeacherScheduleById } from '@/lib/api/schedules'
 import ScheduleFormClient from './ScheduleFormClient'
 
-export default async function ScheduleDetailPage({
-  params,
-}: {
+export default async function ScheduleDetailPage(props: {
   params: Promise<{ id: string }>
 }) {
-  const { id } = await params
+  const { id } = await props.params
 
   let schedule
   try {

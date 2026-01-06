@@ -28,6 +28,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import { Search, GripVertical } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -35,6 +38,7 @@ interface Class {
   id: string
   name: string
   order?: number | null
+  is_active?: boolean
   [key: string]: any
 }
 
@@ -76,12 +80,20 @@ function SortableRow({ classItem }: { classItem: Class }) {
         </button>
       </TableCell>
       <TableCell>
-        <Link
-          href={`/settings/classes/${classItem.id}`}
-          className="hover:underline"
-        >
-          {classItem.name}
-        </Link>
+        <div className="flex items-center gap-2">
+          {!classItem.is_active && (
+            <Badge variant="secondary" className="text-xs">Inactive</Badge>
+          )}
+          <Link
+            href={`/settings/classes/${classItem.id}`}
+            className={cn(
+              "hover:underline",
+              !classItem.is_active && "text-muted-foreground"
+            )}
+          >
+            {classItem.name}
+          </Link>
+        </div>
       </TableCell>
     </TableRow>
   )
@@ -93,6 +105,7 @@ export default function SortableClassesTable({
 }: SortableClassesTableProps) {
   const [classes, setClasses] = useState(initialClasses)
   const [search, setSearch] = useState('')
+  const [showInactive, setShowInactive] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
 
@@ -142,7 +155,7 @@ export default function SortableClassesTable({
         if (orderChanged.length > 0) {
           await Promise.all(
             orderChanged.map((classItem) =>
-              fetch(`/api/classes/${classItem.id}`, {
+              fetch(`/api/class-groups/${classItem.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ order: classItem.order }),
@@ -161,24 +174,34 @@ export default function SortableClassesTable({
     }
   }
 
-  // Filter classes by search
-  const filteredClasses = search
-    ? classes.filter((c) =>
-        c.name.toLowerCase().includes(search.toLowerCase())
-      )
-    : classes
+  // Filter classes by search and active status
+  const filteredClasses = classes.filter((c) => {
+    const matchesSearch = !search || c.name.toLowerCase().includes(search.toLowerCase())
+    const matchesActiveFilter = showInactive || c.is_active !== false
+    return matchesSearch && matchesActiveFilter
+  })
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-4 flex-wrap">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search classes..."
+            placeholder="Search class groups..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-8"
           />
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            id="show-inactive"
+            checked={showInactive}
+            onCheckedChange={setShowInactive}
+          />
+          <Label htmlFor="show-inactive" className="text-sm cursor-pointer">
+            Show inactive
+          </Label>
         </div>
         {isSaving && (
           <span className="text-sm text-muted-foreground">Saving...</span>
@@ -245,12 +268,20 @@ export default function SortableClassesTable({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Link
-                        href={`/settings/classes/${classItem.id}`}
-                        className="hover:underline"
-                      >
-                        {classItem.name}
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        {!classItem.is_active && (
+                          <Badge variant="secondary" className="text-xs">Inactive</Badge>
+                        )}
+                        <Link
+                          href={`/settings/classes/${classItem.id}`}
+                          className={cn(
+                            "hover:underline",
+                            !classItem.is_active && "text-muted-foreground"
+                          )}
+                        >
+                          {classItem.name}
+                        </Link>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

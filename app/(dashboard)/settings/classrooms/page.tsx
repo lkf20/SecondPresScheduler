@@ -13,7 +13,8 @@ export default async function ClassroomsPage() {
   let error: string | null = null
 
   try {
-    classrooms = await getClassrooms()
+    // Fetch all classrooms (including inactive) for the list view
+    classrooms = await getClassrooms(true)
   } catch (err: any) {
     error = err.message || 'Failed to load classrooms'
     console.error('Error loading classrooms:', err)

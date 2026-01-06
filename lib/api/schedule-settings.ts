@@ -28,9 +28,25 @@ export async function getScheduleSettings(): Promise<ScheduleSettings | null> {
     throw error
   }
 
+  // Ensure selected_day_ids is always an array
+  let selectedDayIds: string[] = []
+  if (data.selected_day_ids) {
+    if (Array.isArray(data.selected_day_ids)) {
+      selectedDayIds = data.selected_day_ids
+    } else if (typeof data.selected_day_ids === 'string') {
+      // If it's a string, try to parse it as JSON
+      try {
+        selectedDayIds = JSON.parse(data.selected_day_ids)
+      } catch (e) {
+        console.warn('Failed to parse selected_day_ids as JSON:', e)
+        selectedDayIds = []
+      }
+    }
+  }
+
   return {
     ...data,
-    selected_day_ids: (data.selected_day_ids as any) || [],
+    selected_day_ids: selectedDayIds,
   } as ScheduleSettings
 }
 

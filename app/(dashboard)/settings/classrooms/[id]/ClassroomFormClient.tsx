@@ -7,9 +7,12 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import FormField from '@/components/shared/FormField'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import ClassSelector from '@/components/settings/ClassSelector'
+import ClassroomColorPicker from '@/components/settings/ClassroomColorPicker'
 import { Database } from '@/types/database'
 
 type Classroom = Database['public']['Tables']['classrooms']['Row']
@@ -18,6 +21,8 @@ const classroomSchema = z.object({
   name: z.string().min(1, 'Classroom name is required'),
   capacity: z.string().optional(),
   allowed_classes: z.array(z.string()).optional(),
+  color: z.string().nullable().optional(),
+  is_active: z.boolean().optional(),
 })
 
 type ClassroomFormData = z.infer<typeof classroomSchema>
@@ -31,18 +36,26 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
   const [error, setError] = useState<string | null>(null)
   const [allowedClassIds, setAllowedClassIds] = useState<string[]>([])
   const [loadingAllowedClasses, setLoadingAllowedClasses] = useState(true)
+  const [selectedColor, setSelectedColor] = useState<string | null>(
+    (classroom as any).color || null
+  )
 
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<ClassroomFormData>({
     resolver: zodResolver(classroomSchema),
     defaultValues: {
       name: classroom.name,
       capacity: classroom.capacity?.toString() || '',
+      is_active: classroom.is_active ?? true,
     },
   })
+
+  const isActive = watch('is_active')
 
   // Load allowed classes on mount
   useEffect(() => {
@@ -53,7 +66,7 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
         setLoadingAllowedClasses(false)
       })
       .catch((err) => {
-        console.error('Failed to load allowed classes:', err)
+        console.error('Failed to load allowed class groups:', err)
         setLoadingAllowedClasses(false)
       })
   }, [classroom.id])
@@ -70,6 +83,14 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
       }
       // Order is managed by drag-and-drop, don't update it here
       payload.allowed_classes = allowedClassIds
+      // Add color if selected
+      if (selectedColor) {
+        payload.color = selectedColor
+      } else {
+        payload.color = null
+      }
+      // Add is_active
+      payload.is_active = data.is_active ?? true
       const response = await fetch(`/api/classrooms/${classroom.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -88,26 +109,6 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
     }
   }
 
-  const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this classroom?')) return
-
-    try {
-      setError(null)
-      const response = await fetch(`/api/classrooms/${classroom.id}`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to delete classroom')
-      }
-
-      router.push('/settings/classrooms')
-      router.refresh()
-    } catch (err: any) {
-      setError(err.message)
-    }
-  }
 
   return (
     <div>
@@ -128,7 +129,21 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
             <Input type="number" {...register('capacity')} placeholder="Optional" />
           </FormField>
 
-          <FormField label="Allowed Classes" error={errors.allowed_classes?.message}>
+          <FormField 
+            label={
+              <span>
+                Color <span className="text-muted-foreground font-normal">(Optional)</span>
+              </span>
+            } 
+            error={errors.color?.message}
+          >
+            <ClassroomColorPicker
+              value={selectedColor}
+              onChange={setSelectedColor}
+            />
+          </FormField>
+
+          <FormField label="Allowed Class Groups" error={errors.allowed_classes?.message}>
             {loadingAllowedClasses ? (
               <div className="text-sm text-muted-foreground">Loading...</div>
             ) : (
@@ -139,6 +154,25 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
             )}
           </FormField>
 
+          <div className="space-y-4 pt-6 border-t">
+            <div>
+              <Label className="text-base font-semibold">Status</Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                Inactive items will not appear in dropdowns but historical data is preserved.
+              </p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="is_active"
+                checked={isActive}
+                onCheckedChange={(checked) => setValue('is_active', checked === true)}
+              />
+              <Label htmlFor="is_active" className="font-normal cursor-pointer">
+                Active (appears in dropdowns)
+              </Label>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-4">
             <Button type="button" variant="outline" onClick={() => router.push('/settings/classrooms')}>
               Cancel
@@ -148,14 +182,6 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
             </Button>
           </div>
         </form>
-        <div className="mt-6 pt-6 border-t">
-          <button
-            onClick={handleDelete}
-            className="text-sm text-destructive hover:underline"
-          >
-            Delete Classroom
-          </button>
-        </div>
       </div>
     </div>
   )

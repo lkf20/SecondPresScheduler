@@ -4,13 +4,14 @@ import {
   createClassroom,
   setClassroomAllowedClasses,
 } from '@/lib/api/classrooms'
+import { createErrorResponse } from '@/lib/utils/errors'
 
 export async function GET() {
   try {
     const classrooms = await getClassrooms()
     return NextResponse.json(classrooms)
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error) {
+    return createErrorResponse(error, 'Failed to fetch classrooms', 500, 'GET /api/classrooms')
   }
 }
 
@@ -28,8 +29,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(classroom, { status: 201 })
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error) {
+    return createErrorResponse(error, 'Failed to create classroom', 500, 'POST /api/classrooms')
   }
 }
 

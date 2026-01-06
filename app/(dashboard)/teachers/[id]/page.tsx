@@ -2,12 +2,10 @@ import { notFound } from 'next/navigation'
 import { getTeacherById } from '@/lib/api/teachers'
 import TeacherFormClient from './TeacherFormClient'
 
-export default async function TeacherDetailPage({
-  params,
-}: {
+export default async function TeacherDetailPage(props: {
   params: Promise<{ id: string }>
 }) {
-  const { id } = await params
+  const { id } = await props.params
 
   let teacher
   try {

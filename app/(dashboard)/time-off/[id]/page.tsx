@@ -2,12 +2,10 @@ import { notFound } from 'next/navigation'
 import { getTimeOffRequestById } from '@/lib/api/time-off'
 import TimeOffFormClient from './TimeOffFormClient'
 
-export default async function TimeOffDetailPage({
-  params,
-}: {
+export default async function TimeOffDetailPage(props: {
   params: Promise<{ id: string }>
 }) {
-  const { id } = await params
+  const { id } = await props.params
 
   let timeOffRequest
   try {

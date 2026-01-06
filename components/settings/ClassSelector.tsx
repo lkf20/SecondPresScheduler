@@ -31,7 +31,7 @@ export default function ClassSelector({
   )
 
   useEffect(() => {
-    fetch('/api/classes')
+    fetch('/api/class-groups')
       .then((r) => r.json())
       .then((data) => {
         setClasses(data)
@@ -100,7 +100,7 @@ export default function ClassSelector({
           className="h-7"
         >
           <Plus className="h-3 w-3 mr-1" />
-          Add Classes
+          Add Class Groups
         </Button>
       </div>
 
@@ -108,16 +108,16 @@ export default function ClassSelector({
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-md max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle>Select Classes</DialogTitle>
+            <DialogTitle>Select Class Groups</DialogTitle>
             <DialogDescription>
-              Choose which classes are allowed in this classroom
+              Choose which class groups are allowed in this classroom
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex flex-col flex-1 min-h-0">
             {/* Search input */}
             <Input
-              placeholder="Search classes..."
+              placeholder="Search class groups..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="mb-3"
@@ -161,7 +161,7 @@ export default function ClassSelector({
             <div className="border rounded-md overflow-y-auto flex-1 min-h-0">
               {filteredClasses.length === 0 ? (
                 <div className="p-4 text-sm text-muted-foreground text-center">
-                  No classes found
+                  No class groups found
                 </div>
               ) : (
                 <div className="p-2 space-y-1">

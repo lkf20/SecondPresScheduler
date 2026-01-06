@@ -24,7 +24,7 @@ interface SelectedShift {
 interface ShiftSelectionTableProps {
   teacherId: string | null
   startDate: string
-  endDate: string
+  endDate: string | null // End date can be null/optional
   selectedShifts: SelectedShift[]
   onShiftsChange: (shifts: SelectedShift[]) => void
   disabled?: boolean
@@ -52,44 +52,64 @@ export default function ShiftSelectionTable({
       .catch(console.error)
   }, [])
 
-  // Track if we've already auto-selected shifts to prevent overwriting on re-renders
-  const [hasAutoSelected, setHasAutoSelected] = useState(false)
+  // Helper function to normalize dates to YYYY-MM-DD format
+  const normalizeDate = (d: string) => {
+    if (!d) return ''
+    if (d.match(/^\d{4}-\d{2}-\d{2}$/)) return d
+    try {
+      const parsed = new Date(d)
+      return parsed.toISOString().split('T')[0]
+    } catch {
+      return d
+    }
+  }
 
-  // Fetch scheduled shifts when teacher and dates change
+  // Fetch scheduled shifts when teacher and dates change (NOT when disabled changes)
   useEffect(() => {
-    if (!teacherId || !startDate || !endDate) {
+    if (!teacherId) {
       setScheduledShifts([])
       setLoading(false)
       return
     }
 
+    // If no start date, don't fetch
+    if (!startDate) {
+      setScheduledShifts([])
+      setLoading(false)
+      return
+    }
+
+    // If endDate is not provided, use startDate (single day)
+    const effectiveEndDate = endDate || startDate
+
     setLoading(true)
-    fetch(`/api/teachers/${teacherId}/scheduled-shifts?start_date=${startDate}&end_date=${endDate}`)
+    fetch(`/api/teachers/${teacherId}/scheduled-shifts?start_date=${startDate}&end_date=${effectiveEndDate}`)
       .then((r) => r.json())
       .then((data) => {
-        setScheduledShifts(data)
-        // If disabled (all_scheduled mode) AND no shifts are already selected AND we haven't auto-selected yet
-        // This prevents overwriting existing shifts when editing
-        if (disabled && selectedShifts.length === 0 && !hasAutoSelected) {
-          const allShifts = data.map((shift: ScheduledShift) => ({
-            date: shift.date,
-            day_of_week_id: shift.day_of_week_id,
-            time_slot_id: shift.time_slot_id,
-          }))
-          onShiftsChange(allShifts)
-          setHasAutoSelected(true)
-        }
+        const shifts = data || []
+        setScheduledShifts(shifts)
       })
-      .catch(console.error)
+      .catch((error) => {
+        console.error('Error fetching scheduled shifts:', error)
+        setScheduledShifts([])
+      })
       .finally(() => setLoading(false))
-  }, [teacherId, startDate, endDate, disabled, selectedShifts.length, hasAutoSelected, onShiftsChange])
+  }, [teacherId, startDate, endDate || startDate]) // Remove 'disabled' and 'onShiftsChange' from dependencies
 
-  // Reset auto-select flag when selectedShifts are provided externally (e.g., when editing)
+  // Handle mode switching - auto-select all shifts when switching to "all_scheduled" mode
   useEffect(() => {
-    if (selectedShifts.length > 0) {
-      setHasAutoSelected(true) // Prevent auto-selection if shifts are already provided
+    // Only run this when we have scheduled shifts and we're in disabled mode
+    if (disabled && scheduledShifts.length > 0) {
+      const allShifts = scheduledShifts.map((shift: ScheduledShift) => ({
+        date: normalizeDate(shift.date),
+        day_of_week_id: shift.day_of_week_id,
+        time_slot_id: shift.time_slot_id,
+      }))
+      onShiftsChange(allShifts)
     }
-  }, [selectedShifts.length])
+    // Note: When switching to "select_shifts" mode (disabled=false), we keep the current selectedShifts
+    // so no action needed here
+  }, [disabled, scheduledShifts, onShiftsChange])
 
   // Group shifts by date
   const shiftsByDate = scheduledShifts.reduce((acc, shift) => {
@@ -105,10 +125,12 @@ export default function ShiftSelectionTable({
   }, {} as Record<string, { date: string; day_name: string; shifts: ScheduledShift[] }>)
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr)
-    const month = date.toLocaleString('default', { month: 'short' })
-    const day = date.getDate()
-    return `${month} ${day}`
+    // Parse date string directly to avoid timezone issues
+    // dateStr is in YYYY-MM-DD format
+    const [year, month, day] = dateStr.split('-').map(Number)
+    const date = new Date(year, month - 1, day)
+    const monthName = date.toLocaleString('default', { month: 'short' })
+    return `${monthName} ${day}`
   }
 
   const isShiftSelected = (date: string, timeSlotId: string) => {
@@ -133,8 +155,21 @@ export default function ShiftSelectionTable({
   }
 
   const isShiftScheduled = (date: string, timeSlotId: string) => {
+    // Normalize dates for comparison (same logic as isShiftSelected)
+    const normalizeDate = (d: string) => {
+      if (!d) return ''
+      if (d.match(/^\d{4}-\d{2}-\d{2}$/)) return d
+      try {
+        const parsed = new Date(d)
+        return parsed.toISOString().split('T')[0]
+      } catch {
+        return d
+      }
+    }
+    
+    const normalizedDate = normalizeDate(date)
     return scheduledShifts.some(
-      (s) => s.date === date && s.time_slot_id === timeSlotId
+      (s) => normalizeDate(s.date) === normalizedDate && s.time_slot_id === timeSlotId
     )
   }
 
@@ -158,14 +193,84 @@ export default function ShiftSelectionTable({
     onShiftsChange(newShifts)
   }
 
+  // Show placeholder when teacher or start date is missing
+  if (!teacherId || !startDate) {
+    let message = ''
+    if (!teacherId && !startDate) {
+      message = 'Select a teacher and start date to preview scheduled shifts.'
+    } else if (!teacherId) {
+      message = 'Select a teacher to preview scheduled shifts.'
+    } else {
+      message = 'Select a start date to preview scheduled shifts.'
+    }
+    
+    return (
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Day</TableHead>
+              {timeSlots.map((slot) => (
+                <TableHead key={slot.id} className="text-center">{slot.code}</TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell colSpan={timeSlots.length + 1} className="text-center py-8 text-muted-foreground">
+                {message}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+    )
+  }
+
   if (loading) {
-    return <div className="text-sm text-muted-foreground">Loading shifts...</div>
+    return (
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Day</TableHead>
+              {timeSlots.map((slot) => (
+                <TableHead key={slot.id} className="text-center">{slot.code}</TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell colSpan={timeSlots.length + 1} className="text-center py-8 text-muted-foreground">
+                Loading shifts...
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+    )
   }
 
   if (Object.keys(shiftsByDate).length === 0) {
     return (
-      <div className="text-sm text-muted-foreground">
-        No scheduled shifts found for this date range.
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Day</TableHead>
+              {timeSlots.map((slot) => (
+                <TableHead key={slot.id} className="text-center">{slot.code}</TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell colSpan={timeSlots.length + 1} className="text-center py-8 text-muted-foreground">
+                No scheduled shifts found for this teacher in the selected date range.
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
       </div>
     )
   }

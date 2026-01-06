@@ -15,7 +15,7 @@ const scheduleSchema = z.object({
   teacher_id: z.string().min(1, 'Teacher is required'),
   day_of_week_id: z.string().min(1, 'Day of week is required'),
   time_slot_id: z.string().min(1, 'Time slot is required'),
-  class_id: z.string().min(1, 'Class is required'),
+  class_id: z.string().min(1, 'Class group is required'),
   classroom_id: z.string().min(1, 'Classroom is required'),
 })
 
@@ -43,7 +43,7 @@ export default function TeacherScheduleForm({ schedule, onSubmit, onCancel }: Te
   useEffect(() => {
     fetch('/api/teachers').then((r) => r.json()).then(setTeachers).catch(console.error)
     fetch('/api/timeslots').then((r) => r.json()).then(setTimeSlots).catch(console.error)
-    fetch('/api/classes').then((r) => r.json()).then(setClasses).catch(console.error)
+    fetch('/api/class-groups').then((r) => r.json()).then(setClasses).catch(console.error)
     fetch('/api/classrooms').then((r) => r.json()).then(setClassrooms).catch(console.error)
     fetch('/api/days-of-week')
       .then((r) => {
@@ -161,10 +161,10 @@ export default function TeacherScheduleForm({ schedule, onSubmit, onCancel }: Te
           </Select>
         </FormField>
 
-        <FormField label="Class" error={errors.class_id?.message} required>
+        <FormField label="Class Group" error={errors.class_id?.message} required>
           <Select value={classId || ''} onValueChange={(value) => setValue('class_id', value)}>
             <SelectTrigger>
-              <SelectValue placeholder="Select a class" />
+              <SelectValue placeholder="Select a class group" />
             </SelectTrigger>
             <SelectContent>
               {classes.map((cls) => (

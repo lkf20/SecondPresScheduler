@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -18,7 +18,7 @@ import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
 const timeOffSchema = z.object({
   teacher_id: z.string().min(1, 'Teacher is required'),
   start_date: z.string().min(1, 'Start date is required'),
-  end_date: z.string().min(1, 'End date is required'),
+  end_date: z.string().optional(), // End date is now optional
   shift_selection_mode: z.enum(['all_scheduled', 'select_shifts']).default('all_scheduled'),
   reason: z.enum(['Vacation', 'Sick Day', 'Training', 'Other']).optional(),
   notes: z.string().optional(),
@@ -35,9 +35,23 @@ export default function TimeOffFormClient({ timeOffRequest }: TimeOffFormClientP
   const [error, setError] = useState<string | null>(null)
   const [teachers, setTeachers] = useState<any[]>([])
   const [selectedShifts, setSelectedShifts] = useState<Array<{ date: string; day_of_week_id: string; time_slot_id: string }>>([])
+  const [endDateCorrected, setEndDateCorrected] = useState(false)
+  const justCorrectedRef = useRef(false)
+  const [isPastDate, setIsPastDate] = useState(false)
 
   useEffect(() => {
-    fetch('/api/teachers').then((r) => r.json()).then(setTeachers).catch(console.error)
+    fetch('/api/teachers')
+      .then((r) => r.json())
+      .then((data) => {
+        // Sort teachers alphabetically by display_name, fallback to first_name
+        const sorted = data.sort((a: any, b: any) => {
+          const nameA = a.display_name || `${a.first_name} ${a.last_name}`.trim() || ''
+          const nameB = b.display_name || `${b.first_name} ${b.last_name}`.trim() || ''
+          return nameA.localeCompare(nameB)
+        })
+        setTeachers(sorted)
+      })
+      .catch(console.error)
   }, [])
 
   // Load shifts separately when timeOffRequest changes
@@ -110,10 +124,13 @@ export default function TimeOffFormClient({ timeOffRequest }: TimeOffFormClientP
   const onSubmit = async (data: TimeOffFormData) => {
     try {
       setError(null)
+      // If end_date is not provided, use start_date (single day time off)
+      const effectiveEndDate = data.end_date || data.start_date
+      
       const payload: any = {
         teacher_id: data.teacher_id,
         start_date: data.start_date,
-        end_date: data.end_date,
+        end_date: effectiveEndDate,
         reason: data.reason || null,
         notes: data.notes || null,
         shift_selection_mode: data.shift_selection_mode,
@@ -169,6 +186,45 @@ export default function TimeOffFormClient({ timeOffRequest }: TimeOffFormClientP
   const shiftMode = watch('shift_selection_mode')
   const reason = watch('reason')
 
+  // Check if start date is in the past
+  useEffect(() => {
+    if (startDate) {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const selectedDate = new Date(startDate)
+      selectedDate.setHours(0, 0, 0, 0)
+      setIsPastDate(selectedDate < today)
+    } else {
+      setIsPastDate(false)
+    }
+  }, [startDate])
+
+  // Validate end date is not before start date
+  useEffect(() => {
+    if (startDate && endDate) {
+      if (endDate < startDate) {
+        setValue('end_date', startDate, { shouldValidate: false })
+        justCorrectedRef.current = true
+        setEndDateCorrected(true)
+        // Clear the message after a few seconds
+        const timer = setTimeout(() => {
+          setEndDateCorrected(false)
+          justCorrectedRef.current = false
+        }, 5000)
+        return () => clearTimeout(timer)
+      } else if (endDate === startDate && justCorrectedRef.current) {
+        // Keep the message visible if we just corrected it
+        // Don't clear it here, let the timer handle it
+      } else {
+        setEndDateCorrected(false)
+        justCorrectedRef.current = false
+      }
+    } else {
+      setEndDateCorrected(false)
+      justCorrectedRef.current = false
+    }
+  }, [startDate, endDate, setValue])
+
   return (
     <div>
       <div className="mb-8">
@@ -202,10 +258,29 @@ export default function TimeOffFormClient({ timeOffRequest }: TimeOffFormClientP
 
           <FormField label="Start Date" error={errors.start_date?.message} required>
             <Input type="date" {...register('start_date')} />
+            {isPastDate && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                You are recording time off for a past date.
+              </p>
+            )}
           </FormField>
 
-          <FormField label="End Date" error={errors.end_date?.message} required>
-            <Input type="date" {...register('end_date')} />
+          <FormField label="End Date" error={errors.end_date?.message}>
+            <Input 
+              type="date" 
+              {...register('end_date')} 
+              placeholder="Optional - leave blank for single day"
+            />
+            {endDateCorrected && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                End date was updated to match the start date.
+              </p>
+            )}
+            {!endDateCorrected && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Optional. If not specified, time off will be for the start date only.
+              </p>
+            )}
           </FormField>
 
           <FormField label="Shifts" error={errors.shift_selection_mode?.message}>
@@ -228,66 +303,70 @@ export default function TimeOffFormClient({ timeOffRequest }: TimeOffFormClientP
                 </div>
               </div>
             </RadioGroup>
-            {shiftMode === 'all_scheduled' && (
-              <p className="text-sm text-muted-foreground mt-2">
+          </FormField>
+
+          {/* Shift table moved here, below radio buttons */}
+          <div className="space-y-4">
+            {shiftMode === 'all_scheduled' && teacherId && (
+              <p className="text-sm text-muted-foreground">
                 All scheduled shifts will be logged. Switch to &quot;Select shifts&quot; to make changes.
               </p>
             )}
-          </FormField>
+            <ShiftSelectionTable
+              teacherId={teacherId || null}
+              startDate={startDate || ''}
+              endDate={endDate || startDate || ''}
+              selectedShifts={selectedShifts}
+              onShiftsChange={setSelectedShifts}
+              disabled={shiftMode === 'all_scheduled'}
+            />
+          </div>
 
-          <FormField label="Reason" error={errors.reason?.message}>
-            <RadioGroup
-              value={reason || ''}
-              onValueChange={(value) => setValue('reason', value as 'Vacation' | 'Sick Day' | 'Training' | 'Other')}
-            >
-              <div className="flex items-center space-x-6">
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="Vacation" id="reason-vacation" />
-                  <Label htmlFor="reason-vacation" className="font-normal cursor-pointer">
-                    Vacation
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="Sick Day" id="reason-sick" />
-                  <Label htmlFor="reason-sick" className="font-normal cursor-pointer">
-                    Sick Day
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="Training" id="reason-training" />
-                  <Label htmlFor="reason-training" className="font-normal cursor-pointer">
-                    Training
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="Other" id="reason-other" />
-                  <Label htmlFor="reason-other" className="font-normal cursor-pointer">
-                    Other
-                  </Label>
-                </div>
-              </div>
-            </RadioGroup>
-          </FormField>
+          {/* Optional details section */}
+          <div className="pt-8 mt-12 border-t space-y-6">
+            <div>
+              <h3 className="text-sm font-medium mb-4">Optional Details</h3>
+              <div className="space-y-6">
+                <FormField label="Reason" error={errors.reason?.message}>
+                  <RadioGroup
+                    value={reason || ''}
+                    onValueChange={(value) => setValue('reason', value as 'Vacation' | 'Sick Day' | 'Training' | 'Other')}
+                  >
+                    <div className="flex items-center space-x-6">
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="Vacation" id="reason-vacation" />
+                        <Label htmlFor="reason-vacation" className="font-normal cursor-pointer">
+                          Vacation
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="Sick Day" id="reason-sick" />
+                        <Label htmlFor="reason-sick" className="font-normal cursor-pointer">
+                          Sick Day
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="Training" id="reason-training" />
+                        <Label htmlFor="reason-training" className="font-normal cursor-pointer">
+                          Training
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="Other" id="reason-other" />
+                        <Label htmlFor="reason-other" className="font-normal cursor-pointer">
+                          Other
+                        </Label>
+                      </div>
+                    </div>
+                  </RadioGroup>
+                </FormField>
 
-          <FormField label="Notes" error={errors.notes?.message}>
-            <Textarea {...register('notes')} placeholder="Optional notes" />
-          </FormField>
-
-          {teacherId && startDate && endDate && (
-            <div className="space-y-4 pt-4 border-t">
-              <div>
-                <h3 className="text-sm font-medium mb-2">Shifts</h3>
-                <ShiftSelectionTable
-                  teacherId={teacherId}
-                  startDate={startDate}
-                  endDate={endDate}
-                  selectedShifts={selectedShifts}
-                  onShiftsChange={setSelectedShifts}
-                  disabled={shiftMode === 'all_scheduled'}
-                />
+                <FormField label="Notes" error={errors.notes?.message}>
+                  <Textarea {...register('notes')} placeholder="Optional notes" />
+                </FormField>
               </div>
             </div>
-          )}
+          </div>
 
           <div className="flex justify-end gap-4">
             <Button type="button" variant="outline" onClick={() => router.push('/time-off')}>

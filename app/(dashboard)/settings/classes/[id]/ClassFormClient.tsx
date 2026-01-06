@@ -7,14 +7,16 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import FormField from '@/components/shared/FormField'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import { Database } from '@/types/database'
 
-type Class = Database['public']['Tables']['classes']['Row']
+type ClassGroup = Database['public']['Tables']['class_groups']['Row']
 
 const classSchema = z.object({
-  name: z.string().min(1, 'Class name is required'),
+  name: z.string().min(1, 'Class group name is required'),
   min_age: z.preprocess(
     (val) => (val === '' || val === null || val === undefined || isNaN(Number(val)) ? null : Number(val)),
     z.number().int().min(0).max(18).nullable().optional()
@@ -28,12 +30,16 @@ const classSchema = z.object({
     (val) => (val === '' || val === null || val === undefined || isNaN(Number(val)) ? null : Number(val)),
     z.number().int().min(1).nullable().optional()
   ),
+  diaper_changing_required: z.boolean().optional(),
+  lifting_children_required: z.boolean().optional(),
+  toileting_assistance_required: z.boolean().optional(),
+  is_active: z.boolean().optional(),
 })
 
 type ClassFormData = z.infer<typeof classSchema>
 
 interface ClassFormClientProps {
-  classData: Class
+  classData: ClassGroup
 }
 
 export default function ClassFormClient({ classData }: ClassFormClientProps) {
@@ -42,6 +48,8 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<ClassFormData>({
     resolver: zodResolver(classSchema),
@@ -51,8 +59,17 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
       max_age: classData.max_age ?? undefined,
       required_ratio: classData.required_ratio ?? 8,
       preferred_ratio: classData.preferred_ratio ?? undefined,
+      diaper_changing_required: classData.diaper_changing_required ?? false,
+      lifting_children_required: classData.lifting_children_required ?? false,
+      toileting_assistance_required: classData.toileting_assistance_required ?? false,
+      is_active: classData.is_active ?? true,
     },
   })
+
+  const diaperChanging = watch('diaper_changing_required')
+  const liftingChildren = watch('lifting_children_required')
+  const toiletingAssistance = watch('toileting_assistance_required')
+  const isActive = watch('is_active')
 
   const onSubmit = async (data: ClassFormData) => {
     try {
@@ -63,8 +80,12 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
         min_age: data.min_age === undefined || data.min_age === null ? null : data.min_age,
         max_age: data.max_age === undefined || data.max_age === null ? null : data.max_age,
         preferred_ratio: data.preferred_ratio === undefined || data.preferred_ratio === null ? null : data.preferred_ratio,
+        diaper_changing_required: data.diaper_changing_required ?? false,
+        lifting_children_required: data.lifting_children_required ?? false,
+        toileting_assistance_required: data.toileting_assistance_required ?? false,
+        is_active: data.is_active ?? true,
       }
-      const response = await fetch(`/api/classes/${classData.id}`, {
+      const response = await fetch(`/api/class-groups/${classData.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -72,7 +93,7 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to update class')
+        throw new Error(errorData.error || 'Failed to update class group')
       }
 
       router.push('/settings/classes')
@@ -82,31 +103,11 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
     }
   }
 
-  const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this class?')) return
-
-    try {
-      setError(null)
-      const response = await fetch(`/api/classes/${classData.id}`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to delete class')
-      }
-
-      router.push('/settings/classes')
-      router.refresh()
-    } catch (err: any) {
-      setError(err.message)
-    }
-  }
 
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Edit Class</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Edit Class Group</h1>
         <p className="text-muted-foreground mt-2">{classData.name}</p>
       </div>
 
@@ -114,7 +115,7 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
 
       <div className="max-w-2xl">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <FormField label="Class Name" error={errors.name?.message} required>
+          <FormField label="Class Group Name" error={errors.name?.message} required>
             <Input {...register('name')} />
           </FormField>
 
@@ -127,6 +128,9 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
                 {...register('min_age')}
                 placeholder="Optional"
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                Age in years
+              </p>
             </FormField>
 
             <FormField label="Max Age" error={errors.max_age?.message}>
@@ -137,6 +141,9 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
                 {...register('max_age')}
                 placeholder="Optional"
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                Age in years
+              </p>
             </FormField>
           </div>
 
@@ -166,6 +173,68 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
             </FormField>
           </div>
 
+          <div className="space-y-4 pt-6 border-t">
+            <div>
+              <Label className="text-base font-semibold">Care Requirements</Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                These requirements affect which subs and teachers are eligible.
+              </p>
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="diaper_changing_required"
+                  checked={diaperChanging}
+                  onCheckedChange={(checked) => setValue('diaper_changing_required', checked === true)}
+                />
+                <Label htmlFor="diaper_changing_required" className="font-normal cursor-pointer">
+                  Diaper changing required
+                </Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="lifting_children_required"
+                  checked={liftingChildren}
+                  onCheckedChange={(checked) => setValue('lifting_children_required', checked === true)}
+                />
+                <Label htmlFor="lifting_children_required" className="font-normal cursor-pointer">
+                  Lifting children required
+                </Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="toileting_assistance_required"
+                  checked={toiletingAssistance}
+                  onCheckedChange={(checked) => setValue('toileting_assistance_required', checked === true)}
+                />
+                <Label htmlFor="toileting_assistance_required" className="font-normal cursor-pointer">
+                  Toileting assistance required
+                </Label>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-6 border-t">
+            <div>
+              <Label className="text-base font-semibold">Status</Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                Inactive items will not appear in dropdowns but historical data is preserved.
+              </p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="is_active"
+                checked={isActive}
+                onCheckedChange={(checked) => setValue('is_active', checked === true)}
+              />
+              <Label htmlFor="is_active" className="font-normal cursor-pointer">
+                Active (appears in dropdowns)
+              </Label>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-4">
             <Button type="button" variant="outline" onClick={() => router.push('/settings/classes')}>
               Cancel
@@ -175,14 +244,6 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
             </Button>
           </div>
         </form>
-        <div className="mt-6 pt-6 border-t">
-          <button
-            onClick={handleDelete}
-            className="text-sm text-destructive hover:underline"
-          >
-            Delete Class
-          </button>
-        </div>
       </div>
     </div>
   )

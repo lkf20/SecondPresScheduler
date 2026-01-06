@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 import TeacherForm from '@/components/teachers/TeacherForm'
 import ErrorMessage from '@/components/shared/ErrorMessage'
@@ -14,7 +14,25 @@ interface TeacherFormClientProps {
 
 export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
+  
+  // Get return page and search from URL params
+  const returnPage = searchParams.get('returnPage') || '1'
+  const returnSearch = searchParams.get('returnSearch')
+  
+  // Build return URL with preserved pagination
+  const getReturnUrl = () => {
+    const params = new URLSearchParams()
+    if (returnPage !== '1') {
+      params.set('page', returnPage)
+    }
+    if (returnSearch) {
+      params.set('search', returnSearch)
+    }
+    const queryString = params.toString()
+    return `/teachers${queryString ? `?${queryString}` : ''}`
+  }
 
   const handleSubmit = async (data: any) => {
     try {
@@ -38,7 +56,7 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
         throw new Error(errorData.error || 'Failed to update teacher')
       }
 
-      router.push('/teachers')
+      router.push(getReturnUrl())
       router.refresh()
     } catch (err: any) {
       setError(err.message)
@@ -59,7 +77,7 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
         throw new Error(errorData.error || 'Failed to delete teacher')
       }
 
-      router.push('/teachers')
+      router.push(getReturnUrl())
       router.refresh()
     } catch (err: any) {
       setError(err.message)
@@ -78,7 +96,7 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
       {error && <ErrorMessage message={error} className="mb-6" />}
 
       <div className="max-w-2xl">
-        <TeacherForm teacher={teacher} onSubmit={handleSubmit} onCancel={() => router.push('/teachers')} />
+        <TeacherForm teacher={teacher} onSubmit={handleSubmit} onCancel={() => router.push(getReturnUrl())} />
         <div className="mt-6 pt-6 border-t">
           <button
             onClick={handleDelete}

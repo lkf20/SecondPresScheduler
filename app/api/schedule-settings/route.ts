@@ -6,6 +6,7 @@ export async function GET() {
     const settings = await getScheduleSettings()
     return NextResponse.json(settings || { selected_day_ids: [] })
   } catch (error: any) {
+    console.error('Error fetching schedule settings:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

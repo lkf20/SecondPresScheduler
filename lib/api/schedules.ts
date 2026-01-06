@@ -7,7 +7,7 @@ export async function getTeacherSchedules(teacherId: string) {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('teacher_schedules')
-    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), class:classes(*), classroom:classrooms(*)')
+    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), class:class_groups(*), classroom:classrooms(*)')
     .eq('teacher_id', teacherId)
 
   if (error) throw error
@@ -20,15 +20,28 @@ export async function createTeacherSchedule(schedule: {
   time_slot_id: string
   class_id: string
   classroom_id: string
+  is_floater?: boolean
 }) {
   const supabase = await createClient()
+  const insertData = {
+    ...schedule,
+    is_floater: schedule.is_floater ?? false,
+  }
+  
   const { data, error } = await supabase
     .from('teacher_schedules')
-    .insert(schedule)
+    .insert(insertData)
     .select()
     .single()
 
-  if (error) throw error
+  if (error) {
+    // Preserve error details for better error messages
+    const enhancedError = new Error(error.message)
+    ;(enhancedError as any).code = error.code
+    ;(enhancedError as any).details = error.details
+    ;(enhancedError as any).hint = error.hint
+    throw enhancedError
+  }
   return data as TeacherSchedule
 }
 
@@ -43,7 +56,7 @@ export async function getTeacherScheduleById(id: string) {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('teacher_schedules')
-    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), class:classes(*), classroom:classrooms(*), teacher:staff(*)')
+    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), class:class_groups(*), classroom:classrooms(*), teacher:staff(*)')
     .eq('id', id)
     .single()
 
@@ -68,7 +81,7 @@ export async function getAllTeacherSchedules(filters?: { teacher_id?: string }) 
   const supabase = await createClient()
   let query = supabase
     .from('teacher_schedules')
-    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), class:classes(*), classroom:classrooms(*), teacher:staff(*)')
+    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), class:class_groups(*), classroom:classrooms(*), teacher:staff(*)')
     .order('teacher_id', { ascending: true })
     .order('day_of_week_id', { ascending: true })
     .order('time_slot_id', { ascending: true })
@@ -125,7 +138,7 @@ export async function getScheduleByDayAndSlot(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('teacher_schedules')
-    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), class:classes(*), classroom:classrooms(*)')
+    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), class:class_groups(*), classroom:classrooms(*)')
     .eq('teacher_id', teacherId)
     .eq('day_of_week_id', dayOfWeekId)
     .eq('time_slot_id', timeSlotId)

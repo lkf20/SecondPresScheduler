@@ -21,7 +21,11 @@ export async function GET() {
     return NextResponse.json(data)
   } catch (error: any) {
     console.error('Error fetching weekly schedule:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error('Error stack:', error.stack)
+    return NextResponse.json({ 
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    }, { status: 500 })
   }
 }
 

@@ -16,6 +16,7 @@ export interface WeeklyScheduleData {
     class_name: string
     classroom_id: string
     classroom_name: string
+    is_floater?: boolean
     enrollment?: number
     required_teachers?: number
     preferred_teachers?: number
@@ -26,17 +27,32 @@ export interface WeeklyScheduleData {
 export interface WeeklyScheduleDataByClassroom {
   classroom_id: string
   classroom_name: string
+  classroom_color: string | null
   days: Array<{
     day_of_week_id: string
     day_name: string
     day_number: number
-    time_slots: Array<{
-      time_slot_id: string
-      time_slot_code: string
-      time_slot_name: string | null
-      time_slot_display_order: number | null
-      assignments: WeeklyScheduleData['assignments']
-    }>
+        time_slots: Array<{
+          time_slot_id: string
+          time_slot_code: string
+          time_slot_name: string | null
+          time_slot_display_order: number | null
+          assignments: WeeklyScheduleData['assignments']
+          schedule_cell: {
+            id: string
+            is_active: boolean
+            enrollment_for_staffing: number | null
+            notes: string | null
+            class_groups?: Array<{
+              id: string
+              name: string
+              min_age: number | null
+              max_age: number | null
+              required_ratio: number
+              preferred_ratio: number | null
+            }>
+          } | null
+        }>
   }>
 }
 
@@ -80,7 +96,7 @@ export async function getWeeklyScheduleData(selectedDayIds?: string[]) {
   const { data: classrooms, error: classroomsError } = await supabase
     .from('classrooms')
     .select('*')
-    .order('order', { ascending: true, nullsLast: true })
+    .order('order', { ascending: true, nullsFirst: false })
     .order('name', { ascending: true })
   
   if (classroomsError) {
@@ -100,47 +116,112 @@ export async function getWeeklyScheduleData(selectedDayIds?: string[]) {
   }
   
   // Get all teacher schedules with related data
-  const { data: schedules } = await supabase
+  const { data: schedules, error: schedulesError } = await supabase
     .from('teacher_schedules')
     .select(`
       *,
       teacher:staff!teacher_schedules_teacher_id_fkey(id, first_name, last_name, display_name),
       day_of_week:days_of_week(*),
       time_slot:time_slots(*),
-      class:classes(*),
+      class:class_groups(*),
       classroom:classrooms(*)
     `)
   
+  if (schedulesError) {
+    console.error('API Error: Failed to fetch teacher schedules:', schedulesError)
+    throw new Error(`Failed to fetch teacher schedules: ${schedulesError.message}`)
+  }
+  
   // Get enrollments
-  const { data: enrollments } = await supabase
+  const { data: enrollments, error: enrollmentsError } = await supabase
     .from('enrollments')
     .select(`
       *,
-      class:classes(*),
+      class:class_groups(*),
       day_of_week:days_of_week(*),
       time_slot:time_slots(*)
     `)
   
+  if (enrollmentsError) {
+    console.error('API Error: Failed to fetch enrollments:', enrollmentsError)
+    throw new Error(`Failed to fetch enrollments: ${enrollmentsError.message}`)
+  }
+  
   // Get staffing rules
-  const { data: staffingRules } = await supabase
+  const { data: staffingRules, error: staffingRulesError } = await supabase
     .from('staffing_rules')
     .select(`
       *,
-      class:classes(*),
+      class:class_groups(*),
       day_of_week:days_of_week(*),
       time_slot:time_slots(*)
     `)
   
-  // Get class-classroom mappings
-  const { data: classMappings } = await supabase
-    .from('class_classroom_mappings')
-    .select(`
-      *,
-      class:classes(*),
-      classroom:classrooms(*),
-      day_of_week:days_of_week(*),
-      time_slot:time_slots(*)
-    `)
+  if (staffingRulesError) {
+    console.error('API Error: Failed to fetch staffing rules:', staffingRulesError)
+    throw new Error(`Failed to fetch staffing rules: ${staffingRulesError.message}`)
+  }
+  
+  // Get schedule cells (gracefully handle if table doesn't exist yet)
+  // Note: We fetch all schedule cells and filter in memory for flexibility
+  // Future optimization: Add WHERE clauses if selectedDayIds is provided
+  let scheduleCells: Array<{
+    id: string
+    classroom_id: string
+    day_of_week_id: string
+    time_slot_id: string
+    is_active: boolean
+    enrollment_for_staffing: number | null
+    notes: string | null
+    schedule_cell_class_groups?: Array<{
+      class_group: {
+        id: string
+        name: string
+        min_age: number | null
+        max_age: number | null
+        required_ratio: number
+        preferred_ratio: number | null
+      }
+    }>
+  }> | null = null
+  try {
+    const { data, error: scheduleCellsError } = await supabase
+      .from('schedule_cells')
+      .select(`
+        *,
+        schedule_cell_class_groups(
+          class_group:class_groups(id, name, min_age, max_age, required_ratio, preferred_ratio)
+        )
+      `)
+    
+    if (scheduleCellsError) {
+      // If table doesn't exist (migration not run), continue without schedule cells
+      if (scheduleCellsError.code === '42P01' || scheduleCellsError.message?.includes('does not exist')) {
+        console.warn('schedule_cells table does not exist yet. Please run migration 021_create_schedule_cells.sql')
+        scheduleCells = null
+      } else {
+        console.error('API Error: Failed to fetch schedule cells:', scheduleCellsError)
+        scheduleCells = null
+      }
+    } else {
+      // Transform the nested structure to flatten class_groups array
+      scheduleCells = (data || []).map((cell: any) => {
+        if (cell.schedule_cell_class_groups) {
+          cell.class_groups = cell.schedule_cell_class_groups
+            .map((j: any) => j.class_group)
+            .filter((cg: any) => cg !== null)
+          delete cell.schedule_cell_class_groups
+        } else {
+          cell.class_groups = []
+        }
+        return cell
+      })
+    }
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    console.warn('Error fetching schedule cells (table may not exist):', errorMessage)
+    scheduleCells = null
+  }
   
   // Build the weekly schedule data structure grouped by classroom
   const weeklyDataByClassroom: WeeklyScheduleDataByClassroom[] = []
@@ -149,25 +230,47 @@ export async function getWeeklyScheduleData(selectedDayIds?: string[]) {
   for (const classroom of classrooms) {
     const classroomDays: WeeklyScheduleDataByClassroom['days'] = []
     
-    // Process each day
-    for (const day of daysOfWeek) {
+    // Process each day - only include selected days if selectedDayIds is provided
+    const daysToProcess = selectedDayIds && selectedDayIds.length > 0
+      ? daysOfWeek.filter((d) => selectedDayIds.includes(d.id))
+      : daysOfWeek
+    
+    for (const day of daysToProcess) {
       const dayTimeSlots: Array<{
         time_slot_id: string
         time_slot_code: string
         time_slot_name: string | null
         time_slot_display_order: number | null
+        time_slot_start_time: string | null
+        time_slot_end_time: string | null
         assignments: WeeklyScheduleData['assignments']
+        schedule_cell: {
+          id: string
+          is_active: boolean
+          enrollment_for_staffing: number | null
+          notes: string | null
+          class_groups?: Array<{
+            id: string
+            name: string
+            min_age: number | null
+            max_age: number | null
+            required_ratio: number
+            preferred_ratio: number | null
+          }>
+        } | null
       }> = []
       
       // Process each time slot
       for (const timeSlot of timeSlots) {
-        // Get all class-classroom mappings for this day/time/classroom
-        const mappingsForSlot = classMappings?.filter(
-          (m) => m.day_of_week_id === day.id && 
-                 m.time_slot_id === timeSlot.id &&
-                 m.classroom_id === classroom.id
-        ) || []
-        
+        // Get schedule cell for this day/time/classroom
+        const scheduleCell = scheduleCells && scheduleCells.length > 0
+          ? scheduleCells.find(
+              (c) => c.classroom_id === classroom.id &&
+                     c.day_of_week_id === day.id &&
+                     c.time_slot_id === timeSlot.id
+            )
+          : null
+
         // Get assignments for this day/time/classroom
         const assignmentsForSlot = schedules?.filter(
           (s) => s.day_of_week_id === day.id && 
@@ -175,67 +278,53 @@ export async function getWeeklyScheduleData(selectedDayIds?: string[]) {
                  s.classroom_id === classroom.id
         ) || []
         
-        // Group assignments by class
-        const assignmentMap = new Map<string, any[]>()
-        
-        for (const assignment of assignmentsForSlot) {
-          const key = assignment.class_id
-          if (!assignmentMap.has(key)) {
-            assignmentMap.set(key, [])
-          }
-          assignmentMap.get(key)!.push({
-            id: assignment.id,
-            teacher_id: assignment.teacher_id,
-            teacher_name: assignment.teacher?.display_name || 
-                          `${assignment.teacher?.first_name || ''} ${assignment.teacher?.last_name || ''}`.trim() ||
-                          'Unknown',
-            class_id: assignment.class_id,
-            class_name: assignment.class?.name || 'Unknown',
-            classroom_id: assignment.classroom_id,
-            classroom_name: assignment.classroom?.name || 'Unknown',
-          })
-        }
-        
-        // Build assignments array with enrollment and staffing data
+        // Build assignments array - use schedule_cell as the source of truth
         const assignments: WeeklyScheduleData['assignments'] = []
         
-        for (const mapping of mappingsForSlot) {
-          const key = mapping.class_id
-          const teachers = assignmentMap.get(key) || []
+        // Only process if schedule_cell exists and is active with class groups
+        if (scheduleCell?.class_groups && scheduleCell.class_groups.length > 0 && scheduleCell.is_active) {
+          const classGroupIds = scheduleCell.class_groups.map(cg => cg.id)
           
-          // Get enrollment for this class/day/time
-          const enrollment = enrollments?.find(
-            (e) => e.class_id === mapping.class_id && 
-                   e.day_of_week_id === day.id && 
-                   e.time_slot_id === timeSlot.id
-          )
+          // Get teachers assigned to this slot (teachers are assigned to the slot, not individual class groups)
+          // Filter by any of the class groups in the slot
+          const teachers = assignmentsForSlot
+            .filter(a => a.class_id && classGroupIds.includes(a.class_id))
+            .map(assignment => ({
+              id: assignment.id,
+              teacher_id: assignment.teacher_id,
+              teacher_name: assignment.teacher?.display_name || 
+                            `${assignment.teacher?.first_name || ''} ${assignment.teacher?.last_name || ''}`.trim() ||
+                            'Unknown',
+              class_id: assignment.class_id,
+              class_name: assignment.class?.name || 'Unknown',
+              classroom_id: assignment.classroom_id,
+              classroom_name: assignment.classroom?.name || 'Unknown',
+              is_floater: assignment.is_floater || false,
+            }))
           
-          // Get staffing rule for this class/day/time
+          // Get enrollment from schedule_cell (enrollment is for the whole slot, not per class group)
+          const enrollment = scheduleCell.enrollment_for_staffing ?? null
+          
+          // Find class group with lowest min_age for ratio calculation
+          const classGroupForRatio = scheduleCell.class_groups.reduce((lowest, current) => {
+            const currentMinAge = current.min_age ?? Infinity
+            const lowestMinAge = lowest.min_age ?? Infinity
+            return currentMinAge < lowestMinAge ? current : lowest
+          })
+          
+          // Get staffing rule for the primary class group/day/time
+          const primaryClassGroupId = classGroupIds[0]
           const rule = staffingRules?.find(
-            (r) => r.class_id === mapping.class_id && 
+            (r) => r.class_id === primaryClassGroupId && 
                    r.day_of_week_id === day.id && 
                    r.time_slot_id === timeSlot.id
           )
           
-          assignments.push({
-            id: mapping.id,
-            teacher_id: '', // Not applicable for mapping
-            teacher_name: '', // Not applicable
-            class_id: mapping.class_id,
-            class_name: mapping.class?.name || 'Unknown',
-            classroom_id: mapping.classroom_id,
-            classroom_name: mapping.classroom?.name || 'Unknown',
-            enrollment: enrollment?.enrollment_count || 0,
-            required_teachers: rule?.required_teachers,
-            preferred_teachers: rule?.preferred_teachers,
-            assigned_count: teachers.length,
-          })
-          
-          // Add teacher assignments
+          // Add teacher assignments for this slot
           for (const teacher of teachers) {
             assignments.push({
               ...teacher,
-              enrollment: enrollment?.enrollment_count || 0,
+              enrollment: enrollment ?? 0,
               required_teachers: rule?.required_teachers,
               preferred_teachers: rule?.preferred_teachers,
               assigned_count: teachers.length,
@@ -243,13 +332,22 @@ export async function getWeeklyScheduleData(selectedDayIds?: string[]) {
           }
         }
         
-        dayTimeSlots.push({
-          time_slot_id: timeSlot.id,
-          time_slot_code: timeSlot.code,
-          time_slot_name: timeSlot.name,
-          time_slot_display_order: timeSlot.display_order,
-          assignments,
-        })
+          dayTimeSlots.push({
+            time_slot_id: timeSlot.id,
+            time_slot_code: timeSlot.code,
+            time_slot_name: timeSlot.name,
+            time_slot_display_order: timeSlot.display_order,
+            time_slot_start_time: timeSlot.default_start_time,
+            time_slot_end_time: timeSlot.default_end_time,
+            assignments,
+            schedule_cell: scheduleCell ? {
+              id: scheduleCell.id,
+              is_active: scheduleCell.is_active,
+              enrollment_for_staffing: scheduleCell.enrollment_for_staffing,
+              notes: scheduleCell.notes,
+              class_groups: scheduleCell.class_groups || [],
+            } : null,
+          })
       }
       
       classroomDays.push({
@@ -263,6 +361,7 @@ export async function getWeeklyScheduleData(selectedDayIds?: string[]) {
     weeklyDataByClassroom.push({
       classroom_id: classroom.id,
       classroom_name: classroom.name,
+      classroom_color: (classroom as any).color || null,
       days: classroomDays,
     })
   }

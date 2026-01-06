@@ -29,6 +29,9 @@ import {
 } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import { Search, GripVertical } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -38,6 +41,7 @@ interface Classroom {
   capacity?: number | null
   order?: number | null
   allowed_classes_display?: string
+  is_active?: boolean
   [key: string]: any
 }
 
@@ -79,16 +83,35 @@ function SortableRow({ classroom }: { classroom: Classroom }) {
         </button>
       </TableCell>
       <TableCell>
-        <Link
-          href={`/settings/classrooms/${classroom.id}`}
-          className="hover:underline"
-        >
-          {classroom.name}
-        </Link>
+        <div className="flex items-center gap-2">
+          {!classroom.is_active && (
+            <Badge variant="secondary" className="text-xs">Inactive</Badge>
+          )}
+          <Link
+            href={`/settings/classrooms/${classroom.id}`}
+            className={cn(
+              "hover:underline",
+              !classroom.is_active && "text-muted-foreground"
+            )}
+          >
+            {classroom.name}
+          </Link>
+        </div>
       </TableCell>
                     <TableCell>{classroom.capacity || '—'}</TableCell>
                     <TableCell className="max-w-md">
                       {classroom.allowed_classes_display || 'None'}
+                    </TableCell>
+                    <TableCell>
+                      {classroom.color ? (
+                        <div
+                          className="w-8 h-8 rounded"
+                          style={{ backgroundColor: classroom.color }}
+                          title={classroom.color}
+                        />
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </TableCell>
     </TableRow>
   )
@@ -100,6 +123,7 @@ export default function SortableClassroomsTable({
 }: SortableClassroomsTableProps) {
   const [classrooms, setClassrooms] = useState(initialClassrooms)
   const [search, setSearch] = useState('')
+  const [showInactive, setShowInactive] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
 
@@ -168,16 +192,16 @@ export default function SortableClassroomsTable({
     }
   }
 
-  // Filter classrooms by search
-  const filteredClassrooms = search
-    ? classrooms.filter((c) =>
-        c.name.toLowerCase().includes(search.toLowerCase())
-      )
-    : classrooms
+  // Filter classrooms by search and active status
+  const filteredClassrooms = classrooms.filter((c) => {
+    const matchesSearch = !search || c.name.toLowerCase().includes(search.toLowerCase())
+    const matchesActiveFilter = showInactive || c.is_active !== false
+    return matchesSearch && matchesActiveFilter
+  })
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-4 flex-wrap">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -186,6 +210,16 @@ export default function SortableClassroomsTable({
             onChange={(e) => setSearch(e.target.value)}
             className="pl-8"
           />
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            id="show-inactive"
+            checked={showInactive}
+            onCheckedChange={setShowInactive}
+          />
+          <Label htmlFor="show-inactive" className="text-sm cursor-pointer">
+            Show inactive
+          </Label>
         </div>
         {isSaving && (
           <span className="text-sm text-muted-foreground">Saving...</span>
@@ -205,7 +239,8 @@ export default function SortableClassroomsTable({
                 <TableHead className="w-10"></TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Capacity</TableHead>
-                <TableHead>Allowed Classes</TableHead>
+                <TableHead>Allowed Class Groups</TableHead>
+                <TableHead>Color</TableHead>
               </TableRow>
               </TableHeader>
               <TableBody>
@@ -237,13 +272,14 @@ export default function SortableClassroomsTable({
                 <TableHead className="w-10"></TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Capacity</TableHead>
-                <TableHead>Allowed Classes</TableHead>
+                <TableHead>Allowed Class Groups</TableHead>
+                <TableHead>Color</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredClassrooms.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
                     No classrooms found
                   </TableCell>
                 </TableRow>
@@ -256,16 +292,35 @@ export default function SortableClassroomsTable({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Link
-                        href={`/settings/classrooms/${classroom.id}`}
-                        className="hover:underline"
-                      >
-                        {classroom.name}
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        {!classroom.is_active && (
+                          <Badge variant="secondary" className="text-xs">Inactive</Badge>
+                        )}
+                        <Link
+                          href={`/settings/classrooms/${classroom.id}`}
+                          className={cn(
+                            "hover:underline",
+                            !classroom.is_active && "text-muted-foreground"
+                          )}
+                        >
+                          {classroom.name}
+                        </Link>
+                      </div>
                     </TableCell>
                     <TableCell>{classroom.capacity || '—'}</TableCell>
                     <TableCell className="max-w-md">
                       {classroom.allowed_classes_display || 'None'}
+                    </TableCell>
+                    <TableCell>
+                      {classroom.color ? (
+                        <div
+                          className="w-8 h-8 rounded"
+                          style={{ backgroundColor: classroom.color }}
+                          title={classroom.color}
+                        />
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))

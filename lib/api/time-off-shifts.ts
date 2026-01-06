@@ -90,9 +90,8 @@ export async function getTeacherScheduledShifts(
     }
   })
 
-  // Generate all dates in the range
-  const start = new Date(startDate)
-  const end = new Date(endDate)
+  // Generate all dates in the range (inclusive of both start and end dates)
+  // Work directly with date strings to avoid timezone issues
   const result: Array<{
     date: string
     day_of_week_id: string
@@ -103,19 +102,39 @@ export async function getTeacherScheduledShifts(
     time_slot_name: string | null
   }> = []
   
-  const currentDate = new Date(start)
-  while (currentDate <= end) {
-    const dayNumber = currentDate.getDay()
+  // Parse date string to get components
+  const parseDateStr = (dateStr: string) => {
+    const [year, month, day] = dateStr.split('-').map(Number)
+    return { year, month, day }
+  }
+  
+  // Get day of week from a date string (0 = Sunday, 1 = Monday, etc.)
+  const getDayOfWeek = (dateStr: string) => {
+    const { year, month, day } = parseDateStr(dateStr)
+    // Create date in local timezone, month is 0-indexed
+    const date = new Date(year, month - 1, day)
+    return date.getDay()
+  }
+  
+  // Compare date strings (YYYY-MM-DD format allows string comparison)
+  const compareDates = (date1: string, date2: string) => {
+    if (date1 < date2) return -1
+    if (date1 > date2) return 1
+    return 0
+  }
+  
+  // Iterate through all dates from start to end (inclusive)
+  let currentDateStr = startDate
+  
+  while (compareDates(currentDateStr, endDate) <= 0) {
+    const dayNumber = getDayOfWeek(currentDateStr)
     const shiftsForDay = scheduleByDayNumber.get(dayNumber)
     
     // Only include dates where teacher has scheduled shifts
     if (shiftsForDay && shiftsForDay.length > 0) {
-      const dateStr = currentDate.toISOString().split('T')[0]
-      const firstShift = shiftsForDay[0]
-      
       shiftsForDay.forEach((shift: any) => {
         result.push({
-          date: dateStr,
+          date: currentDateStr,
           day_of_week_id: shift.day_of_week_id,
           day_name: shift.days_of_week?.name || '',
           day_number: dayNumber,
@@ -126,7 +145,13 @@ export async function getTeacherScheduledShifts(
       })
     }
     
-    currentDate.setDate(currentDate.getDate() + 1)
+    // Move to next day by incrementing the date string
+    const { year, month, day } = parseDateStr(currentDateStr)
+    const nextDate = new Date(year, month - 1, day + 1)
+    const nextYear = nextDate.getFullYear()
+    const nextMonth = String(nextDate.getMonth() + 1).padStart(2, '0')
+    const nextDay = String(nextDate.getDate()).padStart(2, '0')
+    currentDateStr = `${nextYear}-${nextMonth}-${nextDay}`
   }
 
   return result

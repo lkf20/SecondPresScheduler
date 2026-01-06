@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getDaysOfWeek, ensureDaysOfWeekSeeded } from '@/lib/api/days-of-week'
+import { createErrorResponse } from '@/lib/utils/errors'
 
 export async function GET() {
   try {
@@ -15,9 +16,8 @@ export async function GET() {
     }
 
     return NextResponse.json(days)
-  } catch (error: any) {
-    console.error('Unexpected error in days-of-week API:', error)
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })
+  } catch (error) {
+    return createErrorResponse(error, 'Failed to fetch days of week', 500, 'GET /api/days-of-week')
   }
 }
 

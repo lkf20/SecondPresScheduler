@@ -21,7 +21,7 @@ export async function getClassClassroomMappings(filters?: {
     .from('class_classroom_mappings')
     .select(`
       *,
-      class:classes(id, name),
+      class:class_groups(id, name),
       classroom:classrooms(id, name),
       day_of_week:days_of_week(id, name, day_number),
       time_slot:time_slots(id, code, name)

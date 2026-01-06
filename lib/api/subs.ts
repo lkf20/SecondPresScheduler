@@ -9,10 +9,17 @@ export async function getSubs() {
     .from('staff')
     .select('*')
     .eq('is_sub', true)
-    .order('last_name', { ascending: true })
 
   if (error) throw error
-  return data as Staff[]
+  
+  // Sort by display_name, falling back to first_name + last_name if display_name is null
+  const sorted = (data as Staff[]).sort((a, b) => {
+    const nameA = a.display_name || `${a.first_name} ${a.last_name}` || ''
+    const nameB = b.display_name || `${b.first_name} ${b.last_name}` || ''
+    return nameA.localeCompare(nameB)
+  })
+  
+  return sorted
 }
 
 export async function getSubById(id: string) {

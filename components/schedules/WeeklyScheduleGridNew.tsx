@@ -429,8 +429,7 @@ export default function WeeklyScheduleGridNew({
                       <div
                         style={{
                           position: 'sticky',
-                          top: 0,
-                          left: 0,
+                          left: 0, // Only sticky horizontally, not vertically
                           backgroundColor: 'white',
                           gridColumn: 1,
                           gridRow: spacerRow,
@@ -501,8 +500,7 @@ export default function WeeklyScheduleGridNew({
                           className="flex items-center justify-center"
                           style={{
                             position: 'sticky',
-                            top: 0,
-                            left: 0,
+                            left: 0, // Only sticky horizontally, not vertically
                             backgroundColor: 'white',
                             gridColumn: 1,
                             gridRow: dataRow,
@@ -694,10 +692,9 @@ export default function WeeklyScheduleGridNew({
             {data.map((classroom, classroomIndex) => {
               const rowIndex = classroomIndex + 3 // After 2 header rows
               return (
-                <>
+                <React.Fragment key={`classroom-row-${classroom.classroom_id}`}>
                   {/* Classroom Name Column */}
                   <div
-                    key={`classroom-${classroom.classroom_id}`}
                     className="sticky left-0 z-10 pt-2"
                     style={{
                       backgroundColor: 'white',
@@ -776,7 +773,7 @@ export default function WeeklyScheduleGridNew({
                       )
                     })
                   })}
-                </>
+                </React.Fragment>
               )
             })}
           </div>

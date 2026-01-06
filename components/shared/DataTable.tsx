@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import {
   Table,
@@ -42,11 +43,38 @@ export default function DataTable<T extends Record<string, any>>({
   className,
   emptyMessage = 'No data available',
 }: DataTableProps<T>) {
-  const [search, setSearch] = useState('')
-  const [sortKey, setSortKey] = useState<string | null>(null)
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
-  const [currentPage, setCurrentPage] = useState(1)
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+  
+  // Get page from URL params, default to 1
+  const pageFromUrl = parseInt(searchParams.get('page') || '1', 10)
+  const [search, setSearch] = useState(searchParams.get('search') || '')
+  const [sortKey, setSortKey] = useState<string | null>(searchParams.get('sort') || null)
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(
+    (searchParams.get('dir') as 'asc' | 'desc') || 'asc'
+  )
+  const [currentPage, setCurrentPage] = useState(pageFromUrl)
   const itemsPerPage = 10
+
+  // Sync currentPage with URL param on mount and when URL changes
+  useEffect(() => {
+    if (pageFromUrl !== currentPage && pageFromUrl >= 1) {
+      setCurrentPage(pageFromUrl)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageFromUrl])
+
+  // Update URL when page changes
+  const updatePageInUrl = (page: number) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (page === 1) {
+      params.delete('page')
+    } else {
+      params.set('page', page.toString())
+    }
+    router.push(`${pathname}?${params.toString()}`, { scroll: false })
+  }
 
   // Filter data
   const filteredData = searchable
@@ -76,12 +104,20 @@ export default function DataTable<T extends Record<string, any>>({
   )
 
   const handleSort = (key: string) => {
-    if (sortKey === key) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSortKey(key)
-      setSortDirection('asc')
-    }
+    const newDirection = sortKey === key && sortDirection === 'asc' ? 'desc' : 'asc'
+    setSortKey(key)
+    setSortDirection(newDirection)
+    
+    // Update URL with sort params
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('sort', key)
+    params.set('dir', newDirection)
+    router.push(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage)
+    updatePageInUrl(newPage)
   }
 
   return (
@@ -94,8 +130,19 @@ export default function DataTable<T extends Record<string, any>>({
               placeholder={searchPlaceholder}
               value={search}
               onChange={(e) => {
-                setSearch(e.target.value)
+                const newSearch = e.target.value
+                setSearch(newSearch)
                 setCurrentPage(1)
+                
+                // Update URL with search param
+                const params = new URLSearchParams(searchParams.toString())
+                if (newSearch) {
+                  params.set('search', newSearch)
+                } else {
+                  params.delete('search')
+                }
+                params.delete('page') // Reset to page 1 when searching
+                router.push(`${pathname}?${params.toString()}`, { scroll: false })
               }}
               className="pl-8"
             />
@@ -147,9 +194,13 @@ export default function DataTable<T extends Record<string, any>>({
                     }
                     
                     // Construct href if linkBasePath is provided
+                    // Preserve current page and search params in the link
                     let href: string | undefined
                     if (column.linkBasePath && row.id) {
-                      href = `${column.linkBasePath}/${row.id}`
+                      const params = new URLSearchParams(searchParams.toString())
+                      // Preserve page, search, sort params when navigating to detail
+                      const queryString = params.toString()
+                      href = `${column.linkBasePath}/${row.id}${queryString ? `?returnPage=${currentPage}${search ? `&returnSearch=${encodeURIComponent(search)}` : ''}` : `?returnPage=${currentPage}`}`
                     }
                     
                     // Special handling for active status
@@ -202,7 +253,7 @@ export default function DataTable<T extends Record<string, any>>({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -213,7 +264,7 @@ export default function DataTable<T extends Record<string, any>>({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage === totalPages}
             >
               <ChevronRight className="h-4 w-4" />

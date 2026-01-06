@@ -10,11 +10,14 @@ import { Input } from '@/components/ui/input'
 import FormField from '@/components/shared/FormField'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import ClassSelector from '@/components/settings/ClassSelector'
+import ClassroomColorPicker from '@/components/settings/ClassroomColorPicker'
 
 const classroomSchema = z.object({
   name: z.string().min(1, 'Classroom name is required'),
   capacity: z.string().optional(),
   allowed_classes: z.array(z.string()).optional(),
+  color: z.string().nullable().optional(),
+  is_active: z.boolean().optional(),
 })
 
 type ClassroomFormData = z.infer<typeof classroomSchema>
@@ -23,6 +26,7 @@ export default function NewClassroomPage() {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [allowedClassIds, setAllowedClassIds] = useState<string[]>([])
+  const [selectedColor, setSelectedColor] = useState<string | null>(null)
   const {
     register,
     handleSubmit,
@@ -45,6 +49,14 @@ export default function NewClassroomPage() {
       if (allowedClassIds.length > 0) {
         payload.allowed_classes = allowedClassIds
       }
+      // Add color if selected
+      if (selectedColor) {
+        payload.color = selectedColor
+      } else {
+        payload.color = null
+      }
+      // Default is_active to true for new classrooms
+      payload.is_active = true
       const response = await fetch('/api/classrooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -82,7 +94,21 @@ export default function NewClassroomPage() {
             <Input type="number" {...register('capacity')} placeholder="Optional" />
           </FormField>
 
-          <FormField label="Allowed Classes" error={errors.allowed_classes?.message}>
+          <FormField 
+            label={
+              <span>
+                Color <span className="text-muted-foreground font-normal">(Optional)</span>
+              </span>
+            } 
+            error={errors.color?.message}
+          >
+            <ClassroomColorPicker
+              value={selectedColor}
+              onChange={setSelectedColor}
+            />
+          </FormField>
+
+          <FormField label="Allowed Class Groups" error={errors.allowed_classes?.message}>
             <ClassSelector
               selectedClassIds={allowedClassIds}
               onSelectionChange={setAllowedClassIds}
