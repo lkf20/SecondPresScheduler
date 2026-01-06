@@ -81,7 +81,6 @@ export default async function SchedulesPage() {
         searchable
         searchPlaceholder="Search schedules..."
         emptyMessage="No schedules found. Add your first schedule to get started."
-        linkBasePath="/schedules"
       />
     </div>
   )

@@ -14,19 +14,40 @@ import ErrorMessage from '@/components/shared/ErrorMessage'
 
 const classSchema = z.object({
   name: z.string().min(1, 'Class name is required'),
-  min_age: z.preprocess(
-    (val) => (val === '' || val === null || val === undefined || isNaN(Number(val)) ? null : Number(val)),
-    z.number().int().min(0).max(18).nullable().optional()
-  ),
-  max_age: z.preprocess(
-    (val) => (val === '' || val === null || val === undefined || isNaN(Number(val)) ? null : Number(val)),
-    z.number().int().min(0).max(18).nullable().optional()
-  ),
+  min_age: z.union([
+    z.string(),
+    z.number(),
+    z.null(),
+    z.undefined()
+  ]).transform((val): number | null => {
+    if (val === '' || val === null || val === undefined || isNaN(Number(val))) return null
+    const num = Number(val)
+    if (num < 0 || num > 18 || !Number.isInteger(num)) return null
+    return num
+  }).nullable().optional(),
+  max_age: z.union([
+    z.string(),
+    z.number(),
+    z.null(),
+    z.undefined()
+  ]).transform((val): number | null => {
+    if (val === '' || val === null || val === undefined || isNaN(Number(val))) return null
+    const num = Number(val)
+    if (num < 0 || num > 18 || !Number.isInteger(num)) return null
+    return num
+  }).nullable().optional(),
   required_ratio: z.number().int().min(1, 'Required ratio must be at least 1'),
-  preferred_ratio: z.preprocess(
-    (val) => (val === '' || val === null || val === undefined || isNaN(Number(val)) ? null : Number(val)),
-    z.number().int().min(1).nullable().optional()
-  ),
+  preferred_ratio: z.union([
+    z.string(),
+    z.number(),
+    z.null(),
+    z.undefined()
+  ]).transform((val): number | null => {
+    if (val === '' || val === null || val === undefined || isNaN(Number(val))) return null
+    const num = Number(val)
+    if (num < 1 || !Number.isInteger(num)) return null
+    return num
+  }).nullable().optional(),
   diaper_changing_required: z.boolean().optional(),
   lifting_children_required: z.boolean().optional(),
   toileting_assistance_required: z.boolean().optional(),

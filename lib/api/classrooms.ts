@@ -13,7 +13,7 @@ export async function getClassrooms(includeInactive = false) {
         class:class_groups(id, name)
       )
     `)
-    .order('order', { ascending: true, nullsLast: true })
+    .order('order', { ascending: true, nullsFirst: false })
     .order('name', { ascending: true })
 
   if (!includeInactive) {
@@ -59,7 +59,7 @@ export async function createClassroom(classroom: {
     const { data: existingClassrooms } = await supabase
       .from('classrooms')
       .select('order')
-      .order('order', { ascending: false, nullsLast: true })
+      .order('order', { ascending: false, nullsFirst: false })
       .limit(1)
     
     const maxOrder = existingClassrooms?.[0]?.order ?? 0

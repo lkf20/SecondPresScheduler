@@ -8,7 +8,7 @@ export async function getClassGroups(includeInactive = false) {
   let query = supabase
     .from('class_groups')
     .select('*')
-    .order('order', { ascending: true, nullsLast: true }) // Sort by order, nulls last
+    .order('order', { ascending: true, nullsFirst: false }) // Sort by order, nulls last
     .order('name', { ascending: true }) // Then by name
 
   if (!includeInactive) {
@@ -52,7 +52,7 @@ export async function createClassGroup(classGroupData: {
     const { data: existingClassGroups } = await supabase
       .from('class_groups')
       .select('order')
-      .order('order', { ascending: false, nullsLast: true })
+      .order('order', { ascending: false, nullsFirst: false })
       .limit(1)
     
     const maxOrder = existingClassGroups?.[0]?.order ?? 0

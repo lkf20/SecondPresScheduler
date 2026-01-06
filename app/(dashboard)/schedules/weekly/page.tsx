@@ -169,25 +169,34 @@ export default function WeeklySchedulePage() {
                 if (isInactive) return filters.displayFilters.inactive
 
                 // Calculate staffing status
-                if (!scheduleCell.class_id || !scheduleCell.enrollment_for_staffing) {
+                if (!scheduleCell.class_groups || scheduleCell.class_groups.length === 0 || !scheduleCell.enrollment_for_staffing) {
                   return filters.displayFilters.inactive
                 }
 
-                // Get class data from schedule_cell (if available) or use defaults
-                const classData = (slot.schedule_cell as any)?.class
-                if (!classData) {
+                // Get class group data from schedule_cell (use the one with lowest min_age for ratio calculation)
+                const classGroups = scheduleCell.class_groups
+                if (!classGroups || classGroups.length === 0) {
                   return filters.displayFilters.inactive
                 }
 
-                const requiredTeachers = classData.required_ratio
-                  ? Math.ceil(scheduleCell.enrollment_for_staffing / classData.required_ratio)
+                // Find class group with lowest min_age for ratio calculation
+                const classGroupForRatio = classGroups.reduce((lowest, current) => {
+                  const currentMinAge = current.min_age ?? Infinity
+                  const lowestMinAge = lowest.min_age ?? Infinity
+                  return currentMinAge < lowestMinAge ? current : lowest
+                })
+
+                const requiredTeachers = classGroupForRatio.required_ratio
+                  ? Math.ceil(scheduleCell.enrollment_for_staffing / classGroupForRatio.required_ratio)
                   : undefined
-                const preferredTeachers = classData.preferred_ratio
-                  ? Math.ceil(scheduleCell.enrollment_for_staffing / classData.preferred_ratio)
+                const preferredTeachers = classGroupForRatio.preferred_ratio
+                  ? Math.ceil(scheduleCell.enrollment_for_staffing / classGroupForRatio.preferred_ratio)
                   : undefined
 
+                // Get class group IDs for filtering assignments
+                const classGroupIds = classGroups.map(cg => cg.id)
                 const assignedCount = slot.assignments.filter(a => 
-                  a.teacher_id && a.class_id === scheduleCell.class_id
+                  a.teacher_id && a.class_id && classGroupIds.includes(a.class_id)
                 ).length
 
                 const belowRequired = requiredTeachers !== undefined && assignedCount < requiredTeachers

@@ -36,7 +36,7 @@ export async function createTeacherScheduleAuditLog(log: AuditLogData): Promise<
     teacher_schedule_id: log.teacher_schedule_id ?? null,
     teacher_id: log.teacher_id,
     action: log.action,
-    action_details: log.action_details ?? null,
+    action_details: (log.action_details ?? null) as AuditLogInsert['action_details'],
     removed_from_classroom_id: log.removed_from_classroom_id ?? null,
     removed_from_day_id: log.removed_from_day_id ?? null,
     removed_from_time_slot_id: log.removed_from_time_slot_id ?? null,

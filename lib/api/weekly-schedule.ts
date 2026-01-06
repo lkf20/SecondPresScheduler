@@ -282,8 +282,14 @@ export async function getWeeklyScheduleData(selectedDayIds?: string[]) {
         const assignments: WeeklyScheduleData['assignments'] = []
         
         // Only process if schedule_cell exists and is active with class groups
-        if (scheduleCell?.class_groups && scheduleCell.class_groups.length > 0 && scheduleCell.is_active) {
-          const classGroupIds = scheduleCell.class_groups.map(cg => cg.id)
+        // Handle both class_groups (from transformed data) and schedule_cell_class_groups (from raw query)
+        const classGroups = scheduleCell 
+          ? ((scheduleCell as any)?.class_groups || 
+             ((scheduleCell as any)?.schedule_cell_class_groups?.map((j: any) => j.class_group).filter((cg: any) => cg !== null) || []))
+          : []
+        
+        if (scheduleCell && classGroups && classGroups.length > 0 && scheduleCell.is_active) {
+          const classGroupIds = classGroups.map((cg: { id: string }) => cg.id)
           
           // Get teachers assigned to this slot (teachers are assigned to the slot, not individual class groups)
           // Filter by any of the class groups in the slot
@@ -306,7 +312,7 @@ export async function getWeeklyScheduleData(selectedDayIds?: string[]) {
           const enrollment = scheduleCell.enrollment_for_staffing ?? null
           
           // Find class group with lowest min_age for ratio calculation
-          const classGroupForRatio = scheduleCell.class_groups.reduce((lowest, current) => {
+          const classGroupForRatio = classGroups.reduce((lowest: { min_age: number | null }, current: { min_age: number | null }) => {
             const currentMinAge = current.min_age ?? Infinity
             const lowestMinAge = lowest.min_age ?? Infinity
             return currentMinAge < lowestMinAge ? current : lowest
@@ -345,7 +351,7 @@ export async function getWeeklyScheduleData(selectedDayIds?: string[]) {
               is_active: scheduleCell.is_active,
               enrollment_for_staffing: scheduleCell.enrollment_for_staffing,
               notes: scheduleCell.notes,
-              class_groups: scheduleCell.class_groups || [],
+              class_groups: classGroups || [],
             } : null,
           })
       }
