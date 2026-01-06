@@ -13,24 +13,25 @@ export interface ApiError {
  * Creates a user-friendly error message from various error types
  */
 export function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    // Check for Supabase/PostgreSQL errors with code property
-    const errorObj = error as any
-    if (errorObj.code) {
-      // PostgreSQL error codes
-      if (errorObj.code === '23505') {
-        return 'This record already exists (duplicate key violation)'
-      }
-      if (errorObj.code === '23503') {
-        return 'Invalid reference to related data (foreign key violation)'
-      }
-      if (errorObj.code === '23502') {
-        return 'Required field is missing (not null violation)'
-      }
-      if (errorObj.code === '23514') {
-        return 'Invalid data provided (check constraint violation)'
-      }
+  // Check for Supabase/PostgreSQL errors with code property (even if not Error instance)
+  const errorObj = error as any
+  if (errorObj?.code) {
+    // PostgreSQL error codes
+    if (errorObj.code === '23505') {
+      return 'This record already exists (duplicate key violation)'
     }
+    if (errorObj.code === '23503') {
+      return 'Invalid reference to related data (foreign key violation)'
+    }
+    if (errorObj.code === '23502') {
+      return 'Required field is missing (not null violation)'
+    }
+    if (errorObj.code === '23514') {
+      return 'Invalid data provided (check constraint violation)'
+    }
+  }
+
+  if (error instanceof Error) {
     // Check for common database errors in message
     if (error.message.includes('duplicate key') || error.message.includes('23505')) {
       return 'This record already exists'
