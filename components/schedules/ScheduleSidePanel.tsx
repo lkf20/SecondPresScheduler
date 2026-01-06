@@ -421,7 +421,7 @@ export default function ScheduleSidePanel({
     })
 
     if (preserveTeachersRef.current && selectedTeachersRef.current.length > 0) {
-      console.log('[ScheduleSidePanel] ✓ Skipping teacher fetch - preserving teachers after class group removal', {
+      console.log('[ScheduleSidePanel] ✓ Skipping teacher fetch - preserving teachers after class group change', {
         previousClassGroupIds: previousClassGroupIdsRef.current,
         currentClassGroupIds: classGroupIds,
         existingTeachersCount: selectedTeachersRef.current.length,
@@ -966,17 +966,17 @@ export default function ScheduleSidePanel({
                 <ClassGroupMultiSelect
                   selectedClassGroupIds={classGroupIds}
                   onSelectionChange={(newClassGroupIds) => {
-                    // If class groups are being removed (fewer groups than before), preserve teachers
-                    // This handles both: removing all groups, and removing some groups
-                    const hadGroups = classGroupIds.length > 0
-                    const groupsRemoved = newClassGroupIds.length < classGroupIds.length
-                    const shouldPreserve = hadGroups && groupsRemoved && selectedTeachersRef.current.length > 0
+                    // Preserve teachers whenever class groups change (added or removed) if we have existing teachers
+                    // This prevents teachers from disappearing when class groups are modified
+                    const hasExistingTeachers = selectedTeachersRef.current.length > 0
+                    const classGroupsChanged = JSON.stringify([...classGroupIds].sort()) !== JSON.stringify([...newClassGroupIds].sort())
+                    const shouldPreserve = hasExistingTeachers && classGroupsChanged
                     
                     console.log('[ScheduleSidePanel] Class groups changed', {
                       previous: classGroupIds,
                       new: newClassGroupIds,
-                      hadGroups,
-                      groupsRemoved,
+                      hasExistingTeachers,
+                      classGroupsChanged,
                       shouldPreserve,
                       currentTeachersCount: selectedTeachers.length,
                       currentTeachersRefCount: selectedTeachersRef.current.length,
