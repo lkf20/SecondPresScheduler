@@ -28,3 +28,5 @@ CREATE INDEX IF NOT EXISTS idx_schedule_cells_class_active
   WHERE class_id IS NOT NULL;
 
 
+
+

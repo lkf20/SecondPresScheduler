@@ -22,3 +22,5 @@ UPDATE classrooms SET is_active = TRUE WHERE is_active IS NULL;
 COMMENT ON COLUMN class_groups.is_active IS 'When false, the class group is inactive and will not appear in dropdowns, but historical data is preserved.';
 COMMENT ON COLUMN classrooms.is_active IS 'When false, the classroom is inactive and will not appear in dropdowns, but historical data is preserved.';
 
+
+

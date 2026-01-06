@@ -11,3 +11,5 @@ COMMENT ON COLUMN staff.can_lift_children IS 'Sub capability: Can lift children'
 COMMENT ON COLUMN staff.can_assist_with_toileting IS 'Sub capability: Can assist with toileting';
 COMMENT ON COLUMN staff.capabilities_notes IS 'Optional notes about sub capabilities';
 
+
+

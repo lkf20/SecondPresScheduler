@@ -15,3 +15,5 @@ CREATE INDEX IF NOT EXISTS idx_teacher_schedules_floater_lookup
   ON teacher_schedules(teacher_id, day_of_week_id, time_slot_id, is_floater);
 
 
+
+

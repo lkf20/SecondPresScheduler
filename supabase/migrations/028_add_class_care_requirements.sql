@@ -9,3 +9,5 @@ COMMENT ON COLUMN classes.diaper_changing_required IS 'Class requires staff who 
 COMMENT ON COLUMN classes.lifting_children_required IS 'Class requires staff who can lift children';
 COMMENT ON COLUMN classes.toileting_assistance_required IS 'Class requires staff who can assist with toileting';
 
+
+

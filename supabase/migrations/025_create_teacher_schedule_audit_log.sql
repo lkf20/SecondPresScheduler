@@ -41,3 +41,5 @@ CREATE POLICY "Audit logs are insertable by authenticated users"
   WITH CHECK (true);
 
 
+
+

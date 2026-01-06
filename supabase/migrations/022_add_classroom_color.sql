@@ -7,3 +7,5 @@ COMMENT ON COLUMN classrooms.color IS 'Optional color for the classroom (hex col
 
 
 
+
+
