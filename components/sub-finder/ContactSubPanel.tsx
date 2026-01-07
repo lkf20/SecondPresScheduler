@@ -499,11 +499,9 @@ export default function ContactSubPanel({
                 </span>
               )}
             </div>
-            {selectedShiftsCount > 0 && (
-              <p className="text-sm text-muted-foreground mt-2">
-                Covering {selectedShiftsCount} of {totalShifts} selected shifts
-              </p>
-            )}
+            <p className="text-sm text-muted-foreground mt-2">
+              Available for {sub.shifts_covered} of {sub.total_shifts} requested shifts
+            </p>
           </SheetHeader>
         </div>
 
