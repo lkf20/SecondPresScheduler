@@ -18,7 +18,7 @@ export async function createTeacherSchedule(schedule: {
   teacher_id: string
   day_of_week_id: string
   time_slot_id: string
-  class_id: string
+  class_id: string | null
   classroom_id: string
   is_floater?: boolean
 }) {
