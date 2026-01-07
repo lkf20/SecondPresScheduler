@@ -668,7 +668,7 @@ export default function ContactSubPanel({
                     })
                     
                     return allShifts.map((shift, idx) => {
-                      const shiftLabel = `${shift.day_name} ${shift.time_slot_code}`
+                      const shiftLabel = `${formatDate(shift.date)} ${shift.time_slot_code}`
                       
                       return (
                         <Badge

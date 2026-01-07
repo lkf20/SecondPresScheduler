@@ -189,7 +189,7 @@ export default function RecommendedSubsList({
                     })
                     
                     return allShifts.map((shift, idx) => {
-                      const shiftLabel = `${shift.day_name} ${shift.time_slot_code}`
+                      const shiftLabel = `${formatDate(shift.date)} ${shift.time_slot_code}`
                       
                       return (
                         <Badge
@@ -218,7 +218,7 @@ export default function RecommendedSubsList({
                   {sub.cannot_cover.map((shift, idx) => (
                     <div key={idx} className="text-xs text-muted-foreground">
                       <span className="font-medium">
-                        {shift.day_name} {shift.time_slot_code}:
+                        {formatDate(shift.date)} {shift.time_slot_code}:
                       </span>{' '}
                       {shift.reason}
                     </div>
