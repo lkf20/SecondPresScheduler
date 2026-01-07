@@ -105,7 +105,7 @@ export default function RecommendedSubsList({
               </div>
             </div>
 
-            {sub.can_cover.length > 0 && (
+            {sub.can_cover && sub.can_cover.length > 0 && (
               <div className="mb-3">
                 <p className="text-xs font-medium text-muted-foreground mb-1.5">Can cover:</p>
                 <div className="flex flex-wrap gap-1.5">
@@ -119,7 +119,7 @@ export default function RecommendedSubsList({
               </div>
             )}
 
-            {sub.cannot_cover.length > 0 && (
+            {sub.cannot_cover && sub.cannot_cover.length > 0 && (
               <div className="mb-3">
                 <p className="text-xs font-medium text-muted-foreground mb-1.5">Cannot cover:</p>
                 <div className="space-y-1">

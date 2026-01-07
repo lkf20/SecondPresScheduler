@@ -19,15 +19,22 @@ interface Shift {
 }
 
 interface SubMatch {
-  sub_id: string
+  id: string
   name: string
   phone: string | null
   email: string | null
-  coverage_percentage: number
-  available_shifts: number
+  coverage_percent: number
+  shifts_covered: number
   total_shifts: number
-  conflicts: Array<{
+  can_cover: Array<{
     date: string
+    day_name: string
+    time_slot_code: string
+    class_name: string | null
+  }>
+  cannot_cover: Array<{
+    date: string
+    day_name: string
     time_slot_code: string
     reason: string
   }>
@@ -174,7 +181,18 @@ export async function POST(request: NextRequest) {
 
         // Calculate coverage
         let availableShifts = 0
-        const conflicts: Array<{ date: string; time_slot_code: string; reason: string }> = []
+        const canCover: Array<{
+          date: string
+          day_name: string
+          time_slot_code: string
+          class_name: string | null
+        }> = []
+        const cannotCover: Array<{
+          date: string
+          day_name: string
+          time_slot_code: string
+          reason: string
+        }> = []
         let qualificationMatches = 0
         let qualificationTotal = 0
 
@@ -195,19 +213,28 @@ export async function POST(request: NextRequest) {
 
           // Check qualifications (if class_id is known)
           let isQualified = true
+          let qualificationReason = ''
           if (shift.class_id) {
             qualificationTotal++
             if (qualifiedClassIds.has(shift.class_id)) {
               qualificationMatches++
             } else {
               isQualified = false
+              qualificationReason = 'Not qualified for class'
             }
           }
 
           if (isAvailable && !hasScheduleConflict && !hasTimeOffConflict && isQualified) {
+            // Can cover this shift
             availableShifts++
+            canCover.push({
+              date: shift.date,
+              day_name: shift.day_name,
+              time_slot_code: shift.time_slot_code,
+              class_name: shift.class_id ? null : null, // TODO: Get class name from class_id
+            })
           } else {
-            // Record conflict reason
+            // Cannot cover - determine reason
             let reason = ''
             if (!isAvailable) {
               reason = 'Not available'
@@ -216,10 +243,12 @@ export async function POST(request: NextRequest) {
             } else if (hasTimeOffConflict) {
               reason = 'Has time off'
             } else if (!isQualified) {
-              reason = 'Not qualified for class'
+              reason = qualificationReason || 'Not qualified for class'
             }
-            conflicts.push({
+            
+            cannotCover.push({
               date: shift.date,
+              day_name: shift.day_name,
               time_slot_code: shift.time_slot_code,
               reason,
             })
@@ -235,14 +264,15 @@ export async function POST(request: NextRequest) {
           sub.display_name || `${sub.first_name} ${sub.last_name}` || 'Unknown'
 
         return {
-          sub_id: sub.id,
+          id: sub.id,
           name,
           phone: sub.phone,
           email: sub.email,
-          coverage_percentage: coveragePercentage,
-          available_shifts: availableShifts,
+          coverage_percent: coveragePercentage,
+          shifts_covered: availableShifts,
           total_shifts: shiftsToCover.length,
-          conflicts,
+          can_cover: canCover,
+          cannot_cover: cannotCover,
           qualification_matches: qualificationMatches,
           qualification_total: qualificationTotal,
         }
@@ -253,13 +283,13 @@ export async function POST(request: NextRequest) {
     // (Flexible staff might be teachers who can sub when not teaching)
     let filteredMatches = subMatches
     if (!include_flexible_staff) {
-      filteredMatches = subMatches.filter((match) => match.coverage_percentage > 0)
+      filteredMatches = subMatches.filter((match) => match.coverage_percent > 0)
     }
 
     // 8. Sort by coverage percentage (descending), then by name
     filteredMatches.sort((a, b) => {
-      if (b.coverage_percentage !== a.coverage_percentage) {
-        return b.coverage_percentage - a.coverage_percentage
+      if (b.coverage_percent !== a.coverage_percent) {
+        return b.coverage_percent - a.coverage_percent
       }
       return a.name.localeCompare(b.name)
     })
