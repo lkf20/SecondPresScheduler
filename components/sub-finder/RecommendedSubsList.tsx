@@ -164,29 +164,72 @@ export default function RecommendedSubsList({
               </div>
             </div>
 
-            {/* Can Cover: Shifts that can be covered */}
-            {sub.can_cover && sub.can_cover.length > 0 && (
+            {/* Can Cover: Show all shifts (can cover and cannot cover) sorted by date */}
+            {((sub.can_cover && sub.can_cover.length > 0) || (sub.cannot_cover && sub.cannot_cover.length > 0)) && (
               <div className="mb-3">
                 <p className="text-xs font-medium text-muted-foreground mb-1.5">Can Cover:</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {sub.can_cover.map((shift, idx) => {
-                    const shiftLabel = formatShiftLabel(shift.date, shift.time_slot_code)
-                    return (
-                      <Badge
-                        key={`can-cover-${shift.date}-${shift.time_slot_code}-${idx}`}
-                        variant="outline"
-                        className="text-xs bg-slate-100 text-slate-900 border-slate-200 flex items-center gap-1"
-                      >
-                        {shiftLabel}
-                        <CheckCircle2 className="h-3 w-3" />
-                      </Badge>
-                    )
-                  })}
+                  {(() => {
+                    type ShiftItem = {
+                      date: string
+                      time_slot_code: string
+                      canCover: boolean
+                    }
+                    
+                    const allShiftsMap = new Map<string, ShiftItem>()
+                    
+                    // Add can_cover shifts
+                    sub.can_cover?.forEach((shift) => {
+                      const key = `${shift.date}|${shift.time_slot_code}`
+                      allShiftsMap.set(key, {
+                        date: shift.date,
+                        time_slot_code: shift.time_slot_code,
+                        canCover: true,
+                      })
+                    })
+                    
+                    // Add cannot_cover shifts
+                    sub.cannot_cover?.forEach((shift) => {
+                      const key = `${shift.date}|${shift.time_slot_code}`
+                      allShiftsMap.set(key, {
+                        date: shift.date,
+                        time_slot_code: shift.time_slot_code,
+                        canCover: false,
+                      })
+                    })
+                    
+                    // Convert to array and sort by date, then time slot
+                    const allShifts = Array.from(allShiftsMap.values()).sort((a, b) => {
+                      const dateA = parseLocalDate(a.date).getTime()
+                      const dateB = parseLocalDate(b.date).getTime()
+                      if (dateA !== dateB) return dateA - dateB
+                      // If same date, sort by time slot code (AM before PM, etc.)
+                      return a.time_slot_code.localeCompare(b.time_slot_code)
+                    })
+                    
+                    return allShifts.map((shift, idx) => {
+                      const shiftLabel = formatShiftLabel(shift.date, shift.time_slot_code)
+                      
+                      return (
+                        <Badge
+                          key={`shift-${shift.date}-${shift.time_slot_code}-${idx}`}
+                          variant="outline"
+                          className={`text-xs ${
+                            shift.canCover
+                              ? 'bg-green-100 text-green-900 border-green-200'
+                              : 'bg-gray-100 text-gray-700 border-gray-300'
+                          }`}
+                        >
+                          {shiftLabel}
+                        </Badge>
+                      )
+                    })
+                  })()}
                 </div>
               </div>
             )}
 
-            {/* Unavailable: Collapsible section */}
+            {/* Unavailable: Collapsible section with reasons only (no chips) */}
             {sub.cannot_cover && sub.cannot_cover.length > 0 && (
               <div className="mb-3">
                 <button
@@ -201,32 +244,15 @@ export default function RecommendedSubsList({
                   <span>Unavailable ({sub.cannot_cover.length})</span>
                 </button>
                 {showUnavailable && (
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      {sub.cannot_cover.map((shift, idx) => {
-                        const shiftLabel = formatShiftLabel(shift.date, shift.time_slot_code)
-                        return (
-                          <Badge
-                            key={`cannot-cover-${shift.date}-${shift.time_slot_code}-${idx}`}
-                            variant="outline"
-                            className="text-xs bg-muted/50 text-muted-foreground border-dashed border-gray-300 flex items-center gap-1"
-                          >
-                            {shiftLabel}
-                            <CircleX className="h-3 w-3 text-muted-foreground" />
-                          </Badge>
-                        )
-                      })}
-                    </div>
-                    <div className="space-y-1">
-                      {sub.cannot_cover.map((shift, idx) => (
-                        <div key={idx} className="text-xs text-muted-foreground">
-                          <span className="font-medium">
-                            {formatShiftLabel(shift.date, shift.time_slot_code)}:
-                          </span>{' '}
-                          {shift.reason}
-                        </div>
-                      ))}
-                    </div>
+                  <div className="space-y-1">
+                    {sub.cannot_cover.map((shift, idx) => (
+                      <div key={idx} className="text-xs text-muted-foreground">
+                        <span className="font-medium">
+                          {formatShiftLabel(shift.date, shift.time_slot_code)}:
+                        </span>{' '}
+                        {shift.reason}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
