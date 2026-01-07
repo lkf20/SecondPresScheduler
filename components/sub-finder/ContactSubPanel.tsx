@@ -172,6 +172,9 @@ export default function ContactSubPanel({
     return (
       <Sheet open={isOpen} onOpenChange={onClose}>
         <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Loading...</SheetTitle>
+          </SheetHeader>
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2" />
