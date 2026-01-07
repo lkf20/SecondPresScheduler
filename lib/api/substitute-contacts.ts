@@ -178,14 +178,26 @@ export async function upsertShiftOverrides(
 ): Promise<void> {
   const supabase = await createClient()
 
-  // Delete existing overrides for shifts not in the new list
-  const shiftIds = shiftOverrides.map((so) => so.coverage_request_shift_id)
-  if (shiftIds.length > 0) {
-    await supabase
-      .from('sub_contact_shift_overrides')
-      .delete()
-      .eq('substitute_contact_id', substituteContactId)
-      .not('coverage_request_shift_id', 'in', `(${shiftIds.map((id) => `"${id}"`).join(',')})`)
+  // Get all existing overrides for this contact
+  const { data: existingOverrides } = await supabase
+    .from('sub_contact_shift_overrides')
+    .select('coverage_request_shift_id')
+    .eq('substitute_contact_id', substituteContactId)
+
+  if (existingOverrides) {
+    const existingShiftIds = new Set(existingOverrides.map((eo) => eo.coverage_request_shift_id))
+    const newShiftIds = new Set(shiftOverrides.map((so) => so.coverage_request_shift_id))
+    
+    // Find shift IDs to delete (exist in DB but not in new list)
+    const toDelete = Array.from(existingShiftIds).filter((id) => !newShiftIds.has(id))
+    
+    if (toDelete.length > 0) {
+      await supabase
+        .from('sub_contact_shift_overrides')
+        .delete()
+        .eq('substitute_contact_id', substituteContactId)
+        .in('coverage_request_shift_id', toDelete)
+    }
   }
 
   // Upsert the new overrides
