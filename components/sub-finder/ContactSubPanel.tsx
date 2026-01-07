@@ -16,6 +16,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { X, Phone, Mail, AlertTriangle } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
+import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 
 interface RecommendedSub {
   id: string
@@ -208,16 +209,6 @@ export default function ContactSubPanel({
     return `${dayName} ${month} ${day}`
   }
 
-  // Format shift label as "Mon AM • Feb 9"
-  const formatShiftLabel = (dateString: string, timeSlotCode: string) => {
-    const date = parseLocalDate(dateString)
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    const dayName = dayNames[date.getDay()]
-    const month = monthNames[date.getMonth()]
-    const day = date.getDate()
-    return `${dayName} ${timeSlotCode} • ${month} ${day}`
-  }
 
   // Format date range for display
   const formatDateRange = () => {
@@ -636,68 +627,10 @@ export default function ContactSubPanel({
                 </span>
               </div>
               {(sub.can_cover && sub.can_cover.length > 0) || (sub.cannot_cover && sub.cannot_cover.length > 0) ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {/* Combine and sort all shifts by date and time slot */}
-                  {(() => {
-                    type ShiftItem = {
-                      date: string
-                      day_name: string
-                      time_slot_code: string
-                      canCover: boolean
-                    }
-                    
-                    const allShiftsMap = new Map<string, ShiftItem>()
-                    
-                    // Add can_cover shifts
-                    sub.can_cover?.forEach((shift) => {
-                      const key = `${shift.date}|${shift.day_name}|${shift.time_slot_code}`
-                      allShiftsMap.set(key, {
-                        date: shift.date,
-                        day_name: shift.day_name,
-                        time_slot_code: shift.time_slot_code,
-                        canCover: true,
-                      })
-                    })
-                    
-                    // Add cannot_cover shifts (will overwrite if duplicate, which shouldn't happen)
-                    sub.cannot_cover?.forEach((shift) => {
-                      const key = `${shift.date}|${shift.day_name}|${shift.time_slot_code}`
-                      allShiftsMap.set(key, {
-                        date: shift.date,
-                        day_name: shift.day_name,
-                        time_slot_code: shift.time_slot_code,
-                        canCover: false,
-                      })
-                    })
-                    
-                    // Convert to array and sort by date, then time slot
-                    const allShifts = Array.from(allShiftsMap.values()).sort((a, b) => {
-                      const dateA = parseLocalDate(a.date).getTime()
-                      const dateB = parseLocalDate(b.date).getTime()
-                      if (dateA !== dateB) return dateA - dateB
-                      // If same date, sort by time slot code (AM before PM, etc.)
-                      return a.time_slot_code.localeCompare(b.time_slot_code)
-                    })
-                    
-                    return allShifts.map((shift, idx) => {
-                      const shiftLabel = formatShiftLabel(shift.date, shift.time_slot_code)
-                      
-                      return (
-                        <Badge
-                          key={`${shift.date}-${shift.time_slot_code}-${idx}`}
-                          variant={shift.canCover ? 'default' : 'outline'}
-                          className={`text-xs ${
-                            shift.canCover
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-muted text-muted-foreground opacity-60'
-                          }`}
-                        >
-                          {shiftLabel}
-                        </Badge>
-                      )
-                    })
-                  })()}
-                </div>
+                <ShiftChips
+                  canCover={sub.can_cover || []}
+                  cannotCover={sub.cannot_cover || []}
+                />
               ) : (
                 <p className="text-sm text-muted-foreground">No shifts available</p>
               )}
