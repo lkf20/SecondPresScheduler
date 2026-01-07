@@ -16,6 +16,7 @@ This document tracks items to update, fix, or implement in the Scheduler App.
 Issues that need to be fixed.
 
 - [ ] Handle duplicate display names - determine what to do when multiple staff members have the same display name
+- [ ] Fix timezone issue causing dates to shift by one day in sub finder (dates stored as DATE type are being parsed as UTC, causing day shift in local timezones)
 
 ---
 
@@ -28,6 +29,7 @@ Features to implement soon (within the next few weeks).
 - [ ] Enhanced profile creation UI - create thorough profile creation process where users add their name, select a role, choose/assign school, and provide other necessary information (expand beyond the basic auto-creation)
 - [ ] User onboarding UI - create UI flow for onboarding new users, collecting necessary information (name, role, school assignment)
 - [ ] School management UI - add ability to create new schools and manage school settings
+- [ ] Timezone settings - add timezone configuration section to Settings to allow schools to set their timezone, ensuring dates are displayed and processed correctly
 
 ---
 

@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import AbsenceList from '@/components/sub-finder/AbsenceList'
 import RecommendedSubsList from '@/components/sub-finder/RecommendedSubsList'
 import ContactSubPanel from '@/components/sub-finder/ContactSubPanel'
+import { parseLocalDate } from '@/lib/utils/date'
 
 type Mode = 'existing' | 'manual'
 
@@ -250,7 +251,7 @@ export default function SubFinderPage() {
                   <span className="text-muted-foreground font-normal text-base">
                     {(() => {
                       const formatDate = (dateString: string) => {
-                        const date = new Date(dateString)
+                        const date = parseLocalDate(dateString)
                         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
                         const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
                         const dayName = dayNames[date.getDay()]

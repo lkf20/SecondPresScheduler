@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Phone, User } from 'lucide-react'
+import { parseLocalDate } from '@/lib/utils/date'
 
 interface RecommendedSub {
   id: string
@@ -53,7 +54,7 @@ export default function RecommendedSubsList({
 }: RecommendedSubsListProps) {
   // Format date as "Mon Jan 11"
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
+    const date = parseLocalDate(dateString)
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     const dayName = dayNames[date.getDay()]
@@ -64,7 +65,7 @@ export default function RecommendedSubsList({
 
   // Format shift label as "Mon AM • Feb 9"
   const formatShiftLabel = (dateString: string, timeSlotCode: string) => {
-    const date = new Date(dateString)
+    const date = parseLocalDate(dateString)
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     const dayName = dayNames[date.getDay()]
@@ -192,8 +193,8 @@ export default function RecommendedSubsList({
                     
                     // Convert to array and sort by date, then time slot
                     const allShifts = Array.from(allShiftsMap.values()).sort((a, b) => {
-                      const dateA = new Date(a.date).getTime()
-                      const dateB = new Date(b.date).getTime()
+                      const dateA = parseLocalDate(a.date).getTime()
+                      const dateB = parseLocalDate(b.date).getTime()
                       if (dateA !== dateB) return dateA - dateB
                       // If same date, sort by time slot code (AM before PM, etc.)
                       return a.time_slot_code.localeCompare(b.time_slot_code)
