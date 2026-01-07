@@ -62,6 +62,17 @@ export default function RecommendedSubsList({
     return `${dayName} ${month} ${day}`
   }
 
+  // Format shift label as "Mon AM • Feb 9"
+  const formatShiftLabel = (dateString: string, timeSlotCode: string) => {
+    const date = new Date(dateString)
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const dayName = dayNames[date.getDay()]
+    const month = monthNames[date.getMonth()]
+    const day = date.getDate()
+    return `${dayName} ${timeSlotCode} • ${month} ${day}`
+  }
+
   // Format date range for display
   const formatDateRange = () => {
     const startDate = formatDate(absence.start_date)
@@ -189,7 +200,7 @@ export default function RecommendedSubsList({
                     })
                     
                     return allShifts.map((shift, idx) => {
-                      const shiftLabel = `${formatDate(shift.date)} ${shift.time_slot_code}`
+                      const shiftLabel = formatShiftLabel(shift.date, shift.time_slot_code)
                       
                       return (
                         <Badge
@@ -218,7 +229,7 @@ export default function RecommendedSubsList({
                   {sub.cannot_cover.map((shift, idx) => (
                     <div key={idx} className="text-xs text-muted-foreground">
                       <span className="font-medium">
-                        {formatDate(shift.date)} {shift.time_slot_code}:
+                        {formatShiftLabel(shift.date, shift.time_slot_code)}:
                       </span>{' '}
                       {shift.reason}
                     </div>
