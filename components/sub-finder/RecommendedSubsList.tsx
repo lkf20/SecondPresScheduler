@@ -39,6 +39,7 @@ interface RecommendedSubsListProps {
   showAllSubs?: boolean
   onContactSub?: (sub: RecommendedSub) => void
   onViewDetails?: (sub: RecommendedSub) => void
+  hideHeader?: boolean
 }
 
 export default function RecommendedSubsList({
@@ -48,6 +49,7 @@ export default function RecommendedSubsList({
   showAllSubs = false,
   onContactSub,
   onViewDetails,
+  hideHeader = false,
 }: RecommendedSubsListProps) {
   // Format date as "Mon Jan 11"
   const formatDate = (dateString: string) => {
@@ -94,18 +96,21 @@ export default function RecommendedSubsList({
 
   return (
     <div className="space-y-4">
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold mb-1 flex items-center gap-3">
-          <span>{showAllSubs ? 'All Subs' : 'Recommended Subs'} for {absence.teacher_name}</span>
-          <span className="h-5 w-px bg-border" aria-hidden="true" />
-          <span className="text-muted-foreground font-normal">{formatDateRange()}</span>
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          {showAllSubs
-            ? 'Showing all subs with coverage details'
-            : 'Sorted by coverage percentage (highest first)'}
-        </p>
-      </div>
+      {/* Conditionally render header only if not hidden */}
+      {!hideHeader && (
+        <div className="mb-4">
+          <h2 className="text-xl font-semibold mb-1 flex items-center gap-3">
+            <span>{showAllSubs ? 'All Subs' : 'Recommended Subs'} for {absence.teacher_name}</span>
+            <span className="h-5 w-px bg-border" aria-hidden="true" />
+            <span className="text-muted-foreground font-normal">{formatDateRange()}</span>
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {showAllSubs
+              ? 'Showing all subs with coverage details'
+              : 'Sorted by coverage percentage (highest first)'}
+          </p>
+        </div>
+      )}
 
       {subs.map((sub) => (
         <Card key={sub.id} className="hover:shadow-md transition-shadow">

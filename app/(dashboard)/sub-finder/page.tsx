@@ -157,11 +157,11 @@ export default function SubFinderPage() {
     <div className="flex h-[calc(100vh-4rem)]">
       {/* Left Rail */}
       <div className="w-80 border-r bg-gray-50 flex flex-col">
-        <div className="p-4 border-b bg-white">
-          <h1 className="text-2xl font-bold mb-4">Sub Finder</h1>
+        <div className="p-3 border-b bg-white">
+          <h1 className="text-xl font-bold mb-3">Sub Finder</h1>
 
           {/* Mode Toggle */}
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-2 mb-3">
             <Button
               variant={mode === 'existing' ? 'default' : 'outline'}
               size="sm"
@@ -198,7 +198,7 @@ export default function SubFinderPage() {
 
           {/* Manual Coverage Form (for manual mode) */}
           {mode === 'manual' && (
-            <div className="space-y-3">
+            <div className="space-y-2">
               <div>
                 <Label className="text-sm">Teacher</Label>
                 <select className="w-full mt-1 text-sm border rounded-md px-2 py-1.5">
@@ -236,117 +236,155 @@ export default function SubFinderPage() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Search Controls Bar */}
+        {/* Fixed Header Bar - combines toolbar and title */}
         {selectedAbsence && (
-          <div className="border-b bg-white p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Button onClick={handleRerunFinder} disabled={loading} size="sm" variant="outline">
-                  <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                  Rerun Finder
-                </Button>
+          <div className="sticky top-0 z-10 border-b bg-white">
+            <div className="px-6 py-3">
+              {/* Header Row */}
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h2 className="text-xl font-semibold flex items-center gap-3">
+                    <span>
+                      {includeOnlyRecommended ? 'Recommended Subs' : 'All Subs'} for {selectedAbsence.teacher_name}
+                    </span>
+                    <span className="h-5 w-px bg-border" aria-hidden="true" />
+                    <span className="text-muted-foreground font-normal text-base">
+                      {(() => {
+                        const formatDate = (dateString: string) => {
+                          const date = new Date(dateString)
+                          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+                          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                          const dayName = dayNames[date.getDay()]
+                          const month = monthNames[date.getMonth()]
+                          const day = date.getDate()
+                          return `${dayName} ${month} ${day}`
+                        }
+                        const startDate = formatDate(selectedAbsence.start_date)
+                        if (selectedAbsence.end_date && selectedAbsence.end_date !== selectedAbsence.start_date) {
+                          const endDate = formatDate(selectedAbsence.end_date)
+                          return `${startDate} - ${endDate}`
+                        }
+                        return startDate
+                      })()}
+                    </span>
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {includeOnlyRecommended
+                      ? 'Sorted by coverage percentage (highest first)'
+                      : 'Showing all subs with coverage details'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Button onClick={handleRerunFinder} disabled={loading} size="sm" variant="outline">
+                    <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                    Rerun Finder
+                  </Button>
 
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="relative">
-                      <Settings2 className="h-4 w-4 mr-2" />
-                      Filters
-                      {(includePartiallyCovered || !includeOnlyRecommended || !includeFlexibleStaff) && (
-                        <Badge
-                          variant="secondary"
-                          className="ml-2 h-5 min-w-[20px] px-1.5 text-xs"
-                        >
-                          {[
-                            includePartiallyCovered,
-                            !includeOnlyRecommended,
-                            !includeFlexibleStaff,
-                          ].filter(Boolean).length}
-                        </Badge>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80" align="start">
-                    <div className="space-y-4">
-                      <div>
-                        <h4 className="font-medium text-sm mb-3">Filter Options</h4>
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <Label
-                                htmlFor="include-only-recommended"
-                                className="text-sm font-normal cursor-pointer"
-                              >
-                                Include only recommended subs
-                              </Label>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                Show only subs who can cover at least one shift
-                              </p>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="relative">
+                        <Settings2 className="h-4 w-4 mr-2" />
+                        Filters
+                        {(includePartiallyCovered || !includeOnlyRecommended || !includeFlexibleStaff) && (
+                          <Badge
+                            variant="secondary"
+                            className="ml-2 h-5 min-w-[20px] px-1.5 text-xs"
+                          >
+                            {[
+                              includePartiallyCovered,
+                              !includeOnlyRecommended,
+                              !includeFlexibleStaff,
+                            ].filter(Boolean).length}
+                          </Badge>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80" align="start">
+                      <div className="space-y-4">
+                        <div>
+                          <h4 className="font-medium text-sm mb-3">Filter Options</h4>
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <Label
+                                  htmlFor="include-only-recommended"
+                                  className="text-sm font-normal cursor-pointer"
+                                >
+                                  Include only recommended subs
+                                </Label>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  Show only subs who can cover at least one shift
+                                </p>
+                              </div>
+                              <Switch
+                                id="include-only-recommended"
+                                checked={includeOnlyRecommended}
+                                onCheckedChange={setIncludeOnlyRecommended}
+                              />
                             </div>
-                            <Switch
-                              id="include-only-recommended"
-                              checked={includeOnlyRecommended}
-                              onCheckedChange={setIncludeOnlyRecommended}
-                            />
-                          </div>
 
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <Label
-                                htmlFor="include-partial"
-                                className="text-sm font-normal cursor-pointer"
-                              >
-                                Include partially covered shifts
-                              </Label>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                Show absences with partial coverage
-                              </p>
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <Label
+                                  htmlFor="include-partial"
+                                  className="text-sm font-normal cursor-pointer"
+                                >
+                                  Include partially covered shifts
+                                </Label>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  Show absences with partial coverage
+                                </p>
+                              </div>
+                              <Switch
+                                id="include-partial"
+                                checked={includePartiallyCovered}
+                                onCheckedChange={setIncludePartiallyCovered}
+                              />
                             </div>
-                            <Switch
-                              id="include-partial"
-                              checked={includePartiallyCovered}
-                              onCheckedChange={setIncludePartiallyCovered}
-                            />
-                          </div>
 
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <Label
-                                htmlFor="include-flexible"
-                                className="text-sm font-normal cursor-pointer"
-                              >
-                                Include Flexible Staff
-                              </Label>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                Include staff who can sub when not teaching
-                              </p>
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <Label
+                                  htmlFor="include-flexible"
+                                  className="text-sm font-normal cursor-pointer"
+                                >
+                                  Include Flexible Staff
+                                </Label>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  Include staff who can sub when not teaching
+                                </p>
+                              </div>
+                              <Switch
+                                id="include-flexible"
+                                checked={includeFlexibleStaff}
+                                onCheckedChange={setIncludeFlexibleStaff}
+                              />
                             </div>
-                            <Switch
-                              id="include-flexible"
-                              checked={includeFlexibleStaff}
-                              onCheckedChange={setIncludeFlexibleStaff}
-                            />
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Recommended Subs List */}
-        <div className="flex-1 overflow-y-auto p-6">
+        {/* Recommended Subs List - now scrollable without header */}
+        <div className="flex-1 overflow-y-auto">
           {selectedAbsence ? (
-            <RecommendedSubsList
-              subs={recommendedSubs}
-              loading={loading}
-              absence={selectedAbsence}
-              showAllSubs={!includeOnlyRecommended}
-              onContactSub={handleContactSub}
-              onViewDetails={handleViewDetails}
-            />
+            <div className="p-4">
+              <RecommendedSubsList
+                subs={recommendedSubs}
+                loading={loading}
+                absence={selectedAbsence}
+                showAllSubs={!includeOnlyRecommended}
+                onContactSub={handleContactSub}
+                onViewDetails={handleViewDetails}
+                hideHeader
+              />
+            </div>
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <div className="text-center">
