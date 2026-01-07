@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Badge } from '@/components/ui/badge'
 import AbsenceList from '@/components/sub-finder/AbsenceList'
 import RecommendedSubsList from '@/components/sub-finder/RecommendedSubsList'
+import ContactSubPanel from '@/components/sub-finder/ContactSubPanel'
 
 type Mode = 'existing' | 'manual'
 
@@ -48,6 +49,8 @@ export default function SubFinderPage() {
   const [includeOnlyRecommended, setIncludeOnlyRecommended] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [allSubs, setAllSubs] = useState<any[]>([]) // Store all subs from API
+  const [selectedSub, setSelectedSub] = useState<any | null>(null)
+  const [isContactPanelOpen, setIsContactPanelOpen] = useState(false)
 
   // Fetch absences on mount and when filters change
   useEffect(() => {
@@ -121,6 +124,21 @@ export default function SubFinderPage() {
     if (selectedAbsence) {
       await handleFindSubs(selectedAbsence)
     }
+  }
+
+  const handleContactSub = (sub: any) => {
+    setSelectedSub(sub)
+    setIsContactPanelOpen(true)
+  }
+
+  const handleViewDetails = (sub: any) => {
+    setSelectedSub(sub)
+    setIsContactPanelOpen(true)
+  }
+
+  const handleCloseContactPanel = () => {
+    setIsContactPanelOpen(false)
+    setSelectedSub(null)
   }
 
   // Filter absences based on search query
@@ -326,6 +344,8 @@ export default function SubFinderPage() {
               loading={loading}
               absence={selectedAbsence}
               showAllSubs={!includeOnlyRecommended}
+              onContactSub={handleContactSub}
+              onViewDetails={handleViewDetails}
             />
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -339,6 +359,16 @@ export default function SubFinderPage() {
           )}
         </div>
       </div>
+
+      {/* Contact Sub Panel */}
+      {selectedAbsence && (
+        <ContactSubPanel
+          isOpen={isContactPanelOpen}
+          onClose={handleCloseContactPanel}
+          sub={selectedSub}
+          absence={selectedAbsence}
+        />
+      )}
     </div>
   )
 }

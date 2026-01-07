@@ -37,6 +37,8 @@ interface RecommendedSubsListProps {
     end_date: string | null
   }
   showAllSubs?: boolean
+  onContactSub?: (sub: RecommendedSub) => void
+  onViewDetails?: (sub: RecommendedSub) => void
 }
 
 export default function RecommendedSubsList({
@@ -44,6 +46,8 @@ export default function RecommendedSubsList({
   loading,
   absence,
   showAllSubs = false,
+  onContactSub,
+  onViewDetails,
 }: RecommendedSubsListProps) {
   // Format date as "Mon Jan 11"
   const formatDate = (dateString: string) => {
@@ -169,10 +173,19 @@ export default function RecommendedSubsList({
             )}
 
             <div className="flex gap-2 mt-4">
-              <Button size="sm" variant="outline" className="flex-1">
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1"
+                onClick={() => onViewDetails?.(sub)}
+              >
                 View Details
               </Button>
-              <Button size="sm" className="flex-1">
+              <Button
+                size="sm"
+                className="flex-1"
+                onClick={() => onContactSub?.(sub)}
+              >
                 Contact
               </Button>
             </div>
