@@ -33,8 +33,9 @@ export default function SetupProfilePage() {
         setError(data.error || 'Failed to check profile status')
       }
     } catch (err) {
-      setError('Failed to check profile status')
-      console.error(err)
+      // Only show error if it's not a network issue (which might be temporary)
+      console.error('Error checking profile:', err)
+      // Don't set error state for check - it's not critical if this fails
     } finally {
       setChecking(false)
     }
@@ -56,11 +57,15 @@ export default function SetupProfilePage() {
         setHasProfile(true)
         setProfile(data.profile)
       } else {
-        setError(data.error || 'Failed to create profile')
+        // Show the specific error message from the API
+        const errorMessage = data.error || 'Unable to create profile. Please try again.'
+        setError(errorMessage)
+        console.error('Profile creation failed:', data)
       }
     } catch (err) {
-      setError('Failed to create profile')
-      console.error(err)
+      // Network or other unexpected errors
+      console.error('Unexpected error creating profile:', err)
+      setError('Unable to connect to the server. Please check your connection and try again.')
     } finally {
       setLoading(false)
     }
@@ -120,10 +125,6 @@ export default function SetupProfilePage() {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center gap-2 text-amber-600">
-                <XCircle className="h-5 w-5" />
-                <span className="font-medium">No profile found</span>
-              </div>
               <p className="text-sm text-muted-foreground">
                 You need to create a profile to link your account to a school. This will allow you
                 to use features that require school context, such as audit logging.
@@ -143,7 +144,11 @@ export default function SetupProfilePage() {
 
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-sm text-red-800">{error}</p>
+              <p className="text-sm text-red-800 font-medium">Unable to create profile</p>
+              <p className="text-sm text-red-700 mt-1">{error}</p>
+              <p className="text-xs text-red-600 mt-2">
+                Please check the browser console for more details or contact support if this issue persists.
+              </p>
             </div>
           )}
 

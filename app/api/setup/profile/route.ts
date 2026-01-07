@@ -66,8 +66,17 @@ export async function POST(request: NextRequest) {
 
     if (profileError) {
       console.error('Error creating profile:', profileError)
+      // Provide more specific error messages
+      let errorMessage = 'Unable to create profile'
+      if (profileError.code === '23505') {
+        errorMessage = 'A profile already exists for this user'
+      } else if (profileError.code === '23503') {
+        errorMessage = 'Invalid school reference. Please contact support.'
+      } else if (profileError.message) {
+        errorMessage = profileError.message
+      }
       return NextResponse.json(
-        { error: `Failed to create profile: ${profileError.message}` },
+        { error: errorMessage },
         { status: 500 }
       )
     }
@@ -79,7 +88,12 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error setting up profile:', error)
-    return createErrorResponse(error, 'Failed to set up profile', 500)
+    // Return a more user-friendly error message
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred'
+    return NextResponse.json(
+      { error: `Unable to create profile: ${errorMessage}` },
+      { status: 500 }
+    )
   }
 }
 
