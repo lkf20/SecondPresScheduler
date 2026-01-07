@@ -475,13 +475,6 @@ export default function ContactSubPanel({
       setLoading(false)
     }
   }
-    } catch (error) {
-      console.error('Error assigning shifts:', error)
-      alert(`Error assigning shifts: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const selectedShiftsCount = selectedShifts.size
   const totalShifts = sub.can_cover?.length || 0
