@@ -17,6 +17,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { X, Phone, Mail, AlertTriangle } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
+import { toast } from 'sonner'
 
 interface RecommendedSub {
   id: string
@@ -572,6 +573,16 @@ export default function ContactSubPanel({
       if (assignData.assigned_shifts) {
         setAssignedShifts(assignData.assigned_shifts)
       }
+
+      // Show success toast
+      const shiftCount = selectedShiftIds.length
+      const teacherName = absence?.teacher_name || 'teacher'
+      toast.success(
+        `Assigned ${shiftCount} shift${shiftCount !== 1 ? 's' : ''} to ${sub.name} for ${teacherName}`,
+        {
+          description: `Coverage has been scheduled and updated in the calendar.`,
+        }
+      )
 
       // Don't close - keep panel open so user can see the updated status
     } catch (error) {

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Header from './Header'
 import Sidebar from './Sidebar'
+import { Toaster } from 'sonner'
 
 export default async function AppLayout({
   children,
@@ -33,6 +34,7 @@ export default async function AppLayout({
             {children}
           </div>
         </main>
+        <Toaster position="top-right" />
       </div>
     )
   } catch (error: any) {
