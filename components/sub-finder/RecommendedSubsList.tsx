@@ -141,23 +141,79 @@ export default function RecommendedSubsList({
               </div>
             </div>
 
-            {sub.can_cover && sub.can_cover.length > 0 && (
+            {/* Coverage: All shifts displayed together */}
+            {(sub.can_cover && sub.can_cover.length > 0) || (sub.cannot_cover && sub.cannot_cover.length > 0) ? (
               <div className="mb-3">
-                <p className="text-xs font-medium text-muted-foreground mb-1.5">Can cover:</p>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5">Coverage:</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {sub.can_cover.map((shift, idx) => (
-                    <Badge key={idx} variant="outline" className="text-xs">
-                      {shift.day_name} {shift.time_slot_code}
-                      {shift.class_name && ` (${shift.class_name})`}
-                    </Badge>
-                  ))}
+                  {/* Combine and sort all shifts by date and time slot */}
+                  {(() => {
+                    type ShiftItem = {
+                      date: string
+                      day_name: string
+                      time_slot_code: string
+                      canCover: boolean
+                    }
+                    
+                    const allShiftsMap = new Map<string, ShiftItem>()
+                    
+                    // Add can_cover shifts
+                    sub.can_cover?.forEach((shift) => {
+                      const key = `${shift.date}|${shift.day_name}|${shift.time_slot_code}`
+                      allShiftsMap.set(key, {
+                        date: shift.date,
+                        day_name: shift.day_name,
+                        time_slot_code: shift.time_slot_code,
+                        canCover: true,
+                      })
+                    })
+                    
+                    // Add cannot_cover shifts (will overwrite if duplicate, which shouldn't happen)
+                    sub.cannot_cover?.forEach((shift) => {
+                      const key = `${shift.date}|${shift.day_name}|${shift.time_slot_code}`
+                      allShiftsMap.set(key, {
+                        date: shift.date,
+                        day_name: shift.day_name,
+                        time_slot_code: shift.time_slot_code,
+                        canCover: false,
+                      })
+                    })
+                    
+                    // Convert to array and sort by date, then time slot
+                    const allShifts = Array.from(allShiftsMap.values()).sort((a, b) => {
+                      const dateA = new Date(a.date).getTime()
+                      const dateB = new Date(b.date).getTime()
+                      if (dateA !== dateB) return dateA - dateB
+                      // If same date, sort by time slot code (AM before PM, etc.)
+                      return a.time_slot_code.localeCompare(b.time_slot_code)
+                    })
+                    
+                    return allShifts.map((shift, idx) => {
+                      const shiftLabel = `${shift.day_name} ${shift.time_slot_code}`
+                      
+                      return (
+                        <Badge
+                          key={`${shift.date}-${shift.time_slot_code}-${idx}`}
+                          variant={shift.canCover ? 'default' : 'outline'}
+                          className={`text-xs ${
+                            shift.canCover
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted text-muted-foreground opacity-60'
+                          }`}
+                        >
+                          {shiftLabel}
+                        </Badge>
+                      )
+                    })
+                  })()}
                 </div>
               </div>
-            )}
+            ) : null}
 
+            {/* Cannot Cover: Reasons section */}
             {sub.cannot_cover && sub.cannot_cover.length > 0 && (
               <div className="mb-3">
-                <p className="text-xs font-medium text-muted-foreground mb-1.5">Cannot cover:</p>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5">Cannot Cover:</p>
                 <div className="space-y-1">
                   {sub.cannot_cover.map((shift, idx) => (
                     <div key={idx} className="text-xs text-muted-foreground">
