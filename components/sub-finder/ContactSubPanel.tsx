@@ -259,34 +259,26 @@ export default function ContactSubPanel({
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader className="text-left">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <SheetTitle className="text-2xl mb-1">{sub.name}</SheetTitle>
-              <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                {sub.phone && (
-                  <span className="flex items-center gap-1.5">
-                    <Phone className="h-3.5 w-3.5" />
-                    <span>{sub.phone}</span>
-                  </span>
-                )}
-                {sub.email && (
-                  <span className="flex items-center gap-1.5">
-                    <Mail className="h-3.5 w-3.5" />
-                    <span>{sub.email}</span>
-                  </span>
-                )}
-              </div>
-              {selectedShiftsCount > 0 && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  Covering {selectedShiftsCount} of {totalShifts} selected shifts
-                </p>
-              )}
-            </div>
-            <Button variant="ghost" size="icon" onClick={onClose} className="absolute right-4 top-4">
-              <X className="h-4 w-4" />
-              <span className="sr-only">Close</span>
-            </Button>
+          <SheetTitle className="text-2xl mb-1">{sub.name}</SheetTitle>
+          <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+            {sub.phone && (
+              <span className="flex items-center gap-1.5">
+                <Phone className="h-3.5 w-3.5" />
+                <span>{sub.phone}</span>
+              </span>
+            )}
+            {sub.email && (
+              <span className="flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5" />
+                <span>{sub.email}</span>
+              </span>
+            )}
           </div>
+          {selectedShiftsCount > 0 && (
+            <p className="text-sm text-muted-foreground mt-2">
+              Covering {selectedShiftsCount} of {totalShifts} selected shifts
+            </p>
+          )}
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
