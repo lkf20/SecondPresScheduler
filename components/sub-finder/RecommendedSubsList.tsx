@@ -3,8 +3,9 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Phone, User } from 'lucide-react'
+import { Phone, User, CheckCircle2, CircleX, ChevronDown, ChevronUp } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
+import { useState } from 'react'
 
 interface RecommendedSub {
   id: string
@@ -52,6 +53,8 @@ export default function RecommendedSubsList({
   onViewDetails,
   hideHeader = false,
 }: RecommendedSubsListProps) {
+  // Track which subs have unavailable shifts expanded
+  const [expandedUnavailable, setExpandedUnavailable] = useState<Set<string>>(new Set())
   // Format date as "Mon Jan 11"
   const formatDate = (dateString: string) => {
     const date = parseLocalDate(dateString)
@@ -124,10 +127,24 @@ export default function RecommendedSubsList({
         </div>
       )}
 
-      {subs.map((sub) => (
+      {subs.map((sub) => {
+        const showUnavailable = expandedUnavailable.has(sub.id)
+        const toggleUnavailable = () => {
+          setExpandedUnavailable((prev) => {
+            const next = new Set(prev)
+            if (next.has(sub.id)) {
+              next.delete(sub.id)
+            } else {
+              next.add(sub.id)
+            }
+            return next
+          })
+        }
+        
+        return (
         <Card key={sub.id} className="hover:shadow-md transition-shadow">
           <CardContent className="p-5">
-            <div className="flex items-start justify-between mb-3">
+            <div className="flex items-start justify-between mb-5">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <User className="h-4 w-4 text-muted-foreground" />
@@ -141,101 +158,77 @@ export default function RecommendedSubsList({
                 )}
               </div>
               <div className="text-right">
-                <Badge
-                  variant={sub.coverage_percent >= 80 ? 'default' : sub.coverage_percent >= 50 ? 'secondary' : 'outline'}
-                  className="text-sm"
-                >
-                  {sub.coverage_percent}% coverage
-                </Badge>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground">
                   {sub.shifts_covered}/{sub.total_shifts} shifts
                 </p>
               </div>
             </div>
 
-            {/* Coverage: All shifts displayed together */}
-            {(sub.can_cover && sub.can_cover.length > 0) || (sub.cannot_cover && sub.cannot_cover.length > 0) ? (
+            {/* Can Cover: Shifts that can be covered */}
+            {sub.can_cover && sub.can_cover.length > 0 && (
               <div className="mb-3">
-                <p className="text-xs font-medium text-muted-foreground mb-1.5">Coverage:</p>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5">Can Cover:</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {/* Combine and sort all shifts by date and time slot */}
-                  {(() => {
-                    type ShiftItem = {
-                      date: string
-                      day_name: string
-                      time_slot_code: string
-                      canCover: boolean
-                    }
-                    
-                    const allShiftsMap = new Map<string, ShiftItem>()
-                    
-                    // Add can_cover shifts
-                    sub.can_cover?.forEach((shift) => {
-                      const key = `${shift.date}|${shift.day_name}|${shift.time_slot_code}`
-                      allShiftsMap.set(key, {
-                        date: shift.date,
-                        day_name: shift.day_name,
-                        time_slot_code: shift.time_slot_code,
-                        canCover: true,
-                      })
-                    })
-                    
-                    // Add cannot_cover shifts (will overwrite if duplicate, which shouldn't happen)
-                    sub.cannot_cover?.forEach((shift) => {
-                      const key = `${shift.date}|${shift.day_name}|${shift.time_slot_code}`
-                      allShiftsMap.set(key, {
-                        date: shift.date,
-                        day_name: shift.day_name,
-                        time_slot_code: shift.time_slot_code,
-                        canCover: false,
-                      })
-                    })
-                    
-                    // Convert to array and sort by date, then time slot
-                    const allShifts = Array.from(allShiftsMap.values()).sort((a, b) => {
-                      const dateA = parseLocalDate(a.date).getTime()
-                      const dateB = parseLocalDate(b.date).getTime()
-                      if (dateA !== dateB) return dateA - dateB
-                      // If same date, sort by time slot code (AM before PM, etc.)
-                      return a.time_slot_code.localeCompare(b.time_slot_code)
-                    })
-                    
-                    return allShifts.map((shift, idx) => {
-                      const shiftLabel = formatShiftLabel(shift.date, shift.time_slot_code)
-                      
-                      return (
-                        <Badge
-                          key={`${shift.date}-${shift.time_slot_code}-${idx}`}
-                          variant={shift.canCover ? 'default' : 'outline'}
-                          className={`text-xs ${
-                            shift.canCover
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-muted text-muted-foreground opacity-60'
-                          }`}
-                        >
-                          {shiftLabel}
-                        </Badge>
-                      )
-                    })
-                  })()}
+                  {sub.can_cover.map((shift, idx) => {
+                    const shiftLabel = formatShiftLabel(shift.date, shift.time_slot_code)
+                    return (
+                      <Badge
+                        key={`can-cover-${shift.date}-${shift.time_slot_code}-${idx}`}
+                        variant="outline"
+                        className="text-xs bg-slate-100 text-slate-900 border-slate-200 flex items-center gap-1"
+                      >
+                        {shiftLabel}
+                        <CheckCircle2 className="h-3 w-3" />
+                      </Badge>
+                    )
+                  })}
                 </div>
               </div>
-            ) : null}
+            )}
 
-            {/* Cannot Cover: Reasons section */}
+            {/* Unavailable: Collapsible section */}
             {sub.cannot_cover && sub.cannot_cover.length > 0 && (
               <div className="mb-3">
-                <p className="text-xs font-medium text-muted-foreground mb-1.5">Cannot Cover:</p>
-                <div className="space-y-1">
-                  {sub.cannot_cover.map((shift, idx) => (
-                    <div key={idx} className="text-xs text-muted-foreground">
-                      <span className="font-medium">
-                        {formatShiftLabel(shift.date, shift.time_slot_code)}:
-                      </span>{' '}
-                      {shift.reason}
+                <button
+                  onClick={toggleUnavailable}
+                  className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors mb-1.5"
+                >
+                  {showUnavailable ? (
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  )}
+                  <span>Unavailable ({sub.cannot_cover.length})</span>
+                </button>
+                {showUnavailable && (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {sub.cannot_cover.map((shift, idx) => {
+                        const shiftLabel = formatShiftLabel(shift.date, shift.time_slot_code)
+                        return (
+                          <Badge
+                            key={`cannot-cover-${shift.date}-${shift.time_slot_code}-${idx}`}
+                            variant="outline"
+                            className="text-xs bg-muted/50 text-muted-foreground border-dashed border-gray-300 flex items-center gap-1"
+                          >
+                            {shiftLabel}
+                            <CircleX className="h-3 w-3 text-muted-foreground" />
+                          </Badge>
+                        )
+                      })}
                     </div>
-                  ))}
-                </div>
+                    <div className="space-y-1">
+                      {sub.cannot_cover.map((shift, idx) => (
+                        <div key={idx} className="text-xs text-muted-foreground">
+                          <span className="font-medium">
+                            {formatShiftLabel(shift.date, shift.time_slot_code)}:
+                          </span>{' '}
+                          {shift.reason}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -248,15 +241,17 @@ export default function RecommendedSubsList({
             <div className="mt-4">
               <Button
                 size="sm"
+                variant="outline"
                 className="w-full"
                 onClick={() => onContactSub?.(sub)}
               >
-                View Details & Contact
+                View & Contact
               </Button>
             </div>
           </CardContent>
         </Card>
-      ))}
+        )
+      })}
     </div>
   )
 }
