@@ -573,11 +573,16 @@ export default function ContactSubPanel({
         } catch {
           errorData = { error: errorText || 'Failed to update contact' }
         }
-        const errorMessage = errorData.error || errorData.message || 'Failed to update contact'
+        const errorMessage =
+          errorData.error ||
+          errorData.message ||
+          errorText ||
+          `Failed to update contact (${updateResponse.status} ${updateResponse.statusText})`
         console.error('Update contact error:', {
           status: updateResponse.status,
           statusText: updateResponse.statusText,
-          error: errorData,
+          errorText,
+          errorData,
           payload: updatePayload,
         })
         throw new Error(errorMessage)

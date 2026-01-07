@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(contactWithDetails || contact)
   } catch (error) {
     console.error('Error fetching substitute contact:', error)
-    return createErrorResponse(getErrorMessage(error), 500)
+    return createErrorResponse(error, 'Failed to fetch substitute contact', 500, 'GET /api/sub-finder/substitute-contacts')
   }
 }
 
@@ -68,7 +68,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(contactWithDetails || updatedContact)
   } catch (error) {
     console.error('Error updating substitute contact:', error)
-    return createErrorResponse(getErrorMessage(error), 500)
+    return createErrorResponse(error, 'Failed to update substitute contact', 500, 'PUT /api/sub-finder/substitute-contacts')
   }
 }
 
