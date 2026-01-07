@@ -620,7 +620,7 @@ export default function ContactSubPanel({
                       Contacted
                     </Label>
                   </div>
-                  {contactedAt && (
+                  {isContacted && contactedAt && (
                     <p className="text-xs text-muted-foreground ml-6">
                       Contact status updated {formatContactedTimestamp(contactedAt)}
                     </p>
