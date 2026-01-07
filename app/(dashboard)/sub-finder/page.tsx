@@ -314,16 +314,6 @@ export default function SubFinderPage() {
                   </PopoverContent>
                 </Popover>
               </div>
-
-              {selectedAbsence && (
-                <div className="text-sm text-muted-foreground">
-                  <span className="font-medium">{selectedAbsence.teacher_name}</span>
-                  {' - '}
-                  {new Date(selectedAbsence.start_date).toLocaleDateString()}
-                  {selectedAbsence.end_date &&
-                    ` to ${new Date(selectedAbsence.end_date).toLocaleDateString()}`}
-                </div>
-              )}
             </div>
           </div>
         )}

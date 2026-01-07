@@ -91,9 +91,10 @@ export default function RecommendedSubsList({
   return (
     <div className="space-y-4">
       <div className="mb-4">
-        <h2 className="text-xl font-semibold mb-1">
-          {showAllSubs ? 'All Subs' : 'Recommended Subs'} for {absence.teacher_name}
-          <span className="text-muted-foreground font-normal"> · {formatDateRange()}</span>
+        <h2 className="text-xl font-semibold mb-1 flex items-center gap-3">
+          <span>{showAllSubs ? 'All Subs' : 'Recommended Subs'} for {absence.teacher_name}</span>
+          <span className="h-5 w-px bg-border" aria-hidden="true" />
+          <span className="text-muted-foreground font-normal">{formatDateRange()}</span>
         </h2>
         <p className="text-sm text-muted-foreground">
           {showAllSubs
