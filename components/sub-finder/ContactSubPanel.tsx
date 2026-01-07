@@ -258,7 +258,7 @@ export default function ContactSubPanel({
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
-        <SheetHeader>
+        <SheetHeader className="text-left">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <SheetTitle className="text-2xl mb-1">{sub.name}</SheetTitle>
@@ -282,8 +282,9 @@ export default function ContactSubPanel({
                 </p>
               )}
             </div>
-            <Button variant="ghost" size="icon" onClick={onClose}>
+            <Button variant="ghost" size="icon" onClick={onClose} className="absolute right-4 top-4">
               <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
             </Button>
           </div>
         </SheetHeader>
