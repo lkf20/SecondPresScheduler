@@ -640,7 +640,7 @@ export default function ContactSubPanel({
                 <p className="text-sm text-muted-foreground">No shifts available</p>
               )}
               {/* Status */}
-              <div className="space-y-2 border-t pt-4 mt-4">
+              <div className="space-y-2 border-t pt-4">
                 <Label className="text-sm font-medium mb-2 block">Status</Label>
                 {assignedShifts.length > 0 ? (
                   <p className="text-sm text-muted-foreground">

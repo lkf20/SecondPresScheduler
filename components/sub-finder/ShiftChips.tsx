@@ -112,7 +112,7 @@ export default function ShiftChips({ canCover, cannotCover, assigned = [], showL
         })}
       </div>
       {showLegend && (
-        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1">
+        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1 pb-4">
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded border bg-blue-50 border-blue-200" />
             <span>Assigned</span>
