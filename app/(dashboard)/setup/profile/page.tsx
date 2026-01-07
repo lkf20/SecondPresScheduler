@@ -12,6 +12,7 @@ export default function SetupProfilePage() {
   const [profile, setProfile] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [justCreated, setJustCreated] = useState(false)
 
   useEffect(() => {
     checkProfile()
@@ -66,6 +67,7 @@ export default function SetupProfilePage() {
         setSuccess(true)
         setHasProfile(true)
         setProfile(data.profile)
+        setJustCreated(true) // Mark that we just created it
       } else {
         // Show the specific error message from the API
         const errorMessage = data.error || 'Unable to create profile. Please try again.'
@@ -110,7 +112,9 @@ export default function SetupProfilePage() {
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-green-600">
                 <CheckCircle2 className="h-5 w-5" />
-                <span className="font-medium">Profile already exists</span>
+                <span className="font-medium">
+                  {justCreated ? 'Profile created successfully!' : 'Profile already exists'}
+                </span>
               </div>
               {profile && (
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2">
@@ -162,10 +166,10 @@ export default function SetupProfilePage() {
             </div>
           )}
 
-          {success && (
+          {success && justCreated && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
               <p className="text-sm text-green-800">
-                Profile created successfully! You can now use all features.
+                Your profile has been set up. You can now use all features that require school context.
               </p>
             </div>
           )}

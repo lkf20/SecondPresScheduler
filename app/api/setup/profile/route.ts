@@ -32,10 +32,20 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (existingProfile) {
+      // Fetch school name for the existing profile
+      const { data: school } = await supabase
+        .from('schools')
+        .select('*')
+        .eq('id', existingProfile.school_id)
+        .single()
+
       return NextResponse.json({
         success: true,
         message: 'Profile already exists',
-        profile: existingProfile,
+        profile: {
+          ...existingProfile,
+          schools: school,
+        },
       })
     }
 
@@ -81,10 +91,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Fetch school name for the new profile
+    const { data: school } = await supabase
+      .from('schools')
+      .select('*')
+      .eq('id', profile.school_id)
+      .single()
+
     return NextResponse.json({
       success: true,
       message: 'Profile created successfully',
-      profile: profile,
+      profile: {
+        ...profile,
+        schools: school,
+      },
     })
   } catch (error) {
     console.error('Error setting up profile:', error)
