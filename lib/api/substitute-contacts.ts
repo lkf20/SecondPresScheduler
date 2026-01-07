@@ -295,17 +295,21 @@ export async function upsertShiftOverrides(
   }
 
   // Upsert the new overrides
-  const overridesToUpsert = shiftOverrides.map((override) => ({
-    substitute_contact_id: substituteContactId,
-    coverage_request_shift_id: override.coverage_request_shift_id,
-    selected: override.selected,
-    is_partial: override.is_partial ?? false,
-    partial_start_time: override.partial_start_time ?? null,
-    partial_end_time: override.partial_end_time ?? null,
-    notes: override.notes ?? null,
-    override_availability: override.override_availability ?? false,
-    updated_at: new Date().toISOString(),
-  }))
+  const overridesToUpsert = shiftOverrides.map((override) => {
+    const now = new Date().toISOString()
+    return {
+      substitute_contact_id: substituteContactId,
+      coverage_request_shift_id: override.coverage_request_shift_id,
+      selected: override.selected,
+      is_partial: override.is_partial ?? false,
+      partial_start_time: override.partial_start_time ?? null,
+      partial_end_time: override.partial_end_time ?? null,
+      notes: override.notes ?? null,
+      override_availability: override.override_availability ?? false,
+      created_at: now, // Include created_at for new records
+      updated_at: now,
+    }
+  })
 
   if (overridesToUpsert.length > 0) {
     const { error, data } = await supabase
