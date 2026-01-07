@@ -45,6 +45,27 @@ export default function RecommendedSubsList({
   absence,
   showAllSubs = false,
 }: RecommendedSubsListProps) {
+  // Format date as "Mon Jan 11"
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const dayName = dayNames[date.getDay()]
+    const month = monthNames[date.getMonth()]
+    const day = date.getDate()
+    return `${dayName} ${month} ${day}`
+  }
+
+  // Format date range for display
+  const formatDateRange = () => {
+    const startDate = formatDate(absence.start_date)
+    if (absence.end_date && absence.end_date !== absence.start_date) {
+      const endDate = formatDate(absence.end_date)
+      return `${startDate} - ${endDate}`
+    }
+    return startDate
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -72,6 +93,7 @@ export default function RecommendedSubsList({
       <div className="mb-4">
         <h2 className="text-xl font-semibold mb-1">
           {showAllSubs ? 'All Subs' : 'Recommended Subs'} for {absence.teacher_name}
+          <span className="text-muted-foreground font-normal"> · {formatDateRange()}</span>
         </h2>
         <p className="text-sm text-muted-foreground">
           {showAllSubs
