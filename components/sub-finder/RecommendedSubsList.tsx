@@ -233,21 +233,13 @@ export default function RecommendedSubsList({
               </div>
             )}
 
-            <div className="flex gap-2 mt-4">
+            <div className="mt-4">
               <Button
                 size="sm"
-                variant="outline"
-                className="flex-1"
-                onClick={() => onViewDetails?.(sub)}
-              >
-                View Details
-              </Button>
-              <Button
-                size="sm"
-                className="flex-1"
+                className="w-full"
                 onClick={() => onContactSub?.(sub)}
               >
-                Contact
+                View Details & Contact
               </Button>
             </div>
           </CardContent>
