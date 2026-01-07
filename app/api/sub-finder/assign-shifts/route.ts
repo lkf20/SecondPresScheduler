@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createErrorResponse, getErrorMessage } from '@/lib/utils/errors'
+import { createAuditLog } from '@/lib/api/audit-logs'
 
 /**
  * POST /api/sub-finder/assign-shifts
@@ -81,6 +82,42 @@ export async function POST(request: NextRequest) {
     if (insertError) {
       console.error('Error creating sub_assignments:', insertError)
       return createErrorResponse('Failed to create assignments', 500)
+    }
+
+    // Get substitute contact ID to check for overrides
+    const { data: substituteContact } = await supabase
+      .from('substitute_contacts')
+      .select('id')
+      .eq('coverage_request_id', coverage_request_id)
+      .eq('sub_id', sub_id)
+      .single()
+
+    // Get shift overrides to check for overrides
+    if (substituteContact) {
+      const { data: shiftOverrides } = await supabase
+        .from('sub_contact_shift_overrides')
+        .select('coverage_request_shift_id, override_availability')
+        .in('coverage_request_shift_id', selected_shift_ids)
+        .eq('substitute_contact_id', substituteContact.id)
+
+      // Log any overridden shifts
+      if (shiftOverrides) {
+        for (const override of shiftOverrides) {
+          if (override.override_availability) {
+            await createAuditLog({
+              action: 'override_availability',
+              entity_type: 'sub_contact_shift_override',
+              entity_id: override.coverage_request_shift_id,
+              details: {
+                coverage_request_id: coverage_request_id,
+                sub_id: sub_id,
+                coverage_request_shift_id: override.coverage_request_shift_id,
+                reason: 'Director override for unavailable shift',
+              },
+            })
+          }
+        }
+      }
     }
 
     // Get assigned shift details for response

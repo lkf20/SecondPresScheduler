@@ -37,6 +37,7 @@ interface RecommendedSub {
     day_name: string
     time_slot_code: string
     reason: string
+    coverage_request_shift_id?: string
   }>
   can_change_diapers?: boolean
   can_lift_children?: boolean
@@ -78,6 +79,8 @@ export default function ContactSubPanel({
   const [coverageRequestId, setCoverageRequestId] = useState<string | null>(null)
   const [shiftMap, setShiftMap] = useState<Record<string, string>>({})
   const [contactId, setContactId] = useState<string | null>(null)
+  const [overriddenShiftIds, setOverriddenShiftIds] = useState<Set<string>>(new Set())
+  const [isSubInactive, setIsSubInactive] = useState(false)
 
   // Fetch coverage request and existing contact data when panel opens
   useEffect(() => {
@@ -96,6 +99,17 @@ export default function ContactSubPanel({
         setCoverageRequestId(coverageData.coverage_request_id)
         setShiftMap(coverageData.shift_map || {})
 
+        // Check if sub is inactive
+        try {
+          const subResponse = await fetch(`/api/subs/${sub.id}`)
+          if (subResponse.ok) {
+            const subData = await subResponse.json()
+            setIsSubInactive(!subData.active)
+          }
+        } catch (error) {
+          console.error('Error fetching sub details:', error)
+        }
+
         // Get or create substitute contact
         const contactResponse = await fetch(
           `/api/sub-finder/substitute-contacts?coverage_request_id=${coverageData.coverage_request_id}&sub_id=${sub.id}`
@@ -110,16 +124,25 @@ export default function ContactSubPanel({
             setNotes(contactData.notes || '')
             setAssignedShifts(contactData.assigned_shifts || [])
 
-            // Load selected shifts from shift_overrides if they exist
+            // Load selected shifts and override state from shift_overrides if they exist
             if (contactData.shift_overrides && contactData.shift_overrides.length > 0) {
               const selected = new Set<string>()
+              const overridden = new Set<string>()
               contactData.shift_overrides.forEach((override: any) => {
                 if (override.selected && override.shift) {
+                  const shiftId = override.coverage_request_shift_id || 
+                    `${override.shift.date}|${override.shift.time_slot?.code || ''}`
                   const key = `${override.shift.date}|${override.shift.time_slot?.code || ''}`
                   selected.add(key)
+                  // Also track by shift ID for unavailable shifts
+                  if (override.override_availability) {
+                    overridden.add(shiftId)
+                    overridden.add(key)
+                  }
                 }
               })
               setSelectedShifts(selected)
+              setOverriddenShiftIds(overridden)
             } else {
               // Initialize to all can_cover shifts if no overrides exist
               if (sub.can_cover) {
@@ -168,6 +191,8 @@ export default function ContactSubPanel({
       setCoverageRequestId(null)
       setShiftMap({})
       setContactId(null)
+      setOverriddenShiftIds(new Set())
+      setIsSubInactive(false)
     }
   }, [isOpen])
 
@@ -264,7 +289,12 @@ export default function ContactSubPanel({
     )
   }
 
-  const handleShiftToggle = (shiftKey: string) => {
+  const handleShiftToggle = (shiftKey: string, isAvailable: boolean) => {
+    // Only allow selection if available OR overridden
+    if (!isAvailable && !overriddenShiftIds.has(shiftKey)) {
+      return // Can't select unavailable shifts without override
+    }
+    
     const newSelected = new Set(selectedShifts)
     if (newSelected.has(shiftKey)) {
       newSelected.delete(shiftKey)
@@ -272,6 +302,18 @@ export default function ContactSubPanel({
       newSelected.add(shiftKey)
     }
     setSelectedShifts(newSelected)
+  }
+
+  const handleToggleOverride = (shiftId: string) => {
+    setOverriddenShiftIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(shiftId)) {
+        next.delete(shiftId)
+      } else {
+        next.add(shiftId)
+      }
+      return next
+    })
   }
 
   const handleSave = async () => {
@@ -282,15 +324,31 @@ export default function ContactSubPanel({
 
     setLoading(true)
     try {
-      // Build shift overrides array
-      const shiftOverrides = sub.can_cover?.map((shift) => {
+      // Build shift overrides array for available shifts
+      const availableShiftOverrides = sub.can_cover?.map((shift) => {
         const shiftKey = `${shift.date}|${shift.time_slot_code}`
         const coverageRequestShiftId = shiftMap[shiftKey]
         return {
           coverage_request_shift_id: coverageRequestShiftId,
           selected: selectedShifts.has(shiftKey),
+          override_availability: false,
         }
       }).filter((override) => override.coverage_request_shift_id) || []
+
+      // Build shift overrides array for unavailable shifts
+      const unavailableShiftOverrides = sub.cannot_cover?.map((shift) => {
+        const shiftId = shift.coverage_request_shift_id || 
+          `${shift.date}|${shift.time_slot_code}`
+        const shiftKey = `${shift.date}|${shift.time_slot_code}`
+        const coverageRequestShiftId = shift.coverage_request_shift_id || shiftMap[shiftKey]
+        return {
+          coverage_request_shift_id: coverageRequestShiftId,
+          selected: selectedShifts.has(shiftKey),
+          override_availability: overriddenShiftIds.has(shiftId) || overriddenShiftIds.has(shiftKey),
+        }
+      }).filter((override) => override.coverage_request_shift_id) || []
+
+      const shiftOverrides = [...availableShiftOverrides, ...unavailableShiftOverrides]
 
       // Get or create contact first if we don't have contactId
       let currentContactId = contactId
@@ -402,12 +460,27 @@ export default function ContactSubPanel({
         }
       }
 
-      // Build shift overrides array and get selected shift IDs
+      // Build shift overrides array and get selected shift IDs (from both available and unavailable)
       const selectedShiftIds: string[] = []
+      
+      // Add available shifts
       sub.can_cover?.forEach((shift) => {
         const shiftKey = `${shift.date}|${shift.time_slot_code}`
         if (selectedShifts.has(shiftKey)) {
           const coverageRequestShiftId = shiftMap[shiftKey]
+          if (coverageRequestShiftId) {
+            selectedShiftIds.push(coverageRequestShiftId)
+          }
+        }
+      })
+      
+      // Add unavailable shifts that are overridden and selected
+      sub.cannot_cover?.forEach((shift) => {
+        const shiftId = shift.coverage_request_shift_id || 
+          `${shift.date}|${shift.time_slot_code}`
+        const shiftKey = `${shift.date}|${shift.time_slot_code}`
+        if (selectedShifts.has(shiftKey) && (overriddenShiftIds.has(shiftId) || overriddenShiftIds.has(shiftKey))) {
+          const coverageRequestShiftId = shift.coverage_request_shift_id || shiftMap[shiftKey]
           if (coverageRequestShiftId) {
             selectedShiftIds.push(coverageRequestShiftId)
           }
@@ -418,15 +491,31 @@ export default function ContactSubPanel({
         throw new Error('No valid shifts selected for assignment')
       }
 
-      // Update contact with response_status, is_contacted, notes, and shift overrides
-      const shiftOverrides = sub.can_cover?.map((shift) => {
+      // Build shift overrides array for available shifts
+      const availableShiftOverrides = sub.can_cover?.map((shift) => {
         const shiftKey = `${shift.date}|${shift.time_slot_code}`
         const coverageRequestShiftId = shiftMap[shiftKey]
         return {
           coverage_request_shift_id: coverageRequestShiftId,
           selected: selectedShifts.has(shiftKey),
+          override_availability: false,
         }
       }).filter((override) => override.coverage_request_shift_id) || []
+
+      // Build shift overrides array for unavailable shifts
+      const unavailableShiftOverrides = sub.cannot_cover?.map((shift) => {
+        const shiftId = shift.coverage_request_shift_id || 
+          `${shift.date}|${shift.time_slot_code}`
+        const shiftKey = `${shift.date}|${shift.time_slot_code}`
+        const coverageRequestShiftId = shift.coverage_request_shift_id || shiftMap[shiftKey]
+        return {
+          coverage_request_shift_id: coverageRequestShiftId,
+          selected: selectedShifts.has(shiftKey),
+          override_availability: overriddenShiftIds.has(shiftId) || overriddenShiftIds.has(shiftKey),
+        }
+      }).filter((override) => override.coverage_request_shift_id) || []
+
+      const shiftOverrides = [...availableShiftOverrides, ...unavailableShiftOverrides]
 
       const updateResponse = await fetch('/api/sub-finder/substitute-contacts', {
         method: 'PUT',
@@ -709,7 +798,7 @@ export default function ContactSubPanel({
                         <Checkbox
                           id={`shift-${idx}`}
                           checked={isSelected}
-                          onCheckedChange={() => handleShiftToggle(shiftKey)}
+                          onCheckedChange={() => handleShiftToggle(shiftKey, true)}
                         />
                         <Label
                           htmlFor={`shift-${idx}`}
@@ -733,21 +822,64 @@ export default function ContactSubPanel({
               </div>
             )}
 
-            {/* Cannot Cover Shifts */}
+            {/* Unavailable Shifts (can override) */}
             {sub.cannot_cover && sub.cannot_cover.length > 0 && (
-              <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-2">
-                <Label className="text-sm font-medium mb-3 block text-amber-600">
-                  Cannot cover
-                </Label>
-                <div className="space-y-1 border rounded-md p-3 bg-amber-50">
-                  {sub.cannot_cover.map((shift, idx) => (
-                    <div key={idx} className="text-sm">
-                      <span className="font-medium">
-                        {formatDate(shift.date)} {shift.time_slot_code}:
-                      </span>{' '}
-                      <span className="text-muted-foreground">{shift.reason}</span>
-                    </div>
-                  ))}
+              <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Unavailable (can override)</Label>
+                </div>
+                <div className="space-y-2">
+                  {sub.cannot_cover.map((shift, idx) => {
+                    const shiftId = shift.coverage_request_shift_id || 
+                      `${shift.date}|${shift.time_slot_code}`
+                    const shiftKey = `${shift.date}|${shift.time_slot_code}`
+                    const isOverridden = overriddenShiftIds.has(shiftId) || overriddenShiftIds.has(shiftKey)
+                    const isSelected = selectedShifts.has(shiftKey)
+                    const canSelect = isOverridden && !isSubInactive && responseStatus !== 'declined'
+                    
+                    return (
+                      <div
+                        key={idx}
+                        className={`flex items-center gap-3 p-3 rounded-lg border ${
+                          isOverridden
+                            ? 'bg-amber-50 border-amber-200'
+                            : 'bg-gray-50 border-gray-200'
+                        }`}
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => handleShiftToggle(shiftKey, false)}
+                          disabled={!canSelect}
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">
+                              {shift.day_name} {shift.time_slot_code}
+                            </span>
+                            {isOverridden && (
+                              <>
+                                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                <Badge variant="outline" className="text-xs bg-amber-100 text-amber-800 border-amber-300">
+                                  Override
+                                </Badge>
+                              </>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {shift.reason}
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleToggleOverride(shiftId)}
+                          disabled={isSubInactive || responseStatus === 'declined'}
+                        >
+                          Override
+                        </Button>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -758,6 +890,13 @@ export default function ContactSubPanel({
                 <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 mb-2">
                   <p className="text-sm text-amber-800">
                     Cannot assign shifts to a declined sub
+                  </p>
+                </div>
+              )}
+              {isSubInactive && (
+                <div className="rounded-lg bg-gray-100 border border-gray-300 p-3 mb-2">
+                  <p className="text-sm text-gray-700">
+                    This sub is inactive. Assignment is disabled.
                   </p>
                 </div>
               )}
@@ -781,7 +920,7 @@ export default function ContactSubPanel({
                 <Button
                   className="flex-1"
                   onClick={handleAssignShifts}
-                  disabled={loading || selectedShiftsCount === 0 || responseStatus === 'declined'}
+                  disabled={loading || selectedShiftsCount === 0 || responseStatus === 'declined' || isSubInactive}
                 >
                   Assign Selected Shifts
                 </Button>

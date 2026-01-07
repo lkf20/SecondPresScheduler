@@ -42,6 +42,7 @@ interface SubMatch {
     day_name: string
     time_slot_code: string
     reason: string
+    coverage_request_shift_id?: string
   }>
   qualification_matches: number
   qualification_total: number
@@ -88,19 +89,22 @@ export async function POST(request: NextRequest) {
     // Get coverage_request_id to fetch class group info
     const coverageRequestId = (timeOffRequest as any).coverage_request_id
 
-    // Get coverage_request_shifts with class group info
+    // Get coverage_request_shifts with class group info and create shift ID map
     let classGroupInfoMap = new Map<string, { 
       diaper_changing_required: boolean
       lifting_children_required: boolean
       class_group_name: string | null
     }>()
+    let shiftIdMap = new Map<string, string>() // key: date|time_slot_code|classroom_id, value: coverage_request_shift_id
     
     if (coverageRequestId) {
       const { data: coverageRequestShifts } = await supabase
         .from('coverage_request_shifts')
         .select(`
+          id,
           date,
           time_slot_id,
+          classroom_id,
           class_group_id,
           class_groups:class_group_id (
             name,
@@ -120,6 +124,10 @@ export async function POST(request: NextRequest) {
             lifting_children_required: classGroup?.lifting_children_required ?? false,
             class_group_name: classGroup?.name || null,
           })
+          
+          // Create shift ID map: date|time_slot_code|classroom_id -> coverage_request_shift_id
+          const shiftIdKey = `${shift.date}|${shift.time_slots?.code || ''}|${shift.classroom_id || ''}`
+          shiftIdMap.set(shiftIdKey, shift.id)
         })
       }
     }
@@ -258,6 +266,7 @@ export async function POST(request: NextRequest) {
           day_name: string
           time_slot_code: string
           reason: string
+          coverage_request_shift_id?: string
         }> = []
         let qualificationMatches = 0
         let qualificationTotal = 0
@@ -316,11 +325,16 @@ export async function POST(request: NextRequest) {
               reason = 'Not available'
             }
             
+            // Get coverage_request_shift_id from map
+            const shiftKey = `${shift.date}|${shift.time_slot_code}|${shift.classroom_id || ''}`
+            const coverageRequestShiftId = shiftIdMap.get(shiftKey)
+            
             cannotCover.push({
               date: shift.date,
               day_name: shift.day_name,
               time_slot_code: shift.time_slot_code,
               reason,
+              coverage_request_shift_id: coverageRequestShiftId,
             })
           }
         })

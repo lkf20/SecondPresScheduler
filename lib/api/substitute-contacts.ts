@@ -42,6 +42,7 @@ export interface SubstituteContactWithDetails extends SubstituteContact {
     partial_start_time: string | null
     partial_end_time: string | null
     notes: string | null
+    override_availability: boolean
     shift: {
       id: string
       date: string
@@ -122,6 +123,7 @@ export async function getSubstituteContact(
         partial_start_time,
         partial_end_time,
         notes,
+        override_availability,
         shift:coverage_request_shifts(
           id,
           date,
@@ -265,6 +267,7 @@ export async function upsertShiftOverrides(
     partial_start_time?: string | null
     partial_end_time?: string | null
     notes?: string | null
+    override_availability?: boolean
   }>
 ): Promise<void> {
   const supabase = await createClient()
@@ -300,6 +303,7 @@ export async function upsertShiftOverrides(
     partial_start_time: override.partial_start_time ?? null,
     partial_end_time: override.partial_end_time ?? null,
     notes: override.notes ?? null,
+    override_availability: override.override_availability ?? false,
     updated_at: new Date().toISOString(),
   }))
 
@@ -341,7 +345,8 @@ export async function getSubstituteContactsForRequest(
         is_partial,
         partial_start_time,
         partial_end_time,
-        notes
+        notes,
+        override_availability
       )
     `)
     .eq('coverage_request_id', coverageRequestId)
