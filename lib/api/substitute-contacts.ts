@@ -308,13 +308,21 @@ export async function upsertShiftOverrides(
   }))
 
   if (overridesToUpsert.length > 0) {
-    const { error } = await supabase
+    const { error, data } = await supabase
       .from('sub_contact_shift_overrides')
       .upsert(overridesToUpsert, {
         onConflict: 'substitute_contact_id,coverage_request_shift_id',
       })
 
-    if (error) throw error
+    if (error) {
+      console.error('Error upserting shift overrides:', {
+        error,
+        substituteContactId,
+        overridesToUpsert,
+        overridesCount: overridesToUpsert.length,
+      })
+      throw error
+    }
   }
 }
 

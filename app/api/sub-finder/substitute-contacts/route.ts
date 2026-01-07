@@ -56,18 +56,35 @@ export async function PUT(request: NextRequest) {
 
     // Update shift overrides if provided
     if (shift_overrides && Array.isArray(shift_overrides)) {
-      await upsertShiftOverrides(id, shift_overrides)
+      try {
+        await upsertShiftOverrides(id, shift_overrides)
+      } catch (overrideError) {
+        console.error('Error upserting shift overrides:', overrideError)
+        throw overrideError
+      }
     }
 
     // Fetch updated contact with details
-    const contactWithDetails = await getSubstituteContact(
-      updatedContact.coverage_request_id,
-      updatedContact.sub_id
-    )
+    let contactWithDetails
+    try {
+      contactWithDetails = await getSubstituteContact(
+        updatedContact.coverage_request_id,
+        updatedContact.sub_id
+      )
+    } catch (fetchError) {
+      console.error('Error fetching contact with details:', fetchError)
+      // Return the updated contact even if fetching details fails
+      return NextResponse.json(updatedContact)
+    }
 
     return NextResponse.json(contactWithDetails || updatedContact)
   } catch (error) {
     console.error('Error updating substitute contact:', error)
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      error,
+    })
     return createErrorResponse(error, 'Failed to update substitute contact', 500, 'PUT /api/sub-finder/substitute-contacts')
   }
 }
