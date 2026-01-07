@@ -535,21 +535,52 @@ export default function ContactSubPanel({
 
       const shiftOverrides = [...availableShiftOverrides, ...unavailableShiftOverrides]
 
+      // Validate shift overrides before sending
+      const validShiftOverrides = shiftOverrides.filter(
+        (override) => override.coverage_request_shift_id
+      )
+
+      if (validShiftOverrides.length !== shiftOverrides.length) {
+        console.warn(
+          `Filtered out ${shiftOverrides.length - validShiftOverrides.length} invalid shift overrides`
+        )
+      }
+
+      const updatePayload = {
+        id: currentContactId,
+        response_status: responseStatus,
+        is_contacted: isContacted,
+        notes: notes || null,
+        shift_overrides: validShiftOverrides,
+      }
+
+      console.log('Updating contact with payload:', {
+        ...updatePayload,
+        shift_overrides_count: validShiftOverrides.length,
+      })
+
       const updateResponse = await fetch('/api/sub-finder/substitute-contacts', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: currentContactId,
-          response_status: responseStatus,
-          is_contacted: isContacted,
-          notes: notes || null,
-          shift_overrides: shiftOverrides,
-        }),
+        body: JSON.stringify(updatePayload),
       })
 
       if (!updateResponse.ok) {
-        const errorData = await updateResponse.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to update contact')
+        const errorText = await updateResponse.text()
+        let errorData
+        try {
+          errorData = JSON.parse(errorText)
+        } catch {
+          errorData = { error: errorText || 'Failed to update contact' }
+        }
+        const errorMessage = errorData.error || errorData.message || 'Failed to update contact'
+        console.error('Update contact error:', {
+          status: updateResponse.status,
+          statusText: updateResponse.statusText,
+          error: errorData,
+          payload: updatePayload,
+        })
+        throw new Error(errorMessage)
       }
 
       // Create calendar entries (sub_assignments)
