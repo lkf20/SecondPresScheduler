@@ -158,6 +158,16 @@ export default function RecommendedSubsList({
                 )}
               </div>
               <div className="text-right">
+                <div className="mb-1.5">
+                  <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-muted-foreground transition-all"
+                      style={{
+                        width: `${sub.total_shifts > 0 ? (sub.shifts_covered / sub.total_shifts) * 100 : 0}%`,
+                      }}
+                    />
+                  </div>
+                </div>
                 <p className="text-xs text-muted-foreground">
                   {sub.shifts_covered}/{sub.total_shifts} shifts
                 </p>
