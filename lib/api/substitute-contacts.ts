@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 
-export type ResponseStatus = 'none' | 'pending' | 'declined'
+export type ResponseStatus = 'none' | 'pending' | 'confirmed' | 'declined_all'
 
 export interface SubstituteContact {
   id: string

@@ -65,7 +65,7 @@ export default function ContactSubPanel({
 }: ContactSubPanelProps) {
   const [isContacted, setIsContacted] = useState(false)
   const [contactedAt, setContactedAt] = useState<string | null>(null)
-  const [responseStatus, setResponseStatus] = useState<'none' | 'pending' | 'declined'>('none')
+  const [responseStatus, setResponseStatus] = useState<'none' | 'pending' | 'confirmed' | 'declined_all'>('none')
   const [notes, setNotes] = useState('')
   const [selectedShifts, setSelectedShifts] = useState<Set<string>>(new Set())
   const [assignedShifts, setAssignedShifts] = useState<Array<{
@@ -734,9 +734,15 @@ export default function ContactSubPanel({
                         </Label>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="declined" id="response_declined" />
-                        <Label htmlFor="response_declined" className="font-normal cursor-pointer">
-                          Declined
+                        <RadioGroupItem value="confirmed" id="response_confirmed" />
+                        <Label htmlFor="response_confirmed" className="font-normal cursor-pointer">
+                          Confirmed (some or all)
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="declined_all" id="response_declined_all" />
+                        <Label htmlFor="response_declined_all" className="font-normal cursor-pointer">
+                          Declined all
                         </Label>
                       </div>
                     </div>
@@ -835,7 +841,7 @@ export default function ContactSubPanel({
                     const shiftKey = `${shift.date}|${shift.time_slot_code}`
                     const isOverridden = overriddenShiftIds.has(shiftId) || overriddenShiftIds.has(shiftKey)
                     const isSelected = selectedShifts.has(shiftKey)
-                    const canSelect = isOverridden && !isSubInactive && responseStatus !== 'declined'
+                    const canSelect = isOverridden && !isSubInactive && responseStatus !== 'declined_all'
                     
                     return (
                       <div
@@ -873,7 +879,7 @@ export default function ContactSubPanel({
                           variant="outline"
                           size="sm"
                           onClick={() => handleToggleOverride(shiftId)}
-                          disabled={isSubInactive || responseStatus === 'declined'}
+                          disabled={isSubInactive || responseStatus === 'declined_all'}
                         >
                           Override
                         </Button>
@@ -886,7 +892,7 @@ export default function ContactSubPanel({
 
             {/* Action Buttons */}
             <div className="flex flex-col gap-2 pt-4 border-t">
-              {responseStatus === 'declined' && (
+              {responseStatus === 'declined_all' && (
                 <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 mb-2">
                   <p className="text-sm text-amber-800">
                     Cannot assign shifts to a declined sub
@@ -920,7 +926,7 @@ export default function ContactSubPanel({
                 <Button
                   className="flex-1"
                   onClick={handleAssignShifts}
-                  disabled={loading || selectedShiftsCount === 0 || responseStatus === 'declined' || isSubInactive}
+                  disabled={loading || selectedShiftsCount === 0 || responseStatus === 'declined_all' || isSubInactive}
                 >
                   Assign Selected Shifts
                 </Button>
