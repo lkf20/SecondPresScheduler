@@ -598,8 +598,9 @@ export default function ContactSubPanel({
               </div>
             )}
 
-            {/* Contact Status & Notes */}
+            {/* Contact Summary & Notes */}
             <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-6">
+              <h3 className="text-sm font-medium mb-4">Contact Summary</h3>
               <div className="space-y-4">
                 {/* Contacted Checkbox */}
                 <div className="space-y-2">
