@@ -22,20 +22,30 @@ export default function SetupProfilePage() {
     setError(null)
     try {
       const response = await fetch('/api/setup/profile')
-      const data = await response.json()
-
-      if (response.ok) {
-        setHasProfile(data.has_profile)
-        if (data.profile) {
-          setProfile(data.profile)
+      
+      // If response is not ok, check if it's an auth issue
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        // If user is not authenticated, just show "no profile" - don't treat as error
+        if (response.status === 401) {
+          setHasProfile(false)
+          return
         }
-      } else {
-        setError(data.error || 'Failed to check profile status')
+        // For other errors, log but don't show to user - assume no profile
+        console.error('Error checking profile:', data.error)
+        setHasProfile(false)
+        return
+      }
+
+      const data = await response.json()
+      setHasProfile(data.has_profile)
+      if (data.profile) {
+        setProfile(data.profile)
       }
     } catch (err) {
-      // Only show error if it's not a network issue (which might be temporary)
+      // Network or other errors - don't show error, just assume no profile
       console.error('Error checking profile:', err)
-      // Don't set error state for check - it's not critical if this fails
+      setHasProfile(false)
     } finally {
       setChecking(false)
     }
