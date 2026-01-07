@@ -15,7 +15,7 @@ This document tracks items to update, fix, or implement in the Scheduler App.
 
 Issues that need to be fixed.
 
-- [ ] _Add bugs here as you discover them_
+- [ ] Handle duplicate display names - determine what to do when multiple staff members have the same display name
 
 ---
 
@@ -23,7 +23,7 @@ Issues that need to be fixed.
 
 Features to implement soon (within the next few weeks).
 
-- [ ] _Add near-term features here_
+- [ ] Display name options - offer display name format options (e.g., "First Name Last Initial") with ability to apply to all staff or just the current instance
 
 ---
 
