@@ -158,11 +158,12 @@ export default function SubFinderPage() {
     <div className="flex h-[calc(100vh-4rem)]">
       {/* Left Rail */}
       <div className="w-80 border-r bg-gray-50 flex flex-col">
-        <div className="p-3 border-b bg-white">
-          <h1 className="text-xl font-bold mb-3">Sub Finder</h1>
+        <div className="px-3 pt-3 pb-3 border-b bg-white flex flex-col">
+          <h1 className="text-xl font-bold">Sub Finder</h1>
+          <div className="h-[1.75rem]"></div>
 
           {/* Mode Toggle */}
-          <div className="flex gap-2 mb-3">
+          <div className="flex gap-2 -mt-7">
             <Button
               variant={mode === 'existing' ? 'default' : 'outline'}
               size="sm"
@@ -240,9 +241,9 @@ export default function SubFinderPage() {
         {/* Fixed Header Bar */}
         {selectedAbsence && (
           <div className="sticky top-0 z-10 border-b bg-white">
-            <div className="px-6 py-3">
+            <div className="px-6 pt-3 pb-0">
               {/* Header Row */}
-              <div className="mb-3">
+              <div className="mb-0">
                 <h2 className="text-xl font-semibold flex items-center gap-3">
                   <span>
                     {includeOnlyRecommended ? 'Recommended Subs' : 'All Subs'} for {selectedAbsence.teacher_name}
@@ -268,7 +269,7 @@ export default function SubFinderPage() {
                     })()}
                   </span>
                 </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5 mb-3">
                   {includeOnlyRecommended
                     ? 'Sorted by coverage percentage (highest first)'
                     : 'Showing all subs with coverage details'}
@@ -276,7 +277,7 @@ export default function SubFinderPage() {
               </div>
 
               {/* Toolbar Row */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 pb-3">
                 <Button onClick={handleRerunFinder} disabled={loading} size="sm" variant="outline">
                   <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                   Rerun Finder
