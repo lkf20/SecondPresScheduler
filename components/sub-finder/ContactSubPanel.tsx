@@ -610,6 +610,10 @@ export default function ContactSubPanel({
                       checked={isContacted}
                       onCheckedChange={(checked) => {
                         setIsContacted(checked === true)
+                        // Set contacted_at immediately if checking and it's null
+                        if (checked === true && !contactedAt) {
+                          setContactedAt(new Date().toISOString())
+                        }
                       }}
                     />
                     <Label htmlFor="is_contacted" className="text-sm font-medium cursor-pointer">
@@ -691,7 +695,7 @@ export default function ContactSubPanel({
             {sub.can_cover && sub.can_cover.length > 0 && (
               <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-2">
                 <Label className="text-sm font-medium mb-3 block">
-                  Shifts this sub can cover
+                  Shifts to assign to sub
                 </Label>
                 <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3 bg-gray-50">
                   {sub.can_cover.map((shift, idx) => {
