@@ -157,8 +157,8 @@ export default function SubFinderPage() {
   return (
     <div className="flex h-[calc(100vh-4rem)]">
       {/* Left Rail */}
-      <div className="w-80 border-r bg-gray-50 flex flex-col">
-        <div className="px-3 pt-4 pb-4 border-b bg-white flex flex-col">
+      <div className="w-80 border-r bg-gray-50 flex flex-col overflow-hidden">
+        <div className="sticky top-0 z-10 px-3 pt-4 pb-4 border-b bg-white flex flex-col">
           <h1 className="text-xl font-bold mb-4">Sub Finder</h1>
 
           {/* Mode Toggle */}
