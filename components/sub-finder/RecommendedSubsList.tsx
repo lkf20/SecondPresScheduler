@@ -226,7 +226,7 @@ export default function RecommendedSubsList({
                           variant="outline"
                           className={`text-xs ${
                             shift.canCover
-                              ? 'bg-green-100 text-green-900 border-green-200'
+                              ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
                               : 'bg-gray-100 text-gray-700 border-gray-300'
                           }`}
                         >
