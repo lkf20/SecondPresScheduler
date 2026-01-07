@@ -28,7 +28,7 @@ WHERE NOT EXISTS (
 -- ============================================================================
 -- 2. Create coverage_requests abstraction table with counters
 -- ============================================================================
-CREATE TABLE coverage_requests (
+CREATE TABLE IF NOT EXISTS coverage_requests (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   request_type TEXT NOT NULL CHECK (request_type IN ('time_off', 'manual_coverage', 'emergency')),
   source_request_id UUID, -- Polymorphic reference (time_off_requests.id, etc.)
@@ -45,15 +45,15 @@ CREATE TABLE coverage_requests (
   )
 );
 
-CREATE INDEX idx_coverage_requests_teacher ON coverage_requests(teacher_id);
-CREATE INDEX idx_coverage_requests_dates ON coverage_requests(start_date, end_date);
-CREATE INDEX idx_coverage_requests_source ON coverage_requests(request_type, source_request_id);
-CREATE INDEX idx_coverage_requests_status ON coverage_requests(status);
+CREATE INDEX IF NOT EXISTS idx_coverage_requests_teacher ON coverage_requests(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_coverage_requests_dates ON coverage_requests(start_date, end_date);
+CREATE INDEX IF NOT EXISTS idx_coverage_requests_source ON coverage_requests(request_type, source_request_id);
+CREATE INDEX IF NOT EXISTS idx_coverage_requests_status ON coverage_requests(status);
 
 -- ============================================================================
 -- 3. Create coverage_request_shifts table
 -- ============================================================================
-CREATE TABLE coverage_request_shifts (
+CREATE TABLE IF NOT EXISTS coverage_request_shifts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   coverage_request_id UUID NOT NULL REFERENCES coverage_requests(id) ON DELETE CASCADE,
   date DATE NOT NULL,
@@ -71,18 +71,26 @@ CREATE TABLE coverage_request_shifts (
   )
 );
 
-CREATE INDEX idx_coverage_request_shifts_request ON coverage_request_shifts(coverage_request_id);
-CREATE INDEX idx_coverage_request_shifts_date ON coverage_request_shifts(date);
-CREATE INDEX idx_coverage_request_shifts_timeslot ON coverage_request_shifts(time_slot_id);
-CREATE INDEX idx_coverage_request_shifts_classroom ON coverage_request_shifts(classroom_id);
+CREATE INDEX IF NOT EXISTS idx_coverage_request_shifts_request ON coverage_request_shifts(coverage_request_id);
+CREATE INDEX IF NOT EXISTS idx_coverage_request_shifts_date ON coverage_request_shifts(date);
+CREATE INDEX IF NOT EXISTS idx_coverage_request_shifts_timeslot ON coverage_request_shifts(time_slot_id);
+CREATE INDEX IF NOT EXISTS idx_coverage_request_shifts_classroom ON coverage_request_shifts(classroom_id);
 
 -- ============================================================================
 -- 4. Add coverage_request_id to time_off_requests
 -- ============================================================================
-ALTER TABLE time_off_requests 
-  ADD COLUMN coverage_request_id UUID REFERENCES coverage_requests(id) ON DELETE SET NULL;
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'time_off_requests' AND column_name = 'coverage_request_id'
+  ) THEN
+    ALTER TABLE time_off_requests 
+      ADD COLUMN coverage_request_id UUID REFERENCES coverage_requests(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
-CREATE INDEX idx_time_off_requests_coverage_request ON time_off_requests(coverage_request_id);
+CREATE INDEX IF NOT EXISTS idx_time_off_requests_coverage_request ON time_off_requests(coverage_request_id);
 
 -- ============================================================================
 -- 5. Mark time_off_shifts as deprecated (add comment)
@@ -92,7 +100,7 @@ COMMENT ON TABLE time_off_shifts IS 'DEPRECATED: Use coverage_request_shifts ins
 -- ============================================================================
 -- 6. Create substitute_contacts table (request-level)
 -- ============================================================================
-CREATE TABLE substitute_contacts (
+CREATE TABLE IF NOT EXISTS substitute_contacts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   coverage_request_id UUID NOT NULL REFERENCES coverage_requests(id) ON DELETE CASCADE,
   sub_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
@@ -110,14 +118,14 @@ CREATE TABLE substitute_contacts (
   UNIQUE(coverage_request_id, sub_id)
 );
 
-CREATE INDEX idx_substitute_contacts_coverage_request ON substitute_contacts(coverage_request_id);
-CREATE INDEX idx_substitute_contacts_sub ON substitute_contacts(sub_id);
-CREATE INDEX idx_substitute_contacts_status ON substitute_contacts(status);
+CREATE INDEX IF NOT EXISTS idx_substitute_contacts_coverage_request ON substitute_contacts(coverage_request_id);
+CREATE INDEX IF NOT EXISTS idx_substitute_contacts_sub ON substitute_contacts(sub_id);
+CREATE INDEX IF NOT EXISTS idx_substitute_contacts_status ON substitute_contacts(status);
 
 -- ============================================================================
 -- 7. Create sub_contact_shift_overrides table (shift-level director selections)
 -- ============================================================================
-CREATE TABLE sub_contact_shift_overrides (
+CREATE TABLE IF NOT EXISTS sub_contact_shift_overrides (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   substitute_contact_id UUID NOT NULL REFERENCES substitute_contacts(id) ON DELETE CASCADE,
   coverage_request_shift_id UUID NOT NULL REFERENCES coverage_request_shifts(id) ON DELETE CASCADE,
@@ -132,13 +140,14 @@ CREATE TABLE sub_contact_shift_overrides (
   UNIQUE(substitute_contact_id, coverage_request_shift_id)
 );
 
-CREATE INDEX idx_shift_overrides_contact ON sub_contact_shift_overrides(substitute_contact_id);
-CREATE INDEX idx_shift_overrides_shift ON sub_contact_shift_overrides(coverage_request_shift_id);
+CREATE INDEX IF NOT EXISTS idx_shift_overrides_contact ON sub_contact_shift_overrides(substitute_contact_id);
+CREATE INDEX IF NOT EXISTS idx_shift_overrides_shift ON sub_contact_shift_overrides(coverage_request_shift_id);
 
 -- ============================================================================
 -- 8. Migrate existing time_off_requests to coverage_requests
 -- ============================================================================
 -- For each existing time_off_request, create a coverage_request and link them
+-- Only migrate if not already migrated
 INSERT INTO coverage_requests (
   id, 
   request_type, 
@@ -182,7 +191,8 @@ SELECT
    WHERE tos.time_off_request_id = tor.id),
   tor.created_at,
   tor.updated_at
-FROM time_off_requests tor;
+FROM time_off_requests tor
+WHERE tor.coverage_request_id IS NULL; -- Only migrate if not already linked
 
 -- Link time_off_requests to their coverage_requests
 UPDATE time_off_requests tor
@@ -194,6 +204,7 @@ WHERE cr.source_request_id = tor.id AND cr.request_type = 'time_off';
 -- 9. Migrate existing time_off_shifts to coverage_request_shifts
 -- ============================================================================
 -- Use Unknown classroom for shifts where classroom cannot be determined
+-- Only migrate if not already migrated
 INSERT INTO coverage_request_shifts (
   id,
   coverage_request_id,
@@ -231,7 +242,11 @@ SELECT
   tos.created_at
 FROM time_off_shifts tos
 JOIN time_off_requests tor ON tos.time_off_request_id = tor.id
-WHERE tor.coverage_request_id IS NOT NULL;
+WHERE tor.coverage_request_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM coverage_request_shifts crs 
+    WHERE crs.id = tos.id
+  ); -- Only migrate if shift not already migrated
 
 -- ============================================================================
 -- 10. Function to update total_shifts counter when shifts are added/removed
@@ -280,6 +295,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_update_total_shifts_on_shift_change ON coverage_request_shifts;
 CREATE TRIGGER trigger_update_total_shifts_on_shift_change
   AFTER INSERT OR UPDATE OR DELETE ON coverage_request_shifts
   FOR EACH ROW
@@ -368,6 +384,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_update_covered_shifts_on_assignment ON sub_assignments;
 CREATE TRIGGER trigger_update_covered_shifts_on_assignment
   AFTER INSERT OR UPDATE OR DELETE ON sub_assignments
   FOR EACH ROW
@@ -398,6 +415,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_update_status_from_counters ON coverage_requests;
 CREATE TRIGGER trigger_update_status_from_counters
   BEFORE UPDATE OF total_shifts, covered_shifts ON coverage_requests
   FOR EACH ROW
@@ -434,6 +452,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_update_substitute_contact_timestamps ON substitute_contacts;
 CREATE TRIGGER trigger_update_substitute_contact_timestamps
   BEFORE UPDATE ON substitute_contacts
   FOR EACH ROW
@@ -450,6 +469,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_update_shift_override_timestamp ON sub_contact_shift_overrides;
 CREATE TRIGGER trigger_update_shift_override_timestamp
   BEFORE UPDATE ON sub_contact_shift_overrides
   FOR EACH ROW
@@ -458,54 +478,71 @@ CREATE TRIGGER trigger_update_shift_override_timestamp
 -- ============================================================================
 -- 15. Enable RLS on new tables
 -- ============================================================================
-ALTER TABLE coverage_requests ENABLE ROW LEVEL SECURITY;
-ALTER TABLE coverage_request_shifts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE substitute_contacts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE sub_contact_shift_overrides ENABLE ROW LEVEL SECURITY;
+-- RLS is enabled by default when creating tables, but ensure it's enabled
+DO $$ 
+BEGIN
+  -- Enable RLS (idempotent - no error if already enabled)
+  ALTER TABLE coverage_requests ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE coverage_request_shifts ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE substitute_contacts ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE sub_contact_shift_overrides ENABLE ROW LEVEL SECURITY;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- RLS might already be enabled, continue
+    NULL;
+END $$;
 
 -- ============================================================================
 -- 16. RLS Policies: Simple "authenticated users can manage everything"
 -- ============================================================================
 
 -- Coverage Requests
+DROP POLICY IF EXISTS "Coverage requests are viewable by authenticated users" ON coverage_requests;
 CREATE POLICY "Coverage requests are viewable by authenticated users"
   ON coverage_requests FOR SELECT
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Coverage requests are manageable by authenticated users" ON coverage_requests;
 CREATE POLICY "Coverage requests are manageable by authenticated users"
   ON coverage_requests FOR ALL
   TO authenticated
   USING (true);
 
 -- Coverage Request Shifts
+DROP POLICY IF EXISTS "Coverage request shifts are viewable by authenticated users" ON coverage_request_shifts;
 CREATE POLICY "Coverage request shifts are viewable by authenticated users"
   ON coverage_request_shifts FOR SELECT
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Coverage request shifts are manageable by authenticated users" ON coverage_request_shifts;
 CREATE POLICY "Coverage request shifts are manageable by authenticated users"
   ON coverage_request_shifts FOR ALL
   TO authenticated
   USING (true);
 
 -- Substitute Contacts
+DROP POLICY IF EXISTS "Substitute contacts are viewable by authenticated users" ON substitute_contacts;
 CREATE POLICY "Substitute contacts are viewable by authenticated users"
   ON substitute_contacts FOR SELECT
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Substitute contacts are manageable by authenticated users" ON substitute_contacts;
 CREATE POLICY "Substitute contacts are manageable by authenticated users"
   ON substitute_contacts FOR ALL
   TO authenticated
   USING (true);
 
 -- Shift Overrides
+DROP POLICY IF EXISTS "Shift overrides are viewable by authenticated users" ON sub_contact_shift_overrides;
 CREATE POLICY "Shift overrides are viewable by authenticated users"
   ON sub_contact_shift_overrides FOR SELECT
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Shift overrides are manageable by authenticated users" ON sub_contact_shift_overrides;
 CREATE POLICY "Shift overrides are manageable by authenticated users"
   ON sub_contact_shift_overrides FOR ALL
   TO authenticated
