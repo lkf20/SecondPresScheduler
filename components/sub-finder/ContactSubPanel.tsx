@@ -29,6 +29,8 @@ interface RecommendedSub {
     day_name: string
     time_slot_code: string
     class_name: string | null
+    diaper_changing_required?: boolean
+    lifting_children_required?: boolean
   }>
   cannot_cover: Array<{
     date: string
@@ -36,6 +38,8 @@ interface RecommendedSub {
     time_slot_code: string
     reason: string
   }>
+  can_change_diapers?: boolean
+  can_lift_children?: boolean
 }
 
 interface Absence {
@@ -170,12 +174,16 @@ export default function ContactSubPanel({
     // If panel is open but no data, show empty state with proper title
     return (
       <Sheet open={isOpen} onOpenChange={onClose}>
-        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Contact Sub</SheetTitle>
-          </SheetHeader>
-          <div className="flex items-center justify-center h-full text-muted-foreground">
-            <p>No sub selected</p>
+        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto bg-gray-50 p-0">
+          <div className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 px-6 pt-6 pb-4">
+            <SheetHeader>
+              <SheetTitle>Contact Sub</SheetTitle>
+            </SheetHeader>
+          </div>
+          <div className="px-6">
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              <p>No sub selected</p>
+            </div>
           </div>
         </SheetContent>
       </Sheet>
@@ -185,14 +193,18 @@ export default function ContactSubPanel({
   if (fetching) {
     return (
       <Sheet open={isOpen} onOpenChange={onClose}>
-        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Loading...</SheetTitle>
-          </SheetHeader>
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2" />
-              <p className="text-muted-foreground">Loading contact information...</p>
+        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto bg-gray-50 p-0">
+          <div className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 px-6 pt-6 pb-4">
+            <SheetHeader>
+              <SheetTitle>Loading...</SheetTitle>
+            </SheetHeader>
+          </div>
+          <div className="px-6">
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2" />
+                <p className="text-muted-foreground">Loading contact information...</p>
+              </div>
             </div>
           </div>
         </SheetContent>
@@ -269,193 +281,406 @@ export default function ContactSubPanel({
     }
   }
 
+  // Calculate contextual warnings
+  const calculateWarnings = () => {
+    if (!sub || !sub.can_cover) return []
+    
+    const warnings: string[] = []
+    const selectedShiftKeys = Array.from(selectedShifts)
+    
+    // Check each selected shift for requirements
+    const hasDiaperingRequired = sub.can_cover.some((shift) => {
+      const shiftKey = `${shift.date}|${shift.time_slot_code}`
+      return selectedShiftKeys.includes(shiftKey) && shift.diaper_changing_required
+    })
+    
+    const hasLiftingRequired = sub.can_cover.some((shift) => {
+      const shiftKey = `${shift.date}|${shift.time_slot_code}`
+      return selectedShiftKeys.includes(shiftKey) && shift.lifting_children_required
+    })
+    
+    if (hasDiaperingRequired && !sub.can_change_diapers) {
+      warnings.push('Diapering required')
+    }
+    
+    if (hasLiftingRequired && !sub.can_lift_children) {
+      warnings.push('Lifting children required')
+    }
+    
+    if (hasLiftingRequired && sub.can_lift_children === false) {
+      warnings.push('Sub prefers not to lift children')
+    }
+    
+    return warnings
+  }
+
+  const warnings = calculateWarnings()
+
+  const handleAssignShifts = async () => {
+    if (!coverageRequestId || selectedShifts.size === 0) {
+      console.error('Cannot assign: missing coverage request or no shifts selected')
+      return
+    }
+
+    setLoading(true)
+    try {
+      // First, save the contact with status and notes
+      let currentContactId = contactId
+      if (!currentContactId) {
+        const getContactResponse = await fetch(
+          `/api/sub-finder/substitute-contacts?coverage_request_id=${coverageRequestId}&sub_id=${sub.id}`
+        )
+        if (getContactResponse.ok) {
+          const contactData = await getContactResponse.json()
+          currentContactId = contactData.id
+          setContactId(currentContactId)
+        } else {
+          throw new Error('Failed to get or create contact')
+        }
+      }
+
+      // Build shift overrides array and get selected shift IDs
+      const selectedShiftIds: string[] = []
+      sub.can_cover?.forEach((shift) => {
+        const shiftKey = `${shift.date}|${shift.time_slot_code}`
+        if (selectedShifts.has(shiftKey)) {
+          const coverageRequestShiftId = shiftMap[shiftKey]
+          if (coverageRequestShiftId) {
+            selectedShiftIds.push(coverageRequestShiftId)
+          }
+        }
+      })
+
+      if (selectedShiftIds.length === 0) {
+        throw new Error('No valid shifts selected for assignment')
+      }
+
+      // Update contact with status = assigned, notes, and shift overrides
+      const shiftOverrides = sub.can_cover?.map((shift) => {
+        const shiftKey = `${shift.date}|${shift.time_slot_code}`
+        const coverageRequestShiftId = shiftMap[shiftKey]
+        return {
+          coverage_request_shift_id: coverageRequestShiftId,
+          selected: selectedShifts.has(shiftKey),
+        }
+      }).filter((override) => override.coverage_request_shift_id) || []
+
+      const updateResponse = await fetch('/api/sub-finder/substitute-contacts', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: currentContactId,
+          status: 'assigned',
+          notes: notes || null,
+          shift_overrides: shiftOverrides,
+        }),
+      })
+
+      if (!updateResponse.ok) {
+        const errorData = await updateResponse.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to update contact')
+      }
+
+      // Create calendar entries (sub_assignments)
+      const assignResponse = await fetch('/api/sub-finder/assign-shifts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          coverage_request_id: coverageRequestId,
+          sub_id: sub.id,
+          selected_shift_ids: selectedShiftIds,
+        }),
+      })
+
+      if (!assignResponse.ok) {
+        const errorData = await assignResponse.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to assign shifts')
+      }
+
+      onClose()
+    } catch (error) {
+      console.error('Error assigning shifts:', error)
+      alert(`Error assigning shifts: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const selectedShiftsCount = selectedShifts.size
   const totalShifts = sub.can_cover?.length || 0
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
-        <SheetHeader className="text-left">
-          <SheetTitle className="text-2xl mb-1">{sub.name}</SheetTitle>
-          <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-            {sub.phone && (
-              <span className="flex items-center gap-1.5">
-                <Phone className="h-3.5 w-3.5" />
-                <span>{sub.phone}</span>
-              </span>
+      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto bg-gray-50 p-0">
+        <div className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 px-6 pt-6 pb-4">
+          <SheetHeader className="text-left">
+            <SheetTitle className="text-2xl mb-1">{sub.name}</SheetTitle>
+            <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+              {sub.phone && (
+                <span className="flex items-center gap-1.5">
+                  <Phone className="h-3.5 w-3.5" />
+                  <span>{sub.phone}</span>
+                </span>
+              )}
+              {sub.email && (
+                <span className="flex items-center gap-1.5">
+                  <Mail className="h-3.5 w-3.5" />
+                  <span>{sub.email}</span>
+                </span>
+              )}
+            </div>
+            {selectedShiftsCount > 0 && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Covering {selectedShiftsCount} of {totalShifts} selected shifts
+              </p>
             )}
-            {sub.email && (
-              <span className="flex items-center gap-1.5">
-                <Mail className="h-3.5 w-3.5" />
-                <span>{sub.email}</span>
-              </span>
-            )}
-          </div>
-          {selectedShiftsCount > 0 && (
-            <p className="text-sm text-muted-foreground mt-2">
-              Covering {selectedShiftsCount} of {totalShifts} selected shifts
-            </p>
-          )}
-        </SheetHeader>
+          </SheetHeader>
+        </div>
 
-        <div className="mt-6 space-y-6">
-          {/* Coverage Summary */}
-          <div>
-            <h3 className="text-sm font-medium mb-2">Coverage Summary</h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Matches</span>
-                <span className="font-medium">
+        <div className="px-6">
+          <div className="mt-6 space-y-10">
+            {/* Coverage Summary */}
+            <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-2">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium">Coverage Summary</h3>
+                <span className="text-sm text-muted-foreground">
                   {sub.shifts_covered} of {sub.total_shifts} shifts
                 </span>
               </div>
-              <div className="w-full bg-muted rounded-full h-2">
-                <div
-                  className="bg-primary h-2 rounded-full transition-all"
-                  style={{ width: `${sub.coverage_percent}%` }}
-                />
-              </div>
-              {sub.cannot_cover && sub.cannot_cover.length > 0 && (
-                <div className="flex items-center gap-2 text-xs text-amber-600 mt-2">
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  <span>Some shifts cannot be covered</span>
+              {(sub.can_cover && sub.can_cover.length > 0) || (sub.cannot_cover && sub.cannot_cover.length > 0) ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {/* Combine and sort all shifts by date and time slot */}
+                  {(() => {
+                    type ShiftItem = {
+                      date: string
+                      day_name: string
+                      time_slot_code: string
+                      canCover: boolean
+                    }
+                    
+                    const allShiftsMap = new Map<string, ShiftItem>()
+                    
+                    // Add can_cover shifts
+                    sub.can_cover?.forEach((shift) => {
+                      const key = `${shift.date}|${shift.day_name}|${shift.time_slot_code}`
+                      allShiftsMap.set(key, {
+                        date: shift.date,
+                        day_name: shift.day_name,
+                        time_slot_code: shift.time_slot_code,
+                        canCover: true,
+                      })
+                    })
+                    
+                    // Add cannot_cover shifts (will overwrite if duplicate, which shouldn't happen)
+                    sub.cannot_cover?.forEach((shift) => {
+                      const key = `${shift.date}|${shift.day_name}|${shift.time_slot_code}`
+                      allShiftsMap.set(key, {
+                        date: shift.date,
+                        day_name: shift.day_name,
+                        time_slot_code: shift.time_slot_code,
+                        canCover: false,
+                      })
+                    })
+                    
+                    // Convert to array and sort by date, then time slot
+                    const allShifts = Array.from(allShiftsMap.values()).sort((a, b) => {
+                      const dateA = new Date(a.date).getTime()
+                      const dateB = new Date(b.date).getTime()
+                      if (dateA !== dateB) return dateA - dateB
+                      // If same date, sort by time slot code (AM before PM, etc.)
+                      return a.time_slot_code.localeCompare(b.time_slot_code)
+                    })
+                    
+                    return allShifts.map((shift, idx) => {
+                      const shiftLabel = `${shift.day_name} ${shift.time_slot_code}`
+                      
+                      return (
+                        <Badge
+                          key={`${shift.date}-${shift.time_slot_code}-${idx}`}
+                          variant={shift.canCover ? 'default' : 'outline'}
+                          className={`text-xs ${
+                            shift.canCover
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted text-muted-foreground opacity-60'
+                          }`}
+                        >
+                          {shiftLabel}
+                        </Badge>
+                      )
+                    })
+                  })()}
                 </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No shifts available</p>
               )}
             </div>
-          </div>
 
-          {/* Contact Status */}
-          <div>
-            <Label className="text-sm font-medium mb-3 block">Contact Status</Label>
-            <RadioGroup value={contactStatus} onValueChange={(value: any) => setContactStatus(value)}>
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="not_contacted" id="not_contacted" />
-                  <Label htmlFor="not_contacted" className="font-normal cursor-pointer">
-                    Not contacted
-                  </Label>
+            {/* Contextual Warnings */}
+            {warnings.length > 0 && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 space-y-1">
+                <div className="flex items-center gap-2 text-sm font-medium text-amber-800 mb-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span>Important Information</span>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="contacted" id="contacted" />
-                  <Label htmlFor="contacted" className="font-normal cursor-pointer">
-                    Contacted
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="pending" id="pending" />
-                  <Label htmlFor="pending" className="font-normal cursor-pointer">
-                    Pending
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="declined" id="declined" />
-                  <Label htmlFor="declined" className="font-normal cursor-pointer">
-                    Declined
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="assigned" id="assigned" />
-                  <Label htmlFor="assigned" className="font-normal cursor-pointer">
-                    Assigned
-                  </Label>
-                </div>
-              </div>
-            </RadioGroup>
-          </div>
-
-          {/* Contact Notes */}
-          <div>
-            <Label htmlFor="notes" className="text-sm font-medium mb-2 block">
-              Notes
-            </Label>
-            <Textarea
-              id="notes"
-              placeholder="Left voicemail… can do mornings only… prefers Orange room…"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={4}
-              className="resize-none"
-            />
-          </div>
-
-          {/* Assignable Shifts */}
-          {sub.can_cover && sub.can_cover.length > 0 && (
-            <div>
-              <Label className="text-sm font-medium mb-3 block">
-                Shifts this sub can cover
-              </Label>
-              <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3">
-                {sub.can_cover.map((shift, idx) => {
-                  const shiftKey = `${shift.date}|${shift.time_slot_code}`
-                  const isSelected = selectedShifts.has(shiftKey)
-                  return (
-                    <div
-                      key={idx}
-                      className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md"
-                    >
-                      <Checkbox
-                        id={`shift-${idx}`}
-                        checked={isSelected}
-                        onCheckedChange={() => handleShiftToggle(shiftKey)}
-                      />
-                      <Label
-                        htmlFor={`shift-${idx}`}
-                        className="flex-1 cursor-pointer font-normal"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">
-                            {formatDate(shift.date)} {shift.time_slot_code}
-                          </span>
-                          {shift.class_name && (
-                            <Badge variant="outline" className="text-xs">
-                              {shift.class_name}
-                            </Badge>
-                          )}
-                        </div>
-                      </Label>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Cannot Cover Shifts */}
-          {sub.cannot_cover && sub.cannot_cover.length > 0 && (
-            <div>
-              <Label className="text-sm font-medium mb-3 block text-amber-600">
-                Cannot cover
-              </Label>
-              <div className="space-y-1 border rounded-md p-3 bg-amber-50">
-                {sub.cannot_cover.map((shift, idx) => (
-                  <div key={idx} className="text-sm">
-                    <span className="font-medium">
-                      {formatDate(shift.date)} {shift.time_slot_code}:
-                    </span>{' '}
-                    <span className="text-muted-foreground">{shift.reason}</span>
-                  </div>
+                {warnings.map((warning, idx) => (
+                  <p key={idx} className="text-sm text-amber-700">
+                    • {warning}
+                  </p>
                 ))}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Action Buttons */}
-          <div className="flex gap-2 pt-4 border-t">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={onClose}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={handleSave}
-              disabled={loading || selectedShiftsCount === 0 || contactStatus === 'declined'}
-            >
-              {contactStatus === 'assigned' ? 'Save Assignment' : 'Save as Pending'}
-            </Button>
+            {/* Contact Status & Notes */}
+            <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-6">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium mb-3 block">Contact Status</Label>
+                <RadioGroup value={contactStatus} onValueChange={(value: any) => setContactStatus(value)}>
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="not_contacted" id="not_contacted" />
+                      <Label htmlFor="not_contacted" className="font-normal cursor-pointer">
+                        Not contacted
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="contacted" id="contacted" />
+                      <Label htmlFor="contacted" className="font-normal cursor-pointer">
+                        Contacted
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="pending" id="pending" />
+                      <Label htmlFor="pending" className="font-normal cursor-pointer">
+                        Pending
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="declined" id="declined" />
+                      <Label htmlFor="declined" className="font-normal cursor-pointer">
+                        Declined
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="assigned" id="assigned" />
+                      <Label htmlFor="assigned" className="font-normal cursor-pointer">
+                        Assigned
+                      </Label>
+                    </div>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              <div className="space-y-2 border-t pt-6">
+                <Label htmlFor="notes" className="text-sm font-medium mb-2 block">
+                  Notes
+                </Label>
+                <Textarea
+                  id="notes"
+                  placeholder="Left voicemail… can do mornings only… prefers Orange room…"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={4}
+                  className="resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Assignable Shifts */}
+            {sub.can_cover && sub.can_cover.length > 0 && (
+              <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-2">
+                <Label className="text-sm font-medium mb-3 block">
+                  Shifts this sub can cover
+                </Label>
+                <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3 bg-gray-50">
+                  {sub.can_cover.map((shift, idx) => {
+                    const shiftKey = `${shift.date}|${shift.time_slot_code}`
+                    const isSelected = selectedShifts.has(shiftKey)
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md bg-white"
+                      >
+                        <Checkbox
+                          id={`shift-${idx}`}
+                          checked={isSelected}
+                          onCheckedChange={() => handleShiftToggle(shiftKey)}
+                        />
+                        <Label
+                          htmlFor={`shift-${idx}`}
+                          className="flex-1 cursor-pointer font-normal"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">
+                              {formatDate(shift.date)} {shift.time_slot_code}
+                            </span>
+                            {shift.class_name && (
+                              <Badge variant="outline" className="text-xs">
+                                {shift.class_name}
+                              </Badge>
+                            )}
+                          </div>
+                        </Label>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Cannot Cover Shifts */}
+            {sub.cannot_cover && sub.cannot_cover.length > 0 && (
+              <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-2">
+                <Label className="text-sm font-medium mb-3 block text-amber-600">
+                  Cannot cover
+                </Label>
+                <div className="space-y-1 border rounded-md p-3 bg-amber-50">
+                  {sub.cannot_cover.map((shift, idx) => (
+                    <div key={idx} className="text-sm">
+                      <span className="font-medium">
+                        {formatDate(shift.date)} {shift.time_slot_code}:
+                      </span>{' '}
+                      <span className="text-muted-foreground">{shift.reason}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-2 pt-4 border-t">
+              {contactStatus === 'declined' && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 mb-2">
+                  <p className="text-sm text-amber-800">
+                    This sub has been marked as declined. Change the status to assign shifts.
+                  </p>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={onClose}
+                  disabled={loading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={handleSave}
+                  disabled={loading || contactStatus === 'declined'}
+                >
+                  Save as Pending
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleAssignShifts}
+                  disabled={loading || selectedShiftsCount === 0 || contactStatus === 'declined'}
+                >
+                  Assign Selected Shifts
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </SheetContent>
