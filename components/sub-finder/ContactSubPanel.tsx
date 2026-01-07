@@ -62,16 +62,96 @@ export default function ContactSubPanel({
   const [notes, setNotes] = useState('')
   const [selectedShifts, setSelectedShifts] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
+  const [fetching, setFetching] = useState(false)
+  const [coverageRequestId, setCoverageRequestId] = useState<string | null>(null)
+  const [shiftMap, setShiftMap] = useState<Record<string, string>>({})
+  const [contactId, setContactId] = useState<string | null>(null)
 
-  // Initialize selected shifts to all can_cover shifts
+  // Fetch coverage request and existing contact data when panel opens
   useEffect(() => {
-    if (sub && sub.can_cover) {
-      const shiftKeys = sub.can_cover.map(
-        (shift) => `${shift.date}|${shift.time_slot_code}`
-      )
-      setSelectedShifts(new Set(shiftKeys))
+    if (!isOpen || !sub || !absence) return
+
+    const fetchData = async () => {
+      setFetching(true)
+      try {
+        // Get coverage_request_id and shift map
+        const coverageResponse = await fetch(`/api/sub-finder/coverage-request/${absence.id}`)
+        if (!coverageResponse.ok) {
+          console.error('Failed to fetch coverage request')
+          return
+        }
+        const coverageData = await coverageResponse.json()
+        setCoverageRequestId(coverageData.coverage_request_id)
+        setShiftMap(coverageData.shift_map || {})
+
+        // Get or create substitute contact
+        const contactResponse = await fetch(
+          `/api/sub-finder/substitute-contacts?coverage_request_id=${coverageData.coverage_request_id}&sub_id=${sub.id}`
+        )
+        if (contactResponse.ok) {
+          const contactData = await contactResponse.json()
+          if (contactData) {
+            setContactId(contactData.id)
+            setContactStatus(contactData.status || 'not_contacted')
+            setNotes(contactData.notes || '')
+
+            // Load selected shifts from shift_overrides if they exist
+            if (contactData.shift_overrides && contactData.shift_overrides.length > 0) {
+              const selected = new Set<string>()
+              contactData.shift_overrides.forEach((override: any) => {
+                if (override.selected && override.shift) {
+                  const key = `${override.shift.date}|${override.shift.time_slot?.code || ''}`
+                  selected.add(key)
+                }
+              })
+              setSelectedShifts(selected)
+            } else {
+              // Initialize to all can_cover shifts if no overrides exist
+              if (sub.can_cover) {
+                const shiftKeys = sub.can_cover.map(
+                  (shift) => `${shift.date}|${shift.time_slot_code}`
+                )
+                setSelectedShifts(new Set(shiftKeys))
+              }
+            }
+          } else {
+            // No contact exists yet, initialize to all can_cover shifts
+            if (sub.can_cover) {
+              const shiftKeys = sub.can_cover.map(
+                (shift) => `${shift.date}|${shift.time_slot_code}`
+              )
+              setSelectedShifts(new Set(shiftKeys))
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching contact data:', error)
+        // Fallback: initialize to all can_cover shifts
+        if (sub.can_cover) {
+          const shiftKeys = sub.can_cover.map(
+            (shift) => `${shift.date}|${shift.time_slot_code}`
+          )
+          setSelectedShifts(new Set(shiftKeys))
+        }
+      } finally {
+        setFetching(false)
+      }
     }
-  }, [sub])
+
+    fetchData()
+  }, [isOpen, sub, absence])
+
+  // Reset state when panel closes
+  useEffect(() => {
+    if (!isOpen) {
+      setContactStatus('not_contacted')
+      setNotes('')
+      setSelectedShifts(new Set())
+      setCoverageRequestId(null)
+      setShiftMap({})
+      setContactId(null)
+    }
+  }, [isOpen])
 
   // Format date for display
   const formatDate = (dateString: string) => {
@@ -88,6 +168,21 @@ export default function ContactSubPanel({
     return null
   }
 
+  if (fetching) {
+    return (
+      <Sheet open={isOpen} onOpenChange={onClose}>
+        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2" />
+              <p className="text-muted-foreground">Loading contact information...</p>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+    )
+  }
+
   const handleShiftToggle = (shiftKey: string) => {
     const newSelected = new Set(selectedShifts)
     if (newSelected.has(shiftKey)) {
@@ -99,22 +194,59 @@ export default function ContactSubPanel({
   }
 
   const handleSave = async () => {
-    // TODO: Implement API call to save contact status and notes
+    if (!coverageRequestId) {
+      console.error('Coverage request ID not available')
+      return
+    }
+
     setLoading(true)
     try {
-      // Placeholder for API call
-      console.log('Saving contact:', {
-        sub_id: sub.id,
-        absence_id: absence.id,
-        status: contactStatus,
-        notes,
-        selected_shifts: Array.from(selectedShifts),
+      // Build shift overrides array
+      const shiftOverrides = sub.can_cover?.map((shift) => {
+        const shiftKey = `${shift.date}|${shift.time_slot_code}`
+        const coverageRequestShiftId = shiftMap[shiftKey]
+        return {
+          coverage_request_shift_id: coverageRequestShiftId,
+          selected: selectedShifts.has(shiftKey),
+        }
+      }).filter((override) => override.coverage_request_shift_id) || []
+
+      // Get or create contact first if we don't have contactId
+      let currentContactId = contactId
+      if (!currentContactId) {
+        const getContactResponse = await fetch(
+          `/api/sub-finder/substitute-contacts?coverage_request_id=${coverageRequestId}&sub_id=${sub.id}`
+        )
+        if (getContactResponse.ok) {
+          const contactData = await getContactResponse.json()
+          currentContactId = contactData.id
+          setContactId(currentContactId)
+        } else {
+          throw new Error('Failed to get or create contact')
+        }
+      }
+
+      // Update contact with status, notes, and shift overrides
+      const updateResponse = await fetch('/api/sub-finder/substitute-contacts', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: currentContactId,
+          status: contactStatus,
+          notes: notes || null,
+          shift_overrides: shiftOverrides,
+        }),
       })
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 500))
+
+      if (!updateResponse.ok) {
+        const errorData = await updateResponse.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to save contact')
+      }
+
       onClose()
     } catch (error) {
       console.error('Error saving contact:', error)
+      alert(`Error saving contact: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setLoading(false)
     }
