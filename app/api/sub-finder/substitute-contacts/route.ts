@@ -35,20 +35,21 @@ export async function GET(request: NextRequest) {
 /**
  * PUT /api/sub-finder/substitute-contacts
  * Update a substitute contact
- * Body: { id, status?, notes?, shift_overrides? }
+ * Body: { id, response_status?, is_contacted?, notes?, shift_overrides? }
  */
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const { id, status, notes, shift_overrides } = body
+    const { id, response_status, is_contacted, notes, shift_overrides } = body
 
     if (!id) {
       return createErrorResponse('Missing required parameter: id', 400)
     }
 
     // Update contact
-    const updates: { status?: any; notes?: string | null } = {}
-    if (status !== undefined) updates.status = status
+    const updates: { response_status?: any; is_contacted?: boolean; notes?: string | null } = {}
+    if (response_status !== undefined) updates.response_status = response_status
+    if (is_contacted !== undefined) updates.is_contacted = is_contacted
     if (notes !== undefined) updates.notes = notes
 
     const updatedContact = await updateSubstituteContact(id, updates)

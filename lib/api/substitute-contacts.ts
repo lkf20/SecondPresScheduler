@@ -1,21 +1,28 @@
 import { createClient } from '@/lib/supabase/server'
 
-export type SubstituteContactStatus = 'not_contacted' | 'contacted' | 'pending' | 'declined' | 'assigned'
+export type ResponseStatus = 'none' | 'pending' | 'declined'
 
 export interface SubstituteContact {
   id: string
   coverage_request_id: string
   sub_id: string
-  status: SubstituteContactStatus
-  notes: string | null
+  response_status: ResponseStatus
+  is_contacted: boolean
   contacted_at: string | null
-  last_status_at: string
-  assigned_at: string | null
-  declined_at: string | null
+  notes: string | null
   created_by: string | null
   updated_by: string | null
   created_at: string
   updated_at: string
+  // Legacy field - kept for backward compatibility during migration
+  status?: string
+}
+
+export interface AssignedShift {
+  coverage_request_shift_id: string
+  date: string
+  day_name: string
+  time_slot_code: string
 }
 
 export interface SubstituteContactWithDetails extends SubstituteContact {
@@ -44,6 +51,8 @@ export interface SubstituteContactWithDetails extends SubstituteContact {
       class_group_id: string | null
     }
   }>
+  assigned_shifts: AssignedShift[]
+  assigned_count: number
 }
 
 /**
@@ -73,7 +82,8 @@ export async function getOrCreateSubstituteContact(
     .insert({
       coverage_request_id: coverageRequestId,
       sub_id: subId,
-      status: 'not_contacted',
+      response_status: 'none',
+      is_contacted: false,
     })
     .select()
     .single()
@@ -83,7 +93,7 @@ export async function getOrCreateSubstituteContact(
 }
 
 /**
- * Get substitute contact with details
+ * Get substitute contact with details including assigned shifts
  */
 export async function getSubstituteContact(
   coverageRequestId: string,
@@ -91,7 +101,8 @@ export async function getSubstituteContact(
 ): Promise<SubstituteContactWithDetails | null> {
   const supabase = await createClient()
 
-  const { data, error } = await supabase
+  // First, get the contact with basic details
+  const { data: contactData, error: contactError } = await supabase
     .from('substitute_contacts')
     .select(`
       *,
@@ -125,15 +136,76 @@ export async function getSubstituteContact(
     .eq('sub_id', subId)
     .single()
 
-  if (error) {
-    if (error.code === 'PGRST116') {
+  if (contactError) {
+    if (contactError.code === 'PGRST116') {
       // Not found
       return null
     }
-    throw error
+    throw contactError
   }
 
-  return data as any as SubstituteContactWithDetails
+  // Get teacher_id from coverage_request
+  const { data: coverageRequest } = await supabase
+    .from('coverage_requests')
+    .select('time_off_request_id, time_off_requests:time_off_request_id(teacher_id)')
+    .eq('id', coverageRequestId)
+    .single()
+
+  const teacherId = (coverageRequest as any)?.time_off_requests?.teacher_id
+
+  // Get assigned shifts by matching sub_assignments with coverage_request_shifts
+  let assignedShifts: AssignedShift[] = []
+  if (teacherId) {
+    // First, get all sub_assignments for this sub and teacher
+    const { data: subAssignments } = await supabase
+      .from('sub_assignments')
+      .select('date, time_slot_id')
+      .eq('sub_id', subId)
+      .eq('teacher_id', teacherId)
+
+    if (subAssignments && subAssignments.length > 0) {
+      // Get all coverage_request_shifts for this request
+      const { data: coverageShifts } = await supabase
+        .from('coverage_request_shifts')
+        .select(`
+          id,
+          date,
+          time_slot_id,
+          time_slots:time_slots(code),
+          days_of_week:day_of_week_id(name)
+        `)
+        .eq('coverage_request_id', coverageRequestId)
+
+      if (coverageShifts) {
+        // Create a map of (date, time_slot_id) -> coverage_request_shift for quick lookup
+        const shiftMap = new Map<string, any>()
+        coverageShifts.forEach((shift: any) => {
+          const key = `${shift.date}|${shift.time_slot_id}`
+          shiftMap.set(key, shift)
+        })
+
+        // Match sub_assignments with coverage_request_shifts
+        assignedShifts = subAssignments
+          .map((assignment) => {
+            const key = `${assignment.date}|${assignment.time_slot_id}`
+            return shiftMap.get(key)
+          })
+          .filter(Boolean)
+          .map((shift: any) => ({
+            coverage_request_shift_id: shift.id,
+            date: shift.date,
+            day_name: shift.days_of_week?.name || '',
+            time_slot_code: shift.time_slots?.code || '',
+          }))
+      }
+    }
+  }
+
+  return {
+    ...(contactData as any),
+    assigned_shifts: assignedShifts,
+    assigned_count: assignedShifts.length,
+  } as SubstituteContactWithDetails
 }
 
 /**
@@ -142,18 +214,37 @@ export async function getSubstituteContact(
 export async function updateSubstituteContact(
   id: string,
   updates: {
-    status?: SubstituteContactStatus
+    response_status?: ResponseStatus
+    is_contacted?: boolean
     notes?: string | null
   }
 ): Promise<SubstituteContact> {
   const supabase = await createClient()
 
+  // Get current contact to check contacted_at
+  const { data: current } = await supabase
+    .from('substitute_contacts')
+    .select('contacted_at')
+    .eq('id', id)
+    .single()
+
+  const updateData: any = {
+    ...updates,
+    updated_at: new Date().toISOString(),
+  }
+
+  // Handle is_contacted: set contacted_at only if it's null when checking
+  if (updates.is_contacted !== undefined) {
+    updateData.is_contacted = updates.is_contacted
+    if (updates.is_contacted && !current?.contacted_at) {
+      updateData.contacted_at = new Date().toISOString()
+    }
+    // If unchecking, don't clear contacted_at (preserve history)
+  }
+
   const { data, error } = await supabase
     .from('substitute_contacts')
-    .update({
-      ...updates,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updateData)
     .eq('id', id)
     .select()
     .single()

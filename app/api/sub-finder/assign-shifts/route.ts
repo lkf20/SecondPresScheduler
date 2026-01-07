@@ -83,25 +83,46 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Failed to create assignments', 500)
     }
 
-    // Update substitute_contact status to 'assigned' if it exists
-    const { data: existingContact } = await supabase
-      .from('substitute_contacts')
-      .select('id')
-      .eq('coverage_request_id', coverage_request_id)
-      .eq('sub_id', sub_id)
-      .single()
+    // Get assigned shift details for response
+    const assignedShiftDetails: Array<{
+      coverage_request_shift_id: string
+      date: string
+      day_name: string
+      time_slot_code: string
+    }> = []
 
-    if (existingContact) {
-      await supabase
-        .from('substitute_contacts')
-        .update({ status: 'assigned' })
-        .eq('id', existingContact.id)
+    if (coverageRequestShifts && createdAssignments) {
+      // Get day names and time slot codes
+      const shiftIds = coverageRequestShifts.map((s: any) => s.id)
+      const { data: shiftDetails } = await supabase
+        .from('coverage_request_shifts')
+        .select(`
+          id,
+          date,
+          time_slot_id,
+          time_slots:time_slots(code),
+          days_of_week:day_of_week_id(name)
+        `)
+        .in('id', shiftIds)
+
+      if (shiftDetails) {
+        assignedShiftDetails.push(
+          ...shiftDetails.map((shift: any) => ({
+            coverage_request_shift_id: shift.id,
+            date: shift.date,
+            day_name: shift.days_of_week?.name || '',
+            time_slot_code: shift.time_slots?.code || '',
+          }))
+        )
+      }
     }
 
     return NextResponse.json({
       success: true,
       assignments_created: createdAssignments?.length || 0,
       assignments: createdAssignments,
+      assigned_shifts: assignedShiftDetails,
+      assigned_count: assignedShiftDetails.length,
     })
   } catch (error) {
     console.error('Error assigning shifts:', error)
