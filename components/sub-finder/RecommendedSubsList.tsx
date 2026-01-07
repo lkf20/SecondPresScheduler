@@ -36,12 +36,14 @@ interface RecommendedSubsListProps {
     start_date: string
     end_date: string | null
   }
+  showAllSubs?: boolean
 }
 
 export default function RecommendedSubsList({
   subs,
   loading,
   absence,
+  showAllSubs = false,
 }: RecommendedSubsListProps) {
   if (loading) {
     return (
@@ -69,10 +71,12 @@ export default function RecommendedSubsList({
     <div className="space-y-4">
       <div className="mb-4">
         <h2 className="text-xl font-semibold mb-1">
-          Recommended Subs for {absence.teacher_name}
+          {showAllSubs ? 'All Subs' : 'Recommended Subs'} for {absence.teacher_name}
         </h2>
         <p className="text-sm text-muted-foreground">
-          Sorted by coverage percentage (highest first)
+          {showAllSubs
+            ? 'Showing all subs with coverage details'
+            : 'Sorted by coverage percentage (highest first)'}
         </p>
       </div>
 
