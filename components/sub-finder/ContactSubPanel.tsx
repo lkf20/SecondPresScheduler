@@ -567,24 +567,31 @@ export default function ContactSubPanel({
 
       if (!updateResponse.ok) {
         const errorText = await updateResponse.text()
-        let errorData
+        let errorData: any = {}
+        let errorMessage = `Failed to update contact (${updateResponse.status} ${updateResponse.statusText})`
+        
         try {
-          errorData = JSON.parse(errorText)
-        } catch {
-          errorData = { error: errorText || 'Failed to update contact' }
+          if (errorText) {
+            errorData = JSON.parse(errorText)
+            errorMessage = errorData.error || errorData.message || errorMessage
+          }
+        } catch (parseError) {
+          // If JSON parsing fails, use the raw text
+          errorMessage = errorText || errorMessage
+          errorData = { rawError: errorText }
         }
-        const errorMessage =
-          errorData.error ||
-          errorData.message ||
-          errorText ||
-          `Failed to update contact (${updateResponse.status} ${updateResponse.statusText})`
+        
         console.error('Update contact error:', {
           status: updateResponse.status,
           statusText: updateResponse.statusText,
-          errorText,
+          errorText: errorText || '(empty response)',
           errorData,
-          payload: updatePayload,
+          payload: {
+            ...updatePayload,
+            shift_overrides_count: updatePayload.shift_overrides.length,
+          },
         })
+        
         throw new Error(errorMessage)
       }
 

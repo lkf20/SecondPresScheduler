@@ -79,17 +79,17 @@ export function createErrorResponse(
     logError(context, error)
   }
   
-  return Response.json(
-    {
-      error: message,
-      ...(process.env.NODE_ENV === 'development' && error instanceof Error && {
-        details: {
-          message: error.message,
-          stack: error.stack,
-        },
-      }),
-    },
-    { status: statusCode }
-  )
+  const errorResponse: any = {
+    error: message,
+  }
+  
+  if (process.env.NODE_ENV === 'development' && error instanceof Error) {
+    errorResponse.details = {
+      message: error.message,
+      stack: error.stack,
+    }
+  }
+  
+  return Response.json(errorResponse, { status: statusCode })
 }
 
