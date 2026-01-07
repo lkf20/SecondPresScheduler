@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AlertCircle, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { parseLocalDate } from '@/lib/utils/date'
 
 interface Absence {
   id: string
@@ -84,10 +85,23 @@ export default function AbsenceList({
                 <div className="flex-1">
                   <h3 className="font-semibold text-sm mb-1">{absence.teacher_name}</h3>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(absence.start_date).toLocaleDateString()}
-                    {absence.end_date && 
-                      ` - ${new Date(absence.end_date).toLocaleDateString()}`
-                    }
+                    {(() => {
+                      const formatDate = (dateString: string) => {
+                        const date = parseLocalDate(dateString)
+                        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+                        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                        const dayName = dayNames[date.getDay()]
+                        const month = monthNames[date.getMonth()]
+                        const day = date.getDate()
+                        return `${dayName} ${month} ${day}`
+                      }
+                      const startDate = formatDate(absence.start_date)
+                      if (absence.end_date && absence.end_date !== absence.start_date) {
+                        const endDate = formatDate(absence.end_date)
+                        return `${startDate} - ${endDate}`
+                      }
+                      return startDate
+                    })()}
                   </p>
                   {absence.reason && (
                     <p className="text-xs text-muted-foreground mt-1">{absence.reason}</p>
