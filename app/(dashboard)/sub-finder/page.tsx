@@ -5,7 +5,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { RefreshCw, Search } from 'lucide-react'
+import { RefreshCw, Search, Settings2 } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Badge } from '@/components/ui/badge'
 import AbsenceList from '@/components/sub-finder/AbsenceList'
 import RecommendedSubsList from '@/components/sub-finder/RecommendedSubsList'
 
@@ -43,7 +45,9 @@ export default function SubFinderPage() {
   const [loading, setLoading] = useState(false)
   const [includePartiallyCovered, setIncludePartiallyCovered] = useState(false)
   const [includeFlexibleStaff, setIncludeFlexibleStaff] = useState(true)
+  const [includeOnlyRecommended, setIncludeOnlyRecommended] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [allSubs, setAllSubs] = useState<any[]>([]) // Store all subs from API
 
   // Fetch absences on mount and when filters change
   useEffect(() => {
@@ -88,13 +92,31 @@ export default function SubFinderPage() {
       })
       if (!response.ok) throw new Error('Failed to find subs')
       const data = await response.json()
-      setRecommendedSubs(data)
+      setAllSubs(data) // Store all subs
+      // Filter based on includeOnlyRecommended
+      if (includeOnlyRecommended) {
+        setRecommendedSubs(data.filter((sub: any) => sub.coverage_percent > 0))
+      } else {
+        setRecommendedSubs(data)
+      }
     } catch (error) {
       console.error('Error finding subs:', error)
     } finally {
       setLoading(false)
     }
   }
+
+  // Update recommended subs when filter changes
+  useEffect(() => {
+    if (allSubs.length > 0 && selectedAbsence) {
+      if (includeOnlyRecommended) {
+        setRecommendedSubs(allSubs.filter((sub: any) => sub.coverage_percent > 0))
+      } else {
+        setRecommendedSubs(allSubs)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [includeOnlyRecommended])
 
   const handleRerunFinder = async () => {
     if (selectedAbsence) {
@@ -201,33 +223,97 @@ export default function SubFinderPage() {
         {selectedAbsence && (
           <div className="border-b bg-white p-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <Button onClick={handleRerunFinder} disabled={loading} size="sm" variant="outline">
                   <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                   Rerun Finder
                 </Button>
 
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="include-partial"
-                    checked={includePartiallyCovered}
-                    onCheckedChange={setIncludePartiallyCovered}
-                  />
-                  <Label htmlFor="include-partial" className="text-sm font-normal cursor-pointer">
-                    Include partially covered shifts
-                  </Label>
-                </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="relative">
+                      <Settings2 className="h-4 w-4 mr-2" />
+                      Filters
+                      {(includePartiallyCovered || !includeOnlyRecommended || !includeFlexibleStaff) && (
+                        <Badge
+                          variant="secondary"
+                          className="ml-2 h-5 min-w-[20px] px-1.5 text-xs"
+                        >
+                          {[
+                            includePartiallyCovered,
+                            !includeOnlyRecommended,
+                            !includeFlexibleStaff,
+                          ].filter(Boolean).length}
+                        </Badge>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80" align="start">
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="font-medium text-sm mb-3">Filter Options</h4>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <Label
+                                htmlFor="include-only-recommended"
+                                className="text-sm font-normal cursor-pointer"
+                              >
+                                Include only recommended subs
+                              </Label>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Show only subs who can cover at least one shift
+                              </p>
+                            </div>
+                            <Switch
+                              id="include-only-recommended"
+                              checked={includeOnlyRecommended}
+                              onCheckedChange={setIncludeOnlyRecommended}
+                            />
+                          </div>
 
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="include-flexible"
-                    checked={includeFlexibleStaff}
-                    onCheckedChange={setIncludeFlexibleStaff}
-                  />
-                  <Label htmlFor="include-flexible" className="text-sm font-normal cursor-pointer">
-                    Include Flexible Staff
-                  </Label>
-                </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <Label
+                                htmlFor="include-partial"
+                                className="text-sm font-normal cursor-pointer"
+                              >
+                                Include partially covered shifts
+                              </Label>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Show absences with partial coverage
+                              </p>
+                            </div>
+                            <Switch
+                              id="include-partial"
+                              checked={includePartiallyCovered}
+                              onCheckedChange={setIncludePartiallyCovered}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <Label
+                                htmlFor="include-flexible"
+                                className="text-sm font-normal cursor-pointer"
+                              >
+                                Include Flexible Staff
+                              </Label>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Include staff who can sub when not teaching
+                              </p>
+                            </div>
+                            <Switch
+                              id="include-flexible"
+                              checked={includeFlexibleStaff}
+                              onCheckedChange={setIncludeFlexibleStaff}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               {selectedAbsence && (
@@ -250,6 +336,7 @@ export default function SubFinderPage() {
               subs={recommendedSubs}
               loading={loading}
               absence={selectedAbsence}
+              showAllSubs={!includeOnlyRecommended}
             />
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground">
