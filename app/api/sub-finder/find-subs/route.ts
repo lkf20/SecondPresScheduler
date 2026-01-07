@@ -16,6 +16,9 @@ interface Shift {
   time_slot_code: string
   class_id?: string | null
   classroom_id?: string | null
+  diaper_changing_required?: boolean
+  lifting_children_required?: boolean
+  class_group_name?: string | null
 }
 
 interface SubMatch {
@@ -31,6 +34,8 @@ interface SubMatch {
     day_name: string
     time_slot_code: string
     class_name: string | null
+    diaper_changing_required?: boolean
+    lifting_children_required?: boolean
   }>
   cannot_cover: Array<{
     date: string
@@ -40,6 +45,8 @@ interface SubMatch {
   }>
   qualification_matches: number
   qualification_total: number
+  can_change_diapers?: boolean
+  can_lift_children?: boolean
 }
 
 /**
@@ -78,16 +85,67 @@ export async function POST(request: NextRequest) {
       return NextResponse.json([])
     }
 
+    // Get coverage_request_id to fetch class group info
+    const coverageRequestId = (timeOffRequest as any).coverage_request_id
+
+    // Get coverage_request_shifts with class group info
+    let classGroupInfoMap = new Map<string, { 
+      diaper_changing_required: boolean
+      lifting_children_required: boolean
+      class_group_name: string | null
+    }>()
+    
+    if (coverageRequestId) {
+      const { data: coverageRequestShifts } = await supabase
+        .from('coverage_request_shifts')
+        .select(`
+          date,
+          time_slot_id,
+          class_group_id,
+          class_groups:class_group_id (
+            name,
+            diaper_changing_required,
+            lifting_children_required
+          ),
+          time_slots:time_slot_id (code)
+        `)
+        .eq('coverage_request_id', coverageRequestId)
+
+      if (coverageRequestShifts) {
+        coverageRequestShifts.forEach((shift: any) => {
+          const key = `${shift.date}|${shift.time_slots?.code || ''}`
+          const classGroup = shift.class_groups
+          classGroupInfoMap.set(key, {
+            diaper_changing_required: classGroup?.diaper_changing_required ?? false,
+            lifting_children_required: classGroup?.lifting_children_required ?? false,
+            class_group_name: classGroup?.name || null,
+          })
+        })
+      }
+    }
+
     // Normalize shifts for easier processing
-    const shiftsToCover: Shift[] = shifts.map((shift: any) => ({
-      date: shift.date,
-      day_of_week_id: shift.day_of_week_id,
-      day_name: shift.day_of_week?.name || '',
-      time_slot_id: shift.time_slot_id,
-      time_slot_code: shift.time_slot?.code || '',
-      class_id: null, // TODO: Get from schedule cells
-      classroom_id: null, // TODO: Get from schedule cells
-    }))
+    const shiftsToCover: Shift[] = shifts.map((shift: any) => {
+      const key = `${shift.date}|${shift.time_slot?.code || ''}`
+      const classGroupInfo = classGroupInfoMap.get(key) || {
+        diaper_changing_required: false,
+        lifting_children_required: false,
+        class_group_name: null,
+      }
+      
+      return {
+        date: shift.date,
+        day_of_week_id: shift.day_of_week_id,
+        day_name: shift.day_of_week?.name || '',
+        time_slot_id: shift.time_slot_id,
+        time_slot_code: shift.time_slot?.code || '',
+        class_id: null, // TODO: Get from schedule cells
+        classroom_id: null, // TODO: Get from schedule cells
+        diaper_changing_required: classGroupInfo.diaper_changing_required,
+        lifting_children_required: classGroupInfo.lifting_children_required,
+        class_group_name: classGroupInfo.class_group_name,
+      }
+    })
 
     // 3. Get all active subs
     const allSubs = await getSubs()
@@ -179,6 +237,12 @@ export async function POST(request: NextRequest) {
           (classPreferences || []).map((pref: any) => pref.class_id)
         )
 
+        // Get sub's capabilities
+        const subCapabilities = {
+          can_change_diapers: sub.can_change_diapers ?? false,
+          can_lift_children: sub.can_lift_children ?? false,
+        }
+
         // Calculate coverage
         let availableShifts = 0
         const canCover: Array<{
@@ -186,6 +250,8 @@ export async function POST(request: NextRequest) {
           day_name: string
           time_slot_code: string
           class_name: string | null
+          diaper_changing_required?: boolean
+          lifting_children_required?: boolean
         }> = []
         const cannotCover: Array<{
           date: string
@@ -231,19 +297,23 @@ export async function POST(request: NextRequest) {
               date: shift.date,
               day_name: shift.day_name,
               time_slot_code: shift.time_slot_code,
-              class_name: shift.class_id ? null : null, // TODO: Get class name from class_id
+              class_name: shift.class_group_name || null,
+              diaper_changing_required: shift.diaper_changing_required,
+              lifting_children_required: shift.lifting_children_required,
             })
           } else {
-            // Cannot cover - determine reason
+            // Cannot cover - determine reason with better wording
             let reason = ''
             if (!isAvailable) {
-              reason = 'Not available'
+              reason = 'Marked as unavailable'
             } else if (hasScheduleConflict) {
-              reason = 'Has scheduled shift'
+              reason = 'Scheduled to teach'
             } else if (hasTimeOffConflict) {
               reason = 'Has time off'
             } else if (!isQualified) {
-              reason = qualificationReason || 'Not qualified for class'
+              reason = 'Not qualified for this class'
+            } else {
+              reason = 'Not available'
             }
             
             cannotCover.push({
@@ -275,6 +345,8 @@ export async function POST(request: NextRequest) {
           cannot_cover: cannotCover,
           qualification_matches: qualificationMatches,
           qualification_total: qualificationTotal,
+          can_change_diapers: subCapabilities.can_change_diapers,
+          can_lift_children: subCapabilities.can_lift_children,
         }
       })
     )
