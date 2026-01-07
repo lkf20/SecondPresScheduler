@@ -41,7 +41,7 @@ Features for later consideration (beyond the next few weeks).
 
 Test cases to add or testing improvements.
 
-- [ ] Add tests for handling deleting or deactivating class groups, classrooms, teachers, and subs
+- [x] Add tests for handling deleting or deactivating class groups, classrooms, teachers, and subs
 
 ---
 
