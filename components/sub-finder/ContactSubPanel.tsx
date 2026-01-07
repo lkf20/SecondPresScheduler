@@ -626,14 +626,30 @@ export default function ContactSubPanel({
                   {sub.shifts_covered} of {sub.total_shifts} shifts
                 </span>
               </div>
-              {(sub.can_cover && sub.can_cover.length > 0) || (sub.cannot_cover && sub.cannot_cover.length > 0) ? (
+              {(sub.can_cover && sub.can_cover.length > 0) || (sub.cannot_cover && sub.cannot_cover.length > 0) || assignedShifts.length > 0 ? (
                 <ShiftChips
                   canCover={sub.can_cover || []}
                   cannotCover={sub.cannot_cover || []}
+                  assigned={assignedShifts.map(shift => ({
+                    date: shift.date,
+                    time_slot_code: shift.time_slot_code,
+                  }))}
+                  showLegend={true}
                 />
               ) : (
                 <p className="text-sm text-muted-foreground">No shifts available</p>
               )}
+              {/* Status */}
+              <div className="space-y-2 border-t pt-4 mt-4">
+                <Label className="text-sm font-medium mb-2 block">Status</Label>
+                {assignedShifts.length > 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Assigned to {assignedShifts.length} shift{assignedShifts.length !== 1 ? 's' : ''}
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Not Assigned</p>
+                )}
+              </div>
             </div>
 
             {/* Contextual Warnings */}
@@ -713,26 +729,6 @@ export default function ContactSubPanel({
                   </RadioGroup>
                 </div>
 
-                {/* Status (Read-only, derived from assignments) */}
-                <div className="space-y-2 border-t pt-4">
-                  <Label className="text-sm font-medium mb-2 block">Status</Label>
-                  {assignedShifts.length > 0 ? (
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">
-                        Assigned to {assignedShifts.length} shift{assignedShifts.length !== 1 ? 's' : ''}:
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {assignedShifts.map((shift, idx) => (
-                          <Badge key={idx} variant="outline" className="text-xs">
-                            {shift.day_name} {shift.time_slot_code}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Not Assigned</p>
-                  )}
-                </div>
               </div>
 
               <div className="space-y-2 border-t pt-6">
