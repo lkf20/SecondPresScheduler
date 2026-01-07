@@ -16,7 +16,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { X, Phone, Mail, AlertTriangle } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
-import ShiftChips from '@/components/sub-finder/ShiftChips'
+import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 
 interface RecommendedSub {
   id: string
@@ -776,7 +776,7 @@ export default function ContactSubPanel({
                         >
                           <div className="flex items-center gap-2">
                             <span className="font-medium">
-                              {formatDate(shift.date)} {shift.time_slot_code}
+                              {formatShiftLabel(shift.date, shift.time_slot_code)}
                             </span>
                             {shift.class_name && (
                               <Badge variant="outline" className="text-xs">
@@ -855,7 +855,7 @@ export default function ContactSubPanel({
             )}
 
             {/* Action Buttons */}
-            <div className="flex flex-col gap-2 pt-4 border-t">
+            <div className="flex flex-col gap-2 pt-4 pb-6 border-t">
               {responseStatus === 'declined_all' && (
                 <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 mb-2">
                   <p className="text-sm text-amber-800">
