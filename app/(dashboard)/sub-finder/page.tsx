@@ -158,12 +158,12 @@ export default function SubFinderPage() {
     <div className="flex h-[calc(100vh-4rem)]">
       {/* Left Rail */}
       <div className="w-80 border-r bg-gray-50 flex flex-col">
-        <div className="px-3 pt-3 pb-3 border-b bg-white flex flex-col">
+        <div className="px-3 pt-4 pb-4 border-b bg-white flex flex-col">
           <h1 className="text-xl font-bold">Sub Finder</h1>
           <div className="h-[1.75rem]"></div>
 
           {/* Mode Toggle */}
-          <div className="flex gap-2 -mt-7">
+          <div className="flex gap-2 -mt-7 mb-4">
             <Button
               variant={mode === 'existing' ? 'default' : 'outline'}
               size="sm"
@@ -241,7 +241,7 @@ export default function SubFinderPage() {
         {/* Fixed Header Bar */}
         {selectedAbsence && (
           <div className="sticky top-0 z-10 border-b bg-white">
-            <div className="px-6 pt-3 pb-0">
+            <div className="px-6 pt-4 pb-0">
               {/* Header Row */}
               <div className="mb-0">
                 <h2 className="text-xl font-semibold flex items-center gap-3">
@@ -277,7 +277,7 @@ export default function SubFinderPage() {
               </div>
 
               {/* Toolbar Row */}
-              <div className="flex items-center gap-3 pb-3">
+              <div className="flex items-center gap-3 pb-4">
                 <Button onClick={handleRerunFinder} disabled={loading} size="sm" variant="outline">
                   <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                   Rerun Finder
