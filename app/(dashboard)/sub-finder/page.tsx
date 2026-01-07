@@ -115,8 +115,7 @@ export default function SubFinderPage() {
         setRecommendedSubs(allSubs)
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [includeOnlyRecommended])
+  }, [includeOnlyRecommended, selectedAbsence])
 
   const handleRerunFinder = async () => {
     if (selectedAbsence) {
