@@ -164,8 +164,22 @@ export default function ContactSubPanel({
     return `${dayName} ${month} ${day}`
   }
 
+  // Don't render if no sub or absence, but Sheet must still have a title when open
   if (!sub || !absence) {
-    return null
+    if (!isOpen) return null
+    // If panel is open but no data, show empty state with proper title
+    return (
+      <Sheet open={isOpen} onOpenChange={onClose}>
+        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Contact Sub</SheetTitle>
+          </SheetHeader>
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            <p>No sub selected</p>
+          </div>
+        </SheetContent>
+      </Sheet>
+    )
   }
 
   if (fetching) {
