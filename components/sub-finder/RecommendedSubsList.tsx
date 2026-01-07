@@ -176,7 +176,7 @@ export default function RecommendedSubsList({
 
             {/* Can Cover: Show all shifts (can cover and cannot cover) sorted by date */}
             {((sub.can_cover && sub.can_cover.length > 0) || (sub.cannot_cover && sub.cannot_cover.length > 0)) && (
-              <div className="mb-3">
+              <div className="mb-5">
                 <p className="text-xs font-medium text-muted-foreground mb-1.5">Can Cover:</p>
                 <div className="flex flex-wrap gap-1.5">
                   {(() => {
@@ -241,7 +241,7 @@ export default function RecommendedSubsList({
 
             {/* Unavailable: Collapsible section with reasons only (no chips) */}
             {sub.cannot_cover && sub.cannot_cover.length > 0 && (
-              <div className="mb-3">
+              <div className="mb-3 pt-4 border-t border-gray-200">
                 <button
                   onClick={toggleUnavailable}
                   className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors mb-1.5"
@@ -281,7 +281,7 @@ export default function RecommendedSubsList({
                 className="w-full"
                 onClick={() => onContactSub?.(sub)}
               >
-                View & Contact
+                Contact & Assign
               </Button>
             </div>
           </CardContent>
