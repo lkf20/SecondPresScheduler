@@ -31,7 +31,9 @@ Features to implement soon (within the next few weeks).
 
 Features for later consideration (beyond the next few weeks).
 
-- [ ] _Add future features here_
+- [ ] For each section of the weekly schedule side panel, add ability to apply to every day or every time slot
+- [ ] Create multiple baseline weekly schedules (e.g., Spring 2026 Schedule) and see a history of weekly schedules
+- [ ] Specify enrollment by class grouping (e.g., Toddler A (2), Toddler B (3)) instead of a single enrollment value
 
 ---
 
@@ -39,7 +41,7 @@ Features for later consideration (beyond the next few weeks).
 
 Test cases to add or testing improvements.
 
-- [ ] _Add testing items here_
+- [ ] Add tests for handling deleting or deactivating class groups, classrooms, teachers, and subs
 
 ---
 
