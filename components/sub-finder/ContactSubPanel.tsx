@@ -207,6 +207,20 @@ export default function ContactSubPanel({
     return `${dayName} ${month} ${day}`
   }
 
+  // Format date range for display
+  const formatDateRange = () => {
+    if (!absence) return null
+    
+    const startDate = formatDate(absence.start_date)
+    
+    if (!absence.end_date || absence.end_date === absence.start_date) {
+      return startDate
+    }
+    
+    const endDate = formatDate(absence.end_date)
+    return `${startDate} - ${endDate}`
+  }
+
   // Format contacted timestamp
   const formatContactedTimestamp = (timestamp: string | null) => {
     if (!timestamp) return null
@@ -589,6 +603,11 @@ export default function ContactSubPanel({
               )}
             </div>
             <p className="text-sm text-muted-foreground mt-2">
+              {formatDateRange() && (
+                <>
+                  {formatDateRange()} |{' '}
+                </>
+              )}
               Available for {sub.shifts_covered} of {sub.total_shifts} requested shifts
             </p>
           </SheetHeader>
