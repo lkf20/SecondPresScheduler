@@ -16,7 +16,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { X, Phone, Mail, AlertTriangle } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
-import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
+import ShiftChips from '@/components/sub-finder/ShiftChips'
 
 interface RecommendedSub {
   id: string
