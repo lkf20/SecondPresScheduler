@@ -130,20 +130,20 @@ export default function ContactSubPanel({
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <SheetTitle className="text-2xl mb-1">{sub.name}</SheetTitle>
-              <SheetDescription className="flex items-center gap-4 mt-2">
+              <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                 {sub.phone && (
-                  <div className="flex items-center gap-1.5 text-sm">
+                  <span className="flex items-center gap-1.5">
                     <Phone className="h-3.5 w-3.5" />
                     <span>{sub.phone}</span>
-                  </div>
+                  </span>
                 )}
                 {sub.email && (
-                  <div className="flex items-center gap-1.5 text-sm">
+                  <span className="flex items-center gap-1.5">
                     <Mail className="h-3.5 w-3.5" />
                     <span>{sub.email}</span>
-                  </div>
+                  </span>
                 )}
-              </SheetDescription>
+              </div>
               {selectedShiftsCount > 0 && (
                 <p className="text-sm text-muted-foreground mt-2">
                   Covering {selectedShiftsCount} of {totalShifts} selected shifts
