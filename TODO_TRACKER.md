@@ -34,6 +34,7 @@ Features for later consideration (beyond the next few weeks).
 - [ ] For each section of the weekly schedule side panel, add ability to apply to every day or every time slot
 - [ ] Create multiple baseline weekly schedules (e.g., Spring 2026 Schedule) and see a history of weekly schedules
 - [ ] Specify enrollment by class grouping (e.g., Toddler A (2), Toddler B (3)) instead of a single enrollment value
+- [ ] Preserve application state when navigating between sections - maintain user context (e.g., selected absence, sub finder filters, selected shifts) when switching to dashboard or other sections and returning, so users don't lose their work in progress
 
 ---
 
