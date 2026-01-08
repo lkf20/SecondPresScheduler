@@ -15,20 +15,37 @@ export interface ApiError {
 export function getErrorMessage(error: unknown): string {
   // Check for Supabase/PostgreSQL errors with code property (even if not Error instance)
   const errorObj = error as any
+  
+  // Log the error structure for debugging
+  if (process.env.NODE_ENV === 'development') {
+    console.error('getErrorMessage received:', {
+      error,
+      type: typeof error,
+      isError: error instanceof Error,
+      errorObj,
+      code: errorObj?.code,
+      message: errorObj?.message,
+      details: errorObj?.details,
+      hint: errorObj?.hint,
+    })
+  }
+  
   if (errorObj?.code) {
     // PostgreSQL error codes
     if (errorObj.code === '23505') {
-      return 'This record already exists (duplicate key violation)'
+      return `This record already exists (duplicate key violation): ${errorObj.message || errorObj.details || ''}`
     }
     if (errorObj.code === '23503') {
-      return 'Invalid reference to related data (foreign key violation)'
+      return `Invalid reference to related data (foreign key violation): ${errorObj.message || errorObj.details || ''}`
     }
     if (errorObj.code === '23502') {
-      return 'Required field is missing (not null violation)'
+      return `Required field is missing (not null violation): ${errorObj.message || errorObj.details || ''}`
     }
     if (errorObj.code === '23514') {
-      return 'Invalid data provided (check constraint violation)'
+      return `Invalid data provided (check constraint violation): ${errorObj.message || errorObj.details || ''}`
     }
+    // Return the error message with code if available
+    return errorObj.message || errorObj.details || `Database error (code: ${errorObj.code})`
   }
 
   if (error instanceof Error) {
@@ -47,7 +64,17 @@ export function getErrorMessage(error: unknown): string {
     }
     return error.message
   }
-  return 'An unexpected error occurred'
+  
+  // Try to extract message from error object
+  if (errorObj?.message) {
+    return String(errorObj.message)
+  }
+  
+  if (errorObj?.details) {
+    return String(errorObj.details)
+  }
+  
+  return `An unexpected error occurred: ${String(error)}`
 }
 
 /**
