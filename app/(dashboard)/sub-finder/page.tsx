@@ -299,7 +299,7 @@ export default function SubFinderPage() {
                     Rerun Finder
                   </Button>
 
-                <Popover>
+                  <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline" size="sm" className="relative">
                       <Settings2 className="h-4 w-4 mr-2" />
