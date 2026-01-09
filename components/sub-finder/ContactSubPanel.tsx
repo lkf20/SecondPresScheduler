@@ -896,7 +896,7 @@ export default function ContactSubPanel({
             {sub.can_cover && sub.can_cover.length > 0 && (
               <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-2">
                 <Label className="text-sm font-medium mb-3 block">
-                  Shifts to assign to sub
+                  Available & not assigned
                 </Label>
                 <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3 bg-gray-50">
                   {sub.can_cover.map((shift, idx) => {
