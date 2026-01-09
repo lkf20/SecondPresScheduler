@@ -1,7 +1,6 @@
 'use client'
 
 import { User, Phone } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 
 interface SubCardHeaderProps {
   name: string
@@ -45,11 +44,6 @@ export default function SubCardHeader({
                 <span>{phone}</span>
               </div>
             </>
-          )}
-          {isDeclined && (
-            <Badge variant="secondary" className="text-xs">
-              Declined
-            </Badge>
           )}
         </div>
       </div>

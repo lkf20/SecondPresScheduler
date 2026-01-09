@@ -193,7 +193,7 @@ export default function RecommendedSubsList({
           
           return (
         <Card key={sub.id} className="hover:shadow-md transition-shadow">
-          <CardContent className="p-4">
+          <CardContent className="pt-4 px-4 pb-2">
             <SubCardHeader
               name={sub.name}
               phone={sub.phone}
@@ -208,6 +208,7 @@ export default function RecommendedSubsList({
                   canCover={sub.can_cover || []}
                   cannotCover={sub.cannot_cover || []}
                   assigned={sub.assigned_shifts || []}
+                  isDeclined={sub.response_status === 'declined_all'}
                 />
               </div>
             )}
@@ -218,7 +219,7 @@ export default function RecommendedSubsList({
               </div>
             )}
 
-            <div className="mt-4 flex justify-end">
+            <div className="mt-0 flex justify-end">
               <Button
                 size="sm"
                 variant="ghost"
@@ -255,7 +256,7 @@ export default function RecommendedSubsList({
                 <div className="mt-4 space-y-4">
                   {declinedSubs.map(({ sub, shiftsCovered, remainingShifts }) => (
                     <Card key={sub.id} className="hover:shadow-md transition-shadow bg-gray-100/50 opacity-75">
-                      <CardContent className="p-4">
+                      <CardContent className="pt-4 px-4 pb-2">
                         <SubCardHeader
                           name={sub.name}
                           phone={sub.phone}
@@ -282,7 +283,7 @@ export default function RecommendedSubsList({
                           </div>
                         )}
 
-                        <div className="mt-4 flex justify-end">
+                        <div className="mt-0 flex justify-end">
                           <Button
                             size="sm"
                             variant="ghost"
