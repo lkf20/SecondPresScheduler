@@ -1092,7 +1092,7 @@ export default function ContactSubPanel({
               {responseStatus === 'declined_all' && (
                 <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 mb-2">
                   <p className="text-sm text-amber-800">
-                    Cannot assign shifts to a declined sub
+                    Declining all shifts
                   </p>
                 </div>
               )}
@@ -1123,9 +1123,9 @@ export default function ContactSubPanel({
                 <Button
                   className="flex-1"
                   onClick={handleAssignShifts}
-                  disabled={loading || fetching || !coverageRequestId || selectedShiftsCount === 0 || responseStatus === 'declined_all' || isSubInactive}
+                  disabled={loading || fetching || !coverageRequestId || (responseStatus !== 'declined_all' && selectedShiftsCount === 0) || isSubInactive}
                 >
-                  Assign Selected Shifts
+                  {responseStatus === 'declined_all' ? 'Mark as Declined' : 'Assign Selected Shifts'}
                 </Button>
               </div>
             </div>
