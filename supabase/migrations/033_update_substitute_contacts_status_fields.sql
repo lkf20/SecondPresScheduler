@@ -87,3 +87,4 @@ END $$;
 -- It can be dropped in a future migration after all code is updated
 -- ============================================================================
 
+

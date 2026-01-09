@@ -60,3 +60,4 @@ CREATE POLICY "Users can view profiles in their school" ON profiles
 -- Comment
 COMMENT ON FUNCTION user_belongs_to_school IS 'Checks if current user belongs to a school without causing RLS recursion';
 
+

@@ -339,6 +339,57 @@ export async function POST(request: NextRequest) {
           }
         })
 
+        // Check for existing assignments for this sub and coverage request
+        const assignedShifts: Array<{
+          date: string
+          day_name: string
+          time_slot_code: string
+        }> = []
+        
+        if (coverageRequestId) {
+          // Get teacher_id from coverage_request
+          const { data: coverageRequest } = await supabase
+            .from('coverage_requests')
+            .select('teacher_id')
+            .eq('id', coverageRequestId)
+            .single()
+          
+          if (coverageRequest) {
+            // Get existing sub_assignments for this sub, teacher, and date range
+            const { data: existingAssignments } = await supabase
+              .from('sub_assignments')
+              .select(`
+                date,
+                time_slot_id,
+                time_slots:time_slots(code),
+                days_of_week:day_of_week_id(name)
+              `)
+              .eq('sub_id', sub.id)
+              .eq('teacher_id', coverageRequest.teacher_id)
+              .gte('date', startDate)
+              .lte('date', endDate)
+              .eq('assignment_type', 'Substitute Shift')
+            
+            if (existingAssignments) {
+              existingAssignments.forEach((assignment: any) => {
+                // Check if this assignment covers one of the shifts we're looking for
+                const shiftKey = `${assignment.date}|${assignment.time_slots?.code || ''}`
+                const matchingShift = shiftsToCover.find(
+                  (s) => s.date === assignment.date && s.time_slot_code === assignment.time_slots?.code
+                )
+                
+                if (matchingShift) {
+                  assignedShifts.push({
+                    date: assignment.date,
+                    day_name: assignment.days_of_week?.name || matchingShift.day_name,
+                    time_slot_code: assignment.time_slots?.code || matchingShift.time_slot_code,
+                  })
+                }
+              })
+            }
+          }
+        }
+
         const coveragePercentage =
           shiftsToCover.length > 0
             ? Math.round((availableShifts / shiftsToCover.length) * 100)
@@ -357,6 +408,7 @@ export async function POST(request: NextRequest) {
           total_shifts: shiftsToCover.length,
           can_cover: canCover,
           cannot_cover: cannotCover,
+          assigned_shifts: assignedShifts, // Shifts already assigned to this sub
           qualification_matches: qualificationMatches,
           qualification_total: qualificationTotal,
           can_change_diapers: subCapabilities.can_change_diapers,

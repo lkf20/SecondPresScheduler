@@ -51,3 +51,56 @@ body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
 }
+
+/* Safari-specific fixes */
+@supports (-webkit-appearance: none) {
+  /* Ensure gap works in flexbox for Safari */
+  .flex {
+    -webkit-box-align: stretch;
+    -webkit-box-direction: normal;
+    -webkit-box-orient: horizontal;
+  }
+  
+  /* Fix for backdrop-filter */
+  [class*="backdrop-blur"] {
+    -webkit-backdrop-filter: blur(8px);
+  }
+  
+  /* Ensure proper flexbox rendering */
+  .flex-wrap {
+    -webkit-flex-wrap: wrap;
+  }
+  
+  /* Fix for space utilities */
+  .space-x-2 > * + * {
+    margin-left: 0.5rem;
+  }
+  
+  .space-y-2 > * + * {
+    margin-top: 0.5rem;
+  }
+  
+  .space-x-3 > * + * {
+    margin-left: 0.75rem;
+  }
+  
+  .space-y-3 > * + * {
+    margin-top: 0.75rem;
+  }
+  
+  .space-x-4 > * + * {
+    margin-left: 1rem;
+  }
+  
+  .space-y-4 > * + * {
+    margin-top: 1rem;
+  }
+  
+  .space-y-6 > * + * {
+    margin-top: 1.5rem;
+  }
+  
+  .space-y-10 > * + * {
+    margin-top: 2.5rem;
+  }
+}

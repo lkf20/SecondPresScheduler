@@ -58,6 +58,7 @@ interface ContactSubPanelProps {
   onClose: () => void
   sub: RecommendedSub | null
   absence: Absence | null
+  onAssignmentComplete?: () => void // Callback to refresh data after assignment
 }
 
 export default function ContactSubPanel({
@@ -65,6 +66,7 @@ export default function ContactSubPanel({
   onClose,
   sub,
   absence,
+  onAssignmentComplete,
 }: ContactSubPanelProps) {
   const [isContacted, setIsContacted] = useState(false)
   const [contactedAt, setContactedAt] = useState<string | null>(null)
@@ -655,6 +657,11 @@ export default function ContactSubPanel({
           description: `Coverage has been scheduled and updated in the calendar.`,
         }
       )
+
+      // Refresh parent data (absences and recommended subs)
+      if (onAssignmentComplete) {
+        onAssignmentComplete()
+      }
 
       // Don't close - keep panel open so user can see the updated status
     } catch (error) {

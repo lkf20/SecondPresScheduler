@@ -406,6 +406,14 @@ export default function SubFinderPage() {
           onClose={handleCloseContactPanel}
           sub={selectedSub}
           absence={selectedAbsence}
+          onAssignmentComplete={async () => {
+            // Refresh absences to update coverage status
+            await fetchAbsences()
+            // Refresh recommended subs if we have a selected absence
+            if (selectedAbsence) {
+              await handleFindSubs(selectedAbsence)
+            }
+          }}
         />
       )}
     </div>

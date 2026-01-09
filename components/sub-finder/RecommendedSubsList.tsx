@@ -27,6 +27,11 @@ interface RecommendedSub {
     time_slot_code: string
     reason: string
   }>
+  assigned_shifts?: Array<{
+    date: string
+    day_name: string
+    time_slot_code: string
+  }>
   notes?: string
 }
 
@@ -166,12 +171,13 @@ export default function RecommendedSubsList({
             </div>
 
             {/* Can Cover: Show all shifts (can cover and cannot cover) sorted by date */}
-            {((sub.can_cover && sub.can_cover.length > 0) || (sub.cannot_cover && sub.cannot_cover.length > 0)) && (
+            {((sub.can_cover && sub.can_cover.length > 0) || (sub.cannot_cover && sub.cannot_cover.length > 0) || (sub.assigned_shifts && sub.assigned_shifts.length > 0)) && (
               <div className="mb-5">
                 <p className="text-xs font-medium text-muted-foreground mb-1.5">Can Cover:</p>
                 <ShiftChips
                   canCover={sub.can_cover || []}
                   cannotCover={sub.cannot_cover || []}
+                  assigned={sub.assigned_shifts || []}
                 />
               </div>
             )}

@@ -57,3 +57,4 @@ CREATE POLICY "Users can view profiles in their school" ON profiles
 COMMENT ON TABLE schools IS 'Schools/tenants in the system';
 COMMENT ON TABLE profiles IS 'Links auth.users to schools with roles';
 
+

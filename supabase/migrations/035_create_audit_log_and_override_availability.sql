@@ -49,3 +49,4 @@ CREATE POLICY "Users can view audit logs for their school" ON audit_log
 COMMENT ON TABLE audit_log IS 'General audit log for all system actions';
 COMMENT ON COLUMN sub_contact_shift_overrides.override_availability IS 'Director override for unavailable shifts';
 
+

@@ -153,3 +153,4 @@ FROM coverage_requests;
 -- ✅ open_requests should be >= 1 (unless all are filled)
 -- ✅ total_shifts_needing_coverage should match the number of shifts in your request
 
+

@@ -190,3 +190,4 @@ CREATE TRIGGER trigger_auto_delete_coverage_request_shift
   FOR EACH ROW
   EXECUTE FUNCTION auto_delete_coverage_request_shift_from_time_off_shift();
 
+

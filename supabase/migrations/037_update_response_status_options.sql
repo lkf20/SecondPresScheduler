@@ -26,3 +26,4 @@ CHECK (response_status IN ('none', 'pending', 'confirmed', 'declined_all'));
 -- ============================================================================
 COMMENT ON COLUMN substitute_contacts.response_status IS 'Response status: none (no response yet), pending, confirmed (some or all shifts), or declined_all. Assigned status is derived from sub_assignments.';
 
+
