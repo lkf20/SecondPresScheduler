@@ -596,19 +596,48 @@ export default function ContactSubPanel({
       }
 
       // Create calendar entries (sub_assignments)
+      const assignPayload = {
+        coverage_request_id: coverageRequestId,
+        sub_id: sub.id,
+        selected_shift_ids: selectedShiftIds,
+      }
+
+      console.log('Assigning shifts with payload:', assignPayload)
+
+      if (!coverageRequestId) {
+        throw new Error('Coverage request ID is missing. Please try opening the panel again.')
+      }
+
       const assignResponse = await fetch('/api/sub-finder/assign-shifts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          coverage_request_id: coverageRequestId,
-          sub_id: sub.id,
-          selected_shift_ids: selectedShiftIds,
-        }),
+        body: JSON.stringify(assignPayload),
       })
 
       if (!assignResponse.ok) {
-        const errorData = await assignResponse.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to assign shifts')
+        const errorText = await assignResponse.text()
+        let errorData: any = {}
+        let errorMessage = `Failed to assign shifts (${assignResponse.status} ${assignResponse.statusText})`
+        
+        try {
+          if (errorText) {
+            errorData = JSON.parse(errorText)
+            errorMessage = errorData.error || errorData.message || errorMessage
+          }
+        } catch (parseError) {
+          errorMessage = errorText || errorMessage
+          errorData = { rawError: errorText }
+        }
+        
+        console.error('Assign shifts error:', {
+          status: assignResponse.status,
+          statusText: assignResponse.statusText,
+          errorText,
+          errorData,
+          payload: assignPayload,
+        })
+        
+        throw new Error(errorMessage)
       }
 
       // Update assigned shifts state with response data

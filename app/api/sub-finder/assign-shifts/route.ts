@@ -25,6 +25,12 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient()
 
+    console.log('Assign shifts request:', {
+      coverage_request_id,
+      sub_id,
+      selected_shift_ids_count: selected_shift_ids.length,
+    })
+
     // Get coverage_request to get time_off_request_id
     const { data: coverageRequest, error: coverageError } = await supabase
       .from('coverage_requests')
@@ -32,8 +38,23 @@ export async function POST(request: NextRequest) {
       .eq('id', coverage_request_id)
       .single()
 
-    if (coverageError || !coverageRequest) {
-      console.error('Error fetching coverage_request:', coverageError)
+    if (coverageError) {
+      console.error('Error fetching coverage_request:', {
+        error: coverageError,
+        code: coverageError.code,
+        message: coverageError.message,
+        details: coverageError.details,
+        hint: coverageError.hint,
+        coverage_request_id,
+      })
+      return createErrorResponse(
+        `Coverage request not found: ${coverageError.message || 'Database error'}`,
+        404
+      )
+    }
+
+    if (!coverageRequest) {
+      console.error('Coverage request not found:', { coverage_request_id })
       return createErrorResponse('Coverage request not found', 404)
     }
 
