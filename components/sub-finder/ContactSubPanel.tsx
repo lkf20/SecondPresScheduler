@@ -855,154 +855,169 @@ export default function ContactSubPanel({
               </div>
             </div>
 
-            {/* Shifts Assigned to This Sub */}
-            {assignedShifts.length > 0 && (
-              <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-2">
-                <Label className="text-sm font-medium mb-3 block">
-                  Shifts assigned to this sub
-                </Label>
-                <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3 bg-gray-50">
-                  {assignedShifts.map((shift, idx) => {
-                    const shiftKey = `${shift.date}|${shift.time_slot_code}`
-                    return (
-                      <div
-                        key={idx}
-                        className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md bg-white"
-                      >
-                        <Checkbox
-                          id={`assigned-shift-${idx}`}
-                          checked={true}
-                          disabled={true}
-                        />
-                        <Label
-                          htmlFor={`assigned-shift-${idx}`}
-                          className="flex-1 cursor-pointer font-normal"
-                        >
-                          <Badge
-                            variant="outline"
-                            className="text-xs bg-blue-50 text-blue-900 border-blue-200"
-                          >
-                            {formatShiftLabel(shift.date, shift.time_slot_code)}
-                          </Badge>
-                        </Label>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
+            {/* Shift Assignments - Combined Section */}
+            {(assignedShifts.length > 0 || (sub.can_cover && sub.can_cover.length > 0) || (sub.cannot_cover && sub.cannot_cover.length > 0)) && (
+              <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-6">
+                <h3 className="text-sm font-medium">Shift Assignments</h3>
 
-            {/* Assignable Shifts */}
-            {sub.can_cover && sub.can_cover.length > 0 && (
-              <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-2">
-                <Label className="text-sm font-medium mb-3 block">
-                  Available & not assigned
-                </Label>
-                <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3 bg-gray-50">
-                  {sub.can_cover.map((shift, idx) => {
-                    const shiftKey = `${shift.date}|${shift.time_slot_code}`
-                    const isSelected = selectedShifts.has(shiftKey)
-                    // Skip if already assigned
-                    const isAssigned = assignedShifts.some(
-                      (as) => as.date === shift.date && as.time_slot_code === shift.time_slot_code
-                    )
-                    if (isAssigned) return null
-                    
-                    return (
-                      <div
-                        key={idx}
-                        className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md bg-white"
-                      >
-                        <Checkbox
-                          id={`shift-${idx}`}
-                          checked={isSelected}
-                          onCheckedChange={() => handleShiftToggle(shiftKey, true)}
-                        />
-                        <Label
-                          htmlFor={`shift-${idx}`}
-                          className="flex-1 cursor-pointer font-normal"
-                        >
-                          <Badge
-                            variant="outline"
-                            className="text-xs bg-emerald-50 text-emerald-900 border-emerald-200"
+                {/* Shifts Assigned to This Sub */}
+                {assignedShifts.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium block">
+                      Shifts assigned to this sub
+                    </Label>
+                    <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3 bg-gray-50">
+                      {assignedShifts.map((shift, idx) => {
+                        const shiftKey = `${shift.date}|${shift.time_slot_code}`
+                        return (
+                          <div
+                            key={idx}
+                            className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md bg-white"
                           >
-                            {formatShiftLabel(shift.date, shift.time_slot_code)}
-                          </Badge>
-                          {shift.class_name && (
-                            <Badge variant="outline" className="text-xs ml-2">
-                              {shift.class_name}
-                            </Badge>
-                          )}
-                        </Label>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Unavailable Shifts (can override) */}
-            {sub.cannot_cover && sub.cannot_cover.length > 0 && (
-              <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Unavailable (can override)</Label>
-                </div>
-                <div className="space-y-2">
-                  {sub.cannot_cover.map((shift, idx) => {
-                    const shiftId = shift.coverage_request_shift_id || 
-                      `${shift.date}|${shift.time_slot_code}`
-                    const shiftKey = `${shift.date}|${shift.time_slot_code}`
-                    const isOverridden = overriddenShiftIds.has(shiftId) || overriddenShiftIds.has(shiftKey)
-                    const isSelected = selectedShifts.has(shiftKey)
-                    const canSelect = isOverridden && !isSubInactive && responseStatus !== 'declined_all'
-                    
-                    return (
-                      <div
-                        key={idx}
-                        className={`flex items-center gap-3 p-3 rounded-lg border ${
-                          isOverridden
-                            ? 'bg-amber-50 border-amber-200'
-                            : 'bg-gray-50 border-gray-200'
-                        }`}
-                      >
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => handleShiftToggle(shiftKey, false)}
-                          disabled={!canSelect}
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <Badge
-                              variant="outline"
-                              className="text-xs bg-gray-100 text-gray-700 border-gray-300"
+                            <Checkbox
+                              id={`assigned-shift-${idx}`}
+                              checked={true}
+                              disabled={true}
+                            />
+                            <Label
+                              htmlFor={`assigned-shift-${idx}`}
+                              className="flex-1 cursor-pointer font-normal"
                             >
-                              {formatShiftLabel(shift.date, shift.time_slot_code)}
-                            </Badge>
-                            {isOverridden && (
-                              <>
-                                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                <Badge variant="outline" className="text-xs bg-amber-100 text-amber-800 border-amber-300">
-                                  Override
-                                </Badge>
-                              </>
-                            )}
+                              <Badge
+                                variant="outline"
+                                className="text-xs bg-blue-50 text-blue-900 border-blue-200"
+                              >
+                                {formatShiftLabel(shift.date, shift.time_slot_code)}
+                              </Badge>
+                            </Label>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {shift.reason}
-                          </p>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleToggleOverride(shiftId)}
-                          disabled={isSubInactive || responseStatus === 'declined_all'}
-                        >
-                          Override
-                        </Button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Available & Not Assigned */}
+                {sub.can_cover && sub.can_cover.length > 0 && (
+                  <>
+                    {assignedShifts.length > 0 && <div className="border-t pt-6" />}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium block">
+                        Available & not assigned
+                      </Label>
+                      <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3 bg-gray-50">
+                        {sub.can_cover.map((shift, idx) => {
+                          const shiftKey = `${shift.date}|${shift.time_slot_code}`
+                          const isSelected = selectedShifts.has(shiftKey)
+                          // Skip if already assigned
+                          const isAssigned = assignedShifts.some(
+                            (as) => as.date === shift.date && as.time_slot_code === shift.time_slot_code
+                          )
+                          if (isAssigned) return null
+                          
+                          return (
+                            <div
+                              key={idx}
+                              className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md bg-white"
+                            >
+                              <Checkbox
+                                id={`shift-${idx}`}
+                                checked={isSelected}
+                                onCheckedChange={() => handleShiftToggle(shiftKey, true)}
+                              />
+                              <Label
+                                htmlFor={`shift-${idx}`}
+                                className="flex-1 cursor-pointer font-normal"
+                              >
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs bg-emerald-50 text-emerald-900 border-emerald-200"
+                                >
+                                  {formatShiftLabel(shift.date, shift.time_slot_code)}
+                                </Badge>
+                                {shift.class_name && (
+                                  <Badge variant="outline" className="text-xs ml-2">
+                                    {shift.class_name}
+                                  </Badge>
+                                )}
+                              </Label>
+                            </div>
+                          )
+                        })}
                       </div>
-                    )
-                  })}
-                </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Unavailable Shifts (can override) */}
+                {sub.cannot_cover && sub.cannot_cover.length > 0 && (
+                  <>
+                    {(assignedShifts.length > 0 || (sub.can_cover && sub.can_cover.length > 0)) && (
+                      <div className="border-t pt-6" />
+                    )}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Unavailable (can override)</Label>
+                      </div>
+                      <div className="space-y-2">
+                        {sub.cannot_cover.map((shift, idx) => {
+                          const shiftId = shift.coverage_request_shift_id || 
+                            `${shift.date}|${shift.time_slot_code}`
+                          const shiftKey = `${shift.date}|${shift.time_slot_code}`
+                          const isOverridden = overriddenShiftIds.has(shiftId) || overriddenShiftIds.has(shiftKey)
+                          const isSelected = selectedShifts.has(shiftKey)
+                          const canSelect = isOverridden && !isSubInactive && responseStatus !== 'declined_all'
+                          
+                          return (
+                            <div
+                              key={idx}
+                              className={`flex items-center gap-3 p-3 rounded-lg border ${
+                                isOverridden
+                                  ? 'bg-amber-50 border-amber-200'
+                                  : 'bg-gray-50 border-gray-200'
+                              }`}
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => handleShiftToggle(shiftKey, false)}
+                                disabled={!canSelect}
+                              />
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <Badge
+                                    variant="outline"
+                                    className="text-xs bg-gray-100 text-gray-700 border-gray-300"
+                                  >
+                                    {formatShiftLabel(shift.date, shift.time_slot_code)}
+                                  </Badge>
+                                  {isOverridden && (
+                                    <>
+                                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                      <Badge variant="outline" className="text-xs bg-amber-100 text-amber-800 border-amber-300">
+                                        Override
+                                      </Badge>
+                                    </>
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {shift.reason}
+                                </p>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleToggleOverride(shiftId)}
+                                disabled={isSubInactive || responseStatus === 'declined_all'}
+                              >
+                                Override
+                              </Button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
