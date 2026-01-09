@@ -58,11 +58,33 @@ interface Absence {
   end_date: string | null
 }
 
+interface ContactData {
+  id: string
+  is_contacted: boolean
+  contacted_at: string | null
+  response_status: string
+  notes: string | null
+  shift_overrides?: Array<{
+    coverage_request_shift_id: string
+    selected: boolean
+    override_availability: boolean
+    shift?: {
+      date: string
+      time_slot?: {
+        code: string
+      }
+    }
+  }>
+  coverage_request_id?: string
+  shift_map?: Record<string, string>
+}
+
 interface ContactSubPanelProps {
   isOpen: boolean
   onClose: () => void
   sub: RecommendedSub | null
   absence: Absence | null
+  initialContactData?: ContactData // Cached contact data from parent
   onAssignmentComplete?: () => void // Callback to refresh data after assignment
 }
 
@@ -71,6 +93,7 @@ export default function ContactSubPanel({
   onClose,
   sub,
   absence,
+  initialContactData,
   onAssignmentComplete,
 }: ContactSubPanelProps) {
   const [isContacted, setIsContacted] = useState(false)
@@ -92,24 +115,89 @@ export default function ContactSubPanel({
   const [overriddenShiftIds, setOverriddenShiftIds] = useState<Set<string>>(new Set())
   const [isSubInactive, setIsSubInactive] = useState(false)
 
-  // Update assignedShifts when sub prop changes (from find-subs API refresh)
+  // Initialize assignedShifts and selectedShifts immediately from sub prop (no API call needed)
   useEffect(() => {
     if (sub?.assigned_shifts) {
       setAssignedShifts(sub.assigned_shifts)
     }
   }, [sub?.assigned_shifts])
 
-  // Fetch coverage request and existing contact data when panel opens
+  // Initialize selectedShifts to all can_cover shifts immediately when sub changes
+  useEffect(() => {
+    if (sub?.can_cover) {
+      const shiftKeys = sub.can_cover.map(
+        (shift) => `${shift.date}|${shift.time_slot_code}`
+      )
+      setSelectedShifts(new Set(shiftKeys))
+    }
+  }, [sub?.can_cover])
+
+  // Use cached contact data if available, otherwise fetch
+  // Coverage Summary and Shift Assignments can display immediately using sub prop
   useEffect(() => {
     if (!isOpen || !sub || !absence) return
 
-    const fetchData = async () => {
+    // If we have cached data, use it immediately
+    if (initialContactData) {
+      setContactId(initialContactData.id)
+      setIsContacted(initialContactData.is_contacted ?? false)
+      setContactedAt(initialContactData.contacted_at)
+      setResponseStatus(initialContactData.response_status || 'none')
+      setNotes(initialContactData.notes || '')
+      setCoverageRequestId(initialContactData.coverage_request_id || null)
+      setShiftMap(initialContactData.shift_map || {})
+
+      // Load selected shifts and override state from shift_overrides if they exist
+      if (initialContactData.shift_overrides && initialContactData.shift_overrides.length > 0) {
+        const selected = new Set<string>()
+        const overridden = new Set<string>()
+        initialContactData.shift_overrides.forEach((override: any) => {
+          if (override.selected && override.shift) {
+            const shiftId = override.coverage_request_shift_id || 
+              `${override.shift.date}|${override.shift.time_slot?.code || ''}`
+            const key = `${override.shift.date}|${override.shift.time_slot?.code || ''}`
+            selected.add(key)
+            // Also track by shift ID for unavailable shifts
+            if (override.override_availability) {
+              overridden.add(shiftId)
+              overridden.add(key)
+            }
+          }
+        })
+        setSelectedShifts(selected)
+        setOverriddenShiftIds(overridden)
+      }
+      // If no shift_overrides, keep the initial selection from can_cover
+
+      // Still check if sub is inactive (this is quick and doesn't block UI)
+      fetch(`/api/subs/${sub.id}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(subData => {
+          if (subData) {
+            setIsSubInactive(!subData.active)
+          }
+        })
+        .catch(() => {
+          // Ignore errors for inactive check
+        })
+
+      setFetching(false)
+      return
+    }
+
+    // No cached data - fetch it
+    const fetchContactData = async () => {
       setFetching(true)
       try {
-        // Get coverage_request_id and shift map
-        const coverageResponse = await fetch(`/api/sub-finder/coverage-request/${absence.id}`)
+        // Fetch coverage_request_id and shift map in parallel with contact data
+        const [coverageResponse, subResponse] = await Promise.all([
+          fetch(`/api/sub-finder/coverage-request/${absence.id}`),
+          fetch(`/api/subs/${sub.id}`).catch(() => null), // Optional: check if sub is inactive
+        ])
+
         if (!coverageResponse.ok) {
           console.error('Failed to fetch coverage request')
+          setFetching(false)
           return
         }
         const coverageData = await coverageResponse.json()
@@ -117,14 +205,9 @@ export default function ContactSubPanel({
         setShiftMap(coverageData.shift_map || {})
 
         // Check if sub is inactive
-        try {
-          const subResponse = await fetch(`/api/subs/${sub.id}`)
-          if (subResponse.ok) {
-            const subData = await subResponse.json()
-            setIsSubInactive(!subData.active)
-          }
-        } catch (error) {
-          console.error('Error fetching sub details:', error)
+        if (subResponse?.ok) {
+          const subData = await subResponse.json()
+          setIsSubInactive(!subData.active)
         }
 
         // Get or create substitute contact
@@ -139,14 +222,6 @@ export default function ContactSubPanel({
             setContactedAt(contactData.contacted_at)
             setResponseStatus(contactData.response_status || 'none')
             setNotes(contactData.notes || '')
-            // Use assigned_shifts from sub object (from find-subs API) if available,
-            // otherwise fall back to contactData.assigned_shifts
-            // sub.assigned_shifts is more up-to-date as it comes from the refreshed find-subs API
-            if (sub.assigned_shifts && sub.assigned_shifts.length > 0) {
-              setAssignedShifts(sub.assigned_shifts)
-            } else {
-              setAssignedShifts(contactData.assigned_shifts || [])
-            }
 
             // Load selected shifts and override state from shift_overrides if they exist
             if (contactData.shift_overrides && contactData.shift_overrides.length > 0) {
@@ -167,41 +242,19 @@ export default function ContactSubPanel({
               })
               setSelectedShifts(selected)
               setOverriddenShiftIds(overridden)
-            } else {
-              // Initialize to all can_cover shifts if no overrides exist
-              if (sub.can_cover) {
-                const shiftKeys = sub.can_cover.map(
-                  (shift) => `${shift.date}|${shift.time_slot_code}`
-                )
-                setSelectedShifts(new Set(shiftKeys))
-              }
             }
-          } else {
-            // No contact exists yet, initialize to all can_cover shifts
-            if (sub.can_cover) {
-              const shiftKeys = sub.can_cover.map(
-                (shift) => `${shift.date}|${shift.time_slot_code}`
-              )
-              setSelectedShifts(new Set(shiftKeys))
-            }
+            // If no shift_overrides, keep the initial selection from can_cover
           }
         }
       } catch (error) {
         console.error('Error fetching contact data:', error)
-        // Fallback: initialize to all can_cover shifts
-        if (sub.can_cover) {
-          const shiftKeys = sub.can_cover.map(
-            (shift) => `${shift.date}|${shift.time_slot_code}`
-          )
-          setSelectedShifts(new Set(shiftKeys))
-        }
       } finally {
         setFetching(false)
       }
     }
 
-    fetchData()
-  }, [isOpen, sub, absence])
+    fetchContactData()
+  }, [isOpen, sub, absence, initialContactData])
 
   // Reset state when panel closes
   useEffect(() => {
@@ -306,27 +359,6 @@ export default function ContactSubPanel({
     )
   }
 
-  if (fetching) {
-    return (
-      <Sheet open={isOpen} onOpenChange={onClose}>
-        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto bg-gray-50 p-0">
-          <div className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 px-6 pt-6 pb-4">
-            <SheetHeader>
-              <SheetTitle>Loading...</SheetTitle>
-            </SheetHeader>
-          </div>
-          <div className="px-6">
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2" />
-                <p className="text-muted-foreground">Loading contact information...</p>
-              </div>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
-    )
-  }
 
   const handleShiftToggle = (shiftKey: string, isAvailable: boolean) => {
     // Only allow selection if available OR overridden
@@ -749,7 +781,7 @@ export default function ContactSubPanel({
                 <p className="text-sm text-muted-foreground">No shifts available</p>
               )}
               {/* Status */}
-              <div className="space-y-2 border-t pt-4">
+              <div className="space-y-2 border-t pt-[5px]">
                 <Label className="text-sm font-medium mb-2 block">Status</Label>
                 {assignedShifts.length > 0 ? (
                   <p className="text-sm text-muted-foreground">
@@ -779,80 +811,91 @@ export default function ContactSubPanel({
             {/* Contact Summary & Notes */}
             <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-6">
               <h3 className="text-sm font-medium mb-4">Contact Summary</h3>
-              <div className="space-y-4">
-                {/* Contacted Checkbox */}
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="is_contacted"
-                      checked={isContacted}
-                      onCheckedChange={(checked) => {
-                        setIsContacted(checked === true)
-                        // Set contacted_at immediately if checking and it's null
-                        if (checked === true && !contactedAt) {
-                          setContactedAt(new Date().toISOString())
-                        }
-                      }}
-                    />
-                    <Label htmlFor="is_contacted" className="text-sm font-medium cursor-pointer">
-                      Contacted
-                    </Label>
+              {fetching ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">Loading contact information...</p>
                   </div>
-                  {isContacted && contactedAt && (
-                    <p className="text-xs text-muted-foreground ml-6">
-                      Contact status updated {formatContactedTimestamp(contactedAt)}
-                    </p>
-                  )}
                 </div>
-
-                {/* Response Status */}
-                <div className="space-y-2 border-t pt-4">
-                  <Label className="text-sm font-medium mb-3 block">Response</Label>
-                  <RadioGroup value={responseStatus} onValueChange={(value: any) => setResponseStatus(value)}>
+              ) : (
+                <>
+                  <div className="space-y-4">
+                    {/* Contacted Checkbox */}
                     <div className="space-y-2">
                       <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="none" id="response_none" />
-                        <Label htmlFor="response_none" className="font-normal cursor-pointer">
-                          No response yet
+                        <Checkbox
+                          id="is_contacted"
+                          checked={isContacted}
+                          onCheckedChange={(checked) => {
+                            setIsContacted(checked === true)
+                            // Set contacted_at immediately if checking and it's null
+                            if (checked === true && !contactedAt) {
+                              setContactedAt(new Date().toISOString())
+                            }
+                          }}
+                        />
+                        <Label htmlFor="is_contacted" className="text-sm font-medium cursor-pointer">
+                          Contacted
                         </Label>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="pending" id="response_pending" />
-                        <Label htmlFor="response_pending" className="font-normal cursor-pointer">
-                          Pending
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="confirmed" id="response_confirmed" />
-                        <Label htmlFor="response_confirmed" className="font-normal cursor-pointer">
-                          Confirmed (some or all)
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="declined_all" id="response_declined_all" />
-                        <Label htmlFor="response_declined_all" className="font-normal cursor-pointer">
-                          Declined all
-                        </Label>
-                      </div>
+                      {isContacted && contactedAt && (
+                        <p className="text-xs text-muted-foreground ml-6">
+                          Contact status updated {formatContactedTimestamp(contactedAt)}
+                        </p>
+                      )}
                     </div>
-                  </RadioGroup>
-                </div>
 
-              </div>
+                    {/* Response Status */}
+                    <div className="space-y-2 border-t pt-4 mt-[30px]">
+                      <Label className="text-sm font-medium mb-3 block">Response</Label>
+                      <RadioGroup value={responseStatus} onValueChange={(value: any) => setResponseStatus(value)}>
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="none" id="response_none" />
+                            <Label htmlFor="response_none" className="font-normal cursor-pointer">
+                              No response yet
+                            </Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="pending" id="response_pending" />
+                            <Label htmlFor="response_pending" className="font-normal cursor-pointer">
+                              Pending
+                            </Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="confirmed" id="response_confirmed" />
+                            <Label htmlFor="response_confirmed" className="font-normal cursor-pointer">
+                              Confirmed (some or all)
+                            </Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="declined_all" id="response_declined_all" />
+                            <Label htmlFor="response_declined_all" className="font-normal cursor-pointer">
+                              Declined all
+                            </Label>
+                          </div>
+                        </div>
+                      </RadioGroup>
+                    </div>
 
-              <div className="space-y-2 border-t pt-6">
-                <Label htmlFor="notes" className="text-sm font-medium mb-2 block">
-                  Notes
-                </Label>
-                <Textarea
-                  id="notes"
-                  placeholder="Left voicemail… can do mornings only… prefers Orange room…"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={4}
-                  className="resize-none"
-                />
-              </div>
+                  </div>
+
+                  <div className="space-y-2 border-t pt-6">
+                    <Label htmlFor="notes" className="text-sm font-medium mb-2 block">
+                      Notes
+                    </Label>
+                    <Textarea
+                      id="notes"
+                      placeholder="Left voicemail… can do mornings only… prefers Orange room…"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows={4}
+                      className="resize-none"
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Shift Assignments - Combined Section */}
@@ -864,7 +907,7 @@ export default function ContactSubPanel({
                 {assignedShifts.length > 0 && (
                   <div className="space-y-2">
                     <Label className="text-sm font-medium block">
-                      Shifts assigned to this sub
+                      Assigned to this sub
                     </Label>
                     <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3 bg-gray-50">
                       {assignedShifts.map((shift, idx) => {
@@ -900,7 +943,7 @@ export default function ContactSubPanel({
                 {/* Available & Not Assigned */}
                 {sub.can_cover && sub.can_cover.length > 0 && (
                   <>
-                    {assignedShifts.length > 0 && <div className="border-t pt-6" />}
+                    {assignedShifts.length > 0 && <div className="border-t pt-4" />}
                     <div className="space-y-2">
                       <Label className="text-sm font-medium block">
                         Available & not assigned
@@ -953,7 +996,7 @@ export default function ContactSubPanel({
                 {sub.cannot_cover && sub.cannot_cover.length > 0 && (
                   <>
                     {(assignedShifts.length > 0 || (sub.can_cover && sub.can_cover.length > 0)) && (
-                      <div className="border-t pt-6" />
+                      <div className="border-t pt-4" />
                     )}
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
@@ -1050,14 +1093,14 @@ export default function ContactSubPanel({
                   variant="outline"
                   className="flex-1"
                   onClick={handleSave}
-                  disabled={loading}
+                  disabled={loading || fetching || !coverageRequestId}
                 >
                   Save as Pending
                 </Button>
                 <Button
                   className="flex-1"
                   onClick={handleAssignShifts}
-                  disabled={loading || selectedShiftsCount === 0 || responseStatus === 'declined_all' || isSubInactive}
+                  disabled={loading || fetching || !coverageRequestId || selectedShiftsCount === 0 || responseStatus === 'declined_all' || isSubInactive}
                 >
                   Assign Selected Shifts
                 </Button>

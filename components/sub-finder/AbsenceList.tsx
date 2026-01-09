@@ -48,8 +48,16 @@ export default function AbsenceList({
 }: AbsenceListProps) {
   if (loading && absences.length === 0) {
     return (
-      <div className="p-4 text-center text-muted-foreground">
-        Loading absences...
+      <div className="p-4 space-y-3">
+        {[1, 2, 3].map((i) => (
+          <Card key={i} className="animate-pulse">
+            <CardContent className="p-4">
+              <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
+              <div className="h-3 bg-gray-200 rounded w-1/2 mb-3" />
+              <div className="h-8 bg-gray-200 rounded" />
+            </CardContent>
+          </Card>
+        ))}
       </div>
     )
   }
@@ -57,7 +65,10 @@ export default function AbsenceList({
   if (absences.length === 0) {
     return (
       <div className="p-4 text-center text-muted-foreground">
-        <p className="mb-2">No absences found</p>
+        <div className="rounded-full bg-gray-100 w-16 h-16 flex items-center justify-center mx-auto mb-3">
+          <AlertCircle className="h-8 w-8 text-gray-400" />
+        </div>
+        <p className="mb-2 font-medium">No absences found</p>
         <p className="text-sm">All absences are fully covered or no time-off requests exist</p>
       </div>
     )
@@ -75,8 +86,8 @@ export default function AbsenceList({
           <Card
             key={absence.id}
             className={cn(
-              'cursor-pointer transition-all hover:shadow-md',
-              isSelected && 'ring-2 ring-primary'
+              'cursor-pointer transition-all hover:shadow-md hover:scale-[1.01] border border-slate-200',
+              isSelected && 'ring-1 ring-slate-300 shadow-md border-l-4 border-l-blue-500 animate-in fade-in-50 duration-200'
             )}
             onClick={() => onSelectAbsence(absence)}
           >
@@ -119,52 +130,33 @@ export default function AbsenceList({
               </div>
 
               {/* Shift Status Breakdown */}
-              <div className="space-y-2 mt-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Total shifts:</span>
-                  <span className="font-medium">{total}</span>
-                </div>
-                
+              <div className="flex items-center gap-2 mt-3 flex-wrap">
                 {uncovered > 0 && (
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <div className="h-2 w-2 rounded-full bg-destructive" />
-                      <span className="text-muted-foreground">Uncovered:</span>
-                    </div>
-                    <Badge variant="destructive" className="text-xs">
-                      {uncovered}
-                    </Badge>
-                  </div>
-                )}
-
-                {partially_covered > 0 && (
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <div className="h-2 w-2 rounded-full bg-yellow-600" />
-                      <span className="text-muted-foreground">Partially covered:</span>
-                    </div>
-                    <Badge variant="outline" className="text-xs border-yellow-600 text-yellow-700">
-                      {partially_covered}
-                    </Badge>
-                  </div>
+                  <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1 bg-amber-50 border border-amber-300 text-amber-700 font-medium">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    Uncovered: {uncovered}
+                  </span>
                 )}
 
                 {fully_covered > 0 && (
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <div className="h-2 w-2 rounded-full bg-green-600" />
-                      <span className="text-muted-foreground">Fully covered:</span>
-                    </div>
-                    <Badge variant="outline" className="text-xs border-green-600 text-green-700">
-                      {fully_covered}
-                    </Badge>
-                  </div>
+                  <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1 bg-emerald-50 border border-emerald-300 text-emerald-700 font-medium">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    Covered: {fully_covered}
+                  </span>
+                )}
+
+                {partially_covered > 0 && (
+                  <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1 bg-yellow-50 border border-yellow-300 text-yellow-700 font-medium">
+                    <span className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
+                    Partial: {partially_covered}
+                  </span>
                 )}
               </div>
 
               <Button
                 size="sm"
-                className="w-full mt-3"
+                variant="outline"
+                className="w-full mt-3 border-primary text-primary hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground"
                 onClick={(e) => {
                   e.stopPropagation()
                   onFindSubs(absence)

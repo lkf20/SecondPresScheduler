@@ -1,17 +1,19 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { parseLocalDate } from '@/lib/utils/date'
 
 interface Shift {
   date: string
   time_slot_code: string
   day_name?: string
+  reason?: string // Reason for unavailable shifts
 }
 
 interface ShiftChipsProps {
   canCover: Shift[]
-  cannotCover: Shift[]
+  cannotCover: Shift[] // Includes reason field for unavailable shifts
   assigned?: Shift[] // Optional list of assigned shifts
   showLegend?: boolean // Whether to show the color legend
 }
@@ -36,6 +38,7 @@ export default function ShiftChips({ canCover, cannotCover, assigned = [], showL
     date: string
     time_slot_code: string
     status: 'assigned' | 'available' | 'unavailable'
+    reason?: string // Reason for unavailable shifts
   }
 
   const allShiftsMap = new Map<string, ShiftItem>()
@@ -70,6 +73,7 @@ export default function ShiftChips({ canCover, cannotCover, assigned = [], showL
         date: shift.date,
         time_slot_code: shift.time_slot_code,
         status: 'unavailable',
+        reason: shift.reason, // Store reason for tooltip
       })
     }
   })
@@ -99,8 +103,7 @@ export default function ShiftChips({ canCover, cannotCover, assigned = [], showL
       <div className="flex flex-wrap gap-1.5">
         {allShifts.map((shift, idx) => {
           const shiftLabel = formatShiftLabel(shift.date, shift.time_slot_code)
-
-          return (
+          const badge = (
             <Badge
               key={`shift-${shift.date}-${shift.time_slot_code}-${idx}`}
               variant="outline"
@@ -109,6 +112,22 @@ export default function ShiftChips({ canCover, cannotCover, assigned = [], showL
               {shiftLabel}
             </Badge>
           )
+
+          // Wrap unavailable shifts with tooltip if reason exists
+          if (shift.status === 'unavailable' && shift.reason) {
+            return (
+              <Tooltip key={`shift-${shift.date}-${shift.time_slot_code}-${idx}`}>
+                <TooltipTrigger asChild>
+                  {badge}
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p>{shift.reason}</p>
+                </TooltipContent>
+              </Tooltip>
+            )
+          }
+
+          return badge
         })}
       </div>
       {showLegend && (

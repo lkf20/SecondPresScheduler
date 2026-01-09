@@ -10,8 +10,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Badge } from '@/components/ui/badge'
 import AbsenceList from '@/components/sub-finder/AbsenceList'
 import RecommendedSubsList from '@/components/sub-finder/RecommendedSubsList'
+import RecommendedCombination from '@/components/sub-finder/RecommendedCombination'
 import ContactSubPanel from '@/components/sub-finder/ContactSubPanel'
 import { parseLocalDate } from '@/lib/utils/date'
+import { findBestCombination } from '@/lib/utils/sub-combination'
+import { cn } from '@/lib/utils'
 
 type Mode = 'existing' | 'manual'
 
@@ -52,6 +55,9 @@ export default function SubFinderPage() {
   const [allSubs, setAllSubs] = useState<any[]>([]) // Store all subs from API
   const [selectedSub, setSelectedSub] = useState<any | null>(null)
   const [isContactPanelOpen, setIsContactPanelOpen] = useState(false)
+  // Cache contact data: key = `${subId}-${absenceId}`
+  const [contactDataCache, setContactDataCache] = useState<Map<string, any>>(new Map())
+  const [recommendedCombination, setRecommendedCombination] = useState<any>(null)
 
   // Fetch absences on mount and when filters change
   useEffect(() => {
@@ -97,6 +103,11 @@ export default function SubFinderPage() {
       if (!response.ok) throw new Error('Failed to find subs')
       const data = await response.json()
       setAllSubs(data) // Store all subs
+      
+      // Calculate recommended combination
+      const combination = findBestCombination(data)
+      setRecommendedCombination(combination)
+      
       // Filter based on includeOnlyRecommended
       if (includeOnlyRecommended) {
         setRecommendedSubs(data.filter((sub: any) => sub.coverage_percent > 0))
@@ -118,8 +129,14 @@ export default function SubFinderPage() {
       } else {
         setRecommendedSubs(allSubs)
       }
+      // Recalculate combination when filters change (combination is based on all subs with coverage > 0)
+      const combination = findBestCombination(allSubs)
+      setRecommendedCombination(combination)
+    } else if (!selectedAbsence) {
+      // Clear combination when no absence is selected
+      setRecommendedCombination(null)
     }
-  }, [includeOnlyRecommended, selectedAbsence])
+  }, [includeOnlyRecommended, selectedAbsence, allSubs])
 
   const handleRerunFinder = async () => {
     if (selectedAbsence) {
@@ -127,19 +144,97 @@ export default function SubFinderPage() {
     }
   }
 
-  const handleContactSub = (sub: any) => {
-    setSelectedSub(sub)
-    setIsContactPanelOpen(true)
+  // Helper to create cache key
+  const getCacheKey = (subId: string, absenceId: string) => `${subId}-${absenceId}`
+
+  // Fetch contact data for a sub/absence combination
+  const fetchContactDataForSub = async (sub: any, absence: Absence) => {
+    const cacheKey = getCacheKey(sub.id, absence.id)
+    
+    // Check cache first
+    if (contactDataCache.has(cacheKey)) {
+      return contactDataCache.get(cacheKey)
+    }
+
+    try {
+      // Get coverage_request_id first
+      const coverageResponse = await fetch(`/api/sub-finder/coverage-request/${absence.id}`)
+      if (!coverageResponse.ok) {
+        console.error('Failed to fetch coverage request')
+        return null
+      }
+      
+      const coverageData = await coverageResponse.json()
+      
+      // Get contact data
+      const contactResponse = await fetch(
+        `/api/sub-finder/substitute-contacts?coverage_request_id=${coverageData.coverage_request_id}&sub_id=${sub.id}`
+      )
+      
+      if (contactResponse.ok) {
+        const contactData = await contactResponse.json()
+        const data = {
+          ...contactData,
+          coverage_request_id: coverageData.coverage_request_id,
+          shift_map: coverageData.shift_map || {},
+        }
+        
+        // Cache it
+        setContactDataCache(prev => new Map(prev).set(cacheKey, data))
+        return data
+      }
+    } catch (error) {
+      console.error('Error fetching contact data:', error)
+    }
+    
+    return null
   }
 
-  const handleViewDetails = (sub: any) => {
+  // Invalidate cache for a specific sub/absence combination
+  const invalidateContactCache = (subId: string, absenceId: string) => {
+    const cacheKey = getCacheKey(subId, absenceId)
+    setContactDataCache(prev => {
+      const next = new Map(prev)
+      next.delete(cacheKey)
+      return next
+    })
+  }
+
+  const handleContactSub = async (sub: any) => {
     setSelectedSub(sub)
     setIsContactPanelOpen(true)
+    
+    // Prefetch contact data in background if we have an absence
+    if (selectedAbsence) {
+      fetchContactDataForSub(sub, selectedAbsence).catch(error => {
+        console.error('Error prefetching contact data:', error)
+      })
+    }
+  }
+
+  const handleViewDetails = async (sub: any) => {
+    setSelectedSub(sub)
+    setIsContactPanelOpen(true)
+    
+    // Prefetch contact data in background if we have an absence
+    if (selectedAbsence) {
+      fetchContactDataForSub(sub, selectedAbsence).catch(error => {
+        console.error('Error prefetching contact data:', error)
+      })
+    }
   }
 
   const handleCloseContactPanel = () => {
     setIsContactPanelOpen(false)
     setSelectedSub(null)
+  }
+
+  // Handler for combination contact button
+  const handleCombinationContact = (subId: string) => {
+    const sub = allSubs.find((s: any) => s.id === subId)
+    if (sub) {
+      handleContactSub(sub)
+    }
   }
 
   // Filter absences based on search query
@@ -155,27 +250,37 @@ export default function SubFinderPage() {
   })
 
   return (
-    <div className="flex h-[calc(100vh-4rem)]">
+    <div className="flex h-[calc(100vh-4rem+1.5rem+4rem)] -mx-4 -mt-[calc(1.5rem+4rem)] -mb-6 relative">
       {/* Left Rail */}
-      <div className="w-80 border-r bg-gray-50 flex flex-col overflow-hidden">
-        <div className="sticky top-0 z-10 px-3 pt-4 pb-4 border-b bg-white flex flex-col">
-          <h1 className="text-xl font-bold mb-4">Sub Finder</h1>
+      <div className="w-80 border-r border-slate-200 bg-slate-50 shadow-[2px_0_6px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden">
+        <div className="sticky top-0 z-10 px-3 pt-4 pb-4 border-b border-slate-200 bg-slate-50 flex flex-col">
+          <h1 className="text-xl font-bold mb-4 text-slate-900">Sub Finder</h1>
 
-          {/* Mode Toggle */}
+          {/* Mode Toggle - Softer Selected State */}
           <div className="flex gap-2 mb-4">
             <Button
-              variant={mode === 'existing' ? 'default' : 'outline'}
+              variant="outline"
               size="sm"
               onClick={() => setMode('existing')}
-              className="flex-1"
+              className={cn(
+                "flex-1 transition-all",
+                mode === 'existing' 
+                  ? "bg-slate-200 text-slate-900 border-slate-400 shadow-sm font-semibold" 
+                  : "bg-white/50 border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
+              )}
             >
               Existing Absences
             </Button>
             <Button
-              variant={mode === 'manual' ? 'default' : 'outline'}
+              variant="outline"
               size="sm"
               onClick={() => setMode('manual')}
-              className="flex-1"
+              className={cn(
+                "flex-1 transition-all",
+                mode === 'manual' 
+                  ? "bg-slate-200 text-slate-900 border-slate-400 shadow-sm font-semibold" 
+                  : "bg-white/50 border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
+              )}
             >
               Manual Coverage
             </Button>
@@ -185,13 +290,13 @@ export default function SubFinderPage() {
           {mode === 'existing' && (
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <Search className="h-4 w-4 text-muted-foreground" />
+                <Search className="h-4 w-4 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Search absences..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="flex-1 text-sm border rounded-md px-2 py-1"
+                  className="flex-1 text-sm border border-slate-200 rounded-md px-2 py-1 bg-white/80 focus:bg-white focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300 transition-colors"
                 />
               </div>
             </div>
@@ -243,21 +348,19 @@ export default function SubFinderPage() {
             <div className="px-6 pt-4 pb-4">
               {/* Header Row */}
               <div className="mb-3">
-                <h2 className="text-xl font-semibold flex items-center gap-3">
-                  <span>
-                    {includeOnlyRecommended ? 'Recommended Subs' : 'All Subs'} for {selectedAbsence.teacher_name}
-                  </span>
-                  <span className="h-5 w-px bg-border" aria-hidden="true" />
-                  <span className="text-muted-foreground font-normal text-base">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <span>Sub Finder</span>
+                  <span className="text-muted-foreground">→</span>
+                  <span>{selectedAbsence.teacher_name}</span>
+                  <span className="text-muted-foreground">→</span>
+                  <span className="text-muted-foreground font-normal">
                     {(() => {
                       const formatDate = (dateString: string) => {
                         const date = parseLocalDate(dateString)
-                        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
                         const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-                        const dayName = dayNames[date.getDay()]
                         const month = monthNames[date.getMonth()]
                         const day = date.getDate()
-                        return `${dayName} ${month} ${day}`
+                        return `${month} ${day}`
                       }
                       const startDate = formatDate(selectedAbsence.start_date)
                       if (selectedAbsence.end_date && selectedAbsence.end_date !== selectedAbsence.start_date) {
@@ -390,10 +493,18 @@ export default function SubFinderPage() {
           </div>
         )}
 
-        {/* Recommended Subs List - now scrollable without header */}
+        {/* Recommended Combination and Subs List - now scrollable without header */}
         <div className="flex-1 overflow-y-auto">
           {selectedAbsence ? (
             <div className="p-4">
+              {/* Recommended Combination Section */}
+              {recommendedCombination && (
+                <RecommendedCombination
+                  combination={recommendedCombination}
+                  onContactSub={handleCombinationContact}
+                />
+              )}
+              
               <RecommendedSubsList
                 subs={recommendedSubs}
                 loading={loading}
@@ -424,10 +535,21 @@ export default function SubFinderPage() {
           onClose={handleCloseContactPanel}
           sub={selectedSub}
           absence={selectedAbsence}
+          initialContactData={
+            selectedSub && selectedAbsence
+              ? contactDataCache.get(getCacheKey(selectedSub.id, selectedAbsence.id))
+              : undefined
+          }
           onAssignmentComplete={async () => {
+            // Invalidate cache for this sub/absence combination
+            if (selectedSub && selectedAbsence) {
+              invalidateContactCache(selectedSub.id, selectedAbsence.id)
+            }
+            
             // Refresh absences to update coverage status
             await fetchAbsences()
             // Refresh recommended subs if we have a selected absence
+            // This will also recalculate the combination
             if (selectedAbsence) {
               await handleFindSubs(selectedAbsence)
             }

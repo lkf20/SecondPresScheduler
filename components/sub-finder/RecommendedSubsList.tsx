@@ -3,10 +3,11 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Phone, User, CheckCircle2, CircleX, ChevronDown, ChevronUp } from 'lucide-react'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { CheckCircle2, CircleX, ArrowRight } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
-import { useState } from 'react'
-import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
+import ShiftChips from '@/components/sub-finder/ShiftChips'
+import SubCardHeader from '@/components/sub-finder/SubCardHeader'
 
 interface RecommendedSub {
   id: string
@@ -59,8 +60,6 @@ export default function RecommendedSubsList({
   onViewDetails,
   hideHeader = false,
 }: RecommendedSubsListProps) {
-  // Track which subs have unavailable shifts expanded
-  const [expandedUnavailable, setExpandedUnavailable] = useState<Set<string>>(new Set())
   // Format date as "Mon Jan 11"
   const formatDate = (dateString: string) => {
     const date = parseLocalDate(dateString)
@@ -106,74 +105,106 @@ export default function RecommendedSubsList({
   }
 
   return (
-    <div className="space-y-4">
-      {/* Conditionally render header only if not hidden */}
-      {!hideHeader && (
-        <div className="mb-4">
-          <h2 className="text-xl font-semibold mb-1 flex items-center gap-3">
-            <span>{showAllSubs ? 'All Subs' : 'Recommended Subs'} for {absence.teacher_name}</span>
-            <span className="h-5 w-px bg-border" aria-hidden="true" />
-            <span className="text-muted-foreground font-normal">{formatDateRange()}</span>
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {showAllSubs
-              ? 'Showing all subs with coverage details'
-              : 'Sorted by coverage percentage (highest first)'}
-          </p>
-        </div>
-      )}
+    <TooltipProvider>
+      <div className="space-y-4">
+        {/* Conditionally render header only if not hidden */}
+        {!hideHeader && (
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold mb-1 flex items-center gap-3">
+              <span>{showAllSubs ? 'All Subs' : 'Recommended Subs'} for {absence.teacher_name}</span>
+              <span className="h-5 w-px bg-border" aria-hidden="true" />
+              <span className="text-muted-foreground font-normal">{formatDateRange()}</span>
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {showAllSubs
+                ? 'Showing all subs with coverage details'
+                : 'Sorted by coverage percentage (highest first)'}
+            </p>
+          </div>
+        )}
 
-      {subs.map((sub) => {
-        const showUnavailable = expandedUnavailable.has(sub.id)
-        const toggleUnavailable = () => {
-          setExpandedUnavailable((prev) => {
-            const next = new Set(prev)
-            if (next.has(sub.id)) {
-              next.delete(sub.id)
-            } else {
-              next.add(sub.id)
-            }
-            return next
+        {(() => {
+          // Calculate total uncovered shifts: all shifts that need coverage minus all assigned shifts
+          // First, collect all shifts that need coverage (from can_cover of all subs)
+          const allShiftsNeedingCoverage = new Set<string>()
+          subs.forEach((s) => {
+            s.can_cover?.forEach((shift) => {
+              const key = `${shift.date}|${shift.time_slot_code}`
+              allShiftsNeedingCoverage.add(key)
+            })
+            // Also include shifts from cannot_cover and assigned_shifts to get complete picture
+            s.cannot_cover?.forEach((shift) => {
+              const key = `${shift.date}|${shift.time_slot_code}`
+              allShiftsNeedingCoverage.add(key)
+            })
+            s.assigned_shifts?.forEach((shift) => {
+              const key = `${shift.date}|${shift.time_slot_code}`
+              allShiftsNeedingCoverage.add(key)
+            })
           })
-        }
-        
-        return (
+          
+          // Collect all assigned shifts from all subs
+          const allAssignedShifts = new Set<string>()
+          subs.forEach((s) => {
+            s.assigned_shifts?.forEach((shift) => {
+              const key = `${shift.date}|${shift.time_slot_code}`
+              allAssignedShifts.add(key)
+            })
+          })
+          
+          // Calculate uncovered shifts: all shifts needing coverage minus assigned shifts
+          const uncoveredShifts = new Set<string>()
+          allShiftsNeedingCoverage.forEach((shiftKey) => {
+            if (!allAssignedShifts.has(shiftKey)) {
+              uncoveredShifts.add(shiftKey)
+            }
+          })
+          
+          // Get total shifts that need coverage (should be same for all subs from the same absence)
+          // Use the first sub's total_shifts as the baseline
+          const totalShiftsNeedingCoverage = subs[0]?.total_shifts || 0
+          
+          // Calculate total uncovered shifts: total shifts minus assigned shifts
+          const totalUncoveredShifts = totalShiftsNeedingCoverage - allAssignedShifts.size
+          
+          // Return mapped subs with calculated coverage, sorted by shiftsCovered (most to least)
+          return subs
+            .map((sub) => {
+              // Count how many of the uncovered shifts this sub can cover
+              let shiftsCovered = 0
+              sub.can_cover?.forEach((shift) => {
+                const shiftKey = `${shift.date}|${shift.time_slot_code}`
+                if (uncoveredShifts.has(shiftKey)) {
+                  shiftsCovered++
+                }
+              })
+              
+              return { sub, shiftsCovered, remainingShifts: totalUncoveredShifts }
+            })
+            .filter(({ shiftsCovered }) => {
+              // If "include only recommended subs" is enabled (showAllSubs is false),
+              // filter out subs with 0 remaining shifts coverage
+              if (!showAllSubs) {
+                return shiftsCovered > 0
+              }
+              return true
+            })
+            .sort((a, b) => b.shiftsCovered - a.shiftsCovered) // Sort by shiftsCovered descending
+        })().map(({ sub, shiftsCovered, remainingShifts }) => {
+          
+          return (
         <Card key={sub.id} className="hover:shadow-md transition-shadow">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between mb-5">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="font-semibold text-lg">{sub.name}</h3>
-                </div>
-                {sub.phone && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Phone className="h-3 w-3" />
-                    <span>{sub.phone}</span>
-                  </div>
-                )}
-              </div>
-              <div className="text-right">
-                <div className="mb-1.5">
-                  <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-muted-foreground transition-all"
-                      style={{
-                        width: `${sub.total_shifts > 0 ? (sub.shifts_covered / sub.total_shifts) * 100 : 0}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {sub.shifts_covered}/{sub.total_shifts} shifts
-                </p>
-              </div>
-            </div>
+          <CardContent className="p-4">
+            <SubCardHeader
+              name={sub.name}
+              phone={sub.phone}
+              shiftsCovered={shiftsCovered}
+              totalShifts={remainingShifts}
+            />
 
-            {/* Can Cover: Show all shifts (can cover and cannot cover) sorted by date */}
+            {/* Shifts: Show all shifts (can cover, cannot cover, and assigned) with tooltips for unavailable */}
             {((sub.can_cover && sub.can_cover.length > 0) || (sub.cannot_cover && sub.cannot_cover.length > 0) || (sub.assigned_shifts && sub.assigned_shifts.length > 0)) && (
-              <div className="mb-5">
-                <p className="text-xs font-medium text-muted-foreground mb-1.5">Can Cover:</p>
+              <div className="mb-3">
                 <ShiftChips
                   canCover={sub.can_cover || []}
                   cannotCover={sub.cannot_cover || []}
@@ -182,56 +213,28 @@ export default function RecommendedSubsList({
               </div>
             )}
 
-            {/* Unavailable: Collapsible section with reasons only (no chips) */}
-            {sub.cannot_cover && sub.cannot_cover.length > 0 && (
-              <div className="mb-3 pt-4 border-t border-gray-200">
-                <button
-                  onClick={toggleUnavailable}
-                  className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors mb-1.5"
-                >
-                  {showUnavailable ? (
-                    <ChevronUp className="h-3.5 w-3.5" />
-                  ) : (
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  )}
-                  <span>Unavailable ({sub.cannot_cover.length})</span>
-                </button>
-                {showUnavailable && (
-                  <div className="space-y-1">
-                    {sub.cannot_cover.map((shift, idx) => (
-                      <div key={idx} className="text-xs text-muted-foreground">
-                        <span className="font-medium">
-                          {formatShiftLabel(shift.date, shift.time_slot_code)}:
-                        </span>{' '}
-                        {shift.reason}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
             {sub.notes && (
-              <div className="mb-3 p-2 bg-muted rounded text-xs text-muted-foreground">
+              <div className="mb-3 p-2 bg-muted rounded border border-border/50 text-xs text-muted-foreground">
                 {sub.notes}
               </div>
             )}
 
-            <div className="mt-4">
+            <div className="mt-4 flex justify-end">
               <Button
                 size="sm"
-                variant="outline"
-                className="w-full"
+                variant="ghost"
+                className="text-primary hover:text-primary hover:bg-primary/10"
                 onClick={() => onContactSub?.(sub)}
               >
-                Contact & Assign
+                Contact & Assign <ArrowRight className="h-3.5 w-3.5 ml-1" />
               </Button>
             </div>
           </CardContent>
         </Card>
         )
-      })}
-    </div>
+        })}
+      </div>
+    </TooltipProvider>
   )
 }
 
