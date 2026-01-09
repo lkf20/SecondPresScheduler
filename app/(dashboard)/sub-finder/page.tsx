@@ -276,9 +276,9 @@ export default function SubFinderPage() {
               </div>
 
               {/* Toolbar Row */}
-              <div className="flex items-center gap-3">
-                {/* Color Key */}
-                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground ml-auto">
+              <div className="flex items-center justify-between">
+                {/* Color Key - Left aligned */}
+                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                   <div className="flex items-center gap-1.5">
                     <div className="w-3 h-3 rounded border bg-blue-50 border-blue-200" />
                     <span>Assigned</span>
@@ -292,10 +292,12 @@ export default function SubFinderPage() {
                     <span>Unavailable</span>
                   </div>
                 </div>
-                <Button onClick={handleRerunFinder} disabled={loading} size="sm" variant="outline">
-                  <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                  Rerun Finder
-                </Button>
+                {/* Buttons - Right aligned */}
+                <div className="flex items-center gap-3">
+                  <Button onClick={handleRerunFinder} disabled={loading} size="sm" variant="outline">
+                    <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                    Rerun Finder
+                  </Button>
 
                 <Popover>
                   <PopoverTrigger asChild>
@@ -382,6 +384,7 @@ export default function SubFinderPage() {
                     </div>
                   </PopoverContent>
                 </Popover>
+                </div>
               </div>
             </div>
           </div>
