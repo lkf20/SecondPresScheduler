@@ -276,8 +276,8 @@ export default function SubFinderPage() {
               </div>
 
               {/* Toolbar Row */}
-              <div className="flex items-center justify-between">
-                {/* Color Key - Left aligned */}
+              <div className="flex items-end justify-between">
+                {/* Color Key - Left aligned, bottom aligned */}
                 <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                   <div className="flex items-center gap-1.5">
                     <div className="w-3 h-3 rounded border bg-blue-50 border-blue-200" />
