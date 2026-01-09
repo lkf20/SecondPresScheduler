@@ -42,6 +42,11 @@ interface RecommendedSub {
     reason: string
     coverage_request_shift_id?: string
   }>
+  assigned_shifts?: Array<{
+    date: string
+    day_name: string
+    time_slot_code: string
+  }>
   can_change_diapers?: boolean
   can_lift_children?: boolean
 }
@@ -87,6 +92,13 @@ export default function ContactSubPanel({
   const [overriddenShiftIds, setOverriddenShiftIds] = useState<Set<string>>(new Set())
   const [isSubInactive, setIsSubInactive] = useState(false)
 
+  // Update assignedShifts when sub prop changes (from find-subs API refresh)
+  useEffect(() => {
+    if (sub?.assigned_shifts) {
+      setAssignedShifts(sub.assigned_shifts)
+    }
+  }, [sub?.assigned_shifts])
+
   // Fetch coverage request and existing contact data when panel opens
   useEffect(() => {
     if (!isOpen || !sub || !absence) return
@@ -127,7 +139,13 @@ export default function ContactSubPanel({
             setContactedAt(contactData.contacted_at)
             setResponseStatus(contactData.response_status || 'none')
             setNotes(contactData.notes || '')
-            setAssignedShifts(contactData.assigned_shifts || [])
+            // Use assigned_shifts from sub object (from find-subs API) if available,
+            // otherwise fall back to contactData.assigned_shifts
+            const assignedFromSub = sub.assigned_shifts || []
+            const assignedFromContact = contactData.assigned_shifts || []
+            // Merge both sources, preferring sub.assigned_shifts as it's more up-to-date
+            const mergedAssigned = assignedFromSub.length > 0 ? assignedFromSub : assignedFromContact
+            setAssignedShifts(mergedAssigned)
 
             // Load selected shifts and override state from shift_overrides if they exist
             if (contactData.shift_overrides && contactData.shift_overrides.length > 0) {
