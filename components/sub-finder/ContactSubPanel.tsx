@@ -905,11 +905,7 @@ export default function ContactSubPanel({
                         >
                           <Badge
                             variant="outline"
-                            className={`text-xs ${
-                              isSelected
-                                ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
-                                : 'bg-gray-50 text-gray-700 border-gray-300'
-                            }`}
+                            className="text-xs bg-emerald-50 text-emerald-900 border-emerald-200"
                           >
                             {formatShiftLabel(shift.date, shift.time_slot_code)}
                           </Badge>
