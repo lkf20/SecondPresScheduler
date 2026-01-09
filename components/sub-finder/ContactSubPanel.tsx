@@ -836,6 +836,43 @@ export default function ContactSubPanel({
               </div>
             </div>
 
+            {/* Shifts Assigned to This Sub */}
+            {assignedShifts.length > 0 && (
+              <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-2">
+                <Label className="text-sm font-medium mb-3 block">
+                  Shifts assigned to this sub
+                </Label>
+                <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3 bg-gray-50">
+                  {assignedShifts.map((shift, idx) => {
+                    const shiftKey = `${shift.date}|${shift.time_slot_code}`
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md bg-white"
+                      >
+                        <Checkbox
+                          id={`assigned-shift-${idx}`}
+                          checked={true}
+                          disabled={true}
+                        />
+                        <Label
+                          htmlFor={`assigned-shift-${idx}`}
+                          className="flex-1 cursor-pointer font-normal"
+                        >
+                          <Badge
+                            variant="outline"
+                            className="text-xs bg-blue-50 text-blue-900 border-blue-200"
+                          >
+                            {formatShiftLabel(shift.date, shift.time_slot_code)}
+                          </Badge>
+                        </Label>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Assignable Shifts */}
             {sub.can_cover && sub.can_cover.length > 0 && (
               <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-2">
@@ -846,6 +883,12 @@ export default function ContactSubPanel({
                   {sub.can_cover.map((shift, idx) => {
                     const shiftKey = `${shift.date}|${shift.time_slot_code}`
                     const isSelected = selectedShifts.has(shiftKey)
+                    // Skip if already assigned
+                    const isAssigned = assignedShifts.some(
+                      (as) => as.date === shift.date && as.time_slot_code === shift.time_slot_code
+                    )
+                    if (isAssigned) return null
+                    
                     return (
                       <div
                         key={idx}
@@ -860,16 +903,21 @@ export default function ContactSubPanel({
                           htmlFor={`shift-${idx}`}
                           className="flex-1 cursor-pointer font-normal"
                         >
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">
-                              {formatShiftLabel(shift.date, shift.time_slot_code)}
-                            </span>
-                            {shift.class_name && (
-                              <Badge variant="outline" className="text-xs">
-                                {shift.class_name}
-                              </Badge>
-                            )}
-                          </div>
+                          <Badge
+                            variant="outline"
+                            className={`text-xs ${
+                              isSelected
+                                ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                                : 'bg-gray-50 text-gray-700 border-gray-300'
+                            }`}
+                          >
+                            {formatShiftLabel(shift.date, shift.time_slot_code)}
+                          </Badge>
+                          {shift.class_name && (
+                            <Badge variant="outline" className="text-xs ml-2">
+                              {shift.class_name}
+                            </Badge>
+                          )}
                         </Label>
                       </div>
                     )
@@ -909,9 +957,12 @@ export default function ContactSubPanel({
                         />
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">
-                              {shift.day_name} {shift.time_slot_code}
-                            </span>
+                            <Badge
+                              variant="outline"
+                              className="text-xs bg-gray-100 text-gray-700 border-gray-300"
+                            >
+                              {formatShiftLabel(shift.date, shift.time_slot_code)}
+                            </Badge>
                             {isOverridden && (
                               <>
                                 <AlertTriangle className="h-4 w-4 text-amber-600" />
@@ -921,7 +972,7 @@ export default function ContactSubPanel({
                               </>
                             )}
                           </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">
+                          <p className="text-xs text-muted-foreground mt-1">
                             {shift.reason}
                           </p>
                         </div>
