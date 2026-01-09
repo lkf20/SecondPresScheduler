@@ -275,24 +275,23 @@ export default function SubFinderPage() {
                 </p>
               </div>
 
-              {/* Color Key */}
-              <div className="mb-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded border bg-blue-50 border-blue-200" />
-                  <span>Assigned</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded border bg-emerald-50 border-emerald-200" />
-                  <span>Available</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded border bg-gray-100 border-gray-300" />
-                  <span>Unavailable</span>
-                </div>
-              </div>
-
               {/* Toolbar Row */}
               <div className="flex items-center gap-3">
+                {/* Color Key */}
+                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground ml-auto">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded border bg-blue-50 border-blue-200" />
+                    <span>Assigned</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded border bg-emerald-50 border-emerald-200" />
+                    <span>Available</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded border bg-gray-100 border-gray-300" />
+                    <span>Unavailable</span>
+                  </div>
+                </div>
                 <Button onClick={handleRerunFinder} disabled={loading} size="sm" variant="outline">
                   <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                   Rerun Finder
