@@ -141,11 +141,12 @@ export default function ContactSubPanel({
             setNotes(contactData.notes || '')
             // Use assigned_shifts from sub object (from find-subs API) if available,
             // otherwise fall back to contactData.assigned_shifts
-            const assignedFromSub = sub.assigned_shifts || []
-            const assignedFromContact = contactData.assigned_shifts || []
-            // Merge both sources, preferring sub.assigned_shifts as it's more up-to-date
-            const mergedAssigned = assignedFromSub.length > 0 ? assignedFromSub : assignedFromContact
-            setAssignedShifts(mergedAssigned)
+            // sub.assigned_shifts is more up-to-date as it comes from the refreshed find-subs API
+            if (sub.assigned_shifts && sub.assigned_shifts.length > 0) {
+              setAssignedShifts(sub.assigned_shifts)
+            } else {
+              setAssignedShifts(contactData.assigned_shifts || [])
+            }
 
             // Load selected shifts and override state from shift_overrides if they exist
             if (contactData.shift_overrides && contactData.shift_overrides.length > 0) {
