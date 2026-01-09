@@ -17,7 +17,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { X, Phone, Mail, AlertTriangle } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
-import { TooltipProvider } from '@/components/ui/tooltip'
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { toast } from 'sonner'
 
 interface RecommendedSub {
@@ -1103,31 +1103,53 @@ export default function ContactSubPanel({
                   </p>
                 </div>
               )}
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={onClose}
-                  disabled={loading}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={handleSave}
-                  disabled={loading || fetching || !coverageRequestId}
-                >
-                  Save as Pending
-                </Button>
-                <Button
-                  className="flex-1"
-                  onClick={handleAssignShifts}
-                  disabled={loading || fetching || !coverageRequestId || (responseStatus !== 'declined_all' && selectedShiftsCount === 0) || isSubInactive}
-                >
-                  {responseStatus === 'declined_all' ? 'Mark as Declined' : 'Assign Selected Shifts'}
-                </Button>
-              </div>
+              <TooltipProvider>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={onClose}
+                    disabled={loading}
+                  >
+                    Cancel
+                  </Button>
+                  {responseStatus === 'declined_all' ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="flex-1">
+                          <Button
+                            variant="outline"
+                            className="flex-1 w-full"
+                            onClick={handleSave}
+                            disabled={true}
+                          >
+                            Save as Pending
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Pending isn't applicable when a sub has declined all shifts.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={handleSave}
+                      disabled={loading || fetching || !coverageRequestId}
+                    >
+                      Save as Pending
+                    </Button>
+                  )}
+                  <Button
+                    className="flex-1"
+                    onClick={handleAssignShifts}
+                    disabled={loading || fetching || !coverageRequestId || (responseStatus !== 'declined_all' && selectedShiftsCount === 0) || isSubInactive}
+                  >
+                    {responseStatus === 'declined_all' ? 'Mark as Declined' : 'Assign Selected Shifts'}
+                  </Button>
+                </div>
+              </TooltipProvider>
             </div>
           </div>
         </div>
