@@ -1,6 +1,7 @@
 'use client'
 
 import { User, Phone } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 
 interface SubCardHeaderProps {
   name: string
@@ -8,6 +9,7 @@ interface SubCardHeaderProps {
   shiftsCovered: number
   totalShifts: number
   coveragePercent?: number
+  isDeclined?: boolean
 }
 
 export default function SubCardHeader({
@@ -16,6 +18,7 @@ export default function SubCardHeader({
   shiftsCovered,
   totalShifts,
   coveragePercent,
+  isDeclined = false,
 }: SubCardHeaderProps) {
   // Calculate coverage percent if not provided
   const percent = coveragePercent ?? (totalShifts > 0 ? Math.round((shiftsCovered / totalShifts) * 100) : 0)
@@ -43,22 +46,35 @@ export default function SubCardHeader({
               </div>
             </>
           )}
+          {isDeclined && (
+            <Badge variant="secondary" className="text-xs">
+              Declined
+            </Badge>
+          )}
         </div>
       </div>
       <div className="text-right flex flex-col items-end">
-        <div className="mb-1.5">
-          <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-            <div
-              className={`h-full ${getBarColor()} transition-all`}
-              style={{
-                width: `${percent}%`,
-              }}
-            />
-          </div>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {shiftsCovered}/{totalShifts} remaining shifts
-        </p>
+        {isDeclined ? (
+          <p className="text-xs text-muted-foreground">
+            Declined all shifts
+          </p>
+        ) : (
+          <>
+            <div className="mb-1.5">
+              <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className={`h-full ${getBarColor()} transition-all`}
+                  style={{
+                    width: `${percent}%`,
+                  }}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {shiftsCovered}/{totalShifts} remaining shifts
+            </p>
+          </>
+        )}
       </div>
     </div>
   )

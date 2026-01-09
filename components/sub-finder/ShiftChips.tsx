@@ -16,6 +16,7 @@ interface ShiftChipsProps {
   cannotCover: Shift[] // Includes reason field for unavailable shifts
   assigned?: Shift[] // Optional list of assigned shifts
   showLegend?: boolean // Whether to show the color legend
+  isDeclined?: boolean // If true, all chips will be gray
 }
 
 // Format shift label as "Mon AM • Feb 9"
@@ -88,6 +89,11 @@ export default function ShiftChips({ canCover, cannotCover, assigned = [], showL
   })
 
   const getBadgeClassName = (status: 'assigned' | 'available' | 'unavailable') => {
+    // If declined, make all chips gray
+    if (isDeclined) {
+      return 'bg-gray-100 text-gray-600 border-gray-300'
+    }
+    
     switch (status) {
       case 'assigned':
         return 'bg-blue-50 text-blue-900 border-blue-200'

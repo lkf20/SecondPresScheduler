@@ -398,6 +398,26 @@ export async function POST(request: NextRequest) {
         const name =
           sub.display_name || `${sub.first_name} ${sub.last_name}` || 'Unknown'
 
+        // Get response_status from substitute_contacts if coverage request exists
+        let responseStatus: string | null = null
+        if (coverageRequestId) {
+          try {
+            const { data: contact } = await supabase
+              .from('substitute_contacts')
+              .select('response_status')
+              .eq('coverage_request_id', coverageRequestId)
+              .eq('sub_id', sub.id)
+              .single()
+            
+            if (contact) {
+              responseStatus = contact.response_status
+            }
+          } catch (error) {
+            // Contact doesn't exist yet, which is fine
+            console.debug(`No contact found for sub ${sub.id} and coverage request ${coverageRequestId}`)
+          }
+        }
+
         return {
           id: sub.id,
           name,
@@ -413,6 +433,7 @@ export async function POST(request: NextRequest) {
           qualification_total: qualificationTotal,
           can_change_diapers: subCapabilities.can_change_diapers,
           can_lift_children: subCapabilities.can_lift_children,
+          response_status: responseStatus,
         }
       })
     )

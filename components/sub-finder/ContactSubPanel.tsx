@@ -17,6 +17,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { X, Phone, Mail, AlertTriangle } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { toast } from 'sonner'
 
 interface RecommendedSub {
@@ -759,6 +760,15 @@ export default function ContactSubPanel({
 
         <div className="px-6">
           <div className="mt-6 space-y-10">
+            {/* Declined Message */}
+            {responseStatus === 'declined_all' && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
+                <p className="text-sm text-amber-800">
+                  This sub has declined all shifts. Change response status to enable assignment.
+                </p>
+              </div>
+            )}
+            
             {/* Coverage Summary */}
             <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-2">
               <div className="flex items-center justify-between mb-3">
@@ -768,15 +778,17 @@ export default function ContactSubPanel({
                 </span>
               </div>
               {(sub.can_cover && sub.can_cover.length > 0) || (sub.cannot_cover && sub.cannot_cover.length > 0) || assignedShifts.length > 0 ? (
-                <ShiftChips
-                  canCover={sub.can_cover || []}
-                  cannotCover={sub.cannot_cover || []}
-                  assigned={assignedShifts.map(shift => ({
-                    date: shift.date,
-                    time_slot_code: shift.time_slot_code,
-                  }))}
-                  showLegend={true}
-                />
+                <TooltipProvider>
+                  <ShiftChips
+                    canCover={sub.can_cover || []}
+                    cannotCover={sub.cannot_cover || []}
+                    assigned={assignedShifts.map(shift => ({
+                      date: shift.date,
+                      time_slot_code: shift.time_slot_code,
+                    }))}
+                    showLegend={true}
+                  />
+                </TooltipProvider>
               ) : (
                 <p className="text-sm text-muted-foreground">No shifts available</p>
               )}
