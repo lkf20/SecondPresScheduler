@@ -30,7 +30,7 @@ export function formatShiftLabel(dateString: string, timeSlotCode: string): stri
   return `${dayName} ${timeSlotCode} • ${month} ${day}`
 }
 
-export default function ShiftChips({ canCover, cannotCover, assigned = [], showLegend = false }: ShiftChipsProps) {
+export default function ShiftChips({ canCover, cannotCover, assigned = [], showLegend = false, isDeclined = false }: ShiftChipsProps) {
   if (canCover.length === 0 && cannotCover.length === 0 && assigned.length === 0) {
     return null
   }
