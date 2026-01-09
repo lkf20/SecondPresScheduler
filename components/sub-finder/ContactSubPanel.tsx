@@ -861,7 +861,18 @@ export default function ContactSubPanel({
                     {/* Response Status */}
                     <div className="space-y-2 border-t pt-4 mt-[30px]">
                       <Label className="text-sm font-medium mb-3 block">Response</Label>
-                      <RadioGroup value={responseStatus} onValueChange={(value: any) => setResponseStatus(value)}>
+                      <RadioGroup 
+                        value={responseStatus} 
+                        onValueChange={(value: any) => {
+                          setResponseStatus(value)
+                          // If "Declined All" is selected, uncheck all shifts
+                          if (value === 'declined_all') {
+                            setSelectedShifts(new Set())
+                            // Also clear any overridden shifts
+                            setOverriddenShiftIds(new Set())
+                          }
+                        }}
+                      >
                         <div className="space-y-2">
                           <div className="flex items-center space-x-2">
                             <RadioGroupItem value="none" id="response_none" />
