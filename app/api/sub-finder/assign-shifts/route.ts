@@ -25,10 +25,10 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient()
 
-    // Get coverage_request to get teacher_id
+    // Get coverage_request to get time_off_request_id
     const { data: coverageRequest, error: coverageError } = await supabase
       .from('coverage_requests')
-      .select('time_off_request_id, time_off_requests:time_off_request_id(teacher_id)')
+      .select('time_off_request_id')
       .eq('id', coverage_request_id)
       .single()
 
@@ -37,9 +37,26 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Coverage request not found', 404)
     }
 
-    const teacherId = (coverageRequest as any).time_off_requests?.teacher_id
+    const timeOffRequestId = (coverageRequest as any).time_off_request_id
+    if (!timeOffRequestId) {
+      return createErrorResponse('Time off request ID not found in coverage request', 404)
+    }
+
+    // Get time_off_request to get teacher_id
+    const { data: timeOffRequest, error: timeOffError } = await supabase
+      .from('time_off_requests')
+      .select('teacher_id')
+      .eq('id', timeOffRequestId)
+      .single()
+
+    if (timeOffError || !timeOffRequest) {
+      console.error('Error fetching time_off_request:', timeOffError)
+      return createErrorResponse('Time off request not found', 404)
+    }
+
+    const teacherId = (timeOffRequest as any).teacher_id
     if (!teacherId) {
-      return createErrorResponse('Teacher ID not found in coverage request', 404)
+      return createErrorResponse('Teacher ID not found in time off request', 404)
     }
 
     // Get coverage_request_shifts for the selected shifts
