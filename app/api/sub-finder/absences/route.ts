@@ -31,7 +31,13 @@ export async function GET(request: NextRequest) {
         
         const { data: subAssignments, error: subError } = await supabase
           .from('sub_assignments')
-          .select('*, time_slot:time_slots(*), day_of_week:days_of_week(*), classroom:classrooms(*)')
+          .select(`
+            *,
+            time_slot:time_slots(*),
+            day_of_week:days_of_week(*),
+            classroom:classrooms(*),
+            sub:staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name)
+          `)
           .eq('teacher_id', request.teacher_id)
           .gte('date', startDate)
           .lte('date', endDate)
@@ -43,17 +49,33 @@ export async function GET(request: NextRequest) {
         // Create a map of shift coverage: date + time_slot_id -> coverage status
         const coverageMap = new Map<string, 'uncovered' | 'partially_covered' | 'fully_covered'>()
         
+        // Create a map of assignments with sub info: date + time_slot_id -> {sub_name, is_partial}
+        const assignmentMap = new Map<string, { sub_name: string; is_partial: boolean }>()
+        
         // Initialize all shifts as uncovered
         shifts.forEach((shift) => {
           const key = `${shift.date}|${shift.time_slot_id}`
           coverageMap.set(key, 'uncovered')
         })
         
-        // Check sub assignments to determine coverage
+        // Check sub assignments to determine coverage and store sub info
         if (subAssignments) {
           subAssignments.forEach((assignment) => {
             const key = `${assignment.date}|${assignment.time_slot_id}`
             if (coverageMap.has(key)) {
+              // Get sub name
+              const sub = assignment.sub as any
+              const sub_name = sub?.display_name || 
+                              (sub?.first_name && sub?.last_name 
+                                ? `${sub.first_name} ${sub.last_name}` 
+                                : 'Unknown Sub')
+              
+              // Store assignment info
+              assignmentMap.set(key, {
+                sub_name,
+                is_partial: assignment.is_partial || false,
+              })
+              
               // Check if this assignment covers the shift
               // If it's a partial sub, mark as partially covered
               // Otherwise, mark as fully covered
@@ -66,13 +88,12 @@ export async function GET(request: NextRequest) {
           })
         }
         
-        // Build shift details with coverage status
+        // Build shift details with coverage status and sub info
         const shiftDetails = shifts.map((shift) => {
           const key = `${shift.date}|${shift.time_slot_id}`
           const status = coverageMap.get(key) || 'uncovered'
+          const assignment = assignmentMap.get(key)
           
-          // Get class and classroom info if available from schedule cells
-          // For now, we'll leave these as null and can enhance later
           return {
             id: shift.id,
             date: shift.date,
@@ -81,6 +102,8 @@ export async function GET(request: NextRequest) {
             class_name: null, // TODO: Get from schedule cells
             classroom_name: null, // TODO: Get from schedule cells
             status,
+            sub_name: assignment?.sub_name || null, // Add sub name for assigned shifts
+            is_partial: assignment?.is_partial || false, // Add partial flag
           }
         })
         

@@ -1,17 +1,20 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { RefreshCw, Search, Settings2 } from 'lucide-react'
+import { ChevronDown, RefreshCw, Search, Settings2 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
 import AbsenceList from '@/components/sub-finder/AbsenceList'
 import RecommendedSubsList from '@/components/sub-finder/RecommendedSubsList'
 import RecommendedCombination from '@/components/sub-finder/RecommendedCombination'
 import ContactSubPanel from '@/components/sub-finder/ContactSubPanel'
+import CoverageSummary from '@/components/sub-finder/CoverageSummary'
+import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
+import DatePickerInput from '@/components/ui/date-picker-input'
 import { parseLocalDate } from '@/lib/utils/date'
 import { findBestCombination } from '@/lib/utils/sub-combination'
 import { cn } from '@/lib/utils'
@@ -38,8 +41,18 @@ interface Absence {
       class_name: string | null
       classroom_name: string | null
       status: 'uncovered' | 'partially_covered' | 'fully_covered'
+      sub_name?: string | null
+      is_partial?: boolean
     }>
   }
+}
+
+interface Teacher {
+  id: string
+  first_name?: string | null
+  last_name?: string | null
+  display_name?: string | null
+  active?: boolean | null
 }
 
 export default function SubFinderPage() {
@@ -58,6 +71,16 @@ export default function SubFinderPage() {
   // Cache contact data: key = `${subId}-${absenceId}`
   const [contactDataCache, setContactDataCache] = useState<Map<string, any>>(new Map())
   const [recommendedCombination, setRecommendedCombination] = useState<any>(null)
+  const [highlightedSubId, setHighlightedSubId] = useState<string | null>(null)
+  const [teachers, setTeachers] = useState<Teacher[]>([])
+  const [manualTeacherId, setManualTeacherId] = useState<string>('')
+  const [manualStartDate, setManualStartDate] = useState<string>('')
+  const [manualEndDate, setManualEndDate] = useState<string>('')
+  const [manualSelectedShifts, setManualSelectedShifts] = useState<
+    Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
+  >([])
+  const [endDateCorrected, setEndDateCorrected] = useState(false)
+  const justCorrectedRef = useRef(false)
 
   // Fetch absences on mount and when filters change
   useEffect(() => {
@@ -65,6 +88,54 @@ export default function SubFinderPage() {
       fetchAbsences()
     }
   }, [mode, includePartiallyCovered])
+
+  useEffect(() => {
+    if (manualStartDate && manualEndDate) {
+      if (manualEndDate < manualStartDate) {
+        setManualEndDate(manualStartDate)
+        justCorrectedRef.current = true
+        setEndDateCorrected(true)
+        const timer = setTimeout(() => {
+          setEndDateCorrected(false)
+          justCorrectedRef.current = false
+        }, 5000)
+        return () => clearTimeout(timer)
+      }
+
+      if (manualEndDate === manualStartDate && justCorrectedRef.current) {
+        return
+      }
+      setEndDateCorrected(false)
+      justCorrectedRef.current = false
+      return
+    }
+
+    setEndDateCorrected(false)
+    justCorrectedRef.current = false
+  }, [manualStartDate, manualEndDate])
+
+  useEffect(() => {
+    const fetchTeachers = async () => {
+      try {
+        const response = await fetch('/api/teachers')
+        if (!response.ok) throw new Error('Failed to fetch teachers')
+        const data = await response.json()
+        const sortedTeachers = (data as Teacher[])
+          .filter((teacher) => teacher.active !== false)
+          .sort((a, b) => {
+            const nameA = (a.display_name || `${a.first_name ?? ''} ${a.last_name ?? ''}`).trim()
+            const nameB = (b.display_name || `${b.first_name ?? ''} ${b.last_name ?? ''}`).trim()
+            return nameA.localeCompare(nameB)
+          })
+        setTeachers(sortedTeachers)
+      } catch (error) {
+        console.error('Error fetching teachers:', error)
+        setTeachers([])
+      }
+    }
+
+    fetchTeachers()
+  }, [])
 
   const fetchAbsences = async () => {
     setLoading(true)
@@ -237,6 +308,34 @@ export default function SubFinderPage() {
     }
   }
 
+  // Handle shift click to scroll to sub card
+  const handleShiftClick = (shift: any) => {
+    if (!shift.sub_name) return
+    
+    // Find the sub in recommendedSubs by matching assigned shifts
+    const sub = recommendedSubs.find((s: any) => {
+      return s.assigned_shifts?.some((as: any) => 
+        as.date === shift.date && as.time_slot_code === shift.time_slot_code
+      )
+    })
+    
+    if (sub) {
+      // Scroll to sub card
+      setTimeout(() => {
+        const element = document.getElementById(`sub-card-${sub.id}`)
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          
+          // Highlight the card
+          setHighlightedSubId(sub.id)
+          setTimeout(() => {
+            setHighlightedSubId(null)
+          }, 2000)
+        }
+      }, 100) // Small delay to ensure DOM is ready
+    }
+  }
+
   // Filter absences based on search query
   const filteredAbsences = absences.filter(absence => {
     if (!searchQuery) return true
@@ -252,38 +351,40 @@ export default function SubFinderPage() {
   return (
     <div className="flex h-[calc(100vh-4rem+1.5rem+4rem)] -mx-4 -mt-[calc(1.5rem+4rem)] -mb-6 relative">
       {/* Left Rail */}
-      <div className="w-80 border-r border-slate-200 bg-slate-50 shadow-[2px_0_6px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden">
-        <div className="sticky top-0 z-10 px-3 pt-4 pb-4 border-b border-slate-200 bg-slate-50 flex flex-col">
-          <h1 className="text-xl font-bold mb-4 text-slate-900">Sub Finder</h1>
+      <div className="w-80 border-r border-slate-200 bg-slate-200 shadow-[2px_0_6px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden">
+        <div className="sticky top-0 z-10 px-3 pt-4 pb-4 border-b border-slate-400 bg-slate-200 flex flex-col">
+          <h1 className="text-xl font-bold mb-4 text-slate-800 pl-2">Sub Finder</h1>
 
-          {/* Mode Toggle - Softer Selected State */}
-          <div className="flex gap-2 mb-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setMode('existing')}
-              className={cn(
-                "flex-1 transition-all",
-                mode === 'existing' 
-                  ? "bg-slate-200 text-slate-900 border-slate-400 shadow-sm font-semibold" 
-                  : "bg-white/50 border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
-              )}
-            >
-              Existing Absences
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setMode('manual')}
-              className={cn(
-                "flex-1 transition-all",
-                mode === 'manual' 
-                  ? "bg-slate-200 text-slate-900 border-slate-400 shadow-sm font-semibold" 
-                  : "bg-white/50 border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
-              )}
-            >
-              Manual Coverage
-            </Button>
+          {/* Mode Toggle - Pill */}
+          <div className="mb-4 rounded-full border border-slate-200 bg-white/70 p-1">
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMode('existing')}
+                className={cn(
+                  "flex-1 rounded-full text-xs font-semibold transition-all",
+                  mode === 'existing'
+                    ? "!bg-slate-800 !text-white shadow-sm"
+                    : "text-slate-600 hover:bg-white hover:text-slate-900"
+                )}
+              >
+                Existing Absences
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMode('manual')}
+                className={cn(
+                  "flex-1 rounded-full text-xs font-semibold transition-all",
+                  mode === 'manual'
+                    ? "!bg-slate-800 !text-white shadow-sm"
+                    : "text-slate-600 hover:bg-white hover:text-slate-900"
+                )}
+              >
+                Manual Coverage
+              </Button>
+            </div>
           </div>
 
           {/* Search/Filter (for existing absences mode) */}
@@ -307,20 +408,70 @@ export default function SubFinderPage() {
             <div className="space-y-2">
               <div>
                 <Label className="text-sm">Teacher</Label>
-                <select className="w-full mt-1 text-sm border rounded-md px-2 py-1.5">
-                  <option>Select teacher...</option>
-                </select>
+                <div className="relative mt-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <select
+                    className="w-full h-10 text-sm border border-input rounded-md bg-background pl-9 pr-9 appearance-none shadow-none focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300 transition-colors"
+                    value={manualTeacherId}
+                    onChange={(event) => setManualTeacherId(event.target.value)}
+                  >
+                    <option value="">Select teacher...</option>
+                    {teachers.map((teacher) => {
+                      const name = (teacher.display_name || `${teacher.first_name ?? ''} ${teacher.last_name ?? ''}`).trim()
+                      return (
+                        <option key={teacher.id} value={teacher.id}>
+                          {name}
+                        </option>
+                      )
+                    })}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
               </div>
               <div>
                 <Label className="text-sm">Start Date</Label>
-                <input type="date" className="w-full mt-1 text-sm border rounded-md px-2 py-1.5" />
+                <div className="mt-1">
+                  <DatePickerInput
+                    value={manualStartDate}
+                    onChange={setManualStartDate}
+                    placeholder="Select start date"
+                  />
+                </div>
               </div>
               <div>
                 <Label className="text-sm">End Date</Label>
-                <input type="date" className="w-full mt-1 text-sm border rounded-md px-2 py-1.5" />
+                <div className="mt-1">
+                  <DatePickerInput
+                    value={manualEndDate}
+                    onChange={setManualEndDate}
+                    placeholder="Select end date"
+                    allowClear
+                  />
+                </div>
+                {endDateCorrected && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    End date adjusted to match start date.
+                  </p>
+                )}
               </div>
-              <Button size="sm" className="w-full">
-                Load Scheduled Shifts
+              <div className="pt-3 mt-2 border-t border-slate-200">
+                <ShiftSelectionTable
+                  teacherId={manualTeacherId || null}
+                  startDate={manualStartDate}
+                  endDate={manualEndDate || manualStartDate}
+                  selectedShifts={manualSelectedShifts}
+                  onShiftsChange={setManualSelectedShifts}
+                  autoSelectScheduled
+                  tableClassName="text-xs [&_th]:px-2 [&_td]:px-2"
+                />
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full border-slate-200 text-primary hover:bg-slate-800 hover:text-white focus:bg-slate-800 focus:text-white"
+                disabled={!manualTeacherId || !manualStartDate}
+              >
+                Find Subs
               </Button>
             </div>
           )}
@@ -344,153 +495,167 @@ export default function SubFinderPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Fixed Header Bar */}
         {selectedAbsence && (
-          <div className="sticky top-0 z-10 border-b bg-white">
-            <div className="px-6 pt-4 pb-4">
-              {/* Header Row */}
-              <div className="mb-3">
-                <h2 className="text-xl font-semibold flex items-center gap-2">
-                  <span>Sub Finder</span>
-                  <span className="text-muted-foreground">→</span>
-                  <span>{selectedAbsence.teacher_name}</span>
-                  <span className="text-muted-foreground">→</span>
-                  <span className="text-muted-foreground font-normal">
-                    {(() => {
-                      const formatDate = (dateString: string) => {
-                        const date = parseLocalDate(dateString)
-                        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-                        const month = monthNames[date.getMonth()]
-                        const day = date.getDate()
-                        return `${month} ${day}`
-                      }
-                      const startDate = formatDate(selectedAbsence.start_date)
-                      if (selectedAbsence.end_date && selectedAbsence.end_date !== selectedAbsence.start_date) {
-                        const endDate = formatDate(selectedAbsence.end_date)
-                        return `${startDate} - ${endDate}`
-                      }
-                      return startDate
-                    })()}
-                  </span>
-                </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {includeOnlyRecommended
-                    ? 'Sorted by coverage percentage (highest first)'
-                    : 'Showing all subs with coverage details'}
-                </p>
-              </div>
-
-              {/* Toolbar Row */}
-              <div className="flex items-end justify-between">
-                {/* Color Key - Left aligned, bottom aligned */}
-                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded border bg-blue-50 border-blue-200" />
-                    <span>Assigned</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded border bg-emerald-50 border-emerald-200" />
-                    <span>Available</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded border bg-gray-100 border-gray-300" />
-                    <span>Unavailable</span>
-                  </div>
+          <>
+            <div className="sticky top-0 z-10 border-b bg-white">
+              <div className="px-6 pt-4 pb-4">
+                {/* Header Row */}
+                <div className="mb-3">
+                  <h2 className="text-xl font-semibold flex items-center gap-2">
+                    <span>Sub Finder</span>
+                    <span className="text-muted-foreground">→</span>
+                    <span>{selectedAbsence.teacher_name}</span>
+                    <span className="text-muted-foreground">→</span>
+                    <span className="text-muted-foreground font-normal">
+                      {(() => {
+                        const formatDate = (dateString: string) => {
+                          const date = parseLocalDate(dateString)
+                          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                          const month = monthNames[date.getMonth()]
+                          const day = date.getDate()
+                          return `${month} ${day}`
+                        }
+                        const startDate = formatDate(selectedAbsence.start_date)
+                        if (selectedAbsence.end_date && selectedAbsence.end_date !== selectedAbsence.start_date) {
+                          const endDate = formatDate(selectedAbsence.end_date)
+                          return `${startDate} - ${endDate}`
+                        }
+                        return startDate
+                      })()}
+                    </span>
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {includeOnlyRecommended
+                      ? 'Sorted by coverage percentage (highest first)'
+                      : 'Showing all subs with coverage details'}
+                  </p>
                 </div>
-                {/* Buttons - Right aligned */}
-                <div className="flex items-center gap-3">
-                  <Button onClick={handleRerunFinder} disabled={loading} size="sm" variant="outline">
-                    <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                    Rerun Finder
-                  </Button>
 
-                  <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="relative">
-                      <Settings2 className="h-4 w-4 mr-2" />
-                      Filters
-                      {(includePartiallyCovered || !includeOnlyRecommended || !includeFlexibleStaff) && (
-                        <Badge
-                          variant="secondary"
-                          className="ml-2 h-5 min-w-[20px] px-1.5 text-xs"
-                        >
-                          {[
-                            includePartiallyCovered,
-                            !includeOnlyRecommended,
-                            !includeFlexibleStaff,
-                          ].filter(Boolean).length}
-                        </Badge>
-                      )}
+                {/* Toolbar Row */}
+                <div className="flex items-end justify-between">
+                  {/* Color Key - Left aligned, bottom aligned */}
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded border bg-blue-50 border-blue-200" />
+                      <span>Assigned</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded border bg-emerald-50 border-emerald-200" />
+                      <span>Available</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded border bg-gray-100 border-gray-300" />
+                      <span>Unavailable</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded border bg-amber-50 border-amber-200" />
+                      <span>Uncovered</span>
+                    </div>
+                  </div>
+                  {/* Buttons - Right aligned */}
+                  <div className="flex items-center gap-3">
+                    <Button onClick={handleRerunFinder} disabled={loading} size="sm" variant="outline">
+                      <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                      Rerun Finder
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80" align="start">
-                    <div className="space-y-4">
-                      <div>
-                        <h4 className="font-medium text-sm mb-3">Filter Options</h4>
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <Label
-                                htmlFor="include-only-recommended"
-                                className="text-sm font-normal cursor-pointer"
-                              >
-                                Include only recommended subs
-                              </Label>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                Show only subs who can cover at least one shift
-                              </p>
-                            </div>
-                            <Switch
-                              id="include-only-recommended"
-                              checked={includeOnlyRecommended}
-                              onCheckedChange={setIncludeOnlyRecommended}
-                            />
-                          </div>
 
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <Label
-                                htmlFor="include-partial"
-                                className="text-sm font-normal cursor-pointer"
-                              >
-                                Include partially covered shifts
-                              </Label>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                Show absences with partial coverage
-                              </p>
+                    <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="relative">
+                        <Settings2 className="h-4 w-4 mr-2" />
+                        Filters
+                        {(includePartiallyCovered || !includeOnlyRecommended || !includeFlexibleStaff) && (
+                          <Badge
+                            variant="secondary"
+                            className="ml-2 h-5 min-w-[20px] px-1.5 text-xs"
+                          >
+                            {[
+                              includePartiallyCovered,
+                              !includeOnlyRecommended,
+                              !includeFlexibleStaff,
+                            ].filter(Boolean).length}
+                          </Badge>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80" align="start">
+                      <div className="space-y-4">
+                        <div>
+                          <h4 className="font-medium text-sm mb-3">Filter Options</h4>
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <Label
+                                  htmlFor="include-only-recommended"
+                                  className="text-sm font-normal cursor-pointer"
+                                >
+                                  Include only recommended subs
+                                </Label>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  Show only subs who can cover at least one shift
+                                </p>
+                              </div>
+                              <Switch
+                                id="include-only-recommended"
+                                checked={includeOnlyRecommended}
+                                onCheckedChange={setIncludeOnlyRecommended}
+                              />
                             </div>
-                            <Switch
-                              id="include-partial"
-                              checked={includePartiallyCovered}
-                              onCheckedChange={setIncludePartiallyCovered}
-                            />
-                          </div>
 
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <Label
-                                htmlFor="include-flexible"
-                                className="text-sm font-normal cursor-pointer"
-                              >
-                                Include Flexible Staff
-                              </Label>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                Include staff who can sub when not teaching
-                              </p>
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <Label
+                                  htmlFor="include-partial"
+                                  className="text-sm font-normal cursor-pointer"
+                                >
+                                  Include partially covered shifts
+                                </Label>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  Show absences with partial coverage
+                                </p>
+                              </div>
+                              <Switch
+                                id="include-partial"
+                                checked={includePartiallyCovered}
+                                onCheckedChange={setIncludePartiallyCovered}
+                              />
                             </div>
-                            <Switch
-                              id="include-flexible"
-                              checked={includeFlexibleStaff}
-                              onCheckedChange={setIncludeFlexibleStaff}
-                            />
+
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <Label
+                                  htmlFor="include-flexible"
+                                  className="text-sm font-normal cursor-pointer"
+                                >
+                                  Include Flexible Staff
+                                </Label>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  Include staff who can sub when not teaching
+                                </p>
+                              </div>
+                              <Switch
+                                id="include-flexible"
+                                checked={includeFlexibleStaff}
+                                onCheckedChange={setIncludeFlexibleStaff}
+                              />
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                    </PopoverContent>
+                  </Popover>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+
+            {/* Coverage Summary - sticky below header */}
+            {selectedAbsence.shifts.total > 0 && (
+              <CoverageSummary
+                shifts={selectedAbsence.shifts}
+                onShiftClick={handleShiftClick}
+              />
+            )}
+          </>
         )}
 
         {/* Recommended Combination and Subs List - now scrollable without header */}
@@ -513,6 +678,7 @@ export default function SubFinderPage() {
                 onContactSub={handleContactSub}
                 onViewDetails={handleViewDetails}
                 hideHeader
+                highlightedSubId={highlightedSubId}
               />
             </div>
           ) : (
@@ -541,15 +707,27 @@ export default function SubFinderPage() {
               : undefined
           }
           onAssignmentComplete={async () => {
-            // Invalidate cache for this sub/absence combination
-            if (selectedSub && selectedAbsence) {
-              invalidateContactCache(selectedSub.id, selectedAbsence.id)
+            // Invalidate ALL contact caches for this absence to ensure all subs refresh
+            // This is important when a sub's status changes (e.g., from declined to not declined)
+            if (selectedAbsence) {
+              // Clear all cached contact data for this absence
+              setContactDataCache(prev => {
+                const next = new Map(prev)
+                // Remove all entries where the key ends with this absence ID
+                for (const [key] of next) {
+                  if (key.endsWith(`-${selectedAbsence.id}`)) {
+                    next.delete(key)
+                  }
+                }
+                return next
+              })
             }
             
             // Refresh absences to update coverage status
             await fetchAbsences()
             // Refresh recommended subs if we have a selected absence
-            // This will also recalculate the combination
+            // This will also recalculate the combination and properly categorize
+            // subs based on their updated response_status
             if (selectedAbsence) {
               await handleFindSubs(selectedAbsence)
             }

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
+import DatePickerInput from '@/components/ui/date-picker-input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -220,14 +220,15 @@ export default function SubQualifications({
                               <Label htmlFor={`expires-${def.id}`} className="text-xs">
                                 Expires on (optional)
                               </Label>
-                              <Input
+                              <DatePickerInput
                                 id={`expires-${def.id}`}
-                                type="date"
                                 value={details.expires_on || ''}
-                                onChange={(e) =>
-                                  handleDetailChange(def.id, 'expires_on', e.target.value || null)
+                                onChange={(value) =>
+                                  handleDetailChange(def.id, 'expires_on', value || null)
                                 }
-                                className="h-8 text-sm"
+                                placeholder="Select date"
+                                allowClear
+                                className="h-8 rounded-md px-2 text-xs"
                               />
                             </div>
                           </div>
@@ -272,4 +273,3 @@ export default function SubQualifications({
     </div>
   )
 }
-

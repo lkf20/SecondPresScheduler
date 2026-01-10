@@ -7,7 +7,6 @@ interface SubCardHeaderProps {
   phone: string | null
   shiftsCovered: number
   totalShifts: number
-  coveragePercent?: number
   isDeclined?: boolean
 }
 
@@ -16,19 +15,9 @@ export default function SubCardHeader({
   phone,
   shiftsCovered,
   totalShifts,
-  coveragePercent,
   isDeclined = false,
 }: SubCardHeaderProps) {
-  // Calculate coverage percent if not provided
-  const percent = coveragePercent ?? (totalShifts > 0 ? Math.round((shiftsCovered / totalShifts) * 100) : 0)
-
-  // Determine bar color based on coverage percentage
-  const getBarColor = () => {
-    if (percent >= 80) return 'bg-emerald-500'
-    if (percent >= 50) return 'bg-amber-500'
-    if (percent > 0) return 'bg-orange-500'
-    return 'bg-gray-400'
-  }
+  const coveredSegments = Math.min(shiftsCovered, totalShifts)
 
   return (
     <div className="flex items-start justify-between mb-3">
@@ -55,13 +44,33 @@ export default function SubCardHeader({
         ) : (
           <>
             <div className="mb-1.5">
-              <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                <div
-                  className={`h-full ${getBarColor()} transition-all`}
-                  style={{
-                    width: `${percent}%`,
-                  }}
-                />
+              <div className="h-2 min-w-[64px] rounded-full overflow-hidden flex gap-0.5">
+                {totalShifts === 0 ? (
+                  <div
+                    className="h-full w-[14px] rounded border"
+                    style={{
+                      backgroundColor: '#d1d5db',
+                      borderColor: '#d1d5db',
+                    }}
+                  />
+                ) : (
+                  Array.from({ length: totalShifts }).map((_, index) => {
+                    const colors =
+                      index < coveredSegments
+                        ? { backgroundColor: '#a7f3d0', borderColor: '#a7f3d0' }
+                        : { backgroundColor: '#d1d5db', borderColor: '#d1d5db' }
+                    return (
+                      <div
+                        key={`segment-${index}`}
+                        className="h-full rounded border"
+                        style={{
+                          width: '14px',
+                          ...colors,
+                        }}
+                      />
+                    )
+                  })
+                )}
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -73,4 +82,3 @@ export default function SubCardHeader({
     </div>
   )
 }
-

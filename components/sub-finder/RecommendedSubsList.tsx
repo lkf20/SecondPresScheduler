@@ -9,6 +9,7 @@ import { parseLocalDate } from '@/lib/utils/date'
 import ShiftChips from '@/components/sub-finder/ShiftChips'
 import SubCardHeader from '@/components/sub-finder/SubCardHeader'
 import { useState } from 'react'
+import { cn } from '@/lib/utils'
 
 interface RecommendedSub {
   id: string
@@ -51,6 +52,7 @@ interface RecommendedSubsListProps {
   onContactSub?: (sub: RecommendedSub) => void
   onViewDetails?: (sub: RecommendedSub) => void
   hideHeader?: boolean
+  highlightedSubId?: string | null
 }
 
 export default function RecommendedSubsList({
@@ -61,6 +63,7 @@ export default function RecommendedSubsList({
   onContactSub,
   onViewDetails,
   hideHeader = false,
+  highlightedSubId = null,
 }: RecommendedSubsListProps) {
   const [isDeclinedExpanded, setIsDeclinedExpanded] = useState(false)
   // Format date as "Mon Jan 11"
@@ -138,6 +141,9 @@ export default function RecommendedSubsList({
       uncoveredShifts.add(shiftKey)
     }
   })
+
+  const filterRemainingShifts = (shifts?: { date: string; time_slot_code: string }[]) =>
+    (shifts || []).filter((shift) => uncoveredShifts.has(`${shift.date}|${shift.time_slot_code}`))
   
   const totalShiftsNeedingCoverage = subs[0]?.total_shifts || 0
   const totalUncoveredShifts = totalShiftsNeedingCoverage - allAssignedShifts.size
@@ -190,9 +196,18 @@ export default function RecommendedSubsList({
         )}
 
         {nonDeclinedSubs.map(({ sub, shiftsCovered, remainingShifts }) => {
-          
+          const remainingCanCover = filterRemainingShifts(sub.can_cover)
+          const remainingCannotCover = filterRemainingShifts(sub.cannot_cover)
+
           return (
-        <Card key={sub.id} className="hover:shadow-md transition-shadow">
+        <Card 
+          key={sub.id} 
+          id={`sub-card-${sub.id}`}
+          className={cn(
+            "hover:shadow-md transition-shadow",
+            highlightedSubId === sub.id && "ring-2 ring-blue-500 ring-offset-2 animate-pulse"
+          )}
+        >
           <CardContent className="pt-4 px-4 pb-2">
             <SubCardHeader
               name={sub.name}
@@ -202,12 +217,12 @@ export default function RecommendedSubsList({
             />
 
             {/* Shifts: Show all shifts (can cover, cannot cover, and assigned) with tooltips for unavailable */}
-            {((sub.can_cover && sub.can_cover.length > 0) || (sub.cannot_cover && sub.cannot_cover.length > 0) || (sub.assigned_shifts && sub.assigned_shifts.length > 0)) && (
+            {(remainingCanCover.length > 0 || remainingCannotCover.length > 0) && (
               <div className="mb-3">
                 <ShiftChips
-                  canCover={sub.can_cover || []}
-                  cannotCover={sub.cannot_cover || []}
-                  assigned={sub.assigned_shifts || []}
+                  canCover={remainingCanCover}
+                  cannotCover={remainingCannotCover}
+                  assigned={[]}
                   isDeclined={sub.response_status === 'declined_all'}
                 />
               </div>
@@ -254,8 +269,19 @@ export default function RecommendedSubsList({
               
               {isDeclinedExpanded && (
                 <div className="mt-4 space-y-4">
-                  {declinedSubs.map(({ sub, shiftsCovered, remainingShifts }) => (
-                    <Card key={sub.id} className="hover:shadow-md transition-shadow bg-gray-100/50 opacity-75">
+                  {declinedSubs.map(({ sub, shiftsCovered, remainingShifts }) => {
+                    const remainingCanCover = filterRemainingShifts(sub.can_cover)
+                    const remainingCannotCover = filterRemainingShifts(sub.cannot_cover)
+
+                    return (
+                    <Card 
+                      key={sub.id} 
+                      id={`sub-card-${sub.id}`}
+                      className={cn(
+                        "hover:shadow-md transition-shadow bg-gray-100/50 opacity-75",
+                        highlightedSubId === sub.id && "ring-2 ring-blue-500 ring-offset-2 animate-pulse"
+                      )}
+                    >
                       <CardContent className="pt-4 px-4 pb-2">
                         <SubCardHeader
                           name={sub.name}
@@ -266,12 +292,12 @@ export default function RecommendedSubsList({
                         />
 
                         {/* Shifts: Show all shifts (can cover, cannot cover, and assigned) with tooltips for unavailable */}
-                        {((sub.can_cover && sub.can_cover.length > 0) || (sub.cannot_cover && sub.cannot_cover.length > 0) || (sub.assigned_shifts && sub.assigned_shifts.length > 0)) && (
+                        {(remainingCanCover.length > 0 || remainingCannotCover.length > 0) && (
                           <div className="mb-3">
                             <ShiftChips
-                              canCover={sub.can_cover || []}
-                              cannotCover={sub.cannot_cover || []}
-                              assigned={sub.assigned_shifts || []}
+                              canCover={remainingCanCover}
+                              cannotCover={remainingCannotCover}
+                              assigned={[]}
                               isDeclined={true}
                             />
                           </div>
@@ -295,7 +321,8 @@ export default function RecommendedSubsList({
                         </div>
                       </CardContent>
                     </Card>
-                ))}
+                )
+                })}
               </div>
             )}
           </div>
@@ -304,6 +331,4 @@ export default function RecommendedSubsList({
     </TooltipProvider>
   )
 }
-
-
 

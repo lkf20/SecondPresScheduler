@@ -28,6 +28,8 @@ interface ShiftSelectionTableProps {
   selectedShifts: SelectedShift[]
   onShiftsChange: (shifts: SelectedShift[]) => void
   disabled?: boolean
+  tableClassName?: string
+  autoSelectScheduled?: boolean
 }
 
 export default function ShiftSelectionTable({
@@ -37,6 +39,8 @@ export default function ShiftSelectionTable({
   selectedShifts,
   onShiftsChange,
   disabled = false,
+  tableClassName,
+  autoSelectScheduled = false,
 }: ShiftSelectionTableProps) {
   const [scheduledShifts, setScheduledShifts] = useState<ScheduledShift[]>([])
   const [loading, setLoading] = useState(true)
@@ -96,10 +100,9 @@ export default function ShiftSelectionTable({
       .finally(() => setLoading(false))
   }, [teacherId, startDate, endDate || startDate]) // Remove 'disabled' and 'onShiftsChange' from dependencies
 
-  // Handle mode switching - auto-select all shifts when switching to "all_scheduled" mode
+  // Auto-select scheduled shifts for read-only or "select all" modes.
   useEffect(() => {
-    // Only run this when we have scheduled shifts and we're in disabled mode
-    if (disabled && scheduledShifts.length > 0) {
+    if ((disabled || autoSelectScheduled) && scheduledShifts.length > 0) {
       const allShifts = scheduledShifts.map((shift: ScheduledShift) => ({
         date: normalizeDate(shift.date),
         day_of_week_id: shift.day_of_week_id,
@@ -109,7 +112,7 @@ export default function ShiftSelectionTable({
     }
     // Note: When switching to "select_shifts" mode (disabled=false), we keep the current selectedShifts
     // so no action needed here
-  }, [disabled, scheduledShifts, onShiftsChange])
+  }, [autoSelectScheduled, disabled, scheduledShifts, onShiftsChange])
 
   // Group shifts by date
   const shiftsByDate = scheduledShifts.reduce((acc, shift) => {
@@ -206,12 +209,12 @@ export default function ShiftSelectionTable({
     
     return (
       <div className="rounded-md border">
-        <Table>
+        <Table className={tableClassName}>
           <TableHeader>
             <TableRow>
               <TableHead>Day</TableHead>
-              {timeSlots.map((slot) => (
-                <TableHead key={slot.id} className="text-center">{slot.code}</TableHead>
+            {timeSlots.map((slot) => (
+                <TableHead key={slot.id} className="text-center px-2">{slot.code}</TableHead>
               ))}
             </TableRow>
           </TableHeader>
@@ -230,12 +233,12 @@ export default function ShiftSelectionTable({
   if (loading) {
     return (
       <div className="rounded-md border">
-        <Table>
+        <Table className={tableClassName}>
           <TableHeader>
             <TableRow>
               <TableHead>Day</TableHead>
-              {timeSlots.map((slot) => (
-                <TableHead key={slot.id} className="text-center">{slot.code}</TableHead>
+            {timeSlots.map((slot) => (
+                <TableHead key={slot.id} className="text-center px-2">{slot.code}</TableHead>
               ))}
             </TableRow>
           </TableHeader>
@@ -254,12 +257,12 @@ export default function ShiftSelectionTable({
   if (Object.keys(shiftsByDate).length === 0) {
     return (
       <div className="rounded-md border">
-        <Table>
+        <Table className={tableClassName}>
           <TableHeader>
             <TableRow>
               <TableHead>Day</TableHead>
-              {timeSlots.map((slot) => (
-                <TableHead key={slot.id} className="text-center">{slot.code}</TableHead>
+            {timeSlots.map((slot) => (
+                <TableHead key={slot.id} className="text-center px-2">{slot.code}</TableHead>
               ))}
             </TableRow>
           </TableHeader>
@@ -277,12 +280,12 @@ export default function ShiftSelectionTable({
 
   return (
     <div className="rounded-md border">
-      <Table>
+      <Table className={tableClassName}>
         <TableHeader>
           <TableRow>
             <TableHead>Day</TableHead>
             {timeSlots.map((slot) => (
-              <TableHead key={slot.id} className="text-center">{slot.code}</TableHead>
+              <TableHead key={slot.id} className="text-center px-2">{slot.code}</TableHead>
             ))}
           </TableRow>
         </TableHeader>
@@ -301,7 +304,10 @@ export default function ShiftSelectionTable({
                   const dayOfWeekId = shift?.day_of_week_id || ''
 
                   return (
-                    <TableCell key={slot.id} className="text-center">
+                    <TableCell
+                      key={slot.id}
+                      className="text-center px-2 [&:has([role=checkbox])]:pr-2 [&:has([role=checkbox])]:pl-2"
+                    >
                       {isScheduled ? (
                         <div className="flex items-center justify-center">
                           <Checkbox
@@ -331,4 +337,3 @@ export default function ShiftSelectionTable({
     </div>
   )
 }
-

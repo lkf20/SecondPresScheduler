@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import DatePickerInput from '@/components/ui/date-picker-input'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
@@ -125,26 +126,27 @@ export default function SubAvailabilityExceptions({
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="start_date">Start Date</Label>
-                    <input
+                    <DatePickerInput
                       id="start_date"
-                      type="date"
                       value={newException.start_date}
-                      onChange={(e) =>
-                        setNewException({ ...newException, start_date: e.target.value })
+                      onChange={(value) =>
+                        setNewException({ ...newException, start_date: value })
                       }
-                      className="w-full mt-1 border rounded-md px-2 py-1.5"
+                      placeholder="Select start date"
+                      className="mt-1"
                     />
                   </div>
                   <div>
                     <Label htmlFor="end_date">End Date</Label>
-                    <input
+                    <DatePickerInput
                       id="end_date"
-                      type="date"
                       value={newException.end_date}
-                      onChange={(e) =>
-                        setNewException({ ...newException, end_date: e.target.value })
+                      onChange={(value) =>
+                        setNewException({ ...newException, end_date: value })
                       }
-                      className="w-full mt-1 border rounded-md px-2 py-1.5"
+                      placeholder="Select end date"
+                      allowClear
+                      className="mt-1"
                     />
                   </div>
                 </div>
@@ -280,4 +282,3 @@ export default function SubAvailabilityExceptions({
     </div>
   )
 }
-

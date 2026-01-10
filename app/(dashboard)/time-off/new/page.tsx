@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import DatePickerInput from '@/components/ui/date-picker-input'
 import {
   Select,
   SelectContent,
@@ -180,7 +180,14 @@ export default function NewTimeOffPage() {
           </FormField>
 
           <FormField label="Start Date" error={errors.start_date?.message} required>
-            <Input type="date" {...register('start_date')} />
+            <DatePickerInput
+              value={startDate || ''}
+              onChange={(value) =>
+                setValue('start_date', value, { shouldValidate: true, shouldDirty: true })
+              }
+              placeholder="Select start date"
+            />
+            <input type="hidden" {...register('start_date')} />
             {isPastDate && (
               <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                 You are recording time off for a past date.
@@ -189,11 +196,15 @@ export default function NewTimeOffPage() {
           </FormField>
 
           <FormField label="End Date" error={errors.end_date?.message}>
-            <Input
-              type="date"
-              {...register('end_date')}
+            <DatePickerInput
+              value={endDate || ''}
+              onChange={(value) =>
+                setValue('end_date', value, { shouldValidate: true, shouldDirty: true })
+              }
               placeholder="Optional - leave blank for single day"
+              allowClear
             />
+            <input type="hidden" {...register('end_date')} />
             {endDateCorrected && (
               <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                 End date was updated to match the start date.

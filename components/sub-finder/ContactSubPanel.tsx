@@ -116,6 +116,8 @@ export default function ContactSubPanel({
   const [overriddenShiftIds, setOverriddenShiftIds] = useState<Set<string>>(new Set())
   const [isSubInactive, setIsSubInactive] = useState(false)
   const [isPreviouslyAvailableExpanded, setIsPreviouslyAvailableExpanded] = useState(false)
+  const [allAssignedShifts, setAllAssignedShifts] = useState<Set<string>>(new Set())
+  const [loadingAssignedShifts, setLoadingAssignedShifts] = useState(false)
 
   // Initialize assignedShifts and selectedShifts immediately from sub prop (no API call needed)
   useEffect(() => {
@@ -280,6 +282,66 @@ export default function ContactSubPanel({
     fetchContactData()
   }, [isOpen, sub, absence, initialContactData])
 
+  // Fetch all assigned shifts for the coverage request to calculate remaining shifts
+  useEffect(() => {
+    if (!coverageRequestId || !absence) {
+      setAllAssignedShifts(new Set())
+      setLoadingAssignedShifts(false)
+      return
+    }
+
+    const fetchAllAssignedShifts = async () => {
+      setLoadingAssignedShifts(true)
+      try {
+        // Fetch all sub_assignments for this coverage request
+        const response = await fetch(`/api/sub-finder/coverage-request/${absence.id}/assigned-shifts`)
+        if (response.ok) {
+          const data = await response.json()
+          // Helper to normalize date to YYYY-MM-DD format
+          const normalizeDate = (dateStr: string): string => {
+            if (!dateStr) return dateStr
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
+            try {
+              const date = new Date(dateStr)
+              if (!isNaN(date.getTime())) {
+                const year = date.getFullYear()
+                const month = String(date.getMonth() + 1).padStart(2, '0')
+                const day = String(date.getDate()).padStart(2, '0')
+                return `${year}-${month}-${day}`
+              }
+            } catch (e) {}
+            return dateStr
+          }
+          // Create a Set of shift keys (date|time_slot_code) for all assigned shifts
+          const assignedSet = new Set<string>()
+          if (data.assigned_shifts) {
+            data.assigned_shifts.forEach((shift: { date: string; time_slot_code: string }) => {
+              const normalizedDate = normalizeDate(shift.date)
+              const key = `${normalizedDate}|${shift.time_slot_code}`
+              assignedSet.add(key)
+            })
+          }
+          setAllAssignedShifts(assignedSet)
+          console.log('ContactSubPanel - All assigned shifts fetched:', {
+            count: assignedSet.size,
+            shifts: Array.from(assignedSet),
+            rawData: data.assigned_shifts
+          })
+        } else {
+          console.error('Failed to fetch assigned shifts:', response.status, response.statusText)
+          const errorText = await response.text()
+          console.error('Error response:', errorText)
+        }
+      } catch (error) {
+        console.error('Error fetching all assigned shifts:', error)
+      } finally {
+        setLoadingAssignedShifts(false)
+      }
+    }
+
+    fetchAllAssignedShifts()
+  }, [coverageRequestId, absence])
+
   // Reset state when panel closes
   useEffect(() => {
     if (!isOpen) {
@@ -295,6 +357,8 @@ export default function ContactSubPanel({
       setOverriddenShiftIds(new Set())
       setIsSubInactive(false)
       setIsPreviouslyAvailableExpanded(false)
+      setAllAssignedShifts(new Set())
+      setLoadingAssignedShifts(false)
     }
   }, [isOpen])
 
@@ -751,6 +815,42 @@ export default function ContactSubPanel({
         onAssignmentComplete()
       }
 
+      // Refresh all assigned shifts to update remaining shifts calculation
+      if (coverageRequestId && absence) {
+        const refreshResponse = await fetch(`/api/sub-finder/coverage-request/${absence.id}/assigned-shifts`)
+        if (refreshResponse.ok) {
+          const refreshData = await refreshResponse.json()
+          // Helper to normalize date to YYYY-MM-DD format
+          const normalizeDate = (dateStr: string): string => {
+            if (!dateStr) return dateStr
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
+            try {
+              const date = new Date(dateStr)
+              if (!isNaN(date.getTime())) {
+                const year = date.getFullYear()
+                const month = String(date.getMonth() + 1).padStart(2, '0')
+                const day = String(date.getDate()).padStart(2, '0')
+                return `${year}-${month}-${day}`
+              }
+            } catch (e) {}
+            return dateStr
+          }
+          const assignedSet = new Set<string>()
+          if (refreshData.assigned_shifts) {
+            refreshData.assigned_shifts.forEach((shift: { date: string; time_slot_code: string }) => {
+              const normalizedDate = normalizeDate(shift.date)
+              const key = `${normalizedDate}|${shift.time_slot_code}`
+              assignedSet.add(key)
+            })
+          }
+          setAllAssignedShifts(assignedSet)
+          console.log('ContactSubPanel - Refreshed all assigned shifts after assignment:', {
+            count: assignedSet.size,
+            shifts: Array.from(assignedSet)
+          })
+        }
+      }
+
       // Don't close - keep panel open so user can see the updated status
     } catch (error) {
       console.error('Error assigning shifts:', error)
@@ -859,6 +959,68 @@ export default function ContactSubPanel({
   const selectedShiftsCount = selectedShifts.size
   const totalShifts = sub.can_cover?.length || 0
 
+  // Helper to normalize date to YYYY-MM-DD format for consistent key matching
+  const normalizeDate = (dateStr: string): string => {
+    if (!dateStr) return dateStr
+    // If it's already in YYYY-MM-DD format, return as is
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return dateStr
+    }
+    // Otherwise, try to parse and format
+    try {
+      const date = new Date(dateStr)
+      if (!isNaN(date.getTime())) {
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        return `${year}-${month}-${day}`
+      }
+    } catch (e) {
+      // If parsing fails, return original
+    }
+    return dateStr
+  }
+
+  // Filter to get only remaining (unassigned) shifts
+  // Remaining shifts are those in can_cover that aren't assigned to ANY sub
+  const remainingCanCover = sub.can_cover?.filter((shift) => {
+    const normalizedDate = normalizeDate(shift.date)
+    const shiftKey = `${normalizedDate}|${shift.time_slot_code}`
+    // Exclude if assigned to any sub (using allAssignedShifts)
+    const isAssigned = allAssignedShifts.has(shiftKey)
+    if (isAssigned) {
+      console.log('ContactSubPanel - Filtering out assigned shift:', shiftKey, 'from shift:', shift)
+    }
+    return !isAssigned
+  }) || []
+  
+  // DEBUG: Log values to understand the data
+  console.log('ContactSubPanel - Remaining Shifts Calculation:', {
+    'loadingAssignedShifts': loadingAssignedShifts,
+    'sub.total_shifts': sub.total_shifts,
+    'allAssignedShifts.size': allAssignedShifts.size,
+    'allAssignedShifts': Array.from(allAssignedShifts),
+    'assignedShifts.length (this sub)': assignedShifts.length,
+    'sub.can_cover.length': sub.can_cover?.length || 0,
+    'sub.can_cover sample keys': sub.can_cover?.slice(0, 3).map(s => `${s.date}|${s.time_slot_code}`),
+    'remainingCanCover.length': remainingCanCover.length,
+    'remainingCanCover sample keys': remainingCanCover.slice(0, 3).map(s => `${s.date}|${s.time_slot_code}`),
+    'sub.shifts_covered': sub.shifts_covered,
+  })
+  
+  // Calculate remaining shifts (total shifts minus all assigned shifts across all subs)
+  // Only calculate if we've loaded the assigned shifts data
+  const remainingShifts = loadingAssignedShifts ? sub.total_shifts : Math.max(0, sub.total_shifts - allAssignedShifts.size)
+  
+  // Calculate remaining shifts covered (shifts this sub can cover that aren't assigned to any sub)
+  const remainingShiftsCovered = remainingCanCover.length
+  
+  console.log('ContactSubPanel - Final Values:', {
+    remainingShifts,
+    remainingShiftsCovered,
+    displayText: `Available for ${remainingShiftsCovered} of ${remainingShifts} remaining shifts`
+  })
+
   // Check if declined_all is selected and any shifts are selected
   const isDeclinedWithShiftsSelected = responseStatus === 'declined_all' && selectedShiftsCount > 0
 
@@ -888,7 +1050,11 @@ export default function ContactSubPanel({
                   {formatDateRange()} |{' '}
                 </>
               )}
-              Available for {sub.shifts_covered} of {sub.total_shifts} requested shifts
+              {responseStatus === 'declined_all' ? (
+                'Declined all shifts'
+              ) : (
+                `Available for ${remainingShiftsCovered} of ${remainingShifts} remaining shifts`
+              )}
             </p>
           </SheetHeader>
         </div>
@@ -909,18 +1075,19 @@ export default function ContactSubPanel({
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium">Coverage Summary</h3>
                 <span className="text-sm text-muted-foreground">
-                  {sub.shifts_covered} of {sub.total_shifts} shifts
+                  {responseStatus === 'declined_all' ? (
+                    'Declined all shifts'
+                  ) : (
+                    `${remainingShiftsCovered} of ${remainingShifts} shifts`
+                  )}
                 </span>
               </div>
-              {(sub.can_cover && sub.can_cover.length > 0) || (sub.cannot_cover && sub.cannot_cover.length > 0) || assignedShifts.length > 0 ? (
+              {(remainingCanCover.length > 0) || assignedShifts.length > 0 ? (
                 <TooltipProvider>
                   <ShiftChips
-                    canCover={sub.can_cover || []}
-                    cannotCover={sub.cannot_cover || []}
-                    assigned={assignedShifts.map(shift => ({
-                      date: shift.date,
-                      time_slot_code: shift.time_slot_code,
-                    }))}
+                    canCover={remainingCanCover}
+                    cannotCover={[]}
+                    assigned={[]}
                     showLegend={true}
                     isDeclined={responseStatus === 'declined_all'}
                   />
@@ -930,7 +1097,7 @@ export default function ContactSubPanel({
               )}
               {/* Status */}
               <div className="space-y-2 border-t pt-[5px]">
-                <Label className="text-sm font-medium mb-2 block">Status</Label>
+                <Label className="text-sm font-medium mb-2 block pt-2">Status</Label>
                 {assignedShifts.length > 0 ? (
                   <p className="text-sm text-muted-foreground">
                     Assigned to {assignedShifts.length} shift{assignedShifts.length !== 1 ? 's' : ''}
@@ -1100,13 +1267,9 @@ export default function ContactSubPanel({
                 )}
 
                 {/* Available & Not Assigned */}
-                {sub.can_cover && sub.can_cover.length > 0 && (() => {
-                  // Filter out assigned shifts
-                  const availableShifts = sub.can_cover.filter((shift) => {
-                    return !assignedShifts.some(
-                      (as) => as.date === shift.date && as.time_slot_code === shift.time_slot_code
-                    )
-                  })
+                {remainingCanCover.length > 0 && (() => {
+                  // Use the already filtered remaining shifts
+                  const availableShifts = remainingCanCover
                   
                   if (availableShifts.length === 0) return null
                   

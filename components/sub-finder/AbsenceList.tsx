@@ -94,7 +94,7 @@ export default function AbsenceList({
             <CardContent className="p-4">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1">
-                  <h3 className="font-semibold text-sm mb-1">{absence.teacher_name}</h3>
+                  <h3 className="font-semibold text-base mb-1 text-slate-800">{absence.teacher_name}</h3>
                   <p className="text-xs text-muted-foreground">
                     {(() => {
                       const formatDate = (dateString: string) => {
@@ -131,23 +131,26 @@ export default function AbsenceList({
 
               {/* Shift Status Breakdown */}
               <div className="flex items-center gap-2 mt-3 flex-wrap">
-                {uncovered > 0 && (
-                  <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1 bg-amber-50 border border-amber-300 text-amber-700 font-medium">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                    Uncovered: {uncovered}
+                {fully_covered > 0 && (
+                  <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1 bg-blue-50 border border-blue-300 text-blue-700 font-medium">
+                    <span
+                      className="inline-block h-2 w-2 rounded-full border border-blue-700 flex-shrink-0"
+                      style={{ backgroundColor: '#1d4ed8' }}
+                    />
+                    Covered: {fully_covered}
                   </span>
                 )}
 
-                {fully_covered > 0 && (
-                  <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1 bg-emerald-50 border border-emerald-300 text-emerald-700 font-medium">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    Covered: {fully_covered}
+                {uncovered > 0 && (
+                  <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1 bg-amber-50 border border-amber-300 text-amber-700 font-medium">
+                    <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                    Uncovered: {uncovered}
                   </span>
                 )}
 
                 {partially_covered > 0 && (
                   <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1 bg-yellow-50 border border-yellow-300 text-yellow-700 font-medium">
-                    <span className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
+                    <span className="inline-block h-2 w-2 rounded-full bg-yellow-500" />
                     Partial: {partially_covered}
                   </span>
                 )}
@@ -156,7 +159,7 @@ export default function AbsenceList({
               <Button
                 size="sm"
                 variant="outline"
-                className="w-full mt-3 border-primary text-primary hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground"
+                className="w-full mt-3 border-primary text-primary hover:bg-slate-800 hover:text-white focus:bg-slate-800 focus:text-white"
                 onClick={(e) => {
                   e.stopPropagation()
                   onFindSubs(absence)
@@ -172,6 +175,3 @@ export default function AbsenceList({
     </div>
   )
 }
-
-
-

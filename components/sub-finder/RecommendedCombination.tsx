@@ -62,7 +62,6 @@ export default function RecommendedCombination({
               phone={assignment.phone}
               shiftsCovered={assignment.shiftsCovered}
               totalShifts={assignment.totalShifts}
-              coveragePercent={assignment.coveragePercent}
             />
 
             {/* Shifts */}
@@ -103,7 +102,7 @@ export default function RecommendedCombination({
               </div>
             )}
 
-            <div className="mt-4 flex justify-end">
+            <div className="mt-0 flex justify-end">
               <Button
                 size="sm"
                 variant="ghost"
@@ -119,4 +118,3 @@ export default function RecommendedCombination({
     </Card>
   )
 }
-
