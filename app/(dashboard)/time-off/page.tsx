@@ -1,15 +1,27 @@
 import Link from 'next/link'
 import { getTimeOffRequests } from '@/lib/api/time-off'
-import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
+import { getTimeOffShifts, getTimeOffCoverageSummary } from '@/lib/api/time-off-shifts'
+import { getTeacherSchedules } from '@/lib/api/schedules'
 import { getTeachers } from '@/lib/api/teachers'
-import DataTable, { Column } from '@/components/shared/DataTable'
+import TimeOffListClient from './TimeOffListClient'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 
-export default async function TimeOffPage() {
-  let requests = await getTimeOffRequests()
+export default async function TimeOffPage({
+  searchParams,
+}: {
+  searchParams?: { view?: string }
+}) {
+  let requests = await getTimeOffRequests({ statuses: ['active', 'draft'] })
   const teachers = await getTeachers()
+  const scheduleCache = new Map<string, any[]>()
+  const formatDay = (name?: string | null) => {
+    if (!name) return '—'
+    if (name === 'Tuesday') return 'Tues'
+    return name.slice(0, 3)
+  }
+  const view = searchParams?.view ?? 'active'
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const ninetyDaysAgo = new Date(today)
@@ -21,6 +33,54 @@ export default async function TimeOffPage() {
       const shifts = await getTimeOffShifts(request.id)
       const shiftCount = shifts.length
       const shiftMode = request.shift_selection_mode || 'all_scheduled'
+      const coverage = await getTimeOffCoverageSummary({
+        id: request.id,
+        teacher_id: request.teacher_id,
+        start_date: request.start_date,
+        end_date: request.end_date || request.start_date,
+      })
+      if (!scheduleCache.has(request.teacher_id)) {
+        const schedules = await getTeacherSchedules(request.teacher_id)
+        scheduleCache.set(request.teacher_id, schedules)
+      }
+      const schedules = scheduleCache.get(request.teacher_id) || []
+      const shiftKeys = new Set(
+        shifts.map((shift: any) => `${shift.day_of_week_id}::${shift.time_slot_id}`)
+      )
+      const classroomsMap = new Map<string, { id: string; name: string; color: string | null }>()
+      schedules.forEach((schedule: any) => {
+        if (!shiftKeys.has(`${schedule.day_of_week_id}::${schedule.time_slot_id}`)) return
+        const classroom = schedule.classroom
+        if (!classroom) return
+        classroomsMap.set(classroom.id, {
+          id: classroom.id,
+          name: classroom.name,
+          color: classroom.color || null,
+        })
+      })
+      const classrooms = Array.from(classroomsMap.values())
+
+      const requestEndDate = request.end_date || request.start_date
+      const isPast = parseLocalDate(requestEndDate) < today
+      let coverage_status: 'draft' | 'completed' | 'covered' | 'partially_covered' | 'needs_coverage'
+      if (request.status === 'draft') {
+        coverage_status = 'draft'
+      } else if (isPast) {
+        coverage_status = 'completed'
+      } else if (coverage.total === 0 || coverage.uncovered === coverage.total) {
+        coverage_status = 'needs_coverage'
+      } else if (coverage.covered === coverage.total) {
+        coverage_status = 'covered'
+      } else {
+        coverage_status = 'partially_covered'
+      }
+
+      const shiftDetails = shifts.map((shift: any) => {
+        const dayName = formatDay(shift.day_of_week?.name)
+        const timeCode = shift.time_slot?.code || '—'
+        return `${dayName} ${timeCode}`
+      })
+      const coveredCount = coverage.covered
 
       return {
         ...request,
@@ -29,11 +89,12 @@ export default async function TimeOffPage() {
           (request.teacher?.first_name && request.teacher?.last_name
             ? `${request.teacher.first_name} ${request.teacher.last_name}`
             : '—'),
-        shifts_display:
-          shiftMode === 'all_scheduled'
-            ? `All scheduled (${shiftCount})`
-            : `${shiftCount} shift${shiftCount !== 1 ? 's' : ''}`,
-        reason_display: request.reason || '—',
+        shifts_display: `${shiftCount} shift${shiftCount !== 1 ? 's' : ''}`,
+        coverage_status,
+        coverage_total: coverage.total,
+        coverage_covered: coveredCount,
+        classrooms,
+        shift_details: shiftDetails,
       }
     })
   )
@@ -42,52 +103,23 @@ export default async function TimeOffPage() {
   const getEndDate = (request: any) =>
     parseLocalDate(request.end_date || request.start_date)
 
-  const pastRequests = requests
+  const draftRequests = requests.filter((request: any) => request.status === 'draft')
+  const activeRequests = requests.filter((request: any) => request.status === 'active')
+
+  const pastRequests = activeRequests
     .filter((request: any) => {
       const endDate = getEndDate(request)
       return endDate < today && endDate >= ninetyDaysAgo
     })
     .sort((a: any, b: any) => getEndDate(b).getTime() - getEndDate(a).getTime())
 
-  const upcomingRequests = requests
+  const upcomingRequests = activeRequests
     .filter((request: any) => getEndDate(request) >= today)
     .sort((a: any, b: any) => getStartDate(a).getTime() - getStartDate(b).getTime())
 
-  const columns: Column<any>[] = [
-    {
-      key: 'teacher_name',
-      header: 'Teacher',
-      sortable: true,
-      linkBasePath: '/time-off',
-    },
-    {
-      key: 'start_date',
-      header: 'Start Date',
-      sortable: true,
-    },
-    {
-      key: 'end_date',
-      header: 'End Date',
-      sortable: true,
-    },
-    {
-      key: 'shifts_display',
-      header: 'Shifts',
-      sortable: true,
-    },
-    {
-      key: 'reason_display',
-      header: 'Reason',
-      sortable: true,
-    },
-    {
-      key: 'notes',
-      header: 'Notes',
-    },
-  ]
-
   return (
-    <div>
+    <div className="w-full">
+      <div className="mx-auto w-full max-w-3xl">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Time Off Requests</h1>
@@ -101,30 +133,13 @@ export default async function TimeOffPage() {
         </Link>
       </div>
 
-      <DataTable
-        data={upcomingRequests}
-        columns={columns}
-        searchable
-        searchPlaceholder="Search time off requests..."
-        emptyMessage="No time off requests found."
+      <TimeOffListClient
+        view={view}
+        draftRequests={draftRequests}
+        upcomingRequests={upcomingRequests}
+        pastRequests={pastRequests}
       />
-
-      {pastRequests.length > 0 && (
-        <details className="mt-6 rounded-lg bg-gray-50 border border-gray-200 p-4">
-          <summary className="cursor-pointer text-sm font-medium text-slate-700 flex items-center justify-between">
-            <span>Past Time Off (last 90 days)</span>
-            <span className="text-muted-foreground">{pastRequests.length}</span>
-          </summary>
-          <div className="mt-4">
-            <DataTable
-              data={pastRequests}
-              columns={columns}
-              searchable={false}
-              emptyMessage="No past time off requests in the last 90 days."
-            />
-          </div>
-        </details>
-      )}
+      </div>
     </div>
   )
 }

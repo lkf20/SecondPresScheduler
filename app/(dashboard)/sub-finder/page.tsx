@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -56,6 +57,9 @@ interface Teacher {
 }
 
 export default function SubFinderPage() {
+  const searchParams = useSearchParams()
+  const requestedAbsenceId = searchParams.get('absence_id')
+  const hasAppliedAbsenceRef = useRef(false)
   const [mode, setMode] = useState<Mode>('existing')
   const [absences, setAbsences] = useState<Absence[]>([])
   const [selectedAbsence, setSelectedAbsence] = useState<Absence | null>(null)
@@ -88,6 +92,21 @@ export default function SubFinderPage() {
       fetchAbsences()
     }
   }, [mode, includePartiallyCovered])
+
+  useEffect(() => {
+    if (!requestedAbsenceId) return
+    if (hasAppliedAbsenceRef.current) return
+    if (absences.length === 0) return
+    const match = absences.find((absence) => absence.id === requestedAbsenceId)
+    if (match) {
+      setMode('existing')
+      setSelectedAbsence(match)
+      handleFindSubs(match).catch((error) => {
+        console.error('Failed to load requested absence:', error)
+      })
+      hasAppliedAbsenceRef.current = true
+    }
+  }, [requestedAbsenceId, absences])
 
   useEffect(() => {
     if (manualStartDate && manualEndDate) {

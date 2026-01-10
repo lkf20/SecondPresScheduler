@@ -172,6 +172,7 @@ export async function getTeacherTimeOffShifts(
     .gte('date', startDate)
     .lte('date', endDate)
     .eq('time_off_requests.teacher_id', teacherId)
+    .eq('time_off_requests.status', 'active')
 
   if (excludeRequestId) {
     query = query.neq('time_off_request_id', excludeRequestId)
@@ -192,4 +193,66 @@ export async function getTeacherTimeOffShifts(
       teacher_id: string
     }
   }>
+}
+
+export async function getTimeOffCoverageSummary(request: {
+  id: string
+  teacher_id: string
+  start_date: string
+  end_date: string
+}) {
+  const shifts = await getTimeOffShifts(request.id)
+  const total = shifts.length
+  if (total === 0) {
+    return { total, covered: 0, partial: 0, uncovered: 0 }
+  }
+
+  const dates = shifts.map((shift: any) => shift.date).sort()
+  const startDate = dates[0]
+  const endDate = dates[dates.length - 1]
+
+  const supabase = await createClient()
+  const { data: assignments, error } = await supabase
+    .from('sub_assignments')
+    .select('date, time_slot_id, is_partial, assignment_type')
+    .eq('teacher_id', request.teacher_id)
+    .gte('date', startDate)
+    .lte('date', endDate)
+
+  if (error) throw error
+
+  const assignmentMap = new Map<
+    string,
+    { full: boolean; partial: boolean }
+  >()
+  ;(assignments || []).forEach((assignment: any) => {
+    const key = `${assignment.date}::${assignment.time_slot_id}`
+    const entry = assignmentMap.get(key) || { full: false, partial: false }
+    const isPartial =
+      assignment.is_partial || assignment.assignment_type === 'Partial Sub Shift'
+    if (isPartial) {
+      entry.partial = true
+    } else {
+      entry.full = true
+    }
+    assignmentMap.set(key, entry)
+  })
+
+  let covered = 0
+  let partial = 0
+  let uncovered = 0
+
+  shifts.forEach((shift: any) => {
+    const key = `${shift.date}::${shift.time_slot_id}`
+    const coverage = assignmentMap.get(key)
+    if (coverage?.full) {
+      covered += 1
+    } else if (coverage?.partial) {
+      partial += 1
+    } else {
+      uncovered += 1
+    }
+  })
+
+  return { total, covered, partial, uncovered }
 }

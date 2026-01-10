@@ -3,12 +3,23 @@ import { Database } from '@/types/database'
 
 type TimeOffRequest = Database['public']['Tables']['time_off_requests']['Row']
 
-export async function getTimeOffRequests(filters?: { teacher_id?: string; start_date?: string; end_date?: string }) {
+export async function getTimeOffRequests(filters?: {
+  teacher_id?: string
+  start_date?: string
+  end_date?: string
+  statuses?: Array<'draft' | 'active' | 'deleted'>
+}) {
   const supabase = await createClient()
   let query = supabase
     .from('time_off_requests')
     .select('*, teacher:staff!time_off_requests_teacher_id_fkey(*)')
     .order('start_date', { ascending: false })
+
+  if (filters?.statuses && filters.statuses.length > 0) {
+    query = query.in('status', filters.statuses)
+  } else {
+    query = query.eq('status', 'active')
+  }
 
   if (filters?.teacher_id) {
     query = query.eq('teacher_id', filters.teacher_id)
@@ -45,6 +56,7 @@ export async function createTimeOffRequest(request: {
   reason?: string
   notes?: string
   shift_selection_mode?: string
+  status?: string
 }) {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -72,10 +84,11 @@ export async function updateTimeOffRequest(id: string, updates: Partial<TimeOffR
 
 export async function deleteTimeOffRequest(id: string) {
   const supabase = await createClient()
-  const { error } = await supabase.from('time_off_requests').delete().eq('id', id)
+  const { error } = await supabase
+    .from('time_off_requests')
+    .update({ status: 'deleted' })
+    .eq('id', id)
 
   if (error) throw error
 }
-
-
 

@@ -31,6 +31,8 @@ export async function PUT(
     const { id } = await params
     const body = await request.json()
     const { shifts, ...requestData } = body
+    const existingRequest = await getTimeOffRequestById(id)
+    const status = requestData.status || existingRequest.status || 'active'
     const effectiveEndDate = requestData.end_date || requestData.start_date
 
     const normalizeDate = (dateStr: string) => {
@@ -58,7 +60,7 @@ export async function PUT(
       }))
     }
 
-    if (requestedShifts.length > 0) {
+    if (requestedShifts.length > 0 && status !== 'draft') {
       const existingShifts = await getTeacherTimeOffShifts(
         requestData.teacher_id,
         requestData.start_date,
@@ -85,7 +87,7 @@ export async function PUT(
     }
     
     // Update the time off request
-    const updatedRequest = await updateTimeOffRequest(id, requestData)
+    const updatedRequest = await updateTimeOffRequest(id, { ...requestData, status })
     
     // Handle shifts
     if (shifts !== undefined) {

@@ -31,6 +31,7 @@ Features to implement soon (within the next few weeks).
 - [ ] User onboarding UI - create UI flow for onboarding new users, collecting necessary information (name, role, school assignment)
 - [ ] School management UI - add ability to create new schools and manage school settings
 - [ ] Timezone settings - add timezone configuration section to Settings to allow schools to set their timezone, ensuring dates are displayed and processed correctly
+- [ ] Standardize warning styles - add a shared WarningText component and migrate existing warnings to it (Time Off, Weekly Schedule, Sub Finder, etc.)
 
 ---
 

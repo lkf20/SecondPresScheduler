@@ -22,6 +22,7 @@ import FormField from '@/components/shared/FormField'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
 import { AlertTriangle } from 'lucide-react'
+import { toast } from 'sonner'
 
 const timeOffSchema = z.object({
   teacher_id: z.string().min(1, 'Teacher is required'),
@@ -48,12 +49,20 @@ export default function NewTimeOffPage() {
   const [endDateCorrected, setEndDateCorrected] = useState(false)
   const justCorrectedRef = useRef(false)
   const [isPastDate, setIsPastDate] = useState(false)
+  const hasHydratedDraftRef = useRef(false)
+  const draftKey = 'time-off:new'
   const focusEndDate = () => {
     if (typeof window === 'undefined') return
     window.requestAnimationFrame(() => {
       const endDateEl = document.getElementById('time-off-end-date')
       endDateEl?.focus()
       endDateEl?.click()
+    })
+  }
+  const focusStartDate = () => {
+    if (typeof window === 'undefined') return
+    window.requestAnimationFrame(() => {
+      document.getElementById('time-off-start-date')?.focus()
     })
   }
 
@@ -80,6 +89,8 @@ export default function NewTimeOffPage() {
     setError: setFormError,
     clearErrors,
     watch,
+    reset,
+    getValues,
   } = useForm<TimeOffFormData>({
     resolver: zodResolver(timeOffSchema),
     defaultValues: {
@@ -104,6 +115,10 @@ export default function NewTimeOffPage() {
     const endLabel = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     return startLabel === endLabel ? startLabel : `${startLabel} - ${endLabel}`
   }
+  const hasDateRange = Boolean(startDate)
+  const rangeLabel = hasDateRange
+    ? formatRange(startDate, endDate || startDate)
+    : ''
 
   // Check if start date is in the past
   useEffect(() => {
@@ -117,6 +132,44 @@ export default function NewTimeOffPage() {
       setIsPastDate(false)
     }
   }, [startDate])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (hasHydratedDraftRef.current) return
+    const raw = window.sessionStorage.getItem(draftKey)
+    if (!raw) {
+      hasHydratedDraftRef.current = true
+      return
+    }
+    try {
+      const draft = JSON.parse(raw) as {
+        form?: Partial<TimeOffFormData>
+        selectedShifts?: Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
+      }
+      if (draft.form) {
+        reset({ shift_selection_mode: 'all_scheduled', ...draft.form })
+      }
+      if (draft.selectedShifts) {
+        setSelectedShifts(draft.selectedShifts)
+      }
+    } catch (error) {
+      console.error('Failed to restore time off draft:', error)
+    }
+    hasHydratedDraftRef.current = true
+  }, [reset, draftKey])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const subscription = watch((value) => {
+      const payload = {
+        form: value,
+        selectedShifts,
+        updatedAt: Date.now(),
+      }
+      window.sessionStorage.setItem(draftKey, JSON.stringify(payload))
+    })
+    return () => subscription.unsubscribe()
+  }, [watch, selectedShifts, draftKey])
 
   // Validate end date is not before start date
   useEffect(() => {
@@ -195,6 +248,9 @@ export default function NewTimeOffPage() {
         throw new Error(errorData.error || 'Failed to create time off request')
       }
 
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem(draftKey)
+      }
       router.push('/time-off')
       router.refresh()
     } catch (err: any) {
@@ -202,8 +258,66 @@ export default function NewTimeOffPage() {
     }
   }
 
+  const saveDraft = async () => {
+    const values = getValues()
+    if (!values.teacher_id) {
+      setFormError('teacher_id', { type: 'manual', message: 'Teacher is required.' })
+      return
+    }
+    if (!values.start_date) {
+      setFormError('start_date', { type: 'manual', message: 'Start date is required.' })
+      return
+    }
+
+    try {
+      setError(null)
+      const effectiveEndDate = values.end_date || values.start_date
+      const payload: any = {
+        teacher_id: values.teacher_id,
+        start_date: values.start_date,
+        end_date: effectiveEndDate,
+        reason: values.reason || null,
+        notes: values.notes || null,
+        shift_selection_mode: values.shift_selection_mode || 'all_scheduled',
+        status: 'draft',
+      }
+
+      if (values.shift_selection_mode === 'select_shifts' && selectedShifts.length > 0) {
+        payload.shifts = selectedShifts
+      }
+
+      const response = await fetch('/api/time-off', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to save draft')
+      }
+
+      const created = await response.json()
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem(draftKey)
+      }
+      toast.success('Draft saved')
+      if (created?.id) {
+        router.push(`/time-off/${created.id}`)
+        router.refresh()
+      }
+    } catch (err: any) {
+      setError(err.message)
+    }
+  }
+
   return (
     <div>
+      <div className="mb-4">
+        <Link href="/time-off" className="inline-flex items-center text-sm text-muted-foreground hover:text-slate-900">
+          ← Back to Time Off
+        </Link>
+      </div>
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Add Time Off Request</h1>
         <p className="text-muted-foreground mt-2">Create a new time off request</p>
@@ -217,7 +331,15 @@ export default function NewTimeOffPage() {
             <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-6">
               <FormField label="Teacher" error={errors.teacher_id?.message} required>
                 <Select onValueChange={value => setValue('teacher_id', value)}>
-                  <SelectTrigger>
+                  <SelectTrigger
+                    tabIndex={1}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Tab' && !event.shiftKey) {
+                        event.preventDefault()
+                        focusStartDate()
+                      }
+                    }}
+                  >
                     <SelectValue placeholder="Select a teacher" />
                   </SelectTrigger>
                   <SelectContent>
@@ -239,6 +361,7 @@ export default function NewTimeOffPage() {
                     if (value) focusEndDate()
                   }}
                   placeholder="Select start date"
+                  tabIndex={2}
                 />
                 <input type="hidden" {...register('start_date')} />
                 {isPastDate && (
@@ -257,6 +380,7 @@ export default function NewTimeOffPage() {
                   }
                   placeholder="Optional - leave blank for single day"
                   allowClear
+                  tabIndex={3}
                 />
                 <input type="hidden" {...register('end_date')} />
                 {endDateCorrected && (
@@ -282,13 +406,13 @@ export default function NewTimeOffPage() {
                 >
                   <div className="flex items-center space-x-6">
                     <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="all_scheduled" id="shifts-all" />
+                      <RadioGroupItem value="all_scheduled" id="shifts-all" tabIndex={4} />
                       <Label htmlFor="shifts-all" className="font-normal cursor-pointer">
                         All scheduled shifts
                       </Label>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="select_shifts" id="shifts-select" />
+                      <RadioGroupItem value="select_shifts" id="shifts-select" tabIndex={5} />
                       <Label htmlFor="shifts-select" className="font-normal cursor-pointer">
                         Select shifts
                       </Label>
@@ -309,23 +433,41 @@ export default function NewTimeOffPage() {
                     changes.
                   </p>
                 )}
-                {conflictSummary.conflictCount > 0 && (
-                  <p className="text-sm text-yellow-600 flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                    This teacher already has time off recorded for {conflictSummary.conflictCount}{' '}
-                    of these shifts. Existing requests will be shown below.
+                {hasDateRange && (
+                  <p className="text-xs text-muted-foreground">
+                    Scheduled shifts from {rangeLabel}
                   </p>
                 )}
-                {conflictingRequests.map((request) => (
-                  <Link
-                    key={request.id}
-                    href={`/time-off/${request.id}`}
-                    className="block text-sm text-yellow-600 hover:underline"
-                  >
-                    Existing Time Off Requests: {formatRange(request.start_date, request.end_date)}
-                    {request.reason ? ` ${request.reason}` : ''}
-                  </Link>
-                ))}
+                {(conflictSummary.conflictCount > 0 || conflictingRequests.length > 0) && (
+                  <div className="rounded-lg border border-yellow-200 bg-yellow-50/40 p-4 space-y-3">
+                    {conflictSummary.conflictCount > 0 && (
+                      <p className="text-sm text-yellow-600 flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
+                        This teacher already has time off recorded for {conflictSummary.conflictCount}{' '}
+                        of these shifts. Existing requests will be shown below.
+                      </p>
+                    )}
+                    {conflictingRequests.length > 0 && (
+                      <div className="ml-6 space-y-2">
+                        <div className="text-xs font-medium text-yellow-700">
+                          Existing time off requests
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {conflictingRequests.map((request) => (
+                            <Link
+                              key={request.id}
+                              href={`/time-off/${request.id}`}
+                              className="inline-flex items-center rounded-md border border-yellow-200 bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-700 hover:underline"
+                            >
+                              {formatRange(request.start_date, request.end_date)}
+                              {request.reason ? ` (${request.reason})` : ''}
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <ShiftSelectionTable
                   teacherId={teacherId || null}
                   startDate={startDate || ''}
@@ -337,6 +479,11 @@ export default function NewTimeOffPage() {
                   validateConflicts
                   disabled={shiftMode === 'all_scheduled'}
                 />
+                {conflictSummary.conflictCount > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Already recorded shifts are locked and can’t be selected.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -351,25 +498,25 @@ export default function NewTimeOffPage() {
                   >
                     <div className="flex items-center space-x-6">
                       <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="Vacation" id="reason-vacation" />
+                        <RadioGroupItem value="Vacation" id="reason-vacation" tabIndex={6} />
                         <Label htmlFor="reason-vacation" className="font-normal cursor-pointer">
                           Vacation
                         </Label>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="Sick Day" id="reason-sick" />
+                        <RadioGroupItem value="Sick Day" id="reason-sick" tabIndex={7} />
                         <Label htmlFor="reason-sick" className="font-normal cursor-pointer">
                           Sick Day
                         </Label>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="Training" id="reason-training" />
+                        <RadioGroupItem value="Training" id="reason-training" tabIndex={8} />
                         <Label htmlFor="reason-training" className="font-normal cursor-pointer">
                           Training
                         </Label>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="Other" id="reason-other" />
+                        <RadioGroupItem value="Other" id="reason-other" tabIndex={9} />
                         <Label htmlFor="reason-other" className="font-normal cursor-pointer">
                           Other
                         </Label>
@@ -379,21 +526,34 @@ export default function NewTimeOffPage() {
                 </FormField>
 
                 <FormField label="Notes" error={errors.notes?.message}>
-                  <Textarea {...register('notes')} placeholder="Optional notes" />
+                  <Textarea {...register('notes')} placeholder="Optional notes" tabIndex={10} />
                 </FormField>
               </div>
             </div>
 
             {allShiftsRecorded && (
               <p className="text-sm text-yellow-600">
-                {conflictSummary.conflictCount} All selected shifts already have time off recorded.
+                All selected shifts already have time off recorded.
               </p>
             )}
             <div className="flex justify-end gap-4">
-              <Button type="button" variant="outline" onClick={() => router.push('/time-off')}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.sessionStorage.removeItem(draftKey)
+                  }
+                  router.push('/time-off')
+                }}
+                tabIndex={11}
+              >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting || allShiftsRecorded}>
+              <Button type="button" variant="outline" onClick={saveDraft} tabIndex={12}>
+                Save as Draft
+              </Button>
+              <Button type="submit" disabled={isSubmitting || allShiftsRecorded} tabIndex={13}>
                 {isSubmitting ? 'Creating...' : 'Create'}
               </Button>
             </div>

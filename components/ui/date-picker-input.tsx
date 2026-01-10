@@ -35,6 +35,7 @@ interface DatePickerInputProps {
   placeholder?: string
   allowClear?: boolean
   className?: string
+  tabIndex?: number
 }
 
 export default function DatePickerInput({
@@ -44,6 +45,7 @@ export default function DatePickerInput({
   placeholder = 'Select date',
   allowClear = false,
   className,
+  tabIndex,
 }: DatePickerInputProps) {
   const selectedDate = useMemo(() => parseDate(value), [value])
   const [viewDate, setViewDate] = useState(() => {
@@ -104,6 +106,7 @@ export default function DatePickerInput({
         <button
           type="button"
           id={id}
+          tabIndex={tabIndex}
           className={cn(
             'flex h-12 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm text-left text-foreground shadow-none transition-colors focus:outline-none focus:ring-1 focus:ring-slate-300',
             className

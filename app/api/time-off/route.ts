@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { shifts, ...requestData } = body
+    const status = requestData.status || 'active'
     const effectiveEndDate = requestData.end_date || requestData.start_date
 
     const normalizeDate = (dateStr: string) => {
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
       }))
     }
 
-    if (requestedShifts.length > 0) {
+    if (requestedShifts.length > 0 && status !== 'draft') {
       const existingShifts = await getTeacherTimeOffShifts(
         requestData.teacher_id,
         requestData.start_date,
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Create the time off request
-    const createdRequest = await createTimeOffRequest(requestData)
+    const createdRequest = await createTimeOffRequest({ ...requestData, status })
     
     // If shifts are provided, create them
     if (shifts && Array.isArray(shifts) && shifts.length > 0) {

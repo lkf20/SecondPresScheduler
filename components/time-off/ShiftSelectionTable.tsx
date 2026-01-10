@@ -391,7 +391,10 @@ export default function ShiftSelectionTable({
           <TableBody>
             <TableRow>
               <TableCell colSpan={timeSlots.length + 1} className="text-center py-8 text-muted-foreground">
-                No scheduled shifts found for this teacher in the selected date range.
+                <div>No scheduled shifts found for this teacher in the selected date range.</div>
+                <div className="text-xs text-muted-foreground mt-2">
+                  Try expanding the date range or check the teacher’s schedule settings.
+                </div>
               </TableCell>
             </TableRow>
           </TableBody>
@@ -432,20 +435,34 @@ export default function ShiftSelectionTable({
                       className="text-center px-2 [&:has([role=checkbox])]:pr-2 [&:has([role=checkbox])]:pl-2"
                     >
                       {isScheduled ? (
-                        <div className="flex flex-col items-center justify-center gap-1">
+                        <div
+                          className={cn(
+                            'relative h-full w-full min-h-[36px]',
+                            isRecorded && 'min-h-[44px]'
+                          )}
+                        >
                           <Checkbox
-                            checked={isSelected}
+                            checked={isRecorded ? true : isSelected}
                             onCheckedChange={() =>
                               handleShiftToggle(dayGroup.date, dayOfWeekId, slot.id)
                             }
                             disabled={disabled || isRecorded}
+                            tabIndex={-1}
+                            className={cn(
+                              'absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
+                              isRecorded &&
+                                'border-yellow-600 data-[state=checked]:bg-yellow-600 data-[state=checked]:text-white'
+                            )}
                           />
-                          {isRecorded && (
-                            <span className="text-[9px] text-yellow-600 italic leading-none text-center">
-                              <span className="block">Already</span>
-                              <span className="block">recorded</span>
-                            </span>
-                          )}
+                          <span
+                            className={cn(
+                              'absolute left-1/2 top-[calc(50%+10px)] -translate-x-1/2 text-[11px] text-yellow-600 italic leading-none text-center',
+                              !isRecorded && 'opacity-0'
+                            )}
+                          >
+                            <span className="block">Already</span>
+                            <span className="block">recorded</span>
+                          </span>
                         </div>
                       ) : (
                         <div className="flex items-center justify-center">
@@ -453,6 +470,7 @@ export default function ShiftSelectionTable({
                             checked={false}
                             disabled
                             className="opacity-30"
+                            tabIndex={-1}
                           />
                         </div>
                       )}

@@ -646,6 +646,7 @@ export interface Database {
           reason: string | null
           notes: string | null
           shift_selection_mode: string | null
+          status: string
           created_at: string
           updated_at: string
         }
@@ -657,6 +658,7 @@ export interface Database {
           reason?: string | null
           notes?: string | null
           shift_selection_mode?: string | null
+          status?: string
           created_at?: string
           updated_at?: string
         }
@@ -668,6 +670,7 @@ export interface Database {
           reason?: string | null
           notes?: string | null
           shift_selection_mode?: string | null
+          status?: string
           created_at?: string
           updated_at?: string
         }
@@ -880,4 +883,3 @@ export interface Database {
     }
   }
 }
-
