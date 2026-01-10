@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Search, Users, UserCheck, Calendar, FileText, Settings } from 'lucide-react'
+import { Search, FileText, Settings } from 'lucide-react'
 
 const quickActions = [
   {
@@ -8,24 +8,6 @@ const quickActions = [
     description: 'Find available substitutes',
     href: '/sub-finder',
     icon: Search,
-  },
-  {
-    name: 'Teachers',
-    description: 'Manage teacher schedules',
-    href: '/teachers',
-    icon: Users,
-  },
-  {
-    name: 'Subs',
-    description: 'Manage substitute availability',
-    href: '/subs',
-    icon: UserCheck,
-  },
-  {
-    name: 'Assignments',
-    description: 'View and manage assignments',
-    href: '/assignments',
-    icon: Calendar,
   },
   {
     name: 'Reports',
@@ -47,7 +29,7 @@ export default async function DashboardPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground mt-2">
-          Welcome to the Scheduler. Manage teachers, subs, and assignments.
+          Welcome to the Scheduler. Manage coverage and reports.
         </p>
       </div>
 
