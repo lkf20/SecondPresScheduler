@@ -157,3 +157,39 @@ export async function getTeacherScheduledShifts(
   return result
 }
 
+export async function getTeacherTimeOffShifts(
+  teacherId: string,
+  startDate: string,
+  endDate: string,
+  excludeRequestId?: string
+) {
+  const supabase = await createClient()
+  let query = supabase
+    .from('time_off_shifts')
+    .select(
+      'date, time_slot_id, time_off_request_id, time_off_requests!inner(id, start_date, end_date, reason, teacher_id)'
+    )
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .eq('time_off_requests.teacher_id', teacherId)
+
+  if (excludeRequestId) {
+    query = query.neq('time_off_request_id', excludeRequestId)
+  }
+
+  const { data, error } = await query
+
+  if (error) throw error
+  return data as Array<{
+    date: string
+    time_slot_id: string
+    time_off_request_id: string
+    time_off_requests: {
+      id: string
+      start_date: string
+      end_date: string | null
+      reason: string | null
+      teacher_id: string
+    }
+  }>
+}

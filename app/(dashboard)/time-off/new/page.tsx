@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
@@ -20,6 +21,7 @@ import { Label } from '@/components/ui/label'
 import FormField from '@/components/shared/FormField'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
+import { AlertTriangle } from 'lucide-react'
 
 const timeOffSchema = z.object({
   teacher_id: z.string().min(1, 'Teacher is required'),
@@ -39,9 +41,21 @@ export default function NewTimeOffPage() {
   const [selectedShifts, setSelectedShifts] = useState<
     Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
   >([])
+  const [conflictSummary, setConflictSummary] = useState({ conflictCount: 0, totalScheduled: 0 })
+  const [conflictingRequests, setConflictingRequests] = useState<
+    Array<{ id: string; start_date: string; end_date: string | null; reason: string | null }>
+  >([])
   const [endDateCorrected, setEndDateCorrected] = useState(false)
   const justCorrectedRef = useRef(false)
   const [isPastDate, setIsPastDate] = useState(false)
+  const focusEndDate = () => {
+    if (typeof window === 'undefined') return
+    window.requestAnimationFrame(() => {
+      const endDateEl = document.getElementById('time-off-end-date')
+      endDateEl?.focus()
+      endDateEl?.click()
+    })
+  }
 
   useEffect(() => {
     fetch('/api/teachers')
@@ -63,6 +77,8 @@ export default function NewTimeOffPage() {
     handleSubmit,
     formState: { errors, isSubmitting },
     setValue,
+    setError: setFormError,
+    clearErrors,
     watch,
   } = useForm<TimeOffFormData>({
     resolver: zodResolver(timeOffSchema),
@@ -75,6 +91,19 @@ export default function NewTimeOffPage() {
   const startDate = watch('start_date')
   const endDate = watch('end_date')
   const shiftMode = watch('shift_selection_mode')
+  const allShiftsRecorded =
+    conflictSummary.totalScheduled > 0 &&
+    conflictSummary.conflictCount === conflictSummary.totalScheduled
+  const formatRange = (start: string, end?: string | null) => {
+    const [startYear, startMonth, startDay] = start.split('-').map(Number)
+    const startDate = new Date(startYear, startMonth - 1, startDay)
+    const endSource = end || start
+    const [endYear, endMonth, endDay] = endSource.split('-').map(Number)
+    const endDate = new Date(endYear, endMonth - 1, endDay)
+    const startLabel = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const endLabel = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    return startLabel === endLabel ? startLabel : `${startLabel} - ${endLabel}`
+  }
 
   // Check if start date is in the past
   useEffect(() => {
@@ -115,9 +144,29 @@ export default function NewTimeOffPage() {
     }
   }, [startDate, endDate, setValue])
 
+  useEffect(() => {
+    if (shiftMode === 'select_shifts' && selectedShifts.length > 0) {
+      clearErrors('shift_selection_mode')
+    }
+    if (shiftMode === 'all_scheduled') {
+      clearErrors('shift_selection_mode')
+    }
+  }, [shiftMode, selectedShifts.length, clearErrors])
+
   const onSubmit = async (data: TimeOffFormData) => {
     try {
       setError(null)
+      if (allShiftsRecorded) {
+        setError('All selected shifts already have time off recorded.')
+        return
+      }
+      if (data.shift_selection_mode === 'select_shifts' && selectedShifts.length === 0) {
+        setFormError('shift_selection_mode', {
+          type: 'manual',
+          message: 'Select at least one shift.',
+        })
+        return
+      }
       // If end_date is not provided, use start_date (single day time off)
       const effectiveEndDate = data.end_date || data.start_date
 
@@ -163,106 +212,136 @@ export default function NewTimeOffPage() {
       {error && <ErrorMessage message={error} className="mb-6" />}
 
       <div className="max-w-2xl">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <FormField label="Teacher" error={errors.teacher_id?.message} required>
-            <Select onValueChange={value => setValue('teacher_id', value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a teacher" />
-              </SelectTrigger>
-              <SelectContent>
-                {teachers.map(teacher => (
-                  <SelectItem key={teacher.id} value={teacher.id}>
-                    {teacher.display_name || `${teacher.first_name} ${teacher.last_name}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FormField>
+        <div className="rounded-lg bg-gray-50 border border-gray-200 p-6">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-6">
+              <FormField label="Teacher" error={errors.teacher_id?.message} required>
+                <Select onValueChange={value => setValue('teacher_id', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a teacher" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teachers.map(teacher => (
+                      <SelectItem key={teacher.id} value={teacher.id}>
+                        {teacher.display_name || `${teacher.first_name} ${teacher.last_name}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormField>
 
-          <FormField label="Start Date" error={errors.start_date?.message} required>
-            <DatePickerInput
-              value={startDate || ''}
-              onChange={(value) =>
-                setValue('start_date', value, { shouldValidate: true, shouldDirty: true })
-              }
-              placeholder="Select start date"
-            />
-            <input type="hidden" {...register('start_date')} />
-            {isPastDate && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              <FormField label="Start Date" error={errors.start_date?.message} required>
+                <DatePickerInput
+                  id="time-off-start-date"
+                  value={startDate || ''}
+                  onChange={(value) => {
+                    setValue('start_date', value, { shouldValidate: true, shouldDirty: true })
+                    if (value) focusEndDate()
+                  }}
+                  placeholder="Select start date"
+                />
+                <input type="hidden" {...register('start_date')} />
+                {isPastDate && (
+              <p className="text-xs text-yellow-600 mt-1">
                 You are recording time off for a past date.
               </p>
-            )}
-          </FormField>
+                )}
+              </FormField>
 
-          <FormField label="End Date" error={errors.end_date?.message}>
-            <DatePickerInput
-              value={endDate || ''}
-              onChange={(value) =>
-                setValue('end_date', value, { shouldValidate: true, shouldDirty: true })
-              }
-              placeholder="Optional - leave blank for single day"
-              allowClear
-            />
-            <input type="hidden" {...register('end_date')} />
-            {endDateCorrected && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              <FormField label="End Date" error={errors.end_date?.message}>
+                <DatePickerInput
+                  id="time-off-end-date"
+                  value={endDate || ''}
+                  onChange={(value) =>
+                    setValue('end_date', value, { shouldValidate: true, shouldDirty: true })
+                  }
+                  placeholder="Optional - leave blank for single day"
+                  allowClear
+                />
+                <input type="hidden" {...register('end_date')} />
+                {endDateCorrected && (
+              <p className="text-xs text-yellow-600 mt-1">
                 End date was updated to match the start date.
               </p>
-            )}
-            {!endDateCorrected && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Optional. If not specified, time off will be for the start date only.
-              </p>
-            )}
-          </FormField>
+                )}
+                {!endDateCorrected && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Optional. If not specified, time off will be for the start date only.
+                  </p>
+                )}
+              </FormField>
+            </div>
 
-          <FormField label="Shifts" error={errors.shift_selection_mode?.message}>
-            <RadioGroup
-              value={shiftMode || 'all_scheduled'}
-              onValueChange={value =>
-                setValue('shift_selection_mode', value as 'all_scheduled' | 'select_shifts')
-              }
-            >
-              <div className="flex items-center space-x-6">
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="all_scheduled" id="shifts-all" />
-                  <Label htmlFor="shifts-all" className="font-normal cursor-pointer">
-                    All scheduled shifts
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="select_shifts" id="shifts-select" />
-                  <Label htmlFor="shifts-select" className="font-normal cursor-pointer">
-                    Select shifts
-                  </Label>
-                </div>
+            <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
+              <FormField label="Shifts" error={errors.shift_selection_mode?.message} required>
+                <RadioGroup
+                  value={shiftMode || 'all_scheduled'}
+                  onValueChange={value =>
+                    setValue('shift_selection_mode', value as 'all_scheduled' | 'select_shifts')
+                  }
+                >
+                  <div className="flex items-center space-x-6">
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="all_scheduled" id="shifts-all" />
+                      <Label htmlFor="shifts-all" className="font-normal cursor-pointer">
+                        All scheduled shifts
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="select_shifts" id="shifts-select" />
+                      <Label htmlFor="shifts-select" className="font-normal cursor-pointer">
+                        Select shifts
+                      </Label>
+                    </div>
+                  </div>
+                </RadioGroup>
+              </FormField>
+
+              <div className="space-y-4">
+                {shiftMode === 'select_shifts' && selectedShifts.length === 0 && (
+                  <p className="text-sm text-yellow-600">
+                    Select at least one shift.
+                  </p>
+                )}
+                {shiftMode === 'all_scheduled' && teacherId && (
+                  <p className="text-sm text-muted-foreground">
+                    All scheduled shifts will be logged. Switch to &quot;Select shifts&quot; to make
+                    changes.
+                  </p>
+                )}
+                {conflictSummary.conflictCount > 0 && (
+                  <p className="text-sm text-yellow-600 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                    This teacher already has time off recorded for {conflictSummary.conflictCount}{' '}
+                    of these shifts. Existing requests will be shown below.
+                  </p>
+                )}
+                {conflictingRequests.map((request) => (
+                  <Link
+                    key={request.id}
+                    href={`/time-off/${request.id}`}
+                    className="block text-sm text-yellow-600 hover:underline"
+                  >
+                    Existing Time Off Requests: {formatRange(request.start_date, request.end_date)}
+                    {request.reason ? ` ${request.reason}` : ''}
+                  </Link>
+                ))}
+                <ShiftSelectionTable
+                  teacherId={teacherId || null}
+                  startDate={startDate || ''}
+                  endDate={endDate || startDate || ''}
+                  selectedShifts={selectedShifts}
+                  onShiftsChange={setSelectedShifts}
+                  onConflictSummaryChange={setConflictSummary}
+                  onConflictRequestsChange={setConflictingRequests}
+                  validateConflicts
+                  disabled={shiftMode === 'all_scheduled'}
+                />
               </div>
-            </RadioGroup>
-          </FormField>
+            </div>
 
-          {/* Shift table moved here, below radio buttons */}
-          <div className="space-y-4">
-            {shiftMode === 'all_scheduled' && teacherId && (
-              <p className="text-sm text-muted-foreground">
-                All scheduled shifts will be logged. Switch to &quot;Select shifts&quot; to make
-                changes.
-              </p>
-            )}
-            <ShiftSelectionTable
-              teacherId={teacherId || null}
-              startDate={startDate || ''}
-              endDate={endDate || startDate || ''}
-              selectedShifts={selectedShifts}
-              onShiftsChange={setSelectedShifts}
-              disabled={shiftMode === 'all_scheduled'}
-            />
-          </div>
-
-          {/* Optional details section */}
-          <div className="pt-8 mt-12 border-t space-y-6">
-            <div>
-              <h3 className="text-sm font-medium mb-4">Optional Details</h3>
+            <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-6">
+              <h3 className="text-sm font-medium">Optional Details</h3>
               <div className="space-y-6">
                 <FormField label="Reason" error={errors.reason?.message}>
                   <RadioGroup
@@ -304,17 +383,22 @@ export default function NewTimeOffPage() {
                 </FormField>
               </div>
             </div>
-          </div>
 
-          <div className="flex justify-end gap-4">
-            <Button type="button" variant="outline" onClick={() => router.push('/time-off')}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Creating...' : 'Create'}
-            </Button>
-          </div>
-        </form>
+            {allShiftsRecorded && (
+              <p className="text-sm text-yellow-600">
+                {conflictSummary.conflictCount} All selected shifts already have time off recorded.
+              </p>
+            )}
+            <div className="flex justify-end gap-4">
+              <Button type="button" variant="outline" onClick={() => router.push('/time-off')}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting || allShiftsRecorded}>
+                {isSubmitting ? 'Creating...' : 'Create'}
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
@@ -21,12 +21,31 @@ interface SelectedShift {
   time_slot_id: string
 }
 
+interface ExistingTimeOffShift {
+  date: string
+  time_slot_id: string
+  time_off_request_id: string
+  time_off_requests: {
+    id: string
+    start_date: string
+    end_date: string | null
+    reason: string | null
+    teacher_id: string
+  }
+}
+
 interface ShiftSelectionTableProps {
   teacherId: string | null
   startDate: string
   endDate: string | null // End date can be null/optional
   selectedShifts: SelectedShift[]
   onShiftsChange: (shifts: SelectedShift[]) => void
+  onConflictSummaryChange?: (summary: { conflictCount: number; totalScheduled: number }) => void
+  onConflictRequestsChange?: (
+    requests: Array<{ id: string; start_date: string; end_date: string | null; reason: string | null }>
+  ) => void
+  excludeRequestId?: string
+  validateConflicts?: boolean
   disabled?: boolean
   tableClassName?: string
   autoSelectScheduled?: boolean
@@ -38,11 +57,19 @@ export default function ShiftSelectionTable({
   endDate,
   selectedShifts,
   onShiftsChange,
+  onConflictSummaryChange,
+  onConflictRequestsChange,
+  excludeRequestId,
+  validateConflicts = false,
   disabled = false,
   tableClassName,
   autoSelectScheduled = false,
 }: ShiftSelectionTableProps) {
   const [scheduledShifts, setScheduledShifts] = useState<ScheduledShift[]>([])
+  const [existingTimeOffShifts, setExistingTimeOffShifts] = useState<ExistingTimeOffShift[]>([])
+  const [conflictingRequests, setConflictingRequests] = useState<
+    Array<{ id: string; start_date: string; end_date: string | null; reason: string | null }>
+  >([])
   const [loading, setLoading] = useState(true)
   const [timeSlots, setTimeSlots] = useState<Array<{ id: string; code: string; name: string | null }>>([])
 
@@ -67,6 +94,9 @@ export default function ShiftSelectionTable({
       return d
     }
   }
+
+  const buildShiftKey = (date: string, timeSlotId: string) =>
+    `${normalizeDate(date)}::${timeSlotId}`
 
   // Fetch scheduled shifts when teacher and dates change (NOT when disabled changes)
   useEffect(() => {
@@ -100,19 +130,111 @@ export default function ShiftSelectionTable({
       .finally(() => setLoading(false))
   }, [teacherId, startDate, endDate || startDate]) // Remove 'disabled' and 'onShiftsChange' from dependencies
 
+  useEffect(() => {
+    if (!validateConflicts) {
+      setExistingTimeOffShifts([])
+      setConflictingRequests([])
+      return
+    }
+
+    if (!teacherId || !startDate) {
+      setExistingTimeOffShifts([])
+      setConflictingRequests([])
+      return
+    }
+
+    const effectiveEndDate = endDate || startDate
+    const params = new URLSearchParams({
+      teacher_id: teacherId,
+      start_date: startDate,
+      end_date: effectiveEndDate,
+    })
+    if (excludeRequestId) {
+      params.set('exclude_request_id', excludeRequestId)
+    }
+
+    fetch(`/api/time-off/existing-shifts?${params.toString()}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const shifts = Array.isArray(data.shifts) ? data.shifts : []
+        setExistingTimeOffShifts(shifts)
+        const requestMap = new Map<
+          string,
+          { id: string; start_date: string; end_date: string | null; reason: string | null }
+        >()
+        shifts.forEach((shift: ExistingTimeOffShift) => {
+          const request = shift.time_off_requests
+          if (request) {
+            requestMap.set(request.id, {
+              id: request.id,
+              start_date: request.start_date,
+              end_date: request.end_date,
+              reason: request.reason,
+            })
+          }
+        })
+        const requests = Array.from(requestMap.values()).sort((a, b) =>
+          a.start_date.localeCompare(b.start_date)
+        )
+        setConflictingRequests(requests)
+      })
+      .catch((error) => {
+        console.error('Error fetching existing time off shifts:', error)
+        setExistingTimeOffShifts([])
+        setConflictingRequests([])
+      })
+  }, [teacherId, startDate, endDate, excludeRequestId, validateConflicts])
+
+  const conflictShiftKeys = useMemo(() => {
+    if (!validateConflicts) {
+      return new Set<string>()
+    }
+    return new Set(
+      existingTimeOffShifts.map((shift) => buildShiftKey(shift.date, shift.time_slot_id))
+    )
+  }, [existingTimeOffShifts, validateConflicts])
+
   // Auto-select scheduled shifts for read-only or "select all" modes.
   useEffect(() => {
     if ((disabled || autoSelectScheduled) && scheduledShifts.length > 0) {
-      const allShifts = scheduledShifts.map((shift: ScheduledShift) => ({
-        date: normalizeDate(shift.date),
-        day_of_week_id: shift.day_of_week_id,
-        time_slot_id: shift.time_slot_id,
-      }))
+      const allShifts = scheduledShifts
+        .map((shift: ScheduledShift) => ({
+          date: normalizeDate(shift.date),
+          day_of_week_id: shift.day_of_week_id,
+          time_slot_id: shift.time_slot_id,
+        }))
+        .filter((shift) => !conflictShiftKeys.has(buildShiftKey(shift.date, shift.time_slot_id)))
       onShiftsChange(allShifts)
     }
     // Note: When switching to "select_shifts" mode (disabled=false), we keep the current selectedShifts
     // so no action needed here
-  }, [autoSelectScheduled, disabled, scheduledShifts, onShiftsChange])
+  }, [autoSelectScheduled, disabled, scheduledShifts, onShiftsChange, conflictShiftKeys])
+
+  const conflictCount = scheduledShifts.filter((shift) =>
+    conflictShiftKeys.has(buildShiftKey(shift.date, shift.time_slot_id))
+  ).length
+
+  useEffect(() => {
+    if (onConflictSummaryChange) {
+      onConflictSummaryChange({ conflictCount, totalScheduled: scheduledShifts.length })
+    }
+  }, [conflictCount, scheduledShifts.length, onConflictSummaryChange])
+
+  useEffect(() => {
+    if (onConflictRequestsChange) {
+      onConflictRequestsChange(conflictingRequests)
+    }
+  }, [conflictingRequests, onConflictRequestsChange])
+
+  useEffect(() => {
+    if (selectedShifts.length === 0 || conflictShiftKeys.size === 0) return
+    const filtered = selectedShifts.filter(
+      (shift) => !conflictShiftKeys.has(buildShiftKey(shift.date, shift.time_slot_id))
+    )
+    if (filtered.length !== selectedShifts.length) {
+      onShiftsChange(filtered)
+    }
+  }, [selectedShifts, conflictShiftKeys, onShiftsChange])
 
   // Group shifts by date
   const shiftsByDate = scheduledShifts.reduce((acc, shift) => {
@@ -299,7 +421,8 @@ export default function ShiftSelectionTable({
                 </TableCell>
                 {timeSlots.map((slot) => {
                   const isScheduled = isShiftScheduled(dayGroup.date, slot.id)
-                  const isSelected = isShiftSelected(dayGroup.date, slot.id)
+                  const isRecorded = conflictShiftKeys.has(buildShiftKey(dayGroup.date, slot.id))
+                  const isSelected = isRecorded ? false : isShiftSelected(dayGroup.date, slot.id)
                   const shift = dayGroup.shifts.find((s) => s.time_slot_id === slot.id)
                   const dayOfWeekId = shift?.day_of_week_id || ''
 
@@ -309,14 +432,20 @@ export default function ShiftSelectionTable({
                       className="text-center px-2 [&:has([role=checkbox])]:pr-2 [&:has([role=checkbox])]:pl-2"
                     >
                       {isScheduled ? (
-                        <div className="flex items-center justify-center">
+                        <div className="flex flex-col items-center justify-center gap-1">
                           <Checkbox
                             checked={isSelected}
                             onCheckedChange={() =>
                               handleShiftToggle(dayGroup.date, dayOfWeekId, slot.id)
                             }
-                            disabled={disabled}
+                            disabled={disabled || isRecorded}
                           />
+                          {isRecorded && (
+                            <span className="text-[9px] text-yellow-600 italic leading-none text-center">
+                              <span className="block">Already</span>
+                              <span className="block">recorded</span>
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <div className="flex items-center justify-center">

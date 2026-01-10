@@ -25,6 +25,7 @@ Issues that need to be fixed.
 Features to implement soon (within the next few weeks).
 
 - [ ] Display name options - offer display name format options (e.g., "First Name Last Initial") with ability to apply to all staff or just the current instance
+- [ ] Dashboard background refresh - refresh coverage summary every 60-120 seconds and show a subtle "Last updated" timestamp with a small manual refresh option
 - [x] Create profile entry for current user - manually create profile entry linking auth user to school (needed for testing audit logging and override functionality) ✅ Added API endpoint and UI page at /setup/profile
 - [ ] Enhanced profile creation UI - create thorough profile creation process where users add their name, select a role, choose/assign school, and provide other necessary information (expand beyond the basic auto-creation)
 - [ ] User onboarding UI - create UI flow for onboarding new users, collecting necessary information (name, role, school assignment)
@@ -63,4 +64,3 @@ Items that have been finished (moved here for reference).
 ## Notes
 
 _Add any additional notes, context, or reminders here._
-
