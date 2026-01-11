@@ -59,8 +59,10 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 pt-3 pb-2 shadow-sm">
       {/* Header */}
-      <div className="mb-2 flex flex-wrap items-center gap-3">
-        <h3 className="text-sm font-semibold text-slate-900">Coverage Summary</h3>
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <div className="text-lg font-bold text-slate-900">
+          {uncovered} of {totalShifts} Shifts Require Subs
+        </div>
         <div className="h-2 rounded-full overflow-hidden flex gap-0.5">
           {sortedShifts.map((shift) => {
             const getSegmentColor = () => {
@@ -88,26 +90,6 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
       </div>
       
       {/* Summary Line */}
-      <div className="mb-3 flex items-center gap-4">
-        <div className="text-sm flex items-center gap-2">
-          <span className="text-muted-foreground">
-            <span className="font-bold text-slate-900">{totalShifts}</span> Total Shifts
-          </span>
-          <Badge variant="outline" className="bg-blue-50 text-blue-900 border-blue-200">
-            Covered: {fully_covered}
-          </Badge>
-          {partially_covered > 0 && (
-            <>
-              <span className="text-muted-foreground">
-                Partial: <span className="font-bold text-blue-700">{partially_covered}</span>
-              </span>
-            </>
-          )}
-          <Badge variant="outline" className="bg-amber-50 text-amber-900 border-amber-200">
-            Uncovered: {uncovered}
-          </Badge>
-        </div>
-      </div>
 
       {/* Shift Chips */}
       <div className="flex flex-wrap gap-1.5 pb-2">

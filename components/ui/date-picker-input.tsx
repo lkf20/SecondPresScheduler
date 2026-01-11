@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { forwardRef, useEffect, useMemo, useState } from 'react'
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -36,9 +36,11 @@ interface DatePickerInputProps {
   allowClear?: boolean
   className?: string
   tabIndex?: number
+  closeOnSelect?: boolean
 }
 
-export default function DatePickerInput({
+const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
+  ({
   id,
   value,
   onChange,
@@ -46,8 +48,10 @@ export default function DatePickerInput({
   allowClear = false,
   className,
   tabIndex,
-}: DatePickerInputProps) {
+  closeOnSelect = false,
+}, ref) => {
   const selectedDate = useMemo(() => parseDate(value), [value])
+  const [open, setOpen] = useState(false)
   const [viewDate, setViewDate] = useState(() => {
     const base = selectedDate || new Date()
     return new Date(base.getFullYear(), base.getMonth(), 1)
@@ -83,6 +87,9 @@ export default function DatePickerInput({
   const handleSelect = (dayNumber: number) => {
     const next = new Date(year, month, dayNumber)
     onChange(formatISO(next))
+    if (closeOnSelect) {
+      setOpen(false)
+    }
   }
 
   const isSelected = (dayNumber: number) =>
@@ -101,12 +108,13 @@ export default function DatePickerInput({
   }
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
           id={id}
           tabIndex={tabIndex}
+          ref={ref}
           className={cn(
             'flex h-12 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm text-left text-foreground shadow-none transition-colors focus:outline-none focus:ring-1 focus:ring-slate-300',
             className
@@ -183,4 +191,8 @@ export default function DatePickerInput({
       </PopoverContent>
     </Popover>
   )
-}
+})
+
+DatePickerInput.displayName = 'DatePickerInput'
+
+export default DatePickerInput

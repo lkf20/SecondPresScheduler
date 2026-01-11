@@ -2,8 +2,8 @@
 
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { AlertCircle, CheckCircle2, AlertTriangle, PieChart } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { AlertCircle, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { parseLocalDate } from '@/lib/utils/date'
 
@@ -80,7 +80,29 @@ export default function AbsenceList({
         const { uncovered, partially_covered, fully_covered, total } = absence.shifts
         const isSelected = selectedAbsence?.id === absence.id
         const hasUncovered = uncovered > 0
-        const hasPartial = partially_covered > 0
+        const hasPartial = partially_covered > 0 || (fully_covered > 0 && uncovered > 0)
+        const classrooms = Array.from(
+          new Set(
+            absence.shifts.shift_details
+              .map((shift) => shift.classroom_name)
+              .filter((name): name is string => Boolean(name))
+          )
+        )
+        const classroomsLabel = classrooms.length > 0 ? classrooms.join(', ') : 'Classroom unavailable'
+        const formatDate = (dateString: string) => {
+          const date = parseLocalDate(dateString)
+          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+          const dayName = dayNames[date.getDay()]
+          const month = monthNames[date.getMonth()]
+          const day = date.getDate()
+          return `${dayName} ${month} ${day}`
+        }
+        const startDate = formatDate(absence.start_date)
+        const endDate =
+          absence.end_date && absence.end_date !== absence.start_date
+            ? formatDate(absence.end_date)
+            : null
 
         return (
           <Card
@@ -89,40 +111,28 @@ export default function AbsenceList({
               'cursor-pointer transition-all hover:shadow-md hover:scale-[1.01] border border-slate-200',
               isSelected && 'ring-1 ring-slate-300 shadow-md border-l-4 border-l-blue-500 animate-in fade-in-50 duration-200'
             )}
-            onClick={() => onSelectAbsence(absence)}
+            onClick={() => {
+              onSelectAbsence(absence)
+              onFindSubs(absence)
+            }}
           >
             <CardContent className="p-4">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1">
                   <h3 className="font-semibold text-base mb-1 text-slate-800">{absence.teacher_name}</h3>
                   <p className="text-xs text-muted-foreground">
-                    {(() => {
-                      const formatDate = (dateString: string) => {
-                        const date = parseLocalDate(dateString)
-                        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-                        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-                        const dayName = dayNames[date.getDay()]
-                        const month = monthNames[date.getMonth()]
-                        const day = date.getDate()
-                        return `${dayName} ${month} ${day}`
-                      }
-                      const startDate = formatDate(absence.start_date)
-                      if (absence.end_date && absence.end_date !== absence.start_date) {
-                        const endDate = formatDate(absence.end_date)
-                        return `${startDate} - ${endDate}`
-                      }
-                      return startDate
-                    })()}
+                    {endDate ? `${startDate} - ${endDate}` : startDate}
+                    {absence.reason && (
+                      <span className="italic"> ({absence.reason})</span>
+                    )}
                   </p>
-                  {absence.reason && (
-                    <p className="text-xs text-muted-foreground mt-1">{absence.reason}</p>
-                  )}
+                  <p className="text-xs text-muted-foreground mt-1">{classroomsLabel}</p>
                 </div>
-                {hasUncovered && (
-                  <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0" />
+                {hasUncovered && !hasPartial && (
+                  <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
                 )}
-                {!hasUncovered && hasPartial && (
-                  <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
+                {hasPartial && (
+                  <PieChart className="h-5 w-5 text-amber-600 flex-shrink-0" />
                 )}
                 {!hasUncovered && !hasPartial && (
                   <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
@@ -156,18 +166,20 @@ export default function AbsenceList({
                 )}
               </div>
 
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full mt-3 border-primary text-primary hover:bg-slate-800 hover:text-white focus:bg-slate-800 focus:text-white"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onFindSubs(absence)
-                }}
-                disabled={loading}
-              >
-                Find Subs
-              </Button>
+              <div className="mt-3 flex justify-end">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-slate-300 text-primary hover:text-primary hover:bg-primary/10"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onFindSubs(absence)
+                  }}
+                  disabled={loading}
+                >
+                  Find Subs →
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )

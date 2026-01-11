@@ -475,6 +475,7 @@ export default function TimeOffFormClient({ timeOffRequest }: TimeOffFormClientP
                   }
                   placeholder="Optional - leave blank for single day"
                   allowClear
+                  closeOnSelect
                   tabIndex={3}
                 />
                 <input type="hidden" {...register('end_date')} />

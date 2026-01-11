@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { ChevronDown, RefreshCw, Search, Settings2 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +20,7 @@ import DatePickerInput from '@/components/ui/date-picker-input'
 import { parseLocalDate } from '@/lib/utils/date'
 import { findBestCombination } from '@/lib/utils/sub-combination'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 type Mode = 'existing' | 'manual'
 
@@ -69,9 +71,12 @@ export default function SubFinderPage() {
   const [includeFlexibleStaff, setIncludeFlexibleStaff] = useState(true)
   const [includeOnlyRecommended, setIncludeOnlyRecommended] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [subSearch, setSubSearch] = useState('')
+  const [isSubSearchOpen, setIsSubSearchOpen] = useState(false)
   const [allSubs, setAllSubs] = useState<any[]>([]) // Store all subs from API
   const [selectedSub, setSelectedSub] = useState<any | null>(null)
   const [isContactPanelOpen, setIsContactPanelOpen] = useState(false)
+  const [isTeacherSearchOpen, setIsTeacherSearchOpen] = useState(false)
   // Cache contact data: key = `${subId}-${absenceId}`
   const [contactDataCache, setContactDataCache] = useState<Map<string, any>>(new Map())
   const [recommendedCombination, setRecommendedCombination] = useState<any>(null)
@@ -83,6 +88,10 @@ export default function SubFinderPage() {
   const [manualSelectedShifts, setManualSelectedShifts] = useState<
     Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
   >([])
+  const [manualTeacherSearch, setManualTeacherSearch] = useState('')
+  const [isManualTeacherSearchOpen, setIsManualTeacherSearchOpen] = useState(false)
+  const subSearchRef = useRef<HTMLDivElement | null>(null)
+  const manualEndDateRef = useRef<HTMLInputElement | null>(null)
   const [endDateCorrected, setEndDateCorrected] = useState(false)
   const justCorrectedRef = useRef(false)
   const selectedClassrooms = selectedAbsence
@@ -94,6 +103,27 @@ export default function SubFinderPage() {
         )
       )
     : []
+  const sortedSubs = useMemo(() => {
+    const displayName = (sub: any) =>
+      (sub.display_name || sub.name || `${sub.first_name ?? ''} ${sub.last_name ?? ''}` || 'Unknown').trim()
+    return [...allSubs].sort((a, b) => displayName(a).localeCompare(displayName(b)))
+  }, [allSubs])
+  const filteredSubsForSearch = useMemo(() => {
+    const query = subSearch.trim().toLowerCase()
+    if (!query) return sortedSubs
+    return sortedSubs.filter((sub) => {
+      const name = (sub.display_name || sub.name || `${sub.first_name ?? ''} ${sub.last_name ?? ''}` || '').toLowerCase()
+      return name.includes(query)
+    })
+  }, [sortedSubs, subSearch])
+  const filteredManualTeachers = useMemo(() => {
+    const query = manualTeacherSearch.trim().toLowerCase()
+    if (!query) return teachers
+    return teachers.filter((teacher) => {
+      const name = (teacher.display_name || `${teacher.first_name ?? ''} ${teacher.last_name ?? ''}` || '').toLowerCase()
+      return name.includes(query)
+    })
+  }, [teachers, manualTeacherSearch])
 
   // Fetch absences on mount and when filters change
   useEffect(() => {
@@ -141,6 +171,19 @@ export default function SubFinderPage() {
     setEndDateCorrected(false)
     justCorrectedRef.current = false
   }, [manualStartDate, manualEndDate])
+
+  useEffect(() => {
+    if (!isSubSearchOpen) return
+    const handleClickOutside = (event: MouseEvent) => {
+      if (subSearchRef.current && !subSearchRef.current.contains(event.target as Node)) {
+        setIsSubSearchOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isSubSearchOpen])
 
   useEffect(() => {
     const fetchTeachers = async () => {
@@ -215,6 +258,79 @@ export default function SubFinderPage() {
       }
     } catch (error) {
       console.error('Error finding subs:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleFindManualSubs = async () => {
+    if (!manualTeacherId || !manualStartDate) return
+    setLoading(true)
+    const teacher = teachers.find((t) => t.id === manualTeacherId)
+    const teacherName = (teacher?.display_name || `${teacher?.first_name ?? ''} ${teacher?.last_name ?? ''}`).trim()
+    setSelectedAbsence({
+      id: `manual-${manualTeacherId}`,
+      teacher_id: manualTeacherId,
+      teacher_name: teacherName || 'Manual Coverage',
+      start_date: manualStartDate,
+      end_date: manualEndDate || manualStartDate,
+      reason: null,
+      shifts: {
+        total: 0,
+        uncovered: 0,
+        partially_covered: 0,
+        fully_covered: 0,
+        shift_details: [],
+      },
+    })
+    setRecommendedSubs([])
+    setAllSubs([])
+    setRecommendedCombination(null)
+    setHighlightedSubId(null)
+    try {
+      const response = await fetch('/api/sub-finder/find-subs-manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teacher_id: manualTeacherId,
+          start_date: manualStartDate,
+          end_date: manualEndDate || manualStartDate,
+          shifts: manualSelectedShifts,
+        }),
+      })
+      if (!response.ok) throw new Error('Failed to find subs')
+      const data = await response.json()
+      const shiftDetails = data.shift_details || []
+      const totals = data.totals || { total: shiftDetails.length, uncovered: shiftDetails.length, partially_covered: 0, fully_covered: 0 }
+
+      setSelectedAbsence({
+        id: `manual-${manualTeacherId}`,
+        teacher_id: manualTeacherId,
+        teacher_name: teacherName || 'Manual Coverage',
+        start_date: manualStartDate,
+        end_date: manualEndDate || manualStartDate,
+        reason: null,
+        shifts: {
+          total: totals.total,
+          uncovered: totals.uncovered,
+          partially_covered: totals.partially_covered,
+          fully_covered: totals.fully_covered,
+          shift_details: shiftDetails,
+        },
+      })
+
+      const subs = data.subs || []
+      setAllSubs(subs)
+      const combination = findBestCombination(subs)
+      setRecommendedCombination(combination)
+      setIncludeOnlyRecommended(true)
+      if (true) {
+        setRecommendedSubs(subs.filter((sub: any) => sub.coverage_percent > 0))
+      } else {
+        setRecommendedSubs(subs)
+      }
+    } catch (error) {
+      console.error('Error finding subs (manual):', error)
     } finally {
       setLoading(false)
     }
@@ -323,6 +439,17 @@ export default function SubFinderPage() {
     }
   }
 
+  const scrollToSubCard = (subId: string) => {
+    const element = document.getElementById(`sub-card-${subId}`)
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setHighlightedSubId(subId)
+      setTimeout(() => {
+        setHighlightedSubId(null)
+      }, 2000)
+    }
+  }
+
   const handleCloseContactPanel = () => {
     setIsContactPanelOpen(false)
     setSelectedSub(null)
@@ -379,8 +506,8 @@ export default function SubFinderPage() {
   return (
     <div className="flex h-[calc(100vh-4rem+1.5rem+4rem)] -mx-4 -mt-[calc(1.5rem+4rem)] -mb-6 relative">
       {/* Left Rail */}
-      <div className="w-80 border-r border-slate-200 bg-slate-200 shadow-[2px_0_6px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden">
-        <div className="sticky top-0 z-10 px-3 pt-4 pb-4 border-b border-slate-400 bg-slate-200 flex flex-col">
+      <div className="w-80 border-r border-slate-200 bg-slate-100 shadow-[2px_0_6px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden">
+        <div className="sticky top-0 z-10 px-3 pt-10 pb-4 border-b border-slate-200 bg-slate-100 flex flex-col">
           <h1 className="text-xl font-bold mb-4 text-slate-800 pl-2">Sub Finder</h1>
 
           {/* Mode Toggle - Pill */}
@@ -420,13 +547,48 @@ export default function SubFinderPage() {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <Search className="h-4 w-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search absences..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="flex-1 text-sm border border-slate-200 rounded-md px-2 py-1 bg-white/80 focus:bg-white focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300 transition-colors"
-                />
+                <div className="flex-1">
+                  <div className="rounded-md border border-slate-200 bg-white/80">
+                    <div className="px-2 py-1">
+                      <input
+                        type="text"
+                        placeholder="Search teachers..."
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        onFocus={() => setIsTeacherSearchOpen(true)}
+                        onBlur={() => {
+                          setTimeout(() => setIsTeacherSearchOpen(false), 150)
+                        }}
+                        className="w-full bg-transparent text-sm focus:outline-none"
+                      />
+                    </div>
+                    {isTeacherSearchOpen && (
+                      <div className="border-t border-slate-100 max-h-40 overflow-y-auto px-2 py-1">
+                        {Array.from(new Set(absences.map((absence) => absence.teacher_name)))
+                          .filter((name) => name.toLowerCase().includes(searchQuery.toLowerCase()))
+                          .sort((a, b) => a.localeCompare(b))
+                          .map((name) => (
+                            <button
+                              key={name}
+                              type="button"
+                              className="w-full rounded px-1.5 py-1 text-left text-sm text-slate-700 hover:bg-slate-100"
+                              onClick={() => {
+                                setSearchQuery(name)
+                                setIsTeacherSearchOpen(false)
+                              }}
+                            >
+                              {name}
+                            </button>
+                          ))}
+                        {absences.length === 0 && (
+                          <div className="px-1.5 py-1 text-xs text-muted-foreground">
+                            No teachers found
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -436,24 +598,47 @@ export default function SubFinderPage() {
             <div className="space-y-2">
               <div>
                 <Label className="text-sm">Teacher</Label>
-                <div className="relative mt-1">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <select
-                    className="w-full h-10 text-sm border border-input rounded-md bg-background pl-9 pr-9 appearance-none shadow-none focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300 transition-colors"
-                    value={manualTeacherId}
-                    onChange={(event) => setManualTeacherId(event.target.value)}
-                  >
-                    <option value="">Select teacher...</option>
-                    {teachers.map((teacher) => {
-                      const name = (teacher.display_name || `${teacher.first_name ?? ''} ${teacher.last_name ?? ''}`).trim()
-                      return (
-                        <option key={teacher.id} value={teacher.id}>
-                          {name}
-                        </option>
-                      )
-                    })}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <div className="mt-1">
+                  <div className="rounded-md border border-slate-200 bg-white">
+                    <div className="border-b border-slate-100 px-2 py-1">
+                      <Input
+                        placeholder="Search teachers..."
+                        value={manualTeacherSearch}
+                        onChange={(event) => setManualTeacherSearch(event.target.value)}
+                        onFocus={() => setIsManualTeacherSearchOpen(true)}
+                        onBlur={() => {
+                          setTimeout(() => setIsManualTeacherSearchOpen(false), 150)
+                        }}
+                        className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
+                      />
+                    </div>
+                    {isManualTeacherSearchOpen && (
+                      <div className="max-h-52 overflow-y-auto p-2">
+                        {filteredManualTeachers.map((teacher) => {
+                          const name = (teacher.display_name || `${teacher.first_name ?? ''} ${teacher.last_name ?? ''}`).trim()
+                          return (
+                            <button
+                              key={teacher.id}
+                              type="button"
+                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
+                              onClick={() => {
+                                setManualTeacherId(teacher.id)
+                                setManualTeacherSearch(name)
+                                setIsManualTeacherSearchOpen(false)
+                              }}
+                            >
+                              {name}
+                            </button>
+                          )
+                        })}
+                        {filteredManualTeachers.length === 0 && (
+                          <div className="px-2 py-1 text-xs text-muted-foreground">
+                            No matches
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               <div>
@@ -461,7 +646,13 @@ export default function SubFinderPage() {
                 <div className="mt-1">
                   <DatePickerInput
                     value={manualStartDate}
-                    onChange={setManualStartDate}
+                    onChange={(value) => {
+                      setManualStartDate(value)
+                      setTimeout(() => {
+                        manualEndDateRef.current?.focus()
+                        manualEndDateRef.current?.click()
+                      }, 0)
+                    }}
                     placeholder="Select start date"
                   />
                 </div>
@@ -470,10 +661,12 @@ export default function SubFinderPage() {
                 <Label className="text-sm">End Date</Label>
                 <div className="mt-1">
                   <DatePickerInput
+                    ref={manualEndDateRef}
                     value={manualEndDate}
                     onChange={setManualEndDate}
                     placeholder="Select end date"
                     allowClear
+                    closeOnSelect
                   />
                 </div>
                 {endDateCorrected && (
@@ -498,6 +691,7 @@ export default function SubFinderPage() {
                 variant="outline"
                 className="w-full border-slate-200 text-primary hover:bg-slate-800 hover:text-white focus:bg-slate-800 focus:text-white"
                 disabled={!manualTeacherId || !manualStartDate}
+                onClick={handleFindManualSubs}
               >
                 Find Subs
               </Button>
@@ -520,14 +714,14 @@ export default function SubFinderPage() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden px-8">
         {/* Fixed Header Bar */}
         {selectedAbsence && (
           <>
             <div className="sticky top-0 z-10 border-b bg-white shadow-sm">
-              <div className="px-6 pt-4 pb-3">
+              <div className="px-6 pt-10 pb-2">
                 {/* Header Row */}
-                <div className="mb-2">
+                <div className="mb-5">
                   <h2 className="text-xl font-semibold flex items-center gap-2">
                     <span>Sub Finder</span>
                     <span className="text-muted-foreground">→</span>
@@ -559,8 +753,17 @@ export default function SubFinderPage() {
                   )}
                 </div>
 
+                {selectedAbsence.shifts.total > 0 && (
+                  <div className="mt-4 mb-8">
+                    <CoverageSummary
+                      shifts={selectedAbsence.shifts}
+                      onShiftClick={handleShiftClick}
+                    />
+                  </div>
+                )}
+
                 {/* Toolbar Row */}
-                <div className="flex items-end justify-between">
+                <div className="flex items-end justify-between pb-3">
                   {/* Color Key - Left aligned, bottom aligned */}
                   <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1.5">
@@ -591,7 +794,7 @@ export default function SubFinderPage() {
                     <PopoverTrigger asChild>
                       <Button variant="outline" size="sm" className="relative">
                         <Settings2 className="h-4 w-4 mr-2" />
-                        Filters
+                        Search & Filter
                         {(includePartiallyCovered || !includeOnlyRecommended || !includeFlexibleStaff) && (
                           <Badge
                             variant="secondary"
@@ -606,8 +809,63 @@ export default function SubFinderPage() {
                         )}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-80" align="start">
+                    <PopoverContent
+                      className="w-80"
+                      align="start"
+                      onOpenAutoFocus={(event) => event.preventDefault()}
+                    >
                       <div className="space-y-4">
+                        <div>
+                          <Label className="text-sm font-medium">Substitute</Label>
+                          <div ref={subSearchRef} className="mt-2 rounded-md border border-slate-200 bg-white">
+                            <div className="border-b border-slate-100 p-2">
+                              <Input
+                                placeholder="Search substitutes..."
+                                value={subSearch}
+                                onChange={(event) => setSubSearch(event.target.value)}
+                                onFocus={() => setIsSubSearchOpen(true)}
+                                className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
+                              />
+                            </div>
+                            {isSubSearchOpen && (
+                              <div className="max-h-60 overflow-y-auto p-2">
+                                {filteredSubsForSearch.length === 0 ? (
+                                  <div className="p-2 text-xs text-muted-foreground">No matches</div>
+                                ) : (
+                                  <div className="space-y-1">
+                                    {filteredSubsForSearch.map((sub) => {
+                                      const name = sub.name || sub.display_name || `${sub.first_name ?? ''} ${sub.last_name ?? ''}` || 'Unknown'
+                                      const canCover = (sub.shifts_covered ?? 0) > 0 || (sub.can_cover?.length ?? 0) > 0
+                                      return (
+                                        <button
+                                          key={sub.id}
+                                          type="button"
+                                          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
+                                          onClick={() => {
+                                            if (!canCover && includeOnlyRecommended) {
+                                              setIncludeOnlyRecommended(false)
+                                              setRecommendedSubs(allSubs)
+                                              toast('Turning off “Include only recommended subs” to show this selection.')
+                                              setTimeout(() => scrollToSubCard(sub.id), 50)
+                                            } else {
+                                              scrollToSubCard(sub.id)
+                                            }
+                                            setIsSubSearchOpen(false)
+                                          }}
+                                        >
+                                          <span
+                                            className={`h-2 w-2 rounded-full ${canCover ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                          />
+                                          <span>{name.trim()}</span>
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                         <div>
                           <h4 className="font-medium text-sm mb-3">Filter Options</h4>
                           <div className="space-y-3">
@@ -684,20 +942,16 @@ export default function SubFinderPage() {
         <div className="flex-1 overflow-y-auto">
           {selectedAbsence ? (
             <div className="p-4">
-              {selectedAbsence.shifts.total > 0 && (
-                <div className="mb-4">
-                  <CoverageSummary
-                    shifts={selectedAbsence.shifts}
-                    onShiftClick={handleShiftClick}
-                  />
-                </div>
-              )}
               {/* Recommended Combination Section */}
               {recommendedCombination && (
-                <RecommendedCombination
-                  combination={recommendedCombination}
-                  onContactSub={handleCombinationContact}
-                />
+                <div className="mt-6">
+                  <RecommendedCombination
+                    combination={recommendedCombination}
+                    onContactSub={handleCombinationContact}
+                    totalShifts={selectedAbsence.shifts.total}
+                    useRemainingLabel={selectedAbsence.shifts.total > selectedAbsence.shifts.uncovered}
+                  />
+                </div>
               )}
               
               <RecommendedSubsList

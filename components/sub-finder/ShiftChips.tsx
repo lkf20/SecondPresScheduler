@@ -1,7 +1,7 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { parseLocalDate } from '@/lib/utils/date'
 
 interface Shift {
@@ -9,6 +9,8 @@ interface Shift {
   time_slot_code: string
   day_name?: string
   reason?: string // Reason for unavailable shifts
+  classroom_name?: string | null
+  class_name?: string | null
 }
 
 interface ShiftChipsProps {
@@ -30,6 +32,16 @@ export function formatShiftLabel(dateString: string, timeSlotCode: string): stri
   return `${dayName} ${timeSlotCode} • ${month} ${day}`
 }
 
+const formatShiftTooltipLabel = (dateString: string, timeSlotCode: string): string => {
+  const date = parseLocalDate(dateString)
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const dayName = dayNames[date.getDay()]
+  const month = monthNames[date.getMonth()]
+  const day = date.getDate()
+  return `${dayName} ${timeSlotCode} • ${month} ${day}`
+}
+
 export default function ShiftChips({ canCover, cannotCover, assigned = [], showLegend = false, isDeclined = false }: ShiftChipsProps) {
   if (canCover.length === 0 && cannotCover.length === 0 && assigned.length === 0) {
     return null
@@ -40,6 +52,8 @@ export default function ShiftChips({ canCover, cannotCover, assigned = [], showL
     time_slot_code: string
     status: 'assigned' | 'available' | 'unavailable'
     reason?: string // Reason for unavailable shifts
+    classroom_name?: string | null
+    class_name?: string | null
   }
 
   const allShiftsMap = new Map<string, ShiftItem>()
@@ -51,6 +65,8 @@ export default function ShiftChips({ canCover, cannotCover, assigned = [], showL
       date: shift.date,
       time_slot_code: shift.time_slot_code,
       status: 'assigned',
+      classroom_name: shift.classroom_name || null,
+      class_name: shift.class_name || null,
     })
   })
 
@@ -62,6 +78,8 @@ export default function ShiftChips({ canCover, cannotCover, assigned = [], showL
         date: shift.date,
         time_slot_code: shift.time_slot_code,
         status: 'available',
+        classroom_name: shift.classroom_name || null,
+        class_name: shift.class_name || null,
       })
     }
   })
@@ -75,6 +93,8 @@ export default function ShiftChips({ canCover, cannotCover, assigned = [], showL
         time_slot_code: shift.time_slot_code,
         status: 'unavailable',
         reason: shift.reason, // Store reason for tooltip
+        classroom_name: shift.classroom_name || null,
+        class_name: shift.class_name || null,
       })
     }
   })
@@ -105,54 +125,64 @@ export default function ShiftChips({ canCover, cannotCover, assigned = [], showL
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-1.5">
-        {allShifts.map((shift, idx) => {
-          const shiftLabel = formatShiftLabel(shift.date, shift.time_slot_code)
-          const badge = (
-            <Badge
-              key={`shift-${shift.date}-${shift.time_slot_code}-${idx}`}
-              variant="outline"
-              className={`text-xs ${getBadgeClassName(shift.status)}`}
-            >
-              {shiftLabel}
-            </Badge>
-          )
+    <TooltipProvider>
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-1.5">
+          {allShifts.map((shift, idx) => {
+            const shiftLabel = formatShiftLabel(shift.date, shift.time_slot_code)
+            const tooltipLabel = formatShiftTooltipLabel(shift.date, shift.time_slot_code)
+            const classroomName = shift.classroom_name
+            const classGroupName = shift.class_name
+            const classroomLabel = classroomName
+              ? classGroupName
+                ? `${classroomName} (${classGroupName})`
+                : classroomName
+              : classGroupName || 'Classroom unavailable'
+            const badge = (
+              <Badge
+                key={`shift-${shift.date}-${shift.time_slot_code}-${idx}`}
+                variant="outline"
+                className={`text-xs ${getBadgeClassName(shift.status)}`}
+              >
+                {shiftLabel}
+              </Badge>
+            )
 
-          // Wrap unavailable shifts with tooltip if reason exists
-          if (shift.status === 'unavailable' && shift.reason) {
             return (
               <Tooltip key={`shift-${shift.date}-${shift.time_slot_code}-${idx}`}>
                 <TooltipTrigger asChild>
                   {badge}
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  <p>{shift.reason}</p>
+                  <div className="text-base">
+                    <div>{tooltipLabel}</div>
+                    <div className={classroomName ? 'font-semibold' : undefined}>{classroomLabel}</div>
+                    {shift.status === 'unavailable' && shift.reason && (
+                      <div className="text-muted-foreground">{shift.reason}</div>
+                    )}
+                  </div>
                 </TooltipContent>
               </Tooltip>
             )
-          }
-
-          return badge
-        })}
-      </div>
-      {showLegend && (
-        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1 pb-4">
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded border bg-blue-50 border-blue-200" />
-            <span>Assigned</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded border bg-emerald-50 border-emerald-200" />
-            <span>Available</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded border bg-gray-100 border-gray-300" />
-            <span>Unavailable</span>
-          </div>
+          })}
         </div>
-      )}
-    </div>
+        {showLegend && (
+          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1 pb-4">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded border bg-blue-50 border-blue-200" />
+              <span>Assigned</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded border bg-emerald-50 border-emerald-200" />
+              <span>Available</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded border bg-gray-100 border-gray-300" />
+              <span>Unavailable</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </TooltipProvider>
   )
 }
-

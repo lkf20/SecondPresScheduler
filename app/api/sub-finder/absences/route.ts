@@ -178,12 +178,20 @@ export async function GET(request: NextRequest) {
       })
     )
     
+    const today = new Date()
+    const todayString = today.toISOString().slice(0, 10)
+
     // Filter absences based on includePartiallyCovered flag
     // If false, only show absences with uncovered shifts (exclude fully covered)
     // If true, show absences with uncovered OR partially covered shifts (exclude fully covered)
     // Always show absences with no shifts (newly created)
     let filteredAbsences = absencesWithCoverage.filter(
       (absence) => {
+        const startDate = absence.start_date
+        const endDate = absence.end_date || absence.start_date
+        if (startDate < todayString && endDate < todayString) {
+          return false
+        }
         // Always show if there are no shifts (newly created time off)
         if (absence.shifts.total === 0) return true
         
@@ -197,11 +205,19 @@ export async function GET(request: NextRequest) {
       }
     )
     
-    // Sort by start date (most recent first)
+    const sortKey = (absence: any) => {
+      const startDate = absence.start_date
+      return startDate < todayString ? todayString : startDate
+    }
+
+    // Sort by closest to present (earliest upcoming/ongoing first)
     filteredAbsences.sort((a, b) => {
-      const dateA = new Date(a.start_date).getTime()
-      const dateB = new Date(b.start_date).getTime()
-      return dateB - dateA
+      const dateA = sortKey(a)
+      const dateB = sortKey(b)
+      if (dateA === dateB) {
+        return a.start_date.localeCompare(b.start_date)
+      }
+      return dateA.localeCompare(dateB)
     })
     
     return NextResponse.json(filteredAbsences)

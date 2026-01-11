@@ -16,6 +16,7 @@ interface Shift {
   time_slot_code: string
   class_id?: string | null
   classroom_id?: string | null
+  classroom_name?: string | null
   diaper_changing_required?: boolean
   lifting_children_required?: boolean
   class_group_name?: string | null
@@ -34,6 +35,7 @@ interface SubMatch {
     day_name: string
     time_slot_code: string
     class_name: string | null
+    classroom_name?: string | null
     diaper_changing_required?: boolean
     lifting_children_required?: boolean
   }>
@@ -42,6 +44,7 @@ interface SubMatch {
     day_name: string
     time_slot_code: string
     reason: string
+    classroom_name?: string | null
     coverage_request_shift_id?: string
   }>
   qualification_matches: number
@@ -84,6 +87,25 @@ export async function POST(request: NextRequest) {
     const shifts = await getTimeOffShifts(absence_id)
     if (shifts.length === 0) {
       return NextResponse.json([])
+    }
+
+    // Lookup classroom/class names from teacher schedule
+    let scheduleLookup = new Map<string, { classrooms: Set<string>; classes: Set<string> }>()
+    const { data: teacherSchedules, error: scheduleError } = await supabase
+      .from('teacher_schedules')
+      .select('day_of_week_id, time_slot_id, classroom:classrooms(name), class:class_groups(name)')
+      .eq('teacher_id', timeOffRequest.teacher_id)
+
+    if (scheduleError) {
+      console.error('Error fetching teacher schedules:', scheduleError)
+    } else {
+      ;(teacherSchedules || []).forEach((schedule: any) => {
+        const key = `${schedule.day_of_week_id}|${schedule.time_slot_id}`
+        const entry = scheduleLookup.get(key) || { classrooms: new Set<string>(), classes: new Set<string>() }
+        if (schedule.classroom?.name) entry.classrooms.add(schedule.classroom.name)
+        if (schedule.class?.name) entry.classes.add(schedule.class.name)
+        scheduleLookup.set(key, entry)
+      })
     }
 
     // Get coverage_request_id to fetch class group info
@@ -140,6 +162,14 @@ export async function POST(request: NextRequest) {
         lifting_children_required: false,
         class_group_name: null,
       }
+      const scheduleKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
+      const scheduleEntry = scheduleLookup.get(scheduleKey)
+      const classroom_name = scheduleEntry?.classrooms?.size
+        ? Array.from(scheduleEntry.classrooms).join(', ')
+        : null
+      const class_name = scheduleEntry?.classes?.size
+        ? Array.from(scheduleEntry.classes).join(', ')
+        : classGroupInfo.class_group_name
       
       return {
         date: shift.date,
@@ -149,9 +179,10 @@ export async function POST(request: NextRequest) {
         time_slot_code: shift.time_slot?.code || '',
         class_id: null, // TODO: Get from schedule cells
         classroom_id: null, // TODO: Get from schedule cells
+        classroom_name,
         diaper_changing_required: classGroupInfo.diaper_changing_required,
         lifting_children_required: classGroupInfo.lifting_children_required,
-        class_group_name: classGroupInfo.class_group_name,
+        class_group_name: class_name,
       }
     })
 
@@ -258,6 +289,7 @@ export async function POST(request: NextRequest) {
           day_name: string
           time_slot_code: string
           class_name: string | null
+          classroom_name?: string | null
           diaper_changing_required?: boolean
           lifting_children_required?: boolean
         }> = []
@@ -266,6 +298,7 @@ export async function POST(request: NextRequest) {
           day_name: string
           time_slot_code: string
           reason: string
+          classroom_name?: string | null
           coverage_request_shift_id?: string
         }> = []
         let qualificationMatches = 0
@@ -307,6 +340,7 @@ export async function POST(request: NextRequest) {
               day_name: shift.day_name,
               time_slot_code: shift.time_slot_code,
               class_name: shift.class_group_name || null,
+              classroom_name: shift.classroom_name || null,
               diaper_changing_required: shift.diaper_changing_required,
               lifting_children_required: shift.lifting_children_required,
             })
@@ -334,6 +368,7 @@ export async function POST(request: NextRequest) {
               day_name: shift.day_name,
               time_slot_code: shift.time_slot_code,
               reason,
+              classroom_name: shift.classroom_name || null,
               coverage_request_shift_id: coverageRequestShiftId,
             })
           }
@@ -344,6 +379,7 @@ export async function POST(request: NextRequest) {
           date: string
           day_name: string
           time_slot_code: string
+          classroom_name?: string | null
         }> = []
         
         if (coverageRequestId) {
@@ -383,6 +419,7 @@ export async function POST(request: NextRequest) {
                     date: assignment.date,
                     day_name: assignment.days_of_week?.name || matchingShift.day_name,
                     time_slot_code: assignment.time_slots?.code || matchingShift.time_slot_code,
+                    classroom_name: matchingShift.classroom_name || null,
                   })
                 }
               })
@@ -463,4 +500,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

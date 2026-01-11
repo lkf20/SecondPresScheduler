@@ -146,6 +146,7 @@ export default function SubAvailabilityExceptions({
                       }
                       placeholder="Select end date"
                       allowClear
+                      closeOnSelect
                       className="mt-1"
                     />
                   </div>

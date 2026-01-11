@@ -12,6 +12,7 @@ type Shift = {
   day_name?: string
   time_slot_code: string
   class_name?: string | null
+  classroom_name?: string | null
   reason?: string
 }
 
@@ -23,10 +24,12 @@ type ConflictCounts = {
 }
 
 interface SubFinderCardProps {
+  id?: string
   name: string
   phone: string | null
   shiftsCovered: number
   totalShifts: number
+  useRemainingLabel?: boolean
   canCover: Shift[]
   cannotCover: Shift[]
   assigned?: Shift[]
@@ -40,10 +43,12 @@ interface SubFinderCardProps {
 }
 
 export default function SubFinderCard({
+  id,
   name,
   phone,
   shiftsCovered,
   totalShifts,
+  useRemainingLabel = false,
   canCover,
   cannotCover,
   assigned = [],
@@ -95,7 +100,7 @@ export default function SubFinderCard({
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          {shiftsCovered}/{totalShifts} remaining shifts
+          {shiftsCovered} of {totalShifts} {useRemainingLabel ? 'remaining shifts' : 'shifts'}
         </p>
       </div>
     )
@@ -103,6 +108,7 @@ export default function SubFinderCard({
 
   return (
     <Card
+      id={id}
       className={cn(
         'hover:shadow-md transition-shadow',
         highlighted && 'ring-2 ring-blue-500 ring-offset-2 animate-pulse',
@@ -171,10 +177,10 @@ export default function SubFinderCard({
           <Button
             size="sm"
             variant="ghost"
-            className="text-primary hover:text-primary hover:bg-primary/10"
+            className="-mr-2 text-primary hover:text-primary hover:bg-primary/10"
             onClick={() => onContact?.()}
           >
-            Contact & Assign <ArrowRight className="h-3.5 w-3.5 ml-1" />
+            Contact & Assign <ArrowRight className="h-3.5 w-3.5 ml-0.5" />
           </Button>
         </div>
       </CardContent>

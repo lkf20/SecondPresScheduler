@@ -19,17 +19,20 @@ interface RecommendedSub {
     day_name: string
     time_slot_code: string
     class_name: string | null
+    classroom_name?: string | null
   }>
   cannot_cover: Array<{
     date: string
     day_name: string
     time_slot_code: string
     reason: string
+    classroom_name?: string | null
   }>
   assigned_shifts?: Array<{
     date: string
     day_name: string
     time_slot_code: string
+    classroom_name?: string | null
   }>
   notes?: string
   response_status?: string | null
@@ -143,8 +146,23 @@ export default function RecommendedSubsList({
   
   const totalShiftsNeedingCoverage = subs[0]?.total_shifts || 0
   const totalUncoveredShifts = totalShiftsNeedingCoverage - allAssignedShifts.size
+  const hasAssignedShifts = allAssignedShifts.size > 0
   
   const isDeclined = (sub: RecommendedSub) => sub.response_status === 'declined_all'
+  const classroomLookup = new Map<string, string>()
+  absence.shifts?.shift_details?.forEach((shift) => {
+    if (shift.classroom_name) {
+      classroomLookup.set(`${shift.date}|${shift.time_slot_code}`, shift.classroom_name)
+    }
+  })
+
+  const withClassroomName = <T extends { date: string; time_slot_code: string; classroom_name?: string | null }>(
+    shifts: T[]
+  ) =>
+    shifts.map((shift) => ({
+      ...shift,
+      classroom_name: shift.classroom_name ?? classroomLookup.get(`${shift.date}|${shift.time_slot_code}`) ?? null,
+    }))
 
   
   const processedSubs = subs.map((sub) => {
@@ -195,16 +213,20 @@ export default function RecommendedSubsList({
         {nonDeclinedSubs.map(({ sub, shiftsCovered, remainingShifts }) => {
           const remainingCanCover = filterRemainingShifts(sub.can_cover)
           const remainingCannotCover = filterRemainingShifts(sub.cannot_cover)
+          const canCoverWithClassrooms = withClassroomName(remainingCanCover)
+          const cannotCoverWithClassrooms = withClassroomName(remainingCannotCover)
 
           return (
             <SubFinderCard
               key={sub.id}
+              id={`sub-card-${sub.id}`}
               name={sub.name}
               phone={sub.phone}
               shiftsCovered={shiftsCovered}
-              totalShifts={remainingShifts}
-              canCover={remainingCanCover}
-              cannotCover={remainingCannotCover}
+              totalShifts={totalShiftsNeedingCoverage}
+              useRemainingLabel={hasAssignedShifts}
+              canCover={canCoverWithClassrooms}
+              cannotCover={cannotCoverWithClassrooms}
               assigned={[]}
               notes={sub.notes}
               isDeclined={isDeclined(sub)}
@@ -237,16 +259,20 @@ export default function RecommendedSubsList({
                   {declinedSubs.map(({ sub, shiftsCovered, remainingShifts }) => {
                     const remainingCanCover = filterRemainingShifts(sub.can_cover)
                     const remainingCannotCover = filterRemainingShifts(sub.cannot_cover)
+                    const canCoverWithClassrooms = withClassroomName(remainingCanCover)
+                    const cannotCoverWithClassrooms = withClassroomName(remainingCannotCover)
 
                     return (
                       <SubFinderCard
                         key={sub.id}
+                        id={`sub-card-${sub.id}`}
                         name={sub.name}
                         phone={sub.phone}
                         shiftsCovered={shiftsCovered}
-                        totalShifts={remainingShifts}
-                        canCover={remainingCanCover}
-                        cannotCover={remainingCannotCover}
+                        totalShifts={totalShiftsNeedingCoverage}
+                        useRemainingLabel={hasAssignedShifts}
+                        canCover={canCoverWithClassrooms}
+                        cannotCover={cannotCoverWithClassrooms}
                         assigned={[]}
                         notes={sub.notes}
                         isDeclined={true}

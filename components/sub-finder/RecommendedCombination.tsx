@@ -8,11 +8,15 @@ import SubFinderCard from '@/components/sub-finder/SubFinderCard'
 interface RecommendedCombinationProps {
   combination: RecommendedCombinationType | null
   onContactSub: (subId: string) => void
+  totalShifts: number
+  useRemainingLabel?: boolean
 }
 
 export default function RecommendedCombination({
   combination,
   onContactSub,
+  totalShifts,
+  useRemainingLabel = false,
 }: RecommendedCombinationProps) {
   // Only show if combination requires more than 1 sub
   if (!combination || combination.subs.length <= 1) {
@@ -53,10 +57,12 @@ export default function RecommendedCombination({
         {combination.subs.map((assignment) => (
           <SubFinderCard
             key={assignment.subId}
+            id={`sub-card-${assignment.subId}`}
             name={assignment.subName}
             phone={assignment.phone}
             shiftsCovered={assignment.shiftsCovered}
-            totalShifts={assignment.totalShifts}
+            totalShifts={totalShifts}
+            useRemainingLabel={useRemainingLabel}
             canCover={assignment.shifts}
             cannotCover={[]}
             assigned={[]}
