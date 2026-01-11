@@ -49,7 +49,6 @@ interface SubAvailabilityGridProps {
 }
 
 export default function SubAvailabilityGrid({
-  subId,
   weeklyAvailability,
   exceptionRows,
   onAvailabilityChange,

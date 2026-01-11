@@ -33,7 +33,6 @@ export default async function TimeOffPage({
     requests.map(async (request: TimeOffRequest) => {
       const shifts = await getTimeOffShifts(request.id)
       const shiftCount = shifts.length
-      const shiftMode = request.shift_selection_mode || 'all_scheduled'
       const coverage = await getTimeOffCoverageSummary({
         id: request.id,
         teacher_id: request.teacher_id,

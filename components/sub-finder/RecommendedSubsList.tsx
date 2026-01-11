@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { CheckCircle2, CircleX, ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 import { useState } from 'react'
 import SubFinderCard from '@/components/sub-finder/SubFinderCard'
@@ -49,7 +49,6 @@ interface RecommendedSubsListProps {
   }
   showAllSubs?: boolean
   onContactSub?: (sub: RecommendedSub) => void
-  onViewDetails?: (sub: RecommendedSub) => void
   hideHeader?: boolean
   highlightedSubId?: string | null
 }
@@ -60,7 +59,6 @@ export default function RecommendedSubsList({
   absence,
   showAllSubs = false,
   onContactSub,
-  onViewDetails,
   hideHeader = false,
   highlightedSubId = null,
 }: RecommendedSubsListProps) {
@@ -210,7 +208,7 @@ export default function RecommendedSubsList({
           </div>
         )}
 
-        {nonDeclinedSubs.map(({ sub, shiftsCovered, remainingShifts }) => {
+        {nonDeclinedSubs.map(({ sub, shiftsCovered }) => {
           const remainingCanCover = filterRemainingShifts(sub.can_cover)
           const remainingCannotCover = filterRemainingShifts(sub.cannot_cover)
           const canCoverWithClassrooms = withClassroomName(remainingCanCover)
@@ -256,7 +254,7 @@ export default function RecommendedSubsList({
               
               {isDeclinedExpanded && (
                 <div className="mt-4 space-y-4">
-                  {declinedSubs.map(({ sub, shiftsCovered, remainingShifts }) => {
+                  {declinedSubs.map(({ sub, shiftsCovered }) => {
                     const remainingCanCover = filterRemainingShifts(sub.can_cover)
                     const remainingCannotCover = filterRemainingShifts(sub.cannot_cover)
                     const canCoverWithClassrooms = withClassroomName(remainingCanCover)

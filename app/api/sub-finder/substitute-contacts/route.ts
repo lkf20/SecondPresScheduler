@@ -5,7 +5,7 @@ import {
   updateSubstituteContact,
   upsertShiftOverrides,
 } from '@/lib/api/substitute-contacts'
-import { createErrorResponse, getErrorMessage } from '@/lib/utils/errors'
+import { createErrorResponse } from '@/lib/utils/errors'
 
 /**
  * GET /api/sub-finder/substitute-contacts
@@ -88,4 +88,3 @@ export async function PUT(request: NextRequest) {
     return createErrorResponse(error, 'Failed to update substitute contact', 500, 'PUT /api/sub-finder/substitute-contacts')
   }
 }
-

@@ -26,12 +26,10 @@ interface ScheduleCellProps {
       }>
     } | null
   }
-  day_of_week_id?: string
-  time_slot_id?: string
   onClick: () => void
 }
 
-export default function ScheduleCell({ data, day_of_week_id, time_slot_id, onClick }: ScheduleCellProps) {
+export default function ScheduleCell({ data, onClick }: ScheduleCellProps) {
   const scheduleCell = data?.schedule_cell
   const isInactive = scheduleCell && !scheduleCell.is_active
   const isActive = scheduleCell?.is_active ?? false
@@ -198,4 +196,3 @@ export default function ScheduleCell({ data, day_of_week_id, time_slot_id, onCli
     </div>
   )
 }
-

@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getTimeOffRequestById } from '@/lib/api/time-off'
-import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
 import { createErrorResponse, getErrorMessage } from '@/lib/utils/errors'
 
 /**
@@ -9,7 +8,6 @@ import { createErrorResponse, getErrorMessage } from '@/lib/utils/errors'
  * Get coverage_request_id and shift mappings for a time_off_request
  */
 export async function GET(
-  request: NextRequest,
   { params }: { params: Promise<{ absence_id: string }> }
 ) {
   try {
@@ -32,9 +30,6 @@ export async function GET(
     if (!coverageRequestId) {
       return createErrorResponse('Coverage request not found for this absence', 404)
     }
-
-    // Get time_off_shifts
-    const timeOffShifts = await getTimeOffShifts(absence_id)
 
     // Get coverage_request_shifts
     const { data: coverageRequestShifts, error: shiftsError } = await supabase
@@ -80,4 +75,3 @@ export async function GET(
     return createErrorResponse(getErrorMessage(error), 500)
   }
 }
-

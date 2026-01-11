@@ -47,7 +47,6 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
     existingTeacher: { first_name: string; last_name: string; email: string | null }
   } | null>(null)
   const [proceedWithDuplicate, setProceedWithDuplicate] = useState(false)
-  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false)
 
   const {
     register,

@@ -26,7 +26,7 @@ interface CoverageSummaryProps {
 }
 
 export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummaryProps) {
-  const { uncovered, partially_covered, fully_covered, shift_details } = shifts
+  const { uncovered, shift_details } = shifts
   
   // Don't show if no shifts
   if (shifts.total === 0) {
@@ -54,8 +54,6 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
 
 
   const totalShifts = shifts.total
-  const coveragePercent = totalShifts > 0 ? Math.round((fully_covered / totalShifts) * 100) : 0
-
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 pt-3 pb-2 shadow-sm">
       {/* Header */}

@@ -3,7 +3,7 @@ import '@testing-library/jest-dom'
 
 // Mock Next.js server globals
 global.Request = class {
-  constructor(input, init) {}
+  constructor() {}
 }
 
 global.Response = class {
@@ -16,4 +16,3 @@ global.Response = class {
     return new global.Response(body, init)
   }
 }
-

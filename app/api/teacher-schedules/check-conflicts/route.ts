@@ -3,7 +3,6 @@ import { createClient } from '@/lib/supabase/server'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { checkConflictsSchema } from '@/lib/validations/teacher-schedules'
 import { validateRequest } from '@/lib/utils/validation'
-import type { TeacherSchedule } from '@/types/api'
 
 export async function POST(request: NextRequest) {
   try {
@@ -88,7 +87,6 @@ export async function POST(request: NextRequest) {
     return createErrorResponse(error, 'Failed to check conflicts', 500, 'POST /api/teacher-schedules/check-conflicts')
   }
 }
-
 
 
 

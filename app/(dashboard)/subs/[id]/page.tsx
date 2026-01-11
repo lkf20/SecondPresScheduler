@@ -8,7 +8,7 @@ export default async function SubDetailPage(props: { params: Promise<{ id: strin
   let sub
   try {
     sub = await getSubById(id)
-  } catch (error) {
+  } catch {
     notFound()
   }
 

@@ -25,10 +25,6 @@ interface TeacherSelectorProps {
 }
 
 export default function TeacherSelector({
-  dayOfWeekId,
-  timeSlotId,
-  classId,
-  classroomId,
   selectedTeachers,
   onTeachersChange,
 }: TeacherSelectorProps) {

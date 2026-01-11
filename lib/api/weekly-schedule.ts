@@ -1,39 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
 
-type DayOfWeekRow = Database['public']['Tables']['days_of_week']['Row']
-type TimeSlotRow = Database['public']['Tables']['time_slots']['Row']
 type ClassGroupRow = Database['public']['Tables']['class_groups']['Row']
-type ClassroomRow = Database['public']['Tables']['classrooms']['Row']
-type StaffRow = Database['public']['Tables']['staff']['Row']
 type ScheduleCellRow = Database['public']['Tables']['schedule_cells']['Row']
-type TeacherScheduleRow = Database['public']['Tables']['teacher_schedules']['Row']
-type EnrollmentRow = Database['public']['Tables']['enrollments']['Row']
-type StaffingRuleRow = Database['public']['Tables']['staffing_rules']['Row']
 
 type ScheduleCellRaw = ScheduleCellRow & {
   schedule_cell_class_groups?: Array<{ class_group: ClassGroupRow | null }>
   class_groups?: ClassGroupRow[]
-}
-
-type TeacherScheduleWithJoins = TeacherScheduleRow & {
-  teacher?: StaffRow | null
-  day_of_week?: DayOfWeekRow | null
-  time_slot?: TimeSlotRow | null
-  class?: ClassGroupRow | null
-  classroom?: ClassroomRow | null
-}
-
-type EnrollmentWithJoins = EnrollmentRow & {
-  class?: ClassGroupRow | null
-  day_of_week?: DayOfWeekRow | null
-  time_slot?: TimeSlotRow | null
-}
-
-type StaffingRuleWithJoins = StaffingRuleRow & {
-  class?: ClassGroupRow | null
-  day_of_week?: DayOfWeekRow | null
-  time_slot?: TimeSlotRow | null
 }
 
 export interface WeeklyScheduleData {
@@ -166,21 +139,6 @@ export async function getWeeklyScheduleData(selectedDayIds?: string[]) {
   if (schedulesError) {
     console.error('API Error: Failed to fetch teacher schedules:', schedulesError)
     throw new Error(`Failed to fetch teacher schedules: ${schedulesError.message}`)
-  }
-  
-  // Get enrollments
-  const { data: enrollments, error: enrollmentsError } = await supabase
-    .from('enrollments')
-    .select(`
-      *,
-      class:class_groups(*),
-      day_of_week:days_of_week(*),
-      time_slot:time_slots(*)
-    `)
-  
-  if (enrollmentsError) {
-    console.error('API Error: Failed to fetch enrollments:', enrollmentsError)
-    throw new Error(`Failed to fetch enrollments: ${enrollmentsError.message}`)
   }
   
   // Get staffing rules
@@ -328,13 +286,6 @@ export async function getWeeklyScheduleData(selectedDayIds?: string[]) {
           
           // Get enrollment from schedule_cell (enrollment is for the whole slot, not per class group)
           const enrollment = scheduleCell.enrollment_for_staffing ?? null
-          
-          // Find class group with lowest min_age for ratio calculation
-          const classGroupForRatio = classGroups.reduce((lowest: { min_age: number | null }, current: { min_age: number | null }) => {
-            const currentMinAge = current.min_age ?? Infinity
-            const lowestMinAge = lowest.min_age ?? Infinity
-            return currentMinAge < lowestMinAge ? current : lowest
-          })
           
           // Get staffing rule for the primary class group/day/time
           const primaryClassGroupId = classGroupIds[0]

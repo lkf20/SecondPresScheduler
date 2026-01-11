@@ -8,7 +8,7 @@ export default async function TeacherDetailPage(props: { params: Promise<{ id: s
   let teacher
   try {
     teacher = await getTeacherById(id)
-  } catch (error) {
+  } catch {
     notFound()
   }
 

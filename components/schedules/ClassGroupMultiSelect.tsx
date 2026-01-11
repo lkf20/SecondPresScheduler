@@ -5,7 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { X, Plus, ChevronDown, Search } from 'lucide-react'
+import { X, Plus } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -44,7 +44,6 @@ export default function ClassGroupMultiSelect({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     new Set(selectedClassGroupIds)
   )
-  const dropdownRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch active class groups for the dropdown
@@ -289,4 +288,3 @@ export default function ClassGroupMultiSelect({
     </div>
   )
 }
-

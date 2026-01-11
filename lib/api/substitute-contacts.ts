@@ -78,7 +78,7 @@ export async function getOrCreateSubstituteContact(
   const supabase = await createClient()
 
   // Try to get existing contact
-  const { data: existing, error: fetchError } = await supabase
+  const { data: existing } = await supabase
     .from('substitute_contacts')
     .select('*')
     .eq('coverage_request_id', coverageRequestId)
@@ -321,7 +321,7 @@ export async function upsertShiftOverrides(
   }))
 
   if (overridesToUpsert.length > 0) {
-    const { error, data } = await supabase
+    const { error } = await supabase
       .from('sub_contact_shift_overrides')
       .upsert(overridesToUpsert, {
         onConflict: 'substitute_contact_id,coverage_request_shift_id',

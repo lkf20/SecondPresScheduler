@@ -69,7 +69,6 @@ describe('SimpleCache', () => {
   describe('clearExpired', () => {
     it('should remove expired entries', () => {
       jest.useFakeTimers()
-      const now = Date.now()
 
       cache.set('expired', 'value', 100)
       cache.set('valid', 'value', 10000)
@@ -167,6 +166,5 @@ describe('invalidateCache', () => {
     expect(cache.get('api/posts/1')).toEqual({ data: 'post1' })
   })
 })
-
 
 

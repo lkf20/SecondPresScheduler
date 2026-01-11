@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
@@ -14,7 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { X, Phone, Mail, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
+import { Phone, Mail, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -313,7 +312,7 @@ export default function ContactSubPanel({
                 const day = String(date.getDate()).padStart(2, '0')
                 return `${year}-${month}-${day}`
               }
-            } catch (e) {}
+            } catch {}
             return dateStr
           }
           // Create a Set of shift keys (date|time_slot_code) for all assigned shifts
@@ -733,7 +732,7 @@ export default function ContactSubPanel({
             errorData = JSON.parse(errorText)
             errorMessage = errorData.error || errorData.message || errorMessage
           }
-        } catch (parseError) {
+        } catch {
           // If JSON parsing fails, use the raw text
           errorMessage = errorText || errorMessage
           errorData = { rawError: errorText }
@@ -782,7 +781,7 @@ export default function ContactSubPanel({
             errorData = JSON.parse(errorText)
             errorMessage = errorData.error || errorData.message || errorMessage
           }
-        } catch (parseError) {
+        } catch {
           errorMessage = errorText || errorMessage
           errorData = { rawError: errorText }
         }
@@ -836,7 +835,7 @@ export default function ContactSubPanel({
                 const day = String(date.getDate()).padStart(2, '0')
                 return `${year}-${month}-${day}`
               }
-            } catch (e) {}
+            } catch {}
             return dateStr
           }
           const assignedSet = new Set<string>()
@@ -961,8 +960,6 @@ export default function ContactSubPanel({
   }
 
   const selectedShiftsCount = selectedShifts.size
-  const totalShifts = sub.can_cover?.length || 0
-
   // Helper to normalize date to YYYY-MM-DD format for consistent key matching
   const normalizeDate = (dateStr: string): string => {
     if (!dateStr) return dateStr
@@ -979,7 +976,7 @@ export default function ContactSubPanel({
         const day = String(date.getDate()).padStart(2, '0')
         return `${year}-${month}-${day}`
       }
-    } catch (e) {
+    } catch {
       // If parsing fails, return original
     }
     return dateStr
@@ -1241,7 +1238,6 @@ export default function ContactSubPanel({
                     </Label>
                     <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3 bg-gray-50">
                       {assignedShifts.map((shift, idx) => {
-                        const shiftKey = `${shift.date}|${shift.time_slot_code}`
                         return (
                           <div
                             key={idx}
@@ -1311,7 +1307,6 @@ export default function ContactSubPanel({
                                 </p>
                                 <div className="space-y-2 max-h-64 overflow-y-auto">
                                   {availableShifts.map((shift, idx) => {
-                                    const shiftKey = `${shift.date}|${shift.time_slot_code}`
                                     return (
                                       <div
                                         key={idx}

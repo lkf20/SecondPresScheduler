@@ -31,18 +31,19 @@ export default function DaySelector({
           return aNum - bNum
         })
         setDaysOfWeek(sorted)
-        
-        // If no days are selected yet, default to Mon-Fri (day_number 1-5)
-        if (selectedDayIds.length === 0) {
-          const defaultDays = sorted
-            .filter((d) => d.day_number >= 1 && d.day_number <= 5)
-            .map((d) => d.id)
-          onSelectionChange(defaultDays)
-        }
       })
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, []) // Only run once on mount
+  }, [])
+
+  useEffect(() => {
+    if (daysOfWeek.length === 0) return
+    if (selectedDayIds.length > 0) return
+    const defaultDays = daysOfWeek
+      .filter((d) => d.day_number >= 1 && d.day_number <= 5)
+      .map((d) => d.id)
+    onSelectionChange(defaultDays)
+  }, [daysOfWeek, onSelectionChange, selectedDayIds.length])
 
   const handleDayToggle = (dayId: string, checked: boolean) => {
     if (checked) {

@@ -8,7 +8,7 @@ export default async function ClassroomDetailPage({ params }: { params: Promise<
   let classroom
   try {
     classroom = await getClassroomById(id)
-  } catch (error) {
+  } catch {
     notFound()
   }
 

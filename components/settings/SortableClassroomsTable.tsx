@@ -28,7 +28,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
@@ -119,7 +118,6 @@ function SortableRow({ classroom }: { classroom: Classroom }) {
 
 export default function SortableClassroomsTable({
   classrooms: initialClassrooms,
-  onOrderChange,
 }: SortableClassroomsTableProps) {
   const [classrooms, setClassrooms] = useState(initialClassrooms)
   const [search, setSearch] = useState('')
@@ -165,7 +163,7 @@ export default function SortableClassroomsTable({
       setIsSaving(true)
       try {
         // Only update classrooms whose order actually changed
-        const orderChanged = updatedClassrooms.filter((classroom, index) => {
+        const orderChanged = updatedClassrooms.filter((classroom) => {
           const original = initialClassrooms.find((c) => c.id === classroom.id)
           return original?.order !== classroom.order
         })

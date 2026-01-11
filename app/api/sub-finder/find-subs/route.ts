@@ -321,14 +321,12 @@ export async function POST(request: NextRequest) {
 
           // Check qualifications (if class_id is known)
           let isQualified = true
-          let qualificationReason = ''
           if (shift.class_id) {
             qualificationTotal++
             if (qualifiedClassIds.has(shift.class_id)) {
               qualificationMatches++
             } else {
               isQualified = false
-              qualificationReason = 'Not qualified for class'
             }
           }
 
@@ -409,7 +407,6 @@ export async function POST(request: NextRequest) {
             if (existingAssignments) {
               existingAssignments.forEach((assignment: any) => {
                 // Check if this assignment covers one of the shifts we're looking for
-                const shiftKey = `${assignment.date}|${assignment.time_slots?.code || ''}`
                 const matchingShift = shiftsToCover.find(
                   (s) => s.date === assignment.date && s.time_slot_code === assignment.time_slots?.code
                 )
@@ -449,7 +446,7 @@ export async function POST(request: NextRequest) {
             if (contact) {
               responseStatus = contact.response_status
             }
-          } catch (error) {
+          } catch {
             // Contact doesn't exist yet, which is fine
             console.debug(`No contact found for sub ${sub.id} and coverage request ${coverageRequestId}`)
           }

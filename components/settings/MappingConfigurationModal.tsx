@@ -45,8 +45,6 @@ export default function MappingConfigurationModal({
   existingMappings,
   onClose,
 }: MappingConfigurationModalProps) {
-  const [classes, setClasses] = useState<ClassGroup[]>([])
-  const [classrooms, setClassrooms] = useState<Classroom[]>([])
   const [combinations, setCombinations] = useState<ClassClassroomCombo[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -62,9 +60,6 @@ export default function MappingConfigurationModal({
 
         const classesData = await classesRes.json()
         const classroomsData = await classroomsRes.json()
-
-        setClasses(classesData as ClassGroup[])
-        setClassrooms(classroomsData as Classroom[])
 
         // Build all combinations
         const combos: ClassClassroomCombo[] = []

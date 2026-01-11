@@ -138,10 +138,6 @@ export function findBestCombination(subs: Sub[]): RecommendedCombination | null 
     return null
   }
 
-  // Calculate total shifts needed (uncovered + any already assigned)
-  // We can get this from the first sub's total_shifts if available, otherwise use uncoveredShifts.size
-  const totalShiftsNeeded = eligibleSubs[0]?.total_shifts || uncoveredShifts.size
-
   // Build shift map: shiftKey -> shift details (from first sub that has it)
   const shiftMap = new Map<string, Shift>()
   eligibleSubs.forEach((sub) => {

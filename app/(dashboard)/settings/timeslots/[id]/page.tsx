@@ -8,7 +8,7 @@ export default async function TimeSlotDetailPage(props: { params: Promise<{ id: 
   let timeslot
   try {
     timeslot = await getTimeSlotById(id)
-  } catch (error) {
+  } catch {
     notFound()
   }
 

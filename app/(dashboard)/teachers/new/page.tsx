@@ -4,8 +4,6 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import TeacherForm, { type TeacherFormData } from '@/components/teachers/TeacherForm'
 import ErrorMessage from '@/components/shared/ErrorMessage'
-import { Button } from '@/components/ui/button'
-import Link from 'next/link'
 
 export default function NewTeacherPage() {
   const router = useRouter()
@@ -16,6 +14,7 @@ export default function NewTeacherPage() {
       setError(null)
       // Convert empty email to null and exclude id (should not be sent for new teachers)
       const { id, ...teacherData } = data
+      void id
       const payload = {
         ...teacherData,
         email: data.email && data.email.trim() !== '' ? data.email : null,

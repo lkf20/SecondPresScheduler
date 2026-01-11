@@ -75,7 +75,6 @@ export async function POST(request: NextRequest) {
 
     // Check each teacher for duplicates
     teachers.forEach((teacher, csvIndex) => {
-      const matches: DuplicateMatch[] = []
       let matchType: 'email' | 'name' | 'both' | null = null
       let existingTeacher: DuplicateMatch['existingTeacher'] | null = null
 
@@ -205,4 +204,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

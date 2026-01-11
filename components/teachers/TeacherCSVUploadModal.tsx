@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Upload, Download, X, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Download, CheckCircle2, AlertCircle } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -65,7 +65,6 @@ export default function TeacherCSVUploadModal({
   onClose,
   onImportComplete,
 }: TeacherCSVUploadModalProps) {
-  const [file, setFile] = useState<File | null>(null)
   const [parsedData, setParsedData] = useState<ParsedTeacher[]>([])
   const [roleTypes, setRoleTypes] = useState<StaffRoleType[]>([])
   const [isValidating, setIsValidating] = useState(false)
@@ -274,7 +273,6 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
     const selectedFile = e.target.files?.[0]
     if (!selectedFile) return
 
-    setFile(selectedFile)
     setError(null)
     setImportResults(null)
     setIsValidating(true)
@@ -416,7 +414,6 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
   }
 
   const handleClose = () => {
-    setFile(null)
     setParsedData([])
     setImportResults(null)
     setError(null)

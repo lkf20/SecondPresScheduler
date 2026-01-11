@@ -68,7 +68,6 @@ export default function ScheduleSidePanel({
   dayId,
   dayName,
   timeSlotId,
-  timeSlotName,
   timeSlotCode,
   timeSlotStartTime,
   timeSlotEndTime,
@@ -90,7 +89,6 @@ export default function ScheduleSidePanel({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [showDeactivateDialog, setShowDeactivateDialog] = useState(false)
-  const [pendingInactive, setPendingInactive] = useState(false)
   const [applyScope, setApplyScope] = useState<'single' | 'timeSlot' | 'day'>('single')
   const [applyDayIds, setApplyDayIds] = useState<string[]>([dayId])
   const [applyTimeSlotIds, setApplyTimeSlotIds] = useState<string[]>([timeSlotId])
@@ -99,7 +97,6 @@ export default function ScheduleSidePanel({
   const [allAvailableClassGroups, setAllAvailableClassGroups] = useState<ClassGroupWithMeta[]>([])
   const [conflicts, setConflicts] = useState<Conflict[]>([])
   const [conflictResolutions, setConflictResolutions] = useState<Map<string, ConflictResolution>>(new Map())
-  const [resolvingConflicts, setResolvingConflicts] = useState(false)
   // Track the original cell state when first loaded to determine if it was empty
   const originalCellStateRef = useRef<{ isActive: boolean; hasData: boolean } | null>(null)
   // Track if we've loaded initial data to prevent useEffect from clearing classGroups prematurely
@@ -112,6 +109,10 @@ export default function ScheduleSidePanel({
   const preserveTeachersRef = useRef(false)
   // Store teachers in ref so we can preserve them even if state hasn't updated
   const selectedTeachersRef = useRef<Teacher[]>([])
+
+  useEffect(() => {
+    selectedTeachersRef.current = selectedTeachers
+  }, [selectedTeachers])
 
   // Format time range for header
   const timeRange = timeSlotStartTime && timeSlotEndTime
@@ -412,7 +413,7 @@ export default function ScheduleSidePanel({
     // even if user added a new class group that wasn't in initial data
     console.log('[ScheduleSidePanel] useEffect - setting classGroups to (from allAvailableClassGroups):', selectedClassGroups)
     setClassGroups(selectedClassGroups)
-  }, [classGroupIds, allAvailableClassGroups, loading])
+  }, [classGroupIds, allAvailableClassGroups, classGroups, loading])
 
   // Fetch teacher assignments when classGroupIds changes or drawer opens
   // Fetch directly from teacher-schedules API for immediate, accurate data
@@ -420,13 +421,10 @@ export default function ScheduleSidePanel({
   useEffect(() => {
     if (!isOpen) return
 
-    // Update ref whenever selectedTeachers changes
-    selectedTeachersRef.current = selectedTeachers
-
     // If we should preserve teachers (class groups were just removed), skip fetching
     console.log('[ScheduleSidePanel] Teacher fetch useEffect - checking preserve flag', {
       preserveFlag: preserveTeachersRef.current,
-      selectedTeachersLength: selectedTeachers.length,
+      selectedTeachersLength: selectedTeachersRef.current.length,
       selectedTeachersRefLength: selectedTeachersRef.current.length,
       classGroupIds,
       willPreserve: preserveTeachersRef.current && selectedTeachersRef.current.length > 0
@@ -449,7 +447,7 @@ export default function ScheduleSidePanel({
     console.log('[ScheduleSidePanel] Fetching teachers', {
       classGroupIds,
       preserveFlag: preserveTeachersRef.current,
-      existingTeachersCount: selectedTeachers.length
+      existingTeachersCount: selectedTeachersRef.current.length
     })
 
     // Fetch directly from teacher-schedules API for most up-to-date data
@@ -515,7 +513,7 @@ export default function ScheduleSidePanel({
       .catch((err) => {
         console.error('Error fetching teacher assignments:', err)
         // Don't clear teachers on error if we should preserve them
-        if (preserveTeachersRef.current && selectedTeachers.length > 0) {
+        if (preserveTeachersRef.current && selectedTeachersRef.current.length > 0) {
           preserveTeachersRef.current = false
           previousClassGroupIdsRef.current = classGroupIds
           return
@@ -679,7 +677,6 @@ export default function ScheduleSidePanel({
           // Note: This code path should only run when saving, and we validate classGroupIds.length > 0 before saving
           {
             // Update teacher assignments using primary class group
-            const currentTeacherIds = new Set(schedulesForThisSlot.map((s) => s.teacher_id))
             const newTeacherIds = new Set(selectedTeachers.map((t) => t.teacher_id))
 
             // Remove assignments that are no longer selected
@@ -909,7 +906,6 @@ export default function ScheduleSidePanel({
   const handleApplyConflictResolutions = async () => {
     if (classGroupIds.length === 0) return
 
-    setResolvingConflicts(true)
     try {
       const teachersToRemove: string[] = []
 
@@ -959,7 +955,6 @@ export default function ScheduleSidePanel({
       const message = error instanceof Error ? error.message : 'Failed to resolve conflicts'
       alert(`Failed to resolve conflicts: ${message}`)
     } finally {
-      setResolvingConflicts(false)
     }
   }
 
@@ -997,20 +992,6 @@ export default function ScheduleSidePanel({
     ? Math.ceil(enrollmentForCalculation / classGroupForRatio.preferred_ratio)
     : undefined
 
-  // Debug logging - extract primitives to keep dependency array stable
-  const cellEnrollment = cell?.enrollment_for_staffing ?? null
-  const classGroupRequiredRatio = classGroupForRatio?.required_ratio ?? null
-  const classGroupPreferredRatio = classGroupForRatio?.preferred_ratio ?? null
-  const classGroupNames = classGroups.map(cg => cg.name).join(', ')
-  const assignedCount = selectedTeachers.length
-  
-  // Debug logging removed - use browser dev tools if needed
-  // Only include primitive source values, not computed values
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    // Staffing calculation dependencies tracked for reactivity
-  }, [isOpen, classGroupIds.length, cellEnrollment, enrollment, classGroupRequiredRatio, classGroupPreferredRatio, assignedCount])
-
   return (
     <>
       <Sheet open={isOpen} onOpenChange={handleClose}>
@@ -1041,7 +1022,6 @@ export default function ScheduleSidePanel({
                     if (isActive && !newActive) {
                       // Show confirmation when deactivating
                       setShowDeactivateDialog(true)
-                      setPendingInactive(true)
                     } else {
                       setIsActive(newActive)
                     }
@@ -1284,7 +1264,6 @@ export default function ScheduleSidePanel({
               variant="outline"
               onClick={() => {
                 setShowDeactivateDialog(false)
-                setPendingInactive(false)
               }}
             >
               Cancel
@@ -1293,7 +1272,6 @@ export default function ScheduleSidePanel({
               onClick={() => {
                 setIsActive(false)
                 setShowDeactivateDialog(false)
-                setPendingInactive(false)
               }}
             >
               Deactivate slot

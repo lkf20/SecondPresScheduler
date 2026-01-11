@@ -103,7 +103,7 @@ export function createErrorResponse(
   statusCode = 500,
   context?: string
 ): Response {
-  const message = getErrorMessage(error)
+  const message = getErrorMessage(error) || defaultMessage
   
   if (context) {
     logError(context, error)

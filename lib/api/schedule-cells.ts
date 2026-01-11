@@ -140,8 +140,6 @@ export async function createScheduleCell(cell: {
   enrollment_for_staffing?: number | null
   notes?: string | null
 }): Promise<ScheduleCell> {
-  const supabase = await createClient()
-  
   // Create the schedule cell
   const { data: cellData, error: cellError } = await supabase
     .from('schedule_cells')
@@ -237,8 +235,6 @@ export async function upsertScheduleCell(cell: {
   enrollment_for_staffing?: number | null
   notes?: string | null
 }): Promise<ScheduleCell> {
-  const supabase = await createClient()
-  
   // First try to find existing cell
   const existing = await getScheduleCell(
     cell.classroom_id,

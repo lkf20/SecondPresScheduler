@@ -1,14 +1,12 @@
 'use client'
 
 interface RatioIndicatorProps {
-  enrollment: number
   required?: number
   preferred?: number
   assigned: number
 }
 
 export default function RatioIndicator({
-  enrollment,
   required,
   preferred,
   assigned,
@@ -45,4 +43,3 @@ export default function RatioIndicator({
     </div>
   )
 }
-

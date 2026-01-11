@@ -100,7 +100,6 @@ function SortableRow({ classItem }: { classItem: Class }) {
 
 export default function SortableClassesTable({
   classes: initialClasses,
-  onOrderChange,
 }: SortableClassesTableProps) {
   const [classes, setClasses] = useState(initialClasses)
   const [search, setSearch] = useState('')
@@ -146,7 +145,7 @@ export default function SortableClassesTable({
       setIsSaving(true)
       try {
         // Only update classes whose order actually changed
-        const orderChanged = updatedClasses.filter((classItem, index) => {
+        const orderChanged = updatedClasses.filter((classItem) => {
           const original = initialClasses.find((c) => c.id === classItem.id)
           return original?.order !== classItem.order
         })

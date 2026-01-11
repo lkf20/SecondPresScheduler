@@ -1,13 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { createErrorResponse, getErrorMessage } from '@/lib/utils/errors'
+import { createErrorResponse } from '@/lib/utils/errors'
 
 /**
  * POST /api/setup/profile
  * Create a profile entry for the current authenticated user
  * Links the user to the default school
  */
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const supabase = await createClient()
 
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
  * GET /api/setup/profile
  * Check if current user has a profile
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const supabase = await createClient()
 
@@ -165,4 +165,3 @@ export async function GET(request: NextRequest) {
     return createErrorResponse(error, 'Failed to check profile', 500)
   }
 }
-

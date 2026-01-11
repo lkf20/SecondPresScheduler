@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
@@ -92,7 +92,7 @@ export default function ShiftSelectionTable({
   }, [])
 
   // Helper function to normalize dates to YYYY-MM-DD format
-  const normalizeDate = (d: string) => {
+  const normalizeDate = useCallback((d: string) => {
     if (!d) return ''
     if (d.match(/^\d{4}-\d{2}-\d{2}$/)) return d
     try {
@@ -101,10 +101,12 @@ export default function ShiftSelectionTable({
     } catch {
       return d
     }
-  }
+  }, [])
 
-  const buildShiftKey = (date: string, timeSlotId: string) =>
-    `${normalizeDate(date)}::${timeSlotId}`
+  const buildShiftKey = useCallback(
+    (date: string, timeSlotId: string) => `${normalizeDate(date)}::${timeSlotId}`,
+    [normalizeDate]
+  )
 
   // Fetch scheduled shifts when teacher and dates change (NOT when disabled changes)
   useEffect(() => {
@@ -140,7 +142,7 @@ export default function ShiftSelectionTable({
         setScheduledShifts([])
       })
       .finally(() => setLoading(false))
-  }, [teacherId, startDate, endDate || startDate]) // Remove 'disabled' and 'onShiftsChange' from dependencies
+  }, [teacherId, startDate, endDate]) // Remove 'disabled' and 'onShiftsChange' from dependencies
 
   useEffect(() => {
     if (!validateConflicts) {
@@ -208,7 +210,7 @@ export default function ShiftSelectionTable({
     return new Set(
       existingTimeOffShifts.map((shift) => buildShiftKey(shift.date, shift.time_slot_id))
     )
-  }, [existingTimeOffShifts, validateConflicts])
+  }, [buildShiftKey, existingTimeOffShifts, validateConflicts])
 
   // Auto-select scheduled shifts for read-only or "select all" modes.
   useEffect(() => {
@@ -224,7 +226,15 @@ export default function ShiftSelectionTable({
     }
     // Note: When switching to "select_shifts" mode (disabled=false), we keep the current selectedShifts
     // so no action needed here
-  }, [autoSelectScheduled, disabled, scheduledShifts, onShiftsChange, conflictShiftKeys])
+  }, [
+    autoSelectScheduled,
+    disabled,
+    scheduledShifts,
+    onShiftsChange,
+    conflictShiftKeys,
+    buildShiftKey,
+    normalizeDate,
+  ])
 
   const conflictCount = scheduledShifts.filter((shift) =>
     conflictShiftKeys.has(buildShiftKey(shift.date, shift.time_slot_id))
@@ -250,7 +260,7 @@ export default function ShiftSelectionTable({
     if (filtered.length !== selectedShifts.length) {
       onShiftsChange(filtered)
     }
-  }, [selectedShifts, conflictShiftKeys, onShiftsChange])
+  }, [selectedShifts, conflictShiftKeys, onShiftsChange, buildShiftKey])
 
   // Group shifts by date
   const shiftsByDate = scheduledShifts.reduce((acc, shift) => {

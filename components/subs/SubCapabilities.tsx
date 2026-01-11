@@ -5,8 +5,6 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Loader2 } from 'lucide-react'
 
 interface SubCapabilitiesProps {
   subId: string
@@ -25,7 +23,6 @@ interface SubCapabilitiesProps {
 }
 
 export default function SubCapabilities({
-  subId,
   capabilities,
   onCapabilitiesChange,
 }: SubCapabilitiesProps) {
@@ -35,8 +32,6 @@ export default function SubCapabilities({
     can_assist_with_toileting: capabilities.can_assist_with_toileting ?? false,
     capabilities_notes: capabilities.capabilities_notes || '',
   })
-  const [saving, setSaving] = useState(false)
-
   // Sync with props when they change
   useEffect(() => {
     setLocalCapabilities({
@@ -134,6 +129,5 @@ export default function SubCapabilities({
     </Card>
   )
 }
-
 
 

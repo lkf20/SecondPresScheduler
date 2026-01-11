@@ -8,7 +8,7 @@ export default async function TimeOffDetailPage(props: { params: Promise<{ id: s
   let timeOffRequest
   try {
     timeOffRequest = await getTimeOffRequestById(id)
-  } catch (error) {
+  } catch {
     notFound()
   }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import SubAvailabilityGrid from './SubAvailabilityGrid'
 import SubAvailabilityExceptions from './SubAvailabilityExceptions'
 import { Button } from '@/components/ui/button'
@@ -62,13 +62,7 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
   const [conflicts, setConflicts] = useState<Array<{ day: string; timeSlot: string }>>([])
   const [showConflictWarning, setShowConflictWarning] = useState(false)
 
-  // Fetch initial data
-  useEffect(() => {
-    fetchAvailability()
-    fetchTimeSlots()
-  }, [subId])
-
-  const fetchAvailability = async () => {
+  const fetchAvailability = useCallback(async () => {
     setLoading(true)
     try {
       const response = await fetch(`/api/subs/${subId}/availability`)
@@ -80,9 +74,9 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
     } finally {
       setLoading(false)
     }
-  }
+  }, [subId])
 
-  const fetchTimeSlots = async () => {
+  const fetchTimeSlots = useCallback(async () => {
     try {
       const response = await fetch('/api/timeslots')
       if (!response.ok) throw new Error('Failed to fetch time slots')
@@ -99,7 +93,13 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
     } catch (error) {
       console.error('Error fetching time slots:', error)
     }
-  }
+  }, [])
+
+  // Fetch initial data
+  useEffect(() => {
+    fetchAvailability()
+    fetchTimeSlots()
+  }, [fetchAvailability, fetchTimeSlots])
 
   const handleAvailabilityChange = async (
     availability: Array<{ day_of_week_id: string; time_slot_id: string; available: boolean }>

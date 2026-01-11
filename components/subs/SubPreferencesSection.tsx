@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import SubClassPreferences from './SubClassPreferences'
 import SubQualifications from './SubQualifications'
 import SubCapabilities from './SubCapabilities'
-import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
 
 interface ClassPreference {
@@ -42,17 +41,10 @@ interface SubPreferencesSectionProps {
 
 export default function SubPreferencesSection({ subId, sub }: SubPreferencesSectionProps) {
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const [classPreferences, setClassPreferences] = useState<ClassPreference[]>([])
   const [qualifications, setQualifications] = useState<StaffQualification[]>([])
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
-  useEffect(() => {
-    fetchPreferences()
-    fetchQualifications()
-  }, [subId])
-
-  const fetchPreferences = async () => {
+  const fetchPreferences = useCallback(async () => {
     try {
       const response = await fetch(`/api/subs/${subId}/preferences`)
       if (!response.ok) throw new Error('Failed to fetch preferences')
@@ -61,9 +53,9 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
     } catch (error) {
       console.error('Error fetching preferences:', error)
     }
-  }
+  }, [subId])
 
-  const fetchQualifications = async () => {
+  const fetchQualifications = useCallback(async () => {
     try {
       const response = await fetch(`/api/subs/${subId}/qualifications`)
       if (!response.ok) throw new Error('Failed to fetch qualifications')
@@ -74,11 +66,14 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
     } finally {
       setLoading(false)
     }
-  }
+  }, [subId])
+
+  useEffect(() => {
+    fetchPreferences()
+    fetchQualifications()
+  }, [fetchPreferences, fetchQualifications])
 
   const handleClassPreferencesChange = async (classIds: string[]) => {
-    setHasUnsavedChanges(true)
-    setSaving(true)
     try {
       const response = await fetch(`/api/subs/${subId}/preferences`, {
         method: 'PUT',
@@ -88,12 +83,9 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
 
       if (!response.ok) throw new Error('Failed to save preferences')
       await fetchPreferences()
-      setHasUnsavedChanges(false)
     } catch (error) {
       console.error('Error saving preferences:', error)
       alert('Failed to save preferences. Please try again.')
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -104,8 +96,6 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
     verified?: boolean | null
     notes?: string | null
   }>) => {
-    setHasUnsavedChanges(true)
-    setSaving(true)
     try {
       const response = await fetch(`/api/subs/${subId}/qualifications`, {
         method: 'PUT',
@@ -115,12 +105,9 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
 
       if (!response.ok) throw new Error('Failed to save qualifications')
       await fetchQualifications()
-      setHasUnsavedChanges(false)
     } catch (error) {
       console.error('Error saving qualifications:', error)
       alert('Failed to save qualifications. Please try again.')
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -130,7 +117,6 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
     can_assist_with_toileting: boolean
     capabilities_notes: string | null
   }) => {
-    setSaving(true)
     try {
       const response = await fetch(`/api/subs/${subId}`, {
         method: 'PUT',
@@ -143,8 +129,6 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
     } catch (error) {
       console.error('Error saving capabilities:', error)
       alert('Failed to save capabilities. Please try again.')
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -191,4 +175,3 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
     </div>
   )
 }
-

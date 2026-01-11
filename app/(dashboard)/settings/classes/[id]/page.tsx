@@ -8,7 +8,7 @@ export default async function ClassDetailPage(props: { params: Promise<{ id: str
   let classData
   try {
     classData = await getClassGroupById(id)
-  } catch (error) {
+  } catch {
     notFound()
   }
 

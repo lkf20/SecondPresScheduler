@@ -1,7 +1,6 @@
 'use client'
 
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { AlertCircle, CheckCircle2, AlertTriangle, PieChart } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -77,7 +76,7 @@ export default function AbsenceList({
   return (
     <div className="p-4 space-y-3">
       {absences.map((absence) => {
-        const { uncovered, partially_covered, fully_covered, total } = absence.shifts
+        const { uncovered, partially_covered, fully_covered } = absence.shifts
         const isSelected = selectedAbsence?.id === absence.id
         const hasUncovered = uncovered > 0
         const hasPartial = partially_covered > 0 || (fully_covered > 0 && uncovered > 0)

@@ -19,7 +19,6 @@ interface SubClassPreferencesProps {
 }
 
 export default function SubClassPreferences({
-  subId,
   selectedClassIds,
   onSelectionChange,
 }: SubClassPreferencesProps) {
@@ -134,4 +133,3 @@ export default function SubClassPreferences({
     </div>
   )
 }
-

@@ -1,8 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import { Button } from '@/components/ui/button'
-import { Plus } from 'lucide-react'
+import { useState, useMemo } from 'react'
 import ScheduleCell from './ScheduleCell'
 import AssignmentModal from './AssignmentModal'
 import type { WeeklyScheduleData } from '@/lib/api/weekly-schedule'
@@ -137,4 +135,3 @@ export default function WeeklyScheduleGrid({ data }: WeeklyScheduleGridProps) {
     </>
   )
 }
-

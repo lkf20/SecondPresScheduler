@@ -11,23 +11,19 @@
 
 import { 
   deleteClassGroup, 
-  updateClassGroup, 
-  getClassGroupById 
+  updateClassGroup 
 } from '../class-groups'
 import { 
   deleteClassroom, 
-  updateClassroom, 
-  getClassroomById 
+  updateClassroom 
 } from '../classrooms'
 import { 
   deleteTeacher, 
-  updateTeacher, 
-  getTeacherById 
+  updateTeacher 
 } from '../teachers'
 import { 
   deleteSub, 
-  updateSub, 
-  getSubById 
+  updateSub 
 } from '../subs'
 import { createClient } from '@/lib/supabase/server'
 

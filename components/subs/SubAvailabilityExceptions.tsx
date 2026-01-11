@@ -37,7 +37,6 @@ interface SubAvailabilityExceptionsProps {
 }
 
 export default function SubAvailabilityExceptions({
-  subId,
   exceptionHeaders,
   timeSlots,
   onAddException,

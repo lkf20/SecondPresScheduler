@@ -46,7 +46,6 @@ interface SubQualificationsProps {
 }
 
 export default function SubQualifications({
-  subId,
   qualifications,
   onQualificationsChange,
 }: SubQualificationsProps) {

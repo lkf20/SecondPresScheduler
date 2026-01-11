@@ -24,7 +24,6 @@ export async function POST(request: NextRequest) {
       resolution,
       target_classroom_id,
       target_class_id,
-      conflicting_schedule_id,
     } = validation.data
 
     const supabase = await createClient()
@@ -205,7 +204,6 @@ export async function POST(request: NextRequest) {
     return createErrorResponse(error, 'Failed to resolve conflict', 500, 'POST /api/teacher-schedules/resolve-conflict')
   }
 }
-
 
 
 

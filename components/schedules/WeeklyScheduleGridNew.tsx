@@ -19,20 +19,6 @@ type WeeklyScheduleCellData = WeeklyScheduleData & {
   schedule_cell: WeeklyScheduleDataByClassroom['days'][number]['time_slots'][number]['schedule_cell']
 }
 
-// Helper function to abbreviate day names
-function abbreviateDayName(dayName: string): string {
-  const abbreviations: Record<string, string> = {
-    'Monday': 'Mon',
-    'Tuesday': 'Tue',
-    'Wednesday': 'Wed',
-    'Thursday': 'Thu',
-    'Friday': 'Fri',
-    'Saturday': 'Sat',
-    'Sunday': 'Sun',
-  }
-  return abbreviations[dayName] || dayName.substring(0, 3)
-}
-
 // Helper function to convert hex color to rgba with opacity
 function hexToRgba(hex: string, opacity: number = 0.08): string {
   // Remove # if present
@@ -135,10 +121,6 @@ export default function WeeklyScheduleGridNew({
         }
         day.time_slots.forEach((slot) => {
           if (!timeSlotSet.has(slot.time_slot_id)) {
-            // Get time slot details from the first occurrence
-            const firstSlot = classroom.days
-              .flatMap((d) => d.time_slots)
-              .find((ts) => ts.time_slot_id === slot.time_slot_id)
             timeSlotSet.set(slot.time_slot_id, {
               id: slot.time_slot_id,
               code: slot.time_slot_code,
@@ -248,9 +230,10 @@ export default function WeeklyScheduleGridNew({
   // Final filter: ensure we only show selected days
   // If selectedDayIds is empty, don't show any days (settings might not be loaded or configured)
   // Only show days if we have explicit selectedDayIds
-  const filteredDays = selectedDayIds.length > 0
-    ? days.filter((day) => selectedDayIds.includes(day.id))
-    : [] // Don't show any days if selectedDayIds is empty
+  const filteredDays = useMemo(() => {
+    if (selectedDayIds.length === 0) return []
+    return days.filter((day) => selectedDayIds.includes(day.id))
+  }, [days, selectedDayIds])
 
   // Transform data for days-x-classrooms layout
   const daysXClassroomsData = useMemo(() => {
@@ -326,9 +309,6 @@ export default function WeeklyScheduleGridNew({
 
   // Render days-x-classrooms layout
   if (layout === 'days-x-classrooms' && daysXClassroomsData && daysXClassroomsGrid) {
-    // Calculate total rows: 1 header + (1 day header + timeSlots.length data rows) per day
-    const totalRows = 1 + filteredDays.length * (1 + timeSlots.length)
-    
     return (
       <>
         {/* Legend */}

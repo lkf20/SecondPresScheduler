@@ -14,6 +14,7 @@ export default function NewSubPage() {
       setError(null)
       // Convert empty email to null and exclude id (should not be sent for new subs)
       const { id, ...subData } = data
+      void id
       const payload = {
         ...subData,
         email: data.email && data.email.trim() !== '' ? data.email : null,
