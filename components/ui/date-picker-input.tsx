@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef, useEffect, useMemo, useState } from 'react'
+import { forwardRef, useMemo, useState } from 'react'
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -57,10 +57,13 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
     return new Date(base.getFullYear(), base.getMonth(), 1)
   })
 
-  useEffect(() => {
-    if (!selectedDate) return
-    setViewDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1))
-  }, [selectedDate])
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      const base = selectedDate || new Date()
+      setViewDate(new Date(base.getFullYear(), base.getMonth(), 1))
+    }
+    setOpen(nextOpen)
+  }
 
   const year = viewDate.getFullYear()
   const month = viewDate.getMonth()
@@ -108,7 +111,7 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <button
           type="button"

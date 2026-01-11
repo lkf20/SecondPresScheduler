@@ -21,7 +21,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import ErrorMessage from '@/components/shared/ErrorMessage'
-import DuplicateResolutionDialog from './DuplicateResolutionDialog'
+import DuplicateResolutionDialog, {
+  type DuplicateMatch,
+  type TeacherImport,
+} from './DuplicateResolutionDialog'
 
 interface ParsedTeacher {
   name: string
@@ -42,6 +45,21 @@ interface TeacherCSVUploadModalProps {
   onImportComplete: () => void
 }
 
+type StaffRoleType = {
+  id: string
+  label: string
+}
+
+type ImportResult = {
+  success: number
+  replaced: number
+  skipped: number
+  errors: number
+  errorDetails: Array<{ row: number; message: string }>
+}
+
+type DuplicateResolutionAction = 'keep' | 'skip' | 'replace'
+
 export default function TeacherCSVUploadModal({
   isOpen,
   onClose,
@@ -49,20 +67,14 @@ export default function TeacherCSVUploadModal({
 }: TeacherCSVUploadModalProps) {
   const [file, setFile] = useState<File | null>(null)
   const [parsedData, setParsedData] = useState<ParsedTeacher[]>([])
-  const [roleTypes, setRoleTypes] = useState<Array<{ id: string; label: string }>>([])
+  const [roleTypes, setRoleTypes] = useState<StaffRoleType[]>([])
   const [isValidating, setIsValidating] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
-  const [importResults, setImportResults] = useState<{
-    success: number
-    replaced: number
-    skipped: number
-    errors: number
-    errorDetails: Array<{ row: number; message: string }>
-  } | null>(null)
+  const [importResults, setImportResults] = useState<ImportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [duplicates, setDuplicates] = useState<any[]>([])
+  const [duplicates, setDuplicates] = useState<DuplicateMatch[]>([])
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false)
-  const [pendingImport, setPendingImport] = useState<any[]>([])
+  const [pendingImport, setPendingImport] = useState<TeacherImport[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch role types on mount
@@ -71,7 +83,12 @@ export default function TeacherCSVUploadModal({
       fetch('/api/staff-role-types')
         .then((r) => r.json())
         .then((data) => {
-          setRoleTypes(data.map((rt: any) => ({ id: rt.id, label: rt.label })))
+          const items = Array.isArray(data) ? (data as Array<{ id?: unknown; label?: unknown }>) : []
+          const normalized = items.flatMap((item) => {
+            if (!item?.id || !item?.label) return []
+            return [{ id: String(item.id), label: String(item.label) }]
+          })
+          setRoleTypes(normalized)
         })
         .catch((err) => {
           console.error('Failed to fetch role types:', err)
@@ -266,15 +283,16 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
       const text = await selectedFile.text()
       const parsed = parseCSV(text)
       setParsedData(parsed)
-    } catch (err: any) {
-      setError(err.message || 'Failed to parse CSV file')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to parse CSV file'
+      setError(message)
       setParsedData([])
     } finally {
       setIsValidating(false)
     }
   }
 
-  const checkDuplicates = async (teachersToImport: any[]) => {
+  const checkDuplicates = async (teachersToImport: TeacherImport[]): Promise<DuplicateMatch[]> => {
     try {
       const response = await fetch('/api/teachers/check-duplicates', {
         method: 'POST',
@@ -287,7 +305,7 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
       }
 
       const data = await response.json()
-      return data.duplicates || []
+      return Array.isArray(data?.duplicates) ? (data.duplicates as DuplicateMatch[]) : []
     } catch (err) {
       console.error('Error checking duplicates:', err)
       return []
@@ -305,7 +323,7 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
     setError(null)
 
     try {
-      const teachersToImport = validRows.map((row) => {
+      const teachersToImport: TeacherImport[] = validRows.map((row) => {
         const { first_name, last_name } = parseName(row.name)
         const roleTypeId = findRoleTypeId(row.staff_role)
         
@@ -336,15 +354,16 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
 
       // No duplicates, proceed with import
       await performImport(teachersToImport, new Map())
-    } catch (err: any) {
-      setError(err.message || 'Failed to import teachers')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to import teachers'
+      setError(message)
       setIsImporting(false)
     }
   }
 
   const performImport = async (
-    teachersToImport: any[],
-    resolutions: Map<number, 'keep' | 'skip' | 'replace'>
+    teachersToImport: TeacherImport[],
+    resolutions: Map<number, DuplicateResolutionAction>
   ) => {
     setIsImporting(true)
     setError(null)
@@ -376,14 +395,15 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
           handleClose()
         }, 2000)
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to import teachers')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to import teachers'
+      setError(message)
     } finally {
       setIsImporting(false)
     }
   }
 
-  const handleDuplicateResolve = (resolutions: Map<number, 'keep' | 'skip' | 'replace'>) => {
+  const handleDuplicateResolve = (resolutions: Map<number, DuplicateResolutionAction>) => {
     setShowDuplicateDialog(false)
     performImport(pendingImport, resolutions)
   }
@@ -428,7 +448,7 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
             <h3 className="font-medium mb-2">CSV Format:</h3>
             <ul className="text-sm space-y-1 text-muted-foreground">
               <li>
-                <strong>Name</strong> (required): Full name or "First Last"
+                <strong>Name</strong> (required): Full name or &quot;First Last&quot;
               </li>
               <li>
                 <strong>Display Name</strong> (optional): Preferred display name
@@ -440,13 +460,13 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
                 <strong>Phone</strong> (optional): Phone number
               </li>
               <li>
-                <strong>Staff Role</strong> (optional): "Permanent" or "Flexible"
+                <strong>Staff Role</strong> (optional): &quot;Permanent&quot; or &quot;Flexible&quot;
               </li>
               <li>
-                <strong>Status</strong> (optional): "Active" or "Inactive" (defaults to Active)
+                <strong>Status</strong> (optional): &quot;Active&quot; or &quot;Inactive&quot; (defaults to Active)
               </li>
               <li>
-                <strong>Is also a sub</strong> (optional): "Yes" or "No" (defaults to No)
+                <strong>Is also a sub</strong> (optional): &quot;Yes&quot; or &quot;No&quot; (defaults to No)
               </li>
             </ul>
           </div>
@@ -617,4 +637,3 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
     </Dialog>
   )
 }
-

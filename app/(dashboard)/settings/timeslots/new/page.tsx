@@ -34,7 +34,13 @@ export default function NewTimeSlotPage() {
   const onSubmit = async (data: TimeSlotFormData) => {
     try {
       setError(null)
-      const payload: any = {
+      const payload: {
+        code: string
+        name: string | null
+        default_start_time: string | null
+        default_end_time: string | null
+        display_order?: number
+      } = {
         code: data.code,
         name: data.name || null,
         default_start_time: data.default_start_time || null,
@@ -56,8 +62,8 @@ export default function NewTimeSlotPage() {
 
       router.push('/settings/timeslots')
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create time slot')
     }
   }
 

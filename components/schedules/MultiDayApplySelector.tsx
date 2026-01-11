@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Database } from '@/types/database'
+
+type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
 
 interface TimeSlot {
   id: string
@@ -33,7 +36,7 @@ export default function MultiDayApplySelector({
   timeSlots,
   onApplyScopeChange,
 }: MultiDayApplySelectorProps) {
-  const [days, setDays] = useState<any[]>([])
+  const [days, setDays] = useState<DayOfWeek[]>([])
   const [scope, setScope] = useState<'single' | 'timeSlot' | 'day'>('single')
   const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set())
   const [selectedTimeSlots, setSelectedTimeSlots] = useState<Set<string>>(new Set([currentTimeSlotId]))
@@ -43,14 +46,14 @@ export default function MultiDayApplySelector({
       .then((r) => r.json())
       .then((data) => {
         // Sort by day_number
-        const sorted = data.sort((a: any, b: any) => {
+        const sorted = (data as DayOfWeek[]).sort((a, b) => {
           const aNum = a.day_number === 0 ? 7 : a.day_number
           const bNum = b.day_number === 0 ? 7 : b.day_number
           return aNum - bNum
         })
         setDays(sorted)
         // Initialize with all available days selected (filtered by selectedDayIds)
-        const availableDayIds = sorted.filter((day: any) => selectedDayIds.includes(day.id)).map((day: any) => day.id)
+        const availableDayIds = sorted.filter((day) => selectedDayIds.includes(day.id)).map((day) => day.id)
         setSelectedDays(new Set(availableDayIds))
       })
       .catch(console.error)

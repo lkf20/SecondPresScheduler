@@ -25,7 +25,7 @@ const subSchema = z.object({
   is_teacher: z.boolean().default(false),
 })
 
-type SubFormData = z.infer<typeof subSchema>
+export type SubFormData = z.infer<typeof subSchema>
 
 interface SubFormProps {
   sub?: Staff
@@ -120,4 +120,3 @@ export default function SubForm({ sub, onSubmit, onCancel }: SubFormProps) {
     </form>
   )
 }
-

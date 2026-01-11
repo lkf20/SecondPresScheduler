@@ -2,26 +2,25 @@ import Link from 'next/link'
 import { getClassrooms } from '@/lib/api/classrooms'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
-import { Database } from '@/types/database'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import SortableClassroomsTable from '@/components/settings/SortableClassroomsTable'
 
-type Classroom = Database['public']['Tables']['classrooms']['Row']
+type ClassroomWithAllowed = Awaited<ReturnType<typeof getClassrooms>>[number]
 
 export default async function ClassroomsPage() {
-  let classrooms: Classroom[] = []
+  let classrooms: ClassroomWithAllowed[] = []
   let error: string | null = null
 
   try {
     // Fetch all classrooms (including inactive) for the list view
     classrooms = await getClassrooms(true)
-  } catch (err: any) {
-    error = err.message || 'Failed to load classrooms'
+  } catch (err: unknown) {
+    error = err instanceof Error ? err.message : 'Failed to load classrooms'
     console.error('Error loading classrooms:', err)
   }
 
   // Add computed fields for display
-  const classroomsWithComputed = classrooms.map((classroom: any) => ({
+  const classroomsWithComputed = classrooms.map((classroom) => ({
     ...classroom,
     allowed_classes_display:
       classroom.allowed_classes_count > 0

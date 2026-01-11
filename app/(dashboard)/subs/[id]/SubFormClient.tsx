@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import SubForm from '@/components/subs/SubForm'
+import SubForm, { type SubFormData } from '@/components/subs/SubForm'
 import SubAvailabilitySection from '@/components/subs/SubAvailabilitySection'
 import SubPreferencesSection from '@/components/subs/SubPreferencesSection'
 import ErrorMessage from '@/components/shared/ErrorMessage'
@@ -70,7 +70,7 @@ export default function SubFormClient({ sub }: SubFormClientProps) {
     }
   }
 
-  const handleSubmit = async (data: any) => {
+  const handleSubmit = async (data: SubFormData) => {
     try {
       setError(null)
       // Convert empty email to null
@@ -93,8 +93,8 @@ export default function SubFormClient({ sub }: SubFormClientProps) {
 
       router.push(getReturnUrl())
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update sub')
     }
   }
 
@@ -114,8 +114,8 @@ export default function SubFormClient({ sub }: SubFormClientProps) {
 
       router.push(getReturnUrl())
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete sub')
     }
   }
 

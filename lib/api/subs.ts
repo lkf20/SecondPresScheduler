@@ -50,7 +50,7 @@ export async function createSub(sub: {
   
   // Exclude id from the insert if it's undefined or empty
   const { id, ...subData } = sub
-  const insertData: any = {
+  const insertData: Partial<Staff> & { id: string } = {
     ...subData,
     email: sub.email && sub.email.trim() !== '' ? sub.email : null,
     is_sub: true,
@@ -94,4 +94,3 @@ export async function deleteSub(id: string) {
 
   if (error) throw error
 }
-

@@ -10,6 +10,15 @@ export interface ScheduleCellWithDetails extends ScheduleCell {
   class_groups?: Array<{ id: string; name: string; min_age: number | null; max_age: number | null; required_ratio: number; preferred_ratio: number | null }>
 }
 
+type ScheduleCellClassGroupJoin = {
+  class_group: ScheduleCellWithDetails['class_groups'] extends Array<infer T> ? T | null : never
+}
+
+type ScheduleCellRaw = Omit<ScheduleCellWithDetails, 'class_groups'> & {
+  schedule_cell_class_groups?: ScheduleCellClassGroupJoin[]
+  class_groups?: ScheduleCellWithDetails['class_groups']
+}
+
 export interface ScheduleCellFilters {
   classroom_id?: string
   day_of_week_id?: string
@@ -51,17 +60,17 @@ export async function getScheduleCell(
   }
 
   // Transform the nested structure to flatten class_groups array
-  const cell = data as any
-  if (cell.schedule_cell_class_groups) {
-    cell.class_groups = cell.schedule_cell_class_groups
-      .map((j: any) => j.class_group)
-      .filter((cg: any) => cg !== null)
-    delete cell.schedule_cell_class_groups
-  } else {
-    cell.class_groups = []
+  const cell = data as ScheduleCellRaw
+  const flattened: ScheduleCellWithDetails = {
+    ...cell,
+    class_groups: cell.schedule_cell_class_groups
+      ? cell.schedule_cell_class_groups
+          .map((j) => j.class_group)
+          .filter((cg): cg is NonNullable<typeof cg> => cg !== null)
+      : [],
   }
-
-  return cell as ScheduleCellWithDetails
+  delete (flattened as ScheduleCellRaw).schedule_cell_class_groups
+  return flattened
 }
 
 /**
@@ -104,16 +113,18 @@ export async function getScheduleCells(
   if (error) throw error
 
   // Transform the nested structure to flatten class_groups array
-  return (data || []).map((cell: any) => {
-    if (cell.schedule_cell_class_groups) {
-      cell.class_groups = cell.schedule_cell_class_groups
-        .map((j: any) => j.class_group)
-        .filter((cg: any) => cg !== null)
-      delete cell.schedule_cell_class_groups
-    } else {
-      cell.class_groups = []
+  return (data || []).map((cell) => {
+    const raw = cell as ScheduleCellRaw
+    const flattened: ScheduleCellWithDetails = {
+      ...raw,
+      class_groups: raw.schedule_cell_class_groups
+        ? raw.schedule_cell_class_groups
+            .map((j) => j.class_group)
+            .filter((cg): cg is NonNullable<typeof cg> => cg !== null)
+        : [],
     }
-    return cell
+    delete (flattened as ScheduleCellRaw).schedule_cell_class_groups
+    return flattened
   }) as ScheduleCellWithDetails[]
 }
 
@@ -358,4 +369,3 @@ export async function bulkUpdateScheduleCells(
 
   return upsertedCells as ScheduleCell[]
 }
-

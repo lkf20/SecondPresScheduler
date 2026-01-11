@@ -13,6 +13,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Database } from '@/types/database'
+
+type ClassGroup = Database['public']['Tables']['class_groups']['Row']
 
 interface ClassSelectorProps {
   selectedClassIds: string[]
@@ -23,7 +26,7 @@ export default function ClassSelector({
   selectedClassIds,
   onSelectionChange,
 }: ClassSelectorProps) {
-  const [classes, setClasses] = useState<any[]>([])
+  const [classes, setClasses] = useState<ClassGroup[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
@@ -34,7 +37,7 @@ export default function ClassSelector({
     fetch('/api/class-groups')
       .then((r) => r.json())
       .then((data) => {
-        setClasses(data)
+        setClasses(data as ClassGroup[])
       })
       .catch(console.error)
   }, [])
@@ -211,4 +214,3 @@ export default function ClassSelector({
     </div>
   )
 }
-

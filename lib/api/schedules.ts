@@ -2,8 +2,30 @@ import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
 
 type TeacherSchedule = Database['public']['Tables']['teacher_schedules']['Row']
+type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
+type TimeSlot = Database['public']['Tables']['time_slots']['Row']
+type ClassGroup = Database['public']['Tables']['class_groups']['Row']
+type Classroom = Database['public']['Tables']['classrooms']['Row']
+type Staff = Database['public']['Tables']['staff']['Row']
 
-export async function getTeacherSchedules(teacherId: string) {
+type TeacherScheduleWithDetails = TeacherSchedule & {
+  day_of_week: DayOfWeek | null
+  time_slot: TimeSlot | null
+  class: ClassGroup | null
+  classroom: Classroom | null
+}
+
+type TeacherScheduleWithTeacher = TeacherScheduleWithDetails & {
+  teacher: Staff | null
+}
+
+type SupabaseErrorDetails = Error & {
+  code?: string | null
+  details?: string | null
+  hint?: string | null
+}
+
+export async function getTeacherSchedules(teacherId: string): Promise<TeacherScheduleWithDetails[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('teacher_schedules')
@@ -11,7 +33,7 @@ export async function getTeacherSchedules(teacherId: string) {
     .eq('teacher_id', teacherId)
 
   if (error) throw error
-  return data as any[]
+  return (data || []) as TeacherScheduleWithDetails[]
 }
 
 export async function createTeacherSchedule(schedule: {
@@ -36,10 +58,10 @@ export async function createTeacherSchedule(schedule: {
 
   if (error) {
     // Preserve error details for better error messages
-    const enhancedError = new Error(error.message)
-    ;(enhancedError as any).code = error.code
-    ;(enhancedError as any).details = error.details
-    ;(enhancedError as any).hint = error.hint
+    const enhancedError: SupabaseErrorDetails = new Error(error.message)
+    enhancedError.code = error.code
+    enhancedError.details = error.details
+    enhancedError.hint = error.hint
     throw enhancedError
   }
   return data as TeacherSchedule
@@ -52,7 +74,7 @@ export async function deleteTeacherSchedule(id: string) {
   if (error) throw error
 }
 
-export async function getTeacherScheduleById(id: string) {
+export async function getTeacherScheduleById(id: string): Promise<TeacherScheduleWithTeacher> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('teacher_schedules')
@@ -61,7 +83,7 @@ export async function getTeacherScheduleById(id: string) {
     .single()
 
   if (error) throw error
-  return data as any
+  return data as TeacherScheduleWithTeacher
 }
 
 export async function updateTeacherSchedule(id: string, updates: Partial<TeacherSchedule>) {
@@ -77,7 +99,9 @@ export async function updateTeacherSchedule(id: string, updates: Partial<Teacher
   return data as TeacherSchedule
 }
 
-export async function getAllTeacherSchedules(filters?: { teacher_id?: string }) {
+export async function getAllTeacherSchedules(
+  filters?: { teacher_id?: string }
+): Promise<TeacherScheduleWithTeacher[]> {
   const supabase = await createClient()
   let query = supabase
     .from('teacher_schedules')
@@ -93,7 +117,7 @@ export async function getAllTeacherSchedules(filters?: { teacher_id?: string }) 
   const { data, error } = await query
 
   if (error) throw error
-  return data as any[]
+  return (data || []) as TeacherScheduleWithTeacher[]
 }
 
 export async function bulkCreateTeacherSchedules(
@@ -134,7 +158,7 @@ export async function getScheduleByDayAndSlot(
   teacherId: string,
   dayOfWeekId: string,
   timeSlotId: string
-) {
+): Promise<TeacherScheduleWithDetails | null> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('teacher_schedules')
@@ -145,8 +169,7 @@ export async function getScheduleByDayAndSlot(
     .maybeSingle()
 
   if (error) throw error
-  return data as any
+  return data as TeacherScheduleWithDetails | null
 }
-
 
 

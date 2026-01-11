@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { getClassGroups, updateClassGroup } from '@/lib/api/class-groups'
+import { getClassGroups } from '@/lib/api/class-groups'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 import { Database } from '@/types/database'
@@ -15,8 +15,8 @@ export default async function ClassesPage() {
   try {
     // Fetch all class groups (including inactive) for the list view
     classGroups = await getClassGroups(true)
-  } catch (err: any) {
-    error = err.message || 'Failed to load class groups'
+  } catch (err: unknown) {
+    error = err instanceof Error ? err.message : 'Failed to load class groups'
     console.error('Error loading class groups:', err)
   }
 

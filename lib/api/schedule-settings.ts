@@ -7,6 +7,23 @@ export interface ScheduleSettings {
   updated_at: string
 }
 
+const normalizeSelectedDayIds = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.filter((entry): entry is string => typeof entry === 'string')
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed)
+        ? parsed.filter((entry): entry is string => typeof entry === 'string')
+        : []
+    } catch (error) {
+      console.warn('Failed to parse selected_day_ids as JSON:', error)
+    }
+  }
+  return []
+}
+
 export async function getScheduleSettings(): Promise<ScheduleSettings | null> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -29,20 +46,7 @@ export async function getScheduleSettings(): Promise<ScheduleSettings | null> {
   }
 
   // Ensure selected_day_ids is always an array
-  let selectedDayIds: string[] = []
-  if (data.selected_day_ids) {
-    if (Array.isArray(data.selected_day_ids)) {
-      selectedDayIds = data.selected_day_ids
-    } else if (typeof data.selected_day_ids === 'string') {
-      // If it's a string, try to parse it as JSON
-      try {
-        selectedDayIds = JSON.parse(data.selected_day_ids)
-      } catch (e) {
-        console.warn('Failed to parse selected_day_ids as JSON:', e)
-        selectedDayIds = []
-      }
-    }
-  }
+  const selectedDayIds = normalizeSelectedDayIds(data.selected_day_ids)
 
   return {
     ...data,
@@ -71,7 +75,7 @@ export async function updateScheduleSettings(selectedDayIds: string[]): Promise<
     if (error) throw error
     return {
       ...data,
-      selected_day_ids: (data.selected_day_ids as any) || [],
+      selected_day_ids: normalizeSelectedDayIds(data.selected_day_ids),
     } as ScheduleSettings
   } else {
     // Create new
@@ -86,8 +90,7 @@ export async function updateScheduleSettings(selectedDayIds: string[]): Promise<
     if (error) throw error
     return {
       ...data,
-      selected_day_ids: (data.selected_day_ids as any) || [],
+      selected_day_ids: normalizeSelectedDayIds(data.selected_day_ids),
     } as ScheduleSettings
   }
 }
-

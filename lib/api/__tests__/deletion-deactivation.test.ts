@@ -37,7 +37,16 @@ jest.mock('@/lib/supabase/server', () => ({
 }))
 
 describe('Deletion and Deactivation Handling', () => {
-  let mockSupabase: any
+  let mockSupabase: {
+    from: jest.Mock
+    select: jest.Mock
+    insert: jest.Mock
+    update: jest.Mock
+    delete: jest.Mock
+    eq: jest.Mock
+    single: jest.Mock
+    order: jest.Mock
+  }
 
   beforeEach(() => {
     mockSupabase = {
@@ -444,4 +453,3 @@ describe('Deletion and Deactivation Handling', () => {
     })
   })
 })
-

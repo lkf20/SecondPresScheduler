@@ -7,7 +7,27 @@ import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, CircleDot, PieChar
 import { Button } from '@/components/ui/button'
 import { parseLocalDate } from '@/lib/utils/date'
 
-type TimeOffRow = Record<string, any>
+type ClassroomBadge = {
+  id: string
+  name: string
+  color: string | null
+}
+
+type CoverageStatus = 'draft' | 'completed' | 'covered' | 'partially_covered' | 'needs_coverage'
+
+type TimeOffRow = {
+  id: string
+  teacher_name: string
+  start_date: string
+  end_date: string | null
+  status: 'draft' | 'active' | 'deleted'
+  coverage_status: CoverageStatus
+  coverage_covered: number
+  coverage_total: number
+  shifts_display: string
+  shift_details?: string[]
+  classrooms?: ClassroomBadge[]
+}
 
 export default function TimeOffListClient({
   view: initialView,
@@ -205,7 +225,7 @@ export default function TimeOffListClient({
             </button>
             {row.classrooms && row.classrooms.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
-                {row.classrooms.map((classroom: any) => (
+                {row.classrooms.map((classroom) => (
                   <span
                     key={classroom.id}
                     className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium"

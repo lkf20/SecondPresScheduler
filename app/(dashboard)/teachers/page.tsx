@@ -13,8 +13,8 @@ export default async function TeachersPage() {
       role_type_label: teacher.staff_role_types?.label || '—',
       full_name: `${teacher.first_name || ''} ${teacher.last_name || ''}`.trim() || '—',
     }))
-  } catch (err: any) {
-    error = err.message || 'Failed to load teachers'
+  } catch (err: unknown) {
+    error = err instanceof Error ? err.message : 'Failed to load teachers'
     console.error('Error loading teachers:', err)
   }
 

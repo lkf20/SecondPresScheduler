@@ -57,6 +57,12 @@ export interface RecommendedCombination {
   coveragePercent: number
 }
 
+type SubShiftCoverage = {
+  sub: Sub
+  availableShifts: Map<string, Shift>
+  conflicts: Map<string, number>
+}
+
 /**
  * Calculate conflicts for a sub covering a specific shift
  */
@@ -148,14 +154,7 @@ export function findBestCombination(subs: Sub[]): RecommendedCombination | null 
   })
 
   // Build sub-to-shifts map with conflict calculations
-  const subShiftsMap = new Map<
-    string,
-    {
-      sub: Sub
-      availableShifts: Map<string, Shift>
-      conflicts: Map<string, number> // shiftKey -> conflict count
-    }
-  >()
+  const subShiftsMap = new Map<string, SubShiftCoverage>()
 
   eligibleSubs.forEach((sub) => {
     const availableShifts = new Map<string, Shift>()
@@ -192,7 +191,7 @@ export function findBestCombination(subs: Sub[]): RecommendedCombination | null 
     let bestSubId: string | null = null
     let bestNewCoverage = 0
     let bestConflicts = Infinity
-    let bestSubData: typeof subShiftsMap extends Map<any, infer V> ? V : never | null = null
+    let bestSubData: SubShiftCoverage | null = null
 
     // Find the sub that adds the most uncovered shifts with least conflicts
     subShiftsMap.forEach((data, subId) => {
@@ -294,4 +293,3 @@ export function findBestCombination(subs: Sub[]): RecommendedCombination | null 
         : 100,
   }
 }
-

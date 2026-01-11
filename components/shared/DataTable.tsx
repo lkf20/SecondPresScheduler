@@ -34,7 +34,7 @@ interface DataTableProps<T> {
   emptyMessage?: string
 }
 
-export default function DataTable<T extends Record<string, any>>({
+export default function DataTable<T extends Record<string, unknown>>({
   data,
   columns,
   searchable = false,
@@ -184,7 +184,7 @@ export default function DataTable<T extends Record<string, any>>({
                 >
                   {columns.map((column) => {
                     // Get cell content - handle cell function if provided, otherwise use row data
-                    let cellContent: any = row[column.key]
+                    let cellContent = row[column.key] as React.ReactNode
                     if (column.cell) {
                       try {
                         cellContent = column.cell(row)
@@ -275,4 +275,3 @@ export default function DataTable<T extends Record<string, any>>({
     </div>
   )
 }
-

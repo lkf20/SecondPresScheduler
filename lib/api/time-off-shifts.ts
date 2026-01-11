@@ -2,8 +2,23 @@ import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
 
 type TimeOffShift = Database['public']['Tables']['time_off_shifts']['Row']
+type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
+type TimeSlot = Database['public']['Tables']['time_slots']['Row']
+type SubAssignment = Database['public']['Tables']['sub_assignments']['Row']
 
-export async function getTimeOffShifts(requestId: string) {
+type TimeOffShiftWithDetails = TimeOffShift & {
+  time_slot: TimeSlot | null
+  day_of_week: DayOfWeek | null
+}
+
+type TeacherScheduleEntry = {
+  day_of_week_id: string
+  time_slot_id: string
+  days_of_week: { name: string | null; day_number: number | null } | null
+  time_slots: { code: string | null; name: string | null } | null
+}
+
+export async function getTimeOffShifts(requestId: string): Promise<TimeOffShiftWithDetails[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('time_off_shifts')
@@ -13,7 +28,7 @@ export async function getTimeOffShifts(requestId: string) {
     .order('time_slot_id', { ascending: true })
 
   if (error) throw error
-  return data as any[]
+  return (data || []) as TimeOffShiftWithDetails[]
 }
 
 export async function createTimeOffShifts(
@@ -79,10 +94,10 @@ export async function getTeacherScheduledShifts(
   if (!schedule || schedule.length === 0) return []
 
   // Create a map of day_number to schedule entries for quick lookup
-  const scheduleByDayNumber = new Map<number, any[]>()
-  schedule.forEach((entry: any) => {
+  const scheduleByDayNumber = new Map<number, TeacherScheduleEntry[]>()
+  ;(schedule as TeacherScheduleEntry[]).forEach((entry) => {
     const dayNumber = entry.days_of_week?.day_number
-    if (dayNumber !== undefined) {
+    if (typeof dayNumber === 'number') {
       if (!scheduleByDayNumber.has(dayNumber)) {
         scheduleByDayNumber.set(dayNumber, [])
       }
@@ -132,7 +147,7 @@ export async function getTeacherScheduledShifts(
     
     // Only include dates where teacher has scheduled shifts
     if (shiftsForDay && shiftsForDay.length > 0) {
-      shiftsForDay.forEach((shift: any) => {
+      shiftsForDay.forEach((shift) => {
         result.push({
           date: currentDateStr,
           day_of_week_id: shift.day_of_week_id,
@@ -207,7 +222,7 @@ export async function getTimeOffCoverageSummary(request: {
     return { total, covered: 0, partial: 0, uncovered: 0 }
   }
 
-  const dates = shifts.map((shift: any) => shift.date).sort()
+  const dates = shifts.map((shift) => shift.date).sort()
   const startDate = dates[0]
   const endDate = dates[dates.length - 1]
 
@@ -225,7 +240,7 @@ export async function getTimeOffCoverageSummary(request: {
     string,
     { full: boolean; partial: boolean }
   >()
-  ;(assignments || []).forEach((assignment: any) => {
+  ;(assignments as SubAssignment[] | null || []).forEach((assignment) => {
     const key = `${assignment.date}::${assignment.time_slot_id}`
     const entry = assignmentMap.get(key) || { full: false, partial: false }
     const isPartial =
@@ -242,7 +257,7 @@ export async function getTimeOffCoverageSummary(request: {
   let partial = 0
   let uncovered = 0
 
-  shifts.forEach((shift: any) => {
+  shifts.forEach((shift) => {
     const key = `${shift.date}::${shift.time_slot_id}`
     const coverage = assignmentMap.get(key)
     if (coverage?.full) {

@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
-import TeacherForm from '@/components/teachers/TeacherForm'
+import TeacherForm, { type TeacherFormData } from '@/components/teachers/TeacherForm'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import { Database } from '@/types/database'
 
@@ -34,7 +34,7 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
     return `/teachers${queryString ? `?${queryString}` : ''}`
   }
 
-  const handleSubmit = async (data: any) => {
+  const handleSubmit = async (data: TeacherFormData) => {
     try {
       setError(null)
       // Convert empty email to null
@@ -58,8 +58,8 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
 
       router.push(getReturnUrl())
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update teacher')
     }
   }
 
@@ -79,8 +79,8 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
 
       router.push(getReturnUrl())
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete teacher')
     }
   }
 

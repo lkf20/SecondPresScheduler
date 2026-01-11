@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { ChevronDown, RefreshCw, Search, Settings2 } from 'lucide-react'
+import { RefreshCw, Search, Settings2 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
 import AbsenceList from '@/components/sub-finder/AbsenceList'
@@ -15,73 +14,52 @@ import RecommendedSubsList from '@/components/sub-finder/RecommendedSubsList'
 import RecommendedCombination from '@/components/sub-finder/RecommendedCombination'
 import ContactSubPanel from '@/components/sub-finder/ContactSubPanel'
 import CoverageSummary from '@/components/sub-finder/CoverageSummary'
+import {
+  useSubFinderData,
+  type Mode,
+  type Absence,
+  type SubCandidate,
+} from '@/components/sub-finder/hooks/useSubFinderData'
 import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
 import DatePickerInput from '@/components/ui/date-picker-input'
 import { parseLocalDate } from '@/lib/utils/date'
-import { findBestCombination } from '@/lib/utils/sub-combination'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-
-type Mode = 'existing' | 'manual'
-
-interface Absence {
-  id: string
-  teacher_id: string
-  teacher_name: string
-  start_date: string
-  end_date: string | null
-  reason: string | null
-  shifts: {
-    total: number
-    uncovered: number
-    partially_covered: number
-    fully_covered: number
-    shift_details: Array<{
-      id: string
-      date: string
-      day_name: string
-      time_slot_code: string
-      class_name: string | null
-      classroom_name: string | null
-      status: 'uncovered' | 'partially_covered' | 'fully_covered'
-      sub_name?: string | null
-      is_partial?: boolean
-    }>
-  }
-}
-
-interface Teacher {
-  id: string
-  first_name?: string | null
-  last_name?: string | null
-  display_name?: string | null
-  active?: boolean | null
-}
 
 export default function SubFinderPage() {
   const searchParams = useSearchParams()
   const requestedAbsenceId = searchParams.get('absence_id')
-  const hasAppliedAbsenceRef = useRef(false)
   const [mode, setMode] = useState<Mode>('existing')
-  const [absences, setAbsences] = useState<Absence[]>([])
-  const [selectedAbsence, setSelectedAbsence] = useState<Absence | null>(null)
-  const [recommendedSubs, setRecommendedSubs] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
-  const [includePartiallyCovered, setIncludePartiallyCovered] = useState(false)
-  const [includeFlexibleStaff, setIncludeFlexibleStaff] = useState(true)
-  const [includeOnlyRecommended, setIncludeOnlyRecommended] = useState(true)
+  const {
+    absences,
+    selectedAbsence,
+    setSelectedAbsence,
+    recommendedSubs,
+    allSubs,
+    recommendedCombination,
+    loading,
+    includePartiallyCovered,
+    setIncludePartiallyCovered,
+    includeFlexibleStaff,
+    setIncludeFlexibleStaff,
+    includeOnlyRecommended,
+    setIncludeOnlyRecommended,
+    teachers,
+    getDisplayName,
+    fetchAbsences,
+    handleFindSubs,
+    handleFindManualSubs,
+    applySubResults,
+  } = useSubFinderData({ mode, requestedAbsenceId })
   const [searchQuery, setSearchQuery] = useState('')
   const [subSearch, setSubSearch] = useState('')
   const [isSubSearchOpen, setIsSubSearchOpen] = useState(false)
-  const [allSubs, setAllSubs] = useState<any[]>([]) // Store all subs from API
-  const [selectedSub, setSelectedSub] = useState<any | null>(null)
+  const [selectedSub, setSelectedSub] = useState<SubCandidate | null>(null)
   const [isContactPanelOpen, setIsContactPanelOpen] = useState(false)
   const [isTeacherSearchOpen, setIsTeacherSearchOpen] = useState(false)
   // Cache contact data: key = `${subId}-${absenceId}`
-  const [contactDataCache, setContactDataCache] = useState<Map<string, any>>(new Map())
-  const [recommendedCombination, setRecommendedCombination] = useState<any>(null)
+  const [contactDataCache, setContactDataCache] = useState<Map<string, Record<string, unknown>>>(new Map())
   const [highlightedSubId, setHighlightedSubId] = useState<string | null>(null)
-  const [teachers, setTeachers] = useState<Teacher[]>([])
   const [manualTeacherId, setManualTeacherId] = useState<string>('')
   const [manualStartDate, setManualStartDate] = useState<string>('')
   const [manualEndDate, setManualEndDate] = useState<string>('')
@@ -91,86 +69,49 @@ export default function SubFinderPage() {
   const [manualTeacherSearch, setManualTeacherSearch] = useState('')
   const [isManualTeacherSearchOpen, setIsManualTeacherSearchOpen] = useState(false)
   const subSearchRef = useRef<HTMLDivElement | null>(null)
-  const manualEndDateRef = useRef<HTMLInputElement | null>(null)
+  const manualEndDateRef = useRef<HTMLButtonElement | null>(null)
   const [endDateCorrected, setEndDateCorrected] = useState(false)
-  const justCorrectedRef = useRef(false)
-  const selectedClassrooms = selectedAbsence
-    ? Array.from(
-        new Set(
-          selectedAbsence.shifts.shift_details
-            .map((shift) => shift.classroom_name)
-            .filter((name): name is string => Boolean(name))
-        )
+  const correctionTimeoutRef = useRef<number | null>(null)
+  const runManualFinder = async () => {
+    if (!manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0) return
+    setHighlightedSubId(null)
+    await handleFindManualSubs({
+      teacherId: manualTeacherId,
+      startDate: manualStartDate,
+      endDate: manualEndDate || manualStartDate,
+      shifts: manualSelectedShifts,
+    })
+  }
+  const selectedClassrooms = useMemo(() => {
+    if (!selectedAbsence) return []
+    return Array.from(
+      new Set(
+        selectedAbsence.shifts.shift_details
+          .map((shift) => shift.classroom_name)
+          .filter((name): name is string => Boolean(name))
       )
-    : []
+    )
+  }, [selectedAbsence])
   const sortedSubs = useMemo(() => {
-    const displayName = (sub: any) =>
-      (sub.display_name || sub.name || `${sub.first_name ?? ''} ${sub.last_name ?? ''}` || 'Unknown').trim()
-    return [...allSubs].sort((a, b) => displayName(a).localeCompare(displayName(b)))
-  }, [allSubs])
+    return [...allSubs].sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)))
+  }, [allSubs, getDisplayName])
   const filteredSubsForSearch = useMemo(() => {
     const query = subSearch.trim().toLowerCase()
     if (!query) return sortedSubs
     return sortedSubs.filter((sub) => {
-      const name = (sub.display_name || sub.name || `${sub.first_name ?? ''} ${sub.last_name ?? ''}` || '').toLowerCase()
-      return name.includes(query)
+      return getDisplayName(sub, '').toLowerCase().includes(query)
     })
-  }, [sortedSubs, subSearch])
+  }, [sortedSubs, subSearch, getDisplayName])
   const filteredManualTeachers = useMemo(() => {
     const query = manualTeacherSearch.trim().toLowerCase()
     if (!query) return teachers
     return teachers.filter((teacher) => {
-      const name = (teacher.display_name || `${teacher.first_name ?? ''} ${teacher.last_name ?? ''}` || '').toLowerCase()
-      return name.includes(query)
+      return getDisplayName(teacher, '').toLowerCase().includes(query)
     })
-  }, [teachers, manualTeacherSearch])
-
-  // Fetch absences on mount and when filters change
-  useEffect(() => {
-    if (mode === 'existing') {
-      fetchAbsences()
-    }
-  }, [mode, includePartiallyCovered])
-
-  useEffect(() => {
-    if (!requestedAbsenceId) return
-    if (hasAppliedAbsenceRef.current) return
-    if (absences.length === 0) return
-    const match = absences.find((absence) => absence.id === requestedAbsenceId)
-    if (match) {
-      setMode('existing')
-      setSelectedAbsence(match)
-      handleFindSubs(match).catch((error) => {
-        console.error('Failed to load requested absence:', error)
-      })
-      hasAppliedAbsenceRef.current = true
-    }
-  }, [requestedAbsenceId, absences])
-
-  useEffect(() => {
-    if (manualStartDate && manualEndDate) {
-      if (manualEndDate < manualStartDate) {
-        setManualEndDate(manualStartDate)
-        justCorrectedRef.current = true
-        setEndDateCorrected(true)
-        const timer = setTimeout(() => {
-          setEndDateCorrected(false)
-          justCorrectedRef.current = false
-        }, 5000)
-        return () => clearTimeout(timer)
-      }
-
-      if (manualEndDate === manualStartDate && justCorrectedRef.current) {
-        return
-      }
-      setEndDateCorrected(false)
-      justCorrectedRef.current = false
-      return
-    }
-
-    setEndDateCorrected(false)
-    justCorrectedRef.current = false
-  }, [manualStartDate, manualEndDate])
+  }, [teachers, manualTeacherSearch, getDisplayName])
+  const teacherNames = useMemo(() => {
+    return Array.from(new Set(absences.map((absence) => absence.teacher_name))).sort((a, b) => a.localeCompare(b))
+  }, [absences])
 
   useEffect(() => {
     if (!isSubSearchOpen) return
@@ -185,185 +126,31 @@ export default function SubFinderPage() {
     }
   }, [isSubSearchOpen])
 
-  useEffect(() => {
-    const fetchTeachers = async () => {
-      try {
-        const response = await fetch('/api/teachers')
-        if (!response.ok) throw new Error('Failed to fetch teachers')
-        const data = await response.json()
-        const sortedTeachers = (data as Teacher[])
-          .filter((teacher) => teacher.active !== false)
-          .sort((a, b) => {
-            const nameA = (a.display_name || `${a.first_name ?? ''} ${a.last_name ?? ''}`).trim()
-            const nameB = (b.display_name || `${b.first_name ?? ''} ${b.last_name ?? ''}`).trim()
-            return nameA.localeCompare(nameB)
-          })
-        setTeachers(sortedTeachers)
-      } catch (error) {
-        console.error('Error fetching teachers:', error)
-        setTeachers([])
-      }
+  const setCorrectionNotice = () => {
+    if (correctionTimeoutRef.current) {
+      window.clearTimeout(correctionTimeoutRef.current)
     }
-
-    fetchTeachers()
-  }, [])
-
-  const fetchAbsences = async () => {
-    setLoading(true)
-    try {
-      const response = await fetch(
-        `/api/sub-finder/absences?include_partially_covered=${includePartiallyCovered}`
-      )
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(errorData.error || 'Failed to fetch absences')
-      }
-      const data = await response.json()
-      console.log('Fetched absences:', data)
-      setAbsences(data)
-    } catch (error) {
-      console.error('Error fetching absences:', error)
-      // Show error to user - you might want to add a toast notification here
-      setAbsences([])
-    } finally {
-      setLoading(false)
-    }
+    setEndDateCorrected(true)
+    correctionTimeoutRef.current = window.setTimeout(() => {
+      setEndDateCorrected(false)
+      correctionTimeoutRef.current = null
+    }, 5000)
   }
-
-  const handleFindSubs = async (absence: Absence) => {
-    setSelectedAbsence(absence)
-    setLoading(true)
-    try {
-      const response = await fetch('/api/sub-finder/find-subs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          absence_id: absence.id,
-          include_flexible_staff: includeFlexibleStaff,
-        }),
-      })
-      if (!response.ok) throw new Error('Failed to find subs')
-      const data = await response.json()
-      setAllSubs(data) // Store all subs
-      
-      // Calculate recommended combination
-      const combination = findBestCombination(data)
-      setRecommendedCombination(combination)
-      
-      // Filter based on includeOnlyRecommended
-      if (includeOnlyRecommended) {
-        setRecommendedSubs(data.filter((sub: any) => sub.coverage_percent > 0))
-      } else {
-        setRecommendedSubs(data)
-      }
-    } catch (error) {
-      console.error('Error finding subs:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleFindManualSubs = async () => {
-    if (!manualTeacherId || !manualStartDate) return
-    setLoading(true)
-    const teacher = teachers.find((t) => t.id === manualTeacherId)
-    const teacherName = (teacher?.display_name || `${teacher?.first_name ?? ''} ${teacher?.last_name ?? ''}`).trim()
-    setSelectedAbsence({
-      id: `manual-${manualTeacherId}`,
-      teacher_id: manualTeacherId,
-      teacher_name: teacherName || 'Manual Coverage',
-      start_date: manualStartDate,
-      end_date: manualEndDate || manualStartDate,
-      reason: null,
-      shifts: {
-        total: 0,
-        uncovered: 0,
-        partially_covered: 0,
-        fully_covered: 0,
-        shift_details: [],
-      },
-    })
-    setRecommendedSubs([])
-    setAllSubs([])
-    setRecommendedCombination(null)
-    setHighlightedSubId(null)
-    try {
-      const response = await fetch('/api/sub-finder/find-subs-manual', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          teacher_id: manualTeacherId,
-          start_date: manualStartDate,
-          end_date: manualEndDate || manualStartDate,
-          shifts: manualSelectedShifts,
-        }),
-      })
-      if (!response.ok) throw new Error('Failed to find subs')
-      const data = await response.json()
-      const shiftDetails = data.shift_details || []
-      const totals = data.totals || { total: shiftDetails.length, uncovered: shiftDetails.length, partially_covered: 0, fully_covered: 0 }
-
-      setSelectedAbsence({
-        id: `manual-${manualTeacherId}`,
-        teacher_id: manualTeacherId,
-        teacher_name: teacherName || 'Manual Coverage',
-        start_date: manualStartDate,
-        end_date: manualEndDate || manualStartDate,
-        reason: null,
-        shifts: {
-          total: totals.total,
-          uncovered: totals.uncovered,
-          partially_covered: totals.partially_covered,
-          fully_covered: totals.fully_covered,
-          shift_details: shiftDetails,
-        },
-      })
-
-      const subs = data.subs || []
-      setAllSubs(subs)
-      const combination = findBestCombination(subs)
-      setRecommendedCombination(combination)
-      setIncludeOnlyRecommended(true)
-      if (true) {
-        setRecommendedSubs(subs.filter((sub: any) => sub.coverage_percent > 0))
-      } else {
-        setRecommendedSubs(subs)
-      }
-    } catch (error) {
-      console.error('Error finding subs (manual):', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Update recommended subs when filter changes
-  useEffect(() => {
-    if (allSubs.length > 0 && selectedAbsence) {
-      if (includeOnlyRecommended) {
-        setRecommendedSubs(allSubs.filter((sub: any) => sub.coverage_percent > 0))
-      } else {
-        setRecommendedSubs(allSubs)
-      }
-      // Recalculate combination when filters change (combination is based on all subs with coverage > 0)
-      const combination = findBestCombination(allSubs)
-      setRecommendedCombination(combination)
-    } else if (!selectedAbsence) {
-      // Clear combination when no absence is selected
-      setRecommendedCombination(null)
-    }
-  }, [includeOnlyRecommended, selectedAbsence, allSubs])
 
   const handleRerunFinder = async () => {
-    if (selectedAbsence) {
-      await handleFindSubs(selectedAbsence)
+    if (!selectedAbsence) return
+    if (mode === 'manual') {
+      await runManualFinder()
+      return
     }
+    await handleFindSubs(selectedAbsence)
   }
 
   // Helper to create cache key
   const getCacheKey = (subId: string, absenceId: string) => `${subId}-${absenceId}`
 
   // Fetch contact data for a sub/absence combination
-  const fetchContactDataForSub = async (sub: any, absence: Absence) => {
+  const fetchContactDataForSub = async (sub: SubCandidate, absence: Absence) => {
     const cacheKey = getCacheKey(sub.id, absence.id)
     
     // Check cache first
@@ -406,16 +193,7 @@ export default function SubFinderPage() {
   }
 
   // Invalidate cache for a specific sub/absence combination
-  const invalidateContactCache = (subId: string, absenceId: string) => {
-    const cacheKey = getCacheKey(subId, absenceId)
-    setContactDataCache(prev => {
-      const next = new Map(prev)
-      next.delete(cacheKey)
-      return next
-    })
-  }
-
-  const handleContactSub = async (sub: any) => {
+  const handleContactSub = async (sub: SubCandidate) => {
     setSelectedSub(sub)
     setIsContactPanelOpen(true)
     
@@ -427,7 +205,7 @@ export default function SubFinderPage() {
     }
   }
 
-  const handleViewDetails = async (sub: any) => {
+  const handleViewDetails = async (sub: SubCandidate) => {
     setSelectedSub(sub)
     setIsContactPanelOpen(true)
     
@@ -457,19 +235,19 @@ export default function SubFinderPage() {
 
   // Handler for combination contact button
   const handleCombinationContact = (subId: string) => {
-    const sub = allSubs.find((s: any) => s.id === subId)
+    const sub = allSubs.find((s) => s.id === subId)
     if (sub) {
       handleContactSub(sub)
     }
   }
 
   // Handle shift click to scroll to sub card
-  const handleShiftClick = (shift: any) => {
+  const handleShiftClick = (shift: Absence['shifts']['shift_details'][number]) => {
     if (!shift.sub_name) return
     
     // Find the sub in recommendedSubs by matching assigned shifts
-    const sub = recommendedSubs.find((s: any) => {
-      return s.assigned_shifts?.some((as: any) => 
+    const sub = recommendedSubs.find((s) => {
+      return s.assigned_shifts?.some((as) => 
         as.date === shift.date && as.time_slot_code === shift.time_slot_code
       )
     })
@@ -492,16 +270,18 @@ export default function SubFinderPage() {
   }
 
   // Filter absences based on search query
-  const filteredAbsences = absences.filter(absence => {
-    if (!searchQuery) return true
-    const query = searchQuery.toLowerCase()
-    return (
-      absence.teacher_name.toLowerCase().includes(query) ||
-      absence.reason?.toLowerCase().includes(query) ||
-      absence.start_date.includes(query) ||
-      absence.end_date?.includes(query)
-    )
-  })
+  const filteredAbsences = useMemo(() => {
+    return absences.filter((absence) => {
+      if (!searchQuery) return true
+      const query = searchQuery.toLowerCase()
+      return (
+        absence.teacher_name.toLowerCase().includes(query) ||
+        absence.reason?.toLowerCase().includes(query) ||
+        absence.start_date.includes(query) ||
+        absence.end_date?.includes(query)
+      )
+    })
+  }, [absences, searchQuery])
 
   return (
     <div className="flex h-[calc(100vh-4rem+1.5rem+4rem)] -mx-4 -mt-[calc(1.5rem+4rem)] -mb-6 relative">
@@ -564,9 +344,8 @@ export default function SubFinderPage() {
                     </div>
                     {isTeacherSearchOpen && (
                       <div className="border-t border-slate-100 max-h-40 overflow-y-auto px-2 py-1">
-                        {Array.from(new Set(absences.map((absence) => absence.teacher_name)))
+                        {teacherNames
                           .filter((name) => name.toLowerCase().includes(searchQuery.toLowerCase()))
-                          .sort((a, b) => a.localeCompare(b))
                           .map((name) => (
                             <button
                               key={name}
@@ -580,9 +359,9 @@ export default function SubFinderPage() {
                               {name}
                             </button>
                           ))}
-                        {absences.length === 0 && (
+                        {teacherNames.filter((name) => name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
                           <div className="px-1.5 py-1 text-xs text-muted-foreground">
-                            No teachers found
+                            No matches
                           </div>
                         )}
                       </div>
@@ -615,7 +394,7 @@ export default function SubFinderPage() {
                     {isManualTeacherSearchOpen && (
                       <div className="max-h-52 overflow-y-auto p-2">
                         {filteredManualTeachers.map((teacher) => {
-                          const name = (teacher.display_name || `${teacher.first_name ?? ''} ${teacher.last_name ?? ''}`).trim()
+                          const name = getDisplayName(teacher)
                           return (
                             <button
                               key={teacher.id}
@@ -648,6 +427,12 @@ export default function SubFinderPage() {
                     value={manualStartDate}
                     onChange={(value) => {
                       setManualStartDate(value)
+                      if (manualEndDate && value && manualEndDate < value) {
+                        setManualEndDate(value)
+                        setCorrectionNotice()
+                      } else if (manualEndDate) {
+                        setEndDateCorrected(false)
+                      }
                       setTimeout(() => {
                         manualEndDateRef.current?.focus()
                         manualEndDateRef.current?.click()
@@ -663,7 +448,15 @@ export default function SubFinderPage() {
                   <DatePickerInput
                     ref={manualEndDateRef}
                     value={manualEndDate}
-                    onChange={setManualEndDate}
+                    onChange={(value) => {
+                      if (manualStartDate && value && value < manualStartDate) {
+                        setManualEndDate(manualStartDate)
+                        setCorrectionNotice()
+                        return
+                      }
+                      setManualEndDate(value)
+                      setEndDateCorrected(false)
+                    }}
                     placeholder="Select end date"
                     allowClear
                     closeOnSelect
@@ -681,17 +474,22 @@ export default function SubFinderPage() {
                   startDate={manualStartDate}
                   endDate={manualEndDate || manualStartDate}
                   selectedShifts={manualSelectedShifts}
-                  onShiftsChange={setManualSelectedShifts}
+                  onShiftsChange={(shifts) => {
+                    setManualSelectedShifts(shifts)
+                  }}
                   autoSelectScheduled
                   tableClassName="text-xs [&_th]:px-2 [&_td]:px-2"
                 />
+                {manualSelectedShifts.length === 0 && (
+                  <p className="text-xs text-amber-600 mt-2">Select at least one shift.</p>
+                )}
               </div>
               <Button
                 size="sm"
                 variant="outline"
                 className="w-full border-slate-200 text-primary hover:bg-slate-800 hover:text-white focus:bg-slate-800 focus:text-white"
-                disabled={!manualTeacherId || !manualStartDate}
-                onClick={handleFindManualSubs}
+                disabled={!manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0}
+                onClick={runManualFinder}
               >
                 Find Subs
               </Button>
@@ -834,7 +632,7 @@ export default function SubFinderPage() {
                                 ) : (
                                   <div className="space-y-1">
                                     {filteredSubsForSearch.map((sub) => {
-                                      const name = sub.name || sub.display_name || `${sub.first_name ?? ''} ${sub.last_name ?? ''}` || 'Unknown'
+                                      const name = getDisplayName(sub)
                                       const canCover = (sub.shifts_covered ?? 0) > 0 || (sub.can_cover?.length ?? 0) > 0
                                       return (
                                         <button
@@ -844,7 +642,7 @@ export default function SubFinderPage() {
                                           onClick={() => {
                                             if (!canCover && includeOnlyRecommended) {
                                               setIncludeOnlyRecommended(false)
-                                              setRecommendedSubs(allSubs)
+                                              applySubResults(allSubs, { useOnlyRecommended: false })
                                               toast('Turning off “Include only recommended subs” to show this selection.')
                                               setTimeout(() => scrollToSubCard(sub.id), 50)
                                             } else {

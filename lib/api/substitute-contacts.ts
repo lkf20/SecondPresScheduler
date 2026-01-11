@@ -56,6 +56,18 @@ export interface SubstituteContactWithDetails extends SubstituteContact {
   assigned_count: number
 }
 
+interface CoverageRequestWithTeacher {
+  time_off_requests?: { teacher_id: string | null } | null
+}
+
+interface CoverageShift {
+  id: string
+  date: string
+  time_slot_id: string
+  time_slots?: { code: string | null } | null
+  days_of_week?: { name: string | null } | null
+}
+
 /**
  * Get or create a substitute contact for a coverage request and sub
  */
@@ -153,7 +165,7 @@ export async function getSubstituteContact(
     .eq('id', coverageRequestId)
     .single()
 
-  const teacherId = (coverageRequest as any)?.time_off_requests?.teacher_id
+  const teacherId = (coverageRequest as CoverageRequestWithTeacher | null)?.time_off_requests?.teacher_id
 
   // Get assigned shifts by matching sub_assignments with coverage_request_shifts
   let assignedShifts: AssignedShift[] = []
@@ -180,8 +192,8 @@ export async function getSubstituteContact(
 
       if (coverageShifts) {
         // Create a map of (date, time_slot_id) -> coverage_request_shift for quick lookup
-        const shiftMap = new Map<string, any>()
-        coverageShifts.forEach((shift: any) => {
+        const shiftMap = new Map<string, CoverageShift>()
+        ;(coverageShifts as CoverageShift[]).forEach((shift) => {
           const key = `${shift.date}|${shift.time_slot_id}`
           shiftMap.set(key, shift)
         })
@@ -192,8 +204,8 @@ export async function getSubstituteContact(
             const key = `${assignment.date}|${assignment.time_slot_id}`
             return shiftMap.get(key)
           })
-          .filter(Boolean)
-          .map((shift: any) => ({
+          .filter((shift): shift is CoverageShift => Boolean(shift))
+          .map((shift) => ({
             coverage_request_shift_id: shift.id,
             date: shift.date,
             day_name: shift.days_of_week?.name || '',
@@ -204,7 +216,7 @@ export async function getSubstituteContact(
   }
 
   return {
-    ...(contactData as any),
+    ...(contactData as SubstituteContactWithDetails),
     assigned_shifts: assignedShifts,
     assigned_count: assignedShifts.length,
   } as SubstituteContactWithDetails
@@ -230,7 +242,7 @@ export async function updateSubstituteContact(
     .eq('id', id)
     .single()
 
-  const updateData: any = {
+  const updateData: Partial<SubstituteContact> & { updated_at: string; contacted_at?: string | null } = {
     ...updates,
     updated_at: new Date().toISOString(),
   }
@@ -362,6 +374,5 @@ export async function getSubstituteContactsForRequest(
     .order('created_at', { ascending: false })
 
   if (error) throw error
-  return data as any as SubstituteContactWithDetails[]
+  return (data || []) as SubstituteContactWithDetails[]
 }
-

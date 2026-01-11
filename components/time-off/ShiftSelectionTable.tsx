@@ -78,7 +78,15 @@ export default function ShiftSelectionTable({
     fetch('/api/timeslots')
       .then((r) => r.json())
       .then((data) => {
-        setTimeSlots(data.sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0)))
+        const typedData = data as Array<{
+          id: string
+          code: string
+          name: string | null
+          display_order?: number | null
+        }>
+        setTimeSlots(
+          typedData.sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+        )
       })
       .catch(console.error)
   }, [])
@@ -101,15 +109,19 @@ export default function ShiftSelectionTable({
   // Fetch scheduled shifts when teacher and dates change (NOT when disabled changes)
   useEffect(() => {
     if (!teacherId) {
-      setScheduledShifts([])
-      setLoading(false)
+      queueMicrotask(() => {
+        setScheduledShifts([])
+        setLoading(false)
+      })
       return
     }
 
     // If no start date, don't fetch
     if (!startDate) {
-      setScheduledShifts([])
-      setLoading(false)
+      queueMicrotask(() => {
+        setScheduledShifts([])
+        setLoading(false)
+      })
       return
     }
 
@@ -132,14 +144,18 @@ export default function ShiftSelectionTable({
 
   useEffect(() => {
     if (!validateConflicts) {
-      setExistingTimeOffShifts([])
-      setConflictingRequests([])
+      queueMicrotask(() => {
+        setExistingTimeOffShifts([])
+        setConflictingRequests([])
+      })
       return
     }
 
     if (!teacherId || !startDate) {
-      setExistingTimeOffShifts([])
-      setConflictingRequests([])
+      queueMicrotask(() => {
+        setExistingTimeOffShifts([])
+        setConflictingRequests([])
+      })
       return
     }
 

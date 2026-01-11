@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
+import { Database } from '@/types/database'
+
+type Staff = Database['public']['Tables']['staff']['Row']
 
 interface Teacher {
   id: string
@@ -30,7 +32,7 @@ export default function TeacherSelector({
   selectedTeachers,
   onTeachersChange,
 }: TeacherSelectorProps) {
-  const [teachers, setTeachers] = useState<any[]>([])
+  const [teachers, setTeachers] = useState<Staff[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     new Set(selectedTeachers.map((t) => t.teacher_id || t.id))
@@ -40,7 +42,7 @@ export default function TeacherSelector({
     fetch('/api/teachers')
       .then((r) => r.json())
       .then((data) => {
-        setTeachers(data.filter((t: any) => t.is_teacher && t.active))
+        setTeachers((data as Staff[]).filter((t) => t.is_teacher && t.active))
       })
       .catch(console.error)
   }, [])
@@ -138,4 +140,3 @@ export default function TeacherSelector({
     </div>
   )
 }
-

@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/table'
 import { AlertCircle } from 'lucide-react'
 
-interface TeacherImport {
+export interface TeacherImport {
   first_name: string
   last_name: string
   display_name?: string | null
@@ -33,7 +33,7 @@ interface TeacherImport {
   is_sub: boolean
 }
 
-interface DuplicateMatch {
+export interface DuplicateMatch {
   csvIndex: number
   csvTeacher: TeacherImport
   matchType: 'email' | 'name' | 'both'
@@ -239,4 +239,3 @@ export default function DuplicateResolutionDialog({
     </Dialog>
   )
 }
-

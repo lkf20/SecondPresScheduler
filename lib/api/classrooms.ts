@@ -2,8 +2,14 @@ import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
 
 type Classroom = Database['public']['Tables']['classrooms']['Row']
+type AllowedClassJoin = { class: { id: string; name: string } | null }
+type ClassroomRaw = Classroom & { allowed_classes?: AllowedClassJoin[] }
+type ClassroomWithAllowedClasses = Classroom & {
+  allowed_classes_names: string
+  allowed_classes_count: number
+}
 
-export async function getClassrooms(includeInactive = false) {
+export async function getClassrooms(includeInactive = false): Promise<ClassroomWithAllowedClasses[]> {
   const supabase = await createClient()
   let query = supabase
     .from('classrooms')
@@ -24,14 +30,15 @@ export async function getClassrooms(includeInactive = false) {
   if (error) throw error
   
   // Transform the data to include allowed classes names
-  return data.map((classroom: any) => ({
+  return (data as ClassroomRaw[]).map((classroom) => ({
     ...classroom,
-    allowed_classes_names: classroom.allowed_classes
-      ?.map((ac: any) => ac.class?.name)
-      .filter(Boolean)
-      .join(', ') || 'None',
+    allowed_classes_names:
+      classroom.allowed_classes
+        ?.map((ac) => ac.class?.name)
+        .filter((name): name is string => Boolean(name))
+        .join(', ') || 'None',
     allowed_classes_count: classroom.allowed_classes?.length || 0,
-  })) as any[]
+  }))
 }
 
 export async function getClassroomById(id: string) {
@@ -112,7 +119,7 @@ export async function deleteClassroom(id: string) {
   return data as Classroom
 }
 
-export async function getClassroomAllowedClasses(classroomId: string) {
+export async function getClassroomAllowedClasses(classroomId: string): Promise<string[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('classroom_allowed_classes')
@@ -120,7 +127,7 @@ export async function getClassroomAllowedClasses(classroomId: string) {
     .eq('classroom_id', classroomId)
 
   if (error) throw error
-  return data.map((item: any) => item.class_id)
+  return data.map((item) => item.class_id)
 }
 
 export async function setClassroomAllowedClasses(
@@ -151,6 +158,5 @@ export async function setClassroomAllowedClasses(
     if (insertError) throw insertError
   }
 }
-
 
 

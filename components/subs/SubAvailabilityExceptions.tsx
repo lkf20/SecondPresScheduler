@@ -275,7 +275,7 @@ export default function SubAvailabilityExceptions({
 
           {exceptionHeaders.length === 0 && !isAdding && (
             <p className="text-sm text-muted-foreground text-center py-4">
-              No exceptions added yet. Click "Add Exception" to create one.
+              No exceptions added yet. Click &quot;Add Exception&quot; to create one.
             </p>
           )}
         </div>

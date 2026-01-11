@@ -185,7 +185,7 @@ export async function GET(request: NextRequest) {
     // If false, only show absences with uncovered shifts (exclude fully covered)
     // If true, show absences with uncovered OR partially covered shifts (exclude fully covered)
     // Always show absences with no shifts (newly created)
-    let filteredAbsences = absencesWithCoverage.filter(
+    const filteredAbsences = absencesWithCoverage.filter(
       (absence) => {
         const startDate = absence.start_date
         const endDate = absence.end_date || absence.start_date

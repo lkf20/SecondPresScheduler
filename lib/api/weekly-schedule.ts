@@ -1,4 +1,40 @@
 import { createClient } from '@/lib/supabase/server'
+import { Database } from '@/types/database'
+
+type DayOfWeekRow = Database['public']['Tables']['days_of_week']['Row']
+type TimeSlotRow = Database['public']['Tables']['time_slots']['Row']
+type ClassGroupRow = Database['public']['Tables']['class_groups']['Row']
+type ClassroomRow = Database['public']['Tables']['classrooms']['Row']
+type StaffRow = Database['public']['Tables']['staff']['Row']
+type ScheduleCellRow = Database['public']['Tables']['schedule_cells']['Row']
+type TeacherScheduleRow = Database['public']['Tables']['teacher_schedules']['Row']
+type EnrollmentRow = Database['public']['Tables']['enrollments']['Row']
+type StaffingRuleRow = Database['public']['Tables']['staffing_rules']['Row']
+
+type ScheduleCellRaw = ScheduleCellRow & {
+  schedule_cell_class_groups?: Array<{ class_group: ClassGroupRow | null }>
+  class_groups?: ClassGroupRow[]
+}
+
+type TeacherScheduleWithJoins = TeacherScheduleRow & {
+  teacher?: StaffRow | null
+  day_of_week?: DayOfWeekRow | null
+  time_slot?: TimeSlotRow | null
+  class?: ClassGroupRow | null
+  classroom?: ClassroomRow | null
+}
+
+type EnrollmentWithJoins = EnrollmentRow & {
+  class?: ClassGroupRow | null
+  day_of_week?: DayOfWeekRow | null
+  time_slot?: TimeSlotRow | null
+}
+
+type StaffingRuleWithJoins = StaffingRuleRow & {
+  class?: ClassGroupRow | null
+  day_of_week?: DayOfWeekRow | null
+  time_slot?: TimeSlotRow | null
+}
 
 export interface WeeklyScheduleData {
   day_of_week_id: string
@@ -165,25 +201,7 @@ export async function getWeeklyScheduleData(selectedDayIds?: string[]) {
   // Get schedule cells (gracefully handle if table doesn't exist yet)
   // Note: We fetch all schedule cells and filter in memory for flexibility
   // Future optimization: Add WHERE clauses if selectedDayIds is provided
-  let scheduleCells: Array<{
-    id: string
-    classroom_id: string
-    day_of_week_id: string
-    time_slot_id: string
-    is_active: boolean
-    enrollment_for_staffing: number | null
-    notes: string | null
-    schedule_cell_class_groups?: Array<{
-      class_group: {
-        id: string
-        name: string
-        min_age: number | null
-        max_age: number | null
-        required_ratio: number
-        preferred_ratio: number | null
-      }
-    }>
-  }> | null = null
+  let scheduleCells: ScheduleCellRaw[] | null = null
   try {
     const { data, error: scheduleCellsError } = await supabase
       .from('schedule_cells')
@@ -205,16 +223,19 @@ export async function getWeeklyScheduleData(selectedDayIds?: string[]) {
       }
     } else {
       // Transform the nested structure to flatten class_groups array
-      scheduleCells = (data || []).map((cell: any) => {
-        if (cell.schedule_cell_class_groups) {
-          cell.class_groups = cell.schedule_cell_class_groups
-            .map((j: any) => j.class_group)
-            .filter((cg: any) => cg !== null)
-          delete cell.schedule_cell_class_groups
-        } else {
-          cell.class_groups = []
+      scheduleCells = (data || []).map((cell) => {
+        const raw = cell as ScheduleCellRaw
+        const classGroups = raw.schedule_cell_class_groups
+          ? raw.schedule_cell_class_groups
+              .map((j) => j.class_group)
+              .filter((cg): cg is NonNullable<typeof cg> => cg !== null)
+          : []
+        const flattened: ScheduleCellRaw = {
+          ...raw,
+          class_groups: classGroups,
         }
-        return cell
+        delete flattened.schedule_cell_class_groups
+        return flattened
       })
     }
   } catch (err) {
@@ -283,13 +304,10 @@ export async function getWeeklyScheduleData(selectedDayIds?: string[]) {
         
         // Only process if schedule_cell exists and is active with class groups
         // Handle both class_groups (from transformed data) and schedule_cell_class_groups (from raw query)
-        const classGroups = scheduleCell 
-          ? ((scheduleCell as any)?.class_groups || 
-             ((scheduleCell as any)?.schedule_cell_class_groups?.map((j: any) => j.class_group).filter((cg: any) => cg !== null) || []))
-          : []
+        const classGroups = scheduleCell?.class_groups || []
         
         if (scheduleCell && classGroups && classGroups.length > 0 && scheduleCell.is_active) {
-          const classGroupIds = classGroups.map((cg: { id: string }) => cg.id)
+          const classGroupIds = classGroups.map((cg) => cg.id)
           
           // Get teachers assigned to this slot (teachers are assigned to the slot, not individual class groups)
           // Filter by any of the class groups in the slot
@@ -367,11 +385,10 @@ export async function getWeeklyScheduleData(selectedDayIds?: string[]) {
     weeklyDataByClassroom.push({
       classroom_id: classroom.id,
       classroom_name: classroom.name,
-      classroom_color: (classroom as any).color || null,
+      classroom_color: classroom.color ?? null,
       days: classroomDays,
     })
   }
   
   return weeklyDataByClassroom
 }
-

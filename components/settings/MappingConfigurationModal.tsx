@@ -13,6 +13,11 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import type { ClassClassroomMappingWithDetails } from '@/lib/api/class-classroom-mappings'
+import { Database } from '@/types/database'
+
+type ClassGroup = Database['public']['Tables']['class_groups']['Row']
+type Classroom = Database['public']['Tables']['classrooms']['Row']
+type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
 
 interface MappingConfigurationModalProps {
   dayName: string
@@ -40,8 +45,8 @@ export default function MappingConfigurationModal({
   existingMappings,
   onClose,
 }: MappingConfigurationModalProps) {
-  const [classes, setClasses] = useState<any[]>([])
-  const [classrooms, setClassrooms] = useState<any[]>([])
+  const [classes, setClasses] = useState<ClassGroup[]>([])
+  const [classrooms, setClassrooms] = useState<Classroom[]>([])
   const [combinations, setCombinations] = useState<ClassClassroomCombo[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -58,13 +63,13 @@ export default function MappingConfigurationModal({
         const classesData = await classesRes.json()
         const classroomsData = await classroomsRes.json()
 
-        setClasses(classesData)
-        setClassrooms(classroomsData)
+        setClasses(classesData as ClassGroup[])
+        setClassrooms(classroomsData as Classroom[])
 
         // Build all combinations
         const combos: ClassClassroomCombo[] = []
-        classesData.forEach((cls: any) => {
-          classroomsData.forEach((classroom: any) => {
+        ;(classesData as ClassGroup[]).forEach((cls) => {
+          ;(classroomsData as Classroom[]).forEach((classroom) => {
             const existing = existingMappings.find(
               (m) => m.class_id === cls.id && m.classroom_id === classroom.id
             )
@@ -84,8 +89,8 @@ export default function MappingConfigurationModal({
           if (classroomCompare !== 0) return classroomCompare
           return a.class_name.localeCompare(b.class_name)
         }))
-      } catch (err: any) {
-        setError(err.message || 'Failed to load data')
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to load data')
       } finally {
         setLoading(false)
       }
@@ -135,8 +140,8 @@ export default function MappingConfigurationModal({
       }
 
       onClose()
-    } catch (err: any) {
-      setError(err.message || 'Failed to save mappings')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save mappings')
     } finally {
       setSaving(false)
     }
@@ -175,8 +180,8 @@ export default function MappingConfigurationModal({
       })
 
       onClose()
-    } catch (err: any) {
-      setError(err.message || 'Failed to copy mappings')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to copy mappings')
     } finally {
       setSaving(false)
     }
@@ -186,7 +191,7 @@ export default function MappingConfigurationModal({
     // Get all weekday IDs (Monday-Friday, day_number 1-5)
     const weekdays = await fetch('/api/days-of-week')
       .then((r) => r.json())
-      .then((days) => days.filter((d: any) => d.day_number >= 1 && d.day_number <= 5).map((d: any) => d.id))
+      .then((days) => (days as DayOfWeek[]).filter((d) => d.day_number >= 1 && d.day_number <= 5).map((d) => d.id))
     
     const targetDays = weekdays.filter((id: string) => id !== dayOfWeekId)
     await handleCopyToOtherDays(targetDays)
@@ -259,4 +264,3 @@ export default function MappingConfigurationModal({
     </Dialog>
   )
 }
-

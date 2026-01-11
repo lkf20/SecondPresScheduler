@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { getTimeOffRequests } from '@/lib/api/time-off'
 import { getTimeOffShifts, getTimeOffCoverageSummary } from '@/lib/api/time-off-shifts'
 import { getTeacherSchedules } from '@/lib/api/schedules'
-import { getTeachers } from '@/lib/api/teachers'
 import TimeOffListClient from './TimeOffListClient'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
@@ -14,8 +13,10 @@ export default async function TimeOffPage({
   searchParams?: { view?: string }
 }) {
   let requests = await getTimeOffRequests({ statuses: ['active', 'draft'] })
-  const teachers = await getTeachers()
-  const scheduleCache = new Map<string, any[]>()
+  type TimeOffRequest = Awaited<ReturnType<typeof getTimeOffRequests>>[number]
+  type TimeOffShift = Awaited<ReturnType<typeof getTimeOffShifts>>[number]
+  type TeacherSchedule = Awaited<ReturnType<typeof getTeacherSchedules>>[number]
+  const scheduleCache = new Map<string, TeacherSchedule[]>()
   const formatDay = (name?: string | null) => {
     if (!name) return '—'
     if (name === 'Tuesday') return 'Tues'
@@ -29,7 +30,7 @@ export default async function TimeOffPage({
 
   // Fetch shifts for each request and add computed fields for display
   requests = await Promise.all(
-    requests.map(async (request: any) => {
+    requests.map(async (request: TimeOffRequest) => {
       const shifts = await getTimeOffShifts(request.id)
       const shiftCount = shifts.length
       const shiftMode = request.shift_selection_mode || 'all_scheduled'
@@ -45,17 +46,17 @@ export default async function TimeOffPage({
       }
       const schedules = scheduleCache.get(request.teacher_id) || []
       const shiftKeys = new Set(
-        shifts.map((shift: any) => `${shift.day_of_week_id}::${shift.time_slot_id}`)
+        shifts.map((shift: TimeOffShift) => `${shift.day_of_week_id}::${shift.time_slot_id}`)
       )
       const classroomsMap = new Map<string, { id: string; name: string; color: string | null }>()
-      schedules.forEach((schedule: any) => {
+      schedules.forEach((schedule: TeacherSchedule) => {
         if (!shiftKeys.has(`${schedule.day_of_week_id}::${schedule.time_slot_id}`)) return
         const classroom = schedule.classroom
         if (!classroom) return
         classroomsMap.set(classroom.id, {
           id: classroom.id,
           name: classroom.name,
-          color: classroom.color || null,
+          color: classroom.color ?? null,
         })
       })
       const classrooms = Array.from(classroomsMap.values())
@@ -75,7 +76,7 @@ export default async function TimeOffPage({
         coverage_status = 'partially_covered'
       }
 
-      const shiftDetails = shifts.map((shift: any) => {
+      const shiftDetails = shifts.map((shift: TimeOffShift) => {
         const dayName = formatDay(shift.day_of_week?.name)
         const timeCode = shift.time_slot?.code || '—'
         return `${dayName} ${timeCode}`
@@ -99,23 +100,23 @@ export default async function TimeOffPage({
     })
   )
 
-  const getStartDate = (request: any) => parseLocalDate(request.start_date)
-  const getEndDate = (request: any) =>
+  const getStartDate = (request: TimeOffRequest) => parseLocalDate(request.start_date)
+  const getEndDate = (request: TimeOffRequest) =>
     parseLocalDate(request.end_date || request.start_date)
 
-  const draftRequests = requests.filter((request: any) => request.status === 'draft')
-  const activeRequests = requests.filter((request: any) => request.status === 'active')
+  const draftRequests = requests.filter((request: TimeOffRequest) => request.status === 'draft')
+  const activeRequests = requests.filter((request: TimeOffRequest) => request.status === 'active')
 
   const pastRequests = activeRequests
-    .filter((request: any) => {
+    .filter((request: TimeOffRequest) => {
       const endDate = getEndDate(request)
       return endDate < today && endDate >= ninetyDaysAgo
     })
-    .sort((a: any, b: any) => getEndDate(b).getTime() - getEndDate(a).getTime())
+    .sort((a, b) => getEndDate(b).getTime() - getEndDate(a).getTime())
 
   const upcomingRequests = activeRequests
-    .filter((request: any) => getEndDate(request) >= today)
-    .sort((a: any, b: any) => getStartDate(a).getTime() - getStartDate(b).getTime())
+    .filter((request: TimeOffRequest) => getEndDate(request) >= today)
+    .sort((a, b) => getStartDate(a).getTime() - getStartDate(b).getTime())
 
   return (
     <div className="w-full">

@@ -39,7 +39,6 @@ interface Class {
   name: string
   order?: number | null
   is_active?: boolean
-  [key: string]: any
 }
 
 interface SortableClassesTableProps {
@@ -293,4 +292,3 @@ export default function SortableClassesTable({
     </div>
   )
 }
-

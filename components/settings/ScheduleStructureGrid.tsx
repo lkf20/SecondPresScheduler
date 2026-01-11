@@ -4,6 +4,10 @@ import { useState, useMemo, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import MappingConfigurationModal from './MappingConfigurationModal'
 import type { ClassClassroomMappingWithDetails } from '@/lib/api/class-classroom-mappings'
+import { Database } from '@/types/database'
+
+type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
+type TimeSlot = Database['public']['Tables']['time_slots']['Row']
 
 interface ScheduleStructureGridProps {
   mappings: ClassClassroomMappingWithDetails[]
@@ -24,17 +28,17 @@ export default function ScheduleStructureGrid({
   } | null>(null)
 
   // Fetch days and time slots
-  const [daysOfWeek, setDaysOfWeek] = useState<any[]>([])
-  const [timeSlots, setTimeSlots] = useState<any[]>([])
+  const [daysOfWeek, setDaysOfWeek] = useState<DayOfWeek[]>([])
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
 
   useEffect(() => {
     fetch('/api/days-of-week')
       .then((r) => r.json())
       .then((data) => {
         // Filter to only show selected days
-        const filtered = data.filter((d: any) => selectedDayIds.includes(d.id))
+        const filtered = (data as DayOfWeek[]).filter((d) => selectedDayIds.includes(d.id))
         // Handle both old (0) and new (7) Sunday values for sorting
-        const sorted = filtered.sort((a: any, b: any) => {
+        const sorted = filtered.sort((a, b) => {
           const aNum = a.day_number === 0 ? 7 : a.day_number
           const bNum = b.day_number === 0 ? 7 : b.day_number
           return aNum - bNum
@@ -46,7 +50,9 @@ export default function ScheduleStructureGrid({
     fetch('/api/timeslots')
       .then((r) => r.json())
       .then((data) => {
-        setTimeSlots(data.sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0)))
+        setTimeSlots(
+          (data as TimeSlot[]).sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+        )
       })
       .catch(console.error)
   }, [selectedDayIds])
@@ -151,4 +157,3 @@ export default function ScheduleStructureGrid({
     </>
   )
 }
-

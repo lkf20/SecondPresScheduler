@@ -27,6 +27,7 @@ import MultiDayApplySelector from './MultiDayApplySelector'
 import UnsavedChangesDialog from './UnsavedChangesDialog'
 import ConflictBanner, { type Conflict, type ConflictResolution } from './ConflictBanner'
 import type { ScheduleCellWithDetails } from '@/lib/api/schedule-cells'
+import type { WeeklyScheduleData } from '@/lib/api/weekly-schedule'
 import type { TimeSlot, ClassGroup, ClassroomWithAllowedClasses, TeacherSchedule } from '@/types/api'
 
 interface Teacher {
@@ -34,6 +35,14 @@ interface Teacher {
   name: string
   teacher_id: string
   is_floater?: boolean
+}
+
+type ClassGroupWithMeta = ClassGroup & {
+  is_active?: boolean | null
+}
+
+type SelectedCellData = WeeklyScheduleData & {
+  schedule_cell: ScheduleCellWithDetails | null
 }
 
 interface ScheduleSidePanelProps {
@@ -49,7 +58,7 @@ interface ScheduleSidePanelProps {
   classroomId: string
   classroomName: string
   selectedDayIds: string[] // Days that are in the weekly schedule
-  selectedCellData?: ScheduleCellWithDetails // Full cell data from the grid
+  selectedCellData?: SelectedCellData // Full cell data from the grid
   onSave?: () => void
 }
 
@@ -86,8 +95,8 @@ export default function ScheduleSidePanel({
   const [applyDayIds, setApplyDayIds] = useState<string[]>([dayId])
   const [applyTimeSlotIds, setApplyTimeSlotIds] = useState<string[]>([timeSlotId])
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
-  const [classGroups, setClassGroups] = useState<Array<{ id: string; name: string; min_age: number | null; max_age: number | null; required_ratio: number; preferred_ratio: number | null; is_active?: boolean; order?: number | null }>>([])
-  const [allAvailableClassGroups, setAllAvailableClassGroups] = useState<Array<{ id: string; name: string; min_age: number | null; max_age: number | null; required_ratio: number; preferred_ratio: number | null; is_active?: boolean; order?: number | null }>>([])
+  const [classGroups, setClassGroups] = useState<ClassGroupWithMeta[]>([])
+  const [allAvailableClassGroups, setAllAvailableClassGroups] = useState<ClassGroupWithMeta[]>([])
   const [conflicts, setConflicts] = useState<Conflict[]>([])
   const [conflictResolutions, setConflictResolutions] = useState<Map<string, ConflictResolution>>(new Map())
   const [resolvingConflicts, setResolvingConflicts] = useState(false)
@@ -108,6 +117,26 @@ export default function ScheduleSidePanel({
   const timeRange = timeSlotStartTime && timeSlotEndTime
     ? `${timeSlotStartTime}–${timeSlotEndTime}`
     : ''
+
+  const normalizeClassGroup = (cg: {
+    id: string
+    name: string
+    min_age: number | null
+    max_age: number | null
+    required_ratio: number
+    preferred_ratio: number | null
+    is_active?: boolean | null
+    order?: number | null
+  }): ClassGroupWithMeta => ({
+    id: cg.id,
+    name: cg.name || '',
+    min_age: cg.min_age ?? null,
+    max_age: cg.max_age ?? null,
+    required_ratio: cg.required_ratio ?? 8,
+    preferred_ratio: cg.preferred_ratio ?? null,
+    is_active: cg.is_active ?? true,
+    order: cg.order ?? null,
+  })
 
   // Fetch time slots for 'day' scope
   useEffect(() => {
@@ -141,11 +170,11 @@ export default function ScheduleSidePanel({
     
     // If selectedCellData is provided and has a schedule_cell, use it
     // Note: selectedCellData structure has schedule_cell nested
-    if (selectedCellData && (selectedCellData as any).schedule_cell) {
-      const cellData = (selectedCellData as any).schedule_cell
+    if (selectedCellData?.schedule_cell) {
+      const cellData = selectedCellData.schedule_cell
       setCell(cellData)
       setIsActive(cellData.is_active ?? true)
-      const classGroupIds = cellData.class_groups?.map((cg: any) => cg.id) || []
+      const classGroupIds = cellData.class_groups?.map((cg) => cg.id) || []
       console.log('[ScheduleSidePanel] Initial load - classGroupIds:', classGroupIds)
       console.log('[ScheduleSidePanel] Initial load - cellData.class_groups:', cellData.class_groups)
       initialClassGroupIdsRef.current = classGroupIds
@@ -155,16 +184,7 @@ export default function ScheduleSidePanel({
       // Set classGroups from cell data initially (will be updated by useEffect when allAvailableClassGroups loads)
       if (cellData.class_groups && cellData.class_groups.length > 0) {
         // Map the class groups, ensuring all fields are present
-        const mappedClassGroups = cellData.class_groups.map((cg: any) => ({
-          id: cg.id,
-          name: cg.name || '',
-          min_age: cg.min_age ?? null,
-          max_age: cg.max_age ?? null,
-          required_ratio: cg.required_ratio ?? 8,
-          preferred_ratio: cg.preferred_ratio ?? null,
-          is_active: cg.is_active ?? true,
-          order: cg.order ?? null,
-        }))
+        const mappedClassGroups = cellData.class_groups.map((cg) => normalizeClassGroup(cg))
         console.log('[ScheduleSidePanel] Initial load - mappedClassGroups:', mappedClassGroups)
         setClassGroups(mappedClassGroups)
         hasLoadedInitialDataRef.current = true
@@ -193,7 +213,7 @@ export default function ScheduleSidePanel({
           const cellData = data[0]
           setCell(cellData)
           setIsActive(cellData.is_active ?? true)
-          const classGroupIds = cellData.class_groups?.map((cg: any) => cg.id) || []
+          const classGroupIds = cellData.class_groups?.map((cg) => cg.id) || []
           console.log('[ScheduleSidePanel] API fetch - classGroupIds:', classGroupIds)
           console.log('[ScheduleSidePanel] API fetch - cellData.class_groups:', cellData.class_groups)
           initialClassGroupIdsRef.current = classGroupIds
@@ -203,16 +223,7 @@ export default function ScheduleSidePanel({
           // Set classGroups from cell data initially (will be updated by useEffect when allAvailableClassGroups loads)
           if (cellData.class_groups && cellData.class_groups.length > 0) {
             // Map the class groups, ensuring all fields are present
-            const mappedClassGroups = cellData.class_groups.map((cg: any) => ({
-              id: cg.id,
-              name: cg.name || '',
-              min_age: cg.min_age ?? null,
-              max_age: cg.max_age ?? null,
-              required_ratio: cg.required_ratio ?? 8,
-              preferred_ratio: cg.preferred_ratio ?? null,
-              is_active: cg.is_active ?? true,
-              order: cg.order ?? null,
-            }))
+            const mappedClassGroups = cellData.class_groups.map((cg) => normalizeClassGroup(cg))
             console.log('[ScheduleSidePanel] API fetch - mappedClassGroups:', mappedClassGroups)
             setClassGroups(mappedClassGroups)
             hasLoadedInitialDataRef.current = true
@@ -271,7 +282,8 @@ export default function ScheduleSidePanel({
     fetch('/api/class-groups?includeInactive=true')
       .then((r) => r.json())
       .then((data) => {
-        setAllAvailableClassGroups(data)
+        const items = Array.isArray(data) ? (data as ClassGroupWithMeta[]) : []
+        setAllAvailableClassGroups(items)
       })
       .catch(console.error)
   }, [isOpen, classroomId, dayId, timeSlotId, selectedCellData])
@@ -344,13 +356,13 @@ export default function ScheduleSidePanel({
         // Fetch missing class groups on demand
         console.log('[ScheduleSidePanel] useEffect - missing class groups, fetching:', missingIds)
         Promise.all(
-          missingIds.map(id => 
+          missingIds.map((id) =>
             fetch(`/api/class-groups/${id}`)
-              .then(r => r.json())
+              .then((r) => r.json())
               .catch(() => null)
           )
-        ).then(results => {
-          const fetchedGroups = results.filter(Boolean)
+        ).then((results) => {
+          const fetchedGroups = results.filter((group): group is ClassGroupWithMeta => Boolean(group))
           const combined = [...filteredFromExisting, ...fetchedGroups]
           // Sort by order, then name
           combined.sort((a, b) => {

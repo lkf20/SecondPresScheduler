@@ -37,6 +37,18 @@ interface AvailabilityData {
   }>
 }
 
+interface TimeSlot {
+  id: string
+  code: string
+  name: string | null
+  display_order?: number | null
+}
+
+interface TeacherSchedule {
+  day_of_week_id?: string | null
+  time_slot_id?: string | null
+}
+
 interface SubAvailabilitySectionProps {
   subId: string
 }
@@ -45,7 +57,7 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [availabilityData, setAvailabilityData] = useState<AvailabilityData | null>(null)
-  const [timeSlots, setTimeSlots] = useState<Array<{ id: string; code: string; name: string | null }>>([])
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [conflicts, setConflicts] = useState<Array<{ day: string; timeSlot: string }>>([])
   const [showConflictWarning, setShowConflictWarning] = useState(false)
@@ -76,7 +88,7 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
       if (!response.ok) throw new Error('Failed to fetch time slots')
       const data = await response.json()
       // Sort time slots by display_order (from settings), then by code as fallback
-      setTimeSlots(data.sort((a: any, b: any) => {
+      setTimeSlots((data as TimeSlot[]).sort((a, b) => {
         const orderA = a.display_order ?? 999
         const orderB = b.display_order ?? 999
         if (orderA !== orderB) {
@@ -126,7 +138,7 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
           
           // Build a set of teaching schedule keys (day_of_week_id|time_slot_id)
           const teachingSlots = new Set<string>()
-          schedules.forEach((schedule: any) => {
+          ;(schedules as TeacherSchedule[]).forEach((schedule) => {
             if (schedule.day_of_week_id && schedule.time_slot_id) {
               const key = `${schedule.day_of_week_id}|${schedule.time_slot_id}`
               teachingSlots.add(key)
@@ -293,4 +305,3 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
     </div>
   )
 }
-

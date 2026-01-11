@@ -31,7 +31,7 @@ const teacherSchema = z.object({
   is_sub: z.boolean().default(false),
 })
 
-type TeacherFormData = z.infer<typeof teacherSchema>
+export type TeacherFormData = z.infer<typeof teacherSchema>
 
 interface TeacherFormProps {
   teacher?: Staff
@@ -281,4 +281,3 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
     </form>
   )
 }
-

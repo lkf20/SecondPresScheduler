@@ -36,9 +36,7 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
   const [error, setError] = useState<string | null>(null)
   const [allowedClassIds, setAllowedClassIds] = useState<string[]>([])
   const [loadingAllowedClasses, setLoadingAllowedClasses] = useState(true)
-  const [selectedColor, setSelectedColor] = useState<string | null>(
-    (classroom as any).color || null
-  )
+  const [selectedColor, setSelectedColor] = useState<string | null>(classroom.color ?? null)
 
   const {
     register,
@@ -74,7 +72,13 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
   const onSubmit = async (data: ClassroomFormData) => {
     try {
       setError(null)
-      const payload: any = { name: data.name }
+      const payload: {
+        name: string
+        capacity?: number
+        allowed_classes: string[]
+        color?: string | null
+        is_active: boolean
+      } = { name: data.name, allowed_classes: allowedClassIds, is_active: data.is_active ?? true }
       if (data.capacity && data.capacity !== '') {
         const capacityNum = Number(data.capacity)
         if (!isNaN(capacityNum) && capacityNum > 0) {
@@ -82,7 +86,6 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
         }
       }
       // Order is managed by drag-and-drop, don't update it here
-      payload.allowed_classes = allowedClassIds
       // Add color if selected
       if (selectedColor) {
         payload.color = selectedColor
@@ -90,7 +93,6 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
         payload.color = null
       }
       // Add is_active
-      payload.is_active = data.is_active ?? true
       const response = await fetch(`/api/classrooms/${classroom.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -104,8 +106,8 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
 
       router.push('/settings/classrooms')
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update classroom')
     }
   }
 

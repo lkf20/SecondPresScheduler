@@ -30,10 +30,10 @@ export default function TimeSlotsPage() {
       if (!response.ok) {
         throw new Error('Failed to load time slots')
       }
-      const data = await response.json()
+      const data = (await response.json()) as TimeSlot[]
       setTimeslots(data)
-    } catch (err: any) {
-      setError(err.message || 'Failed to load time slots')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load time slots')
       console.error('Error loading time slots:', err)
     } finally {
       setLoading(false)
@@ -50,7 +50,7 @@ export default function TimeSlotsPage() {
       if (data.selected_day_ids && Array.isArray(data.selected_day_ids)) {
         setSelectedDayIds(data.selected_day_ids)
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to load schedule settings:', err)
     }
   }
@@ -67,9 +67,10 @@ export default function TimeSlotsPage() {
         const errorData = await response.json()
         throw new Error(errorData.error || 'Failed to save schedule settings')
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save schedule settings'
       console.error('Failed to save schedule settings:', err)
-      alert(`Failed to save schedule settings: ${err.message}`)
+      alert(`Failed to save schedule settings: ${message}`)
     }
   }
 

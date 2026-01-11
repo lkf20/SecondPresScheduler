@@ -23,6 +23,14 @@ import ErrorMessage from '@/components/shared/ErrorMessage'
 import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
 import { AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
+import { Database } from '@/types/database'
+
+type Staff = Database['public']['Tables']['staff']['Row']
+type TimeOffShift = Database['public']['Tables']['time_off_shifts']['Row']
+type TimeOffRequest = Database['public']['Tables']['time_off_requests']['Row'] & {
+  teacher?: Staff | null
+  shifts?: TimeOffShift[]
+}
 
 const timeOffSchema = z.object({
   teacher_id: z.string().min(1, 'Teacher is required'),
@@ -36,13 +44,13 @@ const timeOffSchema = z.object({
 type TimeOffFormData = z.infer<typeof timeOffSchema>
 
 interface TimeOffFormClientProps {
-  timeOffRequest: any
+  timeOffRequest: TimeOffRequest
 }
 
 export default function TimeOffFormClient({ timeOffRequest }: TimeOffFormClientProps) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
-  const [teachers, setTeachers] = useState<any[]>([])
+  const [teachers, setTeachers] = useState<Staff[]>([])
   const [selectedShifts, setSelectedShifts] = useState<
     Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
   >([])
@@ -73,9 +81,9 @@ export default function TimeOffFormClient({ timeOffRequest }: TimeOffFormClientP
   useEffect(() => {
     fetch('/api/teachers')
       .then(r => r.json())
-      .then(data => {
+      .then((data) => {
         // Sort teachers alphabetically by display_name, fallback to first_name
-        const sorted = data.sort((a: any, b: any) => {
+        const sorted = (data as Staff[]).sort((a, b) => {
           const nameA = a.display_name || `${a.first_name} ${a.last_name}`.trim() || ''
           const nameB = b.display_name || `${b.first_name} ${b.last_name}`.trim() || ''
           return nameA.localeCompare(nameB)
@@ -91,9 +99,9 @@ export default function TimeOffFormClient({ timeOffRequest }: TimeOffFormClientP
       // Fetch shifts from API to ensure we have the latest data
       fetch(`/api/time-off/${timeOffRequest.id}`)
         .then(r => r.json())
-        .then(data => {
+        .then((data) => {
           if (data.shifts && Array.isArray(data.shifts)) {
-            const shifts = data.shifts.map((shift: any) => ({
+            const shifts = (data.shifts as TimeOffShift[]).map((shift) => ({
               date: shift.date, // Ensure date is in YYYY-MM-DD format
               day_of_week_id: shift.day_of_week_id || '',
               time_slot_id: shift.time_slot_id,
@@ -145,7 +153,7 @@ export default function TimeOffFormClient({ timeOffRequest }: TimeOffFormClientP
 
       // Load existing shifts
       if (timeOffRequest.shifts && Array.isArray(timeOffRequest.shifts)) {
-        const shifts = timeOffRequest.shifts.map((shift: any) => ({
+        const shifts = timeOffRequest.shifts.map((shift) => ({
           date: shift.date,
           day_of_week_id: shift.day_of_week_id || '',
           time_slot_id: shift.time_slot_id,
@@ -212,7 +220,16 @@ export default function TimeOffFormClient({ timeOffRequest }: TimeOffFormClientP
       // If end_date is not provided, use start_date (single day time off)
       const effectiveEndDate = data.end_date || data.start_date
 
-      const payload: any = {
+      const payload: {
+        teacher_id: string
+        start_date: string
+        end_date: string
+        reason: string | null
+        notes: string | null
+        shift_selection_mode: 'all_scheduled' | 'select_shifts'
+        status?: 'active'
+        shifts?: Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
+      } = {
         teacher_id: data.teacher_id,
         start_date: data.start_date,
         end_date: effectiveEndDate,
@@ -245,8 +262,8 @@ export default function TimeOffFormClient({ timeOffRequest }: TimeOffFormClientP
       }
       router.push('/time-off')
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update time off request')
     }
   }
 
@@ -264,7 +281,16 @@ export default function TimeOffFormClient({ timeOffRequest }: TimeOffFormClientP
     try {
       setError(null)
       const effectiveEndDate = values.end_date || values.start_date
-      const payload: any = {
+      const payload: {
+        teacher_id: string
+        start_date: string
+        end_date: string
+        reason: string | null
+        notes: string | null
+        shift_selection_mode: 'all_scheduled' | 'select_shifts'
+        status: 'draft'
+        shifts?: Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
+      } = {
         teacher_id: values.teacher_id,
         start_date: values.start_date,
         end_date: effectiveEndDate,
@@ -295,8 +321,8 @@ export default function TimeOffFormClient({ timeOffRequest }: TimeOffFormClientP
       toast.success('Draft saved')
       router.push('/time-off')
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save draft')
     }
   }
 
@@ -319,8 +345,8 @@ export default function TimeOffFormClient({ timeOffRequest }: TimeOffFormClientP
       }
       router.push('/time-off')
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete time off request')
     }
   }
 

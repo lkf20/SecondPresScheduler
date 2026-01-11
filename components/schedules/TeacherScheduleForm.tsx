@@ -8,8 +8,23 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import FormField from '@/components/shared/FormField'
 import { Database } from '@/types/database'
+import type { Classroom, ClassGroup, TimeSlot } from '@/types/api'
 
 type TeacherSchedule = Database['public']['Tables']['teacher_schedules']['Row']
+
+type StaffOption = {
+  id: string
+  first_name: string
+  last_name: string
+  display_name: string | null
+  is_teacher?: boolean | null
+}
+
+type DayOfWeek = {
+  id: string
+  name: string
+  day_number?: number | null
+}
 
 const scheduleSchema = z.object({
   teacher_id: z.string().min(1, 'Teacher is required'),
@@ -23,28 +38,28 @@ type ScheduleFormData = z.infer<typeof scheduleSchema>
 
 interface TeacherScheduleFormProps {
   schedule?: TeacherSchedule & {
-    teacher?: any
-    day_of_week?: any
-    time_slot?: any
-    class?: any
-    classroom?: any
+    teacher?: StaffOption | null
+    day_of_week?: DayOfWeek | null
+    time_slot?: TimeSlot | null
+    class?: ClassGroup | null
+    classroom?: Classroom | null
   }
   onSubmit: (data: ScheduleFormData) => Promise<void>
   onCancel?: () => void
 }
 
 export default function TeacherScheduleForm({ schedule, onSubmit, onCancel }: TeacherScheduleFormProps) {
-  const [teachers, setTeachers] = useState<any[]>([])
-  const [daysOfWeek, setDaysOfWeek] = useState<any[]>([])
-  const [timeSlots, setTimeSlots] = useState<any[]>([])
-  const [classes, setClasses] = useState<any[]>([])
-  const [classrooms, setClassrooms] = useState<any[]>([])
+  const [teachers, setTeachers] = useState<StaffOption[]>([])
+  const [daysOfWeek, setDaysOfWeek] = useState<DayOfWeek[]>([])
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
+  const [classes, setClasses] = useState<ClassGroup[]>([])
+  const [classrooms, setClassrooms] = useState<Classroom[]>([])
 
   useEffect(() => {
-    fetch('/api/teachers').then((r) => r.json()).then(setTeachers).catch(console.error)
-    fetch('/api/timeslots').then((r) => r.json()).then(setTimeSlots).catch(console.error)
-    fetch('/api/class-groups').then((r) => r.json()).then(setClasses).catch(console.error)
-    fetch('/api/classrooms').then((r) => r.json()).then(setClassrooms).catch(console.error)
+    fetch('/api/teachers').then((r) => r.json()).then((data) => setTeachers(Array.isArray(data) ? data : [])).catch(console.error)
+    fetch('/api/timeslots').then((r) => r.json()).then((data) => setTimeSlots(Array.isArray(data) ? data : [])).catch(console.error)
+    fetch('/api/class-groups').then((r) => r.json()).then((data) => setClasses(Array.isArray(data) ? data : [])).catch(console.error)
+    fetch('/api/classrooms').then((r) => r.json()).then((data) => setClassrooms(Array.isArray(data) ? data : [])).catch(console.error)
     fetch('/api/days-of-week')
       .then((r) => {
         if (!r.ok) {
@@ -205,4 +220,3 @@ export default function TeacherScheduleForm({ schedule, onSubmit, onCancel }: Te
     </form>
   )
 }
-

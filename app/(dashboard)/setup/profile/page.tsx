@@ -9,7 +9,11 @@ export default function SetupProfilePage() {
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(true)
   const [hasProfile, setHasProfile] = useState(false)
-  const [profile, setProfile] = useState<any>(null)
+  const [profile, setProfile] = useState<{
+    schools?: { name?: string | null } | null
+    role: string
+    created_at: string
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [justCreated, setJustCreated] = useState(false)
@@ -121,7 +125,7 @@ export default function SetupProfilePage() {
                   <div>
                     <span className="text-sm font-medium text-muted-foreground">School:</span>{' '}
                     <span className="text-sm">
-                      {(profile.schools as any)?.name || 'Unknown'}
+                      {profile.schools?.name || 'Unknown'}
                     </span>
                   </div>
                   <div>
@@ -178,4 +182,3 @@ export default function SetupProfilePage() {
     </div>
   )
 }
-

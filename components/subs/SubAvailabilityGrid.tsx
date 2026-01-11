@@ -15,6 +15,7 @@ interface TimeSlot {
   id: string
   code: string
   name: string | null
+  display_order?: number | null
 }
 
 interface AvailabilityItem {
@@ -69,8 +70,8 @@ export default function SubAvailabilityGrid({
       setDays(weekdays.sort((a: Day, b: Day) => a.day_number - b.day_number))
       // Sort time slots by display_order (from settings), then by code as fallback
       setTimeSlots(slotsData.sort((a: TimeSlot, b: TimeSlot) => {
-        const orderA = (a as any).display_order ?? 999
-        const orderB = (b as any).display_order ?? 999
+        const orderA = a.display_order ?? 999
+        const orderB = b.display_order ?? 999
         if (orderA !== orderB) {
           return orderA - orderB
         }
@@ -203,4 +204,3 @@ export default function SubAvailabilityGrid({
     </div>
   )
 }
-

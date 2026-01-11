@@ -3,8 +3,12 @@ import { Database } from '@/types/database'
 
 type SubAvailability = Database['public']['Tables']['sub_availability']['Row']
 type SubAvailabilityException = Database['public']['Tables']['sub_availability_exceptions']['Row']
+type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
+type TimeSlot = Database['public']['Tables']['time_slots']['Row']
+type SubAvailabilityWithDetails = SubAvailability & { day_of_week: DayOfWeek; time_slot: TimeSlot }
+type SubAvailabilityExceptionWithDetails = SubAvailabilityException & { time_slot: TimeSlot }
 
-export async function getSubAvailability(subId: string) {
+export async function getSubAvailability(subId: string): Promise<SubAvailabilityWithDetails[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('sub_availability')
@@ -12,7 +16,7 @@ export async function getSubAvailability(subId: string) {
     .eq('sub_id', subId)
 
   if (error) throw error
-  return data as any[]
+  return (data || []) as SubAvailabilityWithDetails[]
 }
 
 export async function upsertSubAvailability(subId: string, availability: {
@@ -36,7 +40,10 @@ export async function upsertSubAvailability(subId: string, availability: {
   return data as SubAvailability
 }
 
-export async function getSubAvailabilityExceptions(subId: string, filters?: { start_date?: string; end_date?: string }) {
+export async function getSubAvailabilityExceptions(
+  subId: string,
+  filters?: { start_date?: string; end_date?: string }
+): Promise<SubAvailabilityExceptionWithDetails[]> {
   const supabase = await createClient()
   let query = supabase
     .from('sub_availability_exceptions')
@@ -54,7 +61,7 @@ export async function getSubAvailabilityExceptions(subId: string, filters?: { st
   const { data, error } = await query
 
   if (error) throw error
-  return data as any[]
+  return (data || []) as SubAvailabilityExceptionWithDetails[]
 }
 
 export async function createSubAvailabilityException(exception: {
@@ -80,6 +87,5 @@ export async function deleteSubAvailabilityException(id: string) {
 
   if (error) throw error
 }
-
 
 

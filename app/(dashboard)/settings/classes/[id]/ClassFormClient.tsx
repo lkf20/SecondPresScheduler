@@ -119,8 +119,8 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
 
       router.push('/settings/classes')
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update class group')
     }
   }
 

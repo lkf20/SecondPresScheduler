@@ -42,7 +42,7 @@ interface Classroom {
   order?: number | null
   allowed_classes_display?: string
   is_active?: boolean
-  [key: string]: any
+  color?: string | null
 }
 
 interface SortableClassroomsTableProps {
@@ -332,4 +332,3 @@ export default function SortableClassroomsTable({
     </div>
   )
 }
-

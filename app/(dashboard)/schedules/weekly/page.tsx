@@ -8,6 +8,11 @@ import LoadingSpinner from '@/components/shared/LoadingSpinner'
 import { Button } from '@/components/ui/button'
 import { Filter } from 'lucide-react'
 import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
+import type { Database } from '@/types/database'
+
+type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
+type TimeSlot = Database['public']['Tables']['time_slots']['Row']
+type Classroom = Database['public']['Tables']['classrooms']['Row']
 
 export default function WeeklySchedulePage() {
   const [data, setData] = useState<WeeklyScheduleDataByClassroom[]>([])
@@ -36,9 +41,9 @@ export default function WeeklySchedulePage() {
     }
     return null
   })
-  const [availableDays, setAvailableDays] = useState<any[]>([])
-  const [availableTimeSlots, setAvailableTimeSlots] = useState<any[]>([])
-  const [availableClassrooms, setAvailableClassrooms] = useState<any[]>([])
+  const [availableDays, setAvailableDays] = useState<DayOfWeek[]>([])
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<TimeSlot[]>([])
+  const [availableClassrooms, setAvailableClassrooms] = useState<Classroom[]>([])
 
   // Save filters to localStorage whenever they change
   useEffect(() => {
@@ -91,12 +96,12 @@ export default function WeeklySchedulePage() {
         }
         return r.json()
       })
-      .then(data => {
-        setData(data)
+      .then((responseData) => {
+        setData((responseData || []) as WeeklyScheduleDataByClassroom[])
         setLoading(false)
       })
-      .catch(err => {
-        setError(err.message || 'Failed to load weekly schedule')
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : 'Failed to load weekly schedule')
         setLoading(false)
         console.error('Error loading weekly schedule:', err)
         // Still mark settings as loaded even if schedule fails
@@ -126,13 +131,14 @@ export default function WeeklySchedulePage() {
       fetchWithErrorHandling('/api/classrooms'),
     ])
       .then(([days, timeSlots, classrooms]) => {
-        setAvailableDays(days || [])
-        setAvailableTimeSlots(timeSlots || [])
-        setAvailableClassrooms(classrooms || [])
+        setAvailableDays((days || []) as DayOfWeek[])
+        setAvailableTimeSlots((timeSlots || []) as TimeSlot[])
+        setAvailableClassrooms((classrooms || []) as Classroom[])
       })
-      .catch(err => {
+      .catch((err: unknown) => {
         console.error('Error fetching filter options:', err)
-        setError(`Failed to load filter options: ${err.message}`)
+        const message = err instanceof Error ? err.message : 'Failed to load filter options'
+        setError(`Failed to load filter options: ${message}`)
       })
   }, [])
 

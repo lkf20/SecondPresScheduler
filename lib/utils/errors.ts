@@ -14,7 +14,10 @@ export interface ApiError {
  */
 export function getErrorMessage(error: unknown): string {
   // Check for Supabase/PostgreSQL errors with code property (even if not Error instance)
-  const errorObj = error as any
+  const errorObj =
+    typeof error === 'object' && error !== null
+      ? (error as { code?: string; message?: string; details?: string; hint?: string })
+      : null
   
   // Log the error structure for debugging
   if (process.env.NODE_ENV === 'development') {
@@ -106,7 +109,7 @@ export function createErrorResponse(
     logError(context, error)
   }
   
-  const errorResponse: any = {
+  const errorResponse: Record<string, unknown> = {
     error: message,
   }
   
@@ -119,4 +122,3 @@ export function createErrorResponse(
   
   return Response.json(errorResponse, { status: statusCode })
 }
-

@@ -26,6 +26,13 @@ interface StaffQualification {
   qualification?: QualificationDefinition
 }
 
+type QualificationDetail = {
+  level: string | null
+  expires_on: string | null
+  verified: boolean | null
+  notes: string | null
+}
+
 interface SubQualificationsProps {
   subId: string
   qualifications: StaffQualification[]
@@ -45,12 +52,7 @@ export default function SubQualifications({
 }: SubQualificationsProps) {
   const [definitions, setDefinitions] = useState<QualificationDefinition[]>([])
   const [selectedQualIds, setSelectedQualIds] = useState<Set<string>>(new Set())
-  const [qualDetails, setQualDetails] = useState<Map<string, {
-    level: string | null
-    expires_on: string | null
-    verified: boolean | null
-    notes: string | null
-  }>>(new Map())
+  const [qualDetails, setQualDetails] = useState<Map<string, QualificationDetail>>(new Map())
 
   // Fetch qualification definitions
   useEffect(() => {
@@ -65,12 +67,7 @@ export default function SubQualifications({
   // Initialize from props
   useEffect(() => {
     const selected = new Set<string>()
-    const details = new Map<string, {
-      level: string | null
-      expires_on: string | null
-      verified: boolean | null
-      notes: string | null
-    }>()
+    const details = new Map<string, QualificationDetail>()
 
     qualifications.forEach((q) => {
       selected.add(q.qualification_id)
@@ -109,7 +106,11 @@ export default function SubQualifications({
     notifyChange(newSelected, qualDetails)
   }
 
-  const handleDetailChange = (qualId: string, field: string, value: any) => {
+  const handleDetailChange = (
+    qualId: string,
+    field: keyof QualificationDetail,
+    value: QualificationDetail[keyof QualificationDetail]
+  ) => {
     const updated = new Map(qualDetails)
     const current = updated.get(qualId) || {
       level: null,
@@ -124,7 +125,7 @@ export default function SubQualifications({
 
   const notifyChange = (
     selected: Set<string>,
-    details: Map<string, { level: string | null; expires_on: string | null; verified: boolean | null; notes: string | null }>
+    details: Map<string, QualificationDetail>
   ) => {
     const quals = Array.from(selected).map((qualId) => {
       const detail = details.get(qualId) || {

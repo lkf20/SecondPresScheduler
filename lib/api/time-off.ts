@@ -2,13 +2,17 @@ import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
 
 type TimeOffRequest = Database['public']['Tables']['time_off_requests']['Row']
+type Teacher = Database['public']['Tables']['staff']['Row']
+type TimeOffShift = Database['public']['Tables']['time_off_shifts']['Row']
+type TimeOffRequestWithTeacher = TimeOffRequest & { teacher: Teacher }
+type TimeOffRequestWithDetails = TimeOffRequestWithTeacher & { shifts: TimeOffShift[] }
 
 export async function getTimeOffRequests(filters?: {
   teacher_id?: string
   start_date?: string
   end_date?: string
   statuses?: Array<'draft' | 'active' | 'deleted'>
-}) {
+}): Promise<TimeOffRequestWithTeacher[]> {
   const supabase = await createClient()
   let query = supabase
     .from('time_off_requests')
@@ -34,10 +38,10 @@ export async function getTimeOffRequests(filters?: {
   const { data, error } = await query
 
   if (error) throw error
-  return data as any[]
+  return (data || []) as TimeOffRequestWithTeacher[]
 }
 
-export async function getTimeOffRequestById(id: string) {
+export async function getTimeOffRequestById(id: string): Promise<TimeOffRequestWithDetails> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('time_off_requests')
@@ -46,7 +50,7 @@ export async function getTimeOffRequestById(id: string) {
     .single()
 
   if (error) throw error
-  return data as any
+  return data as TimeOffRequestWithDetails
 }
 
 export async function createTimeOffRequest(request: {
@@ -91,4 +95,3 @@ export async function deleteTimeOffRequest(id: string) {
 
   if (error) throw error
 }
-

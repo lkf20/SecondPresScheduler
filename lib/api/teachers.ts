@@ -52,7 +52,7 @@ export async function createTeacher(teacher: {
   
   // Exclude id from the insert if it's undefined or empty
   const { id, ...teacherData } = teacher
-  const insertData: any = {
+  const insertData: Partial<Staff> & { id: string } = {
     ...teacherData,
     email: teacher.email && teacher.email.trim() !== '' ? teacher.email : null,
     is_teacher: true,
@@ -98,4 +98,3 @@ export async function deleteTeacher(id: string) {
 
   if (error) throw error
 }
-

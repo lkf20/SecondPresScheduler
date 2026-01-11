@@ -14,8 +14,8 @@ export default async function SubsPage() {
 
   try {
     subs = await getSubs()
-  } catch (err: any) {
-    error = err.message || 'Failed to load subs'
+  } catch (err: unknown) {
+    error = err instanceof Error ? err.message : 'Failed to load subs'
     console.error('Error loading subs:', err)
   }
 

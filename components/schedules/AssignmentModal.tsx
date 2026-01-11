@@ -12,6 +12,16 @@ import { Button } from '@/components/ui/button'
 import TeacherSelector from './TeacherSelector'
 import RatioIndicator from './RatioIndicator'
 import type { WeeklyScheduleData } from '@/lib/api/weekly-schedule'
+import { Database } from '@/types/database'
+
+type ClassGroupRow = Database['public']['Tables']['class_groups']['Row']
+type ClassroomRow = Database['public']['Tables']['classrooms']['Row']
+type EnrollmentRow = Database['public']['Tables']['enrollments']['Row']
+type StaffingRuleRow = Database['public']['Tables']['staffing_rules']['Row']
+type ClassClassroomMapping = Database['public']['Tables']['class_classroom_mappings']['Row'] & {
+  class?: ClassGroupRow | null
+  classroom?: ClassroomRow | null
+}
 
 interface AssignmentModalProps {
   dayName: string
@@ -37,10 +47,10 @@ export default function AssignmentModal({
   data,
   onClose,
 }: AssignmentModalProps) {
-  const [classes, setClasses] = useState<any[]>([])
-  const [classrooms, setClassrooms] = useState<any[]>([])
-  const [enrollments, setEnrollments] = useState<any[]>([])
-  const [staffingRules, setStaffingRules] = useState<any[]>([])
+  const [classes, setClasses] = useState<ClassGroupRow[]>([])
+  const [classrooms, setClassrooms] = useState<ClassroomRow[]>([])
+  const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([])
+  const [staffingRules, setStaffingRules] = useState<StaffingRuleRow[]>([])
   const [classGroups, setClassGroups] = useState<Map<string, ClassGroup>>(new Map())
   const [loading, setLoading] = useState(true)
 
@@ -60,10 +70,10 @@ export default function AssignmentModal({
         const enrollmentsData = await enrollmentsRes.json().catch(() => [])
         const rulesData = await rulesRes.json().catch(() => [])
 
-        setClasses(classesData)
-        setClassrooms(classroomsData)
-        setEnrollments(enrollmentsData)
-        setStaffingRules(rulesData)
+        setClasses(classesData as ClassGroupRow[])
+        setClassrooms(classroomsData as ClassroomRow[])
+        setEnrollments(enrollmentsData as EnrollmentRow[])
+        setStaffingRules(rulesData as StaffingRuleRow[])
       } catch (error) {
         console.error('Error fetching data:', error)
       } finally {
@@ -74,13 +84,13 @@ export default function AssignmentModal({
     fetchData()
   }, [])
 
-  const [mappings, setMappings] = useState<any[]>([])
+  const [mappings, setMappings] = useState<ClassClassroomMapping[]>([])
 
   // Fetch class-classroom mappings for this day/time
   useEffect(() => {
     fetch(`/api/class-classroom-mappings?day_of_week_id=${data.day_of_week_id}&time_slot_id=${data.time_slot_id}`)
       .then((r) => r.json())
-      .then((data) => setMappings(data))
+      .then((data) => setMappings(data as ClassClassroomMapping[]))
       .catch(console.error)
   }, [data.day_of_week_id, data.time_slot_id])
 
@@ -254,4 +264,3 @@ export default function AssignmentModal({
     </Dialog>
   )
 }
-

@@ -2,14 +2,14 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import SubForm from '@/components/subs/SubForm'
+import SubForm, { type SubFormData } from '@/components/subs/SubForm'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 
 export default function NewSubPage() {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = async (data: any) => {
+  const handleSubmit = async (data: SubFormData) => {
     try {
       setError(null)
       // Convert empty email to null and exclude id (should not be sent for new subs)
@@ -33,8 +33,8 @@ export default function NewSubPage() {
 
       router.push('/subs')
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create sub')
     }
   }
 

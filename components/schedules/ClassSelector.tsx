@@ -9,6 +9,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
+import { Database } from '@/types/database'
+
+type ClassGroup = Database['public']['Tables']['class_groups']['Row']
 
 interface ClassSelectorProps {
   value: string | null
@@ -23,13 +26,13 @@ export default function ClassSelector({
   allowedClassIds,
   disabled = false,
 }: ClassSelectorProps) {
-  const [classes, setClasses] = useState<any[]>([])
+  const [classes, setClasses] = useState<ClassGroup[]>([])
 
   useEffect(() => {
     fetch('/api/class-groups')
       .then((r) => r.json())
       .then((data) => {
-        setClasses(data)
+        setClasses(data as ClassGroup[])
       })
       .catch(console.error)
   }, [])
@@ -67,4 +70,3 @@ export default function ClassSelector({
     </div>
   )
 }
-

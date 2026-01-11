@@ -20,6 +20,20 @@ import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { toast } from 'sonner'
 
+type ResponseStatus = 'none' | 'pending' | 'confirmed' | 'declined_all'
+
+type ShiftOverride = {
+  coverage_request_shift_id?: string | null
+  selected: boolean
+  override_availability: boolean
+  shift?: {
+    date: string
+    time_slot?: {
+      code?: string | null
+    } | null
+  } | null
+}
+
 interface RecommendedSub {
   id: string
   name: string
@@ -63,19 +77,9 @@ interface ContactData {
   id: string
   is_contacted: boolean
   contacted_at: string | null
-  response_status: string
+  response_status: ResponseStatus
   notes: string | null
-  shift_overrides?: Array<{
-    coverage_request_shift_id: string
-    selected: boolean
-    override_availability: boolean
-    shift?: {
-      date: string
-      time_slot?: {
-        code: string
-      }
-    }
-  }>
+  shift_overrides?: ShiftOverride[]
   coverage_request_id?: string
   shift_map?: Record<string, string>
 }
@@ -173,7 +177,7 @@ export default function ContactSubPanel({
       } else if (initialContactData.shift_overrides && initialContactData.shift_overrides.length > 0) {
         const selected = new Set<string>()
         const overridden = new Set<string>()
-        initialContactData.shift_overrides.forEach((override: any) => {
+        initialContactData.shift_overrides.forEach((override: ShiftOverride) => {
           if (override.selected && override.shift) {
             const shiftId = override.coverage_request_shift_id || 
               `${override.shift.date}|${override.shift.time_slot?.code || ''}`
@@ -253,7 +257,7 @@ export default function ContactSubPanel({
             } else if (contactData.shift_overrides && contactData.shift_overrides.length > 0) {
               const selected = new Set<string>()
               const overridden = new Set<string>()
-              contactData.shift_overrides.forEach((override: any) => {
+              contactData.shift_overrides.forEach((override: ShiftOverride) => {
                 if (override.selected && override.shift) {
                   const shiftId = override.coverage_request_shift_id || 
                     `${override.shift.date}|${override.shift.time_slot?.code || ''}`
@@ -721,7 +725,7 @@ export default function ContactSubPanel({
 
       if (!updateResponse.ok) {
         const errorText = await updateResponse.text()
-        let errorData: any = {}
+        let errorData: Record<string, unknown> = {}
         let errorMessage = `Failed to update contact (${updateResponse.status} ${updateResponse.statusText})`
         
         try {
@@ -770,7 +774,7 @@ export default function ContactSubPanel({
 
       if (!assignResponse.ok) {
         const errorText = await assignResponse.text()
-        let errorData: any = {}
+        let errorData: Record<string, unknown> = {}
         let errorMessage = `Failed to assign shifts (${assignResponse.status} ${assignResponse.statusText})`
         
         try {
@@ -887,7 +891,7 @@ export default function ContactSubPanel({
       setLoading(true)
       try {
         // Build empty shift overrides array
-        const shiftOverrides: any[] = []
+        const shiftOverrides: ShiftOverride[] = []
 
         // Get or create contact first if we don't have contactId
         let currentContactId = contactId
@@ -1166,7 +1170,7 @@ export default function ContactSubPanel({
                       <Label className="text-sm font-medium mb-3 block pt-2">Response</Label>
                       <RadioGroup 
                         value={responseStatus} 
-                        onValueChange={(value: any) => {
+                        onValueChange={(value: ResponseStatus) => {
                           setResponseStatus(value)
                           // If "Declined All" is selected, uncheck all shifts
                           if (value === 'declined_all') {
@@ -1468,7 +1472,7 @@ export default function ContactSubPanel({
                     ⚠️ Conflicting selections
                   </p>
                   <p className="text-sm text-amber-800 mt-1">
-                    You've marked this sub as Declined (all) but also selected shifts.
+                    You&apos;ve marked this sub as Declined (all) but also selected shifts.
                   </p>
                 </div>
               ) : responseStatus === 'declined_all' && (
@@ -1529,7 +1533,7 @@ export default function ContactSubPanel({
                         </span>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Pending isn't applicable when a sub has declined all shifts.</p>
+                        <p>Pending isn&apos;t applicable when a sub has declined all shifts.</p>
                       </TooltipContent>
                     </Tooltip>
                   ) : (
@@ -1560,4 +1564,3 @@ export default function ContactSubPanel({
     </Sheet>
   )
 }
-

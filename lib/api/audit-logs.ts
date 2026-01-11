@@ -5,7 +5,7 @@ interface AuditLogEntry {
   action: string
   entity_type: string
   entity_id?: string | null
-  details?: Record<string, any>
+  details?: Record<string, unknown>
 }
 
 /**

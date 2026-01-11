@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import TeacherForm from '@/components/teachers/TeacherForm'
+import TeacherForm, { type TeacherFormData } from '@/components/teachers/TeacherForm'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -11,7 +11,7 @@ export default function NewTeacherPage() {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = async (data: any) => {
+  const handleSubmit = async (data: TeacherFormData) => {
     try {
       setError(null)
       // Convert empty email to null and exclude id (should not be sent for new teachers)
@@ -36,8 +36,8 @@ export default function NewTeacherPage() {
 
       router.push('/teachers')
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create teacher')
     }
   }
 

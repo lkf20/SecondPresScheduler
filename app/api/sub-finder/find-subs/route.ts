@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Lookup classroom/class names from teacher schedule
-    let scheduleLookup = new Map<string, { classrooms: Set<string>; classes: Set<string> }>()
+    const scheduleLookup = new Map<string, { classrooms: Set<string>; classes: Set<string> }>()
     const { data: teacherSchedules, error: scheduleError } = await supabase
       .from('teacher_schedules')
       .select('day_of_week_id, time_slot_id, classroom:classrooms(name), class:class_groups(name)')
@@ -112,12 +112,12 @@ export async function POST(request: NextRequest) {
     const coverageRequestId = (timeOffRequest as any).coverage_request_id
 
     // Get coverage_request_shifts with class group info and create shift ID map
-    let classGroupInfoMap = new Map<string, { 
+    const classGroupInfoMap = new Map<string, { 
       diaper_changing_required: boolean
       lifting_children_required: boolean
       class_group_name: string | null
     }>()
-    let shiftIdMap = new Map<string, string>() // key: date|time_slot_code|classroom_id, value: coverage_request_shift_id
+    const shiftIdMap = new Map<string, string>() // key: date|time_slot_code|classroom_id, value: coverage_request_shift_id
     
     if (coverageRequestId) {
       const { data: coverageRequestShifts } = await supabase

@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react'
 import { CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
 import ScheduleCell from './ScheduleCell'
 import ScheduleSidePanel from './ScheduleSidePanel'
-import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
+import type { WeeklyScheduleData, WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 
 interface WeeklyScheduleGridNewProps {
   data: WeeklyScheduleDataByClassroom[]
@@ -13,6 +13,10 @@ interface WeeklyScheduleGridNewProps {
   onRefresh?: () => void
   onFilterPanelOpenChange?: (open: boolean) => void
   filterPanelOpen?: boolean
+}
+
+type WeeklyScheduleCellData = WeeklyScheduleData & {
+  schedule_cell: WeeklyScheduleDataByClassroom['days'][number]['time_slots'][number]['schedule_cell']
 }
 
 // Helper function to abbreviate day names
@@ -259,7 +263,7 @@ export default function WeeklyScheduleGridNew({
       classrooms: Array<{
         classroomId: string
         classroomName: string
-        cellData: any
+        cellData?: WeeklyScheduleCellData
       }>
     }> = []
 
@@ -268,7 +272,7 @@ export default function WeeklyScheduleGridNew({
         const classrooms: Array<{
           classroomId: string
           classroomName: string
-          cellData: any
+          cellData?: WeeklyScheduleCellData
         }> = []
 
         data.forEach((classroom) => {
@@ -384,7 +388,7 @@ export default function WeeklyScheduleGridNew({
             >
             </div>
             {data.map((classroom, index) => {
-              const classroomColor = (classroom as any).classroom_color
+              const classroomColor = classroom.classroom_color || undefined
               return (
                 <div
                   key={classroom.classroom_id}
@@ -440,7 +444,7 @@ export default function WeeklyScheduleGridNew({
                       />
                       {/* Classroom column spacers (with classroom colors) */}
                       {data.map((classroom, classroomIndex) => {
-                        const classroomColor = (classroom as any).classroom_color
+                        const classroomColor = classroom.classroom_color || undefined
                         return (
                           <div
                             key={`spacer-${classroom.classroom_id}-${day.id}`}
@@ -521,7 +525,7 @@ export default function WeeklyScheduleGridNew({
                           const isInactive =
                             classroom.cellData?.schedule_cell &&
                             !classroom.cellData.schedule_cell.is_active
-                          const classroomColor = data.find(c => c.classroom_id === classroom.classroomId)?.classroom_color as string | undefined
+                          const classroomColor = data.find(c => c.classroom_id === classroom.classroomId)?.classroom_color || undefined
                           return (
                             <div
                               key={`cell-${classroom.classroomId}-${day.id}-${timeSlot.id}`}
@@ -705,7 +709,7 @@ export default function WeeklyScheduleGridNew({
                     <div
                       className="text-sm font-semibold"
                       style={{
-                        color: (classroom as any).classroom_color || '#1f2937'
+                        color: classroom.classroom_color || '#1f2937'
                       }}
                     >
                       {classroom.classroom_name}
@@ -715,7 +719,7 @@ export default function WeeklyScheduleGridNew({
                   {/* Day/Time Slot Cells */}
                   {filteredDays.map((day, dayIndex) => {
                     const dayData = classroom.days.find((d) => d.day_of_week_id === day.id)
-                    const classroomColor = (classroom as any).classroom_color
+                    const classroomColor = classroom.classroom_color || undefined
                     
                     return timeSlots.map((slot, slotIndex) => {
                       const timeSlotData = dayData?.time_slots.find(

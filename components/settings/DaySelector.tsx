@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { Database } from '@/types/database'
+
+type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
 
 interface DaySelectorProps {
   selectedDayIds: string[]
@@ -13,7 +16,7 @@ export default function DaySelector({
   selectedDayIds,
   onSelectionChange,
 }: DaySelectorProps) {
-  const [daysOfWeek, setDaysOfWeek] = useState<any[]>([])
+  const [daysOfWeek, setDaysOfWeek] = useState<DayOfWeek[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -22,7 +25,7 @@ export default function DaySelector({
       .then((data) => {
         // Sort by day_number: Mon(1), Tue(2), Wed(3), Thu(4), Fri(5), Sat(6), Sun(7)
         // Handle both old (0) and new (7) Sunday values for sorting
-        const sorted = data.sort((a: any, b: any) => {
+        const sorted = (data as DayOfWeek[]).sort((a, b) => {
           const aNum = a.day_number === 0 ? 7 : a.day_number
           const bNum = b.day_number === 0 ? 7 : b.day_number
           return aNum - bNum
@@ -32,8 +35,8 @@ export default function DaySelector({
         // If no days are selected yet, default to Mon-Fri (day_number 1-5)
         if (selectedDayIds.length === 0) {
           const defaultDays = sorted
-            .filter((d: any) => d.day_number >= 1 && d.day_number <= 5)
-            .map((d: any) => d.id)
+            .filter((d) => d.day_number >= 1 && d.day_number <= 5)
+            .map((d) => d.id)
           onSelectionChange(defaultDays)
         }
       })
@@ -76,4 +79,3 @@ export default function DaySelector({
     </div>
   )
 }
-

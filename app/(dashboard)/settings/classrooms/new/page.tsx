@@ -38,7 +38,13 @@ export default function NewClassroomPage() {
   const onSubmit = async (data: ClassroomFormData) => {
     try {
       setError(null)
-      const payload: any = { name: data.name }
+      const payload: {
+        name: string
+        capacity?: number
+        allowed_classes?: string[]
+        color?: string | null
+        is_active?: boolean
+      } = { name: data.name }
       if (data.capacity && data.capacity !== '') {
         const capacityNum = Number(data.capacity)
         if (!isNaN(capacityNum) && capacityNum > 0) {
@@ -70,8 +76,8 @@ export default function NewClassroomPage() {
 
       router.push('/settings/classrooms')
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create classroom')
     }
   }
 

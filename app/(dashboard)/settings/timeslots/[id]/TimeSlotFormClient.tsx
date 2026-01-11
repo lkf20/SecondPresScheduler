@@ -60,7 +60,13 @@ export default function TimeSlotFormClient({ timeslot }: TimeSlotFormClientProps
   const onSubmit = async (data: TimeSlotFormData) => {
     try {
       setError(null)
-      const payload: any = {
+      const payload: {
+        code: string
+        name: string | null
+        default_start_time: string | null
+        default_end_time: string | null
+        display_order?: number | null
+      } = {
         code: data.code,
         name: data.name || null,
         default_start_time: data.default_start_time || null,
@@ -98,8 +104,8 @@ export default function TimeSlotFormClient({ timeslot }: TimeSlotFormClientProps
 
       router.push('/settings/timeslots')
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update time slot')
     }
   }
 
@@ -119,8 +125,8 @@ export default function TimeSlotFormClient({ timeslot }: TimeSlotFormClientProps
 
       router.push('/settings/timeslots')
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete time slot')
     }
   }
 
