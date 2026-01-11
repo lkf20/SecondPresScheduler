@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, CircleDot, PieChart } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { parseLocalDate } from '@/lib/utils/date'
@@ -10,7 +10,7 @@ import { parseLocalDate } from '@/lib/utils/date'
 type TimeOffRow = Record<string, any>
 
 export default function TimeOffListClient({
-  view,
+  view: initialView,
   draftRequests,
   upcomingRequests,
   pastRequests,
@@ -21,6 +21,20 @@ export default function TimeOffListClient({
   pastRequests: TimeOffRow[]
 }) {
   const router = useRouter()
+  const [view, setView] = useState(initialView ?? 'active')
+
+  useEffect(() => {
+    setView(initialView ?? 'active')
+  }, [initialView])
+
+  const updateView = (nextView: string) => {
+    setView(nextView)
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.set('view', nextView)
+      window.history.replaceState({}, '', url)
+    }
+  }
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const formatDateRange = (start: string, end?: string | null) => {
     const startDate = parseLocalDate(start)
@@ -55,7 +69,7 @@ export default function TimeOffListClient({
     const b = parseInt(normalized.slice(5, 7), 16)
     return {
       backgroundColor: `rgba(${r}, ${g}, ${b}, 0.12)`,
-      borderColor: normalized,
+      borderColor: `rgba(${r}, ${g}, ${b}, 0.3)`,
       color: normalized,
     }
   }
@@ -137,11 +151,11 @@ export default function TimeOffListClient({
     if (row.coverage_status === 'needs_coverage' || row.coverage_status === 'partially_covered') {
       return (
         <div className="flex items-center gap-2">
-          <Button asChild size="sm" className="border border-slate-200 bg-slate-100 text-slate-800 hover:bg-slate-200">
-            <Link href={`/sub-finder?absence_id=${row.id}`}>Find Sub</Link>
-          </Button>
           <Button asChild size="sm" variant="ghost">
             <Link href={`/time-off/${row.id}`}>View</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="border-black text-slate-900 font-medium hover:bg-slate-50">
+            <Link href={`/sub-finder?absence_id=${row.id}`}>Find Sub</Link>
           </Button>
         </div>
       )
@@ -157,12 +171,12 @@ export default function TimeOffListClient({
   const renderRowCard = (row: TimeOffRow) => (
     <div
       key={row.id}
-      className="rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm"
+      className="rounded-lg border border-slate-200 bg-white px-5 pt-2 pb-4 shadow-sm"
     >
-      <div className="flex flex-col gap-4 md:flex-row md:items-stretch md:justify-between">
-        <div className="space-y-1">
+      <div className="grid gap-4 md:grid-cols-[1fr_auto]">
+        <div className="grid gap-1">
           <div className="text-lg font-semibold text-slate-900">{row.teacher_name}</div>
-          <div className="text-sm font-medium text-slate-700">{formatDateRange(row.start_date, row.end_date)}</div>
+          <div className="text-sm font-medium text-slate-700 pb-3">{formatDateRange(row.start_date, row.end_date)}</div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <button
               type="button"
@@ -204,11 +218,9 @@ export default function TimeOffListClient({
             )}
           </div>
         </div>
-        <div className="flex flex-col items-start md:items-end self-stretch">
-          <div className="flex items-center gap-2 md:justify-end">
-          {renderCoverageBadge(row)}
-          </div>
-          <div className="mt-auto flex items-center gap-2 w-full md:justify-end">{renderActions(row)}</div>
+        <div className="grid grid-rows-[auto_1fr] items-end justify-items-end">
+          <div className="flex items-center gap-2 pt-1">{renderCoverageBadge(row)}</div>
+          <div className="flex items-center gap-2">{renderActions(row)}</div>
         </div>
       </div>
       {expandedIds.has(row.id) && row.shift_details && row.shift_details.length > 0 && (
@@ -230,14 +242,15 @@ export default function TimeOffListClient({
     <>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {[
-          { value: 'active', label: 'Active' },
-          { value: 'drafts', label: 'Drafts' },
-          { value: 'past', label: 'Past' },
-          { value: 'all', label: 'All' },
+          { value: 'active', label: `Active (${upcomingRequests.length})` },
+          { value: 'drafts', label: `Drafts (${draftRequests.length})` },
+          { value: 'past', label: `Past (${pastRequests.length})` },
+          { value: 'all', label: `All (${draftRequests.length + upcomingRequests.length + pastRequests.length})` },
         ].map((option) => (
-          <Link
+          <button
             key={option.value}
-            href={`/time-off?view=${option.value}`}
+            type="button"
+            onClick={() => updateView(option.value)}
             className={
               view === option.value
                 ? 'rounded-full border border-slate-900 bg-slate-900 px-3 py-1 text-xs font-medium text-white'
@@ -245,15 +258,14 @@ export default function TimeOffListClient({
             }
           >
             {option.label}
-          </Link>
+          </button>
         ))}
       </div>
 
       {draftRequests.length > 0 && (view === 'drafts' || view === 'all') && (
         <details open={view === 'drafts'} className="mb-6 rounded-lg bg-gray-50 border border-gray-200 p-4">
-          <summary className="cursor-pointer text-sm font-medium text-slate-700 flex items-center justify-between">
-            <span>Drafts</span>
-            <span className="text-muted-foreground">{draftRequests.length}</span>
+          <summary className="cursor-pointer text-sm font-medium text-slate-700">
+            Drafts ({draftRequests.length})
           </summary>
           <div className="mt-4">
             {renderSection(draftRequests, 'No drafts available.')}
