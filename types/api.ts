@@ -84,21 +84,3 @@ export interface TeacherSchedule {
   created_at?: string
   updated_at?: string
 }
-
-export interface TeacherScheduleAuditLog {
-  id: string
-  teacher_schedule_id: string | null
-  teacher_id: string
-  action: 'created' | 'updated' | 'deleted' | 'conflict_resolved'
-  action_details: Record<string, unknown> | null
-  removed_from_classroom_id: string | null
-  removed_from_day_id: string | null
-  removed_from_time_slot_id: string | null
-  added_to_classroom_id: string | null
-  added_to_day_id: string | null
-  added_to_time_slot_id: string | null
-  reason: string | null
-  user_id: string | null
-  created_at: string
-}
-
