@@ -136,11 +136,11 @@ export default function ClassGroupMultiSelect({
         {selectedClassGroupsList.map((cg) => {
           const isInactive = cg.is_active === false
           return (
-            <Badge 
+            <Badge
               key={cg.id} 
               variant={isInactive ? "outline" : "secondary"} 
               className={cn(
-                "flex items-center gap-1",
+                "flex items-center gap-1 px-3 py-1 text-sm",
                 isInactive && "border-destructive/50 text-muted-foreground"
               )}
             >

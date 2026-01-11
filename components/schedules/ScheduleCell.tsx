@@ -26,7 +26,7 @@ interface ScheduleCellProps {
       }>
     } | null
   }
-  onClick: () => void
+  onClick?: () => void
 }
 
 export default function ScheduleCell({ data, onClick }: ScheduleCellProps) {

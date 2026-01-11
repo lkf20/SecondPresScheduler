@@ -109,10 +109,15 @@ export default function ScheduleSidePanel({
   const preserveTeachersRef = useRef(false)
   // Store teachers in ref so we can preserve them even if state hasn't updated
   const selectedTeachersRef = useRef<Teacher[]>([])
+  const classGroupsRef = useRef<ClassGroupWithMeta[]>([])
 
   useEffect(() => {
     selectedTeachersRef.current = selectedTeachers
   }, [selectedTeachers])
+  
+  useEffect(() => {
+    classGroupsRef.current = classGroups
+  }, [classGroups])
 
   // Format time range for header
   const timeRange = timeSlotStartTime && timeSlotEndTime
@@ -293,7 +298,7 @@ export default function ScheduleSidePanel({
   useEffect(() => {
     console.log('[ScheduleSidePanel] useEffect - classGroupIds:', classGroupIds)
     console.log('[ScheduleSidePanel] useEffect - allAvailableClassGroups.length:', allAvailableClassGroups.length)
-    console.log('[ScheduleSidePanel] useEffect - current classGroups:', classGroups)
+    console.log('[ScheduleSidePanel] useEffect - current classGroups:', classGroupsRef.current)
     console.log('[ScheduleSidePanel] useEffect - loading:', loading)
     console.log('[ScheduleSidePanel] useEffect - hasLoadedInitialData:', hasLoadedInitialDataRef.current)
     
@@ -320,7 +325,7 @@ export default function ScheduleSidePanel({
       
       // If we have initial classGroupIds but classGroups is also empty, this is likely stale state
       // (happens when useEffect runs with empty classGroupIds before initial data sets it)
-      if (initialClassGroupIdsRef.current && initialClassGroupIdsRef.current.length > 0 && classGroups.length === 0) {
+      if (initialClassGroupIdsRef.current && initialClassGroupIdsRef.current.length > 0 && classGroupsRef.current.length === 0) {
         console.log('[ScheduleSidePanel] useEffect - classGroupIds is empty, had initial classGroupIds, but classGroups is also empty, skipping (stale state)')
         return
       }
@@ -328,7 +333,7 @@ export default function ScheduleSidePanel({
       // If we have classGroups but classGroupIds is empty, check if this matches initial state
       // If initial was also empty, this is fine. If initial had values, this might be stale.
       // But if hasLoadedInitialData is true and we have classGroups, it's likely user removed all
-      if (initialClassGroupIdsRef.current && initialClassGroupIdsRef.current.length > 0 && classGroups.length > 0) {
+      if (initialClassGroupIdsRef.current && initialClassGroupIdsRef.current.length > 0 && classGroupsRef.current.length > 0) {
         // This is likely a legitimate user action - user removed all class groups
         console.log('[ScheduleSidePanel] useEffect - classGroupIds is empty but we have classGroups, clearing (user removed all)')
         setClassGroups([])
@@ -346,7 +351,7 @@ export default function ScheduleSidePanel({
     if (allAvailableClassGroups.length === 0) {
       console.log('[ScheduleSidePanel] useEffect - allAvailableClassGroups not loaded yet, updating from existing classGroups')
       // Filter existing classGroups to match the new classGroupIds
-      const filteredFromExisting = classGroups.filter(cg => 
+      const filteredFromExisting = classGroupsRef.current.filter(cg => 
         classGroupIds.includes(cg.id)
       )
       
@@ -413,7 +418,7 @@ export default function ScheduleSidePanel({
     // even if user added a new class group that wasn't in initial data
     console.log('[ScheduleSidePanel] useEffect - setting classGroups to (from allAvailableClassGroups):', selectedClassGroups)
     setClassGroups(selectedClassGroups)
-  }, [classGroupIds, allAvailableClassGroups, classGroups, loading])
+  }, [classGroupIds, allAvailableClassGroups, loading])
 
   // Fetch teacher assignments when classGroupIds changes or drawer opens
   // Fetch directly from teacher-schedules API for immediate, accurate data
@@ -1080,18 +1085,6 @@ export default function ScheduleSidePanel({
                 {/* Age and Ratios Display */}
                 {classGroups.length > 0 && classGroupForRatio && (
                   <div className="space-y-2 text-sm pt-1">
-                    {/* Class Groups List */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="text-muted-foreground">Class Groups:</div>
-                      <div className="flex flex-wrap gap-1">
-                        {classGroups.map((cg) => (
-                          <span key={cg.id} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                            {cg.name}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    
                     {/* Age Range (from lowest min_age) */}
                     <div className="flex items-center gap-2">
                       <div className="text-muted-foreground">Age (lowest):</div>
@@ -1216,7 +1209,7 @@ export default function ScheduleSidePanel({
               </div>
 
               {/* Footer Actions */}
-              <div className="space-y-2 pt-4 border-t">
+              <div className="space-y-2 pt-4 pb-6 border-t">
                 {/* Warning if below required staffing */}
                 {isActive && 
                  classGroups.length > 0 && 

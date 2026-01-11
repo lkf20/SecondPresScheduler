@@ -107,13 +107,14 @@ export default function WeeklyScheduleGrid({ data }: WeeklyScheduleGridProps) {
                   {daysOfWeek.map((day) => {
                     const cellData = gridData.get(slot.id)?.get(day.id)
                     return (
-                      <td key={day.id} className="border p-2 align-top">
-                        <ScheduleCell
-                          data={cellData}
-                          onClick={() =>
-                            handleCellClick(day.id, day.name, slot.id, slot.name || slot.code)
-                          }
-                        />
+                      <td
+                        key={day.id}
+                        className="border p-2 align-top cursor-pointer"
+                        onClick={() =>
+                          handleCellClick(day.id, day.name, slot.id, slot.name || slot.code)
+                        }
+                      >
+                        <ScheduleCell data={cellData} />
                       </td>
                     )
                   })}

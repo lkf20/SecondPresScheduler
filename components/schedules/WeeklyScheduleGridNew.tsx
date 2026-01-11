@@ -520,23 +520,21 @@ export default function WeeklyScheduleGridNew({
                               }}
                             >
                               <div
-                                className={`rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 min-h-[120px] min-w-[160px] m-1.5 ${
+                                className={`rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 min-h-[120px] min-w-[160px] m-1.5 cursor-pointer ${
                                   isInactive ? 'opacity-60 bg-gray-50' : ''
                                 }`}
+                                onClick={() =>
+                                  handleCellClick(
+                                    day.id,
+                                    day.name,
+                                    timeSlot.id,
+                                    item.timeSlot.name || timeSlot.code,
+                                    classroom.classroomId,
+                                    classroom.classroomName
+                                  )
+                                }
                               >
-                                <ScheduleCell
-                                  data={classroom.cellData}
-                                  onClick={() =>
-                                    handleCellClick(
-                                      day.id,
-                                      day.name,
-                                      timeSlot.id,
-                                      item.timeSlot.name || timeSlot.code,
-                                      classroom.classroomId,
-                                      classroom.classroomName
-                                    )
-                                  }
-                                />
+                                <ScheduleCell data={classroom.cellData} />
                               </div>
                             </div>
                           )
@@ -735,23 +733,21 @@ export default function WeeklyScheduleGridNew({
                           }}
                         >
                           <div
-                            className={`rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 min-h-[120px] min-w-[140px] m-1.5 ${
+                            className={`rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 min-h-[120px] min-w-[140px] m-1.5 cursor-pointer ${
                               isInactive ? 'opacity-60 bg-gray-50' : ''
                             }`}
+                            onClick={() =>
+                              handleCellClick(
+                                day.id,
+                                day.name,
+                                slot.id,
+                                slot.name || slot.code,
+                                classroom.classroom_id,
+                                classroom.classroom_name
+                              )
+                            }
                           >
-                            <ScheduleCell
-                              data={cellData}
-                              onClick={() =>
-                                handleCellClick(
-                                  day.id,
-                                  day.name,
-                                  slot.id,
-                                  slot.name || slot.code,
-                                  classroom.classroom_id,
-                                  classroom.classroom_name
-                                )
-                              }
-                            />
+                            <ScheduleCell data={cellData} />
                           </div>
                         </div>
                       )
