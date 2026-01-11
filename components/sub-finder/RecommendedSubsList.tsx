@@ -1,15 +1,11 @@
 'use client'
 
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { CheckCircle2, CircleX, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react'
+import { CheckCircle2, CircleX, ChevronDown, ChevronUp } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
-import ShiftChips from '@/components/sub-finder/ShiftChips'
-import SubCardHeader from '@/components/sub-finder/SubCardHeader'
 import { useState } from 'react'
-import { cn } from '@/lib/utils'
+import SubFinderCard from '@/components/sub-finder/SubFinderCard'
 
 interface RecommendedSub {
   id: string
@@ -149,6 +145,7 @@ export default function RecommendedSubsList({
   const totalUncoveredShifts = totalShiftsNeedingCoverage - allAssignedShifts.size
   
   const isDeclined = (sub: RecommendedSub) => sub.response_status === 'declined_all'
+
   
   const processedSubs = subs.map((sub) => {
     let shiftsCovered = 0
@@ -200,53 +197,21 @@ export default function RecommendedSubsList({
           const remainingCannotCover = filterRemainingShifts(sub.cannot_cover)
 
           return (
-        <Card 
-          key={sub.id} 
-          id={`sub-card-${sub.id}`}
-          className={cn(
-            "hover:shadow-md transition-shadow",
-            highlightedSubId === sub.id && "ring-2 ring-blue-500 ring-offset-2 animate-pulse"
-          )}
-        >
-          <CardContent className="pt-4 px-4 pb-2">
-            <SubCardHeader
+            <SubFinderCard
+              key={sub.id}
               name={sub.name}
               phone={sub.phone}
               shiftsCovered={shiftsCovered}
               totalShifts={remainingShifts}
+              canCover={remainingCanCover}
+              cannotCover={remainingCannotCover}
+              assigned={[]}
+              notes={sub.notes}
+              isDeclined={isDeclined(sub)}
+              highlighted={highlightedSubId === sub.id}
+              onContact={() => onContactSub?.(sub)}
             />
-
-            {/* Shifts: Show all shifts (can cover, cannot cover, and assigned) with tooltips for unavailable */}
-            {(remainingCanCover.length > 0 || remainingCannotCover.length > 0) && (
-              <div className="mb-3">
-                <ShiftChips
-                  canCover={remainingCanCover}
-                  cannotCover={remainingCannotCover}
-                  assigned={[]}
-                  isDeclined={sub.response_status === 'declined_all'}
-                />
-              </div>
-            )}
-
-            {sub.notes && (
-              <div className="mb-3 p-2 bg-muted rounded border border-border/50 text-xs text-muted-foreground">
-                {sub.notes}
-              </div>
-            )}
-
-            <div className="mt-0 flex justify-end">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-primary hover:text-primary hover:bg-primary/10"
-                onClick={() => onContactSub?.(sub)}
-              >
-                Contact & Assign <ArrowRight className="h-3.5 w-3.5 ml-1" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-        )
+          )
         })}
         
         {/* Declined Subs Collapsible Section */}
@@ -274,54 +239,22 @@ export default function RecommendedSubsList({
                     const remainingCannotCover = filterRemainingShifts(sub.cannot_cover)
 
                     return (
-                    <Card 
-                      key={sub.id} 
-                      id={`sub-card-${sub.id}`}
-                      className={cn(
-                        "hover:shadow-md transition-shadow bg-gray-100/50 opacity-75",
-                        highlightedSubId === sub.id && "ring-2 ring-blue-500 ring-offset-2 animate-pulse"
-                      )}
-                    >
-                      <CardContent className="pt-4 px-4 pb-2">
-                        <SubCardHeader
-                          name={sub.name}
-                          phone={sub.phone}
-                          shiftsCovered={shiftsCovered}
-                          totalShifts={remainingShifts}
-                          isDeclined={true}
-                        />
-
-                        {/* Shifts: Show all shifts (can cover, cannot cover, and assigned) with tooltips for unavailable */}
-                        {(remainingCanCover.length > 0 || remainingCannotCover.length > 0) && (
-                          <div className="mb-3">
-                            <ShiftChips
-                              canCover={remainingCanCover}
-                              cannotCover={remainingCannotCover}
-                              assigned={[]}
-                              isDeclined={true}
-                            />
-                          </div>
-                        )}
-
-                        {sub.notes && (
-                          <div className="mb-3 p-2 bg-muted rounded border border-border/50 text-xs text-muted-foreground">
-                            {sub.notes}
-                          </div>
-                        )}
-
-                        <div className="mt-0 flex justify-end">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-primary hover:text-primary hover:bg-primary/10"
-                            onClick={() => onContactSub?.(sub)}
-                          >
-                            Contact & Assign <ArrowRight className="h-3.5 w-3.5 ml-1" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                )
+                      <SubFinderCard
+                        key={sub.id}
+                        name={sub.name}
+                        phone={sub.phone}
+                        shiftsCovered={shiftsCovered}
+                        totalShifts={remainingShifts}
+                        canCover={remainingCanCover}
+                        cannotCover={remainingCannotCover}
+                        assigned={[]}
+                        notes={sub.notes}
+                        isDeclined={true}
+                        highlighted={highlightedSubId === sub.id}
+                        className="bg-gray-100/50 opacity-75"
+                        onContact={() => onContactSub?.(sub)}
+                      />
+                    )
                 })}
               </div>
             )}
@@ -331,4 +264,3 @@ export default function RecommendedSubsList({
     </TooltipProvider>
   )
 }
-

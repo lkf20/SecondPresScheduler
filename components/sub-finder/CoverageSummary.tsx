@@ -57,12 +57,10 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
   const coveragePercent = totalShifts > 0 ? Math.round((fully_covered / totalShifts) * 100) : 0
 
   return (
-    <div className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 px-6 py-4 shadow-sm">
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 pt-3 pb-2 shadow-sm">
       {/* Header */}
-      <h3 className="text-sm font-semibold text-slate-900 mb-3">Coverage Summary</h3>
-
-      {/* Segmented Coverage Bar */}
-      <div className="mb-3">
+      <div className="mb-2 flex flex-wrap items-center gap-3">
+        <h3 className="text-sm font-semibold text-slate-900">Coverage Summary</h3>
         <div className="h-2 rounded-full overflow-hidden flex gap-0.5">
           {sortedShifts.map((shift) => {
             const getSegmentColor = () => {
@@ -90,7 +88,7 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
       </div>
       
       {/* Summary Line */}
-      <div className="mb-4 flex items-center gap-4">
+      <div className="mb-3 flex items-center gap-4">
         <div className="text-sm flex items-center gap-2">
           <span className="text-muted-foreground">
             <span className="font-bold text-slate-900">{totalShifts}</span> Total Shifts

@@ -219,8 +219,12 @@ export default function TimeOffListClient({
           </div>
         </div>
         <div className="grid grid-rows-[auto_1fr] items-end justify-items-end">
-          <div className="flex items-center gap-2 pt-1">{renderCoverageBadge(row)}</div>
-          <div className="flex items-center gap-2">{renderActions(row)}</div>
+          <div className="flex items-center gap-2 pt-1">
+            {renderCoverageBadge(row)}
+          </div>
+          <div className="flex items-center gap-2">
+            {renderActions(row)}
+          </div>
         </div>
       </div>
       {expandedIds.has(row.id) && row.shift_details && row.shift_details.length > 0 && (

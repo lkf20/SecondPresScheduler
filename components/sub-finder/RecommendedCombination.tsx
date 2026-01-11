@@ -1,11 +1,9 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { AlertTriangle, Users, CheckCircle2, ArrowRight } from 'lucide-react'
-import ShiftChips from '@/components/sub-finder/ShiftChips'
-import SubCardHeader from '@/components/sub-finder/SubCardHeader'
+import { Card, CardHeader, CardTitle } from '@/components/ui/card'
+import { Users, CheckCircle2, AlertTriangle } from 'lucide-react'
 import type { RecommendedCombination as RecommendedCombinationType } from '@/lib/utils/sub-combination'
+import SubFinderCard from '@/components/sub-finder/SubFinderCard'
 
 interface RecommendedCombinationProps {
   combination: RecommendedCombinationType | null
@@ -51,70 +49,22 @@ export default function RecommendedCombination({
           {combination.coveragePercent}% of shifts
         </p>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <div className="space-y-4 px-6 pb-6">
         {combination.subs.map((assignment) => (
-          <div
+          <SubFinderCard
             key={assignment.subId}
-            className="border rounded-lg p-4 bg-gray-50/50 hover:shadow-md hover:bg-gray-50 transition-all"
-          >
-            <SubCardHeader
-              name={assignment.subName}
-              phone={assignment.phone}
-              shiftsCovered={assignment.shiftsCovered}
-              totalShifts={assignment.totalShifts}
-            />
-
-            {/* Shifts */}
-            {assignment.shifts.length > 0 && (
-              <div className="mb-3">
-                <ShiftChips
-                  canCover={assignment.shifts}
-                  cannotCover={[]}
-                  assigned={[]}
-                />
-              </div>
-            )}
-
-            {/* Conflicts Warning */}
-            {assignment.conflicts.total > 0 && (
-              <div className="mb-3 rounded-md bg-amber-50 border border-amber-200 p-2.5 space-y-1">
-                <div className="flex items-center gap-1.5 text-xs font-medium text-amber-800">
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  <span>Conflicts:</span>
-                </div>
-                <div className="text-xs text-amber-700 space-y-0.5 ml-5">
-                  {assignment.conflicts.missingDiaperChanging > 0 && (
-                    <div>
-                      • Missing diaper changing skill for {assignment.conflicts.missingDiaperChanging} shift{assignment.conflicts.missingDiaperChanging !== 1 ? 's' : ''}
-                    </div>
-                  )}
-                  {assignment.conflicts.missingLifting > 0 && (
-                    <div>
-                      • Missing lifting children skill for {assignment.conflicts.missingLifting} shift{assignment.conflicts.missingLifting !== 1 ? 's' : ''}
-                    </div>
-                  )}
-                  {assignment.conflicts.missingQualifications > 0 && (
-                    <div>
-                      • Missing class qualifications for {assignment.conflicts.missingQualifications} shift{assignment.conflicts.missingQualifications !== 1 ? 's' : ''}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div className="mt-0 flex justify-end">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-primary hover:text-primary hover:bg-primary/10"
-                onClick={() => onContactSub(assignment.subId)}
-              >
-                Contact & Assign <ArrowRight className="h-3.5 w-3.5 ml-1" />
-              </Button>
-            </div>
-          </div>
+            name={assignment.subName}
+            phone={assignment.phone}
+            shiftsCovered={assignment.shiftsCovered}
+            totalShifts={assignment.totalShifts}
+            canCover={assignment.shifts}
+            cannotCover={[]}
+            assigned={[]}
+            conflicts={assignment.conflicts}
+            onContact={() => onContactSub(assignment.subId)}
+          />
         ))}
-      </CardContent>
+      </div>
     </Card>
   )
 }

@@ -8,6 +8,7 @@ interface SubCardHeaderProps {
   shiftsCovered: number
   totalShifts: number
   isDeclined?: boolean
+  showCoverage?: boolean
 }
 
 export default function SubCardHeader({
@@ -16,6 +17,7 @@ export default function SubCardHeader({
   shiftsCovered,
   totalShifts,
   isDeclined = false,
+  showCoverage = true,
 }: SubCardHeaderProps) {
   const coveredSegments = Math.min(shiftsCovered, totalShifts)
 
@@ -36,49 +38,51 @@ export default function SubCardHeader({
           )}
         </div>
       </div>
-      <div className="text-right flex flex-col items-end">
-        {isDeclined ? (
-          <p className="text-xs text-muted-foreground">
-            Declined all shifts
-          </p>
-        ) : (
-          <>
-            <div className="mb-1.5">
-              <div className="h-2 min-w-[64px] rounded-full overflow-hidden flex gap-0.5">
-                {totalShifts === 0 ? (
-                  <div
-                    className="h-full w-[14px] rounded border"
-                    style={{
-                      backgroundColor: '#d1d5db',
-                      borderColor: '#d1d5db',
-                    }}
-                  />
-                ) : (
-                  Array.from({ length: totalShifts }).map((_, index) => {
-                    const colors =
-                      index < coveredSegments
-                        ? { backgroundColor: '#a7f3d0', borderColor: '#a7f3d0' }
-                        : { backgroundColor: '#d1d5db', borderColor: '#d1d5db' }
-                    return (
-                      <div
-                        key={`segment-${index}`}
-                        className="h-full rounded border"
-                        style={{
-                          width: '14px',
-                          ...colors,
-                        }}
-                      />
-                    )
-                  })
-                )}
-              </div>
-            </div>
+      {showCoverage && (
+        <div className="text-right flex flex-col items-end">
+          {isDeclined ? (
             <p className="text-xs text-muted-foreground">
-              {shiftsCovered}/{totalShifts} remaining shifts
+              Declined all shifts
             </p>
-          </>
-        )}
-      </div>
+          ) : (
+            <>
+              <div className="mb-1.5">
+                <div className="h-2 min-w-[64px] rounded-full overflow-hidden flex gap-0.5">
+                  {totalShifts === 0 ? (
+                    <div
+                      className="h-full w-[14px] rounded border"
+                      style={{
+                        backgroundColor: '#d1d5db',
+                        borderColor: '#d1d5db',
+                      }}
+                    />
+                  ) : (
+                    Array.from({ length: totalShifts }).map((_, index) => {
+                      const colors =
+                        index < coveredSegments
+                          ? { backgroundColor: '#a7f3d0', borderColor: '#a7f3d0' }
+                          : { backgroundColor: '#d1d5db', borderColor: '#d1d5db' }
+                      return (
+                        <div
+                          key={`segment-${index}`}
+                          className="h-full rounded border"
+                          style={{
+                            width: '14px',
+                            ...colors,
+                          }}
+                        />
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {shiftsCovered}/{totalShifts} remaining shifts
+              </p>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

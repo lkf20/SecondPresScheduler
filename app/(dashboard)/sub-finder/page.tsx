@@ -85,6 +85,15 @@ export default function SubFinderPage() {
   >([])
   const [endDateCorrected, setEndDateCorrected] = useState(false)
   const justCorrectedRef = useRef(false)
+  const selectedClassrooms = selectedAbsence
+    ? Array.from(
+        new Set(
+          selectedAbsence.shifts.shift_details
+            .map((shift) => shift.classroom_name)
+            .filter((name): name is string => Boolean(name))
+        )
+      )
+    : []
 
   // Fetch absences on mount and when filters change
   useEffect(() => {
@@ -515,10 +524,10 @@ export default function SubFinderPage() {
         {/* Fixed Header Bar */}
         {selectedAbsence && (
           <>
-            <div className="sticky top-0 z-10 border-b bg-white">
-              <div className="px-6 pt-4 pb-4">
+            <div className="sticky top-0 z-10 border-b bg-white shadow-sm">
+              <div className="px-6 pt-4 pb-3">
                 {/* Header Row */}
-                <div className="mb-3">
+                <div className="mb-2">
                   <h2 className="text-xl font-semibold flex items-center gap-2">
                     <span>Sub Finder</span>
                     <span className="text-muted-foreground">→</span>
@@ -542,11 +551,12 @@ export default function SubFinderPage() {
                       })()}
                     </span>
                   </h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {includeOnlyRecommended
-                      ? 'Sorted by coverage percentage (highest first)'
-                      : 'Showing all subs with coverage details'}
-                  </p>
+                  {selectedClassrooms.length > 0 && (
+                    <div className="text-base text-muted-foreground">
+                      {selectedClassrooms.length === 1 ? 'Classroom' : 'Classrooms'}:{' '}
+                      {selectedClassrooms.join(', ')}
+                    </div>
+                  )}
                 </div>
 
                 {/* Toolbar Row */}
@@ -667,13 +677,6 @@ export default function SubFinderPage() {
               </div>
             </div>
 
-            {/* Coverage Summary - sticky below header */}
-            {selectedAbsence.shifts.total > 0 && (
-              <CoverageSummary
-                shifts={selectedAbsence.shifts}
-                onShiftClick={handleShiftClick}
-              />
-            )}
           </>
         )}
 
@@ -681,6 +684,14 @@ export default function SubFinderPage() {
         <div className="flex-1 overflow-y-auto">
           {selectedAbsence ? (
             <div className="p-4">
+              {selectedAbsence.shifts.total > 0 && (
+                <div className="mb-4">
+                  <CoverageSummary
+                    shifts={selectedAbsence.shifts}
+                    onShiftClick={handleShiftClick}
+                  />
+                </div>
+              )}
               {/* Recommended Combination Section */}
               {recommendedCombination && (
                 <RecommendedCombination

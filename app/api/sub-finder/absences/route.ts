@@ -12,6 +12,38 @@ export async function GET(request: NextRequest) {
     
     // Fetch all time off requests with teacher info
     const timeOffRequests = await getTimeOffRequests()
+
+    const teacherIds = Array.from(
+      new Set(
+        timeOffRequests
+          .map((request) => request.teacher_id)
+          .filter((id): id is string => Boolean(id))
+      )
+    )
+
+    const scheduleLookup = new Map<
+      string,
+      { classrooms: Set<string>; classes: Set<string> }
+    >()
+
+    if (teacherIds.length > 0) {
+      const { data: teacherSchedules, error: scheduleError } = await supabase
+        .from('teacher_schedules')
+        .select('teacher_id, day_of_week_id, time_slot_id, classroom:classrooms(name), class:class_groups(name)')
+        .in('teacher_id', teacherIds)
+
+      if (scheduleError) {
+        console.error('Error fetching teacher schedules:', scheduleError)
+      } else {
+        ;(teacherSchedules || []).forEach((schedule: any) => {
+          const key = `${schedule.teacher_id}|${schedule.day_of_week_id}|${schedule.time_slot_id}`
+          const entry = scheduleLookup.get(key) || { classrooms: new Set<string>(), classes: new Set<string>() }
+          if (schedule.classroom?.name) entry.classrooms.add(schedule.classroom.name)
+          if (schedule.class?.name) entry.classes.add(schedule.class.name)
+          scheduleLookup.set(key, entry)
+        })
+      }
+    }
     
     // For each request, get shifts and check coverage
     const absencesWithCoverage = await Promise.all(
@@ -93,14 +125,22 @@ export async function GET(request: NextRequest) {
           const key = `${shift.date}|${shift.time_slot_id}`
           const status = coverageMap.get(key) || 'uncovered'
           const assignment = assignmentMap.get(key)
+          const scheduleKey = `${request.teacher_id}|${shift.day_of_week_id}|${shift.time_slot_id}`
+          const scheduleEntry = scheduleLookup.get(scheduleKey)
+          const classroom_name = scheduleEntry?.classrooms?.size
+            ? Array.from(scheduleEntry.classrooms).join(', ')
+            : null
+          const class_name = scheduleEntry?.classes?.size
+            ? Array.from(scheduleEntry.classes).join(', ')
+            : null
           
           return {
             id: shift.id,
             date: shift.date,
             day_name: shift.day_of_week?.name || '',
             time_slot_code: shift.time_slot?.code || '',
-            class_name: null, // TODO: Get from schedule cells
-            classroom_name: null, // TODO: Get from schedule cells
+            class_name,
+            classroom_name,
             status,
             sub_name: assignment?.sub_name || null, // Add sub name for assigned shifts
             is_partial: assignment?.is_partial || false, // Add partial flag
@@ -170,4 +210,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
-
