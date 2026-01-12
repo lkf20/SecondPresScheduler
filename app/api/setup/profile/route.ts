@@ -7,9 +7,12 @@ import { createErrorResponse } from '@/lib/utils/errors'
  * Create a profile entry for the current authenticated user
  * Links the user to the default school
  */
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const supabase = await createClient()
+    const payload = await request.json().catch(() => ({}))
+    const firstName = typeof payload?.first_name === 'string' ? payload.first_name.trim() : null
+    const lastName = typeof payload?.last_name === 'string' ? payload.last_name.trim() : null
 
     // Get current user
     const {
@@ -70,6 +73,8 @@ export async function POST() {
         user_id: user.id,
         school_id: defaultSchool.id,
         role: 'director', // Default role
+        first_name: firstName || null,
+        last_name: lastName || null,
       })
       .select()
       .single()

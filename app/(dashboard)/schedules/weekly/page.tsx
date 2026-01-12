@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import WeeklyScheduleGridNew from '@/components/schedules/WeeklyScheduleGridNew'
 import FilterPanel, { type FilterState } from '@/components/schedules/FilterPanel'
 import ErrorMessage from '@/components/shared/ErrorMessage'
@@ -15,6 +16,11 @@ type TimeSlot = Database['public']['Tables']['time_slots']['Row']
 type Classroom = Database['public']['Tables']['classrooms']['Row']
 
 export default function WeeklySchedulePage() {
+  const searchParams = useSearchParams()
+  const focusClassroomId = searchParams.get('classroom_id')
+  const focusDayId = searchParams.get('day_of_week_id')
+  const focusTimeSlotId = searchParams.get('time_slot_id')
+  const hasAppliedFocusRef = useRef(false)
   const [data, setData] = useState<WeeklyScheduleDataByClassroom[]>([])
   const [selectedDayIds, setSelectedDayIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,6 +50,40 @@ export default function WeeklySchedulePage() {
   const [availableDays, setAvailableDays] = useState<DayOfWeek[]>([])
   const [availableTimeSlots, setAvailableTimeSlots] = useState<TimeSlot[]>([])
   const [availableClassrooms, setAvailableClassrooms] = useState<Classroom[]>([])
+
+  useEffect(() => {
+    if (!focusClassroomId || !focusDayId || !focusTimeSlotId) return
+    if (hasAppliedFocusRef.current) return
+    if (
+      availableDays.length === 0 ||
+      availableTimeSlots.length === 0 ||
+      availableClassrooms.length === 0
+    ) {
+      return
+    }
+
+    setFilters((prev) => ({
+      selectedDayIds: [focusDayId],
+      selectedTimeSlotIds: [focusTimeSlotId],
+      selectedClassroomIds: [focusClassroomId],
+      displayFilters: prev?.displayFilters ?? {
+        belowRequired: true,
+        belowPreferred: true,
+        fullyStaffed: true,
+        inactive: true,
+      },
+      displayMode: prev?.displayMode ?? 'all-scheduled-staff',
+      layout: prev?.layout ?? 'classrooms-x-days',
+    }))
+    hasAppliedFocusRef.current = true
+  }, [
+    focusClassroomId,
+    focusDayId,
+    focusTimeSlotId,
+    availableDays.length,
+    availableTimeSlots.length,
+    availableClassrooms.length,
+  ])
 
   // Save filters to localStorage whenever they change
   useEffect(() => {
@@ -298,6 +338,15 @@ export default function WeeklySchedulePage() {
             onRefresh={() => setRefreshKey(prev => prev + 1)}
             onFilterPanelOpenChange={setFilterPanelOpen}
             filterPanelOpen={filterPanelOpen}
+            initialSelectedCell={
+              focusClassroomId && focusDayId && focusTimeSlotId
+                ? {
+                    classroomId: focusClassroomId,
+                    dayId: focusDayId,
+                    timeSlotId: focusTimeSlotId,
+                  }
+                : null
+            }
           />
           <FilterPanel
             isOpen={filterPanelOpen}

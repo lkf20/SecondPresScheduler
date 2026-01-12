@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createErrorResponse, getErrorMessage } from '@/lib/utils/errors'
 import { createAuditLog } from '@/lib/api/audit-logs'
+import { revalidatePath } from 'next/cache'
 
 /**
  * POST /api/sub-finder/assign-shifts
@@ -165,7 +166,7 @@ export async function POST(request: NextRequest) {
         `)
         .in('id', shiftIds)
 
-      if (shiftDetails) {
+    if (shiftDetails) {
         assignedShiftDetails.push(
           ...shiftDetails.map((shift: any) => ({
             coverage_request_shift_id: shift.id,
@@ -176,6 +177,8 @@ export async function POST(request: NextRequest) {
         )
       }
     }
+
+    revalidatePath('/dashboard')
 
     return NextResponse.json({
       success: true,
@@ -189,4 +192,3 @@ export async function POST(request: NextRequest) {
     return createErrorResponse(getErrorMessage(error), 500)
   }
 }
-

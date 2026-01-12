@@ -1,6 +1,5 @@
-import Link from 'next/link'
 import { headers } from 'next/headers'
-import { Card, CardContent } from '@/components/ui/card'
+import DashboardClient from './DashboardClient'
 
 const toDateString = (date: Date) => {
   const year = date.getFullYear()
@@ -15,10 +14,8 @@ const addDays = (date: Date, days: number) => {
   return next
 }
 
-const formatRangeLabel = (start: Date, end: Date) =>
-  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(start) +
-  ' - ' +
-  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(end)
+const formatRangeLabel = (date: Date) =>
+  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
 
 const getBaseUrl = async () => {
   const headerList = await headers()
@@ -28,22 +25,30 @@ const getBaseUrl = async () => {
   return `${protocol}://${host}`
 }
 
-const fetchSummary = async (startDate: string, endDate: string) => {
+const fetchOverview = async (startDate: string, endDate: string) => {
   const baseUrl = await getBaseUrl()
+  const headerList = await headers()
+  const cookie = headerList.get('cookie')
   const url = baseUrl
-    ? `${baseUrl}/api/dashboard/coverage-summary?start_date=${startDate}&end_date=${endDate}`
-    : `/api/dashboard/coverage-summary?start_date=${startDate}&end_date=${endDate}`
-  const response = await fetch(url, { cache: 'no-store' })
+    ? `${baseUrl}/api/dashboard/overview?start_date=${startDate}&end_date=${endDate}`
+    : `/api/dashboard/overview?start_date=${startDate}&end_date=${endDate}`
+  const response = await fetch(url, {
+    cache: 'no-store',
+    headers: cookie ? { cookie } : undefined,
+  })
   const contentType = response.headers.get('content-type') || ''
-  if (!response.ok || !contentType.includes('application/json')) {
+  if (!contentType.includes('application/json')) {
+    const fallbackText = await response.text().catch(() => '')
+    const snippet = fallbackText.trim().slice(0, 200)
     return {
-      absences: 0,
-      uncovered_shifts: 0,
-      partially_covered_shifts: 0,
-      scheduled_subs: 0,
+      error: `Dashboard data response was not JSON. Status ${response.status}. Content-Type ${contentType || 'unknown'}. URL ${response.url || url}. ${snippet || 'No body.'}`,
     }
   }
-  return response.json()
+  const data = await response.json()
+  if (!response.ok) {
+    return { error: data?.error || `Failed to load dashboard data. Status ${response.status}.` }
+  }
+  return data
 }
 
 export default async function DashboardPage() {
@@ -51,64 +56,25 @@ export default async function DashboardPage() {
   const startDate = toDateString(today)
   const endDateDate = addDays(today, 13)
   const endDate = toDateString(endDateDate)
-  const summary = await fetchSummary(startDate, endDate)
-  const rangeLabel = formatRangeLabel(today, endDateDate)
-
-  const summaryItems = [
-    {
-      label: 'Uncovered shifts',
-      count: summary.uncovered_shifts ?? 0,
-      href: '#uncovered-shifts',
-    },
-    {
-      label: 'Partially covered',
-      count: summary.partially_covered_shifts ?? 0,
-      href: '#partially-covered',
-    },
-    {
-      label: 'Absences',
-      count: summary.absences ?? 0,
-      href: '#absences',
-    },
-    {
-      label: 'Scheduled subs',
-      count: summary.scheduled_subs ?? 0,
-      href: '#scheduled-subs',
-    },
-  ]
+  const overview = await fetchOverview(startDate, endDate)
+  const rangeStartLabel = formatRangeLabel(today)
+  const rangeEndLabel = formatRangeLabel(endDateDate)
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-      </div>
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-700">
-            Coverage outlook: {rangeLabel}
-          </h2>
+      {overview && !('error' in overview) ? (
+        <DashboardClient
+          overview={overview}
+          rangeStartLabel={rangeStartLabel}
+          rangeEndLabel={rangeEndLabel}
+        />
+      ) : (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+          {overview && 'error' in overview
+            ? overview.error
+            : 'Dashboard data is unavailable right now. Please try again.'}
         </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {summaryItems.map((item) => (
-            <Link key={item.label} href={item.href} className="block">
-              <Card className="hover:bg-accent transition-colors">
-                <CardContent className="p-4">
-                  <div className="text-xs text-muted-foreground">{item.label}</div>
-                  <div className="text-2xl font-semibold text-slate-900 mt-1">{item.count}</div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <section className="mt-10 space-y-8">
-        <div id="uncovered-shifts" className="min-h-[80px]" />
-        <div id="partially-covered" className="min-h-[80px]" />
-        <div id="absences" className="min-h-[80px]" />
-        <div id="scheduled-subs" className="min-h-[80px]" />
-      </section>
+      )}
     </div>
   )
 }

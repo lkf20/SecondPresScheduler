@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
 import ScheduleCell from './ScheduleCell'
 import ScheduleSidePanel from './ScheduleSidePanel'
@@ -13,6 +13,11 @@ interface WeeklyScheduleGridNewProps {
   onRefresh?: () => void
   onFilterPanelOpenChange?: (open: boolean) => void
   filterPanelOpen?: boolean
+  initialSelectedCell?: {
+    classroomId: string
+    dayId: string
+    timeSlotId: string
+  } | null
 }
 
 type WeeklyScheduleCellData = WeeklyScheduleData & {
@@ -80,6 +85,7 @@ export default function WeeklyScheduleGridNew({
   onRefresh,
   onFilterPanelOpenChange,
   filterPanelOpen = false,
+  initialSelectedCell = null,
 }: WeeklyScheduleGridNewProps) {
   const [selectedCell, setSelectedCell] = useState<{
     dayId: string
@@ -157,6 +163,35 @@ export default function WeeklyScheduleGridNew({
 
     return { days: daysArray, timeSlots: timeSlotsArray }
   }, [data, selectedDayIds])
+
+  const hasAppliedInitialSelection = useRef(false)
+
+  useEffect(() => {
+    if (!initialSelectedCell || hasAppliedInitialSelection.current) return
+    const classroom = data.find((c) => c.classroom_id === initialSelectedCell.classroomId)
+    if (!classroom) return
+    const day = classroom.days.find((d) => d.day_of_week_id === initialSelectedCell.dayId)
+    if (!day) return
+    const timeSlotMeta = timeSlots.find((ts) => ts.id === initialSelectedCell.timeSlotId)
+    const timeSlotFromData = day.time_slots.find(
+      (ts) => ts.time_slot_id === initialSelectedCell.timeSlotId
+    )
+    const timeSlotCode = timeSlotMeta?.code || timeSlotFromData?.time_slot_code || ''
+    const timeSlotName = timeSlotMeta?.name || timeSlotFromData?.time_slot_name || timeSlotCode
+
+    setSelectedCell({
+      dayId: day.day_of_week_id,
+      dayName: day.day_name,
+      timeSlotId: initialSelectedCell.timeSlotId,
+      timeSlotName: timeSlotName || '',
+      timeSlotCode,
+      timeSlotStartTime: timeSlotMeta?.default_start_time || null,
+      timeSlotEndTime: timeSlotMeta?.default_end_time || null,
+      classroomId: classroom.classroom_id,
+      classroomName: classroom.classroom_name,
+    })
+    hasAppliedInitialSelection.current = true
+  }, [initialSelectedCell, data, timeSlots])
 
   const handleCellClick = (
     dayId: string,

@@ -3,9 +3,11 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, CircleDot, PieChart } from 'lucide-react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import CoverageStatusPill from '@/components/ui/coverage-status-pill'
 import { parseLocalDate } from '@/lib/utils/date'
+import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 
 type ClassroomBadge = {
   id: string
@@ -75,24 +77,7 @@ export default function TimeOffListClient({
     return `${startLabel} - ${endLabel} (${startDay} - ${endDay})`
   }
 
-  const formatClassroomStyle = (color: string | null) => {
-    if (!color) return {}
-    const hex = color.trim()
-    if (!hex.startsWith('#') || (hex.length !== 7 && hex.length !== 4)) {
-      return { backgroundColor: color, borderColor: color, color }
-    }
-    const normalized = hex.length === 4
-      ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
-      : hex
-    const r = parseInt(normalized.slice(1, 3), 16)
-    const g = parseInt(normalized.slice(3, 5), 16)
-    const b = parseInt(normalized.slice(5, 7), 16)
-    return {
-      backgroundColor: `rgba(${r}, ${g}, ${b}, 0.12)`,
-      borderColor: `rgba(${r}, ${g}, ${b}, 0.3)`,
-      color: normalized,
-    }
-  }
+  const formatClassroomStyle = (color: string | null) => getClassroomPillStyle(color)
 
   const handleDeleteDraft = async (id: string) => {
     if (!confirm('Delete this draft?')) return
@@ -108,50 +93,13 @@ export default function TimeOffListClient({
     }
   }
   const renderCoverageBadge = (row: TimeOffRow) => {
-    const status = row.coverage_status
-    switch (status) {
-      case 'draft':
-        return (
-          <span className="inline-flex items-center gap-1 rounded-full border border-yellow-200 bg-yellow-50 px-3 py-1 text-xs font-semibold text-yellow-700">
-            <CircleDot className="h-3.5 w-3.5" />
-            Draft
-          </span>
-        )
-      case 'completed':
-        return (
-          <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            Completed
-          </span>
-        )
-      case 'covered':
-        return (
-          <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            Covered
-          </span>
-        )
-      case 'partially_covered':
-        return (
-          <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 border-dashed bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-            <PieChart className="h-3.5 w-3.5" />
-            Partially covered ({row.coverage_covered} of {row.coverage_total})
-          </span>
-        )
-      case 'needs_coverage':
-        return (
-          <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-            <AlertTriangle className="h-3.5 w-3.5" />
-            Needs coverage
-          </span>
-        )
-      default:
-        return (
-          <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-            — 
-          </span>
-        )
-    }
+    return (
+      <CoverageStatusPill
+        status={row.coverage_status}
+        coveredCount={row.coverage_covered}
+        totalCount={row.coverage_total}
+      />
+    )
   }
 
   const renderActions = (row: TimeOffRow) => {

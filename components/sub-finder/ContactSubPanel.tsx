@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetHeader,
   SheetTitle,
@@ -13,7 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Phone, Mail, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
+import { Phone, Mail, AlertTriangle, ChevronDown, ChevronUp, X } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -210,6 +211,13 @@ export default function ContactSubPanel({
       return
     }
 
+    if (absence.id.startsWith('manual-')) {
+      setCoverageRequestId(null)
+      setShiftMap({})
+      setFetching(false)
+      return
+    }
+
     // No cached data - fetch it
     const fetchContactData = async () => {
       setFetching(true)
@@ -221,7 +229,10 @@ export default function ContactSubPanel({
         ])
 
         if (!coverageResponse.ok) {
-          console.error('Failed to fetch coverage request')
+          const errorBody = await coverageResponse.text().catch(() => '')
+          console.error(
+            `Failed to fetch coverage request: status=${coverageResponse.status} statusText=${coverageResponse.statusText} url=${coverageResponse.url} body=${errorBody.slice(0, 200)}`
+          )
           setFetching(false)
           return
         }
@@ -442,8 +453,17 @@ export default function ContactSubPanel({
     // If panel is open but no data, show empty state with proper title
     return (
       <Sheet open={isOpen} onOpenChange={onClose}>
-        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto bg-gray-50 p-0">
-          <div className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 px-6 pt-6 pb-4">
+        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto bg-gray-50 p-0 [&>button]:hidden">
+          <div className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 px-6 pt-6 pb-4 relative">
+            <SheetClose asChild>
+              <button
+                type="button"
+                className="absolute right-6 top-6 inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:text-slate-700 hover:bg-white"
+              >
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </button>
+            </SheetClose>
             <SheetHeader>
               <SheetTitle>Contact Sub</SheetTitle>
             </SheetHeader>
@@ -1027,8 +1047,17 @@ export default function ContactSubPanel({
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto bg-gray-50 p-0">
-        <div className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 px-6 pt-6 pb-4">
+      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto bg-gray-50 p-0 [&>button]:hidden">
+        <div className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 px-6 pt-6 pb-4 relative">
+          <SheetClose asChild>
+            <button
+              type="button"
+              className="absolute right-6 top-6 inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:text-slate-700 hover:bg-white"
+            >
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </button>
+          </SheetClose>
           <SheetHeader className="text-left">
             <SheetTitle className="text-2xl mb-1">{sub.name}</SheetTitle>
             <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">

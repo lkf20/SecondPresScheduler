@@ -151,6 +151,9 @@ export default function SubFinderPage() {
 
   // Fetch contact data for a sub/absence combination
   const fetchContactDataForSub = async (sub: SubCandidate, absence: Absence) => {
+    if (absence.id.startsWith('manual-')) {
+      return null
+    }
     const cacheKey = getCacheKey(sub.id, absence.id)
     
     // Check cache first
@@ -162,7 +165,10 @@ export default function SubFinderPage() {
       // Get coverage_request_id first
       const coverageResponse = await fetch(`/api/sub-finder/coverage-request/${absence.id}`)
       if (!coverageResponse.ok) {
-        console.error('Failed to fetch coverage request')
+        const errorBody = await coverageResponse.text().catch(() => '')
+        console.error(
+          `Failed to fetch coverage request: status=${coverageResponse.status} statusText=${coverageResponse.statusText} url=${coverageResponse.url} body=${errorBody.slice(0, 200)}`
+        )
         return null
       }
       
