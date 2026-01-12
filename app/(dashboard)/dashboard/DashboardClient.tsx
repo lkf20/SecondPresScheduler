@@ -248,7 +248,7 @@ export default function DashboardClient({
   )
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-10 rounded-2xl bg-slate-50/70 p-6">
       <section className="space-y-2">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
@@ -296,362 +296,376 @@ export default function DashboardClient({
         </div>
       </section>
 
-      <section
-        ref={coverageRef}
-        className={cn(
-          'space-y-4',
-          (activeSection === 'uncovered' ||
-            activeSection === 'partial' ||
-            activeSection === 'absences') &&
-            'rounded-lg border border-slate-200 bg-slate-50/60 p-4'
-        )}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-slate-900">
-              Upcoming Time Off & Coverage
-            </h2>
-            <button
-              type="button"
-              onClick={() => setCoverageCollapsed((prev) => !prev)}
-              aria-label={
-                coverageCollapsed ? 'Expand coverage overview' : 'Collapse coverage overview'
-              }
-              className="text-slate-500 transition hover:text-slate-700"
-            >
-              <ChevronUp
-                className={cn('h-4 w-4 transition-transform', coverageCollapsed && 'rotate-180')}
-              />
-            </button>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
-            <button
-              type="button"
-              onClick={() => setCoverageFilter('needs')}
-              className={cn(
-                'rounded-full border px-3 py-1 transition',
-                coverageFilter === 'needs'
-                  ? 'border-slate-300 bg-white text-slate-900'
-                  : 'border-slate-200 bg-slate-50 hover:bg-white'
-              )}
-            >
-              Needs a Sub ({coverageCounts.needs})
-            </button>
-            <button
-              type="button"
-              onClick={() => setCoverageFilter('covered')}
-              className={cn(
-                'rounded-full border px-3 py-1 transition',
-                coverageFilter === 'covered'
-                  ? 'border-slate-300 bg-white text-slate-900'
-                  : 'border-slate-200 bg-slate-50 hover:bg-white'
-              )}
-            >
-              Covered ({coverageCounts.covered})
-            </button>
-            <button
-              type="button"
-              onClick={() => setCoverageFilter('all')}
-              className={cn(
-                'rounded-full border px-3 py-1 transition',
-                coverageFilter === 'all'
-                  ? 'border-slate-300 bg-white text-slate-900'
-                  : 'border-slate-200 bg-slate-50 hover:bg-white'
-              )}
-            >
-              All ({coverageCounts.all})
-            </button>
-          </div>
-        </div>
-
-        {!coverageCollapsed &&
-          (filteredCoverageRequests.length === 0 ? (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 max-w-2xl">
-              No upcoming time off in the next 14 days
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section
+          ref={coverageRef}
+          className={cn(
+            'space-y-4 rounded-xl border border-slate-200 bg-white p-5',
+            (activeSection === 'uncovered' ||
+              activeSection === 'partial' ||
+              activeSection === 'absences') &&
+              'ring-1 ring-slate-200'
+          )}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-slate-900">
+                Upcoming Time Off & Coverage
+              </h2>
+              <button
+                type="button"
+                onClick={() => setCoverageCollapsed((prev) => !prev)}
+                aria-label={
+                  coverageCollapsed ? 'Expand coverage overview' : 'Collapse coverage overview'
+                }
+                className="text-slate-500 transition hover:text-slate-700"
+              >
+                <ChevronUp
+                  className={cn('h-4 w-4 transition-transform', coverageCollapsed && 'rotate-180')}
+                />
+              </button>
             </div>
-          ) : (
-            <div className="space-y-3 max-w-2xl">
-              {filteredCoverageRequests.map((request) => (
-                <div
-                  key={request.id}
-                  className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3"
-                >
-                  <div className="min-w-[200px] space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="text-base font-semibold text-slate-900">
-                        {request.teacher_name}
-                      </div>
-                      {request.reason && (
-                        <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                          {request.reason}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-sm text-slate-600">
-                      {formatDateRange(request.start_date, request.end_date)}
-                    </div>
-                    {request.classrooms?.length ? (
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {request.classrooms.map((classroom) => (
-                          <span
-                            key={classroom.id}
-                            className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold"
-                            style={getClassroomPillStyle(classroom.color)}
-                          >
-                            {classroom.name}
-                          </span>
-                        ))}
-                        {request.classrooms.length > 1 && (
-                          <span className="text-[11px] text-slate-500">
-                            (varies by shift)
+            <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
+              <button
+                type="button"
+                onClick={() => setCoverageFilter('needs')}
+                className={cn(
+                  'rounded-full border px-3 py-1 transition',
+                  coverageFilter === 'needs'
+                    ? 'border-slate-300 bg-white text-slate-900'
+                    : 'border-slate-200 bg-slate-50 hover:bg-white'
+                )}
+              >
+                Needs a Sub ({coverageCounts.needs})
+              </button>
+              <button
+                type="button"
+                onClick={() => setCoverageFilter('covered')}
+                className={cn(
+                  'rounded-full border px-3 py-1 transition',
+                  coverageFilter === 'covered'
+                    ? 'border-slate-300 bg-white text-slate-900'
+                    : 'border-slate-200 bg-slate-50 hover:bg-white'
+                )}
+              >
+                Covered ({coverageCounts.covered})
+              </button>
+              <button
+                type="button"
+                onClick={() => setCoverageFilter('all')}
+                className={cn(
+                  'rounded-full border px-3 py-1 transition',
+                  coverageFilter === 'all'
+                    ? 'border-slate-300 bg-white text-slate-900'
+                    : 'border-slate-200 bg-slate-50 hover:bg-white'
+                )}
+              >
+                All ({coverageCounts.all})
+              </button>
+            </div>
+          </div>
+
+          {!coverageCollapsed &&
+            (filteredCoverageRequests.length === 0 ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                No upcoming time off in the next 14 days
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredCoverageRequests.map((request) => (
+                  <div
+                    key={request.id}
+                    className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3"
+                  >
+                    <div className="min-w-[200px] space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-base font-semibold text-slate-900">
+                          {request.teacher_name}
+                        </div>
+                        {request.reason && (
+                          <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                            {request.reason}
                           </span>
                         )}
                       </div>
-                    ) : (
-                      <div className="text-xs text-slate-500">{request.classroom_label}</div>
-                    )}
-                  </div>
-                  <div className="flex min-w-[200px] flex-col items-center gap-2 text-center">
-                    <CoverageStatusPill status={request.status} />
-                    <div className="text-xs text-slate-600">
-                      {request.status === 'covered'
-                        ? 'All shifts covered'
-                        : request.status === 'needs_coverage'
-                        ? `${request.total_shifts} shifts need coverage`
-                        : `${request.remaining_shifts} of ${request.total_shifts} shifts need coverage`}
-                    </div>
-                  </div>
-                  <div className="flex flex-1 items-center justify-end gap-3">
-                    {request.status !== 'covered' && (
-                      <Button asChild size="sm" variant="outline" className="border-slate-500 text-slate-900 hover:bg-slate-50">
-                        <Link href={`/sub-finder?absence_id=${request.id}`}>
-                          Find Sub
-                        </Link>
-                      </Button>
-                    )}
-                    <Link
-                      href={`/time-off/${request.id}`}
-                      className="text-sm font-semibold text-slate-700 hover:text-slate-900"
-                    >
-                      View
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ))}
-      </section>
-
-      <section
-        ref={scheduledRef}
-        className={cn(
-          'space-y-4',
-          activeSection === 'scheduled' && 'rounded-lg border border-slate-200 bg-slate-50/60 p-4'
-        )}
-      >
-        <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold text-slate-900">Scheduled Subs</h2>
-          <button
-            type="button"
-            onClick={() => setScheduledCollapsed((prev) => !prev)}
-            aria-label={scheduledCollapsed ? 'Expand scheduled subs' : 'Collapse scheduled subs'}
-            className="text-slate-500 transition hover:text-slate-700"
-          >
-            <ChevronUp
-              className={cn('h-4 w-4 transition-transform', scheduledCollapsed && 'rotate-180')}
-            />
-          </button>
-        </div>
-
-        {!scheduledCollapsed &&
-          (overview.scheduled_subs.length === 0 ? (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 max-w-2xl">
-              No subs scheduled in the next 14 days
-            </div>
-          ) : (
-            <div className="space-y-3 max-w-2xl">
-              {overview.scheduled_subs.map((assignment) => (
-                <div
-                  key={assignment.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3"
-                >
-                  <div className="space-y-1">
-                    <div className="text-base font-semibold text-slate-900">
-                      {assignment.sub_name}
-                    </div>
-                    <div className="text-sm text-slate-600">
-                      {formatDayTime(
-                        assignment.day_name,
-                        assignment.date,
-                        assignment.time_slot_code
+                      <div className="text-sm text-slate-600">
+                        {formatDateRange(request.start_date, request.end_date)}
+                      </div>
+                      {request.classrooms?.length ? (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {request.classrooms.map((classroom) => (
+                            <span
+                              key={classroom.id}
+                              className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold"
+                              style={getClassroomPillStyle(classroom.color)}
+                            >
+                              {classroom.name}
+                            </span>
+                          ))}
+                          {request.classrooms.length > 1 && (
+                            <span className="text-[11px] text-slate-500">
+                              (varies by shift)
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-500">{request.classroom_label}</div>
                       )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                      <span
-                        className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold"
-                        style={getClassroomPillStyle(assignment.classroom_color)}
+                    <div className="flex min-w-[200px] flex-col items-center gap-2 text-center">
+                      <CoverageStatusPill status={request.status} />
+                      <div className="text-xs text-slate-600">
+                        {request.status === 'covered'
+                          ? 'All shifts covered'
+                          : request.status === 'needs_coverage'
+                          ? `${request.total_shifts} shifts need coverage`
+                          : `${request.remaining_shifts} of ${request.total_shifts} shifts need coverage`}
+                      </div>
+                    </div>
+                    <div className="flex flex-1 items-center justify-end gap-3">
+                      {request.status !== 'covered' && (
+                        <Button
+                          asChild
+                          size="sm"
+                          variant="outline"
+                          className="border-slate-500 text-slate-900 hover:bg-slate-50"
+                        >
+                          <Link href={`/sub-finder?absence_id=${request.id}`}>
+                            Find Sub
+                          </Link>
+                        </Button>
+                      )}
+                      <Link
+                        href={`/time-off/${request.id}`}
+                        className="text-sm font-semibold text-slate-700 hover:text-slate-900"
                       >
-                        {assignment.classroom_name}
-                      </span>
-                      <span>Covering {assignment.teacher_name}</span>
+                        View
+                      </Link>
                     </div>
                   </div>
-                  <div className="flex w-full justify-end sm:w-auto">
-                    <Button asChild size="sm" variant="outline" className="border-slate-500 text-slate-900 hover:bg-slate-50">
-                      <Link href={`/schedules/weekly?sub_assignment_id=${assignment.id}`}>
-                        Update Sub
-                      </Link>
-                    </Button>
+                ))}
+              </div>
+            ))}
+        </section>
+
+        <div className="space-y-6">
+          <section
+            ref={scheduledRef}
+            className={cn(
+              'space-y-4 rounded-xl border border-slate-200 bg-white p-5',
+              activeSection === 'scheduled' && 'ring-1 ring-slate-200'
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-slate-900">Scheduled Subs</h2>
+              <button
+                type="button"
+                onClick={() => setScheduledCollapsed((prev) => !prev)}
+                aria-label={scheduledCollapsed ? 'Expand scheduled subs' : 'Collapse scheduled subs'}
+                className="text-slate-500 transition hover:text-slate-700"
+              >
+                <ChevronUp
+                  className={cn('h-4 w-4 transition-transform', scheduledCollapsed && 'rotate-180')}
+                />
+              </button>
+            </div>
+
+            {!scheduledCollapsed &&
+              (overview.scheduled_subs.length === 0 ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                  No subs scheduled in the next 14 days
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {overview.scheduled_subs.map((assignment) => (
+                    <div
+                      key={assignment.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3"
+                    >
+                      <div className="space-y-1">
+                        <div className="text-base font-semibold text-slate-900">
+                          {assignment.sub_name}
+                        </div>
+                        <div className="text-sm text-slate-600">
+                          {formatDayTime(
+                            assignment.day_name,
+                            assignment.date,
+                            assignment.time_slot_code
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                          <span
+                            className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold"
+                            style={getClassroomPillStyle(assignment.classroom_color)}
+                          >
+                            {assignment.classroom_name}
+                          </span>
+                          <span>Covering {assignment.teacher_name}</span>
+                        </div>
+                      </div>
+                      <div className="flex w-full justify-end sm:w-auto">
+                        <Button
+                          asChild
+                          size="sm"
+                          variant="outline"
+                          className="border-slate-500 text-slate-900 hover:bg-slate-50"
+                        >
+                          <Link href={`/schedules/weekly?sub_assignment_id=${assignment.id}`}>
+                            Update Sub
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+          </section>
+
+          <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-slate-900">Below Staffing Target</h2>
+              <button
+                type="button"
+                onClick={() => setStaffingCollapsed((prev) => !prev)}
+                aria-label={
+                  staffingCollapsed ? 'Expand staffing targets' : 'Collapse staffing targets'
+                }
+                className="text-slate-500 transition hover:text-slate-700"
+              >
+                <ChevronUp
+                  className={cn('h-4 w-4 transition-transform', staffingCollapsed && 'rotate-180')}
+                />
+              </button>
+            </div>
+
+            {!staffingCollapsed &&
+              (overview.staffing_targets.length === 0 ? (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                  ✅ All classrooms meet staffing targets for the next 14 days
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Below Required ({belowRequiredGroups.reduce((total, group) => total + group.slots.length, 0)})
+                    </div>
+                    {belowRequiredGroups.length === 0 ? (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                        All slots meet required staffing ratios.
+                      </div>
+                    ) : (
+                      belowRequiredGroups.map((classroom) => (
+                        <div key={classroom.classroom_name} className="space-y-2">
+                          <div>
+                            <span
+                              className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                              style={getClassroomPillStyle(classroom.classroom_color)}
+                            >
+                              {classroom.classroom_name} ({classroom.slots.length})
+                            </span>
+                          </div>
+                          {classroom.slots.map((slot) => (
+                            <div
+                              key={slot.id}
+                              className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3"
+                            >
+                              <div className="min-w-[180px] space-y-1">
+                                <div className="text-sm font-semibold text-slate-900">
+                                  {formatSlotLabel(slot.day_name, slot.time_slot_code)}
+                                </div>
+                              </div>
+                              <div className="flex min-w-[190px] flex-col items-start gap-2">
+                              <div className="text-xs text-slate-600">
+                                Required: {slot.required_staff} · Scheduled: {slot.scheduled_staff}
+                              </div>
+                                <span
+                                  className={cn(
+                                    'rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                                    staffingBadge(slot.status)
+                                  )}
+                                >
+                                  Below Required
+                                </span>
+                              </div>
+                              <div className="flex flex-1 items-center justify-end">
+                                <Button asChild size="sm" variant="outline">
+                                  <Link
+                                    href={`/schedules/weekly?classroom_id=${slot.classroom_id}&day_of_week_id=${slot.day_of_week_id}&time_slot_id=${slot.time_slot_id}`}
+                                  >
+                                    Add Coverage
+                                  </Link>
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Below Preferred ({belowPreferredGroups.reduce((total, group) => total + group.slots.length, 0)})
+                    </div>
+                    {belowPreferredGroups.length === 0 ? (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                        All slots meet preferred staffing ratios.
+                      </div>
+                    ) : (
+                      belowPreferredGroups.map((classroom) => (
+                        <div key={classroom.classroom_name} className="space-y-2">
+                          <div>
+                            <span
+                              className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                              style={getClassroomPillStyle(classroom.classroom_color)}
+                            >
+                              {classroom.classroom_name} ({classroom.slots.length})
+                            </span>
+                          </div>
+                          {classroom.slots.map((slot) => (
+                            <div
+                              key={slot.id}
+                              className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3"
+                            >
+                              <div className="min-w-[180px] space-y-1">
+                                <div className="text-sm font-semibold text-slate-900">
+                                  {formatSlotLabel(slot.day_name, slot.time_slot_code)}
+                                </div>
+                              </div>
+                              <div className="flex min-w-[190px] flex-col items-start gap-2">
+                              <div className="text-xs text-slate-600">
+                                Preferred: {slot.preferred_staff ?? slot.required_staff} · Scheduled:{' '}
+                                {slot.scheduled_staff}
+                              </div>
+                                <span
+                                  className={cn(
+                                    'rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                                    staffingBadge(slot.status)
+                                  )}
+                                >
+                                  Below Preferred
+                                </span>
+                              </div>
+                              <div className="flex flex-1 items-center justify-end">
+                                <Button asChild size="sm" variant="outline">
+                                  <Link
+                                    href={`/schedules/weekly?classroom_id=${slot.classroom_id}&day_of_week_id=${slot.day_of_week_id}&time_slot_id=${slot.time_slot_id}`}
+                                  >
+                                    Add Coverage
+                                  </Link>
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               ))}
-            </div>
-          ))}
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold text-slate-900">Below Staffing Target</h2>
-          <button
-            type="button"
-            onClick={() => setStaffingCollapsed((prev) => !prev)}
-            aria-label={
-              staffingCollapsed ? 'Expand staffing targets' : 'Collapse staffing targets'
-            }
-            className="text-slate-500 transition hover:text-slate-700"
-          >
-            <ChevronUp
-              className={cn('h-4 w-4 transition-transform', staffingCollapsed && 'rotate-180')}
-            />
-          </button>
+          </section>
         </div>
-
-        {!staffingCollapsed &&
-          (overview.staffing_targets.length === 0 ? (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 max-w-2xl">
-              ✅ All classrooms meet staffing targets for the next 14 days
-            </div>
-          ) : (
-            <div className="space-y-4 max-w-2xl">
-              <div className="space-y-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Below Required ({belowRequiredGroups.reduce((total, group) => total + group.slots.length, 0)})
-                </div>
-                {belowRequiredGroups.length === 0 ? (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                    All slots meet required staffing ratios.
-                  </div>
-                ) : (
-                  belowRequiredGroups.map((classroom) => (
-                    <div key={classroom.classroom_name} className="space-y-2">
-                      <div>
-                        <span
-                          className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold"
-                          style={getClassroomPillStyle(classroom.classroom_color)}
-                        >
-                          {classroom.classroom_name} ({classroom.slots.length})
-                        </span>
-                      </div>
-                      {classroom.slots.map((slot) => (
-                        <div
-                          key={slot.id}
-                          className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3"
-                        >
-                          <div className="min-w-[180px] space-y-1">
-                            <div className="text-sm font-semibold text-slate-900">
-                              {formatSlotLabel(slot.day_name, slot.time_slot_code)}
-                            </div>
-                          </div>
-                          <div className="flex min-w-[190px] flex-col items-start gap-2">
-                          <div className="text-xs text-slate-600">
-                            Required: {slot.required_staff} · Scheduled: {slot.scheduled_staff}
-                          </div>
-                            <span
-                              className={cn(
-                                'rounded-full border px-2.5 py-0.5 text-xs font-medium',
-                                staffingBadge(slot.status)
-                              )}
-                            >
-                              Below Required
-                            </span>
-                          </div>
-                          <div className="flex flex-1 items-center justify-end">
-                            <Button asChild size="sm" variant="outline">
-                              <Link
-                                href={`/schedules/weekly?classroom_id=${slot.classroom_id}&day_of_week_id=${slot.day_of_week_id}&time_slot_id=${slot.time_slot_id}`}
-                              >
-                                Add Coverage
-                              </Link>
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="space-y-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Below Preferred ({belowPreferredGroups.reduce((total, group) => total + group.slots.length, 0)})
-                </div>
-                {belowPreferredGroups.length === 0 ? (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                    All slots meet preferred staffing ratios.
-                  </div>
-                ) : (
-                  belowPreferredGroups.map((classroom) => (
-                    <div key={classroom.classroom_name} className="space-y-2">
-                      <div>
-                        <span
-                          className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold"
-                          style={getClassroomPillStyle(classroom.classroom_color)}
-                        >
-                          {classroom.classroom_name} ({classroom.slots.length})
-                        </span>
-                      </div>
-                      {classroom.slots.map((slot) => (
-                        <div
-                          key={slot.id}
-                          className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3"
-                        >
-                          <div className="min-w-[180px] space-y-1">
-                            <div className="text-sm font-semibold text-slate-900">
-                              {formatSlotLabel(slot.day_name, slot.time_slot_code)}
-                            </div>
-                          </div>
-                          <div className="flex min-w-[190px] flex-col items-start gap-2">
-                          <div className="text-xs text-slate-600">
-                            Preferred: {slot.preferred_staff ?? slot.required_staff} · Scheduled:{' '}
-                            {slot.scheduled_staff}
-                          </div>
-                            <span
-                              className={cn(
-                                'rounded-full border px-2.5 py-0.5 text-xs font-medium',
-                                staffingBadge(slot.status)
-                              )}
-                            >
-                              Below Preferred
-                            </span>
-                          </div>
-                          <div className="flex flex-1 items-center justify-end">
-                            <Button asChild size="sm" variant="outline">
-                              <Link
-                                href={`/schedules/weekly?classroom_id=${slot.classroom_id}&day_of_week_id=${slot.day_of_week_id}&time_slot_id=${slot.time_slot_id}`}
-                              >
-                                Add Coverage
-                              </Link>
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          ))}
-      </section>
+      </div>
     </div>
   )
 }
