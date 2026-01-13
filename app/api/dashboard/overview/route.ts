@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     const { data: timeOffRequests, error: requestsError } = await supabase
       .from('time_off_requests')
       .select(
-        'id, teacher_id, start_date, end_date, reason, status, teacher:staff(id, first_name, last_name, display_name)'
+        'id, teacher_id, start_date, end_date, reason, notes, status, teacher:staff(id, first_name, last_name, display_name)'
       )
       .eq('status', 'active')
       .lte('start_date', endDate)
@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
     const { data: subAssignments, error: assignmentsError } = await supabase
       .from('sub_assignments')
       .select(
-        'id, sub_id, teacher_id, date, time_slot_id, day_of_week_id, is_partial, classroom_id, sub:staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name), teacher:staff!sub_assignments_teacher_id_fkey(first_name, last_name, display_name), time_slot:time_slots(code, display_order), classroom:classrooms(name, color)'
+        'id, sub_id, teacher_id, date, time_slot_id, day_of_week_id, is_partial, classroom_id, notes, sub:staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name), teacher:staff!sub_assignments_teacher_id_fkey(first_name, last_name, display_name), time_slot:time_slots(code, display_order), classroom:classrooms(name, color)'
       )
       .gte('date', startDate)
       .lte('date', endDate)
@@ -267,6 +267,7 @@ export async function GET(request: NextRequest) {
       start_date: string
       end_date: string
       reason: string | null
+      notes: string | null
       classrooms: Array<{ id: string; name: string; color: string | null }>
       classroom_label: string
       total_shifts: number
@@ -363,6 +364,7 @@ export async function GET(request: NextRequest) {
         start_date: request.start_date,
         end_date: request.end_date || request.start_date,
         reason: request.reason,
+        notes: request.notes || null,
         classrooms: classroomList,
         classroom_label: classroomLabel,
         total_shifts: totalShifts,
@@ -562,6 +564,7 @@ export async function GET(request: NextRequest) {
         time_slot_order: assignment.time_slot?.display_order ?? 999,
         classroom_name: assignment.classroom?.name || 'Classroom unavailable',
         classroom_color: assignment.classroom?.color ?? null,
+        notes: assignment.notes || null,
         sub_name:
           assignment.sub?.display_name ||
           `${assignment.sub?.first_name || ''} ${assignment.sub?.last_name || ''}`.trim() ||

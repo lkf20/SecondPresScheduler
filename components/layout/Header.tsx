@@ -1,9 +1,10 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { LogOut } from 'lucide-react'
+import { CalendarPlus, LogOut, UserPlus, UserSearch } from 'lucide-react'
 
 interface HeaderProps {
   userEmail?: string
@@ -25,7 +26,27 @@ export default function Header({ userEmail }: HeaderProps) {
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-semibold">Scheduler</h1>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <Button asChild size="sm" variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-100">
+              <Link href="/time-off/new">
+                <CalendarPlus className="h-4 w-4 mr-2" />
+                Add Time Off
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-100">
+              <Link href="/sub-finder">
+                <UserSearch className="h-4 w-4 mr-2" />
+                Find Sub
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-100">
+              <Link href="/schedules/weekly">
+                <UserPlus className="h-4 w-4 mr-2" />
+                Assign Sub
+              </Link>
+            </Button>
+          </div>
           {userEmail && (
             <span className="text-sm text-muted-foreground">{userEmail}</span>
           )}
@@ -38,6 +59,3 @@ export default function Header({ userEmail }: HeaderProps) {
     </header>
   )
 }
-
-
-

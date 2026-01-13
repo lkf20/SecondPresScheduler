@@ -1,16 +1,17 @@
 'use client'
 
-import { useMemo, useRef, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
   AlertTriangle,
   CalendarDays,
   Calendar,
-  ChevronUp,
   PieChart,
   CheckCircle2,
   Users,
   AlertCircle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -30,6 +31,7 @@ type CoverageRequestItem = {
   start_date: string
   end_date: string
   reason: string | null
+  notes: string | null
   classrooms: Array<{ id: string; name: string; color: string | null }>
   classroom_label: string
   total_shifts: number
@@ -46,6 +48,7 @@ type ScheduledSubItem = {
   time_slot_code: string
   classroom_name: string
   classroom_color: string | null
+  notes: string | null
   sub_name: string
   teacher_name: string
 }
@@ -74,11 +77,6 @@ type DashboardOverview = {
   staffing_targets: StaffingTargetItem[]
   scheduled_subs: ScheduledSubItem[]
 }
-
-type SectionKey = 'uncovered' | 'partial' | 'absences' | 'scheduled' | 'staffing'
-
-const formatRangeLabel = (startLabel: string, endLabel: string) =>
-  `Showing next 14 days (${startLabel} - ${endLabel})`
 
 const formatDate = (value: string) => {
   const date = new Date(`${value}T00:00:00`)
@@ -113,6 +111,12 @@ const formatFullDateLabel = (value: string) => {
   const dateLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
   return `${weekday} ${dateLabel}`
 }
+
+const formatShortfallLabel = (shortfall: number) =>
+  `Below ${shortfall === 1 ? 'by 1' : `by ${shortfall}`}`
+
+const formatShortfallValue = (required: number, scheduled: number) =>
+  Math.max(0, required - scheduled)
 
   const staffingBadge = (status: StaffingTargetItem['status']) => {
   switch (status) {
@@ -162,38 +166,20 @@ const groupStaffingTargets = (slots: StaffingTargetItem[]) => {
 
 export default function DashboardClient({
   overview,
-  rangeStartLabel,
-  rangeEndLabel,
+  startDate,
+  endDate,
 }: {
   overview: DashboardOverview
-  rangeStartLabel: string
-  rangeEndLabel: string
+  startDate: string
+  endDate: string
 }) {
-  const [activeSection, setActiveSection] = useState<SectionKey | null>(null)
-  const [coverageCollapsed, setCoverageCollapsed] = useState(false)
-  const [scheduledCollapsed, setScheduledCollapsed] = useState(false)
-  const [staffingCollapsed, setStaffingCollapsed] = useState(false)
   const [greetingName, setGreetingName] = useState<string | null>(null)
   const [greetingTime, setGreetingTime] = useState('Good Morning')
-  const coverageRef = useRef<HTMLDivElement | null>(null)
-  const scheduledRef = useRef<HTMLDivElement | null>(null)
-  const staffingRef = useRef<HTMLDivElement | null>(null)
+  const [belowRequiredCollapsed, setBelowRequiredCollapsed] = useState(false)
+  const [belowPreferredCollapsed, setBelowPreferredCollapsed] = useState(false)
   const [coverageFilter, setCoverageFilter] = useState<'needs' | 'covered' | 'all'>(
     'needs'
   )
-
-  useEffect(() => {
-    if (!activeSection) return
-    const target =
-      activeSection === 'uncovered' || activeSection === 'partial' || activeSection === 'absences'
-        ? coverageRef.current
-        : activeSection === 'staffing'
-        ? staffingRef.current
-        : scheduledRef.current
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }, [activeSection])
 
   useEffect(() => {
     const hour = new Date().getHours()
@@ -217,9 +203,19 @@ export default function DashboardClient({
     loadProfile()
   }, [])
 
-  const understaffedClassrooms = useMemo(() => {
+  const belowRequiredClassrooms = useMemo(() => {
     const classrooms = new Set<string>()
-    overview.staffing_targets.forEach((slot) => classrooms.add(slot.classroom_id))
+    overview.staffing_targets
+      .filter((slot) => slot.status === 'below_required')
+      .forEach((slot) => classrooms.add(slot.classroom_id))
+    return classrooms.size
+  }, [overview.staffing_targets])
+
+  const belowPreferredClassrooms = useMemo(() => {
+    const classrooms = new Set<string>()
+    overview.staffing_targets
+      .filter((slot) => slot.status === 'below_preferred')
+      .forEach((slot) => classrooms.add(slot.classroom_id))
     return classrooms.size
   }, [overview.staffing_targets])
 
@@ -230,7 +226,7 @@ export default function DashboardClient({
         label: 'Uncovered Shifts',
         count: overview.summary.uncovered_shifts,
         tone: 'text-amber-900',
-        cardStyle: 'border-orange-200 bg-orange-50/70 text-orange-900',
+        cardStyle: 'border-slate-200 bg-white text-orange-900',
         icon: AlertTriangle,
         iconStyle: 'bg-orange-200 text-orange-800',
       },
@@ -239,7 +235,7 @@ export default function DashboardClient({
         label: 'Partially Covered Shifts',
         count: overview.summary.partially_covered_shifts,
         tone: 'text-amber-800',
-        cardStyle: 'border-amber-200 bg-amber-50/60 text-amber-900',
+        cardStyle: 'border-slate-200 bg-white text-amber-900',
         icon: PieChart,
         iconStyle: 'bg-amber-200 text-amber-800',
       },
@@ -248,30 +244,34 @@ export default function DashboardClient({
         label: 'Upcoming Absences',
         count: overview.summary.absences,
         tone: 'text-blue-900',
-        cardStyle: 'border-blue-200 bg-blue-50/60 text-blue-900',
+        cardStyle: 'border-slate-200 bg-white text-blue-900',
         icon: Calendar,
         iconStyle: 'bg-blue-200 text-blue-800',
       },
       {
         key: 'scheduled' as const,
-        label: 'Scheduled Subs',
+        label: 'Scheduled Sub Shifts',
         count: overview.summary.scheduled_subs,
         tone: 'text-emerald-800',
-        cardStyle: 'border-emerald-200 bg-emerald-50/60 text-emerald-900',
+        cardStyle: 'border-slate-200 bg-white text-emerald-900',
         icon: Users,
         iconStyle: 'bg-emerald-200 text-emerald-800',
       },
       {
         key: 'staffing' as const,
         label: 'Understaffed Classrooms',
-        count: understaffedClassrooms,
-        tone: 'text-rose-900',
-        cardStyle: 'border-rose-200 bg-rose-50/60 text-rose-900',
-        icon: AlertCircle,
-        iconStyle: 'bg-rose-200 text-rose-800',
+        cardStyle: 'border-slate-200 bg-white text-rose-900',
+        secondaryCount: belowPreferredClassrooms,
+        secondaryIcon: AlertTriangle,
+        secondaryStyle: 'text-amber-900',
+        secondaryIconStyle: 'bg-orange-200 text-amber-800',
+        secondaryRightCount: belowRequiredClassrooms,
+        secondaryRightIcon: AlertCircle,
+        secondaryRightStyle: 'text-rose-900',
+        secondaryRightIconStyle: 'bg-rose-200 text-rose-800',
       },
     ],
-    [overview.summary, understaffedClassrooms]
+    [overview.summary, belowRequiredClassrooms, belowPreferredClassrooms]
   )
 
   const coverageCounts = useMemo(() => {
@@ -318,6 +318,14 @@ export default function DashboardClient({
     [overview.staffing_targets]
   )
 
+  useEffect(() => {
+    setBelowRequiredCollapsed(belowRequiredGroups.length === 0)
+  }, [belowRequiredGroups.length])
+
+  useEffect(() => {
+    setBelowPreferredCollapsed(belowPreferredGroups.length === 0)
+  }, [belowPreferredGroups.length])
+
   return (
     <div className="space-y-10">
       <section className="space-y-2">
@@ -327,7 +335,8 @@ export default function DashboardClient({
             {greetingName ? `, ${greetingName}` : ''}!
           </h1>
           <p className="text-xl text-slate-600 mt-1">
-            Here is your coverage outlook for the next two weeks ({rangeStartLabel} - {rangeEndLabel}).
+            Here is your coverage outlook for the next two weeks (
+            {formatFullDateLabel(startDate)} - {formatFullDateLabel(endDate)}).
           </p>
         </div>
       </section>
@@ -335,81 +344,84 @@ export default function DashboardClient({
       <section className="space-y-3 pb-6 border-b border-slate-200">
         <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {summaryItems.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => {
-                setActiveSection((prev) => (prev === item.key ? null : item.key))
-                if (item.key === 'uncovered' || item.key === 'partial') {
-                  setCoverageFilter('needs')
-                }
-                if (item.key === 'absences') {
-                  setCoverageFilter('all')
-                }
-              }}
-              className="text-left"
-            >
+            <div key={item.key} className="text-left">
               <Card
                 className={cn(
-                  'w-full max-w-[240px] justify-self-start transition-transform hover:-translate-y-0.5 shadow-md',
-                  item.cardStyle,
-                  activeSection === item.key && 'ring-1 ring-slate-300'
+                  'w-full max-w-[260px] justify-self-start shadow-md',
+                  item.cardStyle
                 )}
               >
                 <CardContent className="p-4">
-                  <div className="text-sm font-semibold">{item.label}</div>
+                  <div className="text-base font-semibold">{item.label}</div>
                   <div className="mt-3 h-px w-full bg-black/10" />
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className={cn('text-3xl font-semibold', item.tone)}>
-                      {item.count}
+                  {'count' in item ? (
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className={cn('text-3xl font-semibold', item.tone)}>
+                        {item.count}
+                      </div>
+                      {item.icon ? (
+                        <span
+                          className={cn(
+                            'inline-flex h-9 w-9 items-center justify-center rounded-full',
+                            item.iconStyle
+                          )}
+                        >
+                          <item.icon className="h-5 w-5" />
+                        </span>
+                      ) : null}
                     </div>
-                    {item.icon ? (
-                      <span
-                        className={cn(
-                          'inline-flex h-9 w-9 items-center justify-center rounded-full',
-                          item.iconStyle
-                        )}
+                  ) : null}
+                  {'secondaryCount' in item &&
+                  item.secondaryCount !== undefined &&
+                  item.secondaryIcon &&
+                  item.secondaryStyle &&
+                  item.secondaryIconStyle &&
+                  item.secondaryRightCount !== undefined &&
+                  item.secondaryRightIcon &&
+                  item.secondaryRightStyle &&
+                  item.secondaryRightIconStyle ? (
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className={cn('flex items-center gap-2 text-3xl font-semibold', item.secondaryStyle)}>
+                        <span>{item.secondaryCount}</span>
+                        <span
+                          className={cn(
+                            'inline-flex h-9 w-9 items-center justify-center rounded-full',
+                            item.secondaryIconStyle
+                          )}
+                        >
+                          <item.secondaryIcon className="h-5 w-5" />
+                        </span>
+                      </div>
+                      <div
+                        className={cn('flex items-center gap-2 text-3xl font-semibold', item.secondaryRightStyle)}
                       >
-                        <item.icon className="h-5 w-5" />
-                      </span>
-                    ) : null}
-                  </div>
+                        <span>{item.secondaryRightCount}</span>
+                        <span
+                          className={cn(
+                            'inline-flex h-9 w-9 items-center justify-center rounded-full',
+                            item.secondaryRightIconStyle
+                          )}
+                        >
+                          <item.secondaryRightIcon className="h-5 w-5" />
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
-            </button>
+            </div>
           ))}
         </div>
       </section>
 
-      <div className="grid gap-6 pt-4 lg:grid-cols-[1.4fr_1fr_0.8fr]">
-        <section
-          ref={coverageRef}
-          className={cn(
-            'space-y-4 rounded-xl border border-slate-200 bg-white p-5',
-            (activeSection === 'uncovered' ||
-              activeSection === 'partial' ||
-              activeSection === 'absences') &&
-              'ring-1 ring-slate-200'
-          )}
-        >
+      <div className="grid gap-6 pt-4 lg:grid-cols-[1.4fr_0.9fr_0.9fr]">
+        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-slate-900" />
               <h2 className="text-lg font-semibold text-slate-900">
                 Upcoming Time Off & Coverage
               </h2>
-              <button
-                type="button"
-                onClick={() => setCoverageCollapsed((prev) => !prev)}
-                aria-label={
-                  coverageCollapsed ? 'Expand coverage overview' : 'Collapse coverage overview'
-                }
-                className="text-slate-500 transition hover:text-slate-700"
-              >
-                <ChevronUp
-                  className={cn('h-4 w-4 transition-transform', coverageCollapsed && 'rotate-180')}
-                />
-              </button>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
               <button
@@ -451,18 +463,27 @@ export default function DashboardClient({
             </div>
           </div>
 
-          {!coverageCollapsed &&
-            (filteredCoverageRequests.length === 0 ? (
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                No upcoming time off in the next 14 days
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {filteredCoverageRequests.map((request) => (
+          {filteredCoverageRequests.length === 0 ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              No upcoming time off in the next 14 days
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredCoverageRequests.map((request) => (
                   <div
                     key={request.id}
-                    className="rounded-lg border border-slate-200 bg-white px-4 py-4"
+                    className="group relative rounded-lg border border-slate-200 bg-white px-4 py-4"
                   >
+                    {request.notes ? (
+                      <span
+                        className="absolute right-0 top-0 h-4 w-4 cursor-help rounded-tr-lg bg-[linear-gradient(225deg,#fbbf24_0_50%,transparent_50%)]"
+                        aria-label="Note"
+                      >
+                        <span className="absolute right-0 top-4 z-10 hidden w-56 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 shadow-sm group-hover:block">
+                          {request.notes}
+                        </span>
+                      </span>
+                    ) : null}
                     <div className="flex items-start justify-between gap-3">
                       <div className="space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
@@ -483,6 +504,10 @@ export default function DashboardClient({
                             ? ''
                             : ` - ${formatFullDateLabel(request.end_date)}`}
                         </div>
+                        <span className="h-4 w-px bg-slate-500" aria-hidden="true" />
+                        <span className="text-sm font-medium italic text-slate-400">
+                          {request.total_shifts} {request.total_shifts === 1 ? 'Shift' : 'Shifts'}
+                        </span>
                       </div>
                         {request.classrooms?.length ? (
                           <div className="flex flex-wrap items-center gap-1.5">
@@ -550,72 +575,68 @@ export default function DashboardClient({
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
-            ))}
+              ))}
+            </div>
+          )}
         </section>
 
-        <section
-          ref={scheduledRef}
-          className={cn(
-            'space-y-4 rounded-xl border border-slate-200 bg-white p-5',
-            activeSection === 'scheduled' && 'ring-1 ring-slate-200'
-          )}
-        >
+        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5 text-slate-900" />
             <h2 className="text-lg font-semibold text-slate-900">Scheduled Subs</h2>
-            <button
-              type="button"
-              onClick={() => setScheduledCollapsed((prev) => !prev)}
-              aria-label={scheduledCollapsed ? 'Expand scheduled subs' : 'Collapse scheduled subs'}
-              className="text-slate-500 transition hover:text-slate-700"
-            >
-              <ChevronUp
-                className={cn('h-4 w-4 transition-transform', scheduledCollapsed && 'rotate-180')}
-              />
-            </button>
           </div>
 
-          {!scheduledCollapsed &&
-            (overview.scheduled_subs.length === 0 ? (
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                No subs scheduled in the next 14 days
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {overview.scheduled_subs.map((assignment) => (
+          {overview.scheduled_subs.length === 0 ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              No subs scheduled in the next 14 days
+            </div>
+          ) : (
+            <div className="space-y-3">
+                  {overview.scheduled_subs.map((assignment) => (
                   <div
                     key={assignment.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3"
+                    className="group relative flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3"
                   >
-                    <div className="space-y-1">
-                      <div className="text-base font-semibold text-slate-900">
-                        {assignment.sub_name}
+                    {assignment.notes ? (
+                      <span
+                        className="absolute right-0 top-0 h-4 w-4 cursor-help rounded-tr-lg bg-[linear-gradient(225deg,#fbbf24_0_50%,transparent_50%)]"
+                        aria-label="Note"
+                      >
+                        <span className="absolute right-0 top-4 z-10 hidden w-56 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 shadow-sm group-hover:block">
+                          {assignment.notes}
+                        </span>
+                      </span>
+                    ) : null}
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-base font-semibold text-slate-900">
+                          {assignment.sub_name}
+                        </div>
+                        <div className="text-sm text-slate-600">
+                          Covering {assignment.teacher_name}
+                        </div>
                       </div>
-                      <div className="text-sm text-slate-600">
-                        {formatDayTime(
-                          assignment.day_name,
-                          assignment.date,
-                          assignment.time_slot_code
-                        )}
+                      <div className="flex items-center gap-2 text-sm text-slate-600">
+                        <CalendarDays className="h-4 w-4 text-slate-500" />
+                        <div className="text-sm font-medium text-slate-800">
+                          {formatFullDateLabel(assignment.date)} · {assignment.time_slot_code}
+                        </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
                         <span
-                          className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold"
+                          className="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold"
                           style={getClassroomPillStyle(assignment.classroom_color)}
                         >
                           {assignment.classroom_name}
                         </span>
-                        <span>Covering {assignment.teacher_name}</span>
                       </div>
-                    </div>
-                    <div className="flex w-full justify-end sm:w-auto">
+                      </div>
+                      <div className="flex w-full justify-end sm:w-auto">
                       <Button
                         asChild
                         size="sm"
                         variant="outline"
-                        className="border-slate-500 text-slate-900 hover:bg-slate-50"
+                        className="border-slate-500 text-slate-900 hover:bg-slate-200"
                       >
                         <Link href={`/schedules/weekly?sub_assignment_id=${assignment.id}`}>
                           Update Sub
@@ -623,49 +644,43 @@ export default function DashboardClient({
                       </Button>
                     </div>
                   </div>
-                ))}
-              </div>
-            ))}
+              ))}
+            </div>
+          )}
         </section>
 
-        <section
-          ref={staffingRef}
-          className={cn(
-            'space-y-4 rounded-xl border border-slate-200 bg-white p-5',
-            activeSection === 'staffing' && 'ring-1 ring-slate-200'
-          )}
-        >
+        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex items-center gap-2">
             <AlertCircle className="h-5 w-5 text-slate-900" />
             <h2 className="text-lg font-semibold text-slate-900">Below Staffing Target</h2>
-            <button
-              type="button"
-              onClick={() => setStaffingCollapsed((prev) => !prev)}
-              aria-label={
-                staffingCollapsed ? 'Expand staffing targets' : 'Collapse staffing targets'
-              }
-              className="text-slate-500 transition hover:text-slate-700"
-            >
-              <ChevronUp
-                className={cn('h-4 w-4 transition-transform', staffingCollapsed && 'rotate-180')}
-              />
-            </button>
           </div>
 
-          {!staffingCollapsed &&
-            (overview.staffing_targets.length === 0 ? (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                ✅ All classrooms meet staffing targets for the next 14 days
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="space-y-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {overview.staffing_targets.length === 0 ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              ✅ All classrooms meet staffing targets for the next 14 days
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => setBelowRequiredCollapsed((prev) => !prev)}
+                  className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  <span>
                     Below Required ({belowRequiredGroups.reduce((total, group) => total + group.slots.length, 0)})
-                  </div>
-                  {belowRequiredGroups.length === 0 ? (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                      All slots meet required staffing ratios.
+                  </span>
+                  {belowRequiredCollapsed ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronUp className="h-4 w-4" />
+                  )}
+                </button>
+                {!belowRequiredCollapsed &&
+                  (belowRequiredGroups.length === 0 ? (
+                    <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      <span>All slots meet required staffing ratios.</span>
                     </div>
                   ) : (
                     belowRequiredGroups.map((classroom) => (
@@ -679,51 +694,71 @@ export default function DashboardClient({
                           </span>
                         </div>
                         {classroom.slots.map((slot) => (
-                          <div
-                            key={slot.id}
-                            className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3"
-                          >
-                            <div className="min-w-[180px] space-y-1">
+                        <div
+                          key={slot.id}
+                          className="grid gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 md:grid-cols-[1fr_auto]"
+                        >
+                          <div className="flex flex-wrap items-center gap-4">
+                            <div className="min-w-[180px] space-y-3">
                               <div className="text-sm font-semibold text-slate-900">
                                 {formatSlotLabel(slot.day_name, slot.time_slot_code)}
                               </div>
-                            </div>
-                            <div className="flex min-w-[190px] flex-col items-start gap-2">
-                            <div className="text-xs text-slate-600">
-                              Required: {slot.required_staff} · Scheduled: {slot.scheduled_staff}
-                            </div>
                               <span
                                 className={cn(
-                                  'rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                                  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
                                   staffingBadge(slot.status)
                                 )}
                               >
-                                Below Required
+                                Below Required {formatShortfallLabel(formatShortfallValue(slot.required_staff, slot.scheduled_staff))}
                               </span>
                             </div>
-                            <div className="flex flex-1 items-center justify-end">
-                              <Button asChild size="sm" variant="outline">
-                                <Link
-                                  href={`/schedules/weekly?classroom_id=${slot.classroom_id}&day_of_week_id=${slot.day_of_week_id}&time_slot_id=${slot.time_slot_id}`}
-                                >
-                                  Add Coverage
-                                </Link>
-                              </Button>
+                            <div className="flex min-w-[190px] flex-col items-start gap-3">
+                              <div className="text-xs text-slate-600">
+                                Required: {slot.required_staff} · Scheduled: {slot.scheduled_staff}
+                              </div>
                             </div>
                           </div>
+                          <div className="flex items-center justify-end self-center">
+                            <Button
+                              asChild
+                              size="sm"
+                              variant="outline"
+                              className="border-slate-500 text-slate-900 hover:bg-slate-200"
+                            >
+                              <Link
+                                href={`/schedules/weekly?classroom_id=${slot.classroom_id}&day_of_week_id=${slot.day_of_week_id}&time_slot_id=${slot.time_slot_id}`}
+                              >
+                                Assign Coverage
+                              </Link>
+                            </Button>
+                          </div>
+                        </div>
                         ))}
                       </div>
                     ))
-                  )}
-                </div>
+                  ))}
+              </div>
 
-                <div className="space-y-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => setBelowPreferredCollapsed((prev) => !prev)}
+                  className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  <span>
                     Below Preferred ({belowPreferredGroups.reduce((total, group) => total + group.slots.length, 0)})
-                  </div>
-                  {belowPreferredGroups.length === 0 ? (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                      All slots meet preferred staffing ratios.
+                  </span>
+                  {belowPreferredCollapsed ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronUp className="h-4 w-4" />
+                  )}
+                </button>
+                {!belowPreferredCollapsed &&
+                  (belowPreferredGroups.length === 0 ? (
+                    <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      <span>All slots meet preferred staffing ratios.</span>
                     </div>
                   ) : (
                     belowPreferredGroups.map((classroom) => (
@@ -737,46 +772,59 @@ export default function DashboardClient({
                           </span>
                         </div>
                         {classroom.slots.map((slot) => (
-                          <div
-                            key={slot.id}
-                            className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3"
-                          >
-                            <div className="min-w-[180px] space-y-1">
+                        <div
+                          key={slot.id}
+                          className="grid gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 md:grid-cols-[1fr_auto]"
+                        >
+                          <div className="flex flex-wrap items-center gap-4">
+                            <div className="min-w-[180px] space-y-3">
                               <div className="text-sm font-semibold text-slate-900">
                                 {formatSlotLabel(slot.day_name, slot.time_slot_code)}
                               </div>
-                            </div>
-                            <div className="flex min-w-[190px] flex-col items-start gap-2">
-                            <div className="text-xs text-slate-600">
-                              Preferred: {slot.preferred_staff ?? slot.required_staff} · Scheduled:{' '}
-                              {slot.scheduled_staff}
-                            </div>
                               <span
                                 className={cn(
-                                  'rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                                  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
                                   staffingBadge(slot.status)
                                 )}
                               >
-                                Below Preferred
+                                Below Preferred{' '}
+                                {formatShortfallLabel(
+                                  formatShortfallValue(
+                                    slot.preferred_staff ?? slot.required_staff,
+                                    slot.scheduled_staff
+                                  )
+                                )}
                               </span>
                             </div>
-                            <div className="flex flex-1 items-center justify-end">
-                              <Button asChild size="sm" variant="outline">
-                                <Link
-                                  href={`/schedules/weekly?classroom_id=${slot.classroom_id}&day_of_week_id=${slot.day_of_week_id}&time_slot_id=${slot.time_slot_id}`}
-                                >
-                                  Add Coverage
-                                </Link>
-                              </Button>
+                            <div className="flex min-w-[190px] flex-col items-start gap-3">
+                              <div className="text-xs text-slate-600">
+                                Preferred: {slot.preferred_staff ?? slot.required_staff} · Scheduled:{' '}
+                                {slot.scheduled_staff}
+                              </div>
                             </div>
                           </div>
+                          <div className="flex items-center justify-end self-center">
+                            <Button
+                              asChild
+                              size="sm"
+                              variant="outline"
+                              className="border-slate-500 text-slate-900 hover:bg-slate-200"
+                            >
+                              <Link
+                                href={`/schedules/weekly?classroom_id=${slot.classroom_id}&day_of_week_id=${slot.day_of_week_id}&time_slot_id=${slot.time_slot_id}`}
+                              >
+                                Assign Coverage
+                              </Link>
+                            </Button>
+                          </div>
+                        </div>
                         ))}
                       </div>
                     ))
-                  )}
-                </div>
+                  ))}
               </div>
-            ))}
+            </div>
+          )}
         </section>
       </div>
     </div>

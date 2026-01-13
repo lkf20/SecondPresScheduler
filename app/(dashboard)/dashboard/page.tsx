@@ -14,8 +14,6 @@ const addDays = (date: Date, days: number) => {
   return next
 }
 
-const formatRangeLabel = (date: Date) =>
-  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
 
 const getBaseUrl = async () => {
   const headerList = await headers()
@@ -57,16 +55,13 @@ export default async function DashboardPage() {
   const endDateDate = addDays(today, 13)
   const endDate = toDateString(endDateDate)
   const overview = await fetchOverview(startDate, endDate)
-  const rangeStartLabel = formatRangeLabel(today)
-  const rangeEndLabel = formatRangeLabel(endDateDate)
-
   return (
     <div>
       {overview && !('error' in overview) ? (
         <DashboardClient
           overview={overview}
-          rangeStartLabel={rangeStartLabel}
-          rangeEndLabel={rangeEndLabel}
+          startDate={startDate}
+          endDate={endDate}
         />
       ) : (
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
