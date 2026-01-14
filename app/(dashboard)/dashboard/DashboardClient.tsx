@@ -201,10 +201,10 @@ export default function DashboardClient({
         key: 'uncovered' as const,
         label: 'Uncovered Shifts',
         count: overview.summary.uncovered_shifts,
-        tone: 'text-amber-900',
-        cardStyle: 'border-slate-200 bg-white text-orange-900',
+        tone: 'text-orange-600',
+        cardStyle: 'border-slate-200 bg-white text-orange-800',
         icon: AlertTriangle,
-        iconStyle: 'bg-orange-200 text-orange-800',
+        iconStyle: 'bg-orange-100 text-orange-600',
       },
       {
         key: 'partial' as const,
@@ -213,7 +213,7 @@ export default function DashboardClient({
         tone: 'text-amber-800',
         cardStyle: 'border-slate-200 bg-white text-amber-900',
         icon: PieChart,
-        iconStyle: 'bg-amber-200 text-amber-800',
+        iconStyle: 'bg-amber-100 text-amber-700',
       },
       {
         key: 'absences' as const,
@@ -222,16 +222,16 @@ export default function DashboardClient({
         tone: 'text-blue-900',
         cardStyle: 'border-slate-200 bg-white text-blue-900',
         icon: Calendar,
-        iconStyle: 'bg-blue-200 text-blue-800',
+        iconStyle: 'bg-blue-100 text-blue-600',
       },
       {
         key: 'scheduled' as const,
         label: 'Scheduled Sub Shifts',
         count: overview.summary.scheduled_subs,
-        tone: 'text-emerald-800',
-        cardStyle: 'border-slate-200 bg-white text-emerald-900',
+        tone: 'text-teal-700',
+        cardStyle: 'border-slate-200 bg-white text-teal-800',
         icon: Users,
-        iconStyle: 'bg-emerald-200 text-emerald-800',
+        iconStyle: 'bg-teal-100 text-teal-600',
       },
       {
         key: 'staffing' as const,
@@ -244,7 +244,7 @@ export default function DashboardClient({
         secondaryRightCount: belowRequiredClassrooms,
         secondaryRightIcon: AlertCircle,
         secondaryRightStyle: 'text-rose-900',
-        secondaryRightIconStyle: 'bg-rose-200 text-rose-800',
+        secondaryRightIconStyle: 'bg-red-100 text-red-600',
       },
     ],
     [overview.summary, belowRequiredClassrooms, belowPreferredClassrooms]
@@ -328,7 +328,14 @@ export default function DashboardClient({
                 )}
               >
                 <CardContent className="p-4">
-                  <div className="text-base font-semibold">{item.label}</div>
+                  <div
+                    className={cn(
+                      'text-base font-semibold',
+                      item.key === 'uncovered' ? 'text-orange-600' : undefined
+                    )}
+                  >
+                    {item.label}
+                  </div>
                   <div className="mt-3 h-px w-full bg-black/10" />
                   {'count' in item ? (
                     <div className="mt-3 flex items-center justify-between">
