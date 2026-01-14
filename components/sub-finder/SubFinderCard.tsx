@@ -33,6 +33,14 @@ interface SubFinderCardProps {
   canCover: Shift[]
   cannotCover: Shift[]
   assigned?: Shift[]
+  shiftChips?: Array<{
+    date: string
+    time_slot_code: string
+    status: 'assigned' | 'available' | 'unavailable'
+    reason?: string
+    classroom_name?: string | null
+    class_name?: string | null
+  }>
   notes?: string
   conflicts?: ConflictCounts
   isDeclined?: boolean
@@ -52,6 +60,7 @@ export default function SubFinderCard({
   canCover,
   cannotCover,
   assigned = [],
+  shiftChips,
   notes,
   conflicts,
   isDeclined = false,
@@ -129,12 +138,13 @@ export default function SubFinderCard({
             showCoverage={false}
           />
 
-          {(canCover.length > 0 || cannotCover.length > 0 || assigned.length > 0) && (
+          {(canCover.length > 0 || cannotCover.length > 0 || assigned.length > 0 || (shiftChips?.length ?? 0) > 0) && (
             <div className="mb-3 w-full" style={outline('#7dd3fc')}>
               <ShiftChips
                 canCover={canCover}
                 cannotCover={cannotCover}
                 assigned={assigned}
+                shifts={shiftChips}
                 isDeclined={isDeclined}
               />
             </div>

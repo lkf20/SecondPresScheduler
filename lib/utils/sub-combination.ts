@@ -124,45 +124,35 @@ function getUncoveredShifts(subs: Sub[]): Set<string> {
  * Uses a greedy algorithm that prioritizes subs with best conflict-to-coverage ratio
  */
 export function findBestCombination(subs: Sub[]): RecommendedCombination | null {
-  // Filter to only subs with coverage_percent > 0
-  const eligibleSubs = subs.filter((sub) => sub.coverage_percent > 0)
+  const combos = findTopCombinations(subs, 1)
+  return combos[0] ?? null
+}
 
-  if (eligibleSubs.length === 0) {
-    return null
-  }
+function buildCombinationFromSubs(
+  selectedSubs: Sub[],
+  uncoveredShifts: Set<string>
+): RecommendedCombination | null {
+  if (selectedSubs.length === 0 || uncoveredShifts.size === 0) return null
 
-  // Get all uncovered shifts
-  const uncoveredShifts = getUncoveredShifts(eligibleSubs)
-
-  if (uncoveredShifts.size === 0) {
-    return null
-  }
-
-  // Build shift map: shiftKey -> shift details (from first sub that has it)
-  const shiftMap = new Map<string, Shift>()
-  eligibleSubs.forEach((sub) => {
+  const selectedShiftMap = new Map<string, Shift>()
+  selectedSubs.forEach((sub) => {
     sub.can_cover?.forEach((shift) => {
       const shiftKey = `${shift.date}|${shift.time_slot_code}`
-      if (uncoveredShifts.has(shiftKey) && !shiftMap.has(shiftKey)) {
-        shiftMap.set(shiftKey, shift)
+      if (uncoveredShifts.has(shiftKey) && !selectedShiftMap.has(shiftKey)) {
+        selectedShiftMap.set(shiftKey, shift)
       }
     })
   })
 
-  // Build sub-to-shifts map with conflict calculations
-  const subShiftsMap = new Map<string, SubShiftCoverage>()
-
-  eligibleSubs.forEach((sub) => {
+  const subCoverage = new Map<string, SubShiftCoverage>()
+  selectedSubs.forEach((sub) => {
     const availableShifts = new Map<string, Shift>()
     const conflicts = new Map<string, number>()
 
     sub.can_cover?.forEach((shift) => {
       const shiftKey = `${shift.date}|${shift.time_slot_code}`
-      // Only include uncovered shifts
       if (uncoveredShifts.has(shiftKey)) {
         availableShifts.set(shiftKey, shift)
-
-        // Calculate conflicts for this shift
         const shiftConflicts = calculateShiftConflicts(shift, sub)
         let conflictCount = 0
         if (shiftConflicts.missingDiaperChanging) conflictCount++
@@ -173,110 +163,94 @@ export function findBestCombination(subs: Sub[]): RecommendedCombination | null 
     })
 
     if (availableShifts.size > 0) {
-      subShiftsMap.set(sub.id, { sub, availableShifts, conflicts })
+      subCoverage.set(sub.id, { sub, availableShifts, conflicts })
     }
   })
 
-  // Greedy algorithm: repeatedly select the sub that covers the most uncovered shifts
-  // with the least conflicts, breaking ties by preferring fewer total conflicts
-  const selectedSubs = new Set<string>()
+  const assignmentsBySub = new Map<string, Shift[]>()
   const coveredShifts = new Set<string>()
-  const assignments: SubAssignment[] = []
 
-  while (coveredShifts.size < uncoveredShifts.size) {
-    let bestSubId: string | null = null
-    let bestNewCoverage = 0
+  for (const shiftKey of uncoveredShifts) {
+    let bestSub: SubShiftCoverage | null = null
     let bestConflicts = Infinity
-    let bestSubData: SubShiftCoverage | null = null
+    let bestCoveragePercent = -1
 
-    // Find the sub that adds the most uncovered shifts with least conflicts
-    subShiftsMap.forEach((data, subId) => {
-      if (selectedSubs.has(subId)) return
-
-      // Count new shifts this sub would cover
-      let newCoverage = 0
-      let newConflicts = 0
-
-      data.availableShifts.forEach((shift, shiftKey) => {
-        if (!coveredShifts.has(shiftKey)) {
-          newCoverage++
-          newConflicts += data.conflicts.get(shiftKey) || 0
-        }
-      })
-
-      // Skip if no new coverage
-      if (newCoverage === 0) return
-
-      // Prioritize: more coverage is better, but if coverage is equal, prefer fewer conflicts
-      const isBetter =
-        newCoverage > bestNewCoverage ||
-        (newCoverage === bestNewCoverage && newConflicts < bestConflicts)
-
-      if (isBetter) {
-        bestSubId = subId
-        bestNewCoverage = newCoverage
-        bestConflicts = newConflicts
-        bestSubData = data
+    subCoverage.forEach((data) => {
+      if (!data.availableShifts.has(shiftKey)) return
+      const conflictCount = data.conflicts.get(shiftKey) ?? 0
+      if (
+        conflictCount < bestConflicts ||
+        (conflictCount === bestConflicts &&
+          (data.sub.coverage_percent ?? 0) > bestCoveragePercent)
+      ) {
+        bestSub = data
+        bestConflicts = conflictCount
+        bestCoveragePercent = data.sub.coverage_percent ?? 0
       }
     })
 
-    // If no sub can add coverage, we're done (partial solution)
-    if (!bestSubId || !bestSubData) break
+    if (!bestSub) {
+      return null
+    }
 
-    // Add this sub to the combination
-    selectedSubs.add(bestSubId)
-    const shiftsForSub: Shift[] = []
+    const shift = bestSub.availableShifts.get(shiftKey) ?? selectedShiftMap.get(shiftKey)
+    if (!shift) {
+      return null
+    }
+
+    const assigned = assignmentsBySub.get(bestSub.sub.id) || []
+    assigned.push(shift)
+    assignmentsBySub.set(bestSub.sub.id, assigned)
+    coveredShifts.add(shiftKey)
+  }
+
+  const assignments: SubAssignment[] = []
+  let totalConflicts = 0
+
+  selectedSubs.forEach((sub) => {
+    const shifts = assignmentsBySub.get(sub.id) || []
+    if (shifts.length === 0) return
+
     let missingDiaperChanging = 0
     let missingLifting = 0
     let missingQualifications = 0
 
-    bestSubData.availableShifts.forEach((shift, shiftKey) => {
-      if (!coveredShifts.has(shiftKey)) {
-        coveredShifts.add(shiftKey)
-        shiftsForSub.push(shift)
-
-        // Count conflicts
-        const shiftConflicts = calculateShiftConflicts(shift, bestSubData.sub)
-        if (shiftConflicts.missingDiaperChanging) missingDiaperChanging++
-        if (shiftConflicts.missingLifting) missingLifting++
-        if (shiftConflicts.missingQualification) missingQualifications++
-      }
+    shifts.forEach((shift) => {
+      const shiftConflicts = calculateShiftConflicts(shift, sub)
+      if (shiftConflicts.missingDiaperChanging) missingDiaperChanging++
+      if (shiftConflicts.missingLifting) missingLifting++
+      if (shiftConflicts.missingQualification) missingQualifications++
     })
 
-    // Calculate coverage for this sub (remaining shifts they can cover, excluding assigned shifts)
-    const subShiftsCovered = shiftsForSub.length
-    // Count how many of the sub's can_cover shifts are still uncovered (not assigned to anyone)
     let remainingShifts = 0
-    bestSubData.sub.can_cover?.forEach((shift) => {
+    sub.can_cover?.forEach((shift) => {
       const shiftKey = `${shift.date}|${shift.time_slot_code}`
       if (uncoveredShifts.has(shiftKey)) {
         remainingShifts++
       }
     })
-    const subTotalShifts = remainingShifts > 0 ? remainingShifts : 0
-    const subCoveragePercent = subTotalShifts > 0 
-      ? Math.round((subShiftsCovered / subTotalShifts) * 100)
-      : 0
+    const totalShifts = remainingShifts > 0 ? remainingShifts : 0
+    const coveragePercent = totalShifts > 0 ? Math.round((shifts.length / totalShifts) * 100) : 0
+
+    const conflictsTotal = missingDiaperChanging + missingLifting + missingQualifications
+    totalConflicts += conflictsTotal
 
     assignments.push({
-      subId: bestSubData.sub.id,
-      subName: bestSubData.sub.name,
-      phone: bestSubData.sub.phone || null,
-      shifts: shiftsForSub,
-      shiftsCovered: subShiftsCovered,
-      totalShifts: subTotalShifts,
-      coveragePercent: subCoveragePercent,
+      subId: sub.id,
+      subName: sub.name,
+      phone: sub.phone || null,
+      shifts,
+      shiftsCovered: shifts.length,
+      totalShifts,
+      coveragePercent,
       conflicts: {
         missingDiaperChanging,
         missingLifting,
         missingQualifications,
-        total: missingDiaperChanging + missingLifting + missingQualifications,
+        total: conflictsTotal,
       },
     })
-  }
-
-  // Calculate totals
-  const totalConflicts = assignments.reduce((sum, assignment) => sum + assignment.conflicts.total, 0)
+  })
 
   return {
     subs: assignments,
@@ -288,4 +262,75 @@ export function findBestCombination(subs: Sub[]): RecommendedCombination | null 
         ? Math.round((coveredShifts.size / uncoveredShifts.size) * 100)
         : 100,
   }
+}
+
+export function findTopCombinations(subs: Sub[], limit = 5): RecommendedCombination[] {
+  // Filter to only subs with coverage_percent > 0
+  const eligibleSubs = subs.filter((sub) => sub.coverage_percent > 0)
+
+  if (eligibleSubs.length === 0) {
+    return []
+  }
+
+  // Get all uncovered shifts
+  const uncoveredShifts = getUncoveredShifts(eligibleSubs)
+
+  if (uncoveredShifts.size === 0) {
+    return []
+  }
+
+  const subsWithCoverage = eligibleSubs
+    .map((sub) => {
+      const coverage = new Set<string>()
+      sub.can_cover?.forEach((shift) => {
+        const key = `${shift.date}|${shift.time_slot_code}`
+        if (uncoveredShifts.has(key)) {
+          coverage.add(key)
+        }
+      })
+      return { sub, coverage }
+    })
+    .filter((entry) => entry.coverage.size > 0)
+    .sort((a, b) => {
+      if (b.coverage.size !== a.coverage.size) return b.coverage.size - a.coverage.size
+      return (b.sub.coverage_percent ?? 0) - (a.sub.coverage_percent ?? 0)
+    })
+
+  const targetCount = uncoveredShifts.size
+  const results: RecommendedCombination[] = []
+  const seen = new Set<string>()
+
+  const dfs = (startIndex: number, selected: Sub[], covered: Set<string>) => {
+    if (results.length >= limit) return
+    if (covered.size === targetCount) {
+      const combo = buildCombinationFromSubs(selected, uncoveredShifts)
+      if (combo && combo.totalShiftsCovered === targetCount) {
+        const key = combo.subs.map((assignment) => assignment.subId).sort().join('|')
+        if (!seen.has(key)) {
+          seen.add(key)
+          results.push(combo)
+        }
+      }
+      return
+    }
+
+    for (let i = startIndex; i < subsWithCoverage.length; i++) {
+      if (results.length >= limit) return
+      const entry = subsWithCoverage[i]
+      const nextCovered = new Set(covered)
+      entry.coverage.forEach((shiftKey) => nextCovered.add(shiftKey))
+      if (nextCovered.size === covered.size) continue
+      dfs(i + 1, [...selected, entry.sub], nextCovered)
+    }
+  }
+
+  dfs(0, [], new Set())
+
+  return results
+    .sort((a, b) => {
+      if (a.totalConflicts !== b.totalConflicts) return a.totalConflicts - b.totalConflicts
+      if (a.subs.length !== b.subs.length) return a.subs.length - b.subs.length
+      return b.totalShiftsCovered - a.totalShiftsCovered
+    })
+    .slice(0, limit)
 }

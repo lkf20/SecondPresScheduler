@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const { id, response_status, is_contacted, notes, shift_overrides } = body
+    const { id, response_status, is_contacted, notes, shift_overrides, selected_shift_keys } = body
 
     if (!id) {
       return createErrorResponse('Missing required parameter: id', 400)
@@ -53,6 +53,11 @@ export async function PUT(request: NextRequest) {
     if (notes !== undefined) updates.notes = notes
 
     const updatedContact = await updateSubstituteContact(id, updates)
+
+    // If decline_all and selected_shift_keys provided, enforce no selected shifts
+    if (response_status === 'declined_all' && Array.isArray(selected_shift_keys) && selected_shift_keys.length > 0) {
+      return createErrorResponse('Cannot decline all while shifts are selected', 400)
+    }
 
     // Update shift overrides if provided
     if (shift_overrides && Array.isArray(shift_overrides)) {

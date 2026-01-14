@@ -3,6 +3,7 @@
 import { Badge } from '@/components/ui/badge'
 import { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 import { parseLocalDate } from '@/lib/utils/date'
+import { AlertTriangle, Check } from 'lucide-react'
 
 interface ShiftDetail {
   id: string
@@ -21,12 +22,14 @@ interface CoverageSummaryProps {
     partially_covered: number
     fully_covered: number
     shift_details: ShiftDetail[]
+    shift_details_sorted?: ShiftDetail[]
+    coverage_segments?: Array<{ id: string; status: ShiftDetail['status'] }>
   }
   onShiftClick?: (shift: ShiftDetail) => void
 }
 
 export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummaryProps) {
-  const { uncovered, shift_details } = shifts
+  const { uncovered, fully_covered, shift_details } = shifts
   
   // Don't show if no shifts
   if (shifts.total === 0) {
@@ -34,12 +37,14 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
   }
   
   // Sort shifts by date, then time slot
-  const sortedShifts = [...shift_details].sort((a, b) => {
-    const dateA = parseLocalDate(a.date).getTime()
-    const dateB = parseLocalDate(b.date).getTime()
-    if (dateA !== dateB) return dateA - dateB
-    return a.time_slot_code.localeCompare(b.time_slot_code)
-  })
+  const sortedShifts = shifts.shift_details_sorted?.length
+    ? shifts.shift_details_sorted
+    : [...shift_details].sort((a, b) => {
+        const dateA = parseLocalDate(a.date).getTime()
+        const dateB = parseLocalDate(b.date).getTime()
+        if (dateA !== dateB) return dateA - dateB
+        return a.time_slot_code.localeCompare(b.time_slot_code)
+      })
 
   const getBadgeClassName = (shift: ShiftDetail) => {
     switch (shift.status) {
@@ -54,6 +59,11 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
 
 
   const totalShifts = shifts.total
+  const coveredShiftsWithSubs = shift_details.filter((shift) => Boolean(shift.sub_name))
+  const coveredCount = coveredShiftsWithSubs.length
+  const coveredSubNames = Array.from(
+    new Set(coveredShiftsWithSubs.map((shift) => shift.sub_name).filter(Boolean))
+  ) as string[]
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 pt-3 pb-2 shadow-sm">
       {/* Header */}
@@ -62,9 +72,14 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
           {uncovered} of {totalShifts} Shifts Require Subs
         </div>
         <div className="h-2 rounded-full overflow-hidden flex gap-0.5">
-          {sortedShifts.map((shift) => {
+          {(shifts.coverage_segments ||
+            sortedShifts.map((shift) => ({
+              id: shift.id,
+              status: shift.status,
+            }))
+          ).map((segment) => {
             const getSegmentColor = () => {
-              switch (shift.status) {
+              switch (segment.status) {
                 case 'fully_covered':
                   return 'bg-blue-200'
                 case 'partially_covered':
@@ -73,10 +88,10 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
                   return 'bg-amber-200'
               }
             }
-            
+
             return (
               <div
-                key={shift.id}
+                key={segment.id}
                 className={`h-full ${getSegmentColor()} rounded`}
                 style={{
                   width: '14px', // 14px (between 12-16px)
@@ -87,10 +102,27 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
         </div>
       </div>
       
+      {coveredCount > 0 && (
+        <div className="mb-3 -mt-2 text-sm text-muted-foreground">
+          {coveredCount} Shift{coveredCount === 1 ? '' : 's'} covered by {coveredSubNames.join(', ')}
+        </div>
+      )}
+
       {/* Summary Line */}
+      <div className="mb-3 flex items-center gap-2 flex-wrap">
+        <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 bg-blue-50 border border-blue-400 text-blue-700 font-medium">
+          <Check className="h-3 w-3" />
+          Covered: {fully_covered}
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 bg-amber-50 border border-amber-400 text-amber-700 font-medium">
+          <AlertTriangle className="h-3 w-3" />
+          Uncovered: {uncovered}
+        </span>
+      </div>
+      <div className="border-t border-slate-200" />
 
       {/* Shift Chips */}
-      <div className="flex flex-wrap gap-1.5 pb-2">
+      <div className="mt-3 flex flex-wrap gap-1.5 pb-2">
         {sortedShifts.map((shift) => {
           const isClickable = shift.status === 'fully_covered' || shift.status === 'partially_covered'
           const baseLabel = formatShiftLabel(shift.date, shift.time_slot_code)

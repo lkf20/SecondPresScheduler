@@ -48,12 +48,15 @@ export interface SubstituteContactWithDetails extends SubstituteContact {
       date: string
       day_of_week_id: string | null
       time_slot_id: string
+      time_slots?: { code: string | null } | null
       classroom_id: string
       class_group_id: string | null
     }
   }>
   assigned_shifts: AssignedShift[]
   assigned_count: number
+  selected_shift_keys?: string[]
+  override_shift_keys?: string[]
 }
 
 interface CoverageRequestWithTeacher {
@@ -141,6 +144,7 @@ export async function getSubstituteContact(
           date,
           day_of_week_id,
           time_slot_id,
+          time_slots:time_slot_id(code),
           classroom_id,
           class_group_id
         )
@@ -215,10 +219,28 @@ export async function getSubstituteContact(
     }
   }
 
+  const selectedShiftKeys = new Set<string>()
+  const overrideShiftKeys = new Set<string>()
+  const overrides = (contactData as SubstituteContactWithDetails).shift_overrides || []
+  overrides.forEach((override) => {
+    const shift = override.shift
+    const timeSlotCode = shift?.time_slots?.code || ''
+    if (!shift?.date || !timeSlotCode) return
+    const key = `${shift.date}|${timeSlotCode}`
+    if (override.selected) {
+      selectedShiftKeys.add(key)
+    }
+    if (override.override_availability) {
+      overrideShiftKeys.add(key)
+    }
+  })
+
   return {
     ...(contactData as SubstituteContactWithDetails),
     assigned_shifts: assignedShifts,
     assigned_count: assignedShifts.length,
+    selected_shift_keys: Array.from(selectedShiftKeys),
+    override_shift_keys: Array.from(overrideShiftKeys),
   } as SubstituteContactWithDetails
 }
 

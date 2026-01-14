@@ -1,8 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { findBestCombination } from '@/lib/utils/sub-combination'
-
+import type { RecommendedCombination } from '@/lib/utils/sub-combination'
 export type Mode = 'existing' | 'manual'
 
 export interface Absence {
@@ -12,24 +11,42 @@ export interface Absence {
   start_date: string
   end_date: string | null
   reason: string | null
+  classrooms?: Array<{
+    id: string
+    name: string
+    color: string | null
+  }>
   shifts: {
-    total: number
-    uncovered: number
-    partially_covered: number
-    fully_covered: number
-    shift_details: Array<{
-      id: string
-      date: string
-      day_name: string
-      time_slot_code: string
-      class_name: string | null
-      classroom_name: string | null
-      status: 'uncovered' | 'partially_covered' | 'fully_covered'
-      sub_name?: string | null
-      is_partial?: boolean
-    }>
+      total: number
+      uncovered: number
+      partially_covered: number
+      fully_covered: number
+      shift_details: Array<{
+        id: string
+        date: string
+        day_name: string
+        time_slot_code: string
+        class_name: string | null
+        classroom_name: string | null
+        status: 'uncovered' | 'partially_covered' | 'fully_covered'
+        sub_name?: string | null
+        is_partial?: boolean
+      }>
+      shift_details_sorted?: Array<{
+        id: string
+        date: string
+        day_name: string
+        time_slot_code: string
+        status: 'uncovered' | 'partially_covered' | 'fully_covered'
+        sub_name?: string | null
+        is_partial?: boolean
+      }>
+      coverage_segments?: Array<{
+        id: string
+        status: 'uncovered' | 'partially_covered' | 'fully_covered'
+      }>
+    }
   }
-}
 
 export interface Teacher {
   id: string
@@ -45,6 +62,17 @@ export interface SubCandidate {
   shifts_covered?: number
   can_cover?: unknown[]
   assigned_shifts?: Array<{ date: string; time_slot_code: string }>
+  remaining_shift_keys?: string[]
+  remaining_shift_count?: number
+  has_assigned_shifts?: boolean
+  shift_chips?: Array<{
+    date: string
+    time_slot_code: string
+    status: 'assigned' | 'available' | 'unavailable'
+    reason?: string
+    classroom_name?: string | null
+    class_name?: string | null
+  }>
   [key: string]: unknown
 }
 
@@ -67,7 +95,7 @@ export function useSubFinderData({
   const [selectedAbsence, setSelectedAbsence] = useState<Absence | null>(null)
   const [recommendedSubs, setRecommendedSubs] = useState<SubCandidate[]>([])
   const [allSubs, setAllSubs] = useState<SubCandidate[]>([])
-  const [recommendedCombination, setRecommendedCombination] = useState<unknown>(null)
+  const [recommendedCombinations, setRecommendedCombinations] = useState<RecommendedCombination[]>([])
   const [loading, setLoading] = useState(false)
   const [includePartiallyCovered, setIncludePartiallyCovered] = useState(false)
   const [includeFlexibleStaff, setIncludeFlexibleStaff] = useState(true)
@@ -97,8 +125,6 @@ export function useSubFinderData({
     ) => {
       const { forceOnlyRecommended = false, useOnlyRecommended } = options
       setAllSubs(subs)
-      const combination = findBestCombination(subs)
-      setRecommendedCombination(combination)
       const effectiveOnlyRecommended =
         typeof useOnlyRecommended === 'boolean'
           ? useOnlyRecommended
@@ -149,8 +175,13 @@ export function useSubFinderData({
           }),
         })
         if (!response.ok) throw new Error('Failed to find subs')
-        const data = (await response.json()) as SubCandidate[]
-        applySubResults(data)
+        const data = await response.json()
+        const subs = Array.isArray(data) ? (data as SubCandidate[]) : ((data.subs || []) as SubCandidate[])
+        const combinations = !Array.isArray(data)
+          ? data.recommended_combinations || (data.recommended_combination ? [data.recommended_combination] : [])
+          : []
+        setRecommendedCombinations(combinations)
+        applySubResults(subs)
       } catch (error) {
         console.error('Error finding subs:', error)
       } finally {
@@ -183,7 +214,7 @@ export function useSubFinderData({
       })
       setRecommendedSubs([])
       setAllSubs([])
-      setRecommendedCombination(null)
+      setRecommendedCombinations([])
       try {
         const response = await fetch('/api/sub-finder/find-subs-manual', {
           method: 'POST',
@@ -222,6 +253,8 @@ export function useSubFinderData({
         })
 
         const subs = (data.subs || []) as SubCandidate[]
+        const combinations = data.recommended_combinations || (data.recommended_combination ? [data.recommended_combination] : [])
+        setRecommendedCombinations(combinations)
         applySubResults(subs, { forceOnlyRecommended: true })
       } catch (error) {
         console.error('Error finding subs (manual):', error)
@@ -255,7 +288,7 @@ export function useSubFinderData({
     if (allSubs.length > 0 && selectedAbsence) {
       applySubResults(allSubs)
     } else if (!selectedAbsence) {
-      setRecommendedCombination(null)
+      setRecommendedCombinations([])
     }
   }, [includeOnlyRecommended, selectedAbsence, allSubs, applySubResults])
 
@@ -285,7 +318,7 @@ export function useSubFinderData({
     setSelectedAbsence,
     recommendedSubs,
     allSubs,
-    recommendedCombination,
+    recommendedCombinations,
     loading,
     includePartiallyCovered,
     setIncludePartiallyCovered,

@@ -17,6 +17,7 @@ Issues that need to be fixed.
 
 - [ ] Handle duplicate display names - determine what to do when multiple staff members have the same display name
 - [ ] Fix timezone issue causing dates to shift by one day in sub finder (dates stored as DATE type are being parsed as UTC, causing day shift in local timezones)
+- [ ] After assigning selected shifts, getting an assign shifts error sometimes
 
 ---
 
@@ -24,6 +25,8 @@ Issues that need to be fixed.
 
 Features to implement soon (within the next few weeks).
 
+- [ ] Add summary text of who has already been assigned to sub in Sub Finder under (for example) "3 of 5 Shifts Require Subs"
+- [ ] Add option to view absences in Sub Finder left rail that are already covered
 - [ ] Display name options - offer display name format options (e.g., "First Name Last Initial") with ability to apply to all staff or just the current instance
 - [ ] Dashboard background refresh - refresh coverage summary every 60-120 seconds and show a subtle "Last updated" timestamp with a small manual refresh option
 - [ ] Dashboard time range setting - add a Settings option to configure how far ahead the dashboard looks (e.g., 2 weeks, 3 weeks)
@@ -34,6 +37,7 @@ Features to implement soon (within the next few weeks).
 - [ ] School management UI - add ability to create new schools and manage school settings
 - [ ] Timezone settings - add timezone configuration section to Settings to allow schools to set their timezone, ensuring dates are displayed and processed correctly
 - [ ] Standardize warning styles - add a shared WarningText component and migrate existing warnings to it (Time Off, Weekly Schedule, Sub Finder, etc.)
+- [ ] Check and fix UI for different screen sizes - some UI errors noticed in Dashboard for medium size screens
 
 ---
 

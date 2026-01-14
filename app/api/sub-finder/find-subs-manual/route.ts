@@ -5,6 +5,8 @@ import { getSubAvailability, getSubAvailabilityExceptions } from '@/lib/api/sub-
 import { getTeacherScheduledShifts, getTimeOffShifts } from '@/lib/api/time-off-shifts'
 import { getTimeOffRequests } from '@/lib/api/time-off'
 import { createErrorResponse } from '@/lib/utils/errors'
+import { findTopCombinations } from '@/lib/utils/sub-combination'
+import { buildShiftChips } from '@/lib/server/coverage/shift-chips'
 
 interface ManualShiftInput {
   date: string
@@ -330,10 +332,53 @@ export async function POST(request: NextRequest) {
       return a.name.localeCompare(b.name)
     })
 
+    const allShiftKeys = new Set<string>()
+    const assignedShiftKeys = new Set<string>()
+    filteredMatches.forEach((match) => {
+      match.can_cover?.forEach((shift: { date: string; time_slot_code: string }) => {
+        allShiftKeys.add(`${shift.date}|${shift.time_slot_code}`)
+      })
+      match.cannot_cover?.forEach((shift: { date: string; time_slot_code: string }) => {
+        allShiftKeys.add(`${shift.date}|${shift.time_slot_code}`)
+      })
+      match.assigned_shifts?.forEach((shift: { date: string; time_slot_code: string }) => {
+        const key = `${shift.date}|${shift.time_slot_code}`
+        allShiftKeys.add(key)
+        assignedShiftKeys.add(key)
+      })
+    })
+
+    const remainingShiftKeys = Array.from(allShiftKeys).filter((key) => !assignedShiftKeys.has(key))
+    const totalShifts = filteredMatches[0]?.total_shifts || 0
+    const remainingShiftCount = Math.max(0, totalShifts - assignedShiftKeys.size)
+    const hasAssignedShifts = assignedShiftKeys.size > 0
+
+    const enrichedMatches = filteredMatches.map((match) => {
+      const shiftChips = buildShiftChips({
+        assigned: [],
+        canCover: match.can_cover || [],
+        cannotCover: match.cannot_cover || [],
+        allowedShiftKeys: remainingShiftKeys,
+      })
+
+      return {
+        ...match,
+        remaining_shift_keys: remainingShiftKeys,
+        remaining_shift_count: remainingShiftCount,
+        has_assigned_shifts: hasAssignedShifts,
+        shift_chips: shiftChips,
+      }
+    })
+
+    const recommendedCombinations = findTopCombinations(enrichedMatches, 5)
+    const recommendedCombination = recommendedCombinations[0] ?? null
+
     return NextResponse.json({
-      subs: filteredMatches,
+      subs: enrichedMatches,
       shift_details: shiftDetails,
       totals: { total, uncovered, partially_covered, fully_covered },
+      recommended_combination: recommendedCombination,
+      recommended_combinations: recommendedCombinations,
     })
   } catch (error) {
     return createErrorResponse(error, 'Failed to find subs (manual)', 500, 'POST /api/sub-finder/find-subs-manual')

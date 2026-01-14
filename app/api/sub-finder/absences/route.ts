@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getTimeOffRequests } from '@/lib/api/time-off'
 import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
+import { buildCoverageBadges, getCoverageStatus } from '@/lib/server/coverage/absence-status'
+import { sortCoverageShifts, buildCoverageSegments } from '@/lib/server/coverage/coverage-summary'
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,13 +25,16 @@ export async function GET(request: NextRequest) {
 
     const scheduleLookup = new Map<
       string,
-      { classrooms: Set<string>; classes: Set<string> }
+      {
+        classrooms: Map<string, { id: string; name: string; color: string | null }>
+        classes: Set<string>
+      }
     >()
 
     if (teacherIds.length > 0) {
       const { data: teacherSchedules, error: scheduleError } = await supabase
         .from('teacher_schedules')
-        .select('teacher_id, day_of_week_id, time_slot_id, classroom:classrooms(name), class:class_groups(name)')
+        .select('teacher_id, day_of_week_id, time_slot_id, classroom:classrooms(id, name, color), class:class_groups(name)')
         .in('teacher_id', teacherIds)
 
       if (scheduleError) {
@@ -37,8 +42,19 @@ export async function GET(request: NextRequest) {
       } else {
         ;(teacherSchedules || []).forEach((schedule: any) => {
           const key = `${schedule.teacher_id}|${schedule.day_of_week_id}|${schedule.time_slot_id}`
-          const entry = scheduleLookup.get(key) || { classrooms: new Set<string>(), classes: new Set<string>() }
-          if (schedule.classroom?.name) entry.classrooms.add(schedule.classroom.name)
+          const entry =
+            scheduleLookup.get(key) || {
+              classrooms: new Map<string, { id: string; name: string; color: string | null }>(),
+              classes: new Set<string>(),
+            }
+          if (schedule.classroom?.name) {
+            const classroomId = schedule.classroom.id || schedule.classroom.name
+            entry.classrooms.set(classroomId, {
+              id: schedule.classroom.id || schedule.classroom.name,
+              name: schedule.classroom.name,
+              color: schedule.classroom.color || null,
+            })
+          }
           if (schedule.class?.name) entry.classes.add(schedule.class.name)
           scheduleLookup.set(key, entry)
         })
@@ -121,14 +137,21 @@ export async function GET(request: NextRequest) {
         }
         
         // Build shift details with coverage status and sub info
+        const classroomMap = new Map<string, { id: string; name: string; color: string | null }>()
+
         const shiftDetails = shifts.map((shift) => {
           const key = `${shift.date}|${shift.time_slot_id}`
           const status = coverageMap.get(key) || 'uncovered'
           const assignment = assignmentMap.get(key)
           const scheduleKey = `${request.teacher_id}|${shift.day_of_week_id}|${shift.time_slot_id}`
           const scheduleEntry = scheduleLookup.get(scheduleKey)
+          if (scheduleEntry?.classrooms?.size) {
+            scheduleEntry.classrooms.forEach((classroom) => {
+              classroomMap.set(classroom.id || classroom.name, classroom)
+            })
+          }
           const classroom_name = scheduleEntry?.classrooms?.size
-            ? Array.from(scheduleEntry.classrooms).join(', ')
+            ? Array.from(scheduleEntry.classrooms.values()).map((classroom) => classroom.name).join(', ')
             : null
           const class_name = scheduleEntry?.classes?.size
             ? Array.from(scheduleEntry.classes).join(', ')
@@ -148,9 +171,9 @@ export async function GET(request: NextRequest) {
         })
         
         // Count coverage status
-        const uncovered = shiftDetails.filter(s => s.status === 'uncovered').length
-        const partially_covered = shiftDetails.filter(s => s.status === 'partially_covered').length
-        const fully_covered = shiftDetails.filter(s => s.status === 'fully_covered').length
+        const uncovered = shiftDetails.filter((s) => s.status === 'uncovered').length
+        const partially_covered = shiftDetails.filter((s) => s.status === 'partially_covered').length
+        const fully_covered = shiftDetails.filter((s) => s.status === 'fully_covered').length
         const total = shiftDetails.length
         
         // Get teacher name
@@ -160,6 +183,20 @@ export async function GET(request: NextRequest) {
                               ? `${teacher.first_name} ${teacher.last_name}` 
                               : teacher?.first_name || 'Unknown Teacher')
         
+        const classrooms = Array.from(classroomMap.values())
+        const coverage_status = getCoverageStatus({
+          uncovered,
+          partiallyCovered: partially_covered,
+        })
+        const coverage_badges = buildCoverageBadges({
+          uncovered,
+          partiallyCovered: partially_covered,
+          fullyCovered: fully_covered,
+        })
+
+        const sortedShiftDetails = sortCoverageShifts(shiftDetails)
+        const coverageSegments = buildCoverageSegments(sortedShiftDetails)
+
         return {
           id: request.id,
           teacher_id: request.teacher_id,
@@ -167,12 +204,17 @@ export async function GET(request: NextRequest) {
           start_date: request.start_date,
           end_date: request.end_date,
           reason: request.reason,
+          classrooms,
+          coverage_status,
+          coverage_badges,
           shifts: {
             total,
             uncovered,
             partially_covered,
             fully_covered,
             shift_details: shiftDetails,
+            shift_details_sorted: sortedShiftDetails,
+            coverage_segments: coverageSegments,
           },
         }
       })

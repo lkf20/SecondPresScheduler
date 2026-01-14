@@ -46,7 +46,7 @@ export async function GET(
     // Get all coverage_request_shifts for this coverage request to get the date/time_slot combinations
     const { data: coverageRequestShifts, error: shiftsError } = await supabase
       .from('coverage_request_shifts')
-      .select('date, time_slot_id')
+      .select('date, time_slot_id, time_slots:time_slot_id(code)')
       .eq('coverage_request_id', coverageRequestId)
 
     if (shiftsError) {
@@ -57,13 +57,17 @@ export async function GET(
     if (!coverageRequestShifts || coverageRequestShifts.length === 0) {
       return NextResponse.json({
         assigned_shifts: [],
+        remaining_shift_keys: [],
+        remaining_shift_count: 0,
+        total_shifts: 0,
       })
     }
 
-    // Build a set of date|time_slot_id combinations for this coverage request
+    // Build a set of date|time_slot_code combinations for this coverage request
     const coverageShiftKeys = new Set<string>()
     coverageRequestShifts.forEach((shift: any) => {
-      const key = `${shift.date}|${shift.time_slot_id}`
+      const timeSlotCode = shift.time_slots?.code || ''
+      const key = `${shift.date}|${timeSlotCode}`
       coverageShiftKeys.add(key)
     })
 
@@ -86,7 +90,8 @@ export async function GET(
 
     // Filter sub_assignments to only include those that match coverage_request_shifts
     const matchingAssignments = (subAssignments || []).filter((assignment: any) => {
-      const key = `${assignment.date}|${assignment.time_slot_id}`
+      const timeSlotCode = assignment.time_slots?.code || ''
+      const key = `${assignment.date}|${timeSlotCode}`
       return coverageShiftKeys.has(key)
     })
 
@@ -96,13 +101,20 @@ export async function GET(
       time_slot_code: assignment.time_slots?.code || '',
       day_name: assignment.days_of_week?.name || '',
     }))
+    const assignedShiftKeys = new Set<string>()
+    assignedShifts.forEach((shift) => {
+      assignedShiftKeys.add(`${shift.date}|${shift.time_slot_code}`)
+    })
+    const remainingShiftKeys = Array.from(coverageShiftKeys).filter((key) => !assignedShiftKeys.has(key))
 
     return NextResponse.json({
       assigned_shifts: assignedShifts,
+      remaining_shift_keys: remainingShiftKeys,
+      remaining_shift_count: Math.max(0, coverageShiftKeys.size - assignedShiftKeys.size),
+      total_shifts: coverageShiftKeys.size,
     })
   } catch (error) {
     console.error('Error fetching assigned shifts:', error)
     return createErrorResponse(getErrorMessage(error), 500)
   }
 }
-

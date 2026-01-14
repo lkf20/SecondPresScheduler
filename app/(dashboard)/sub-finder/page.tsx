@@ -23,6 +23,7 @@ import {
 import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
 import DatePickerInput from '@/components/ui/date-picker-input'
 import { parseLocalDate } from '@/lib/utils/date'
+import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -36,7 +37,7 @@ export default function SubFinderPage() {
     setSelectedAbsence,
     recommendedSubs,
     allSubs,
-    recommendedCombination,
+    recommendedCombinations,
     loading,
     includePartiallyCovered,
     setIncludePartiallyCovered,
@@ -84,13 +85,16 @@ export default function SubFinderPage() {
   }
   const selectedClassrooms = useMemo(() => {
     if (!selectedAbsence) return []
+    if (Array.isArray((selectedAbsence as { classrooms?: Array<{ id: string; name: string; color: string | null }> }).classrooms)) {
+      return (selectedAbsence as { classrooms: Array<{ id: string; name: string; color: string | null }> }).classrooms
+    }
     return Array.from(
       new Set(
         selectedAbsence.shifts.shift_details
           .map((shift) => shift.classroom_name)
           .filter((name): name is string => Boolean(name))
       )
-    )
+    ).map((name) => ({ id: name, name, color: null }))
   }, [selectedAbsence])
   const sortedSubs = useMemo(() => {
     return [...allSubs].sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)))
@@ -526,35 +530,53 @@ export default function SubFinderPage() {
               <div className="px-6 pt-10 pb-2">
                 {/* Header Row */}
                 <div className="mb-5">
-                  <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <h2 className="text-xl font-semibold flex flex-wrap items-center gap-2">
                     <span>Sub Finder</span>
                     <span className="text-muted-foreground">→</span>
                     <span>{selectedAbsence.teacher_name}</span>
                     <span className="text-muted-foreground">→</span>
-                    <span className="text-muted-foreground font-normal">
+                    <span>
                       {(() => {
                         const formatDate = (dateString: string) => {
                           const date = parseLocalDate(dateString)
+                          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+                          const dayName = dayNames[date.getDay()]
                           const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
                           const month = monthNames[date.getMonth()]
                           const day = date.getDate()
-                          return `${month} ${day}`
+                          return `${dayName} ${month} ${day}`
                         }
                         const startDate = formatDate(selectedAbsence.start_date)
                         if (selectedAbsence.end_date && selectedAbsence.end_date !== selectedAbsence.start_date) {
                           const endDate = formatDate(selectedAbsence.end_date)
-                          return `${startDate} - ${endDate}`
+                          return (
+                            <>
+                              {startDate}
+                              <span className="font-normal text-slate-500"> - </span>
+                              {endDate}
+                            </>
+                          )
                         }
                         return startDate
                       })()}
                     </span>
+                    <span className="h-4 w-px bg-slate-500 mx-2" />
+                    {selectedClassrooms.length > 0 ? (
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        {selectedClassrooms.map((classroom) => (
+                          <span
+                            key={classroom.id || classroom.name}
+                            className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-none"
+                            style={getClassroomPillStyle(classroom.color)}
+                          >
+                            {classroom.name}
+                          </span>
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="text-xs font-normal text-muted-foreground">Classroom unavailable</span>
+                    )}
                   </h2>
-                  {selectedClassrooms.length > 0 && (
-                    <div className="text-base text-muted-foreground">
-                      {selectedClassrooms.length === 1 ? 'Classroom' : 'Classrooms'}:{' '}
-                      {selectedClassrooms.join(', ')}
-                    </div>
-                  )}
                 </div>
 
                 {selectedAbsence.shifts.total > 0 && (
@@ -747,17 +769,19 @@ export default function SubFinderPage() {
           {selectedAbsence ? (
             <div className="p-4">
               {/* Recommended Combination Section */}
-              {recommendedCombination && (
-                <div className="mt-6">
+              {recommendedCombinations.length > 0 && (
+                <div className="mt-2">
                   <RecommendedCombination
-                    combination={recommendedCombination}
+                    combinations={recommendedCombinations}
                     onContactSub={handleCombinationContact}
                     totalShifts={selectedAbsence.shifts.total}
                     useRemainingLabel={selectedAbsence.shifts.total > selectedAbsence.shifts.uncovered}
                   />
+                  <div className="mt-16 text-sm font-semibold text-slate-700">All Available Subs</div>
+                  <div className="mt-2 border-t border-slate-200 pt-6" />
                 </div>
               )}
-              
+
               <RecommendedSubsList
                 subs={recommendedSubs}
                 loading={loading}

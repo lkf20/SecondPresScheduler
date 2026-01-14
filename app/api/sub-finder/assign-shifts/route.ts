@@ -82,20 +82,49 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('No valid shifts found for assignment', 404)
     }
 
+    const shiftsNeedingClassroom = coverageRequestShifts.filter(
+      (shift: any) => !shift.classroom_id
+    )
+    let fallbackClassroomMap = new Map<string, string>()
+    if (shiftsNeedingClassroom.length > 0) {
+      const { data: schedules, error: scheduleError } = await supabase
+        .from('teacher_schedules')
+        .select('day_of_week_id, time_slot_id, classroom_id')
+        .eq('teacher_id', teacherId)
+
+      if (scheduleError) {
+        console.error('Error fetching teacher schedules for classroom fallback:', scheduleError)
+        return createErrorResponse('Failed to resolve classroom for assignment', 500)
+      }
+
+      ;(schedules || []).forEach((schedule: any) => {
+        if (!schedule.classroom_id) return
+        const key = `${schedule.day_of_week_id}|${schedule.time_slot_id}`
+        fallbackClassroomMap.set(key, schedule.classroom_id)
+      })
+    }
+
     // Create sub_assignments for each selected shift
-    const assignments = coverageRequestShifts.map((shift: any) => ({
-      sub_id,
-      teacher_id: teacherId,
-      date: shift.date,
-      day_of_week_id: shift.day_of_week_id,
-      time_slot_id: shift.time_slot_id,
-      assignment_type: 'Substitute Shift' as const,
-      classroom_id: shift.classroom_id || null, // Use classroom from coverage_request_shift, or null if unknown
-      is_partial: false,
-      partial_start_time: null,
-      partial_end_time: null,
-      notes: null,
-    }))
+    const assignments = coverageRequestShifts.map((shift: any) => {
+      const fallbackKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
+      const resolvedClassroomId = shift.classroom_id || fallbackClassroomMap.get(fallbackKey)
+      if (!resolvedClassroomId) {
+        throw new Error('Missing classroom assignment for selected shifts')
+      }
+      return {
+        sub_id,
+        teacher_id: teacherId,
+        date: shift.date,
+        day_of_week_id: shift.day_of_week_id,
+        time_slot_id: shift.time_slot_id,
+        assignment_type: 'Substitute Shift' as const,
+        classroom_id: resolvedClassroomId,
+        is_partial: false,
+        partial_start_time: null,
+        partial_end_time: null,
+        notes: null,
+      }
+    })
 
     // Insert sub_assignments
     const { data: createdAssignments, error: insertError } = await supabase
@@ -104,8 +133,16 @@ export async function POST(request: NextRequest) {
       .select()
 
     if (insertError) {
-      console.error('Error creating sub_assignments:', insertError)
-      return createErrorResponse('Failed to create assignments', 500)
+      console.error('Error creating sub_assignments:', {
+        code: insertError.code,
+        message: insertError.message,
+        details: insertError.details,
+        hint: insertError.hint,
+      })
+      return createErrorResponse(
+        `Failed to create assignments: ${insertError.message || 'Database error'}`,
+        500
+      )
     }
 
     // Get substitute contact ID to check for overrides

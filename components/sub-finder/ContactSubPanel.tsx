@@ -62,6 +62,9 @@ interface RecommendedSub {
     day_name: string
     time_slot_code: string
   }>
+  remaining_shift_keys?: string[]
+  remaining_shift_count?: number
+  has_assigned_shifts?: boolean
   can_change_diapers?: boolean
   can_lift_children?: boolean
 }
@@ -82,6 +85,8 @@ interface ContactData {
   shift_overrides?: ShiftOverride[]
   coverage_request_id?: string
   shift_map?: Record<string, string>
+  selected_shift_keys?: string[]
+  override_shift_keys?: string[]
 }
 
 interface ContactSubPanelProps {
@@ -115,13 +120,43 @@ export default function ContactSubPanel({
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(false)
   const [coverageRequestId, setCoverageRequestId] = useState<string | null>(null)
-  const [shiftMap, setShiftMap] = useState<Record<string, string>>({})
   const [contactId, setContactId] = useState<string | null>(null)
   const [overriddenShiftIds, setOverriddenShiftIds] = useState<Set<string>>(new Set())
   const [isSubInactive, setIsSubInactive] = useState(false)
   const [isPreviouslyAvailableExpanded, setIsPreviouslyAvailableExpanded] = useState(false)
-  const [allAssignedShifts, setAllAssignedShifts] = useState<Set<string>>(new Set())
-  const [loadingAssignedShifts, setLoadingAssignedShifts] = useState(false)
+  const [remainingShiftKeys, setRemainingShiftKeys] = useState<Set<string>>(new Set())
+  const [remainingShiftCount, setRemainingShiftCount] = useState<number | null>(null)
+
+  const applyShiftSelections = (data: ContactData) => {
+    if (data.response_status === 'declined_all') {
+      setSelectedShifts(new Set())
+      setOverriddenShiftIds(new Set())
+      return
+    }
+
+    if (Array.isArray(data.selected_shift_keys) || Array.isArray(data.override_shift_keys)) {
+      setSelectedShifts(new Set(data.selected_shift_keys || []))
+      setOverriddenShiftIds(new Set(data.override_shift_keys || []))
+      return
+    }
+
+    if (data.shift_overrides && data.shift_overrides.length > 0) {
+      const selected = new Set<string>()
+      const overridden = new Set<string>()
+      data.shift_overrides.forEach((override: ShiftOverride) => {
+        if (!override.shift) return
+        const key = `${override.shift.date}|${override.shift.time_slot?.code || ''}`
+        if (override.selected) {
+          selected.add(key)
+        }
+        if (override.override_availability) {
+          overridden.add(key)
+        }
+      })
+      setSelectedShifts(selected)
+      setOverriddenShiftIds(overridden)
+    }
+  }
 
   // Initialize assignedShifts and selectedShifts immediately from sub prop (no API call needed)
   useEffect(() => {
@@ -167,32 +202,8 @@ export default function ContactSubPanel({
       setResponseStatus(initialContactData.response_status || 'none')
       setNotes(initialContactData.notes || '')
       setCoverageRequestId(initialContactData.coverage_request_id || null)
-      setShiftMap(initialContactData.shift_map || {})
 
-      // Load selected shifts and override state from shift_overrides if they exist
-      // But if response_status is declined_all, clear all selections
-      if (initialContactData.response_status === 'declined_all') {
-        setSelectedShifts(new Set())
-        setOverriddenShiftIds(new Set())
-      } else if (initialContactData.shift_overrides && initialContactData.shift_overrides.length > 0) {
-        const selected = new Set<string>()
-        const overridden = new Set<string>()
-        initialContactData.shift_overrides.forEach((override: ShiftOverride) => {
-          if (override.selected && override.shift) {
-            const shiftId = override.coverage_request_shift_id || 
-              `${override.shift.date}|${override.shift.time_slot?.code || ''}`
-            const key = `${override.shift.date}|${override.shift.time_slot?.code || ''}`
-            selected.add(key)
-            // Also track by shift ID for unavailable shifts
-            if (override.override_availability) {
-              overridden.add(shiftId)
-              overridden.add(key)
-            }
-          }
-        })
-        setSelectedShifts(selected)
-        setOverriddenShiftIds(overridden)
-      }
+      applyShiftSelections(initialContactData)
       // If no shift_overrides, keep the initial selection from can_cover (unless declined_all)
 
       // Still check if sub is inactive (this is quick and doesn't block UI)
@@ -213,7 +224,6 @@ export default function ContactSubPanel({
 
     if (absence.id.startsWith('manual-')) {
       setCoverageRequestId(null)
-      setShiftMap({})
       setFetching(false)
       return
     }
@@ -238,7 +248,6 @@ export default function ContactSubPanel({
         }
         const coverageData = await coverageResponse.json()
         setCoverageRequestId(coverageData.coverage_request_id)
-        setShiftMap(coverageData.shift_map || {})
 
         // Check if sub is inactive
         if (subResponse?.ok) {
@@ -259,30 +268,7 @@ export default function ContactSubPanel({
             setResponseStatus(contactData.response_status || 'none')
             setNotes(contactData.notes || '')
 
-            // Load selected shifts and override state from shift_overrides if they exist
-            // But if response_status is declined_all, clear all selections
-            if (contactData.response_status === 'declined_all') {
-              setSelectedShifts(new Set())
-              setOverriddenShiftIds(new Set())
-            } else if (contactData.shift_overrides && contactData.shift_overrides.length > 0) {
-              const selected = new Set<string>()
-              const overridden = new Set<string>()
-              contactData.shift_overrides.forEach((override: ShiftOverride) => {
-                if (override.selected && override.shift) {
-                  const shiftId = override.coverage_request_shift_id || 
-                    `${override.shift.date}|${override.shift.time_slot?.code || ''}`
-                  const key = `${override.shift.date}|${override.shift.time_slot?.code || ''}`
-                  selected.add(key)
-                  // Also track by shift ID for unavailable shifts
-                  if (override.override_availability) {
-                    overridden.add(shiftId)
-                    overridden.add(key)
-                  }
-                }
-              })
-              setSelectedShifts(selected)
-              setOverriddenShiftIds(overridden)
-            }
+            applyShiftSelections(contactData)
             // If no shift_overrides, keep the initial selection from can_cover (unless declined_all)
           }
         }
@@ -296,64 +282,35 @@ export default function ContactSubPanel({
     fetchContactData()
   }, [isOpen, sub, absence, initialContactData])
 
-  // Fetch all assigned shifts for the coverage request to calculate remaining shifts
+  // Fetch remaining shifts for the coverage request (computed server-side)
   useEffect(() => {
     if (!coverageRequestId || !absence) {
-      setAllAssignedShifts(new Set())
-      setLoadingAssignedShifts(false)
+      setRemainingShiftKeys(new Set())
+      setRemainingShiftCount(null)
       return
     }
 
-    const fetchAllAssignedShifts = async () => {
-      setLoadingAssignedShifts(true)
+    const fetchRemainingShifts = async () => {
       try {
-        // Fetch all sub_assignments for this coverage request
         const response = await fetch(`/api/sub-finder/coverage-request/${absence.id}/assigned-shifts`)
         if (response.ok) {
           const data = await response.json()
-          // Helper to normalize date to YYYY-MM-DD format
-          const normalizeDate = (dateStr: string): string => {
-            if (!dateStr) return dateStr
-            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
-            try {
-              const date = new Date(dateStr)
-              if (!isNaN(date.getTime())) {
-                const year = date.getFullYear()
-                const month = String(date.getMonth() + 1).padStart(2, '0')
-                const day = String(date.getDate()).padStart(2, '0')
-                return `${year}-${month}-${day}`
-              }
-            } catch {}
-            return dateStr
-          }
-          // Create a Set of shift keys (date|time_slot_code) for all assigned shifts
-          const assignedSet = new Set<string>()
-          if (data.assigned_shifts) {
-            data.assigned_shifts.forEach((shift: { date: string; time_slot_code: string }) => {
-              const normalizedDate = normalizeDate(shift.date)
-              const key = `${normalizedDate}|${shift.time_slot_code}`
-              assignedSet.add(key)
-            })
-          }
-          setAllAssignedShifts(assignedSet)
-          console.log('ContactSubPanel - All assigned shifts fetched:', {
-            count: assignedSet.size,
-            shifts: Array.from(assignedSet),
-            rawData: data.assigned_shifts
-          })
+          const remainingKeys = new Set<string>(
+            Array.isArray(data.remaining_shift_keys) ? data.remaining_shift_keys : []
+          )
+          setRemainingShiftKeys(remainingKeys)
+          setRemainingShiftCount(typeof data.remaining_shift_count === 'number' ? data.remaining_shift_count : null)
         } else {
           console.error('Failed to fetch assigned shifts:', response.status, response.statusText)
           const errorText = await response.text()
           console.error('Error response:', errorText)
         }
       } catch (error) {
-        console.error('Error fetching all assigned shifts:', error)
-      } finally {
-        setLoadingAssignedShifts(false)
+        console.error('Error fetching remaining shifts:', error)
       }
     }
 
-    fetchAllAssignedShifts()
+    fetchRemainingShifts()
   }, [coverageRequestId, absence])
 
   // Reset state when panel closes
@@ -366,13 +323,12 @@ export default function ContactSubPanel({
       setSelectedShifts(new Set())
       setAssignedShifts([])
       setCoverageRequestId(null)
-      setShiftMap({})
       setContactId(null)
       setOverriddenShiftIds(new Set())
       setIsSubInactive(false)
       setIsPreviouslyAvailableExpanded(false)
-      setAllAssignedShifts(new Set())
-      setLoadingAssignedShifts(false)
+      setRemainingShiftKeys(new Set())
+      setRemainingShiftCount(null)
     }
   }, [isOpen])
 
@@ -494,16 +450,57 @@ export default function ContactSubPanel({
     setSelectedShifts(newSelected)
   }
 
-  const handleToggleOverride = (shiftId: string) => {
+  const handleToggleOverride = (shiftKey: string) => {
     setOverriddenShiftIds((prev) => {
       const next = new Set(prev)
-      if (next.has(shiftId)) {
-        next.delete(shiftId)
+      if (next.has(shiftKey)) {
+        next.delete(shiftKey)
       } else {
-        next.add(shiftId)
+        next.add(shiftKey)
       }
       return next
     })
+  }
+
+  const resolveShiftOverrides = async () => {
+    if (!coverageRequestId || !sub) {
+      throw new Error('Coverage request or sub data missing')
+    }
+
+    const availableShiftKeys = (sub.can_cover || []).map(
+      (shift) => `${shift.date}|${shift.time_slot_code}`
+    )
+    const unavailableShiftKeys = (sub.cannot_cover || []).map(
+      (shift) => `${shift.date}|${shift.time_slot_code}`
+    )
+
+    const response = await fetch('/api/sub-finder/shift-overrides', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        coverage_request_id: coverageRequestId,
+        selected_shift_keys: Array.from(selectedShifts),
+        override_shift_keys: Array.from(overriddenShiftIds),
+        available_shift_keys: availableShiftKeys,
+        unavailable_shift_keys: unavailableShiftKeys,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => '')
+      throw new Error(
+        errorBody || `Failed to resolve shift overrides (${response.status} ${response.statusText})`
+      )
+    }
+
+    return (await response.json()) as {
+      shift_overrides: Array<{
+        coverage_request_shift_id: string
+        selected: boolean
+        override_availability: boolean
+      }>
+      selected_shift_ids: string[]
+    }
   }
 
   const handleSave = async () => {
@@ -514,31 +511,7 @@ export default function ContactSubPanel({
 
     setLoading(true)
     try {
-      // Build shift overrides array for available shifts
-      const availableShiftOverrides = sub.can_cover?.map((shift) => {
-        const shiftKey = `${shift.date}|${shift.time_slot_code}`
-        const coverageRequestShiftId = shiftMap[shiftKey]
-        return {
-          coverage_request_shift_id: coverageRequestShiftId,
-          selected: selectedShifts.has(shiftKey),
-          override_availability: false,
-        }
-      }).filter((override) => override.coverage_request_shift_id) || []
-
-      // Build shift overrides array for unavailable shifts
-      const unavailableShiftOverrides = sub.cannot_cover?.map((shift) => {
-        const shiftId = shift.coverage_request_shift_id || 
-          `${shift.date}|${shift.time_slot_code}`
-        const shiftKey = `${shift.date}|${shift.time_slot_code}`
-        const coverageRequestShiftId = shift.coverage_request_shift_id || shiftMap[shiftKey]
-        return {
-          coverage_request_shift_id: coverageRequestShiftId,
-          selected: selectedShifts.has(shiftKey),
-          override_availability: overriddenShiftIds.has(shiftId) || overriddenShiftIds.has(shiftKey),
-        }
-      }).filter((override) => override.coverage_request_shift_id) || []
-
-      const shiftOverrides = [...availableShiftOverrides, ...unavailableShiftOverrides]
+      const resolvedOverrides = await resolveShiftOverrides()
 
       // Get or create contact first if we don't have contactId
       let currentContactId = contactId
@@ -564,7 +537,8 @@ export default function ContactSubPanel({
           response_status: responseStatus,
           is_contacted: isContacted,
           notes: notes || null,
-          shift_overrides: shiftOverrides,
+          shift_overrides: resolvedOverrides.shift_overrides,
+          selected_shift_keys: Array.from(selectedShifts),
         }),
       })
 
@@ -655,72 +629,11 @@ export default function ContactSubPanel({
         }
       }
 
-      // Build shift overrides array and get selected shift IDs (from both available and unavailable)
-      const selectedShiftIds: string[] = []
-      
-      // Add available shifts
-      sub.can_cover?.forEach((shift) => {
-        const shiftKey = `${shift.date}|${shift.time_slot_code}`
-        if (selectedShifts.has(shiftKey)) {
-          const coverageRequestShiftId = shiftMap[shiftKey]
-          if (coverageRequestShiftId) {
-            selectedShiftIds.push(coverageRequestShiftId)
-          }
-        }
-      })
-      
-      // Add unavailable shifts that are overridden and selected
-      sub.cannot_cover?.forEach((shift) => {
-        const shiftId = shift.coverage_request_shift_id || 
-          `${shift.date}|${shift.time_slot_code}`
-        const shiftKey = `${shift.date}|${shift.time_slot_code}`
-        if (selectedShifts.has(shiftKey) && (overriddenShiftIds.has(shiftId) || overriddenShiftIds.has(shiftKey))) {
-          const coverageRequestShiftId = shift.coverage_request_shift_id || shiftMap[shiftKey]
-          if (coverageRequestShiftId) {
-            selectedShiftIds.push(coverageRequestShiftId)
-          }
-        }
-      })
+      const resolvedOverrides = await resolveShiftOverrides()
+      const selectedShiftIds = resolvedOverrides.selected_shift_ids
 
-      if (selectedShiftIds.length === 0) {
+      if (!selectedShiftIds || selectedShiftIds.length === 0) {
         throw new Error('No valid shifts selected for assignment')
-      }
-
-      // Build shift overrides array for available shifts
-      const availableShiftOverrides = sub.can_cover?.map((shift) => {
-        const shiftKey = `${shift.date}|${shift.time_slot_code}`
-        const coverageRequestShiftId = shiftMap[shiftKey]
-        return {
-          coverage_request_shift_id: coverageRequestShiftId,
-          selected: selectedShifts.has(shiftKey),
-          override_availability: false,
-        }
-      }).filter((override) => override.coverage_request_shift_id) || []
-
-      // Build shift overrides array for unavailable shifts
-      const unavailableShiftOverrides = sub.cannot_cover?.map((shift) => {
-        const shiftId = shift.coverage_request_shift_id || 
-          `${shift.date}|${shift.time_slot_code}`
-        const shiftKey = `${shift.date}|${shift.time_slot_code}`
-        const coverageRequestShiftId = shift.coverage_request_shift_id || shiftMap[shiftKey]
-        return {
-          coverage_request_shift_id: coverageRequestShiftId,
-          selected: selectedShifts.has(shiftKey),
-          override_availability: overriddenShiftIds.has(shiftId) || overriddenShiftIds.has(shiftKey),
-        }
-      }).filter((override) => override.coverage_request_shift_id) || []
-
-      const shiftOverrides = [...availableShiftOverrides, ...unavailableShiftOverrides]
-
-      // Validate shift overrides before sending
-      const validShiftOverrides = shiftOverrides.filter(
-        (override) => override.coverage_request_shift_id
-      )
-
-      if (validShiftOverrides.length !== shiftOverrides.length) {
-        console.warn(
-          `Filtered out ${shiftOverrides.length - validShiftOverrides.length} invalid shift overrides`
-        )
       }
 
       const updatePayload = {
@@ -728,13 +641,9 @@ export default function ContactSubPanel({
         response_status: responseStatus,
         is_contacted: isContacted,
         notes: notes || null,
-        shift_overrides: validShiftOverrides,
+        shift_overrides: resolvedOverrides.shift_overrides,
+        selected_shift_keys: Array.from(selectedShifts),
       }
-
-      console.log('Updating contact with payload:', {
-        ...updatePayload,
-        shift_overrides_count: validShiftOverrides.length,
-      })
 
       const updateResponse = await fetch('/api/sub-finder/substitute-contacts', {
         method: 'PUT',
@@ -763,10 +672,7 @@ export default function ContactSubPanel({
           statusText: updateResponse.statusText,
           errorText: errorText || '(empty response)',
           errorData,
-          payload: {
-            ...updatePayload,
-            shift_overrides_count: updatePayload.shift_overrides.length,
-          },
+          payload: updatePayload,
         })
         
         throw new Error(errorMessage)
@@ -778,8 +684,6 @@ export default function ContactSubPanel({
         sub_id: sub.id,
         selected_shift_ids: selectedShiftIds,
       }
-
-      console.log('Assigning shifts with payload:', assignPayload)
 
       if (!coverageRequestId) {
         throw new Error('Coverage request ID is missing. Please try opening the panel again.')
@@ -838,39 +742,18 @@ export default function ContactSubPanel({
         onAssignmentComplete()
       }
 
-      // Refresh all assigned shifts to update remaining shifts calculation
+      // Refresh remaining shifts to update remaining shifts calculation
       if (coverageRequestId && absence) {
         const refreshResponse = await fetch(`/api/sub-finder/coverage-request/${absence.id}/assigned-shifts`)
         if (refreshResponse.ok) {
           const refreshData = await refreshResponse.json()
-          // Helper to normalize date to YYYY-MM-DD format
-          const normalizeDate = (dateStr: string): string => {
-            if (!dateStr) return dateStr
-            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
-            try {
-              const date = new Date(dateStr)
-              if (!isNaN(date.getTime())) {
-                const year = date.getFullYear()
-                const month = String(date.getMonth() + 1).padStart(2, '0')
-                const day = String(date.getDate()).padStart(2, '0')
-                return `${year}-${month}-${day}`
-              }
-            } catch {}
-            return dateStr
-          }
-          const assignedSet = new Set<string>()
-          if (refreshData.assigned_shifts) {
-            refreshData.assigned_shifts.forEach((shift: { date: string; time_slot_code: string }) => {
-              const normalizedDate = normalizeDate(shift.date)
-              const key = `${normalizedDate}|${shift.time_slot_code}`
-              assignedSet.add(key)
-            })
-          }
-          setAllAssignedShifts(assignedSet)
-          console.log('ContactSubPanel - Refreshed all assigned shifts after assignment:', {
-            count: assignedSet.size,
-            shifts: Array.from(assignedSet)
-          })
+          const refreshedRemainingKeys = new Set<string>(
+            Array.isArray(refreshData.remaining_shift_keys) ? refreshData.remaining_shift_keys : []
+          )
+          setRemainingShiftKeys(refreshedRemainingKeys)
+          setRemainingShiftCount(
+            typeof refreshData.remaining_shift_count === 'number' ? refreshData.remaining_shift_count : null
+          )
         }
       }
 
@@ -937,6 +820,7 @@ export default function ContactSubPanel({
             is_contacted: isContacted,
             notes: notes || null,
             shift_overrides: shiftOverrides,
+            selected_shift_keys: [],
           }),
         })
 
@@ -980,67 +864,42 @@ export default function ContactSubPanel({
   }
 
   const selectedShiftsCount = selectedShifts.size
-  // Helper to normalize date to YYYY-MM-DD format for consistent key matching
-  const normalizeDate = (dateStr: string): string => {
-    if (!dateStr) return dateStr
-    // If it's already in YYYY-MM-DD format, return as is
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      return dateStr
-    }
-    // Otherwise, try to parse and format
-    try {
-      const date = new Date(dateStr)
-      if (!isNaN(date.getTime())) {
-        const year = date.getFullYear()
-        const month = String(date.getMonth() + 1).padStart(2, '0')
-        const day = String(date.getDate()).padStart(2, '0')
-        return `${year}-${month}-${day}`
-      }
-    } catch {
-      // If parsing fails, return original
-    }
-    return dateStr
-  }
 
-  // Filter to get only remaining (unassigned) shifts
-  // Remaining shifts are those in can_cover that aren't assigned to ANY sub
-  const remainingCanCover = sub.can_cover?.filter((shift) => {
-    const normalizedDate = normalizeDate(shift.date)
-    const shiftKey = `${normalizedDate}|${shift.time_slot_code}`
-    // Exclude if assigned to any sub (using allAssignedShifts)
-    const isAssigned = allAssignedShifts.has(shiftKey)
-    if (isAssigned) {
-      console.log('ContactSubPanel - Filtering out assigned shift:', shiftKey, 'from shift:', shift)
+  const derivedShiftKeys = (() => {
+    if (remainingShiftKeys.size > 0) return remainingShiftKeys
+    if (Array.isArray(sub.remaining_shift_keys) && sub.remaining_shift_keys.length > 0) {
+      return new Set(sub.remaining_shift_keys)
     }
-    return !isAssigned
+    const allKeys = new Set<string>()
+    sub.can_cover?.forEach((shift) => {
+      allKeys.add(`${shift.date}|${shift.time_slot_code}`)
+    })
+    sub.cannot_cover?.forEach((shift) => {
+      allKeys.add(`${shift.date}|${shift.time_slot_code}`)
+    })
+    sub.assigned_shifts?.forEach((shift) => {
+      allKeys.add(`${shift.date}|${shift.time_slot_code}`)
+    })
+    const assignedKeys = new Set<string>()
+    sub.assigned_shifts?.forEach((shift) => {
+      assignedKeys.add(`${shift.date}|${shift.time_slot_code}`)
+    })
+    return new Set(Array.from(allKeys).filter((key) => !assignedKeys.has(key)))
+  })()
+
+  const remainingCanCover = sub.can_cover?.filter((shift) => {
+    const shiftKey = `${shift.date}|${shift.time_slot_code}`
+    return derivedShiftKeys.has(shiftKey)
   }) || []
-  
-  // DEBUG: Log values to understand the data
-  console.log('ContactSubPanel - Remaining Shifts Calculation:', {
-    'loadingAssignedShifts': loadingAssignedShifts,
-    'sub.total_shifts': sub.total_shifts,
-    'allAssignedShifts.size': allAssignedShifts.size,
-    'allAssignedShifts': Array.from(allAssignedShifts),
-    'assignedShifts.length (this sub)': assignedShifts.length,
-    'sub.can_cover.length': sub.can_cover?.length || 0,
-    'sub.can_cover sample keys': sub.can_cover?.slice(0, 3).map(s => `${s.date}|${s.time_slot_code}`),
-    'remainingCanCover.length': remainingCanCover.length,
-    'remainingCanCover sample keys': remainingCanCover.slice(0, 3).map(s => `${s.date}|${s.time_slot_code}`),
-    'sub.shifts_covered': sub.shifts_covered,
-  })
-  
-  // Calculate remaining shifts (total shifts minus all assigned shifts across all subs)
-  // Only calculate if we've loaded the assigned shifts data
-  const remainingShifts = loadingAssignedShifts ? sub.total_shifts : Math.max(0, sub.total_shifts - allAssignedShifts.size)
-  
-  // Calculate remaining shifts covered (shifts this sub can cover that aren't assigned to any sub)
+
+  const remainingShifts =
+    remainingShiftCount !== null
+      ? remainingShiftCount
+      : typeof sub.remaining_shift_count === 'number'
+        ? sub.remaining_shift_count
+        : sub.total_shifts
+
   const remainingShiftsCovered = remainingCanCover.length
-  
-  console.log('ContactSubPanel - Final Values:', {
-    remainingShifts,
-    remainingShiftsCovered,
-    displayText: `Available for ${remainingShiftsCovered} of ${remainingShifts} remaining shifts`
-  })
 
   // Check if declined_all is selected and any shifts are selected
   const isDeclinedWithShiftsSelected = responseStatus === 'declined_all' && selectedShiftsCount > 0
@@ -1428,10 +1287,8 @@ export default function ContactSubPanel({
                       </div>
                       <div className="space-y-2">
                         {sub.cannot_cover.map((shift, idx) => {
-                          const shiftId = shift.coverage_request_shift_id || 
-                            `${shift.date}|${shift.time_slot_code}`
                           const shiftKey = `${shift.date}|${shift.time_slot_code}`
-                          const isOverridden = overriddenShiftIds.has(shiftId) || overriddenShiftIds.has(shiftKey)
+                          const isOverridden = overriddenShiftIds.has(shiftKey)
                           const isSelected = selectedShifts.has(shiftKey)
                           const canSelect = isOverridden && !isSubInactive && responseStatus !== 'declined_all'
                           
@@ -1473,7 +1330,7 @@ export default function ContactSubPanel({
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleToggleOverride(shiftId)}
+                                onClick={() => handleToggleOverride(shiftKey)}
                                 disabled={isSubInactive || responseStatus === 'declined_all'}
                               >
                                 Override

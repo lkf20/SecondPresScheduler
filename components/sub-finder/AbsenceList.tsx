@@ -1,10 +1,11 @@
 'use client'
 
 import { Card, CardContent } from '@/components/ui/card'
-import { AlertCircle, CheckCircle2, AlertTriangle, PieChart } from 'lucide-react'
+import { AlertCircle, Check, CheckCircle2, AlertTriangle, PieChart, CalendarDays } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { parseLocalDate } from '@/lib/utils/date'
+import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 
 interface Absence {
   id: string
@@ -13,6 +14,13 @@ interface Absence {
   start_date: string
   end_date: string | null
   reason: string | null
+  classrooms?: Array<{ id: string; name: string; color: string | null }>
+  coverage_status?: 'uncovered' | 'partially_covered' | 'covered'
+  coverage_badges?: Array<{
+    label: string
+    count: number
+    tone: 'covered' | 'uncovered' | 'partial'
+  }>
   shifts: {
     total: number
     uncovered: number
@@ -78,29 +86,30 @@ export default function AbsenceList({
       {absences.map((absence) => {
         const { uncovered, partially_covered, fully_covered } = absence.shifts
         const isSelected = selectedAbsence?.id === absence.id
-        const hasUncovered = uncovered > 0
-        const hasPartial = partially_covered > 0 || (fully_covered > 0 && uncovered > 0)
-        const classrooms = Array.from(
-          new Set(
-            absence.shifts.shift_details
-              .map((shift) => shift.classroom_name)
-              .filter((name): name is string => Boolean(name))
-          )
-        )
-        const classroomsLabel = classrooms.length > 0 ? classrooms.join(', ') : 'Classroom unavailable'
-        const formatDate = (dateString: string) => {
-          const date = parseLocalDate(dateString)
-          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-          const dayName = dayNames[date.getDay()]
-          const month = monthNames[date.getMonth()]
-          const day = date.getDate()
-          return `${dayName} ${month} ${day}`
+        const coverageStatus =
+          absence.coverage_status ||
+          (uncovered > 0 ? 'uncovered' : partially_covered > 0 ? 'partially_covered' : 'covered')
+        const hasUncovered = coverageStatus === 'uncovered'
+        const hasPartial = coverageStatus === 'partially_covered'
+        const classrooms =
+          absence.classrooms ||
+          Array.from(
+            new Set(
+              absence.shifts.shift_details
+                .map((shift) => shift.classroom_name)
+                .filter((name): name is string => Boolean(name))
+            )
+          ).map((name) => ({ id: name, name, color: null }))
+        const formatFullDateLabel = (value: string) => {
+          const date = parseLocalDate(value)
+          const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date)
+          const dateLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
+          return `${weekday} ${dateLabel}`
         }
-        const startDate = formatDate(absence.start_date)
+        const startDate = formatFullDateLabel(absence.start_date)
         const endDate =
           absence.end_date && absence.end_date !== absence.start_date
-            ? formatDate(absence.end_date)
+            ? formatFullDateLabel(absence.end_date)
             : null
 
         return (
@@ -118,14 +127,34 @@ export default function AbsenceList({
             <CardContent className="p-4">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1">
-                  <h3 className="font-semibold text-base mb-1 text-slate-800">{absence.teacher_name}</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {endDate ? `${startDate} - ${endDate}` : startDate}
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <h3 className="font-semibold text-base text-slate-800">{absence.teacher_name}</h3>
                     {absence.reason && (
-                      <span className="italic"> ({absence.reason})</span>
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                        {absence.reason}
+                      </span>
                     )}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">{classroomsLabel}</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                    <CalendarDays className="h-4 w-4 text-slate-500" />
+                    <span className="text-sm font-medium text-slate-800">
+                      {endDate ? `${startDate} - ${endDate}` : startDate}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {classrooms.map((classroom) => (
+                      <span
+                        key={classroom.id || classroom.name}
+                        className="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+                        style={getClassroomPillStyle(classroom.color)}
+                      >
+                        {classroom.name}
+                      </span>
+                    ))}
+                    {classrooms.length === 0 && (
+                      <span className="text-xs text-muted-foreground">Classroom unavailable</span>
+                    )}
+                  </div>
                 </div>
                 {hasUncovered && !hasPartial && (
                   <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
@@ -138,31 +167,78 @@ export default function AbsenceList({
                 )}
               </div>
 
-              {/* Shift Status Breakdown */}
-              <div className="flex items-center gap-2 mt-3 flex-wrap">
-                {fully_covered > 0 && (
-                  <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1 bg-blue-50 border border-blue-300 text-blue-700 font-medium">
-                    <span
-                      className="inline-block h-2 w-2 rounded-full border border-blue-700 flex-shrink-0"
-                      style={{ backgroundColor: '#1d4ed8' }}
-                    />
-                    Covered: {fully_covered}
-                  </span>
-                )}
+              <div className="mt-3 border-t border-slate-200 pt-3">
+                {/* Shift Status Breakdown */}
+                <div className="flex items-center justify-between gap-3">
+                  {(absence.coverage_badges || []).length === 0 && (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {fully_covered > 0 && (
+                          <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 bg-blue-50 border border-blue-400 text-blue-700 font-medium">
+                            <Check className="h-3 w-3" />
+                            Covered: {fully_covered}
+                          </span>
+                        )}
+                        {partially_covered > 0 && (
+                          <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 bg-yellow-50 border border-yellow-300 text-yellow-700 font-medium">
+                            Partial: {partially_covered}
+                          </span>
+                        )}
+                      </div>
+                      <div className="ml-auto flex flex-wrap items-center gap-2">
+                        {uncovered > 0 && (
+                          <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 bg-amber-50 border border-amber-400 text-amber-700 font-medium">
+                            <AlertTriangle className="h-3 w-3" />
+                            Uncovered: {uncovered}
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
+                  {(absence.coverage_badges || []).length > 0 && (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {(absence.coverage_badges || [])
+                          .filter((badge) => badge.tone !== 'uncovered')
+                          .map((badge) => {
+                            const palette =
+                              badge.tone === 'covered'
+                                ? {
+                                    className: 'bg-blue-50 border border-blue-400 text-blue-700',
+                                    icon: <Check className="h-3 w-3" />,
+                                  }
+                                : {
+                                    className: 'bg-yellow-50 border border-yellow-300 text-yellow-700',
+                                    icon: null,
+                                  }
 
-                {uncovered > 0 && (
-                  <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1 bg-amber-50 border border-amber-300 text-amber-700 font-medium">
-                    <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
-                    Uncovered: {uncovered}
-                  </span>
-                )}
-
-                {partially_covered > 0 && (
-                  <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1 bg-yellow-50 border border-yellow-300 text-yellow-700 font-medium">
-                    <span className="inline-block h-2 w-2 rounded-full bg-yellow-500" />
-                    Partial: {partially_covered}
-                  </span>
-                )}
+                            return (
+                              <span
+                                key={badge.label}
+                                className={`inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 font-medium ${palette.className}`}
+                              >
+                                {palette.icon}
+                                {badge.label}: {badge.count}
+                              </span>
+                            )
+                          })}
+                      </div>
+                      <div className="ml-auto flex flex-wrap items-center gap-2">
+                        {(absence.coverage_badges || [])
+                          .filter((badge) => badge.tone === 'uncovered')
+                          .map((badge) => (
+                            <span
+                              key={badge.label}
+                              className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 font-medium bg-amber-50 border border-amber-400 text-amber-700"
+                            >
+                              <AlertTriangle className="h-3 w-3" />
+                              {badge.label}: {badge.count}
+                            </span>
+                          ))}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
 
               <div className="mt-3 flex justify-end">

@@ -17,6 +17,14 @@ interface ShiftChipsProps {
   canCover: Shift[]
   cannotCover: Shift[] // Includes reason field for unavailable shifts
   assigned?: Shift[] // Optional list of assigned shifts
+  shifts?: Array<{
+    date: string
+    time_slot_code: string
+    status: 'assigned' | 'available' | 'unavailable'
+    reason?: string
+    classroom_name?: string | null
+    class_name?: string | null
+  }>
   showLegend?: boolean // Whether to show the color legend
   isDeclined?: boolean // If true, all chips will be gray
 }
@@ -42,8 +50,15 @@ const formatShiftTooltipLabel = (dateString: string, timeSlotCode: string): stri
   return `${dayName} ${timeSlotCode} • ${month} ${day}`
 }
 
-export default function ShiftChips({ canCover, cannotCover, assigned = [], showLegend = false, isDeclined = false }: ShiftChipsProps) {
-  if (canCover.length === 0 && cannotCover.length === 0 && assigned.length === 0) {
+export default function ShiftChips({
+  canCover,
+  cannotCover,
+  assigned = [],
+  shifts,
+  showLegend = false,
+  isDeclined = false,
+}: ShiftChipsProps) {
+  if (canCover.length === 0 && cannotCover.length === 0 && assigned.length === 0 && (!shifts || shifts.length === 0)) {
     return null
   }
 
@@ -100,13 +115,15 @@ export default function ShiftChips({ canCover, cannotCover, assigned = [], showL
   })
 
   // Convert to array and sort by date, then time slot
-  const allShifts = Array.from(allShiftsMap.values()).sort((a, b) => {
-    const dateA = parseLocalDate(a.date).getTime()
-    const dateB = parseLocalDate(b.date).getTime()
-    if (dateA !== dateB) return dateA - dateB
-    // If same date, sort by time slot code (AM before PM, etc.)
-    return a.time_slot_code.localeCompare(b.time_slot_code)
-  })
+  const allShifts = shifts
+    ? shifts
+    : Array.from(allShiftsMap.values()).sort((a, b) => {
+        const dateA = parseLocalDate(a.date).getTime()
+        const dateB = parseLocalDate(b.date).getTime()
+        if (dateA !== dateB) return dateA - dateB
+        // If same date, sort by time slot code (AM before PM, etc.)
+        return a.time_slot_code.localeCompare(b.time_slot_code)
+      })
 
   const getBadgeClassName = (status: 'assigned' | 'available' | 'unavailable') => {
     // If declined, make all chips gray
