@@ -29,7 +29,7 @@ export default async function AppLayout({
       <Header userEmail={user.email || undefined} />
       <Sidebar />
       <main className="md:pl-64 pt-16">
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-4 py-4 md:pl-8">
           {children}
         </div>
       </main>
