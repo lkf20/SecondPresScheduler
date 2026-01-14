@@ -156,6 +156,9 @@ export default function DashboardClient({
   const [coverageFilter, setCoverageFilter] = useState<'needs' | 'covered' | 'all'>(
     'needs'
   )
+  const [coverageSectionCollapsed, setCoverageSectionCollapsed] = useState(false)
+  const [scheduledSubsSectionCollapsed, setScheduledSubsSectionCollapsed] = useState(false)
+  const [staffingTargetSectionCollapsed, setStaffingTargetSectionCollapsed] = useState(false)
 
   useEffect(() => {
     const hour = new Date().getHours()
@@ -201,26 +204,26 @@ export default function DashboardClient({
         key: 'uncovered' as const,
         label: 'Uncovered Shifts',
         count: overview.summary.uncovered_shifts,
-        tone: 'text-orange-600',
-        cardStyle: 'border-slate-200 bg-white text-orange-800',
+        tone: 'text-amber-600',
+        cardStyle: 'border-slate-200 bg-white text-slate-700',
         icon: AlertTriangle,
-        iconStyle: 'bg-orange-100 text-orange-600',
+        iconStyle: 'bg-amber-100 text-amber-600',
       },
       {
         key: 'partial' as const,
         label: 'Partially Covered Shifts',
         count: overview.summary.partially_covered_shifts,
-        tone: 'text-amber-800',
-        cardStyle: 'border-slate-200 bg-white text-amber-900',
+        tone: 'text-orange-600',
+        cardStyle: 'border-slate-200 bg-white text-slate-700',
         icon: PieChart,
-        iconStyle: 'bg-amber-100 text-amber-700',
+        iconStyle: 'bg-orange-200 text-orange-600',
       },
       {
         key: 'absences' as const,
         label: 'Upcoming Absences',
         count: overview.summary.absences,
-        tone: 'text-blue-900',
-        cardStyle: 'border-slate-200 bg-white text-blue-900',
+        tone: 'text-blue-600',
+        cardStyle: 'border-slate-200 bg-white text-slate-700',
         icon: Calendar,
         iconStyle: 'bg-blue-100 text-blue-600',
       },
@@ -228,23 +231,23 @@ export default function DashboardClient({
         key: 'scheduled' as const,
         label: 'Scheduled Sub Shifts',
         count: overview.summary.scheduled_subs,
-        tone: 'text-teal-700',
-        cardStyle: 'border-slate-200 bg-white text-teal-800',
+        tone: 'text-teal-600',
+        cardStyle: 'border-slate-200 bg-white text-slate-700',
         icon: Users,
         iconStyle: 'bg-teal-100 text-teal-600',
       },
       {
         key: 'staffing' as const,
         label: 'Understaffed Classrooms',
-        cardStyle: 'border-slate-200 bg-white text-rose-900',
+        cardStyle: 'border-slate-200 bg-white text-slate-700',
         secondaryCount: belowPreferredClassrooms,
         secondaryIcon: AlertTriangle,
-        secondaryStyle: 'text-amber-900',
-        secondaryIconStyle: 'bg-orange-200 text-amber-800',
+        secondaryStyle: 'text-purple-800',
+        secondaryIconStyle: 'bg-purple-100 text-purple-800',
         secondaryRightCount: belowRequiredClassrooms,
         secondaryRightIcon: AlertCircle,
-        secondaryRightStyle: 'text-rose-900',
-        secondaryRightIconStyle: 'bg-red-100 text-red-600',
+        secondaryRightStyle: 'text-purple-800',
+        secondaryRightIconStyle: 'bg-purple-100 text-purple-800',
       },
     ],
     [overview.summary, belowRequiredClassrooms, belowPreferredClassrooms]
@@ -317,22 +320,21 @@ export default function DashboardClient({
         </div>
       </section>
 
-      <section className="space-y-3 pb-6 border-b border-slate-200">
-        <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <section className="space-y-3 pb-1">
+        <div className="grid gap-x-4 gap-y-6 justify-items-start grid-cols-[repeat(auto-fill,minmax(250px,250px))]">
           {summaryItems.map((item) => (
-            <div key={item.key} className="text-left">
+            <div key={item.key} className="text-left min-w-[250px] max-w-[250px]">
               <Card
                 className={cn(
-                  'w-full max-w-[260px] justify-self-start shadow-md',
+                  'border-2 shadow-sm',
+                  'sm:justify-self-start',
                   item.cardStyle
                 )}
               >
                 <CardContent className="p-4">
                   <div
-                    className={cn(
-                      'text-base font-semibold',
-                      item.key === 'uncovered' ? 'text-orange-600' : undefined
-                    )}
+                    className="text-base font-normal"
+                    style={item.key === 'partial' ? { backgroundClip: 'unset', WebkitBackgroundClip: 'unset' } : undefined}
                   >
                     {item.label}
                   </div>
@@ -397,19 +399,34 @@ export default function DashboardClient({
         </div>
       </section>
 
-      <div className="grid gap-6 pt-4 lg:grid-cols-[1.4fr_0.9fr_0.9fr]">
-        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-slate-900" />
-              <h2 className="text-lg font-semibold text-slate-900">
-                Upcoming Time Off & Coverage
-              </h2>
-            </div>
+      <div className="grid grid-cols-1 gap-6 pt-1 xl:grid-cols-[minmax(550px,1.4fr)_minmax(400px,0.9fr)_minmax(400px,0.9fr)]">
+        <section className="min-w-[550px] space-y-4 rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setCoverageSectionCollapsed(!coverageSectionCollapsed)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setCoverageSectionCollapsed(!coverageSectionCollapsed)
+              }
+            }}
+            className="flex w-full items-center justify-between gap-3 xl:pointer-events-none xl:cursor-default"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 xl:flex-1">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-slate-900" />
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Upcoming Time Off & Coverage
+                </h2>
+              </div>
             <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
               <button
                 type="button"
-                onClick={() => setCoverageFilter('needs')}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setCoverageFilter('needs')
+                }}
                 className={cn(
                   'rounded-full border px-3 py-1 transition',
                   coverageFilter === 'needs'
@@ -421,7 +438,10 @@ export default function DashboardClient({
               </button>
               <button
                 type="button"
-                onClick={() => setCoverageFilter('covered')}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setCoverageFilter('covered')
+                }}
                 className={cn(
                   'rounded-full border px-3 py-1 transition',
                   coverageFilter === 'covered'
@@ -433,7 +453,10 @@ export default function DashboardClient({
               </button>
               <button
                 type="button"
-                onClick={() => setCoverageFilter('all')}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setCoverageFilter('all')
+                }}
                 className={cn(
                   'rounded-full border px-3 py-1 transition',
                   coverageFilter === 'all'
@@ -444,9 +467,18 @@ export default function DashboardClient({
                 All ({coverageCounts.all})
               </button>
             </div>
+            </div>
+            <div className="xl:hidden">
+              {coverageSectionCollapsed ? (
+                <ChevronDown className="h-5 w-5 text-slate-500" />
+              ) : (
+                <ChevronUp className="h-5 w-5 text-slate-500" />
+              )}
+            </div>
           </div>
 
-          {filteredCoverageRequests.length === 0 ? (
+          <div className={cn('space-y-4', coverageSectionCollapsed && 'hidden xl:block')}>
+              {filteredCoverageRequests.length === 0 ? (
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
               No upcoming time off in the next 14 days
             </div>
@@ -561,15 +593,38 @@ export default function DashboardClient({
               ))}
             </div>
           )}
-        </section>
-
-        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-slate-900" />
-            <h2 className="text-lg font-semibold text-slate-900">Scheduled Subs</h2>
           </div>
 
-          {overview.scheduled_subs.length === 0 ? (
+        </section>
+
+        <section className="min-w-[400px] space-y-4 rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setScheduledSubsSectionCollapsed(!scheduledSubsSectionCollapsed)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setScheduledSubsSectionCollapsed(!scheduledSubsSectionCollapsed)
+              }
+            }}
+            className="flex w-full items-center justify-between gap-3 xl:pointer-events-none xl:cursor-default"
+          >
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-slate-900" />
+              <h2 className="text-lg font-semibold text-slate-900">Scheduled Subs</h2>
+            </div>
+            <div className="xl:hidden">
+              {scheduledSubsSectionCollapsed ? (
+                <ChevronDown className="h-5 w-5 text-slate-500" />
+              ) : (
+                <ChevronUp className="h-5 w-5 text-slate-500" />
+              )}
+            </div>
+          </div>
+
+          <div className={cn('space-y-4', scheduledSubsSectionCollapsed && 'hidden xl:block')}>
+            {overview.scheduled_subs.length === 0 ? (
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
               No subs scheduled in the next 14 days
             </div>
@@ -630,13 +685,36 @@ export default function DashboardClient({
               ))}
             </div>
           )}
+          </div>
         </section>
 
-        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-slate-900" />
-            <h2 className="text-lg font-semibold text-slate-900">Below Staffing Target</h2>
+        <section className="min-w-[400px] space-y-4 rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setStaffingTargetSectionCollapsed(!staffingTargetSectionCollapsed)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setStaffingTargetSectionCollapsed(!staffingTargetSectionCollapsed)
+              }
+            }}
+            className="flex w-full items-center justify-between gap-3 xl:pointer-events-none xl:cursor-default"
+          >
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-slate-900" />
+              <h2 className="text-lg font-semibold text-slate-900">Below Staffing Target</h2>
+            </div>
+            <div className="xl:hidden">
+              {staffingTargetSectionCollapsed ? (
+                <ChevronDown className="h-5 w-5 text-slate-500" />
+              ) : (
+                <ChevronUp className="h-5 w-5 text-slate-500" />
+              )}
+            </div>
           </div>
+
+          <div className={cn('space-y-4', staffingTargetSectionCollapsed && 'hidden xl:block')}>
 
           {overview.staffing_targets.length === 0 ? (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
@@ -808,6 +886,7 @@ export default function DashboardClient({
               </div>
             </div>
           )}
+          </div>
         </section>
       </div>
     </div>

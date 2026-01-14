@@ -28,7 +28,7 @@ export default function Sidebar() {
   const isAccented = theme === 'accented'
 
   return (
-    <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 md:pt-16">
+    <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 md:pt-16 md:z-40">
       <div
         className={cn(
           'flex-1 flex flex-col min-h-0 border-r transition-colors',
