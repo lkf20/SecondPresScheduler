@@ -326,7 +326,7 @@ export default function DashboardClient({
             <div key={item.key} className="text-left min-w-[250px] max-w-[250px]">
               <Card
                 className={cn(
-                  'border-2 shadow-sm',
+                  'w-full border-2 shadow-sm',
                   'sm:justify-self-start',
                   item.cardStyle
                 )}
