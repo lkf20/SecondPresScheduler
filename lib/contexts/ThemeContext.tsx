@@ -12,9 +12,15 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('system')
-  const [isLoading, setIsLoading] = useState(true)
+export function ThemeProvider({
+  children,
+  initialTheme,
+}: {
+  children: React.ReactNode
+  initialTheme?: Theme
+}) {
+  const [theme, setThemeState] = useState<Theme>(initialTheme ?? 'system')
+  const [isLoading, setIsLoading] = useState(initialTheme ? false : true)
 
   // Fetch theme from server on mount
   useEffect(() => {
@@ -54,6 +60,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
       if (response.ok) {
         setThemeState(newTheme)
+        try {
+          window.localStorage.setItem('theme', newTheme)
+        } catch (error) {
+          console.error('Error persisting theme:', error)
+        }
       } else {
         console.error('Failed to update theme')
       }
