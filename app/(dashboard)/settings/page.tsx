@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { BookOpen, Building2, Clock, Users, UserCheck } from 'lucide-react'
+import { BookOpen, Building2, Clock, Users, UserCheck, Palette } from 'lucide-react'
 
 const settingsCategories = [
   {
@@ -32,6 +32,12 @@ const settingsCategories = [
     description: 'Configure which days appear in the weekly schedule and manage time periods',
     href: '/settings/timeslots',
     icon: Clock,
+  },
+  {
+    name: 'Appearance',
+    description: 'Customize the look and feel of the application',
+    href: '/settings/appearance',
+    icon: Palette,
   },
 ]
 

@@ -23,6 +23,15 @@
   --input: 0 0% 89.8%;
   --ring: 0 0% 3.9%;
   --radius: 0.5rem;
+  
+  /* Sidebar colors - default to system theme values */
+  --sidebar-bg: 0 0% 100%;
+  --sidebar-foreground: 0 0% 3.9%;
+  --sidebar-accent: 0 0% 96.1%;
+  --sidebar-accent-foreground: 0 0% 9%;
+  --sidebar-hover: 0 0% 96.1%;
+  --sidebar-active: 0 0% 96.1%;
+  --sidebar-active-foreground: 0 0% 9%;
 }
 
 .dark {
@@ -45,6 +54,31 @@
   --border: 0 0% 14.9%;
   --input: 0 0% 14.9%;
   --ring: 0 0% 83.1%;
+}
+
+/* Accented theme: Dark navy sidebar, teal/turquoise buttons */
+[data-theme="accented"] {
+  /* Sidebar colors - dark navy */
+  --sidebar-bg: 220 40% 15%;
+  --sidebar-foreground: 0 0% 95%;
+  --sidebar-accent: 180 70% 38%;
+  --sidebar-accent-foreground: 0 0% 98%;
+  --sidebar-hover: 220 40% 20%;
+  --sidebar-active: 180 70% 38%;
+  --sidebar-active-foreground: 0 0% 98%;
+  
+  /* Override primary colors for buttons - teal/turquoise (darker shade) */
+  --primary: 180 70% 38%;
+  --primary-foreground: 0 0% 98%;
+  
+  /* Primary button colors - teal/turquoise (for explicit use) */
+  --primary-accent: 180 70% 38%;
+  --primary-accent-foreground: 0 0% 98%;
+  --primary-accent-hover: 180 70% 35%;
+  
+  /* Outline button colors */
+  --outline-accent: 180 70% 38%;
+  --outline-navy: 220 40% 25%;
 }
 
 body {
