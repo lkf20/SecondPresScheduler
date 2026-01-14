@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     const shiftsNeedingClassroom = coverageRequestShifts.filter(
       (shift: any) => !shift.classroom_id
     )
-    let fallbackClassroomMap = new Map<string, string>()
+    const fallbackClassroomMap = new Map<string, string>()
     if (shiftsNeedingClassroom.length > 0) {
       const { data: schedules, error: scheduleError } = await supabase
         .from('teacher_schedules')

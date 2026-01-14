@@ -78,32 +78,8 @@ type DashboardOverview = {
   scheduled_subs: ScheduledSubItem[]
 }
 
-const formatDate = (value: string) => {
-  const date = new Date(`${value}T00:00:00`)
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
-}
-
-const formatDayName = (value: string) => {
-  const date = new Date(`${value}T00:00:00`)
-  return new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date)
-}
-
-const formatDayTime = (dayName: string, date: string, timeSlotCode: string) => {
-  const dateLabel = formatDate(date)
-  return `${dayName} ${dateLabel} · ${timeSlotCode}`
-}
-
 const formatSlotLabel = (dayName: string, timeSlotCode: string) =>
   `${dayName || '—'} - ${timeSlotCode}`
-
-const formatDateRange = (startDate: string, endDate: string) => {
-  if (!endDate || endDate === startDate) {
-    return `${formatDate(startDate)} (${formatDayName(startDate)})`
-  }
-  return `${formatDate(startDate)} - ${formatDate(endDate)} (${formatDayName(startDate)} - ${formatDayName(endDate)})`
-}
-
-const normalizeWeekday = (label: string) => (label === 'Tue' ? 'Tues' : label)
 
 const formatFullDateLabel = (value: string) => {
   const date = new Date(`${value}T00:00:00`)
