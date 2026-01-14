@@ -49,7 +49,21 @@ Features for later consideration (beyond the next few weeks).
 - [ ] Create multiple baseline weekly schedules (e.g., Spring 2026 Schedule) and see a history of weekly schedules
 - [ ] Specify enrollment by class grouping (e.g., Toddler A (2), Toddler B (3)) instead of a single enrollment value
 - [ ] Preserve application state when navigating between sections - maintain user context (e.g., selected absence, sub finder filters, selected shifts) when switching to dashboard or other sections and returning, so users don't lose their work in progress
-- [ ] Add AI chat assistant for coverage planning; keep coverage/assignment logic in reusable server functions and make “find sub”/“assign shifts” deterministic and explainable so the AI can justify choices
+- [ ] Add AI chat assistant for coverage planning; keep coverage/assignment logic in reusable server functions and make "find sub"/"assign shifts" deterministic and explainable so the AI can justify choices
+
+### API Enhancements for AI Chat (Phase 3)
+
+- [ ] Add advanced filtering to unified `/api/time-off-requests` endpoint (query builder pattern for complex filters)
+- [ ] Add pagination and cursor-based navigation to unified API
+- [ ] Add field selection (sparse fieldsets) to reduce payload sizes
+- [ ] Add caching layer for coverage calculations (Redis or in-memory cache with TTL)
+- [ ] Add rate limiting to unified API endpoints
+
+### Future API Optimizations (Phase 4)
+
+- [ ] Consider GraphQL implementation if query complexity grows significantly
+- [ ] Add real-time updates (WebSocket or Server-Sent Events) for live coverage changes
+- [ ] Add analytics endpoints for coverage trends and patterns
 
 ---
 
