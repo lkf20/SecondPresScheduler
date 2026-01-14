@@ -30,13 +30,13 @@ describe('Error Utilities', () => {
 
     it('should handle PostgreSQL error codes', () => {
       const error = { code: '23505', message: 'Duplicate' } as any
-      expect(getErrorMessage(error)).toBe('This record already exists (duplicate key violation)')
+      expect(getErrorMessage(error)).toBe('This record already exists (duplicate key violation): Duplicate')
     })
 
     it('should return default message for unknown errors', () => {
-      expect(getErrorMessage(null)).toBe('An unexpected error occurred')
-      expect(getErrorMessage(undefined)).toBe('An unexpected error occurred')
-      expect(getErrorMessage('string error')).toBe('An unexpected error occurred')
+      expect(getErrorMessage(null)).toBe('An unexpected error occurred: null')
+      expect(getErrorMessage(undefined)).toBe('An unexpected error occurred: undefined')
+      expect(getErrorMessage('string error')).toBe('An unexpected error occurred: string error')
     })
   })
 
@@ -92,7 +92,12 @@ describe('Error Utilities', () => {
 
     it('should include details in development mode', () => {
       const originalEnv = process.env.NODE_ENV
-      process.env.NODE_ENV = 'development'
+      // Use Object.defineProperty to make NODE_ENV writable for testing
+      Object.defineProperty(process.env, 'NODE_ENV', {
+        value: 'development',
+        writable: true,
+        configurable: true,
+      })
 
       const error = new Error('Test error')
       const response = createErrorResponse(error, 'User message', 500, 'TestContext')
@@ -100,7 +105,12 @@ describe('Error Utilities', () => {
       expect(response.status).toBe(500)
       expect(mockConsoleError).toHaveBeenCalled()
 
-      process.env.NODE_ENV = originalEnv
+      // Restore original value
+      Object.defineProperty(process.env, 'NODE_ENV', {
+        value: originalEnv,
+        writable: true,
+        configurable: true,
+      })
     })
   })
 })

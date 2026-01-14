@@ -175,7 +175,7 @@ function buildCombinationFromSubs(
     let bestConflicts = Infinity
     let bestCoveragePercent = -1
 
-    subCoverage.forEach((data) => {
+    subCoverage.forEach((data: SubShiftCoverage) => {
       if (!data.availableShifts.has(shiftKey)) return
       const conflictCount = data.conflicts.get(shiftKey) ?? 0
       if (

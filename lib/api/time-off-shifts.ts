@@ -93,9 +93,27 @@ export async function getTeacherScheduledShifts(
   if (scheduleError) throw scheduleError
   if (!schedule || schedule.length === 0) return []
 
+  // Transform the data to match TeacherScheduleEntry interface
+  const transformedSchedule: TeacherScheduleEntry[] = schedule.map((entry: any) => ({
+    day_of_week_id: entry.day_of_week_id,
+    time_slot_id: entry.time_slot_id,
+    days_of_week: Array.isArray(entry.days_of_week) && entry.days_of_week.length > 0
+      ? {
+          name: entry.days_of_week[0]?.name ?? null,
+          day_number: entry.days_of_week[0]?.day_number ?? null,
+        }
+      : null,
+    time_slots: Array.isArray(entry.time_slots) && entry.time_slots.length > 0
+      ? {
+          code: entry.time_slots[0]?.code ?? null,
+          name: entry.time_slots[0]?.name ?? null,
+        }
+      : null,
+  }))
+
   // Create a map of day_number to schedule entries for quick lookup
   const scheduleByDayNumber = new Map<number, TeacherScheduleEntry[]>()
-  ;(schedule as TeacherScheduleEntry[]).forEach((entry) => {
+  transformedSchedule.forEach((entry) => {
     const dayNumber = entry.days_of_week?.day_number
     if (typeof dayNumber === 'number') {
       if (!scheduleByDayNumber.has(dayNumber)) {
@@ -196,7 +214,27 @@ export async function getTeacherTimeOffShifts(
   const { data, error } = await query
 
   if (error) throw error
-  return data as Array<{
+  if (!data) return []
+
+  // Transform the data to match the expected return type
+  return data.map((item: any) => {
+    const timeOffRequest = Array.isArray(item.time_off_requests) && item.time_off_requests.length > 0
+      ? item.time_off_requests[0]
+      : null
+
+    return {
+      date: item.date,
+      time_slot_id: item.time_slot_id,
+      time_off_request_id: item.time_off_request_id,
+      time_off_requests: timeOffRequest ? {
+        id: timeOffRequest.id,
+        start_date: timeOffRequest.start_date,
+        end_date: timeOffRequest.end_date ?? null,
+        reason: timeOffRequest.reason ?? null,
+        teacher_id: timeOffRequest.teacher_id,
+      } : null,
+    }
+  }) as Array<{
     date: string
     time_slot_id: string
     time_off_request_id: string

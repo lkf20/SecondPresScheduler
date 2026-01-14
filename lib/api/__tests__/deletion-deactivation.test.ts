@@ -11,7 +11,8 @@
 
 import { 
   deleteClassGroup, 
-  updateClassGroup 
+  updateClassGroup,
+  getClassGroupById
 } from '../class-groups'
 import { 
   deleteClassroom, 

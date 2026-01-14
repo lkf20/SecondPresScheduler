@@ -197,9 +197,21 @@ export async function getSubstituteContact(
       if (coverageShifts) {
         // Create a map of (date, time_slot_id) -> coverage_request_shift for quick lookup
         const shiftMap = new Map<string, CoverageShift>()
-        ;(coverageShifts as CoverageShift[]).forEach((shift) => {
+        coverageShifts.forEach((shift: any) => {
           const key = `${shift.date}|${shift.time_slot_id}`
-          shiftMap.set(key, shift)
+          // Transform the data to match CoverageShift interface
+          const transformedShift: CoverageShift = {
+            id: shift.id,
+            date: shift.date,
+            time_slot_id: shift.time_slot_id,
+            time_slots: Array.isArray(shift.time_slots) && shift.time_slots.length > 0
+              ? { code: shift.time_slots[0]?.code ?? null }
+              : null,
+            days_of_week: Array.isArray(shift.days_of_week) && shift.days_of_week.length > 0
+              ? { name: shift.days_of_week[0]?.name ?? null }
+              : null,
+          }
+          shiftMap.set(key, transformedShift)
         })
 
         // Match sub_assignments with coverage_request_shifts

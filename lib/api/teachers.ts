@@ -54,7 +54,7 @@ export async function createTeacher(teacher: {
   const { id, ...teacherData } = teacher
   const insertData: Partial<Staff> & { id: string } = {
     ...teacherData,
-    email: teacher.email && teacher.email.trim() !== '' ? teacher.email : null,
+    email: teacher.email && teacher.email.trim() !== '' ? teacher.email : undefined,
     is_teacher: true,
     is_sub: teacher.is_sub ?? false, // Preserve is_sub flag
     role_type_id: teacher.role_type_id, // Include role_type_id
