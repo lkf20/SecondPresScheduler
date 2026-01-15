@@ -69,7 +69,7 @@ export const coverageColorValues = {
   partial: {
     bg: 'rgb(254, 252, 232)', // yellow-50
     border: 'rgb(253, 224, 71)', // yellow-300
-    text: 'rgb(161, 98, 7)', // yellow-700
+    text: 'rgb(202, 138, 4)', // yellow-600 (darker yellow, less amber)
     icon: 'rgb(202, 138, 4)', // yellow-600
   },
   uncovered: {
