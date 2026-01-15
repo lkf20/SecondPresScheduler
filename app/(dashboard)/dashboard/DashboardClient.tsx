@@ -206,7 +206,7 @@ export default function DashboardClient({
     const uncoveredColors = getCoverageColors('uncovered')
     const partialColors = getCoverageColors('partial')
     const infoColors = { text: 'text-blue-600', bg: 'bg-blue-100', icon: 'text-blue-600' }
-    const tealColors = { text: 'text-teal-600', bg: 'bg-teal-100', icon: 'text-teal-600' }
+    const tealColors = { text: 'text-teal-700', bg: 'bg-teal-100', icon: 'text-teal-600' }
     const purpleColors = { text: 'text-purple-800', bg: 'bg-purple-100', icon: 'text-purple-800' }
     
     return [
@@ -232,19 +232,19 @@ export default function DashboardClient({
         key: 'absences' as const,
         label: 'Upcoming Absences',
         count: overview.summary.absences,
-        tone: infoColors.text,
+        tone: tealColors.text,
         cardStyle: `${neutralColors.border} bg-white ${neutralColors.textMedium}`,
         icon: Calendar,
-        iconStyle: `${infoColors.bg} ${infoColors.icon}`,
+        iconStyle: `${tealColors.bg} ${tealColors.icon}`,
       },
       {
         key: 'scheduled' as const,
         label: 'Scheduled Sub Shifts',
         count: overview.summary.scheduled_subs,
-        tone: tealColors.text,
+        tone: infoColors.text,
         cardStyle: `${neutralColors.border} bg-white ${neutralColors.textMedium}`,
         icon: Users,
-        iconStyle: `${tealColors.bg} ${tealColors.icon}`,
+        iconStyle: `${infoColors.bg} ${infoColors.icon}`,
       },
       {
         key: 'staffing' as const,
@@ -358,9 +358,9 @@ export default function DashboardClient({
                             : item.key === 'partial'
                             ? { color: coverageColorValues.partial.text } as React.CSSProperties
                             : item.key === 'scheduled'
-                            ? { color: 'rgb(13, 148, 136)' } as React.CSSProperties // teal-600
-                            : item.key === 'absences'
                             ? { color: 'rgb(37, 99, 235)' } as React.CSSProperties // blue-600
+                            : item.key === 'absences'
+                            ? { color: 'rgb(15, 118, 110)' } as React.CSSProperties // teal-700
                             : undefined
                         }
                       >
@@ -382,13 +382,13 @@ export default function DashboardClient({
                                 } as React.CSSProperties
                               : item.key === 'scheduled'
                               ? {
-                                  backgroundColor: 'rgb(204, 251, 241)', // teal-100
-                                  color: 'rgb(13, 148, 136)', // teal-600
+                                  backgroundColor: 'rgb(219, 234, 254)', // blue-100
+                                  color: 'rgb(37, 99, 235)', // blue-600
                                 } as React.CSSProperties
                               : item.key === 'absences'
                               ? {
-                                  backgroundColor: 'rgb(219, 234, 254)', // blue-100
-                                  color: 'rgb(37, 99, 235)', // blue-600
+                                  backgroundColor: 'rgb(204, 251, 241)', // teal-100
+                                  color: 'rgb(13, 148, 136)', // teal-600
                                 } as React.CSSProperties
                               : undefined
                           }
@@ -642,7 +642,7 @@ export default function DashboardClient({
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
                         <span
-                          className="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold"
+                          className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
                           style={getClassroomPillStyle(assignment.classroom_color)}
                         >
                           {assignment.classroom_name}
@@ -728,7 +728,7 @@ export default function DashboardClient({
                       <div key={classroom.classroom_name} className="space-y-2">
                         <div>
                           <span
-                            className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                            className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
                             style={getClassroomPillStyle(classroom.classroom_color)}
                           >
                             {classroom.classroom_name} ({classroom.slots.length})
@@ -806,7 +806,7 @@ export default function DashboardClient({
                       <div key={classroom.classroom_name} className="space-y-2">
                         <div>
                           <span
-                            className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                            className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
                             style={getClassroomPillStyle(classroom.classroom_color)}
                           >
                             {classroom.classroom_name} ({classroom.slots.length})

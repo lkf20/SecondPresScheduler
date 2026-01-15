@@ -263,9 +263,9 @@ export const staffingColors = {
     text: 'text-amber-900',
   },
   below_preferred: {
-    bg: 'bg-amber-50',
-    border: 'border-amber-200',
-    text: 'text-amber-800',
+    bg: 'bg-purple-100',
+    border: 'border-purple-200',
+    text: 'text-purple-800',
   },
   adequate: {
     bg: neutralColors.bgLight,
@@ -307,9 +307,9 @@ export const shiftStatusColors = {
     // Uses same as covered for consistency
   },
   available: {
-    bg: 'bg-emerald-50',
-    border: 'border-emerald-200',
-    text: 'text-emerald-900',
+    bg: 'bg-teal-50',
+    border: 'border-teal-200',
+    text: 'text-teal-700',
   },
   unavailable: {
     bg: 'bg-gray-100',

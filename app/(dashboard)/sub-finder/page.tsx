@@ -566,7 +566,7 @@ export default function SubFinderPage() {
                         {selectedClassrooms.map((classroom) => (
                           <span
                             key={classroom.id || classroom.name}
-                            className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-none"
+                            className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium leading-none"
                             style={getClassroomPillStyle(classroom.color)}
                           >
                             {classroom.name}

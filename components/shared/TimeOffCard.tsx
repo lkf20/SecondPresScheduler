@@ -136,7 +136,7 @@ export default function TimeOffCard({
                 {classrooms.map((classroom) => (
                   <span
                     key={classroom.id || classroom.name}
-                    className="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+                    className="rounded-full px-2.5 py-1 text-[11px] font-medium"
                     style={getClassroomPillStyle(classroom.color)}
                   >
                     {classroom.name}
@@ -253,7 +253,7 @@ export default function TimeOffCard({
                 {classrooms.map((classroom) => (
                   <span
                     key={classroom.id}
-                    className="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold"
+                    className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
                     style={getClassroomPillStyle(classroom.color)}
                   >
                     {classroom.name}
