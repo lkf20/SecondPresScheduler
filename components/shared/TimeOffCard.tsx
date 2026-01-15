@@ -146,7 +146,7 @@ export default function TimeOffCard({
               </div>
             </div>
             {uncovered > 0 && partial === 0 && (
-              <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+              <AlertTriangle className="h-5 w-5 text-orange-600 flex-shrink-0" />
             )}
             {partial > 0 && <PieChart className="h-5 w-5 text-amber-600 flex-shrink-0" />}
             {uncovered === 0 && partial === 0 && covered > 0 && (
@@ -171,12 +171,12 @@ export default function TimeOffCard({
                 )}
               </div>
               <div className="ml-auto flex flex-wrap items-center gap-2">
-                {uncovered > 0 && (
-                  <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 bg-amber-50 border border-amber-400 text-amber-700 font-medium">
-                    <AlertTriangle className="h-3 w-3" />
-                    Uncovered: {uncovered}
-                  </span>
-                )}
+            {uncovered > 0 && (
+              <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 bg-orange-50 border border-orange-400 text-orange-700 font-medium">
+                <AlertTriangle className="h-3 w-3" />
+                Uncovered: {uncovered}
+              </span>
+            )}
               </div>
             </div>
           </div>
@@ -294,7 +294,7 @@ export default function TimeOffCard({
               </span>
             )}
             {uncovered > 0 && (
-              <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 bg-amber-50 border border-amber-400 text-amber-700 font-medium">
+              <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 bg-orange-50 border border-orange-400 text-orange-700 font-medium">
                 <AlertTriangle className="h-3 w-3" />
                 Uncovered: {uncovered}
               </span>
@@ -328,14 +328,27 @@ export default function TimeOffCard({
       {hasShiftsDropdown && isExpanded && shiftDetails.length > 0 && (
         <div className="mt-3 border-t border-slate-200 pt-3">
           <div className="flex flex-wrap items-center gap-1.5">
-            {shiftDetails.map((shift, index) => (
-              <span
-                key={index}
-                className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600"
-              >
-                {shift}
-              </span>
-            ))}
+            {shiftDetails.map((shift, index) => {
+              const label = typeof shift === 'string' ? shift : shift.label
+              const status = typeof shift === 'object' ? shift.status : undefined
+              let chipClassName = 'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium'
+              
+              if (status === 'covered') {
+                chipClassName += ' border-blue-400 bg-blue-50 text-blue-700'
+              } else if (status === 'partial') {
+                chipClassName += ' border-yellow-300 bg-yellow-50 text-yellow-700'
+              } else if (status === 'uncovered') {
+                chipClassName += ' border-orange-400 bg-orange-50 text-orange-700'
+              } else {
+                chipClassName += ' border-slate-200 bg-slate-50 text-slate-600'
+              }
+              
+              return (
+                <span key={index} className={chipClassName}>
+                  {label}
+                </span>
+              )
+            })}
           </div>
         </div>
       )}
