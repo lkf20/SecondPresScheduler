@@ -162,8 +162,7 @@ export default async function TimeOffPage({
     .sort((a, b) => getStartDate(a).getTime() - getStartDate(b).getTime())
 
   return (
-    <div className="w-full">
-      <div className="mx-auto w-full max-w-3xl">
+    <div className="w-full max-w-4xl">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Time Off Requests</h1>
@@ -183,7 +182,6 @@ export default async function TimeOffPage({
         upcomingRequests={upcomingRequests}
         pastRequests={pastRequests}
       />
-      </div>
     </div>
   )
 }
