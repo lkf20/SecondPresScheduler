@@ -17,7 +17,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
-import { getCoverageColors, getStaffingColorClasses, getStaffingColors, neutralColors, coverageColorValues } from '@/lib/utils/colors'
+import { getCoverageColors, getStaffingColorClasses, getStaffingColors, neutralColors, coverageColorValues, getButtonColors } from '@/lib/utils/colors'
 import TimeOffCard from '@/components/shared/TimeOffCard'
 
 type Summary = {
@@ -654,7 +654,7 @@ export default function DashboardClient({
                         asChild
                         size="sm"
                         variant="outline"
-                        className="border-slate-500 text-slate-900 hover:bg-slate-200"
+                        className={getButtonColors('teal').base}
                       >
                         <Link href={`/schedules/weekly?sub_assignment_id=${assignment.id}`}>
                           Update Sub
@@ -764,7 +764,7 @@ export default function DashboardClient({
                               asChild
                               size="sm"
                               variant="outline"
-                              className="border-slate-500 text-slate-900 hover:bg-slate-200"
+                              className={getButtonColors('teal').base}
                             >
                               <Link
                                 href={`/schedules/weekly?classroom_id=${slot.classroom_id}&day_of_week_id=${slot.day_of_week_id}&time_slot_id=${slot.time_slot_id}`}
@@ -849,7 +849,7 @@ export default function DashboardClient({
                               asChild
                               size="sm"
                               variant="outline"
-                              className="border-slate-500 text-slate-900 hover:bg-slate-200"
+                              className={getButtonColors('teal').base}
                             >
                               <Link
                                 href={`/schedules/weekly?classroom_id=${slot.classroom_id}&day_of_week_id=${slot.day_of_week_id}&time_slot_id=${slot.time_slot_id}`}

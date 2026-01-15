@@ -18,7 +18,7 @@ import { Phone, Mail, AlertTriangle, ChevronDown, ChevronUp, X } from 'lucide-re
 import { parseLocalDate } from '@/lib/utils/date'
 import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { getShiftStatusColorClasses } from '@/lib/utils/colors'
+import { getShiftStatusColorClasses, getButtonColors } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -1431,7 +1431,8 @@ export default function ContactSubPanel({
                   )}
                   {!isDeclinedWithShiftsSelected && (
                     <Button
-                      className="flex-1"
+                      variant="outline"
+                      className={cn('flex-1', getButtonColors('teal').base)}
                       onClick={responseStatus === 'declined_all' && selectedShiftsCount === 0 ? handleMarkAsDeclinedSave : handleAssignShifts}
                       disabled={loading || fetching || !coverageRequestId || (responseStatus !== 'declined_all' && selectedShiftsCount === 0) || isSubInactive}
                     >
