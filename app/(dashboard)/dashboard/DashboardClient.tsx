@@ -17,7 +17,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
-import { getCoverageColors, getStaffingColorClasses, getStaffingColors, neutralColors, coverageColorValues, getButtonColors } from '@/lib/utils/colors'
+import { getCoverageColors, getStaffingColorClasses, getStaffingColors, neutralColors, coverageColorValues, getButtonColors, staffingColorValues } from '@/lib/utils/colors'
 import TimeOffCard from '@/components/shared/TimeOffCard'
 
 type Summary = {
@@ -354,13 +354,13 @@ export default function DashboardClient({
                         className="text-3xl font-semibold"
                         style={
                           item.key === 'uncovered' 
-                            ? { color: coverageColorValues.uncovered.text } as React.CSSProperties
+                            ? { color: coverageColorValues.uncovered.icon } as React.CSSProperties
                             : item.key === 'partial'
                             ? { color: coverageColorValues.partial.text } as React.CSSProperties
                             : item.key === 'scheduled'
                             ? { color: 'rgb(37, 99, 235)' } as React.CSSProperties // blue-600
                             : item.key === 'absences'
-                            ? { color: 'rgb(15, 118, 110)' } as React.CSSProperties // teal-700
+                            ? { color: 'rgb(13, 148, 136)' } as React.CSSProperties // teal-600 (matches icon)
                             : undefined
                         }
                       >
@@ -441,7 +441,7 @@ export default function DashboardClient({
         </div>
       </section>
 
-      <div className="grid grid-cols-1 gap-6 pt-1 xl:grid-cols-[minmax(550px,1.4fr)_minmax(400px,0.9fr)_minmax(400px,0.9fr)]">
+      <div className="grid grid-cols-1 gap-6 pt-1 max-w-3xl xl:grid-cols-[minmax(550px,1.4fr)_minmax(400px,0.9fr)_minmax(400px,0.9fr)]">
         <section className="min-w-[550px] space-y-4 rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">
           <div
             role="button"
@@ -744,12 +744,28 @@ export default function DashboardClient({
                               <div className="text-sm font-semibold text-slate-900">
                                 {formatSlotLabel(slot.day_name, slot.time_slot_code)}
                               </div>
-                              <div className="flex flex-wrap items-center gap-2">
+                              <div className="flex flex-col items-start gap-2">
                                 <span
-                                  className={cn(
-                                    'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
-                                    staffingBadge(slot.status)
-                                  )}
+                                  className="inline-flex items-center rounded-full px-3.5 py-1 text-xs font-medium"
+                                  style={
+                                    slot.status === 'below_required'
+                                      ? {
+                                          backgroundColor: staffingColorValues.below_required.bg,
+                                          borderStyle: 'solid',
+                                          borderWidth: '1px',
+                                          borderColor: staffingColorValues.below_required.border,
+                                          color: staffingColorValues.below_required.text,
+                                        } as React.CSSProperties
+                                      : slot.status === 'below_preferred'
+                                      ? {
+                                          backgroundColor: staffingColorValues.below_preferred.bg,
+                                          borderStyle: 'solid',
+                                          borderWidth: '1px',
+                                          borderColor: staffingColorValues.below_preferred.border,
+                                          color: staffingColorValues.below_preferred.text,
+                                        } as React.CSSProperties
+                                      : undefined
+                                  }
                                 >
                                   Below Required {formatShortfallLabel(formatShortfallValue(slot.required_staff, slot.scheduled_staff))}
                                 </span>
@@ -822,12 +838,28 @@ export default function DashboardClient({
                               <div className="text-sm font-semibold text-slate-900">
                                 {formatSlotLabel(slot.day_name, slot.time_slot_code)}
                               </div>
-                              <div className="flex flex-wrap items-center gap-2">
+                              <div className="flex flex-col items-start gap-2">
                                 <span
-                                  className={cn(
-                                    'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
-                                    staffingBadge(slot.status)
-                                  )}
+                                  className="inline-flex items-center rounded-full px-3.5 py-1 text-xs font-medium"
+                                  style={
+                                    slot.status === 'below_preferred'
+                                      ? {
+                                          backgroundColor: staffingColorValues.below_preferred.bg,
+                                          borderStyle: 'solid',
+                                          borderWidth: '1px',
+                                          borderColor: staffingColorValues.below_preferred.border,
+                                          color: staffingColorValues.below_preferred.text,
+                                        } as React.CSSProperties
+                                      : slot.status === 'below_required'
+                                      ? {
+                                          backgroundColor: staffingColorValues.below_required.bg,
+                                          borderStyle: 'solid',
+                                          borderWidth: '1px',
+                                          borderColor: staffingColorValues.below_required.border,
+                                          color: staffingColorValues.below_required.text,
+                                        } as React.CSSProperties
+                                      : undefined
+                                  }
                                 >
                                   Below Preferred by{' '}
                                   {formatShortfallValue(

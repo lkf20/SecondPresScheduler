@@ -275,6 +275,28 @@ export const staffingColors = {
 } as const
 
 /**
+ * RGB color values for staffing badges
+ * Used for inline styles to ensure they override conflicting CSS
+ */
+export const staffingColorValues = {
+  below_required: {
+    bg: 'rgb(254, 243, 199)', // amber-100
+    border: 'rgb(253, 230, 138)', // amber-200
+    text: 'rgb(120, 53, 15)', // amber-900
+  },
+  below_preferred: {
+    bg: 'rgb(243, 232, 255)', // purple-100
+    border: 'rgb(192, 132, 252)', // purple-400 (lighter border)
+    text: 'rgb(107, 33, 168)', // purple-800
+  },
+  adequate: {
+    bg: 'rgb(248, 250, 252)', // slate-50
+    border: 'rgb(226, 232, 240)', // slate-200
+    text: 'rgb(71, 85, 105)', // slate-600
+  },
+} as const
+
+/**
  * Get staffing color classes
  */
 export function getStaffingColors(status: StaffingStatus) {
