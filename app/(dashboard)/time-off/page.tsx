@@ -6,6 +6,7 @@ import TimeOffListClient from './TimeOffListClient'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
+import { transformTimeOffCardData } from '@/lib/utils/time-off-card-data'
 
 export default async function TimeOffPage({
   searchParams,
@@ -75,26 +76,69 @@ export default async function TimeOffPage({
         coverage_status = 'partially_covered'
       }
 
-      const shiftDetails = shifts.map((shift: TimeOffShift) => {
-        const dayName = formatDay(shift.day_of_week?.name)
-        const timeCode = shift.time_slot?.code || '—'
-        return `${dayName} ${timeCode}`
-      })
-      const coveredCount = coverage.covered
+      // Build shift details with coverage status
+      // Get all assignments for this request
+      const { createClient } = await import('@/lib/supabase/server')
+      const supabase = await createClient()
+      
+      const dates = shifts.map((shift: TimeOffShift) => shift.date).sort()
+      const startDate = dates[0]
+      const endDate = dates[dates.length - 1]
+      
+      const { data: assignments } = await supabase
+        .from('sub_assignments')
+        .select('date, time_slot_id, is_partial, assignment_type')
+        .eq('teacher_id', request.teacher_id)
+        .gte('date', startDate)
+        .lte('date', endDate)
+      
+      // Transform using shared utility
+      const transformed = transformTimeOffCardData(
+        {
+          id: request.id,
+          teacher_id: request.teacher_id,
+          start_date: request.start_date,
+          end_date: request.end_date,
+          reason: request.reason,
+          notes: request.notes,
+          teacher: request.teacher as any,
+        },
+        shifts.map((shift: TimeOffShift) => ({
+          id: shift.id,
+          date: shift.date,
+          day_of_week_id: shift.day_of_week_id,
+          time_slot_id: shift.time_slot_id,
+          day_of_week: shift.day_of_week,
+          time_slot: shift.time_slot,
+        })),
+        (assignments || []).map((assignment: any) => ({
+          date: assignment.date,
+          time_slot_id: assignment.time_slot_id,
+          is_partial: assignment.is_partial,
+          assignment_type: assignment.assignment_type || null,
+        })),
+        classrooms,
+        {
+          includeDetailedShifts: false,
+          formatDay,
+        }
+      )
+      
+      const shiftDetails = transformed.shift_details || []
 
       return {
         ...request,
-        teacher_name:
-          request.teacher?.display_name ||
-          (request.teacher?.first_name && request.teacher?.last_name
-            ? `${request.teacher.first_name} ${request.teacher.last_name}`
-            : '—'),
+        teacher_name: transformed.teacher_name,
         shifts_display: `${shiftCount} shift${shiftCount !== 1 ? 's' : ''}`,
         coverage_status,
-        coverage_total: coverage.total,
-        coverage_covered: coveredCount,
-        classrooms,
+        coverage_total: transformed.total,
+        coverage_covered: transformed.covered,
+        coverage_partial: transformed.partial,
+        coverage_uncovered: transformed.uncovered,
+        classrooms: transformed.classrooms,
         shift_details: shiftDetails,
+        reason: transformed.reason,
+        notes: transformed.notes,
       }
     })
   )

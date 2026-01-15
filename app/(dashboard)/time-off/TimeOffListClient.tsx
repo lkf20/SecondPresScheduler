@@ -3,11 +3,9 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import CoverageStatusPill from '@/components/ui/coverage-status-pill'
-import { parseLocalDate } from '@/lib/utils/date'
-import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
+import TimeOffCard from '@/components/shared/TimeOffCard'
+import type { ClassroomBadge } from '@/components/shared/TimeOffCard'
 
 type ClassroomBadge = {
   id: string
@@ -26,9 +24,13 @@ type TimeOffRow = {
   coverage_status: CoverageStatus
   coverage_covered: number
   coverage_total: number
+  coverage_partial?: number
+  coverage_uncovered?: number
   shifts_display: string
-  shift_details?: string[]
+  shift_details?: string[] | Array<{ label: string; status: 'covered' | 'partial' | 'uncovered' }>
   classrooms?: ClassroomBadge[]
+  reason?: string | null
+  notes?: string | null
 }
 
 export default function TimeOffListClient({
@@ -58,26 +60,6 @@ export default function TimeOffListClient({
     }
   }
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
-  const formatDateRange = (start: string, end?: string | null) => {
-    const startDate = parseLocalDate(start)
-    const endDate = parseLocalDate(end || start)
-    const shortDate = (date: Date) =>
-      new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
-    const weekday = (date: Date) =>
-      new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date)
-    const normalizeWeekday = (label: string) => (label === 'Tue' ? 'Tues' : label)
-    const startLabel = shortDate(startDate)
-    const endLabel = shortDate(endDate)
-    const startDay = normalizeWeekday(weekday(startDate))
-    const endDay = normalizeWeekday(weekday(endDate))
-
-    if (startLabel === endLabel) {
-      return `${startLabel} (${startDay})`
-    }
-    return `${startLabel} - ${endLabel} (${startDay} - ${endDay})`
-  }
-
-  const formatClassroomStyle = (color: string | null) => getClassroomPillStyle(color)
 
   const handleDeleteDraft = async (id: string) => {
     if (!confirm('Delete this draft?')) return
@@ -92,116 +74,87 @@ export default function TimeOffListClient({
       console.error('Failed to delete draft:', error)
     }
   }
-  const renderCoverageBadge = (row: TimeOffRow) => {
+  const renderRowCard = (row: TimeOffRow) => {
+    // Use provided coverage counts if available, otherwise calculate from status
+    let covered = row.coverage_covered || 0
+    let uncovered = row.coverage_uncovered ?? (row.coverage_total - row.coverage_covered)
+    let partial = row.coverage_partial || 0
+
+    // If we have exact counts, use them; otherwise infer from status
+    if (row.coverage_status === 'covered') {
+      covered = row.coverage_total
+      uncovered = 0
+      partial = 0
+    } else if (row.coverage_status === 'needs_coverage') {
+      covered = 0
+      uncovered = row.coverage_total
+      partial = 0
+    } else if (row.coverage_status === 'partially_covered') {
+      // If we have partial count, use it; otherwise estimate
+      if (row.coverage_partial !== undefined) {
+        partial = row.coverage_partial
+        uncovered = row.coverage_uncovered ?? (row.coverage_total - row.coverage_covered - row.coverage_partial)
+      } else {
+        // Estimate: covered is known, rest is split between uncovered and partial
+        uncovered = row.coverage_total - row.coverage_covered
+        partial = 0
+      }
+    }
+
+    // Extract total shifts from shifts_display (e.g., "12 shifts" -> 12)
+    const totalShiftsMatch = row.shifts_display.match(/(\d+)/)
+    const totalShifts = totalShiftsMatch ? parseInt(totalShiftsMatch[1], 10) : undefined
+
+    // Handle draft status with delete button
+    if (row.status === 'draft') {
+      return (
+        <div key={row.id} className="rounded-lg border border-slate-200 bg-white px-5 pt-2 pb-4 shadow-sm">
+          <TimeOffCard
+            id={row.id}
+            teacherName={row.teacher_name}
+            startDate={row.start_date}
+            endDate={row.end_date}
+            reason={row.reason || null}
+            classrooms={row.classrooms}
+            variant="time-off"
+            covered={covered}
+            uncovered={uncovered}
+            partial={partial}
+            totalShifts={totalShifts}
+            shiftDetails={row.shift_details}
+            className="border-0 shadow-none px-0 py-0"
+          />
+          <div className="mt-3 flex items-center gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/time-off/${row.id}`}>Edit</Link>
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => handleDeleteDraft(row.id)}>
+              Delete
+            </Button>
+          </div>
+        </div>
+      )
+    }
+
     return (
-      <CoverageStatusPill
-        status={row.coverage_status}
-        coveredCount={row.coverage_covered}
-        totalCount={row.coverage_total}
+      <TimeOffCard
+        key={row.id}
+        id={row.id}
+        teacherName={row.teacher_name}
+        startDate={row.start_date}
+        endDate={row.end_date}
+        reason={row.reason || null}
+        classrooms={row.classrooms}
+        variant="time-off"
+        covered={covered}
+        uncovered={uncovered}
+        partial={partial}
+        totalShifts={totalShifts}
+        shiftDetails={row.shift_details}
+        notes={row.notes || null}
       />
     )
   }
-
-  const renderActions = (row: TimeOffRow) => {
-    if (row.status === 'draft') {
-      return (
-        <div className="flex items-center gap-2">
-          <Button asChild size="sm" variant="outline">
-            <Link href={`/time-off/${row.id}`}>Edit</Link>
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => handleDeleteDraft(row.id)}>
-            Delete
-          </Button>
-        </div>
-      )
-    }
-
-    if (row.coverage_status === 'needs_coverage' || row.coverage_status === 'partially_covered') {
-      return (
-        <div className="flex items-center gap-2">
-          <Button asChild size="sm" variant="ghost">
-            <Link href={`/time-off/${row.id}`}>View</Link>
-          </Button>
-          <Button asChild size="sm" variant="outline" className="border-black text-slate-900 font-medium hover:bg-slate-50">
-            <Link href={`/sub-finder?absence_id=${row.id}`}>Find Sub</Link>
-          </Button>
-        </div>
-      )
-    }
-
-    return (
-      <Button asChild size="sm" variant="ghost">
-        <Link href={`/time-off/${row.id}`}>View</Link>
-      </Button>
-    )
-  }
-
-  const renderRowCard = (row: TimeOffRow) => (
-    <div
-      key={row.id}
-      className="rounded-lg border border-slate-200 bg-white px-5 pt-2 pb-4 shadow-sm"
-    >
-      <div className="grid gap-4 md:grid-cols-[1fr_auto]">
-        <div className="grid gap-1">
-          <div className="text-lg font-semibold text-slate-900">{row.teacher_name}</div>
-          <div className="text-sm font-medium text-slate-700 pb-3">{formatDateRange(row.start_date, row.end_date)}</div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <button
-              type="button"
-              onClick={() => {
-                if (!row.shift_details || row.shift_details.length === 0) return
-                const next = new Set(expandedIds)
-                if (next.has(row.id)) {
-                  next.delete(row.id)
-                } else {
-                  next.add(row.id)
-                }
-                setExpandedIds(next)
-              }}
-              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
-              aria-expanded={expandedIds.has(row.id)}
-              aria-label={expandedIds.has(row.id) ? 'Hide shift details' : 'Show shift details'}
-            >
-              {row.shifts_display}
-              {row.shift_details && row.shift_details.length > 0 && (
-                expandedIds.has(row.id) ? (
-                  <ChevronUp className="h-3 w-3" />
-                ) : (
-                  <ChevronDown className="h-3 w-3" />
-                )
-              )}
-            </button>
-            {row.classrooms && row.classrooms.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {row.classrooms.map((classroom) => (
-                  <span
-                    key={classroom.id}
-                    className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium"
-                    style={formatClassroomStyle(classroom.color)}
-                  >
-                    {classroom.name}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="grid grid-rows-[auto_1fr] items-end justify-items-end">
-          <div className="flex items-center gap-2 pt-1">
-            {renderCoverageBadge(row)}
-          </div>
-          <div className="flex items-center gap-2">
-            {renderActions(row)}
-          </div>
-        </div>
-      </div>
-      {expandedIds.has(row.id) && row.shift_details && row.shift_details.length > 0 && (
-        <div className="mt-4 border-t border-slate-100 pt-3 text-sm text-slate-600">
-          {row.shift_details.join(' • ')}
-        </div>
-      )}
-    </div>
-  )
 
   const renderSection = (rows: TimeOffRow[], emptyMessage: string) => {
     if (rows.length === 0) {

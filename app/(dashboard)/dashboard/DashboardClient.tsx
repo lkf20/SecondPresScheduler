@@ -17,6 +17,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
+import TimeOffCard from '@/components/shared/TimeOffCard'
 
 type Summary = {
   absences: number
@@ -37,8 +38,10 @@ type CoverageRequestItem = {
   total_shifts: number
   assigned_shifts: number
   uncovered_shifts: number
+  partial_shifts: number
   remaining_shifts: number
   status: 'needs_coverage' | 'partially_covered' | 'covered'
+  shift_details?: Array<{ label: string; status: 'covered' | 'partial' | 'uncovered' }>
 }
 
 type ScheduledSubItem = {
@@ -484,113 +487,51 @@ export default function DashboardClient({
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredCoverageRequests.map((request) => (
-                  <div
+              {filteredCoverageRequests.map((request) => {
+                // Calculate coverage counts from API data
+                // assigned_shifts includes both full and partial coverage
+                // partial_shifts = shifts with only partial coverage
+                // covered = assigned_shifts - partial_shifts (fully covered shifts)
+                let covered = 0
+                let uncovered = request.uncovered_shifts
+                let partial = request.partial_shifts || 0
+                
+                if (request.status === 'covered') {
+                  covered = request.total_shifts
+                  uncovered = 0
+                  partial = 0
+                } else if (request.status === 'needs_coverage') {
+                  covered = 0
+                  uncovered = request.uncovered_shifts
+                  partial = 0
+                } else if (request.status === 'partially_covered') {
+                  // assigned_shifts includes both full and partial
+                  // partial_shifts = shifts with only partial coverage
+                  // covered = assigned_shifts - partial_shifts
+                  partial = request.partial_shifts || 0
+                  covered = request.assigned_shifts - partial
+                  uncovered = request.uncovered_shifts
+                }
+
+                return (
+                  <TimeOffCard
                     key={request.id}
-                    className="group relative rounded-lg border border-slate-200 bg-white px-4 py-4"
-                  >
-                    {request.notes ? (
-                      <span
-                        className="absolute right-0 top-0 h-4 w-4 cursor-help rounded-tr-lg bg-[linear-gradient(225deg,#fbbf24_0_50%,transparent_50%)]"
-                        aria-label="Note"
-                      >
-                        <span className="absolute right-0 top-4 z-10 hidden w-56 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 shadow-sm group-hover:block">
-                          {request.notes}
-                        </span>
-                      </span>
-                    ) : null}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="text-base font-semibold text-slate-900">
-                            {request.teacher_name}
-                          </div>
-                          {request.reason && (
-                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                              {request.reason}
-                            </span>
-                          )}
-                        </div>
-                      <div className="flex items-center gap-2 text-sm text-slate-600">
-                        <CalendarDays className="h-4 w-4 text-slate-500" />
-                        <div className="text-sm font-medium text-slate-800">
-                          {formatFullDateLabel(request.start_date)}
-                          {!request.end_date || request.end_date === request.start_date
-                            ? ''
-                            : ` - ${formatFullDateLabel(request.end_date)}`}
-                        </div>
-                        <span className="h-4 w-px bg-slate-500" aria-hidden="true" />
-                        <span className="text-sm font-medium italic text-slate-400">
-                          {request.total_shifts} {request.total_shifts === 1 ? 'Shift' : 'Shifts'}
-                        </span>
-                      </div>
-                        {request.classrooms?.length ? (
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {request.classrooms.map((classroom) => (
-                              <span
-                                key={classroom.id}
-                                className="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold"
-                                style={getClassroomPillStyle(classroom.color)}
-                              >
-                                {classroom.name}
-                              </span>
-                            ))}
-                            {request.classrooms.length > 1 && (
-                              <span className="text-[11px] text-slate-500">
-                                (varies by shift)
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-slate-500">{request.classroom_label}</div>
-                        )}
-                    </div>
-                      <div className="flex flex-col items-end gap-3">
-                        <div
-                          className={cn(
-                            'inline-flex items-center gap-2 rounded-lg border px-2.5 py-1',
-                            request.status === 'needs_coverage'
-                            ? 'border-amber-200 bg-amber-100 text-amber-900'
-                            : request.status === 'partially_covered'
-                              ? 'border-amber-200 bg-amber-50 text-amber-800'
-                              : 'border-slate-200 bg-slate-50 text-slate-700'
-                          )}
-                        >
-                          {request.status === 'needs_coverage' ? (
-                            <AlertTriangle className="h-5 w-5 text-amber-800" />
-                          ) : request.status === 'partially_covered' ? (
-                            <PieChart className="h-5 w-5 text-amber-700" />
-                          ) : null}
-                          <span className="text-sm font-semibold whitespace-nowrap">
-                            {request.status === 'covered'
-                              ? 'All shifts covered'
-                              : `${request.remaining_shifts} uncovered ${request.remaining_shifts === 1 ? 'shift' : 'shifts'}`}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-end gap-3 mt-4">
-                          <Link
-                            href={`/time-off/${request.id}`}
-                            className="text-sm font-semibold text-slate-700 hover:text-slate-900"
-                          >
-                            View
-                          </Link>
-                          {request.status !== 'covered' && (
-                        <Button
-                          asChild
-                          size="sm"
-                          variant="outline"
-                          className="border-slate-500 text-slate-900 hover:bg-slate-200"
-                        >
-                              <Link href={`/sub-finder?absence_id=${request.id}`}>
-                                Find Sub
-                              </Link>
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-              ))}
+                    id={request.id}
+                    teacherName={request.teacher_name}
+                    startDate={request.start_date}
+                    endDate={request.end_date}
+                    reason={request.reason}
+                    classrooms={request.classrooms}
+                    variant="dashboard"
+                    covered={covered}
+                    uncovered={uncovered}
+                    partial={partial}
+                    totalShifts={request.total_shifts}
+                    shiftDetails={request.shift_details}
+                    notes={request.notes}
+                  />
+                )
+              })}
             </div>
           )}
           </div>
