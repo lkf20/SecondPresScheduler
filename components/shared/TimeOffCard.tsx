@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { parseLocalDate } from '@/lib/utils/date'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
+import { getButtonColors, getCoverageColorClasses, getNeutralChipClasses } from '@/lib/utils/colors'
 
 export type TimeOffCardVariant = 'sub-finder' | 'dashboard' | 'time-off'
 
@@ -122,7 +123,7 @@ export default function TimeOffCard({
               <div className="flex flex-wrap items-center gap-2 mb-1">
                 <h3 className="font-semibold text-base text-slate-800">{teacherName}</h3>
                 {reason && (
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                  <span className={cn('rounded-full border px-2 py-0.5 text-[11px] font-medium', getNeutralChipClasses())}>
                     {reason}
                   </span>
                 )}
@@ -229,7 +230,7 @@ export default function TimeOffCard({
                     e.stopPropagation()
                     setIsExpanded(!isExpanded)
                   }}
-                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                  className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium', getNeutralChipClasses(), 'hover:bg-slate-100')}
                   aria-expanded={isExpanded}
                   aria-label={isExpanded ? 'Hide shift details' : 'Show shift details'}
                 >
@@ -287,7 +288,7 @@ export default function TimeOffCard({
                   asChild
                   size="sm"
                   variant="outline"
-                  className="border-teal-700 text-teal-700 hover:bg-teal-700 hover:text-white hover:border-teal-700"
+                  className={getButtonColors('teal').base}
                 >
                   <Link href={`/sub-finder?absence_id=${id}`}>Find Sub</Link>
                 </Button>
@@ -306,15 +307,15 @@ export default function TimeOffCard({
               const status = typeof shift === 'object' ? shift.status : undefined
               let chipClassName = 'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium'
               
-              if (status === 'covered') {
-                chipClassName += ' border-blue-400 bg-blue-50 text-blue-700'
-              } else if (status === 'partial') {
-                chipClassName += ' border-yellow-300 bg-yellow-50 text-yellow-700'
-              } else if (status === 'uncovered') {
-                chipClassName += ' border-orange-400 bg-orange-50 text-orange-700'
-              } else {
-                chipClassName += ' border-slate-200 bg-slate-50 text-slate-600'
-              }
+                     if (status === 'covered') {
+                       chipClassName += ` ${getCoverageColorClasses('covered')}`
+                     } else if (status === 'partial') {
+                       chipClassName += ` ${getCoverageColorClasses('partial')}`
+                     } else if (status === 'uncovered') {
+                       chipClassName += ` ${getCoverageColorClasses('uncovered')}`
+                     } else {
+                       chipClassName += ` ${getNeutralChipClasses()}`
+                     }
               
               return (
                 <span key={index} className={chipClassName}>

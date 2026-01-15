@@ -17,6 +17,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
+import { getCoverageColors, getStaffingColorClasses, getStaffingColors, neutralColors } from '@/lib/utils/colors'
 import TimeOffCard from '@/components/shared/TimeOffCard'
 
 type Summary = {
@@ -100,11 +101,11 @@ const formatShortfallValue = (required: number, scheduled: number) =>
   const staffingBadge = (status: StaffingTargetItem['status']) => {
   switch (status) {
     case 'below_required':
-      return 'bg-amber-100 text-amber-900 border-amber-200'
+      return getStaffingColorClasses('below_required')
     case 'below_preferred':
-      return 'bg-amber-50 text-amber-800 border-amber-200'
+      return getStaffingColorClasses('below_preferred')
     default:
-      return 'bg-slate-100 text-slate-700 border-slate-200'
+      return getStaffingColorClasses('adequate')
   }
 }
 
@@ -201,60 +202,65 @@ export default function DashboardClient({
     return classrooms.size
   }, [overview.staffing_targets])
 
-  const summaryItems = useMemo(
-    () => [
+  const summaryItems = useMemo(() => {
+    const uncoveredColors = getCoverageColors('uncovered')
+    const partialColors = getCoverageColors('partial')
+    const infoColors = { text: 'text-blue-600', bg: 'bg-blue-100', icon: 'text-blue-600' }
+    const tealColors = { text: 'text-teal-600', bg: 'bg-teal-100', icon: 'text-teal-600' }
+    const purpleColors = { text: 'text-purple-800', bg: 'bg-purple-100', icon: 'text-purple-800' }
+    
+    return [
       {
         key: 'uncovered' as const,
         label: 'Uncovered Shifts',
         count: overview.summary.uncovered_shifts,
-        tone: 'text-orange-600',
-        cardStyle: 'border-slate-200 bg-white text-slate-700',
+        tone: uncoveredColors.text,
+        cardStyle: `${neutralColors.border} bg-white ${neutralColors.textMedium}`,
         icon: AlertTriangle,
-        iconStyle: 'bg-orange-100 text-orange-600',
+        iconStyle: `${uncoveredColors.bg} ${uncoveredColors.icon}`,
       },
       {
         key: 'partial' as const,
         label: 'Partially Covered Shifts',
         count: overview.summary.partially_covered_shifts,
-        tone: 'text-yellow-600',
-        cardStyle: 'border-slate-200 bg-white text-slate-700',
+        tone: partialColors.text,
+        cardStyle: `${neutralColors.border} bg-white ${neutralColors.textMedium}`,
         icon: PieChart,
-        iconStyle: 'bg-amber-100 text-yellow-600',
+        iconStyle: `${partialColors.bg} ${partialColors.icon}`,
       },
       {
         key: 'absences' as const,
         label: 'Upcoming Absences',
         count: overview.summary.absences,
-        tone: 'text-blue-600',
-        cardStyle: 'border-slate-200 bg-white text-slate-700',
+        tone: infoColors.text,
+        cardStyle: `${neutralColors.border} bg-white ${neutralColors.textMedium}`,
         icon: Calendar,
-        iconStyle: 'bg-blue-100 text-blue-600',
+        iconStyle: `${infoColors.bg} ${infoColors.icon}`,
       },
       {
         key: 'scheduled' as const,
         label: 'Scheduled Sub Shifts',
         count: overview.summary.scheduled_subs,
-        tone: 'text-teal-600',
-        cardStyle: 'border-slate-200 bg-white text-slate-700',
+        tone: tealColors.text,
+        cardStyle: `${neutralColors.border} bg-white ${neutralColors.textMedium}`,
         icon: Users,
-        iconStyle: 'bg-teal-100 text-teal-600',
+        iconStyle: `${tealColors.bg} ${tealColors.icon}`,
       },
       {
         key: 'staffing' as const,
         label: 'Understaffed Classrooms',
-        cardStyle: 'border-slate-200 bg-white text-slate-700',
+        cardStyle: `${neutralColors.border} bg-white ${neutralColors.textMedium}`,
         secondaryCount: belowPreferredClassrooms,
         secondaryIcon: AlertTriangle,
-        secondaryStyle: 'text-purple-800',
-        secondaryIconStyle: 'bg-purple-100 text-purple-800',
+        secondaryStyle: purpleColors.text,
+        secondaryIconStyle: `${purpleColors.bg} ${purpleColors.icon}`,
         secondaryRightCount: belowRequiredClassrooms,
         secondaryRightIcon: AlertCircle,
-        secondaryRightStyle: 'text-purple-800',
-        secondaryRightIconStyle: 'bg-purple-100 text-purple-800',
+        secondaryRightStyle: purpleColors.text,
+        secondaryRightIconStyle: `${purpleColors.bg} ${purpleColors.icon}`,
       },
-    ],
-    [overview.summary, belowRequiredClassrooms, belowPreferredClassrooms]
-  )
+    ]
+  }, [overview.summary, belowRequiredClassrooms, belowPreferredClassrooms])
 
   const coverageCounts = useMemo(() => {
     const needs = overview.coverage_requests.filter(

@@ -1,5 +1,6 @@
 import { AlertTriangle, CheckCircle2, CircleDot, PieChart } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getStatusColorClasses, getStatusColors, getNeutralChipClasses } from '@/lib/utils/colors'
 
 type CoverageStatus = 'draft' | 'completed' | 'covered' | 'partially_covered' | 'needs_coverage'
 
@@ -20,60 +21,62 @@ export default function CoverageStatusPill({
   className,
 }: CoverageStatusPillProps) {
   switch (status) {
-    case 'draft':
+    case 'draft': {
+      const colors = getStatusColors('draft')
       return (
-        <span className={cn(baseClass, 'border-yellow-200 bg-yellow-50 text-yellow-700', className)}>
-          <CircleDot className="h-3.5 w-3.5" />
+        <span className={cn(baseClass, getStatusColorClasses('draft'), className)}>
+          <CircleDot className={cn('h-3.5 w-3.5', colors.icon)} />
           Draft
         </span>
       )
-    case 'completed':
+    }
+    case 'completed': {
+      const colors = getStatusColors('completed')
       return (
-        <span className={cn(baseClass, 'border-green-200 bg-green-50 text-green-700', className)}>
-          <CheckCircle2 className="h-3.5 w-3.5" />
+        <span className={cn(baseClass, getStatusColorClasses('completed'), className)}>
+          <CheckCircle2 className={cn('h-3.5 w-3.5', colors.icon)} />
           Completed
         </span>
       )
-    case 'covered':
+    }
+    case 'covered': {
+      const colors = getStatusColors('covered')
       return (
-        <span className={cn(baseClass, 'border-green-200 bg-green-50 text-green-700', className)}>
-          <CheckCircle2 className="h-3.5 w-3.5" />
+        <span className={cn(baseClass, getStatusColorClasses('covered'), className)}>
+          <CheckCircle2 className={cn('h-3.5 w-3.5', colors.icon)} />
           Covered
         </span>
       )
+    }
     case 'partially_covered': {
       const hasCounts = typeof coveredCount === 'number' && typeof totalCount === 'number'
+      const colors = getStatusColors('partially_covered')
       return (
         <span
           className={cn(
             baseClass,
-            'border-yellow-200 border-dashed bg-yellow-50 text-yellow-700',
+            getStatusColorClasses('partially_covered'),
+            'border-dashed',
             className
           )}
         >
-          <PieChart className="h-3.5 w-3.5" />
+          <PieChart className={cn('h-3.5 w-3.5', colors.icon)} />
           Partially covered{hasCounts ? ` (${coveredCount} of ${totalCount})` : ''}
         </span>
       )
     }
-    case 'needs_coverage':
+    case 'needs_coverage': {
+      const colors = getStatusColors('needs_coverage')
       return (
-        <span
-          className={cn(baseClass, 'border-orange-200 bg-orange-100 text-orange-900', className)}
-        >
-          <AlertTriangle className="h-3.5 w-3.5" />
+        <span className={cn(baseClass, getStatusColorClasses('needs_coverage'), className)}>
+          <AlertTriangle className={cn('h-3.5 w-3.5', colors.icon)} />
           Needs coverage
         </span>
       )
+    }
     default:
       return (
-        <span
-          className={cn(
-            baseClass,
-            'border-slate-200 bg-slate-50 text-slate-600',
-            className
-          )}
-        >
+        <span className={cn(baseClass, getNeutralChipClasses(), className)}>
           —
         </span>
       )

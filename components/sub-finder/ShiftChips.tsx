@@ -3,6 +3,8 @@
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { parseLocalDate } from '@/lib/utils/date'
+import { getShiftStatusColorClasses, getShiftStatusColors } from '@/lib/utils/colors'
+import { cn } from '@/lib/utils'
 
 interface Shift {
   date: string
@@ -128,17 +130,10 @@ export default function ShiftChips({
   const getBadgeClassName = (status: 'assigned' | 'available' | 'unavailable') => {
     // If declined, make all chips gray
     if (isDeclined) {
-      return 'bg-gray-100 text-gray-600 border-gray-300'
+      return getShiftStatusColorClasses('declined')
     }
     
-    switch (status) {
-      case 'assigned':
-        return 'bg-blue-50 text-blue-900 border-blue-200'
-      case 'available':
-        return 'bg-emerald-50 text-emerald-900 border-emerald-200'
-      case 'unavailable':
-        return 'bg-gray-100 text-gray-700 border-gray-300'
-    }
+    return getShiftStatusColorClasses(status)
   }
 
   return (
@@ -186,15 +181,15 @@ export default function ShiftChips({
         {showLegend && (
           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1 pb-4">
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded border bg-blue-50 border-blue-200" />
+              <div className={cn('w-3 h-3 rounded border', getShiftStatusColors('assigned').bg, getShiftStatusColors('assigned').border)} />
               <span>Assigned</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded border bg-emerald-50 border-emerald-200" />
+              <div className={cn('w-3 h-3 rounded border', getShiftStatusColors('available').bg, getShiftStatusColors('available').border)} />
               <span>Available</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded border bg-gray-100 border-gray-300" />
+              <div className={cn('w-3 h-3 rounded border', getShiftStatusColors('unavailable').bg, getShiftStatusColors('unavailable').border)} />
               <span>Unavailable</span>
             </div>
           </div>

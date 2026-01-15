@@ -71,8 +71,8 @@ export default function AbsenceList({
   if (absences.length === 0) {
     return (
       <div className="p-4 text-center text-muted-foreground">
-        <div className="rounded-full bg-gray-100 w-16 h-16 flex items-center justify-center mx-auto mb-3">
-          <AlertCircle className="h-8 w-8 text-gray-400" />
+        <div className="rounded-full bg-slate-100 w-16 h-16 flex items-center justify-center mx-auto mb-3">
+          <AlertCircle className="h-8 w-8 text-slate-400" />
         </div>
         <p className="mb-2 font-medium">No absences found</p>
         <p className="text-sm">All absences are fully covered or no time-off requests exist</p>

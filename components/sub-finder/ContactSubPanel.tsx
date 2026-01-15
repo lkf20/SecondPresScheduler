@@ -18,6 +18,8 @@ import { Phone, Mail, AlertTriangle, ChevronDown, ChevronUp, X } from 'lucide-re
 import { parseLocalDate } from '@/lib/utils/date'
 import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { getShiftStatusColorClasses } from '@/lib/utils/colors'
+import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
 type ResponseStatus = 'none' | 'pending' | 'confirmed' | 'declined_all'
@@ -1142,7 +1144,7 @@ export default function ContactSubPanel({
                             >
                               <Badge
                                 variant="outline"
-                                className="text-xs bg-blue-50 text-blue-900 border-blue-200"
+                                className={cn('text-xs', getShiftStatusColorClasses('assigned'))}
                               >
                                 {formatShiftLabel(shift.date, shift.time_slot_code)}
                               </Badge>
@@ -1254,7 +1256,7 @@ export default function ContactSubPanel({
                                     >
                                       <Badge
                                         variant="outline"
-                                        className="text-xs bg-emerald-50 text-emerald-900 border-emerald-200"
+                                        className={cn('text-xs', getShiftStatusColorClasses('available'))}
                                       >
                                         {formatShiftLabel(shift.date, shift.time_slot_code)}
                                       </Badge>

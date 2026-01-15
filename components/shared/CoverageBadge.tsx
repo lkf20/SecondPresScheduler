@@ -1,7 +1,8 @@
 import { AlertTriangle, Check, PieChart } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getCoverageColors, getCoverageColorClasses, type CoverageType } from '@/lib/utils/colors'
 
-export type CoverageBadgeType = 'covered' | 'partial' | 'uncovered'
+export type CoverageBadgeType = CoverageType
 
 interface CoverageBadgeProps {
   type: CoverageBadgeType
@@ -13,6 +14,7 @@ interface CoverageBadgeProps {
 /**
  * Shared component for displaying coverage badges (Covered, Partial, Uncovered)
  * Standardizes colors and styling across the app
+ * Uses standardized color system from lib/utils/colors
  */
 export default function CoverageBadge({
   type,
@@ -21,6 +23,7 @@ export default function CoverageBadge({
   className,
 }: CoverageBadgeProps) {
   const baseClasses = 'inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 font-medium'
+  const colors = getCoverageColors(type)
 
   switch (type) {
     case 'covered':
@@ -28,11 +31,11 @@ export default function CoverageBadge({
         <span
           className={cn(
             baseClasses,
-            'bg-blue-50 border border-blue-400 text-blue-700',
+            getCoverageColorClasses('covered'),
             className
           )}
         >
-          <Check className="h-3 w-3" />
+          <Check className={cn('h-3 w-3', colors.icon)} />
           {showLabel && 'Covered: '}
           {count}
         </span>
@@ -43,11 +46,11 @@ export default function CoverageBadge({
         <span
           className={cn(
             baseClasses,
-            'bg-yellow-50 border border-yellow-300 text-yellow-700',
+            getCoverageColorClasses('partial'),
             className
           )}
         >
-          <PieChart className="h-3 w-3" />
+          <PieChart className={cn('h-3 w-3', colors.icon)} />
           {showLabel && 'Partial: '}
           {count}
         </span>
@@ -58,11 +61,11 @@ export default function CoverageBadge({
         <span
           className={cn(
             baseClasses,
-            'bg-orange-50 border border-orange-400 text-orange-700',
+            getCoverageColorClasses('uncovered'),
             className
           )}
         >
-          <AlertTriangle className="h-3 w-3" />
+          <AlertTriangle className={cn('h-3 w-3', colors.icon)} />
           {showLabel && 'Uncovered: '}
           {count}
         </span>

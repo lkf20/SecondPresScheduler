@@ -4,6 +4,8 @@ import { Badge } from '@/components/ui/badge'
 import { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 import { parseLocalDate } from '@/lib/utils/date'
 import CoverageBadge from '@/components/shared/CoverageBadge'
+import { getCoverageColors, getCoverageColorClasses, neutralColors } from '@/lib/utils/colors'
+import { cn } from '@/lib/utils'
 
 interface ShiftDetail {
   id: string
@@ -49,11 +51,11 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
   const getBadgeClassName = (shift: ShiftDetail) => {
     switch (shift.status) {
       case 'fully_covered':
-        return 'bg-blue-50 text-blue-900 border-blue-200'
+        return cn(getCoverageColorClasses('covered'), 'text-blue-900')
       case 'partially_covered':
-        return 'bg-yellow-50 text-yellow-900 border-yellow-200 border-dashed'
+        return cn(getCoverageColorClasses('partial'), 'border-dashed', 'text-yellow-900')
       case 'uncovered':
-        return 'bg-orange-50 text-orange-900 border-orange-200'
+        return cn(getCoverageColorClasses('uncovered'), 'text-orange-900')
     }
   }
 
@@ -65,7 +67,7 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
     new Set(coveredShiftsWithSubs.map((shift) => shift.sub_name).filter(Boolean))
   ) as string[]
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 pt-3 pb-2 shadow-sm">
+    <div className={cn('rounded-lg border px-4 pt-3 pb-2 shadow-sm', neutralColors.border, neutralColors.bgLight)}>
       {/* Header */}
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <div className="text-lg font-bold text-slate-900">
@@ -81,11 +83,11 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
             const getSegmentColor = () => {
               switch (segment.status) {
                 case 'fully_covered':
-                  return 'bg-blue-200'
+                  return 'bg-blue-200' // Use darker shade for progress bar
                 case 'partially_covered':
-                  return 'bg-yellow-200'
+                  return 'bg-yellow-200' // Use darker shade for progress bar
                 case 'uncovered':
-                  return 'bg-orange-200'
+                  return 'bg-orange-200' // Use darker shade for progress bar
               }
             }
 
@@ -113,7 +115,7 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
         <CoverageBadge type="covered" count={fully_covered} />
         <CoverageBadge type="uncovered" count={uncovered} />
       </div>
-      <div className="border-t border-slate-200" />
+      <div className={cn('border-t', neutralColors.border)} />
 
       {/* Shift Chips */}
       <div className="mt-3 flex flex-wrap gap-1.5 pb-2">
