@@ -577,7 +577,7 @@ export default function DashboardClient({
 
         </section>
 
-        <section className="min-w-[400px] space-y-4 rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">
+        <section className="min-w-[450px] space-y-4 rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">
           <div
             role="button"
             tabIndex={0}
@@ -668,7 +668,7 @@ export default function DashboardClient({
           </div>
         </section>
 
-        <section className="min-w-[400px] space-y-4 rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">
+        <section className="min-w-[450px] space-y-4 rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">
           <div
             role="button"
             tabIndex={0}
@@ -739,8 +739,8 @@ export default function DashboardClient({
                           key={slot.id}
                           className="grid gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 md:grid-cols-[1fr_auto]"
                         >
-                          <div className="flex flex-wrap items-center gap-4">
-                            <div className="min-w-[180px] space-y-3">
+                          <div className="flex flex-wrap items-center gap-4 min-w-0">
+                            <div className="min-w-[160px] space-y-3 flex-shrink-0">
                               <div className="text-sm font-semibold text-slate-900">
                                 {formatSlotLabel(slot.day_name, slot.time_slot_code)}
                               </div>
@@ -753,13 +753,13 @@ export default function DashboardClient({
                                 Below Required {formatShortfallLabel(formatShortfallValue(slot.required_staff, slot.scheduled_staff))}
                               </span>
                             </div>
-                            <div className="flex min-w-[190px] flex-col items-start gap-3">
+                            <div className="flex min-w-[170px] flex-col items-start gap-3 flex-shrink-0">
                               <div className="text-xs text-slate-600">
                                 Required: {slot.required_staff} · Scheduled: {slot.scheduled_staff}
                               </div>
                             </div>
                           </div>
-                          <div className="flex items-center justify-end self-center">
+                          <div className="flex items-center justify-end self-center flex-shrink-0">
                             <Button
                               asChild
                               size="sm"
@@ -817,8 +817,8 @@ export default function DashboardClient({
                           key={slot.id}
                           className="grid gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 md:grid-cols-[1fr_auto]"
                         >
-                          <div className="flex flex-wrap items-center gap-4">
-                            <div className="min-w-[180px] space-y-3">
+                          <div className="flex flex-wrap items-center gap-4 min-w-0">
+                            <div className="min-w-[160px] space-y-3 flex-shrink-0">
                               <div className="text-sm font-semibold text-slate-900">
                                 {formatSlotLabel(slot.day_name, slot.time_slot_code)}
                               </div>
@@ -828,23 +828,21 @@ export default function DashboardClient({
                                   staffingBadge(slot.status)
                                 )}
                               >
-                                Below Preferred{' '}
-                                {formatShortfallLabel(
-                                  formatShortfallValue(
-                                    slot.preferred_staff ?? slot.required_staff,
-                                    slot.scheduled_staff
-                                  )
+                                Below Preferred by{' '}
+                                {formatShortfallValue(
+                                  slot.preferred_staff ?? slot.required_staff,
+                                  slot.scheduled_staff
                                 )}
                               </span>
                             </div>
-                            <div className="flex min-w-[190px] flex-col items-start gap-3">
+                            <div className="flex min-w-[170px] flex-col items-start gap-3 flex-shrink-0">
                               <div className="text-xs text-slate-600">
                                 Preferred: {slot.preferred_staff ?? slot.required_staff} · Scheduled:{' '}
                                 {slot.scheduled_staff}
                               </div>
                             </div>
                           </div>
-                          <div className="flex items-center justify-end self-center">
+                          <div className="flex items-center justify-end self-center flex-shrink-0">
                             <Button
                               asChild
                               size="sm"
