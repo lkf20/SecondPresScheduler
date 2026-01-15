@@ -4,6 +4,11 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Settings2 } from 'lucide-react'
 import TimeOffCard from '@/components/shared/TimeOffCard'
 import type { ClassroomBadge } from '@/components/shared/TimeOffCard'
 
@@ -46,6 +51,10 @@ export default function TimeOffListClient({
 }) {
   const router = useRouter()
   const [view, setView] = useState(initialView ?? 'active')
+  // Default to all coverage filters selected
+  const [coverageFilters, setCoverageFilters] = useState<Set<string>>(
+    new Set(['covered', 'needs_coverage', 'partially_covered'])
+  )
 
   useEffect(() => {
     setView(initialView ?? 'active')
@@ -59,6 +68,58 @@ export default function TimeOffListClient({
       window.history.replaceState({}, '', url)
     }
   }
+
+  const toggleCoverageFilter = (filter: string) => {
+    setCoverageFilters((prev) => {
+      const next = new Set(prev)
+      if (next.has(filter)) {
+        next.delete(filter)
+      } else {
+        next.add(filter)
+      }
+      return next
+    })
+  }
+
+  // Filter requests based on status view and coverage filters
+  const getFilteredRequests = (requests: TimeOffRow[]): TimeOffRow[] => {
+    // If all filters are selected, show all requests
+    if (coverageFilters.size === 3) {
+      return requests
+    }
+
+    // If no filters are selected, show nothing (or all - let's show all for better UX)
+    if (coverageFilters.size === 0) {
+      return requests
+    }
+
+    // Filter by selected coverage statuses
+    return requests.filter((request) => {
+      return coverageFilters.has(request.coverage_status)
+    })
+  }
+
+  // Calculate coverage filter counts based on current status view
+  const getCoverageCounts = () => {
+    let requestsToCount: TimeOffRow[] = []
+    
+    if (view === 'active') {
+      requestsToCount = upcomingRequests
+    } else if (view === 'drafts') {
+      requestsToCount = draftRequests
+    } else if (view === 'past') {
+      requestsToCount = pastRequests
+    } else {
+      requestsToCount = [...draftRequests, ...upcomingRequests, ...pastRequests]
+    }
+
+    const covered = requestsToCount.filter(r => r.coverage_status === 'covered').length
+    const needsCoverage = requestsToCount.filter(r => r.coverage_status === 'needs_coverage').length
+    const partiallyCovered = requestsToCount.filter(r => r.coverage_status === 'partially_covered').length
+
+    return { covered, needsCoverage, partiallyCovered }
+  }
+
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
   const handleDeleteDraft = async (id: string) => {
@@ -163,6 +224,11 @@ export default function TimeOffListClient({
     return <div className="space-y-3">{rows.map(renderRowCard)}</div>
   }
 
+  const coverageCounts = getCoverageCounts()
+  const filteredDraftRequests = getFilteredRequests(draftRequests)
+  const filteredUpcomingRequests = getFilteredRequests(upcomingRequests)
+  const filteredPastRequests = getFilteredRequests(pastRequests)
+
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -185,33 +251,122 @@ export default function TimeOffListClient({
             {option.label}
           </button>
         ))}
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="relative">
+              <Settings2 className="h-4 w-4 mr-2" />
+              Filter
+              {coverageFilters.size < 3 && (
+                <Badge
+                  variant="secondary"
+                  className="ml-2 h-5 min-w-[20px] px-1.5 text-xs"
+                >
+                  {3 - coverageFilters.size}
+                </Badge>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            className="w-80"
+            align="start"
+            onOpenAutoFocus={(event) => event.preventDefault()}
+          >
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-medium text-sm mb-3">Coverage Status</h4>
+                <div className="space-y-3">
+                  <div className="flex items-start space-x-3">
+                    <Checkbox
+                      id="filter-covered"
+                      checked={coverageFilters.has('covered')}
+                      onCheckedChange={() => toggleCoverageFilter('covered')}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <Label
+                        htmlFor="filter-covered"
+                        className="text-sm font-normal cursor-pointer"
+                      >
+                        Fully Covered
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {coverageCounts.covered} request{coverageCounts.covered !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-3">
+                    <Checkbox
+                      id="filter-needs-coverage"
+                      checked={coverageFilters.has('needs_coverage')}
+                      onCheckedChange={() => toggleCoverageFilter('needs_coverage')}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <Label
+                        htmlFor="filter-needs-coverage"
+                        className="text-sm font-normal cursor-pointer"
+                      >
+                        Needs Coverage
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {coverageCounts.needsCoverage} request{coverageCounts.needsCoverage !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-3">
+                    <Checkbox
+                      id="filter-partially-covered"
+                      checked={coverageFilters.has('partially_covered')}
+                      onCheckedChange={() => toggleCoverageFilter('partially_covered')}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <Label
+                        htmlFor="filter-partially-covered"
+                        className="text-sm font-normal cursor-pointer"
+                      >
+                        Partially Covered
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {coverageCounts.partiallyCovered} request{coverageCounts.partiallyCovered !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
-      {draftRequests.length > 0 && (view === 'drafts' || view === 'all') && (
+      {filteredDraftRequests.length > 0 && (view === 'drafts' || view === 'all') && (
         <details open={view === 'drafts'} className="mb-6 rounded-lg bg-gray-50 border border-gray-200 p-4">
           <summary className="cursor-pointer text-sm font-medium text-slate-700">
-            Drafts ({draftRequests.length})
+            Drafts ({filteredDraftRequests.length})
           </summary>
           <div className="mt-4">
-            {renderSection(draftRequests, 'No drafts available.')}
+            {renderSection(filteredDraftRequests, 'No drafts available.')}
           </div>
         </details>
       )}
 
       {(view === 'active' || view === 'all') && (
         <div className="space-y-3">
-          {renderSection(upcomingRequests, 'No active time off requests found.')}
+          {renderSection(filteredUpcomingRequests, 'No active time off requests found.')}
         </div>
       )}
 
-      {pastRequests.length > 0 && (view === 'past' || view === 'active' || view === 'all') && (
+      {filteredPastRequests.length > 0 && (view === 'past' || view === 'active' || view === 'all') && (
         <details className="mt-6 rounded-lg bg-gray-50 border border-gray-200 p-4">
           <summary className="cursor-pointer text-sm font-medium text-slate-700 flex items-center justify-between">
             <span>Past Time Off (last 90 days)</span>
-            <span className="text-muted-foreground">{pastRequests.length}</span>
+            <span className="text-muted-foreground">{filteredPastRequests.length}</span>
           </summary>
           <div className="mt-4">
-            {renderSection(pastRequests, 'No past time off requests in the last 90 days.')}
+            {renderSection(filteredPastRequests, 'No past time off requests in the last 90 days.')}
           </div>
         </details>
       )}
