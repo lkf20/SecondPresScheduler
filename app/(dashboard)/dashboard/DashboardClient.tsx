@@ -12,13 +12,18 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
+  Settings,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { getCoverageColors, getStaffingColorClasses, getStaffingColors, neutralColors, coverageColorValues, getButtonColors, staffingColorValues } from '@/lib/utils/colors'
 import TimeOffCard from '@/components/shared/TimeOffCard'
+import { Loader2 } from 'lucide-react'
 
 type Summary = {
   absences: number
@@ -144,10 +149,64 @@ const groupStaffingTargets = (slots: StaffingTargetItem[]) => {
   }))
 }
 
+type CoverageRange = '1 week' | '2 weeks' | '1 month' | '2 months'
+
+const getDaysFromRange = (range: CoverageRange): number => {
+  switch (range) {
+    case '1 week':
+      return 6 // 7 days total (today + 6 more)
+    case '2 weeks':
+      return 13 // 14 days total (today + 13 more)
+    case '1 month':
+      return 29 // 30 days total (today + 29 more)
+    case '2 months':
+      return 59 // 60 days total (today + 59 more)
+  }
+}
+
+const getRangeLabel = (range: CoverageRange): string => {
+  switch (range) {
+    case '1 week':
+      return 'the next week'
+    case '2 weeks':
+      return 'the next two weeks'
+    case '1 month':
+      return 'the next month'
+    case '2 months':
+      return 'the next two months'
+  }
+}
+
+const getRangeDaysText = (range: CoverageRange): string => {
+  switch (range) {
+    case '1 week':
+      return '7 days'
+    case '2 weeks':
+      return '14 days'
+    case '1 month':
+      return '30 days'
+    case '2 months':
+      return '60 days'
+  }
+}
+
+const toDateString = (date: Date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date)
+  next.setDate(next.getDate() + days)
+  return next
+}
+
 export default function DashboardClient({
-  overview,
-  startDate,
-  endDate,
+  overview: initialOverview,
+  startDate: initialStartDate,
+  endDate: initialEndDate,
 }: {
   overview: DashboardOverview
   startDate: string
@@ -163,6 +222,76 @@ export default function DashboardClient({
   const [coverageSectionCollapsed, setCoverageSectionCollapsed] = useState(false)
   const [scheduledSubsSectionCollapsed, setScheduledSubsSectionCollapsed] = useState(false)
   const [staffingTargetSectionCollapsed, setStaffingTargetSectionCollapsed] = useState(false)
+  
+  // Coverage range state
+  const [coverageRange, setCoverageRange] = useState<CoverageRange>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('dashboard_coverage_range') as CoverageRange | null
+      if (stored && ['1 week', '2 weeks', '1 month', '2 months'].includes(stored)) {
+        return stored
+      }
+    }
+    return '2 weeks' // default
+  })
+  
+  const [overview, setOverview] = useState<DashboardOverview>(initialOverview)
+  const [isLoadingOverview, setIsLoadingOverview] = useState(false)
+  
+  // Calculate dates based on selected range
+  const calculateDates = (range: CoverageRange) => {
+    const today = new Date()
+    const start = toDateString(today)
+    const end = toDateString(addDays(today, getDaysFromRange(range)))
+    return { start, end }
+  }
+  
+  const { start: currentStartDate, end: currentEndDate } = useMemo(
+    () => calculateDates(coverageRange),
+    [coverageRange]
+  )
+  
+  // Track if this is the initial mount to avoid unnecessary fetch
+  const [isInitialMount, setIsInitialMount] = useState(true)
+  
+  // Fetch overview data when range changes
+  useEffect(() => {
+    // On initial mount, check if we can use the provided data
+    if (isInitialMount) {
+      setIsInitialMount(false)
+      // Only use initial data if it matches the selected range exactly
+      if (coverageRange === '2 weeks' && currentStartDate === initialStartDate && currentEndDate === initialEndDate) {
+        // Use initial data, no need to fetch
+        return
+      }
+    }
+    
+    // Always fetch when range changes (after initial mount)
+    const fetchOverview = async () => {
+      setIsLoadingOverview(true)
+      try {
+        const response = await fetch(
+          `/api/dashboard/overview?start_date=${currentStartDate}&end_date=${currentEndDate}`
+        )
+        if (response.ok) {
+          const data = await response.json()
+          setOverview(data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch overview:', error)
+      } finally {
+        setIsLoadingOverview(false)
+      }
+    }
+    
+    fetchOverview()
+  }, [coverageRange, currentStartDate, currentEndDate, initialStartDate, initialEndDate, isInitialMount])
+  
+  // Save to localStorage when range changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dashboard_coverage_range', coverageRange)
+    }
+  }, [coverageRange])
 
   useEffect(() => {
     const hour = new Date().getHours()
@@ -322,9 +451,58 @@ export default function DashboardClient({
             {greetingTime}
             {greetingName ? `, ${greetingName}` : ''}!
           </h1>
-          <p className="text-xl text-slate-600 mt-1">
-            Here is your coverage outlook for the next two weeks (
-            {formatFullDateLabel(startDate)} - {formatFullDateLabel(endDate)}).
+          <p className="text-xl text-slate-600 mt-1 flex items-center gap-2">
+            Here is your coverage outlook for {getRangeLabel(coverageRange)} (
+            {formatFullDateLabel(currentStartDate)} - {formatFullDateLabel(currentEndDate)}).
+            {isLoadingOverview && (
+              <Loader2 className="h-4 w-4 animate-spin text-slate-500 ml-1" />
+            )}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none transition-colors"
+                  aria-label="Change coverage outlook time range"
+                >
+                  <Settings className="h-4 w-4" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 shadow-lg border-slate-200" align="start" sideOffset={8}>
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold text-slate-900">Time Range</Label>
+                  <RadioGroup
+                    value={coverageRange}
+                    onValueChange={(value) => setCoverageRange(value as CoverageRange)}
+                    className="space-y-2.5"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <RadioGroupItem value="1 week" id="range-1week" className="focus:outline-none focus-visible:ring-0" />
+                      <Label htmlFor="range-1week" className="text-base font-normal cursor-pointer text-slate-700">
+                        1 week
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <RadioGroupItem value="2 weeks" id="range-2weeks" className="focus:outline-none focus-visible:ring-0" />
+                      <Label htmlFor="range-2weeks" className="text-base font-normal cursor-pointer text-slate-700">
+                        2 weeks
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <RadioGroupItem value="1 month" id="range-1month" className="focus:outline-none focus-visible:ring-0" />
+                      <Label htmlFor="range-1month" className="text-base font-normal cursor-pointer text-slate-700">
+                        1 month
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <RadioGroupItem value="2 months" id="range-2months" className="focus:outline-none focus-visible:ring-0" />
+                      <Label htmlFor="range-2months" className="text-base font-normal cursor-pointer text-slate-700">
+                        2 months
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+              </PopoverContent>
+            </Popover>
           </p>
         </div>
       </section>
@@ -400,13 +578,13 @@ export default function DashboardClient({
                   ) : null}
                   {'secondaryCount' in item &&
                   item.secondaryCount !== undefined &&
-                  item.secondaryIcon &&
-                  item.secondaryStyle &&
-                  item.secondaryIconStyle &&
+                  item.secondaryIcon !== undefined &&
+                  item.secondaryStyle !== undefined &&
+                  item.secondaryIconStyle !== undefined &&
                   item.secondaryRightCount !== undefined &&
-                  item.secondaryRightIcon &&
-                  item.secondaryRightStyle &&
-                  item.secondaryRightIconStyle ? (
+                  item.secondaryRightIcon !== undefined &&
+                  item.secondaryRightStyle !== undefined &&
+                  item.secondaryRightIconStyle !== undefined ? (
                     <div className="mt-3 flex items-center justify-between">
                       <div className={cn('flex items-center gap-2 text-3xl font-semibold', item.secondaryStyle)}>
                         <span>{item.secondaryCount}</span>
@@ -522,7 +700,7 @@ export default function DashboardClient({
           <div className={cn('space-y-4', coverageSectionCollapsed && 'hidden xl:block')}>
               {filteredCoverageRequests.length === 0 ? (
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-              No upcoming time off in the next 14 days
+              No upcoming time off in the next {getRangeDaysText(coverageRange)}
             </div>
           ) : (
             <div className="space-y-3">
@@ -606,7 +784,7 @@ export default function DashboardClient({
           <div className={cn('space-y-4', scheduledSubsSectionCollapsed && 'hidden xl:block')}>
             {overview.scheduled_subs.length === 0 ? (
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-              No subs scheduled in the next 14 days
+              No subs scheduled in the next {getRangeDaysText(coverageRange)}
             </div>
           ) : (
             <div className="space-y-3">
@@ -698,7 +876,7 @@ export default function DashboardClient({
 
           {overview.staffing_targets.length === 0 ? (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-              ✅ All classrooms meet staffing targets for the next 14 days
+              ✅ All classrooms meet staffing targets.
             </div>
           ) : (
             <div className="space-y-4">
