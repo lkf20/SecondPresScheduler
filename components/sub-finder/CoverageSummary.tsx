@@ -3,7 +3,7 @@
 import { Badge } from '@/components/ui/badge'
 import { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 import { parseLocalDate } from '@/lib/utils/date'
-import { AlertTriangle, Check } from 'lucide-react'
+import CoverageBadge from '@/components/shared/CoverageBadge'
 
 interface ShiftDetail {
   id: string
@@ -51,9 +51,9 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
       case 'fully_covered':
         return 'bg-blue-50 text-blue-900 border-blue-200'
       case 'partially_covered':
-        return 'bg-blue-50 text-blue-900 border-blue-200 border-dashed'
+        return 'bg-yellow-50 text-yellow-900 border-yellow-200 border-dashed'
       case 'uncovered':
-        return 'bg-amber-50 text-amber-900 border-amber-200'
+        return 'bg-orange-50 text-orange-900 border-orange-200'
     }
   }
 
@@ -83,9 +83,9 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
                 case 'fully_covered':
                   return 'bg-blue-200'
                 case 'partially_covered':
-                  return 'bg-blue-200'
+                  return 'bg-yellow-200'
                 case 'uncovered':
-                  return 'bg-amber-200'
+                  return 'bg-orange-200'
               }
             }
 
@@ -110,14 +110,8 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
 
       {/* Summary Line */}
       <div className="mb-3 flex items-center gap-2 flex-wrap">
-        <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 bg-blue-50 border border-blue-400 text-blue-700 font-medium">
-          <Check className="h-3 w-3" />
-          Covered: {fully_covered}
-        </span>
-        <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 bg-amber-50 border border-amber-400 text-amber-700 font-medium">
-          <AlertTriangle className="h-3 w-3" />
-          Uncovered: {uncovered}
-        </span>
+        <CoverageBadge type="covered" count={fully_covered} />
+        <CoverageBadge type="uncovered" count={uncovered} />
       </div>
       <div className="border-t border-slate-200" />
 

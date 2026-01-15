@@ -47,7 +47,7 @@ export default function CoverageStatusPill({
         <span
           className={cn(
             baseClass,
-            'border-amber-200 border-dashed bg-amber-50 text-amber-800',
+            'border-yellow-200 border-dashed bg-yellow-50 text-yellow-700',
             className
           )}
         >
@@ -59,7 +59,7 @@ export default function CoverageStatusPill({
     case 'needs_coverage':
       return (
         <span
-          className={cn(baseClass, 'border-amber-200 bg-amber-100 text-amber-900', className)}
+          className={cn(baseClass, 'border-orange-200 bg-orange-100 text-orange-900', className)}
         >
           <AlertTriangle className="h-3.5 w-3.5" />
           Needs coverage

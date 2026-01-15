@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { CalendarDays, ChevronDown, ChevronUp, Check, AlertTriangle, PieChart, CheckCircle2 } from 'lucide-react'
+import { CalendarDays, ChevronDown, ChevronUp, AlertTriangle, PieChart, CheckCircle2 } from 'lucide-react'
+import CoverageBadge from './CoverageBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -148,7 +149,7 @@ export default function TimeOffCard({
             {uncovered > 0 && partial === 0 && (
               <AlertTriangle className="h-5 w-5 text-orange-600 flex-shrink-0" />
             )}
-            {partial > 0 && <PieChart className="h-5 w-5 text-amber-600 flex-shrink-0" />}
+            {partial > 0 && <PieChart className="h-5 w-5 text-yellow-600 flex-shrink-0" />}
             {uncovered === 0 && partial === 0 && covered > 0 && (
               <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
             )}
@@ -158,25 +159,11 @@ export default function TimeOffCard({
             {/* Coverage badges in middle */}
             <div className="flex items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
-                {covered > 0 && (
-                  <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 bg-blue-50 border border-blue-400 text-blue-700 font-medium">
-                    <Check className="h-3 w-3" />
-                    Covered: {covered}
-                  </span>
-                )}
-                {partial > 0 && (
-                  <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 bg-yellow-50 border border-yellow-300 text-yellow-700 font-medium">
-                    Partial: {partial}
-                  </span>
-                )}
+                {covered > 0 && <CoverageBadge type="covered" count={covered} />}
+                {partial > 0 && <CoverageBadge type="partial" count={partial} />}
               </div>
               <div className="ml-auto flex flex-wrap items-center gap-2">
-            {uncovered > 0 && (
-              <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 bg-orange-50 border border-orange-400 text-orange-700 font-medium">
-                <AlertTriangle className="h-3 w-3" />
-                Uncovered: {uncovered}
-              </span>
-            )}
+                {uncovered > 0 && <CoverageBadge type="uncovered" count={uncovered} />}
               </div>
             </div>
           </div>
@@ -282,23 +269,9 @@ export default function TimeOffCard({
         </div>
         <div className="flex flex-col items-end self-stretch">
           <div className="flex items-center gap-2 mb-auto">
-            {covered > 0 && (
-              <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 bg-blue-50 border border-blue-400 text-blue-700 font-medium">
-                <Check className="h-3 w-3" />
-                Covered: {covered}
-              </span>
-            )}
-            {partial > 0 && (
-              <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 bg-yellow-50 border border-yellow-300 text-yellow-700 font-medium">
-                Partial: {partial}
-              </span>
-            )}
-            {uncovered > 0 && (
-              <span className="inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 bg-orange-50 border border-orange-400 text-orange-700 font-medium">
-                <AlertTriangle className="h-3 w-3" />
-                Uncovered: {uncovered}
-              </span>
-            )}
+            {covered > 0 && <CoverageBadge type="covered" count={covered} />}
+            {partial > 0 && <CoverageBadge type="partial" count={partial} />}
+            {uncovered > 0 && <CoverageBadge type="uncovered" count={uncovered} />}
           </div>
           <div className="flex items-center justify-end gap-3 mt-auto">
             <Link
