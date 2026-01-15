@@ -429,7 +429,7 @@ export default function TimeOffFormClient({ timeOffRequest }: TimeOffFormClientP
         </Link>
       </div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Edit Time Off Request</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Edit Time Off Request</h1>
         <p className="text-muted-foreground mt-2">
           {timeOffRequest.teacher?.display_name ||
             (timeOffRequest.teacher?.first_name && timeOffRequest.teacher?.last_name

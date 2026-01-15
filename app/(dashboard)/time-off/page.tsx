@@ -7,12 +7,14 @@ import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 import { transformTimeOffCardData } from '@/lib/utils/time-off-card-data'
+import { getHeaderClasses } from '@/lib/utils/colors'
 
 export default async function TimeOffPage({
   searchParams,
 }: {
-  searchParams?: { view?: string }
+  searchParams?: Promise<{ view?: string }>
 }) {
+  const params = await searchParams
   let requests = await getTimeOffRequests({ statuses: ['active', 'draft'] })
   type TimeOffRequest = Awaited<ReturnType<typeof getTimeOffRequests>>[number]
   type TimeOffShift = Awaited<ReturnType<typeof getTimeOffShifts>>[number]
@@ -23,7 +25,7 @@ export default async function TimeOffPage({
     if (name === 'Tuesday') return 'Tues'
     return name.slice(0, 3)
   }
-  const view = searchParams?.view ?? 'active'
+  const view = params?.view ?? 'active'
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const ninetyDaysAgo = new Date(today)
@@ -165,7 +167,7 @@ export default async function TimeOffPage({
     <div className="w-full max-w-4xl">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Time Off Requests</h1>
+          <h1 className={getHeaderClasses('3xl')}>Time Off Requests</h1>
           <p className="text-muted-foreground mt-2">Manage teacher time off requests</p>
         </div>
         <Link href="/time-off/new">

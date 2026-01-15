@@ -298,7 +298,7 @@ export default function SubFinderPage() {
       {/* Left Rail */}
       <div className="w-80 border-r border-slate-200 bg-slate-100 shadow-[2px_0_6px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden">
         <div className="sticky top-0 z-10 px-3 pt-10 pb-4 border-b border-slate-200 bg-slate-100 flex flex-col">
-          <h1 className="text-xl font-bold mb-4 text-slate-800 pl-2">Sub Finder</h1>
+          <h1 className="text-xl font-bold mb-4 text-slate-900 pl-2">Sub Finder</h1>
 
           {/* Mode Toggle - Pill */}
           <div className="mb-4 rounded-full border border-slate-200 bg-white/70 p-1">
@@ -310,7 +310,7 @@ export default function SubFinderPage() {
                 className={cn(
                   "flex-1 rounded-full text-xs font-semibold transition-all",
                   mode === 'existing'
-                    ? "!bg-slate-800 !text-white shadow-sm"
+                    ? "!bg-button-fill !text-button-fill-foreground shadow-sm"
                     : "text-slate-600 hover:bg-white hover:text-slate-900"
                 )}
               >
@@ -323,7 +323,7 @@ export default function SubFinderPage() {
                 className={cn(
                   "flex-1 rounded-full text-xs font-semibold transition-all",
                   mode === 'manual'
-                    ? "!bg-slate-800 !text-white shadow-sm"
+                    ? "!bg-button-fill !text-button-fill-foreground shadow-sm"
                     : "text-slate-600 hover:bg-white hover:text-slate-900"
                 )}
               >
@@ -497,7 +497,7 @@ export default function SubFinderPage() {
               <Button
                 size="sm"
                 variant="outline"
-                className="w-full border-slate-200 text-primary hover:bg-slate-800 hover:text-white focus:bg-slate-800 focus:text-white"
+                className="w-full border-slate-200 text-primary hover:bg-button-fill hover:text-button-fill-foreground focus:bg-button-fill focus:text-button-fill-foreground"
                 disabled={!manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0}
                 onClick={runManualFinder}
               >

@@ -87,7 +87,7 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Edit Teacher</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Edit Teacher</h1>
         <p className="text-muted-foreground mt-2">
           {teacher.display_name || `${teacher.first_name} ${teacher.last_name}`}
         </p>

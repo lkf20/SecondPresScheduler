@@ -57,6 +57,11 @@ const config: Config = {
         "primary-accent-hover": "hsl(var(--primary-accent-hover))",
         "outline-accent": "hsl(var(--outline-accent))",
         "outline-navy": "hsl(var(--outline-navy))",
+        "button-fill": {
+          DEFAULT: "hsl(var(--button-fill))",
+          foreground: "hsl(var(--button-fill-foreground))",
+          hover: "hsl(var(--button-fill-hover))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

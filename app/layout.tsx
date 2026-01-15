@@ -14,7 +14,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  let initialTheme: "system" | "accented" = "system";
+  let initialTheme: "system" | "accented" = "accented"; // Default to accented
 
   try {
     const supabase = await createClient();
@@ -28,8 +28,9 @@ export default async function RootLayout({
         .select("theme")
         .eq("user_id", user.id)
         .single();
-      if (profile?.theme === "accented") {
-        initialTheme = "accented";
+      // Use profile theme if set, otherwise default to accented
+      if (profile?.theme) {
+        initialTheme = profile.theme as "system" | "accented";
       }
     }
   } catch (error) {

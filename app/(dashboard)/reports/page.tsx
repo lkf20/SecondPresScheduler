@@ -27,7 +27,7 @@ export default function ReportsPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
+        <h1 className={getHeaderClasses('3xl')}>Reports</h1>
         <p className="text-muted-foreground mt-2">Generate schedules and availability reports</p>
       </div>
 

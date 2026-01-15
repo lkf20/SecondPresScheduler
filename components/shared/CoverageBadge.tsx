@@ -1,6 +1,6 @@
 import { AlertTriangle, Check, PieChart } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getCoverageColors, getCoverageColorClasses, type CoverageType } from '@/lib/utils/colors'
+import { getCoverageColors, getCoverageColorClasses, coverageColorValues, type CoverageType } from '@/lib/utils/colors'
 
 export type CoverageBadgeType = CoverageType
 
@@ -26,50 +26,81 @@ export default function CoverageBadge({
   const colors = getCoverageColors(type)
 
   switch (type) {
-    case 'covered':
+    case 'covered': {
+      const colorClasses = getCoverageColorClasses('covered')
+      const colorValues = coverageColorValues.covered
       return (
         <span
           className={cn(
             baseClasses,
-            getCoverageColorClasses('covered'),
+            colorClasses,
             className
           )}
+          style={{
+            // Inline styles ensure colors override conflicting CSS (twMerge, specificity issues)
+            backgroundColor: colorValues.bg,
+            color: colorValues.text,
+            borderStyle: 'solid',
+            borderWidth: '1px',
+            borderColor: colorValues.border,
+          } as React.CSSProperties}
         >
           <Check className={cn('h-3 w-3', colors.icon)} />
           {showLabel && 'Covered: '}
           {count}
         </span>
       )
+    }
 
-    case 'partial':
+    case 'partial': {
+      const colorClasses = getCoverageColorClasses('partial')
+      const colorValues = coverageColorValues.partial
       return (
         <span
           className={cn(
             baseClasses,
-            getCoverageColorClasses('partial'),
+            colorClasses,
             className
           )}
+          style={{
+            backgroundColor: colorValues.bg,
+            color: colorValues.text,
+            borderStyle: 'solid',
+            borderWidth: '1px',
+            borderColor: colorValues.border,
+          } as React.CSSProperties}
         >
           <PieChart className={cn('h-3 w-3', colors.icon)} />
           {showLabel && 'Partial: '}
           {count}
         </span>
       )
+    }
 
-    case 'uncovered':
+    case 'uncovered': {
+      const colorClasses = getCoverageColorClasses('uncovered')
+      const colorValues = coverageColorValues.uncovered
       return (
         <span
           className={cn(
             baseClasses,
-            getCoverageColorClasses('uncovered'),
+            colorClasses,
             className
           )}
+          style={{
+            backgroundColor: colorValues.bg,
+            color: colorValues.text,
+            borderStyle: 'solid',
+            borderWidth: '1px',
+            borderColor: colorValues.border,
+          } as React.CSSProperties}
         >
           <AlertTriangle className={cn('h-3 w-3', colors.icon)} />
           {showLabel && 'Uncovered: '}
           {count}
         </span>
       )
+    }
 
     default:
       return null

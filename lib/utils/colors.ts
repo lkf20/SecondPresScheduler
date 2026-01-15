@@ -54,6 +54,32 @@ export type CoverageType = 'covered' | 'partial' | 'uncovered'
  * Standardized colors for coverage status badges
  * Used by CoverageBadge and all coverage-related components
  */
+/**
+ * RGB color values for coverage badges
+ * Used for inline styles to ensure they override conflicting CSS
+ * These match Tailwind's color palette
+ */
+export const coverageColorValues = {
+  covered: {
+    bg: 'rgb(239, 246, 255)', // blue-50
+    border: 'rgb(96, 165, 250)', // blue-400
+    text: 'rgb(29, 78, 216)', // blue-700
+    icon: 'rgb(37, 99, 235)', // blue-600
+  },
+  partial: {
+    bg: 'rgb(254, 252, 232)', // yellow-50
+    border: 'rgb(253, 224, 71)', // yellow-300
+    text: 'rgb(161, 98, 7)', // yellow-700
+    icon: 'rgb(202, 138, 4)', // yellow-600
+  },
+  uncovered: {
+    bg: 'rgb(255, 247, 237)', // orange-50
+    border: 'rgb(251, 146, 60)', // orange-400
+    text: 'rgb(194, 65, 12)', // orange-700
+    icon: 'rgb(234, 88, 12)', // orange-600
+  },
+} as const
+
 export const coverageColors = {
   covered: {
     bg: 'bg-blue-50',
@@ -84,10 +110,14 @@ export function getCoverageColors(type: CoverageType) {
 
 /**
  * Get coverage color classes as a single string for className
+ * Note: Using explicit border utilities to avoid twMerge conflicts
+ * Separating border classes to prevent twMerge from merging them incorrectly
  */
 export function getCoverageColorClasses(type: CoverageType): string {
   const colors = getCoverageColors(type)
-  return `border ${colors.bg} ${colors.border} ${colors.text}`
+  // Return classes in a specific order to avoid twMerge conflicts
+  // Background first, then border utilities separately
+  return `${colors.bg} ${colors.text} border-[1px] border-solid ${colors.border}`
 }
 
 // ============================================================================
@@ -130,7 +160,7 @@ export function getStatusColors(status: StatusType) {
  */
 export function getStatusColorClasses(status: StatusType): string {
   const colors = getStatusColors(status)
-  return `border ${colors.bg} ${colors.border} ${colors.text}`
+  return `border border-solid ${colors.bg} ${colors.border} ${colors.text}`
 }
 
 // ============================================================================
@@ -162,8 +192,8 @@ export const buttonColors = {
     // Custom teal for "Find Sub" buttons
   },
   dark: {
-    base: 'bg-slate-900 text-white hover:bg-slate-800',
-    // Dark button for selected states
+    base: 'bg-button-fill text-button-fill-foreground hover:bg-button-fill-hover',
+    // Dark button for selected states - uses theme variable (dark navy in accented theme)
   },
   ghost: {
     base: 'hover:bg-accent hover:text-accent-foreground',
@@ -214,7 +244,7 @@ export const neutralColors = {
  * Get neutral color classes for chips
  */
 export function getNeutralChipClasses(): string {
-  return `border ${neutralColors.chip.bg} ${neutralColors.chip.border} ${neutralColors.chip.text}`
+  return `border border-solid ${neutralColors.chip.bg} ${neutralColors.chip.border} ${neutralColors.chip.text}`
 }
 
 // ============================================================================
@@ -256,7 +286,7 @@ export function getStaffingColors(status: StaffingStatus) {
  */
 export function getStaffingColorClasses(status: StaffingStatus): string {
   const colors = getStaffingColors(status)
-  return `border ${colors.bg} ${colors.border} ${colors.text}`
+  return `border border-solid ${colors.bg} ${colors.border} ${colors.text}`
 }
 
 // ============================================================================
@@ -306,7 +336,35 @@ export function getShiftStatusColors(status: ShiftStatus | 'declined') {
  */
 export function getShiftStatusColorClasses(status: ShiftStatus | 'declined'): string {
   const colors = getShiftStatusColors(status)
-  return `border ${colors.bg} ${colors.border} ${colors.text}`
+  return `border border-solid ${colors.bg} ${colors.border} ${colors.text}`
+}
+
+// ============================================================================
+// HEADER STYLES
+// ============================================================================
+
+export type HeaderSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl'
+
+/**
+ * Standardized header styling
+ * Use these utilities to ensure consistent header appearance across the app
+ */
+export const headerStyles = {
+  sm: 'text-sm font-bold text-slate-900',
+  md: 'text-base font-bold text-slate-900',
+  lg: 'text-lg font-bold text-slate-900',
+  xl: 'text-xl font-bold text-slate-900',
+  '2xl': 'text-2xl font-bold text-slate-900',
+  '3xl': 'text-3xl font-bold tracking-tight text-slate-900',
+} as const
+
+/**
+ * Get header classes by size
+ * @param size - Header size (sm, md, lg, xl, 2xl, 3xl)
+ * @returns Tailwind classes for the header
+ */
+export function getHeaderClasses(size: HeaderSize = 'lg'): string {
+  return headerStyles[size]
 }
 
 // ============================================================================

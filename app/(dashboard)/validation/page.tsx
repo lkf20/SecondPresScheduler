@@ -4,7 +4,7 @@ export default function ValidationPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Schedule Validation</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Schedule Validation</h1>
         <p className="text-muted-foreground mt-2">Check for conflicts and validation errors</p>
       </div>
 

@@ -42,7 +42,7 @@ export default function NewSubPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Add New Sub</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Add New Sub</h1>
         <p className="text-muted-foreground mt-2">Create a new substitute teacher profile</p>
       </div>
 

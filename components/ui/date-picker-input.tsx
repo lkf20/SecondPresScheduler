@@ -172,7 +172,7 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
                   onClick={() => handleSelect(dayNumber)}
                   className={cn(
                     'h-8 rounded-md text-slate-800 hover:bg-slate-100',
-                    selected && 'bg-slate-800 text-white hover:bg-slate-800',
+                    selected && 'bg-button-fill text-button-fill-foreground hover:bg-button-fill',
                     !selected && isToday(dayNumber) && 'border border-slate-300'
                   )}
                 >

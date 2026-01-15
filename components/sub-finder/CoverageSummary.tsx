@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 import { parseLocalDate } from '@/lib/utils/date'
 import CoverageBadge from '@/components/shared/CoverageBadge'
-import { getCoverageColors, getCoverageColorClasses, neutralColors } from '@/lib/utils/colors'
+import { getCoverageColors, getCoverageColorClasses, neutralColors, getHeaderClasses } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
 
 interface ShiftDetail {
@@ -70,7 +70,7 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
     <div className={cn('rounded-lg border px-4 pt-3 pb-2 shadow-sm', neutralColors.border, neutralColors.bgLight)}>
       {/* Header */}
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <div className="text-lg font-bold text-slate-900">
+        <div className={getHeaderClasses('lg')}>
           {uncovered} of {totalShifts} Shifts Require Subs
         </div>
         <div className="h-2 rounded-full overflow-hidden flex gap-0.5">

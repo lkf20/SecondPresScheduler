@@ -122,7 +122,7 @@ export default function TimeSlotsPage() {
     <div>
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Days and Time Slots</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Days and Time Slots</h1>
           <p className="text-muted-foreground mt-2">
             Configure which days appear in the weekly schedule and manage time periods
           </p>

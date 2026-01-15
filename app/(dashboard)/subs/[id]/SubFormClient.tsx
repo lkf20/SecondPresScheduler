@@ -142,7 +142,7 @@ export default function SubFormClient({ sub }: SubFormClientProps) {
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <h1 className="text-3xl font-bold tracking-tight">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
               Edit Sub: <span className="text-primary">{subName}</span>
             </h1>
             <Button

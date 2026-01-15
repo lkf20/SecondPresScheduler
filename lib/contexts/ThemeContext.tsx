@@ -19,7 +19,7 @@ export function ThemeProvider({
   children: React.ReactNode
   initialTheme?: Theme
 }) {
-  const [theme, setThemeState] = useState<Theme>(initialTheme ?? 'system')
+  const [theme, setThemeState] = useState<Theme>(initialTheme ?? 'accented') // Default to accented
   const [isLoading, setIsLoading] = useState(initialTheme ? false : true)
 
   // Fetch theme from server on mount
@@ -29,7 +29,7 @@ export function ThemeProvider({
         const response = await fetch('/api/user/theme')
         if (response.ok) {
           const data = await response.json()
-          setThemeState(data.theme || 'system')
+          setThemeState(data.theme || 'accented') // Default to accented
         }
       } catch (error) {
         console.error('Error fetching theme:', error)

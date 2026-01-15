@@ -24,7 +24,7 @@ export default async function ClassesPage() {
     <div>
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-8">
         <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight">Class Groups</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Class Groups</h1>
           <p className="text-muted-foreground mt-2">
             Manage class group names. Drag rows to reorder.
           </p>

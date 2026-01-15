@@ -305,7 +305,7 @@ export default function WeeklySchedulePage() {
     <div>
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Weekly Schedule</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Weekly Schedule</h1>
           <p className="text-muted-foreground mt-2">
             Manage staffing by classroom, day, and time slot
           </p>

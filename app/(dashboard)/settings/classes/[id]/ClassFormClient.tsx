@@ -127,7 +127,7 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Edit Class Group</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Edit Class Group</h1>
         <p className="text-muted-foreground mt-2">{classData.name}</p>
       </div>
 

@@ -114,7 +114,7 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Edit Classroom</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Edit Classroom</h1>
         <p className="text-muted-foreground mt-2">{classroom.name}</p>
       </div>
 

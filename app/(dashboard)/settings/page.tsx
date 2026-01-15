@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { BookOpen, Building2, Clock, Users, UserCheck, Palette } from 'lucide-react'
+import { BookOpen, Building2, Clock, Users, UserCheck } from 'lucide-react'
+import { getHeaderClasses } from '@/lib/utils/colors'
 
 const settingsCategories = [
   {
@@ -33,19 +34,13 @@ const settingsCategories = [
     href: '/settings/timeslots',
     icon: Clock,
   },
-  {
-    name: 'Appearance',
-    description: 'Customize the look and feel of the application',
-    href: '/settings/appearance',
-    icon: Palette,
-  },
 ]
 
 export default function SettingsPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+        <h1 className={getHeaderClasses('3xl')}>Settings</h1>
         <p className="text-muted-foreground mt-2">Configure reference data for the scheduler</p>
       </div>
 

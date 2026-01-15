@@ -244,7 +244,7 @@ export default function TimeOffListClient({
             onClick={() => updateView(option.value)}
             className={
               view === option.value
-                ? 'rounded-full border border-slate-900 bg-slate-900 px-3 py-1 text-xs font-medium text-white'
+                ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
                 : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
             }
           >

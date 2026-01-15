@@ -4,7 +4,7 @@ export default function WeeklyScheduleReportPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Weekly Schedule</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Weekly Schedule</h1>
         <p className="text-muted-foreground mt-2">Generate regular weekly schedule</p>
       </div>
 

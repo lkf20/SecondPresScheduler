@@ -24,7 +24,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch theme' }, { status: 500 })
     }
 
-    return NextResponse.json({ theme: profile?.theme || 'system' })
+    return NextResponse.json({ theme: profile?.theme || 'accented' }) // Default to accented
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

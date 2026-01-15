@@ -16,7 +16,7 @@ export default function AppearancePage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Appearance</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Appearance</h1>
         <p className="text-muted-foreground mt-2">Customize the look and feel of the application</p>
       </div>
 

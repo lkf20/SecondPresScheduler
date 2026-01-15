@@ -339,7 +339,7 @@ export default function NewTimeOffPage() {
         </Link>
       </div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Add Time Off Request</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Add Time Off Request</h1>
         <p className="text-muted-foreground mt-2">Create a new time off request</p>
       </div>
 

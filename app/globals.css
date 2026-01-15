@@ -32,6 +32,11 @@
   --sidebar-hover: 0 0% 96.1%;
   --sidebar-active: 0 0% 96.1%;
   --sidebar-active-foreground: 0 0% 9%;
+  
+  /* Button fill color - default to slate-900 for system theme */
+  --button-fill: 222 47% 11%;
+  --button-fill-foreground: 0 0% 98%;
+  --button-fill-hover: 222 47% 14%;
 }
 
 .dark {
@@ -79,6 +84,11 @@
   /* Outline button colors */
   --outline-accent: 180 70% 38%;
   --outline-navy: 220 40% 25%;
+  
+  /* Button fill color - dark navy (matches sidebar) */
+  --button-fill: 220 40% 15%;
+  --button-fill-foreground: 0 0% 98%;
+  --button-fill-hover: 220 40% 20%;
 }
 
 body {

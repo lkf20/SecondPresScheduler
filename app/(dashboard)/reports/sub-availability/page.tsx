@@ -4,7 +4,7 @@ export default function SubAvailabilityReportPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Sub Availability</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Sub Availability</h1>
         <p className="text-muted-foreground mt-2">View sub availability matrix</p>
       </div>
 
