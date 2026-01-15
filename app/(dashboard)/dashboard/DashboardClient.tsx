@@ -744,18 +744,18 @@ export default function DashboardClient({
                               <div className="text-sm font-semibold text-slate-900">
                                 {formatSlotLabel(slot.day_name, slot.time_slot_code)}
                               </div>
-                              <span
-                                className={cn(
-                                  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
-                                  staffingBadge(slot.status)
-                                )}
-                              >
-                                Below Required {formatShortfallLabel(formatShortfallValue(slot.required_staff, slot.scheduled_staff))}
-                              </span>
-                            </div>
-                            <div className="flex min-w-[170px] flex-col items-start gap-3 flex-shrink-0">
-                              <div className="text-xs text-slate-600">
-                                Required: {slot.required_staff} · Scheduled: {slot.scheduled_staff}
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span
+                                  className={cn(
+                                    'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                                    staffingBadge(slot.status)
+                                  )}
+                                >
+                                  Below Required {formatShortfallLabel(formatShortfallValue(slot.required_staff, slot.scheduled_staff))}
+                                </span>
+                                <div className="text-xs text-slate-600 whitespace-nowrap">
+                                  Required: {slot.required_staff} · Scheduled: {slot.scheduled_staff}
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -822,23 +822,23 @@ export default function DashboardClient({
                               <div className="text-sm font-semibold text-slate-900">
                                 {formatSlotLabel(slot.day_name, slot.time_slot_code)}
                               </div>
-                              <span
-                                className={cn(
-                                  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
-                                  staffingBadge(slot.status)
-                                )}
-                              >
-                                Below Preferred by{' '}
-                                {formatShortfallValue(
-                                  slot.preferred_staff ?? slot.required_staff,
-                                  slot.scheduled_staff
-                                )}
-                              </span>
-                            </div>
-                            <div className="flex min-w-[170px] flex-col items-start gap-3 flex-shrink-0">
-                              <div className="text-xs text-slate-600">
-                                Preferred: {slot.preferred_staff ?? slot.required_staff} · Scheduled:{' '}
-                                {slot.scheduled_staff}
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span
+                                  className={cn(
+                                    'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                                    staffingBadge(slot.status)
+                                  )}
+                                >
+                                  Below Preferred by{' '}
+                                  {formatShortfallValue(
+                                    slot.preferred_staff ?? slot.required_staff,
+                                    slot.scheduled_staff
+                                  )}
+                                </span>
+                                <div className="text-xs text-slate-600 whitespace-nowrap">
+                                  Preferred: {slot.preferred_staff ?? slot.required_staff} · Scheduled:{' '}
+                                  {slot.scheduled_staff}
+                                </div>
                               </div>
                             </div>
                           </div>

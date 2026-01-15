@@ -109,7 +109,7 @@ export default function TimeOffCard({
       >
         {notes && (
           <span
-            className="group/note absolute right-0 top-0 h-4 w-4 cursor-pointer rounded-tr-lg bg-[linear-gradient(225deg,#fbbf24_0_50%,transparent_50%)] z-10"
+            className="group/note absolute right-0 top-0 h-4 w-4 cursor-pointer rounded-tr-lg bg-[linear-gradient(225deg,#e2e8f0_0_50%,transparent_50%)] z-10"
             aria-label="Note"
           >
             <span className="absolute right-0 top-4 z-10 hidden w-56 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 shadow-sm group-hover/note:block">
@@ -199,7 +199,7 @@ export default function TimeOffCard({
     >
       {notes && (
         <span
-          className="group/note absolute right-0 top-0 h-4 w-4 cursor-pointer rounded-tr-lg bg-[linear-gradient(225deg,#fbbf24_0_50%,transparent_50%)] z-10"
+          className="group/note absolute right-0 top-0 h-4 w-4 cursor-pointer rounded-tr-lg bg-[linear-gradient(225deg,#e2e8f0_0_50%,transparent_50%)] z-10"
           aria-label="Note"
         >
           <span className="absolute right-0 top-4 z-10 hidden w-56 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 shadow-sm group-hover/note:block">
