@@ -17,7 +17,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
-import { getCoverageColors, getStaffingColorClasses, getStaffingColors, neutralColors } from '@/lib/utils/colors'
+import { getCoverageColors, getStaffingColorClasses, getStaffingColors, neutralColors, coverageColorValues } from '@/lib/utils/colors'
 import TimeOffCard from '@/components/shared/TimeOffCard'
 
 type Summary = {
@@ -350,15 +350,48 @@ export default function DashboardClient({
                   <div className="mt-3 h-px w-full bg-black/10" />
                   {'count' in item ? (
                     <div className="mt-3 flex items-center justify-between">
-                      <div className={cn('text-3xl font-semibold', item.tone)}>
+                      <div 
+                        className="text-3xl font-semibold"
+                        style={
+                          item.key === 'uncovered' 
+                            ? { color: coverageColorValues.uncovered.text } as React.CSSProperties
+                            : item.key === 'partial'
+                            ? { color: coverageColorValues.partial.text } as React.CSSProperties
+                            : item.key === 'scheduled'
+                            ? { color: 'rgb(13, 148, 136)' } as React.CSSProperties // teal-600
+                            : item.key === 'absences'
+                            ? { color: 'rgb(37, 99, 235)' } as React.CSSProperties // blue-600
+                            : undefined
+                        }
+                      >
                         {item.count}
                       </div>
                       {item.icon ? (
                         <span
-                          className={cn(
-                            'inline-flex h-9 w-9 items-center justify-center rounded-full',
-                            item.iconStyle
-                          )}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full"
+                          style={
+                            item.key === 'uncovered'
+                              ? {
+                                  backgroundColor: coverageColorValues.uncovered.bg,
+                                  color: coverageColorValues.uncovered.icon,
+                                } as React.CSSProperties
+                              : item.key === 'partial'
+                              ? {
+                                  backgroundColor: coverageColorValues.partial.bg,
+                                  color: coverageColorValues.partial.icon,
+                                } as React.CSSProperties
+                              : item.key === 'scheduled'
+                              ? {
+                                  backgroundColor: 'rgb(204, 251, 241)', // teal-100
+                                  color: 'rgb(13, 148, 136)', // teal-600
+                                } as React.CSSProperties
+                              : item.key === 'absences'
+                              ? {
+                                  backgroundColor: 'rgb(219, 234, 254)', // blue-100
+                                  color: 'rgb(37, 99, 235)', // blue-600
+                                } as React.CSSProperties
+                              : undefined
+                          }
                         >
                           <item.icon className="h-5 w-5" />
                         </span>
