@@ -107,10 +107,10 @@ export default function TimeOffCard({
       >
         {notes && (
           <span
-            className="absolute right-0 top-0 h-4 w-4 cursor-help rounded-tr-lg bg-[linear-gradient(225deg,#fbbf24_0_50%,transparent_50%)] z-10"
+            className="group/note absolute right-0 top-0 h-4 w-4 cursor-pointer rounded-tr-lg bg-[linear-gradient(225deg,#fbbf24_0_50%,transparent_50%)] z-10"
             aria-label="Note"
           >
-            <span className="absolute right-0 top-4 z-10 hidden w-56 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 shadow-sm group-hover:block">
+            <span className="absolute right-0 top-4 z-10 hidden w-56 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 shadow-sm group-hover/note:block">
               {notes}
             </span>
           </span>
@@ -185,7 +185,7 @@ export default function TimeOffCard({
             <Button
               size="sm"
               variant="outline"
-              className="border-slate-300 text-primary hover:text-primary hover:bg-primary/10"
+              className="border-teal-700 text-teal-700 hover:bg-teal-700 hover:text-white hover:border-teal-700"
               onClick={handleFindSubsClick}
               disabled={loading}
             >
@@ -211,10 +211,10 @@ export default function TimeOffCard({
     >
       {notes && (
         <span
-          className="absolute right-0 top-0 h-4 w-4 cursor-help rounded-tr-lg bg-[linear-gradient(225deg,#fbbf24_0_50%,transparent_50%)]"
+          className="group/note absolute right-0 top-0 h-4 w-4 cursor-pointer rounded-tr-lg bg-[linear-gradient(225deg,#fbbf24_0_50%,transparent_50%)] z-10"
           aria-label="Note"
         >
-          <span className="absolute right-0 top-4 z-10 hidden w-56 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 shadow-sm group-hover:block">
+          <span className="absolute right-0 top-4 z-10 hidden w-56 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 shadow-sm group-hover/note:block">
             {notes}
           </span>
         </span>
@@ -304,7 +304,7 @@ export default function TimeOffCard({
             <Link
               href={`/time-off/${id}`}
               onClick={(e) => e.stopPropagation()}
-              className="text-sm font-semibold text-slate-700 hover:text-slate-900"
+              className="text-sm font-semibold text-teal-700 hover:text-teal-800 hover:underline"
             >
               {isTimeOffVariant ? 'Edit' : 'View'}
             </Link>
@@ -314,7 +314,7 @@ export default function TimeOffCard({
                   asChild
                   size="sm"
                   variant="outline"
-                  className="border-slate-500 text-slate-900 hover:bg-slate-200"
+                  className="border-teal-700 text-teal-700 hover:bg-teal-700 hover:text-white hover:border-teal-700"
                 >
                   <Link href={`/sub-finder?absence_id=${id}`}>Find Sub</Link>
                 </Button>
