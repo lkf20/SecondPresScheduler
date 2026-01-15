@@ -18,6 +18,7 @@ Issues that need to be fixed.
 - [ ] Handle duplicate display names - determine what to do when multiple staff members have the same display name
 - [ ] Fix timezone issue causing dates to shift by one day in sub finder (dates stored as DATE type are being parsed as UTC, causing day shift in local timezones)
 - [ ] After assigning selected shifts, getting an assign shifts error sometimes
+- [ ] Add validation to prevent multiple subs from being assigned to the same classroom/slot/teacher combination - need better error controls and logic around how many subs can be assigned to a single shift
 
 ---
 
@@ -38,6 +39,13 @@ Features to implement soon (within the next few weeks).
 - [ ] Timezone settings - add timezone configuration section to Settings to allow schools to set their timezone, ensuring dates are displayed and processed correctly
 - [ ] Standardize warning styles - add a shared WarningText component and migrate existing warnings to it (Time Off, Weekly Schedule, Sub Finder, etc.)
 - [ ] Check and fix UI for different screen sizes - some UI errors noticed in Dashboard for medium size screens
+- [ ] Add tooltip to Understaffed Classrooms summary card icons
+- [ ] Decide on formatting for Below Required pill in Below Staffing Target section
+- [ ] Count understaffed classrooms by slot rather than by classroom
+- [ ] Change where Update Sub button directs you to
+- [ ] Add tooltip to Covered badge to see subs and shifts
+- [ ] Add tooltip to Uncovered badge to see shifts
+- [ ] Add borders/shading to shifts in Upcoming Time Off to match Uncovered and Covered pills
 
 ---
 
