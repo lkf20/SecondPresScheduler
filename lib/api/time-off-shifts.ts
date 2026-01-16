@@ -79,37 +79,80 @@ export async function getTeacherScheduledShifts(
 ) {
   const supabase = await createClient()
   
+  console.log('[getTeacherScheduledShifts] Input:', { teacherId, startDate, endDate })
+  
   // Get teacher's schedule (day_of_week + time_slot combinations)
+  // Try without !inner first to see if that's the issue
   const { data: schedule, error: scheduleError } = await supabase
     .from('teacher_schedules')
     .select(`
       day_of_week_id, 
       time_slot_id, 
-      days_of_week!inner(name, day_number), 
-      time_slots!inner(code, name)
+      days_of_week(name, day_number), 
+      time_slots(code, name)
     `)
     .eq('teacher_id', teacherId)
+    .not('day_of_week_id', 'is', null)
+    .not('time_slot_id', 'is', null)
 
-  if (scheduleError) throw scheduleError
-  if (!schedule || schedule.length === 0) return []
+  if (scheduleError) {
+    console.error('[getTeacherScheduledShifts] Schedule fetch error:', scheduleError)
+    throw scheduleError
+  }
+  
+  console.log('[getTeacherScheduledShifts] Raw schedule data:', schedule)
+  console.log('[getTeacherScheduledShifts] Schedule count:', schedule?.length || 0)
+  
+  if (!schedule || schedule.length === 0) {
+    console.log('[getTeacherScheduledShifts] No schedule found for teacher')
+    return []
+  }
 
   // Transform the data to match TeacherScheduleEntry interface
-  const transformedSchedule: TeacherScheduleEntry[] = schedule.map((entry: any) => ({
-    day_of_week_id: entry.day_of_week_id,
-    time_slot_id: entry.time_slot_id,
-    days_of_week: Array.isArray(entry.days_of_week) && entry.days_of_week.length > 0
-      ? {
+  // Handle both array and object formats from Supabase
+  const transformedSchedule: TeacherScheduleEntry[] = schedule.map((entry: any) => {
+    // Handle days_of_week - could be array or object
+    let daysOfWeek = null
+    if (entry.days_of_week) {
+      if (Array.isArray(entry.days_of_week) && entry.days_of_week.length > 0) {
+        daysOfWeek = {
           name: entry.days_of_week[0]?.name ?? null,
           day_number: entry.days_of_week[0]?.day_number ?? null,
         }
-      : null,
-    time_slots: Array.isArray(entry.time_slots) && entry.time_slots.length > 0
-      ? {
+      } else if (typeof entry.days_of_week === 'object' && entry.days_of_week.name !== undefined) {
+        daysOfWeek = {
+          name: entry.days_of_week.name ?? null,
+          day_number: entry.days_of_week.day_number ?? null,
+        }
+      }
+    }
+    
+    // Handle time_slots - could be array or object
+    let timeSlots = null
+    if (entry.time_slots) {
+      if (Array.isArray(entry.time_slots) && entry.time_slots.length > 0) {
+        timeSlots = {
           code: entry.time_slots[0]?.code ?? null,
           name: entry.time_slots[0]?.name ?? null,
         }
-      : null,
-  }))
+      } else if (typeof entry.time_slots === 'object' && entry.time_slots.code !== undefined) {
+        timeSlots = {
+          code: entry.time_slots.code ?? null,
+          name: entry.time_slots.name ?? null,
+        }
+      }
+    }
+    
+    return {
+      day_of_week_id: entry.day_of_week_id,
+      time_slot_id: entry.time_slot_id,
+      days_of_week: daysOfWeek,
+      time_slots: timeSlots,
+    }
+  })
+  
+  console.log('[getTeacherScheduledShifts] Transformed schedule entries:', transformedSchedule.length)
+  console.log('[getTeacherScheduledShifts] Sample transformed entry:', transformedSchedule[0])
 
   // Create a map of day_number to schedule entries for quick lookup
   const scheduleByDayNumber = new Map<number, TeacherScheduleEntry[]>()
@@ -122,6 +165,9 @@ export async function getTeacherScheduledShifts(
       scheduleByDayNumber.get(dayNumber)!.push(entry)
     }
   })
+  
+  console.log('[getTeacherScheduledShifts] Transformed schedule:', transformedSchedule)
+  console.log('[getTeacherScheduledShifts] Schedule by day number:', Array.from(scheduleByDayNumber.entries()))
 
   // Generate all dates in the range (inclusive of both start and end dates)
   // Work directly with date strings to avoid timezone issues
@@ -141,12 +187,17 @@ export async function getTeacherScheduledShifts(
     return { year, month, day }
   }
   
-  // Get day of week from a date string (0 = Sunday, 1 = Monday, etc.)
+  // Get day of week from a date string
+  // JavaScript getDay(): 0=Sunday, 1=Monday, ..., 6=Saturday
+  // Database day_number: 1=Monday, 2=Tuesday, ..., 6=Saturday, 7=Sunday
+  // Convert JavaScript day to database day_number
   const getDayOfWeek = (dateStr: string) => {
     const { year, month, day } = parseDateStr(dateStr)
     // Create date in local timezone, month is 0-indexed
     const date = new Date(year, month - 1, day)
-    return date.getDay()
+    const jsDay = date.getDay() // 0=Sunday, 1=Monday, ..., 6=Saturday
+    // Convert to database format: Sunday (0) -> 7, Monday (1) -> 1, etc.
+    return jsDay === 0 ? 7 : jsDay
   }
   
   // Compare date strings (YYYY-MM-DD format allows string comparison)
@@ -158,10 +209,16 @@ export async function getTeacherScheduledShifts(
   
   // Iterate through all dates from start to end (inclusive)
   let currentDateStr = startDate
+  let dateCount = 0
+  
+  console.log('[getTeacherScheduledShifts] Starting date iteration from', startDate, 'to', endDate)
   
   while (compareDates(currentDateStr, endDate) <= 0) {
+    dateCount++
     const dayNumber = getDayOfWeek(currentDateStr)
     const shiftsForDay = scheduleByDayNumber.get(dayNumber)
+    
+    console.log(`[getTeacherScheduledShifts] Date ${dateCount}: ${currentDateStr}, JS day: ${new Date(parseDateStr(currentDateStr).year, parseDateStr(currentDateStr).month - 1, parseDateStr(currentDateStr).day).getDay()}, DB day_number: ${dayNumber}, Found shifts: ${shiftsForDay?.length || 0}`)
     
     // Only include dates where teacher has scheduled shifts
     if (shiftsForDay && shiftsForDay.length > 0) {
@@ -187,6 +244,9 @@ export async function getTeacherScheduledShifts(
     currentDateStr = `${nextYear}-${nextMonth}-${nextDay}`
   }
 
+  console.log('[getTeacherScheduledShifts] Final result count:', result.length)
+  console.log('[getTeacherScheduledShifts] Final result:', result)
+  
   return result
 }
 

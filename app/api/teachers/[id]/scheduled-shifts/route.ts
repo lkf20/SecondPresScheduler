@@ -11,6 +11,8 @@ export async function GET(
     const startDate = searchParams.get('start_date')
     const endDate = searchParams.get('end_date')
     
+    console.log('[API /teachers/[id]/scheduled-shifts] Request:', { id, startDate, endDate })
+    
     if (!startDate || !endDate) {
       return NextResponse.json(
         { error: 'start_date and end_date query parameters are required' },
@@ -19,8 +21,10 @@ export async function GET(
     }
     
     const shifts = await getTeacherScheduledShifts(id, startDate, endDate)
+    console.log('[API /teachers/[id]/scheduled-shifts] Returning shifts:', shifts.length)
     return NextResponse.json(shifts)
   } catch (error: any) {
+    console.error('[API /teachers/[id]/scheduled-shifts] Error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
