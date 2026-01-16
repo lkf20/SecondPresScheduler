@@ -76,7 +76,7 @@ export default function SubCardHeader({
                   )}
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-teal-600">
                 {shiftsCovered}/{totalShifts} remaining shifts
               </p>
             </>

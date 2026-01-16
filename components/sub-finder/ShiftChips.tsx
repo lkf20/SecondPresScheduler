@@ -3,7 +3,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { parseLocalDate } from '@/lib/utils/date'
-import { getShiftStatusColorClasses, getShiftStatusColors } from '@/lib/utils/colors'
+import { getShiftStatusColorClasses, getShiftStatusColors, shiftStatusColorValues } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
 
 interface Shift {
@@ -150,11 +150,18 @@ export default function ShiftChips({
                 ? `${classroomName} (${classGroupName})`
                 : classroomName
               : classGroupName || 'Classroom unavailable'
+            const status = isDeclined ? 'declined' : shift.status
+            const colorValues = shiftStatusColorValues[status]
             const badge = (
               <Badge
                 key={`shift-${shift.date}-${shift.time_slot_code}-${idx}`}
                 variant="outline"
-                className={`text-xs ${getBadgeClassName(shift.status)}`}
+                className={`text-xs border-[1px] border-solid ${getShiftStatusColors(status).text}`}
+                style={{
+                  backgroundColor: colorValues.bg,
+                  borderColor: colorValues.border,
+                  color: colorValues.text,
+                } as React.CSSProperties}
               >
                 {shiftLabel}
               </Badge>

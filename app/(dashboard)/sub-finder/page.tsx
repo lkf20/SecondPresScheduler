@@ -692,8 +692,8 @@ export default function SubFinderPage() {
                   {/* Color Key - Left aligned, bottom aligned */}
                   <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded border bg-blue-50 border-blue-200" />
-                      <span>Assigned</span>
+                      <div className="w-3 h-3 rounded border bg-blue-50 border-blue-400" />
+                      <span>Covered</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <div className="w-3 h-3 rounded border bg-emerald-50 border-emerald-200" />
@@ -704,7 +704,7 @@ export default function SubFinderPage() {
                       <span>Unavailable</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded border bg-amber-50 border-amber-200" />
+                      <div className="w-3 h-3 rounded border bg-orange-50 border-orange-400" />
                       <span>Uncovered</span>
                     </div>
                   </div>

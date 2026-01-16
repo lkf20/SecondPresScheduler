@@ -108,7 +108,7 @@ export default function SubFinderCard({
             )}
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-teal-600">
           {shiftsCovered} of {totalShifts} {useRemainingLabel ? 'remaining shifts' : 'shifts'}
         </p>
       </div>
@@ -187,7 +187,8 @@ export default function SubFinderCard({
           <Button
             size="sm"
             variant="ghost"
-            className="-mr-2 text-primary hover:text-primary hover:bg-primary/10"
+            className="-mr-2 hover:bg-primary/10"
+            style={{ color: '#115E59' }}
             onClick={() => onContact?.()}
           >
             Contact & Assign <ArrowRight className="h-3.5 w-3.5 ml-0.5" />
