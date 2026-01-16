@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -41,9 +41,11 @@ interface TimeOffFormProps {
   onSuccess?: (teacherName: string, startDate: string, endDate: string) => void
   onCancel?: () => void
   showBackLink?: boolean
+  onHasUnsavedChanges?: (hasChanges: boolean) => void
 }
 
-export default function TimeOffForm({ onSuccess, onCancel, showBackLink = true }: TimeOffFormProps) {
+const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
+  ({ onSuccess, onCancel, showBackLink = true, onHasUnsavedChanges }, ref) => {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [teachers, setTeachers] = useState<Staff[]>([])
@@ -93,7 +95,7 @@ export default function TimeOffForm({ onSuccess, onCancel, showBackLink = true }
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
     setValue,
     setError: setFormError,
     clearErrors,
@@ -106,6 +108,40 @@ export default function TimeOffForm({ onSuccess, onCancel, showBackLink = true }
       shift_selection_mode: 'all_scheduled',
     },
   })
+  
+  // Expose reset method via ref
+  React.useImperativeHandle(ref, () => ({
+    reset: () => {
+      reset({
+        teacher_id: '',
+        start_date: '',
+        end_date: '',
+        shift_selection_mode: 'all_scheduled',
+        reason: undefined,
+        notes: undefined,
+      })
+      setSelectedShifts([])
+      setError(null)
+      setConflictSummary({ conflictCount: 0, totalScheduled: 0 })
+      setConflictingRequests([])
+      setEndDateCorrected(false)
+      setIsPastDate(false)
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem(draftKey)
+      }
+    },
+  }))
+  
+  // Track unsaved changes (form is dirty or has selected shifts)
+  const hasUnsavedChanges = isDirty || selectedShifts.length > 0 || 
+    Boolean(watch('teacher_id')) || Boolean(watch('start_date'))
+  
+  // Notify parent of unsaved changes status
+  useEffect(() => {
+    if (onHasUnsavedChanges) {
+      onHasUnsavedChanges(hasUnsavedChanges)
+    }
+  }, [hasUnsavedChanges, onHasUnsavedChanges])
 
   const teacherId = watch('teacher_id')
   const startDate = watch('start_date')
@@ -603,4 +639,8 @@ export default function TimeOffForm({ onSuccess, onCancel, showBackLink = true }
       </form>
     </div>
   )
-}
+})
+
+TimeOffForm.displayName = 'TimeOffForm'
+
+export default TimeOffForm

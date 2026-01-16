@@ -13,9 +13,18 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 import TimeOffForm from '@/components/time-off/TimeOffForm'
+import { useRef } from 'react'
 
 interface HeaderProps {
   userEmail?: string
@@ -25,6 +34,10 @@ export default function Header({ userEmail }: HeaderProps) {
   const router = useRouter()
   const supabase = createClient()
   const [isTimeOffSheetOpen, setIsTimeOffSheetOpen] = useState(false)
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [pendingClose, setPendingClose] = useState(false)
+  const timeOffFormRef = useRef<{ reset: () => void }>(null)
   const { activePanel, savePreviousPanel, restorePreviousPanel, setActivePanel, requestPanelClose } = usePanelManager()
 
   const handleLogout = async () => {
@@ -46,6 +59,9 @@ export default function Header({ userEmail }: HeaderProps) {
       ? startDateFormatted 
       : `${startDateFormatted}-${endDateFormatted}`
     
+    // Reset unsaved changes flag
+    setHasUnsavedChanges(false)
+    
     // Close the sheet
     setIsTimeOffSheetOpen(false)
     
@@ -54,6 +70,47 @@ export default function Header({ userEmail }: HeaderProps) {
     
     // Refresh the current page to update data
     router.refresh()
+  }
+
+  const handleCloseSheet = (open: boolean) => {
+    if (!open && hasUnsavedChanges) {
+      // Prevent closing and show warning dialog
+      setPendingClose(true)
+      setShowUnsavedDialog(true)
+      // Keep sheet open
+      setIsTimeOffSheetOpen(true)
+    } else if (!open) {
+      // No unsaved changes, close normally
+      setIsTimeOffSheetOpen(false)
+      setActivePanel(null)
+      setTimeout(() => {
+        restorePreviousPanel()
+      }, 100)
+    } else {
+      setIsTimeOffSheetOpen(open)
+    }
+  }
+
+  const handleDiscard = () => {
+    // Reset form
+    if (timeOffFormRef.current) {
+      timeOffFormRef.current.reset()
+    }
+    setHasUnsavedChanges(false)
+    setShowUnsavedDialog(false)
+    setPendingClose(false)
+    // Close the sheet
+    setIsTimeOffSheetOpen(false)
+    setActivePanel(null)
+    setTimeout(() => {
+      restorePreviousPanel()
+    }, 100)
+  }
+
+  const handleKeepEditing = () => {
+    setShowUnsavedDialog(false)
+    setPendingClose(false)
+    // Keep sheet open (already open)
   }
 
   return (
@@ -106,17 +163,7 @@ export default function Header({ userEmail }: HeaderProps) {
 
       <Sheet 
         open={isTimeOffSheetOpen} 
-        onOpenChange={(open) => {
-          setIsTimeOffSheetOpen(open)
-          if (!open) {
-            // When Add Time Off closes, restore the previous panel if there was one
-            setActivePanel(null)
-            // Use setTimeout to ensure the sheet closes before restoring
-            setTimeout(() => {
-              restorePreviousPanel()
-            }, 100)
-          }
-        }}
+        onOpenChange={handleCloseSheet}
       >
         <SheetContent 
           side="right" 
@@ -132,13 +179,34 @@ export default function Header({ userEmail }: HeaderProps) {
               </SheetDescription>
             </SheetHeader>
             <TimeOffForm 
+              ref={timeOffFormRef}
               onSuccess={handleTimeOffSuccess}
-              onCancel={() => setIsTimeOffSheetOpen(false)}
+              onCancel={() => handleCloseSheet(false)}
               showBackLink={false}
+              onHasUnsavedChanges={setHasUnsavedChanges}
             />
           </div>
         </SheetContent>
       </Sheet>
+
+      <Dialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unsaved Changes</DialogTitle>
+            <DialogDescription>
+              You have unsaved changes. What would you like to do?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleKeepEditing}>
+              Keep Editing
+            </Button>
+            <Button variant="outline" onClick={handleDiscard}>
+              Discard
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </header>
   )
 }
