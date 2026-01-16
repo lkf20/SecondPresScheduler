@@ -411,7 +411,7 @@ export default function ContactSubPanel({
     // If panel is open but no data, show empty state with proper title
     return (
       <Sheet open={isOpen} onOpenChange={onClose}>
-        <SheetContent className={`w-full sm:max-w-2xl overflow-y-auto p-0 [&>button]:hidden ${getPanelBackgroundClasses()}`}>
+        <SheetContent showCloseButton={false} className={`w-full sm:max-w-2xl overflow-y-auto p-0 ${getPanelBackgroundClasses()}`}>
           <div className={`sticky top-0 z-10 ${getPanelHeaderBackgroundClasses()} ${panelBackgrounds.panelBorder} border-b px-6 pt-6 pb-4 relative`}>
             <SheetClose asChild>
               <button
@@ -908,7 +908,7 @@ export default function ContactSubPanel({
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent className={`w-full sm:max-w-2xl overflow-y-auto p-0 [&>button]:hidden ${getPanelBackgroundClasses()}`}>
+      <SheetContent showCloseButton={false} className={`w-full sm:max-w-2xl overflow-y-auto p-0 ${getPanelBackgroundClasses()}`}>
         <div className={`sticky top-0 z-10 ${getPanelHeaderBackgroundClasses()} ${panelBackgrounds.panelBorder} border-b px-6 pt-6 pb-4 relative`}>
           <SheetClose asChild>
             <button

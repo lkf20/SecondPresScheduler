@@ -10,7 +10,9 @@ import {
   SheetHeader,
   SheetTitle,
   SheetDescription,
+  SheetClose,
 } from '@/components/ui/sheet'
+import { X } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -127,16 +129,30 @@ export default function AddTimeOffButton() {
       >
         <SheetContent 
           side="right" 
-          className={`w-full sm:max-w-2xl h-screen flex flex-col p-0 [&>button]:top-4 [&>button]:right-4 ${getPanelBackgroundClasses()}`}
+          showCloseButton={false}
+          className={`w-full sm:max-w-2xl h-screen flex flex-col p-0 ${getPanelBackgroundClasses()}`}
         >
           <div className={`flex-1 overflow-y-auto px-6 py-6 ${getPanelBackgroundClasses()}`}>
-            <SheetHeader className="mb-6">
-              <SheetTitle className="text-3xl font-bold tracking-tight text-slate-900">
-                Add Time Off Request
-              </SheetTitle>
-              <SheetDescription>
-                Create a new time off request
-              </SheetDescription>
+            <SheetHeader className="mb-6 pt-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <SheetTitle className="text-3xl font-bold tracking-tight text-slate-900">
+                    Add Time Off Request
+                  </SheetTitle>
+                  <SheetDescription>
+                    Create a new time off request
+                  </SheetDescription>
+                </div>
+                <SheetClose asChild>
+                  <button
+                    type="button"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ml-4"
+                    aria-label="Close"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </SheetClose>
+              </div>
             </SheetHeader>
             <TimeOffForm 
               ref={timeOffFormRef}

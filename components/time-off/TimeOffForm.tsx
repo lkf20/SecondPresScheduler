@@ -794,7 +794,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
           )}
         </div>
 
-        <div className="flex justify-end gap-4 pt-6 border-t mt-6">
+        <div className="flex justify-end gap-4 pt-6 pb-8 border-t mt-6">
           {onCancel && (
             <Button
               type="button"
