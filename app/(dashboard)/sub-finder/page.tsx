@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
@@ -29,8 +29,10 @@ import { toast } from 'sonner'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 
 export default function SubFinderPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const requestedAbsenceId = searchParams.get('absence_id')
+  const requestedTeacherId = searchParams.get('teacher_id')
   const [mode, setMode] = useState<Mode>('existing')
   const {
     absences,
@@ -54,6 +56,7 @@ export default function SubFinderPage() {
     applySubResults,
   } = useSubFinderData({ mode, requestedAbsenceId })
   const [searchQuery, setSearchQuery] = useState('')
+  const [teacherSearchInput, setTeacherSearchInput] = useState('') // Separate state for dropdown input
   const [subSearch, setSubSearch] = useState('')
   const [isSubSearchOpen, setIsSubSearchOpen] = useState(false)
   const [selectedSub, setSelectedSub] = useState<SubCandidate | null>(null)
@@ -117,9 +120,10 @@ export default function SubFinderPage() {
       return getDisplayName(teacher, '').toLowerCase().includes(query)
     })
   }, [teachers, manualTeacherSearch, getDisplayName])
+  // Get all teacher names from the teachers array (not just those with absences)
   const teacherNames = useMemo(() => {
-    return Array.from(new Set(absences.map((absence) => absence.teacher_name))).sort((a, b) => a.localeCompare(b))
-  }, [absences])
+    return teachers.map(teacher => getDisplayName(teacher)).sort((a, b) => a.localeCompare(b))
+  }, [teachers, getDisplayName])
 
   useEffect(() => {
     if (!isSubSearchOpen) return
@@ -322,19 +326,47 @@ export default function SubFinderPage() {
     }
   }
 
-  // Filter absences based on search query
+  // Set search query when teacher_id is provided
+  useEffect(() => {
+    if (requestedTeacherId && absences.length > 0 && !searchQuery) {
+      const teacherAbsence = absences.find((absence) => absence.teacher_id === requestedTeacherId)
+      if (teacherAbsence) {
+        setSearchQuery(teacherAbsence.teacher_name)
+      }
+    }
+  }, [requestedTeacherId, absences, searchQuery])
+
+  // Filter absences based on search query and teacher_id param
   const filteredAbsences = useMemo(() => {
-    return absences.filter((absence) => {
-      if (!searchQuery) return true
-      const query = searchQuery.toLowerCase()
-      return (
-        absence.teacher_name.toLowerCase().includes(query) ||
-        absence.reason?.toLowerCase().includes(query) ||
-        absence.start_date.includes(query) ||
-        absence.end_date?.includes(query)
-      )
-    })
-  }, [absences, searchQuery])
+    let filtered = absences
+    
+    // If teacher_id is provided in URL, filter by that teacher
+    if (requestedTeacherId) {
+      filtered = filtered.filter((absence) => absence.teacher_id === requestedTeacherId)
+    } else {
+      // Otherwise, filter by search query
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase()
+        filtered = filtered.filter((absence) => {
+          return (
+            absence.teacher_name.toLowerCase().includes(query) ||
+            absence.reason?.toLowerCase().includes(query) ||
+            absence.start_date.includes(query) ||
+            absence.end_date?.includes(query)
+          )
+        })
+      }
+    }
+    
+    return filtered
+  }, [absences, searchQuery, requestedTeacherId])
+  
+  // Auto-select first absence if teacher_id is provided and there's exactly one absence
+  useEffect(() => {
+    if (requestedTeacherId && filteredAbsences.length === 1 && !selectedAbsence) {
+      setSelectedAbsence(filteredAbsences[0])
+    }
+  }, [requestedTeacherId, filteredAbsences, selectedAbsence, setSelectedAbsence])
 
   return (
     <div className="flex h-[calc(100vh-4rem+1.5rem+4rem)] -mx-4 -mt-[calc(1.5rem+4rem)] -mb-6 relative">
@@ -386,11 +418,23 @@ export default function SubFinderPage() {
                       <input
                         type="text"
                         placeholder="Search teachers..."
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        onFocus={() => setIsTeacherSearchOpen(true)}
+                        value={isTeacherSearchOpen ? teacherSearchInput : searchQuery}
+                        onChange={e => {
+                          if (isTeacherSearchOpen) {
+                            setTeacherSearchInput(e.target.value)
+                          } else {
+                            setSearchQuery(e.target.value)
+                          }
+                        }}
+                        onFocus={() => {
+                          setTeacherSearchInput('') // Clear dropdown input when opening
+                          setIsTeacherSearchOpen(true)
+                        }}
                         onBlur={() => {
-                          setTimeout(() => setIsTeacherSearchOpen(false), 150)
+                          setTimeout(() => {
+                            setIsTeacherSearchOpen(false)
+                            setTeacherSearchInput('')
+                          }, 150)
                         }}
                         className="w-full bg-transparent text-sm focus:outline-none"
                       />
@@ -398,7 +442,11 @@ export default function SubFinderPage() {
                     {isTeacherSearchOpen && (
                       <div className="border-t border-slate-100 max-h-40 overflow-y-auto px-2 py-1">
                         {teacherNames
-                          .filter((name) => name.toLowerCase().includes(searchQuery.toLowerCase()))
+                          .filter((name) => {
+                            const query = teacherSearchInput.toLowerCase()
+                            // If there's a query in the dropdown input, filter by it. Otherwise show all teachers
+                            return !query || name.toLowerCase().includes(query)
+                          })
                           .map((name) => (
                             <button
                               key={name}
@@ -406,13 +454,21 @@ export default function SubFinderPage() {
                               className="w-full rounded px-1.5 py-1 text-left text-sm text-slate-700 hover:bg-slate-100"
                               onClick={() => {
                                 setSearchQuery(name)
+                                setTeacherSearchInput('')
                                 setIsTeacherSearchOpen(false)
+                                // Clear teacher_id from URL to show all absences for this teacher
+                                const newSearchParams = new URLSearchParams(searchParams.toString())
+                                newSearchParams.delete('teacher_id')
+                                router.push(`/sub-finder?${newSearchParams.toString()}`)
                               }}
                             >
                               {name}
                             </button>
                           ))}
-                        {teacherNames.filter((name) => name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+                        {teacherNames.filter((name) => {
+                          const query = teacherSearchInput.toLowerCase()
+                          return !query || name.toLowerCase().includes(query)
+                        }).length === 0 && (
                           <div className="px-1.5 py-1 text-xs text-muted-foreground">
                             No matches
                           </div>

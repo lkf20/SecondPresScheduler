@@ -45,6 +45,30 @@ export async function GET(request: NextRequest) {
     // Fetch time off requests
     const timeOffRequests = await getTimeOffRequests({ statuses: statuses as any[] })
     
+    // Log for debugging - check for Anupa B.
+    console.log('[Time Off Requests] Total requests fetched:', timeOffRequests.length)
+    const anupaRequest = timeOffRequests.find((req: any) => {
+      const teacher = req.teacher
+      const name = teacher?.display_name || `${teacher?.first_name} ${teacher?.last_name}`.trim() || ''
+      return name.toLowerCase().includes('anupa') || name.toLowerCase().includes('b.')
+    })
+    if (anupaRequest) {
+      console.log('[Time Off Requests] Found Anupa B. request:', {
+        id: anupaRequest.id,
+        teacher_id: anupaRequest.teacher_id,
+        start_date: anupaRequest.start_date,
+        end_date: anupaRequest.end_date,
+        status: anupaRequest.status,
+        teacher_name: anupaRequest.teacher?.display_name || `${anupaRequest.teacher?.first_name} ${anupaRequest.teacher?.last_name}`.trim(),
+      })
+    } else {
+      console.log('[Time Off Requests] Anupa B. request NOT found in database query')
+      console.log('[Time Off Requests] Status filter:', statuses)
+      console.log('[Time Off Requests] Sample teacher names:', timeOffRequests.slice(0, 5).map((r: any) => 
+        r.teacher?.display_name || `${r.teacher?.first_name} ${r.teacher?.last_name}`.trim()
+      ))
+    }
+    
     // Apply date range filter
     const getOverlap = (reqStart: string, reqEnd: string, rangeStart: string | null, rangeEnd: string | null) => {
       if (!rangeStart && !rangeEnd) return true
