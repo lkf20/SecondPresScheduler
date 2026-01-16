@@ -390,6 +390,54 @@ export function getHeaderClasses(size: HeaderSize = 'lg'): string {
 }
 
 // ============================================================================
+// PANEL BACKGROUNDS
+// ============================================================================
+
+/**
+ * Standardized background colors for right-side panel overlays
+ * Used for Sheet/Modal components that slide in from the right
+ */
+export const panelBackgrounds = {
+  // Main panel background - light gray for subtle distinction from main content
+  panel: 'bg-gray-50',
+  // Panel header background (for sticky headers)
+  panelHeader: 'bg-gray-50',
+  // Panel border (subtle separation)
+  panelBorder: 'border-gray-200',
+  // White card backgrounds within panels
+  panelCard: 'bg-white',
+  // Card border within panels
+  panelCardBorder: 'border-gray-200',
+} as const
+
+/**
+ * Get panel background classes
+ * @returns Tailwind classes for panel background
+ */
+export function getPanelBackgroundClasses(): string {
+  return panelBackgrounds.panel
+}
+
+/**
+ * Get panel header background classes
+ * @returns Tailwind classes for panel header background
+ */
+export function getPanelHeaderBackgroundClasses(): string {
+  return panelBackgrounds.panelHeader
+}
+
+/**
+ * Get complete panel SheetContent classes
+ * Includes background, overflow, and standard sizing
+ * @param additionalClasses - Optional additional classes to append
+ * @returns Complete className string for SheetContent
+ */
+export function getPanelSheetContentClasses(additionalClasses?: string): string {
+  const base = `${panelBackgrounds.panel} overflow-y-auto`
+  return additionalClasses ? `${base} ${additionalClasses}` : base
+}
+
+// ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
 

@@ -25,6 +25,7 @@ import { toast } from 'sonner'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 import TimeOffForm from '@/components/time-off/TimeOffForm'
 import { useRef } from 'react'
+import { getPanelBackgroundClasses } from '@/lib/utils/colors'
 
 interface HeaderProps {
   userEmail?: string
@@ -171,9 +172,9 @@ export default function Header({ userEmail }: HeaderProps) {
       >
         <SheetContent 
           side="right" 
-          className="w-full sm:max-w-2xl h-screen flex flex-col p-0 [&>button]:top-4 [&>button]:right-4"
+          className={`w-full sm:max-w-2xl h-screen flex flex-col p-0 [&>button]:top-4 [&>button]:right-4 ${getPanelBackgroundClasses()}`}
         >
-          <div className="flex-1 overflow-y-auto px-6 py-6">
+          <div className={`flex-1 overflow-y-auto px-6 py-6 ${getPanelBackgroundClasses()}`}>
             <SheetHeader className="mb-6">
               <SheetTitle className="text-3xl font-bold tracking-tight text-slate-900">
                 Add Time Off Request

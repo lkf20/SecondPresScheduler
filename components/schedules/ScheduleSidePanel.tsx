@@ -29,6 +29,7 @@ import ConflictBanner, { type Conflict, type ConflictResolution } from './Confli
 import type { ScheduleCellWithDetails } from '@/lib/api/schedule-cells'
 import type { WeeklyScheduleData } from '@/lib/api/weekly-schedule'
 import type { TimeSlot, ClassGroup, ClassroomWithAllowedClasses, TeacherSchedule } from '@/types/api'
+import { getPanelBackgroundClasses, getPanelHeaderBackgroundClasses, panelBackgrounds } from '@/lib/utils/colors'
 
 interface Teacher {
   id: string
@@ -1000,8 +1001,8 @@ export default function ScheduleSidePanel({
   return (
     <>
       <Sheet open={isOpen} onOpenChange={handleClose}>
-        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto bg-gray-50 p-0">
-          <div className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 px-6 pt-6 pb-4">
+        <SheetContent className={`w-full sm:max-w-2xl overflow-y-auto p-0 ${getPanelBackgroundClasses()}`}>
+          <div className={`sticky top-0 z-10 ${getPanelHeaderBackgroundClasses()} ${panelBackgrounds.panelBorder} border-b px-6 pt-6 pb-4`}>
             <SheetHeader>
               <SheetTitle>
                 {classroomName} • {dayName} • {timeSlotCode} {timeRange && `(${timeRange})`}
