@@ -1,10 +1,9 @@
 'use client'
 
-import { Badge } from '@/components/ui/badge'
 import { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 import { parseLocalDate } from '@/lib/utils/date'
 import CoverageBadge from '@/components/shared/CoverageBadge'
-import { getCoverageColors, getCoverageColorClasses, neutralColors, getHeaderClasses } from '@/lib/utils/colors'
+import { getCoverageColors, getCoverageColorClasses, coverageColorValues, neutralColors, getHeaderClasses } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
 
 interface ShiftDetail {
@@ -48,14 +47,27 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
         return a.time_slot_code.localeCompare(b.time_slot_code)
       })
 
-  const getBadgeClassName = (shift: ShiftDetail) => {
+  const getBadgeStyles = (shift: ShiftDetail) => {
     switch (shift.status) {
       case 'fully_covered':
-        return cn(getCoverageColorClasses('covered'), 'text-blue-900')
+        return {
+          backgroundColor: coverageColorValues.covered.bg,
+          color: coverageColorValues.covered.text,
+          borderColor: coverageColorValues.covered.border,
+        }
       case 'partially_covered':
-        return cn(getCoverageColorClasses('partial'), 'border-dashed', 'text-yellow-900')
+        return {
+          backgroundColor: coverageColorValues.partial.bg,
+          color: coverageColorValues.partial.text,
+          borderColor: coverageColorValues.partial.border,
+          borderStyle: 'dashed' as const,
+        }
       case 'uncovered':
-        return cn(getCoverageColorClasses('uncovered'), 'text-orange-900')
+        return {
+          backgroundColor: coverageColorValues.uncovered.bg,
+          color: coverageColorValues.uncovered.text,
+          borderColor: coverageColorValues.uncovered.border,
+        }
     }
   }
 
@@ -122,14 +134,16 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
         {sortedShifts.map((shift) => {
           const isClickable = shift.status === 'fully_covered' || shift.status === 'partially_covered'
           const baseLabel = formatShiftLabel(shift.date, shift.time_slot_code)
+          const badgeStyles = getBadgeStyles(shift)
           
           return (
-            <Badge
+            <span
               key={shift.id}
-              variant="outline"
-              className={`text-xs ${getBadgeClassName(shift)} ${
+              className={cn(
+                'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-normal transition-colors border-[1px] border-solid',
                 isClickable ? 'cursor-pointer hover:shadow-sm transition-shadow' : ''
-              }`}
+              )}
+              style={badgeStyles}
               onClick={() => {
                 if (isClickable && onShiftClick) {
                   onShiftClick(shift)
@@ -147,7 +161,7 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
               ) : (
                 baseLabel
               )}
-            </Badge>
+            </span>
           )
         })}
       </div>
