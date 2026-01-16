@@ -26,6 +26,7 @@ import { parseLocalDate } from '@/lib/utils/date'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 
 export default function SubFinderPage() {
   const searchParams = useSearchParams()
@@ -58,6 +59,9 @@ export default function SubFinderPage() {
   const [selectedSub, setSelectedSub] = useState<SubCandidate | null>(null)
   const [isContactPanelOpen, setIsContactPanelOpen] = useState(false)
   const [isTeacherSearchOpen, setIsTeacherSearchOpen] = useState(false)
+  const { setActivePanel, previousPanel, restorePreviousPanel, registerPanelCloseHandler } = usePanelManager()
+  const savedSubRef = useRef<SubCandidate | null>(null)
+  const savedAbsenceRef = useRef<Absence | null>(null)
   // Cache contact data: key = `${subId}-${absenceId}`
   const [contactDataCache, setContactDataCache] = useState<Map<string, Record<string, unknown>>>(new Map())
   const [highlightedSubId, setHighlightedSubId] = useState<string | null>(null)
@@ -240,8 +244,47 @@ export default function SubFinderPage() {
 
   const handleCloseContactPanel = () => {
     setIsContactPanelOpen(false)
+    setActivePanel(null)
     setSelectedSub(null)
   }
+
+  // Handle panel restoration when Add Time Off closes
+  useEffect(() => {
+    if (previousPanel?.type === 'contact-sub' && !isContactPanelOpen && savedSubRef.current && savedAbsenceRef.current) {
+      // Restore the panel
+      setSelectedSub(savedSubRef.current)
+      setSelectedAbsence(savedAbsenceRef.current)
+      setIsContactPanelOpen(true)
+      setActivePanel('contact-sub')
+      restorePreviousPanel()
+    }
+  }, [previousPanel, isContactPanelOpen, setActivePanel, restorePreviousPanel, setSelectedAbsence])
+
+  // Register panel with PanelManager when it opens
+  useEffect(() => {
+    if (isContactPanelOpen && selectedSub && selectedAbsence) {
+      setActivePanel('contact-sub', () => {
+        // Restore callback - save current state and reopen
+        savedSubRef.current = selectedSub
+        savedAbsenceRef.current = selectedAbsence
+        setSelectedSub(selectedSub)
+        setSelectedAbsence(selectedAbsence)
+        setIsContactPanelOpen(true)
+      })
+      
+      // Register close request handler
+      const unregister = registerPanelCloseHandler('contact-sub', () => {
+        // Save state before closing
+        savedSubRef.current = selectedSub
+        savedAbsenceRef.current = selectedAbsence
+        setIsContactPanelOpen(false)
+      })
+      
+      return unregister
+    } else if (!isContactPanelOpen) {
+      setActivePanel(null)
+    }
+  }, [isContactPanelOpen, selectedSub, selectedAbsence, setActivePanel, registerPanelCloseHandler, setSelectedAbsence])
 
   // Handler for combination contact button
   const handleCombinationContact = (subId: string) => {
