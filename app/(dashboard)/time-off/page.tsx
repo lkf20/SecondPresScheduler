@@ -1,10 +1,8 @@
-import Link from 'next/link'
 import { getTimeOffRequests } from '@/lib/api/time-off'
 import { getTimeOffShifts, getTimeOffCoverageSummary } from '@/lib/api/time-off-shifts'
 import { getTeacherSchedules } from '@/lib/api/schedules'
 import TimeOffListClient from './TimeOffListClient'
-import { Button } from '@/components/ui/button'
-import { Plus } from 'lucide-react'
+import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
 import { parseLocalDate } from '@/lib/utils/date'
 import { transformTimeOffCardData } from '@/lib/utils/time-off-card-data'
 import { getHeaderClasses } from '@/lib/utils/colors'
@@ -170,12 +168,7 @@ export default async function TimeOffPage({
           <h1 className={getHeaderClasses('3xl')}>Time Off Requests</h1>
           <p className="text-muted-foreground mt-2">Manage teacher time off requests</p>
         </div>
-        <Link href="/time-off/new">
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Time Off
-          </Button>
-        </Link>
+        <AddTimeOffButton />
       </div>
 
       <TimeOffListClient
