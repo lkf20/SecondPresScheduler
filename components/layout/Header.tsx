@@ -37,6 +37,7 @@ export default function Header({ userEmail }: HeaderProps) {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [pendingClose, setPendingClose] = useState(false)
+  const [clearDraftOnMount, setClearDraftOnMount] = useState(false)
   const timeOffFormRef = useRef<{ reset: () => void }>(null)
   const { activePanel, savePreviousPanel, restorePreviousPanel, setActivePanel, requestPanelClose } = usePanelManager()
 
@@ -82,6 +83,7 @@ export default function Header({ userEmail }: HeaderProps) {
     } else if (!open) {
       // No unsaved changes, close normally
       setIsTimeOffSheetOpen(false)
+      setClearDraftOnMount(false) // Reset flag for next open
       setActivePanel(null)
       setTimeout(() => {
         restorePreviousPanel()
@@ -131,6 +133,8 @@ export default function Header({ userEmail }: HeaderProps) {
                   savePreviousPanel(activePanel)
                   requestPanelClose(activePanel)
                 }
+                // Clear draft when opening fresh (not restoring from previous session)
+                setClearDraftOnMount(true)
                 setActivePanel('time-off')
                 setIsTimeOffSheetOpen(true)
               }}
@@ -184,6 +188,7 @@ export default function Header({ userEmail }: HeaderProps) {
               onCancel={() => handleCloseSheet(false)}
               showBackLink={false}
               onHasUnsavedChanges={setHasUnsavedChanges}
+              clearDraftOnMount={clearDraftOnMount}
             />
           </div>
         </SheetContent>
@@ -201,7 +206,7 @@ export default function Header({ userEmail }: HeaderProps) {
             <Button variant="outline" onClick={handleKeepEditing}>
               Keep Editing
             </Button>
-            <Button variant="outline" onClick={handleDiscard}>
+            <Button variant="destructive" onClick={handleDiscard}>
               Discard
             </Button>
           </DialogFooter>

@@ -42,10 +42,11 @@ interface TimeOffFormProps {
   onCancel?: () => void
   showBackLink?: boolean
   onHasUnsavedChanges?: (hasChanges: boolean) => void
+  clearDraftOnMount?: boolean // Force clear draft when component mounts
 }
 
 const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
-  ({ onSuccess, onCancel, showBackLink = true, onHasUnsavedChanges }, ref) => {
+  ({ onSuccess, onCancel, showBackLink = true, onHasUnsavedChanges, clearDraftOnMount = false }, ref) => {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [teachers, setTeachers] = useState<Staff[]>([])
@@ -60,7 +61,17 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
   const justCorrectedRef = useRef(false)
   const [isPastDate, setIsPastDate] = useState(false)
   const hasHydratedDraftRef = useRef(false)
+  const [isDraftRestored, setIsDraftRestored] = useState(false)
   const draftKey = 'time-off:new'
+  const initialFormStateRef = useRef<{
+    teacher_id: string
+    start_date: string
+    end_date: string | undefined
+    shift_selection_mode: 'all_scheduled' | 'select_shifts'
+    reason: string | undefined
+    notes: string | undefined
+    selectedShifts: Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
+  } | null>(null)
   
   const focusEndDate = () => {
     if (typeof window === 'undefined') return
@@ -95,7 +106,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting, isDirty },
+    formState: { errors, isSubmitting, isDirty, touchedFields },
     setValue,
     setError: setFormError,
     clearErrors,
@@ -109,6 +120,38 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     },
   })
   
+  // Track if we've captured the initial state yet
+  const [isInitialStateCaptured, setIsInitialStateCaptured] = useState(false)
+  
+  // Capture initial state after draft restoration completes
+  // We need to wait for draft restoration to finish before capturing initial state
+  useEffect(() => {
+    // Wait for draft restoration to complete
+    if (!isDraftRestored) {
+      return // Don't capture yet if draft restoration hasn't completed
+    }
+    
+    // Capture initial state after a brief delay to ensure form is settled
+    const timer = setTimeout(() => {
+      if (!isInitialStateCaptured) {
+        const currentValues = getValues()
+        initialFormStateRef.current = {
+          teacher_id: currentValues.teacher_id || '',
+          start_date: currentValues.start_date || '',
+          end_date: currentValues.end_date || undefined,
+          shift_selection_mode: currentValues.shift_selection_mode || 'all_scheduled',
+          reason: currentValues.reason || undefined,
+          notes: currentValues.notes || undefined,
+          selectedShifts: [...selectedShifts],
+        }
+        console.log('[TimeOffForm] Captured initial state:', initialFormStateRef.current)
+        setIsInitialStateCaptured(true)
+      }
+    }, 150) // Small delay to ensure all initialization is complete
+    
+    return () => clearTimeout(timer)
+  }, [isDraftRestored, isInitialStateCaptured, getValues, selectedShifts])
+
   // Expose reset method via ref
   React.useImperativeHandle(ref, () => ({
     reset: () => {
@@ -126,22 +169,136 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       setConflictingRequests([])
       setEndDateCorrected(false)
       setIsPastDate(false)
+      // Reset initial state reference and flag
+      initialFormStateRef.current = {
+        teacher_id: '',
+        start_date: '',
+        end_date: undefined,
+        shift_selection_mode: 'all_scheduled',
+        reason: undefined,
+        notes: undefined,
+        selectedShifts: [],
+      }
+      setIsInitialStateCaptured(false)
+      setIsDraftRestored(false)
       if (typeof window !== 'undefined') {
         window.sessionStorage.removeItem(draftKey)
       }
     },
   }))
   
-  // Track unsaved changes (form is dirty or has selected shifts)
-  const hasUnsavedChanges = isDirty || selectedShifts.length > 0 || 
-    Boolean(watch('teacher_id')) || Boolean(watch('start_date'))
+  // Track unsaved changes by comparing current state to initial state
+  // Only check after initial state has been captured
+  // Also require that user has actually interacted with the form (touched fields)
+  const currentValues = watch()
+  const hasUnsavedChanges = (() => {
+    // Don't show warning if we haven't captured initial state yet
+    if (!isInitialStateCaptured || !initialFormStateRef.current) {
+      console.log('[TimeOffForm] Unsaved changes check: Initial state not captured yet', {
+        isInitialStateCaptured,
+        hasInitialState: !!initialFormStateRef.current
+      })
+      return false
+    }
+    
+    // Check if user has actually interacted with the form
+    // If no fields have been touched and form is not dirty, no changes
+    const hasTouchedFields = Object.keys(touchedFields).length > 0
+    if (!hasTouchedFields && !isDirty && selectedShifts.length === 0) {
+      console.log('[TimeOffForm] Unsaved changes check: No user interaction detected', {
+        hasTouchedFields,
+        isDirty,
+        selectedShiftsCount: selectedShifts.length
+      })
+      return false
+    }
+    
+    const initial = initialFormStateRef.current
+    
+    // Normalize values for comparison (treat empty string and undefined as the same)
+    const normalize = (value: string | undefined): string | undefined => {
+      if (value === '' || value === null) return undefined
+      return value
+    }
+    
+    // Check if form fields have changed
+    const formFieldChanges = {
+      teacher_id: normalize(currentValues.teacher_id) !== normalize(initial.teacher_id),
+      start_date: normalize(currentValues.start_date) !== normalize(initial.start_date),
+      end_date: normalize(currentValues.end_date) !== normalize(initial.end_date),
+      shift_selection_mode: currentValues.shift_selection_mode !== initial.shift_selection_mode,
+      reason: normalize(currentValues.reason) !== normalize(initial.reason),
+      notes: normalize(currentValues.notes) !== normalize(initial.notes),
+    }
+    
+    const formChanged = Object.values(formFieldChanges).some(Boolean)
+    
+    // Check if selected shifts have changed
+    const shiftsChanged = (() => {
+      if (selectedShifts.length !== initial.selectedShifts.length) {
+        console.log('[TimeOffForm] Shifts count changed', {
+          current: selectedShifts.length,
+          initial: initial.selectedShifts.length
+        })
+        return true
+      }
+      const currentKeys = new Set(selectedShifts.map(s => `${s.date}::${s.time_slot_id}`))
+      const initialKeys = new Set(initial.selectedShifts.map(s => `${s.date}::${s.time_slot_id}`))
+      if (currentKeys.size !== initialKeys.size) {
+        console.log('[TimeOffForm] Shifts keys size changed', {
+          current: currentKeys.size,
+          initial: initialKeys.size
+        })
+        return true
+      }
+      for (const key of currentKeys) {
+        if (!initialKeys.has(key)) {
+          console.log('[TimeOffForm] New shift key found', { key })
+          return true
+        }
+      }
+      return false
+    })()
+    
+    const result = formChanged || shiftsChanged
+    
+    console.log('[TimeOffForm] Unsaved changes check result:', {
+      result,
+      formChanged,
+      shiftsChanged,
+      formFieldChanges,
+      currentValues: {
+        teacher_id: currentValues.teacher_id,
+        start_date: currentValues.start_date,
+        end_date: currentValues.end_date,
+        shift_selection_mode: currentValues.shift_selection_mode,
+        reason: currentValues.reason,
+        notes: currentValues.notes,
+      },
+      initialValues: {
+        teacher_id: initial.teacher_id,
+        start_date: initial.start_date,
+        end_date: initial.end_date,
+        shift_selection_mode: initial.shift_selection_mode,
+        reason: initial.reason,
+        notes: initial.notes,
+      },
+      selectedShiftsCount: selectedShifts.length,
+      initialShiftsCount: initial.selectedShifts.length,
+      hasTouchedFields,
+      isDirty,
+      touchedFields: Object.keys(touchedFields),
+    })
+    
+    return result
+  })()
   
   // Notify parent of unsaved changes status
   useEffect(() => {
     if (onHasUnsavedChanges) {
       onHasUnsavedChanges(hasUnsavedChanges)
     }
-  }, [hasUnsavedChanges, onHasUnsavedChanges])
+  }, [hasUnsavedChanges, onHasUnsavedChanges, currentValues, selectedShifts])
 
   const teacherId = watch('teacher_id')
   const startDate = watch('start_date')
@@ -182,16 +339,41 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (hasHydratedDraftRef.current) return
+    
+    // If clearDraftOnMount is true, clear the draft and skip restoration
+    if (clearDraftOnMount) {
+      window.sessionStorage.removeItem(draftKey)
+      hasHydratedDraftRef.current = true
+      setIsDraftRestored(true)
+      return
+    }
+    
     const raw = window.sessionStorage.getItem(draftKey)
     if (!raw) {
       hasHydratedDraftRef.current = true
+      setIsDraftRestored(true)
       return
     }
     try {
       const draft = JSON.parse(raw) as {
         form?: Partial<TimeOffFormData>
         selectedShifts?: Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
+        updatedAt?: number
       }
+      
+      // Invalidate drafts older than 24 hours
+      const DRAFT_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 hours
+      if (draft.updatedAt && Date.now() - draft.updatedAt > DRAFT_EXPIRY_MS) {
+        console.log('[TimeOffForm] Draft expired, clearing:', {
+          age: Date.now() - draft.updatedAt,
+          expiry: DRAFT_EXPIRY_MS
+        })
+        window.sessionStorage.removeItem(draftKey)
+        hasHydratedDraftRef.current = true
+        setIsDraftRestored(true)
+        return
+      }
+      
       if (draft.form) {
         reset({ shift_selection_mode: 'all_scheduled', ...draft.form })
       }
@@ -200,9 +382,12 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       }
     } catch (error) {
       console.error('Failed to restore time off draft:', error)
+      // Clear corrupted draft
+      window.sessionStorage.removeItem(draftKey)
     }
     hasHydratedDraftRef.current = true
-  }, [reset, draftKey])
+    setIsDraftRestored(true)
+  }, [reset, draftKey, clearDraftOnMount])
 
   useEffect(() => {
     if (typeof window === 'undefined') return

@@ -223,16 +223,20 @@ export default function DashboardClient({
   const [scheduledSubsSectionCollapsed, setScheduledSubsSectionCollapsed] = useState(false)
   const [staffingTargetSectionCollapsed, setStaffingTargetSectionCollapsed] = useState(false)
   
-  // Coverage range state
-  const [coverageRange, setCoverageRange] = useState<CoverageRange>(() => {
-    if (typeof window !== 'undefined') {
+  // Coverage range state - always start with default to avoid hydration mismatch
+  const [coverageRange, setCoverageRange] = useState<CoverageRange>('2 weeks')
+  const [hasHydratedRange, setHasHydratedRange] = useState(false)
+  
+  // Hydrate from localStorage after mount (client-side only)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !hasHydratedRange) {
       const stored = localStorage.getItem('dashboard_coverage_range') as CoverageRange | null
       if (stored && ['1 week', '2 weeks', '1 month', '2 months'].includes(stored)) {
-        return stored
+        setCoverageRange(stored)
       }
+      setHasHydratedRange(true)
     }
-    return '2 weeks' // default
-  })
+  }, [hasHydratedRange])
   
   const [overview, setOverview] = useState<DashboardOverview>(initialOverview)
   const [isLoadingOverview, setIsLoadingOverview] = useState(false)

@@ -29,6 +29,7 @@ export default function AddTimeOffButton() {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [pendingClose, setPendingClose] = useState(false)
+  const [clearDraftOnMount, setClearDraftOnMount] = useState(false)
   const timeOffFormRef = useRef<{ reset: () => void }>(null)
   const { activePanel, savePreviousPanel, restorePreviousPanel, setActivePanel, requestPanelClose } = usePanelManager()
 
@@ -68,6 +69,7 @@ export default function AddTimeOffButton() {
     } else if (!open) {
       // No unsaved changes, close normally
       setIsTimeOffSheetOpen(false)
+      setClearDraftOnMount(false) // Reset flag for next open
       setActivePanel(null)
       setTimeout(() => {
         restorePreviousPanel()
@@ -105,6 +107,8 @@ export default function AddTimeOffButton() {
       savePreviousPanel(activePanel)
       requestPanelClose(activePanel)
     }
+    // Clear draft when opening fresh (not restoring from previous session)
+    setClearDraftOnMount(true)
     setActivePanel('time-off')
     setIsTimeOffSheetOpen(true)
   }
@@ -139,6 +143,7 @@ export default function AddTimeOffButton() {
               onCancel={() => handleCloseSheet(false)}
               showBackLink={false}
               onHasUnsavedChanges={setHasUnsavedChanges}
+              clearDraftOnMount={clearDraftOnMount}
             />
           </div>
         </SheetContent>
@@ -156,7 +161,7 @@ export default function AddTimeOffButton() {
             <Button variant="outline" onClick={handleKeepEditing}>
               Keep Editing
             </Button>
-            <Button variant="outline" onClick={handleDiscard}>
+            <Button variant="destructive" onClick={handleDiscard}>
               Discard
             </Button>
           </DialogFooter>
