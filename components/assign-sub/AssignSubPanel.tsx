@@ -17,7 +17,7 @@ import { AlertTriangle, Info, X, ExternalLink } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 import SearchableSelect, { type SearchableSelectOption } from '@/components/shared/SearchableSelect'
 import DatePickerInput from '@/components/ui/date-picker-input'
-import { getPanelBackgroundClasses, getPanelHeaderBackgroundClasses } from '@/lib/utils/colors'
+import { getPanelBackgroundClasses } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
@@ -103,7 +103,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
         if (!response.ok) throw new Error('Failed to fetch teachers')
         const data = await response.json()
         const sorted = (data as Teacher[])
-          .filter((t) => (t as any).active !== false)
+          .filter((t) => (t as Teacher & { active?: boolean }).active !== false)
           .sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)))
         setTeachers(sorted)
       } catch (error) {
@@ -122,7 +122,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
         if (!response.ok) throw new Error('Failed to fetch subs')
         const data = await response.json()
         const sorted = (data as Sub[])
-          .filter((s) => (s as any).active !== false)
+          .filter((s) => (s as Sub & { active?: boolean }).active !== false)
           .sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)))
         setSubs(sorted)
       } catch (error) {
@@ -144,12 +144,6 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
       setLoading(true)
       try {
         const effectiveEndDate = endDate || startDate
-        console.log('[AssignSubPanel] Fetching shifts:', {
-          teacherId,
-          startDate,
-          endDate,
-          effectiveEndDate,
-        })
         const response = await fetch('/api/coverage-requests/ensure-for-quick-assign', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -166,28 +160,18 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
         }
 
         const data = await response.json()
-        console.log('[AssignSubPanel] Received shifts data:', {
-          coverage_request_id: data.coverage_request_id,
-          shifts_count: data.coverage_request_shifts?.length || 0,
-          shifts: data.coverage_request_shifts,
-        })
         setCoverageRequestId(data.coverage_request_id)
         
-        // Fetch all days and timeslots once for lookup
-        const [daysResponse, timeslotsResponse] = await Promise.all([
-          fetch('/api/days-of-week').catch(() => null),
-          fetch('/api/timeslots').catch(() => null),
-        ])
+        // Fetch timeslots once for lookup
+        const timeslotsResponse = await fetch('/api/timeslots').catch(() => null)
 
-        const days = daysResponse?.ok ? await daysResponse.json() : []
         const timeslots = timeslotsResponse?.ok ? await timeslotsResponse.json() : []
 
-        const daysMap = new Map(days.map((d: any) => [d.id, d.name]))
-        const timeslotsMap = new Map(timeslots.map((t: any) => [t.id, t.code]))
+        const timeslotsMap = new Map(timeslots.map((t: { id: string; code: string }) => [t.id, t.code]))
         
         // Create a map of time slot code to display_order for sorting
         const timeSlotOrderMap = new Map<string, number>()
-        timeslots.forEach((slot: any) => {
+        timeslots.forEach((slot: { code?: string; display_order?: number }) => {
           if (slot.code) {
             timeSlotOrderMap.set(slot.code, slot.display_order ?? 999)
           }
@@ -195,7 +179,14 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
 
         // Fetch shift details with day/time slot names
         const shiftDetails = await Promise.all(
-          data.coverage_request_shifts.map(async (shift: any) => {
+          data.coverage_request_shifts.map(async (shift: {
+            id: string
+            date: string
+            day_of_week_id: string
+            time_slot_id: string
+            classroom_id?: string | null
+            time_off_request_id?: string | null
+          }) => {
             // Fetch classroom name if available
             let classroomName = null
             if (shift.classroom_id) {
@@ -282,7 +273,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
         const data = await response.json()
         // Extract unique class names from shifts
         const classNames = new Set<string>()
-        data.forEach((shift: any) => {
+        data.forEach((shift: { class_name?: string }) => {
           if (shift.class_name) classNames.add(shift.class_name)
         })
         setTeacherClasses(Array.from(classNames))
@@ -452,17 +443,6 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
 
       if (createTimeOffForMissing && shiftsWithoutTimeOff.length > 0 && teacherId) {
         // Create time off request
-        console.log('[AssignSubPanel] Creating time off request:', {
-          teacher_id: teacherId,
-          start_date: shiftsWithoutTimeOff[0].date,
-          end_date: shiftsWithoutTimeOff[shiftsWithoutTimeOff.length - 1].date,
-          shifts_count: shiftsWithoutTimeOff.length,
-          shifts: shiftsWithoutTimeOff.map((s) => ({
-            date: s.date,
-            day_of_week_id: s.day_of_week_id,
-            time_slot_id: s.time_slot_id,
-          })),
-        })
         
         const timeOffResponse = await fetch('/api/time-off', {
           method: 'POST',
@@ -498,8 +478,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
           throw new Error(errorMessage)
         }
         
-        const timeOffData = await timeOffResponse.json()
-        console.log('[AssignSubPanel] Time off request created:', timeOffData)
+        await timeOffResponse.json()
       }
 
       // Assign shifts
@@ -567,7 +546,6 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
     }
   }, [isOpen])
 
-  const selectedTeacher = teachers.find((t) => t.id === teacherId)
   const selectedSub = subs.find((s) => s.id === subId)
 
   return (
@@ -804,7 +782,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
                     <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
                     <p className="text-sm text-amber-800">
                       {summaryStats.conflictCount} selected shift{summaryStats.conflictCount !== 1 ? 's' : ''} override
-                      {summaryStats.conflictCount === 1 ? 's' : ''} the sub's availability or existing assignment.
+                      {summaryStats.conflictCount === 1 ? 's' : ''} the sub&apos;s availability or existing assignment.
                     </p>
                   </div>
                 )}

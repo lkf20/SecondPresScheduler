@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { getTeacherScheduledShifts } from './time-off-shifts'
 import { parseLocalDate } from '@/lib/utils/date'
 
 export interface CoverageRequestWithShifts {
@@ -26,7 +25,6 @@ export async function ensureCoverageRequestForQuickAssign(
 ): Promise<CoverageRequestWithShifts> {
   const supabase = await createClient()
 
-  console.log('[ensureCoverageRequestForQuickAssign] Input:', { teacherId, startDate, endDate })
 
   // First, check for existing coverage_requests for this teacher and date range
   // Look for requests that overlap with our date range
@@ -43,14 +41,12 @@ export async function ensureCoverageRequestForQuickAssign(
     throw existingError
   }
 
-  console.log('[ensureCoverageRequestForQuickAssign] Existing requests:', existingRequests?.length || 0)
 
   // If we find an existing request that covers our date range, reuse it
   let coverageRequestId: string | null = null
   if (existingRequests && existingRequests.length > 0) {
     // Use the first matching request (could be enhanced to find best match)
     coverageRequestId = existingRequests[0].id
-    console.log('[ensureCoverageRequestForQuickAssign] Reusing existing coverage request:', coverageRequestId)
   }
 
   // Get teacher's scheduled shifts for the date range
@@ -73,11 +69,8 @@ export async function ensureCoverageRequestForQuickAssign(
     throw scheduleError
   }
 
-  console.log('[ensureCoverageRequestForQuickAssign] Raw schedule entries:', schedule?.length || 0)
-  console.log('[ensureCoverageRequestForQuickAssign] Schedule data:', schedule)
 
   if (!schedule || schedule.length === 0) {
-    console.log('[ensureCoverageRequestForQuickAssign] No schedule found for teacher')
     // If no scheduled shifts, still create a coverage request but with no shifts
     if (!coverageRequestId) {
       const { data: newRequest, error: createError } = await supabase
@@ -102,6 +95,10 @@ export async function ensureCoverageRequestForQuickAssign(
       coverageRequestId = newRequest.id
     }
 
+    if (!coverageRequestId) {
+      throw new Error('Failed to create or find coverage request')
+    }
+
     return {
       coverage_request_id: coverageRequestId,
       coverage_request_shifts: [],
@@ -109,7 +106,13 @@ export async function ensureCoverageRequestForQuickAssign(
   }
 
   // Transform schedule data similar to getTeacherScheduledShifts
-  const transformedSchedule = schedule.map((entry: any) => {
+  const transformedSchedule = schedule.map((entry: {
+    day_of_week_id: string
+    time_slot_id: string
+    classroom_id: string | null
+    days_of_week?: Array<{ name: string; day_number: number }> | { name: string; day_number: number } | null
+    time_slots?: Array<{ code: string; name: string }> | { code: string; name: string } | null
+  }) => {
     let daysOfWeek = null
     if (entry.days_of_week) {
       if (Array.isArray(entry.days_of_week) && entry.days_of_week.length > 0) {
@@ -183,7 +186,6 @@ export async function ensureCoverageRequestForQuickAssign(
   // Build a map of date -> shifts for that date
   const shiftsByDate = new Map<string, Array<{ day_of_week_id: string; time_slot_id: string; classroom_id: string | null }>>()
 
-  console.log('[ensureCoverageRequestForQuickAssign] Schedule by day number:', Array.from(scheduleByDayNumber.entries()).map(([day, shifts]) => ({ day, count: shifts.length })))
 
   let currentDateStr = startDate
   let dateCount = 0
@@ -192,7 +194,6 @@ export async function ensureCoverageRequestForQuickAssign(
     const dayNumber = getDayOfWeek(currentDateStr)
     const shiftsForDay = scheduleByDayNumber.get(dayNumber)
     
-    console.log(`[ensureCoverageRequestForQuickAssign] Date ${dateCount}: ${currentDateStr}, day_number: ${dayNumber}, found shifts: ${shiftsForDay?.length || 0}`)
     
     if (shiftsForDay && shiftsForDay.length > 0) {
       if (!shiftsByDate.has(currentDateStr)) {
@@ -205,7 +206,6 @@ export async function ensureCoverageRequestForQuickAssign(
           classroom_id: shift.classroom_id,
         })
       })
-      console.log(`[ensureCoverageRequestForQuickAssign] Added ${shiftsForDay.length} shifts for ${currentDateStr}`)
     }
     
     // Move to next day
@@ -217,8 +217,6 @@ export async function ensureCoverageRequestForQuickAssign(
     currentDateStr = `${nextYear}-${nextMonth}-${nextDay}`
   }
 
-  console.log('[ensureCoverageRequestForQuickAssign] Total shifts by date:', shiftsByDate.size)
-  console.log('[ensureCoverageRequestForQuickAssign] Shifts by date map:', Array.from(shiftsByDate.entries()).map(([date, shifts]) => ({ date, count: shifts.length })))
 
   // Check which shifts already have time off requests
   const timeOffShiftsMap = new Map<string, { time_off_request_id: string }>()
@@ -371,10 +369,6 @@ export async function ensureCoverageRequestForQuickAssign(
     }
   }
 
-  console.log('[ensureCoverageRequestForQuickAssign] Shifts to create:', shiftsToCreate.length)
-  if (shiftsToCreate.length === 0) {
-    console.log('[ensureCoverageRequestForQuickAssign] WARNING: No shifts to create! This might indicate a date matching issue.')
-  }
 
   const { data: newRequest, error: createError } = await supabase
     .from('coverage_requests')
@@ -430,6 +424,10 @@ export async function ensureCoverageRequestForQuickAssign(
       time_off_request_id: timeOffInfo?.time_off_request_id || null,
     }
   })
+
+  if (!coverageRequestId) {
+    throw new Error('Failed to create or find coverage request')
+  }
 
   return {
     coverage_request_id: coverageRequestId,
