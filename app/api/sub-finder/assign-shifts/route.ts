@@ -215,7 +215,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Revalidate all pages that might show this data
     revalidatePath('/dashboard')
+    revalidatePath('/time-off')
+    revalidatePath('/schedules/weekly')
+    revalidatePath('/sub-finder')
+    revalidatePath('/reports')
 
     return NextResponse.json({
       success: true,

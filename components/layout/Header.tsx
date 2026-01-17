@@ -26,6 +26,7 @@ import {
 import { toast } from 'sonner'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 import TimeOffForm from '@/components/time-off/TimeOffForm'
+import AssignSubPanel from '@/components/assign-sub/AssignSubPanel'
 import { useRef, useMemo } from 'react'
 import { getPanelBackgroundClasses } from '@/lib/utils/colors'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -49,6 +50,7 @@ export default function Header({ userEmail }: HeaderProps) {
   const timeOffFormRef = useRef<{ reset: () => void }>(null)
   const { activePanel, savePreviousPanel, restorePreviousPanel, setActivePanel, requestPanelClose } = usePanelManager()
   const [isFindSubPopoverOpen, setIsFindSubPopoverOpen] = useState(false)
+  const [isAssignSubPanelOpen, setIsAssignSubPanelOpen] = useState(false)
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('')
   const [teachers, setTeachers] = useState<Staff[]>([])
   const [teacherSearch, setTeacherSearch] = useState('')
@@ -290,11 +292,18 @@ export default function Header({ userEmail }: HeaderProps) {
                 </div>
               </PopoverContent>
             </Popover>
-            <Button asChild size="sm" variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-100">
-              <Link href="/schedules/weekly">
-                <UserPlus className="h-4 w-4 mr-2" />
-                Assign Sub
-              </Link>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-slate-300 text-slate-700 hover:bg-slate-100"
+              onClick={() => {
+                savePreviousPanel()
+                setActivePanel('assign-sub')
+                setIsAssignSubPanelOpen(true)
+              }}
+            >
+              <UserPlus className="h-4 w-4 mr-2" />
+              Assign Sub
             </Button>
           </div>
           {userEmail && (
@@ -368,6 +377,16 @@ export default function Header({ userEmail }: HeaderProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AssignSubPanel
+        isOpen={isAssignSubPanelOpen}
+        onClose={() => {
+          setIsAssignSubPanelOpen(false)
+          setActivePanel(null)
+          setTimeout(() => {
+            restorePreviousPanel()
+          }, 100)
+        }}
+      />
     </header>
   )
 }

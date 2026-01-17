@@ -25,6 +25,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    console.log('[API /time-off POST] Received request:', {
+      teacher_id: body.teacher_id,
+      start_date: body.start_date,
+      end_date: body.end_date,
+      shift_selection_mode: body.shift_selection_mode,
+      shifts_count: body.shifts?.length || 0,
+    })
     const { shifts, ...requestData } = body
     const status = requestData.status || 'active'
     const effectiveEndDate = requestData.end_date || requestData.start_date
@@ -80,10 +87,16 @@ export async function POST(request: NextRequest) {
     }
     
     // Create the time off request
+    console.log('[API /time-off POST] Creating time off request with data:', {
+      ...requestData,
+      status,
+    })
     const createdRequest = await createTimeOffRequest({ ...requestData, status })
+    console.log('[API /time-off POST] Time off request created:', createdRequest.id)
     
     // If shifts are provided, create them
     if (shifts && Array.isArray(shifts) && shifts.length > 0) {
+      console.log('[API /time-off POST] Creating time off shifts:', shifts.length)
       await createTimeOffShifts(createdRequest.id, shifts)
     } else if (requestData.shift_selection_mode === 'all_scheduled') {
       // If "all_scheduled" mode, fetch all scheduled shifts and create them
@@ -107,10 +120,17 @@ export async function POST(request: NextRequest) {
       }
     }
     
+    // Revalidate all pages that might show this data
     revalidatePath('/dashboard')
     revalidatePath('/time-off')
+    revalidatePath('/schedules/weekly')
+    revalidatePath('/sub-finder')
+    revalidatePath('/reports')
+    
     return NextResponse.json(createdRequest, { status: 201 })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error('[API /time-off POST] Error:', error)
+    console.error('[API /time-off POST] Error stack:', error.stack)
+    return NextResponse.json({ error: error.message || 'Unknown error occurred' }, { status: 500 })
   }
 }
