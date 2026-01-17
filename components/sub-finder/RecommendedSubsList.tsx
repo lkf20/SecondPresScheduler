@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 import { useEffect, useMemo, useState } from 'react'
 import SubFinderCard from '@/components/sub-finder/SubFinderCard'
@@ -74,7 +74,6 @@ export default function RecommendedSubsList({
   highlightedSubId = null,
 }: RecommendedSubsListProps) {
   const [isDeclinedExpanded, setIsDeclinedExpanded] = useState(false)
-  const [currentIndex, setCurrentIndex] = useState(0)
   // Format date as "Mon Jan 11"
   const formatDate = (dateString: string) => {
     const date = parseLocalDate(dateString)
@@ -201,7 +200,7 @@ export default function RecommendedSubsList({
       remainingShiftKeys,
       nonDeclinedSubs,
       declinedSubs,
-      canPaginate: !showAllSubs && nonDeclinedSubs.length > 1,
+      canPaginate: false, // Always show all subs in scrollable list
     }
   }, [isDeclinedExpanded, loading, showAllSubs, subs])
 
@@ -219,9 +218,6 @@ export default function RecommendedSubsList({
         null,
     }))
 
-  useEffect(() => {
-    setCurrentIndex(0)
-  }, [showAllSubs, derived.nonDeclinedSubs.length])
 
   const renderSubCard = ({ sub, shiftsCovered }: { sub: RecommendedSub; shiftsCovered: number }) => {
     const remainingCanCover = filterRemainingShifts(sub.can_cover)
@@ -292,48 +288,7 @@ export default function RecommendedSubsList({
           </div>
         )}
 
-        {showAllSubs &&
-          derived.nonDeclinedSubs.map(({ sub, shiftsCovered }) => renderSubCard({ sub, shiftsCovered }))}
-        {!showAllSubs &&
-          derived.nonDeclinedSubs.length > 0 &&
-          renderSubCard(derived.nonDeclinedSubs[currentIndex])}
-        {derived.canPaginate && (
-          <div className="flex items-center justify-center gap-3 pt-2">
-            <button
-              type="button"
-              className="h-8 w-8 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
-              onClick={() => setCurrentIndex((prev) => Math.max(prev - 1, 0))}
-              disabled={currentIndex === 0}
-              aria-label="Previous recommended sub"
-            >
-              <ChevronLeft className="h-4 w-4 mx-auto" />
-            </button>
-            <div className="flex items-center gap-2">
-              {derived.nonDeclinedSubs.map((_, index) => (
-                <button
-                  key={`sub-dot-${index}`}
-                  type="button"
-                  onClick={() => setCurrentIndex(index)}
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    index === currentIndex ? 'bg-amber-400' : 'bg-slate-300'
-                  }`}
-                  aria-label={`Recommended sub ${index + 1}`}
-                />
-              ))}
-            </div>
-            <button
-              type="button"
-              className="h-8 w-8 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
-              onClick={() =>
-                setCurrentIndex((prev) => Math.min(prev + 1, derived.nonDeclinedSubs.length - 1))
-              }
-              disabled={currentIndex === derived.nonDeclinedSubs.length - 1}
-              aria-label="Next recommended sub"
-            >
-              <ChevronRight className="h-4 w-4 mx-auto" />
-            </button>
-          </div>
-        )}
+        {derived.nonDeclinedSubs.map(({ sub, shiftsCovered }) => renderSubCard({ sub, shiftsCovered }))}
         
         {/* Declined Subs Collapsible Section */}
         {derived.declinedSubs.length > 0 && (

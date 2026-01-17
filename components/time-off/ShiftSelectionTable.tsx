@@ -131,14 +131,19 @@ export default function ShiftSelectionTable({
     const effectiveEndDate = endDate || startDate
 
     setLoading(true)
+    console.log('[ShiftSelectionTable] Fetching shifts:', { teacherId, startDate, effectiveEndDate })
     fetch(`/api/teachers/${teacherId}/scheduled-shifts?start_date=${startDate}&end_date=${effectiveEndDate}`)
-      .then((r) => r.json())
+      .then((r) => {
+        console.log('[ShiftSelectionTable] Response status:', r.status)
+        return r.json()
+      })
       .then((data) => {
         const shifts = data || []
+        console.log('[ShiftSelectionTable] Received shifts:', shifts.length, shifts)
         setScheduledShifts(shifts)
       })
       .catch((error) => {
-        console.error('Error fetching scheduled shifts:', error)
+        console.error('[ShiftSelectionTable] Error fetching scheduled shifts:', error)
         setScheduledShifts([])
       })
       .finally(() => setLoading(false))
@@ -275,12 +280,16 @@ export default function ShiftSelectionTable({
     return acc
   }, {} as Record<string, { date: string; day_name: string; shifts: ScheduledShift[] }>)
 
-  const formatDate = (dateStr: string) => {
+  const formatDate = (dateStr: string, dayName?: string) => {
     // Parse date string directly to avoid timezone issues
     // dateStr is in YYYY-MM-DD format
     const [year, month, day] = dateStr.split('-').map(Number)
     const date = new Date(year, month - 1, day)
     const monthName = date.toLocaleString('default', { month: 'short' })
+    // If dayName is provided, show "Mon Jan 26" format, otherwise just "Jan 26"
+    if (dayName) {
+      return `${dayName.slice(0, 3)} ${monthName} ${day}`
+    }
     return `${monthName} ${day}`
   }
 
@@ -446,7 +455,7 @@ export default function ShiftSelectionTable({
             .map((dayGroup) => (
               <TableRow key={dayGroup.date}>
                 <TableCell className="font-medium">
-                  {formatDate(dayGroup.date)} {dayGroup.day_name.slice(0, 3)}
+                  {formatDate(dayGroup.date, dayGroup.day_name)}
                 </TableCell>
                 {timeSlots.map((slot) => {
                   const isScheduled = isShiftScheduled(dayGroup.date, slot.id)

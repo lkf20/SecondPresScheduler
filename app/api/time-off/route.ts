@@ -107,10 +107,16 @@ export async function POST(request: NextRequest) {
       }
     }
     
+    // Revalidate all pages that might show this data
     revalidatePath('/dashboard')
     revalidatePath('/time-off')
+    revalidatePath('/schedules/weekly')
+    revalidatePath('/sub-finder')
+    revalidatePath('/reports')
+    
     return NextResponse.json(createdRequest, { status: 201 })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error('Error creating time off request:', error)
+    return NextResponse.json({ error: error.message || 'Unknown error occurred' }, { status: 500 })
   }
 }

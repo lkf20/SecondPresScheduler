@@ -5,6 +5,7 @@ import { CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
 import ScheduleCell from './ScheduleCell'
 import ScheduleSidePanel from './ScheduleSidePanel'
 import type { WeeklyScheduleData, WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
+import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 
 interface WeeklyScheduleGridNewProps {
   data: WeeklyScheduleDataByClassroom[]
@@ -98,6 +99,8 @@ export default function WeeklyScheduleGridNew({
     classroomId: string
     classroomName: string
   } | null>(null)
+  const { setActivePanel, previousPanel, restorePreviousPanel, registerPanelCloseHandler } = usePanelManager()
+  const savedCellRef = useRef<typeof selectedCell>(null)
 
   // Extract unique days and time slots from data, filtered by selectedDayIds
   const { days, timeSlots } = useMemo(() => {
@@ -236,7 +239,40 @@ export default function WeeklyScheduleGridNew({
 
   const handleClosePanel = () => {
     setSelectedCell(null)
+    setActivePanel(null)
   }
+
+  // Handle panel restoration when Add Time Off closes
+  useEffect(() => {
+    if (previousPanel?.type === 'schedule' && !selectedCell && savedCellRef.current) {
+      // Restore the panel
+      setSelectedCell(savedCellRef.current)
+      setActivePanel('schedule')
+      restorePreviousPanel()
+    }
+  }, [previousPanel, selectedCell, setActivePanel, restorePreviousPanel])
+
+  // Register panel with PanelManager when it opens
+  useEffect(() => {
+    if (selectedCell) {
+      setActivePanel('schedule', () => {
+        // Restore callback - save current state and reopen
+        savedCellRef.current = selectedCell
+        setSelectedCell(selectedCell)
+      })
+      
+      // Register close request handler
+      const unregister = registerPanelCloseHandler('schedule', () => {
+        // Save state before closing
+        savedCellRef.current = selectedCell
+        setSelectedCell(null)
+      })
+      
+      return unregister
+    } else {
+      setActivePanel(null)
+    }
+  }, [selectedCell, setActivePanel, registerPanelCloseHandler])
 
   // Get cell data for selected cell
   const selectedCellData = selectedCell

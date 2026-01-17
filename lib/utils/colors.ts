@@ -318,6 +318,33 @@ export function getStaffingColorClasses(status: StaffingStatus): string {
 export type ShiftStatus = 'assigned' | 'available' | 'unavailable'
 
 /**
+ * RGB color values for shift status chips
+ * Used for inline styles to ensure they override conflicting CSS
+ */
+export const shiftStatusColorValues = {
+  assigned: {
+    bg: 'rgb(239, 246, 255)', // blue-50
+    border: 'rgb(191, 219, 254)', // blue-200
+    text: 'rgb(30, 58, 138)', // blue-900
+  },
+  available: {
+    bg: 'rgb(240, 253, 250)', // teal-50 #f0fdfa
+    border: 'rgb(153, 246, 228)', // teal-200
+    text: 'rgb(13, 148, 136)', // teal-600 #0D9488
+  },
+  unavailable: {
+    bg: 'rgb(243, 244, 246)', // gray-100
+    border: 'rgb(209, 213, 219)', // gray-300
+    text: 'rgb(55, 65, 81)', // gray-700
+  },
+  declined: {
+    bg: 'rgb(243, 244, 246)', // gray-100
+    border: 'rgb(209, 213, 219)', // gray-300
+    text: 'rgb(75, 85, 99)', // gray-600
+  },
+} as const
+
+/**
  * Standardized colors for shift status chips
  * Used in ShiftChips and related components
  */
@@ -329,9 +356,9 @@ export const shiftStatusColors = {
     // Uses same as covered for consistency
   },
   available: {
-    bg: 'bg-teal-50',
+    bg: 'bg-teal-50', // #f0fdfa (lighter than #CCFBF1)
     border: 'border-teal-200',
-    text: 'text-teal-700',
+    text: 'text-teal-600', // #0D9488
   },
   unavailable: {
     bg: 'bg-gray-100',
@@ -387,6 +414,54 @@ export const headerStyles = {
  */
 export function getHeaderClasses(size: HeaderSize = 'lg'): string {
   return headerStyles[size]
+}
+
+// ============================================================================
+// PANEL BACKGROUNDS
+// ============================================================================
+
+/**
+ * Standardized background colors for right-side panel overlays
+ * Used for Sheet/Modal components that slide in from the right
+ */
+export const panelBackgrounds = {
+  // Main panel background - light gray for subtle distinction from main content
+  panel: 'bg-gray-50',
+  // Panel header background (for sticky headers)
+  panelHeader: 'bg-gray-50',
+  // Panel border (subtle separation)
+  panelBorder: 'border-gray-200',
+  // White card backgrounds within panels
+  panelCard: 'bg-white',
+  // Card border within panels
+  panelCardBorder: 'border-gray-200',
+} as const
+
+/**
+ * Get panel background classes
+ * @returns Tailwind classes for panel background
+ */
+export function getPanelBackgroundClasses(): string {
+  return panelBackgrounds.panel
+}
+
+/**
+ * Get panel header background classes
+ * @returns Tailwind classes for panel header background
+ */
+export function getPanelHeaderBackgroundClasses(): string {
+  return panelBackgrounds.panelHeader
+}
+
+/**
+ * Get complete panel SheetContent classes
+ * Includes background, overflow, and standard sizing
+ * @param additionalClasses - Optional additional classes to append
+ * @returns Complete className string for SheetContent
+ */
+export function getPanelSheetContentClasses(additionalClasses?: string): string {
+  const base = `${panelBackgrounds.panel} overflow-y-auto`
+  return additionalClasses ? `${base} ${additionalClasses}` : base
 }
 
 // ============================================================================

@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { RefreshCw, Search, Settings2 } from 'lucide-react'
+import { RefreshCw, Search, Settings2, X } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
 import AbsenceList from '@/components/sub-finder/AbsenceList'
@@ -26,10 +26,13 @@ import { parseLocalDate } from '@/lib/utils/date'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 
 export default function SubFinderPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const requestedAbsenceId = searchParams.get('absence_id')
+  const requestedTeacherId = searchParams.get('teacher_id')
   const [mode, setMode] = useState<Mode>('existing')
   const {
     absences,
@@ -53,11 +56,16 @@ export default function SubFinderPage() {
     applySubResults,
   } = useSubFinderData({ mode, requestedAbsenceId })
   const [searchQuery, setSearchQuery] = useState('')
+  const [teacherSearchInput, setTeacherSearchInput] = useState('') // Separate state for dropdown input
+  const [selectedTeacherIds, setSelectedTeacherIds] = useState<string[]>([]) // Array of selected teacher IDs
   const [subSearch, setSubSearch] = useState('')
   const [isSubSearchOpen, setIsSubSearchOpen] = useState(false)
   const [selectedSub, setSelectedSub] = useState<SubCandidate | null>(null)
   const [isContactPanelOpen, setIsContactPanelOpen] = useState(false)
   const [isTeacherSearchOpen, setIsTeacherSearchOpen] = useState(false)
+  const { setActivePanel, previousPanel, restorePreviousPanel, registerPanelCloseHandler } = usePanelManager()
+  const savedSubRef = useRef<SubCandidate | null>(null)
+  const savedAbsenceRef = useRef<Absence | null>(null)
   // Cache contact data: key = `${subId}-${absenceId}`
   const [contactDataCache, setContactDataCache] = useState<Map<string, Record<string, unknown>>>(new Map())
   const [highlightedSubId, setHighlightedSubId] = useState<string | null>(null)
@@ -73,6 +81,7 @@ export default function SubFinderPage() {
   const manualEndDateRef = useRef<HTMLButtonElement | null>(null)
   const [endDateCorrected, setEndDateCorrected] = useState(false)
   const correctionTimeoutRef = useRef<number | null>(null)
+  const isFlexibleStaffChangeUserInitiatedRef = useRef(false)
   const runManualFinder = async () => {
     if (!manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0) return
     setHighlightedSubId(null)
@@ -113,9 +122,10 @@ export default function SubFinderPage() {
       return getDisplayName(teacher, '').toLowerCase().includes(query)
     })
   }, [teachers, manualTeacherSearch, getDisplayName])
+  // Get all teacher names from the teachers array (not just those with absences)
   const teacherNames = useMemo(() => {
-    return Array.from(new Set(absences.map((absence) => absence.teacher_name))).sort((a, b) => a.localeCompare(b))
-  }, [absences])
+    return teachers.map(teacher => getDisplayName(teacher)).sort((a, b) => a.localeCompare(b))
+  }, [teachers, getDisplayName])
 
   useEffect(() => {
     if (!isSubSearchOpen) return
@@ -240,8 +250,64 @@ export default function SubFinderPage() {
 
   const handleCloseContactPanel = () => {
     setIsContactPanelOpen(false)
+    setActivePanel(null)
     setSelectedSub(null)
   }
+
+  // Handle panel restoration when Add Time Off closes
+  useEffect(() => {
+    if (previousPanel?.type === 'contact-sub' && !isContactPanelOpen && savedSubRef.current && savedAbsenceRef.current) {
+      // Restore the panel
+      setSelectedSub(savedSubRef.current)
+      setSelectedAbsence(savedAbsenceRef.current)
+      setIsContactPanelOpen(true)
+      setActivePanel('contact-sub')
+      restorePreviousPanel()
+    }
+  }, [previousPanel, isContactPanelOpen, setActivePanel, restorePreviousPanel, setSelectedAbsence])
+
+  // Register panel with PanelManager when it opens
+  useEffect(() => {
+    if (isContactPanelOpen && selectedSub && selectedAbsence) {
+      setActivePanel('contact-sub', () => {
+        // Restore callback - save current state and reopen
+        savedSubRef.current = selectedSub
+        savedAbsenceRef.current = selectedAbsence
+        setSelectedSub(selectedSub)
+        setSelectedAbsence(selectedAbsence)
+        setIsContactPanelOpen(true)
+      })
+      
+      // Register close request handler
+      const unregister = registerPanelCloseHandler('contact-sub', () => {
+        // Save state before closing
+        savedSubRef.current = selectedSub
+        savedAbsenceRef.current = selectedAbsence
+        setIsContactPanelOpen(false)
+      })
+      
+      return unregister
+    } else if (!isContactPanelOpen) {
+      setActivePanel(null)
+    }
+  }, [isContactPanelOpen, selectedSub, selectedAbsence, setActivePanel, registerPanelCloseHandler, setSelectedAbsence])
+
+  // Wrapper for setIncludeFlexibleStaff that marks change as user-initiated
+  const handleFlexibleStaffChange = (checked: boolean) => {
+    isFlexibleStaffChangeUserInitiatedRef.current = true
+    setIncludeFlexibleStaff(checked)
+  }
+
+  // Auto-rerun Finder when includeFlexibleStaff changes (user-initiated only)
+  useEffect(() => {
+    if (isFlexibleStaffChangeUserInitiatedRef.current && selectedAbsence && mode === 'existing') {
+      isFlexibleStaffChangeUserInitiatedRef.current = false // Reset flag
+      handleFindSubs(selectedAbsence)
+    } else if (isFlexibleStaffChangeUserInitiatedRef.current) {
+      // Reset flag even if we don't rerun (e.g., no selected absence)
+      isFlexibleStaffChangeUserInitiatedRef.current = false
+    }
+  }, [includeFlexibleStaff, selectedAbsence, mode, handleFindSubs])
 
   // Handler for combination contact button
   const handleCombinationContact = (subId: string) => {
@@ -279,19 +345,50 @@ export default function SubFinderPage() {
     }
   }
 
-  // Filter absences based on search query
+  // Set selected teachers when teacher_id is provided from URL
+  useEffect(() => {
+    if (requestedTeacherId && !selectedTeacherIds.includes(requestedTeacherId)) {
+      setSelectedTeacherIds([requestedTeacherId])
+      // Clear teacher_id from URL after adding to selection
+      const newSearchParams = new URLSearchParams(searchParams.toString())
+      newSearchParams.delete('teacher_id')
+      router.replace(`/sub-finder?${newSearchParams.toString()}`)
+    }
+  }, [requestedTeacherId, selectedTeacherIds, searchParams, router])
+
+  // Filter absences based on selected teachers
   const filteredAbsences = useMemo(() => {
-    return absences.filter((absence) => {
-      if (!searchQuery) return true
-      const query = searchQuery.toLowerCase()
-      return (
-        absence.teacher_name.toLowerCase().includes(query) ||
-        absence.reason?.toLowerCase().includes(query) ||
-        absence.start_date.includes(query) ||
-        absence.end_date?.includes(query)
-      )
-    })
-  }, [absences, searchQuery])
+    let filtered = absences
+    
+    // If teachers are selected, filter by those teachers
+    if (selectedTeacherIds.length > 0) {
+      filtered = filtered.filter((absence) => selectedTeacherIds.includes(absence.teacher_id))
+    }
+    // Otherwise, show all absences (no filtering)
+    
+    return filtered
+  }, [absences, selectedTeacherIds])
+
+  // Add teacher to selection
+  const addTeacherToSelection = (teacherId: string) => {
+    if (!selectedTeacherIds.includes(teacherId)) {
+      setSelectedTeacherIds([...selectedTeacherIds, teacherId])
+    }
+    setTeacherSearchInput('')
+    setIsTeacherSearchOpen(false)
+  }
+
+  // Remove teacher from selection
+  const removeTeacherFromSelection = (teacherId: string) => {
+    setSelectedTeacherIds(selectedTeacherIds.filter(id => id !== teacherId))
+  }
+  
+  // Auto-select first absence if exactly one absence matches selected teachers
+  useEffect(() => {
+    if (selectedTeacherIds.length > 0 && filteredAbsences.length === 1 && !selectedAbsence) {
+      setSelectedAbsence(filteredAbsences[0])
+    }
+  }, [selectedTeacherIds, filteredAbsences, selectedAbsence, setSelectedAbsence])
 
   return (
     <div className="flex h-[calc(100vh-4rem+1.5rem+4rem)] -mx-4 -mt-[calc(1.5rem+4rem)] -mb-6 relative">
@@ -343,11 +440,23 @@ export default function SubFinderPage() {
                       <input
                         type="text"
                         placeholder="Search teachers..."
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        onFocus={() => setIsTeacherSearchOpen(true)}
+                        value={isTeacherSearchOpen ? teacherSearchInput : searchQuery}
+                        onChange={e => {
+                          if (isTeacherSearchOpen) {
+                            setTeacherSearchInput(e.target.value)
+                          } else {
+                            setSearchQuery(e.target.value)
+                          }
+                        }}
+                        onFocus={() => {
+                          setTeacherSearchInput('') // Clear dropdown input when opening
+                          setIsTeacherSearchOpen(true)
+                        }}
                         onBlur={() => {
-                          setTimeout(() => setIsTeacherSearchOpen(false), 150)
+                          setTimeout(() => {
+                            setIsTeacherSearchOpen(false)
+                            setTeacherSearchInput('')
+                          }, 150)
                         }}
                         className="w-full bg-transparent text-sm focus:outline-none"
                       />
@@ -355,21 +464,38 @@ export default function SubFinderPage() {
                     {isTeacherSearchOpen && (
                       <div className="border-t border-slate-100 max-h-40 overflow-y-auto px-2 py-1">
                         {teacherNames
-                          .filter((name) => name.toLowerCase().includes(searchQuery.toLowerCase()))
-                          .map((name) => (
-                            <button
-                              key={name}
-                              type="button"
-                              className="w-full rounded px-1.5 py-1 text-left text-sm text-slate-700 hover:bg-slate-100"
-                              onClick={() => {
-                                setSearchQuery(name)
-                                setIsTeacherSearchOpen(false)
-                              }}
-                            >
-                              {name}
-                            </button>
-                          ))}
-                        {teacherNames.filter((name) => name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+                          .filter((name) => {
+                            const query = teacherSearchInput.toLowerCase()
+                            // If there's a query in the dropdown input, filter by it. Otherwise show all teachers
+                            return !query || name.toLowerCase().includes(query)
+                          })
+                          .map((name) => {
+                            const teacher = teachers.find(t => getDisplayName(t) === name)
+                            const teacherId = teacher?.id
+                            const isSelected = teacherId && selectedTeacherIds.includes(teacherId)
+                            return (
+                              <button
+                                key={name}
+                                type="button"
+                                className={cn(
+                                  "w-full rounded px-1.5 py-1 text-left text-sm text-slate-700 hover:bg-slate-100",
+                                  isSelected && "bg-slate-100 opacity-60"
+                                )}
+                                onClick={() => {
+                                  if (teacherId && !isSelected) {
+                                    addTeacherToSelection(teacherId)
+                                  }
+                                }}
+                                disabled={isSelected}
+                              >
+                                {name}
+                              </button>
+                            )
+                          })}
+                        {teacherNames.filter((name) => {
+                          const query = teacherSearchInput.toLowerCase()
+                          return !query || name.toLowerCase().includes(query)
+                        }).length === 0 && (
                           <div className="px-1.5 py-1 text-xs text-muted-foreground">
                             No matches
                           </div>
@@ -379,6 +505,32 @@ export default function SubFinderPage() {
                   </div>
                 </div>
               </div>
+              {/* Selected Teachers Pills */}
+              {selectedTeacherIds.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {selectedTeacherIds.map((teacherId) => {
+                    const teacher = teachers.find(t => t.id === teacherId)
+                    if (!teacher) return null
+                    const teacherName = getDisplayName(teacher)
+                    return (
+                      <div
+                        key={teacherId}
+                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600"
+                      >
+                        <span>{teacherName}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeTeacherFromSelection(teacherId)}
+                          className="hover:bg-slate-200 rounded-full p-0.5 -mr-1 ml-0.5"
+                          aria-label={`Remove ${teacherName}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -566,7 +718,7 @@ export default function SubFinderPage() {
                         {selectedClassrooms.map((classroom) => (
                           <span
                             key={classroom.id || classroom.name}
-                            className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium leading-none"
+                            className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
                             style={getClassroomPillStyle(classroom.color)}
                           >
                             {classroom.name}
@@ -593,8 +745,8 @@ export default function SubFinderPage() {
                   {/* Color Key - Left aligned, bottom aligned */}
                   <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded border bg-blue-50 border-blue-200" />
-                      <span>Assigned</span>
+                      <div className="w-3 h-3 rounded border bg-blue-50 border-blue-400" />
+                      <span>Covered</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <div className="w-3 h-3 rounded border bg-emerald-50 border-emerald-200" />
@@ -605,7 +757,7 @@ export default function SubFinderPage() {
                       <span>Unavailable</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded border bg-amber-50 border-amber-200" />
+                      <div className="w-3 h-3 rounded border bg-orange-50 border-orange-400" />
                       <span>Uncovered</span>
                     </div>
                   </div>
@@ -748,7 +900,7 @@ export default function SubFinderPage() {
                               <Switch
                                 id="include-flexible"
                                 checked={includeFlexibleStaff}
-                                onCheckedChange={setIncludeFlexibleStaff}
+                                onCheckedChange={handleFlexibleStaffChange}
                               />
                             </div>
                           </div>
