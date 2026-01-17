@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { RefreshCw, Search, Settings2 } from 'lucide-react'
+import { RefreshCw, Search, Settings2, X } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
 import AbsenceList from '@/components/sub-finder/AbsenceList'
@@ -57,6 +57,7 @@ export default function SubFinderPage() {
   } = useSubFinderData({ mode, requestedAbsenceId })
   const [searchQuery, setSearchQuery] = useState('')
   const [teacherSearchInput, setTeacherSearchInput] = useState('') // Separate state for dropdown input
+  const [selectedTeacherIds, setSelectedTeacherIds] = useState<string[]>([]) // Array of selected teacher IDs
   const [subSearch, setSubSearch] = useState('')
   const [isSubSearchOpen, setIsSubSearchOpen] = useState(false)
   const [selectedSub, setSelectedSub] = useState<SubCandidate | null>(null)
@@ -326,47 +327,50 @@ export default function SubFinderPage() {
     }
   }
 
-  // Set search query when teacher_id is provided
+  // Set selected teachers when teacher_id is provided from URL
   useEffect(() => {
-    if (requestedTeacherId && absences.length > 0 && !searchQuery) {
-      const teacherAbsence = absences.find((absence) => absence.teacher_id === requestedTeacherId)
-      if (teacherAbsence) {
-        setSearchQuery(teacherAbsence.teacher_name)
-      }
+    if (requestedTeacherId && !selectedTeacherIds.includes(requestedTeacherId)) {
+      setSelectedTeacherIds([requestedTeacherId])
+      // Clear teacher_id from URL after adding to selection
+      const newSearchParams = new URLSearchParams(searchParams.toString())
+      newSearchParams.delete('teacher_id')
+      router.replace(`/sub-finder?${newSearchParams.toString()}`)
     }
-  }, [requestedTeacherId, absences, searchQuery])
+  }, [requestedTeacherId, selectedTeacherIds, searchParams, router])
 
-  // Filter absences based on search query and teacher_id param
+  // Filter absences based on selected teachers
   const filteredAbsences = useMemo(() => {
     let filtered = absences
     
-    // If teacher_id is provided in URL, filter by that teacher
-    if (requestedTeacherId) {
-      filtered = filtered.filter((absence) => absence.teacher_id === requestedTeacherId)
-    } else {
-      // Otherwise, filter by search query
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase()
-        filtered = filtered.filter((absence) => {
-          return (
-            absence.teacher_name.toLowerCase().includes(query) ||
-            absence.reason?.toLowerCase().includes(query) ||
-            absence.start_date.includes(query) ||
-            absence.end_date?.includes(query)
-          )
-        })
-      }
+    // If teachers are selected, filter by those teachers
+    if (selectedTeacherIds.length > 0) {
+      filtered = filtered.filter((absence) => selectedTeacherIds.includes(absence.teacher_id))
     }
+    // Otherwise, show all absences (no filtering)
     
     return filtered
-  }, [absences, searchQuery, requestedTeacherId])
+  }, [absences, selectedTeacherIds])
+
+  // Add teacher to selection
+  const addTeacherToSelection = (teacherId: string) => {
+    if (!selectedTeacherIds.includes(teacherId)) {
+      setSelectedTeacherIds([...selectedTeacherIds, teacherId])
+    }
+    setTeacherSearchInput('')
+    setIsTeacherSearchOpen(false)
+  }
+
+  // Remove teacher from selection
+  const removeTeacherFromSelection = (teacherId: string) => {
+    setSelectedTeacherIds(selectedTeacherIds.filter(id => id !== teacherId))
+  }
   
-  // Auto-select first absence if teacher_id is provided and there's exactly one absence
+  // Auto-select first absence if exactly one absence matches selected teachers
   useEffect(() => {
-    if (requestedTeacherId && filteredAbsences.length === 1 && !selectedAbsence) {
+    if (selectedTeacherIds.length > 0 && filteredAbsences.length === 1 && !selectedAbsence) {
       setSelectedAbsence(filteredAbsences[0])
     }
-  }, [requestedTeacherId, filteredAbsences, selectedAbsence, setSelectedAbsence])
+  }, [selectedTeacherIds, filteredAbsences, selectedAbsence, setSelectedAbsence])
 
   return (
     <div className="flex h-[calc(100vh-4rem+1.5rem+4rem)] -mx-4 -mt-[calc(1.5rem+4rem)] -mb-6 relative">
@@ -447,24 +451,29 @@ export default function SubFinderPage() {
                             // If there's a query in the dropdown input, filter by it. Otherwise show all teachers
                             return !query || name.toLowerCase().includes(query)
                           })
-                          .map((name) => (
-                            <button
-                              key={name}
-                              type="button"
-                              className="w-full rounded px-1.5 py-1 text-left text-sm text-slate-700 hover:bg-slate-100"
-                              onClick={() => {
-                                setSearchQuery(name)
-                                setTeacherSearchInput('')
-                                setIsTeacherSearchOpen(false)
-                                // Clear teacher_id from URL to show all absences for this teacher
-                                const newSearchParams = new URLSearchParams(searchParams.toString())
-                                newSearchParams.delete('teacher_id')
-                                router.push(`/sub-finder?${newSearchParams.toString()}`)
-                              }}
-                            >
-                              {name}
-                            </button>
-                          ))}
+                          .map((name) => {
+                            const teacher = teachers.find(t => getDisplayName(t) === name)
+                            const teacherId = teacher?.id
+                            const isSelected = teacherId && selectedTeacherIds.includes(teacherId)
+                            return (
+                              <button
+                                key={name}
+                                type="button"
+                                className={cn(
+                                  "w-full rounded px-1.5 py-1 text-left text-sm text-slate-700 hover:bg-slate-100",
+                                  isSelected && "bg-slate-100 opacity-60"
+                                )}
+                                onClick={() => {
+                                  if (teacherId && !isSelected) {
+                                    addTeacherToSelection(teacherId)
+                                  }
+                                }}
+                                disabled={isSelected}
+                              >
+                                {name}
+                              </button>
+                            )
+                          })}
                         {teacherNames.filter((name) => {
                           const query = teacherSearchInput.toLowerCase()
                           return !query || name.toLowerCase().includes(query)
@@ -478,6 +487,32 @@ export default function SubFinderPage() {
                   </div>
                 </div>
               </div>
+              {/* Selected Teachers Pills */}
+              {selectedTeacherIds.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {selectedTeacherIds.map((teacherId) => {
+                    const teacher = teachers.find(t => t.id === teacherId)
+                    if (!teacher) return null
+                    const teacherName = getDisplayName(teacher)
+                    return (
+                      <div
+                        key={teacherId}
+                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600"
+                      >
+                        <span>{teacherName}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeTeacherFromSelection(teacherId)}
+                          className="hover:bg-slate-200 rounded-full p-0.5 -mr-1 ml-0.5"
+                          aria-label={`Remove ${teacherName}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
 
