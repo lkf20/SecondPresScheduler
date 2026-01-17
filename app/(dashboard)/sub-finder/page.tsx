@@ -81,6 +81,7 @@ export default function SubFinderPage() {
   const manualEndDateRef = useRef<HTMLButtonElement | null>(null)
   const [endDateCorrected, setEndDateCorrected] = useState(false)
   const correctionTimeoutRef = useRef<number | null>(null)
+  const isFlexibleStaffChangeUserInitiatedRef = useRef(false)
   const runManualFinder = async () => {
     if (!manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0) return
     setHighlightedSubId(null)
@@ -290,6 +291,23 @@ export default function SubFinderPage() {
       setActivePanel(null)
     }
   }, [isContactPanelOpen, selectedSub, selectedAbsence, setActivePanel, registerPanelCloseHandler, setSelectedAbsence])
+
+  // Wrapper for setIncludeFlexibleStaff that marks change as user-initiated
+  const handleFlexibleStaffChange = (checked: boolean) => {
+    isFlexibleStaffChangeUserInitiatedRef.current = true
+    setIncludeFlexibleStaff(checked)
+  }
+
+  // Auto-rerun Finder when includeFlexibleStaff changes (user-initiated only)
+  useEffect(() => {
+    if (isFlexibleStaffChangeUserInitiatedRef.current && selectedAbsence && mode === 'existing') {
+      isFlexibleStaffChangeUserInitiatedRef.current = false // Reset flag
+      handleFindSubs(selectedAbsence)
+    } else if (isFlexibleStaffChangeUserInitiatedRef.current) {
+      // Reset flag even if we don't rerun (e.g., no selected absence)
+      isFlexibleStaffChangeUserInitiatedRef.current = false
+    }
+  }, [includeFlexibleStaff, selectedAbsence, mode, handleFindSubs])
 
   // Handler for combination contact button
   const handleCombinationContact = (subId: string) => {
@@ -700,7 +718,7 @@ export default function SubFinderPage() {
                         {selectedClassrooms.map((classroom) => (
                           <span
                             key={classroom.id || classroom.name}
-                            className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium leading-none"
+                            className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
                             style={getClassroomPillStyle(classroom.color)}
                           >
                             {classroom.name}
@@ -882,7 +900,7 @@ export default function SubFinderPage() {
                               <Switch
                                 id="include-flexible"
                                 checked={includeFlexibleStaff}
-                                onCheckedChange={setIncludeFlexibleStaff}
+                                onCheckedChange={handleFlexibleStaffChange}
                               />
                             </div>
                           </div>
