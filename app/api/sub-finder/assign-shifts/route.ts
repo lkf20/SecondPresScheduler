@@ -32,12 +32,13 @@ export async function POST(request: NextRequest) {
       selected_shift_ids_count: selected_shift_ids.length,
     })
 
-    // Get coverage_request to get teacher_id
+    // Get active coverage_request to get teacher_id
     // The coverage_requests table has teacher_id directly, and source_request_id for time_off requests
     const { data: coverageRequest, error: coverageError } = await supabase
       .from('coverage_requests')
       .select('teacher_id, source_request_id, request_type')
       .eq('id', coverage_request_id)
+      .in('status', ['open', 'filled']) // Only active coverage requests
       .single()
 
     if (coverageError) {
@@ -66,11 +67,12 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Teacher ID not found in coverage request', 404)
     }
 
-    // Get coverage_request_shifts for the selected shifts
+    // Get active coverage_request_shifts for the selected shifts
     const { data: coverageRequestShifts, error: shiftsError } = await supabase
       .from('coverage_request_shifts')
       .select('id, date, day_of_week_id, time_slot_id, classroom_id')
       .eq('coverage_request_id', coverage_request_id)
+      .eq('status', 'active') // Only active shifts
       .in('id', selected_shift_ids)
 
     if (shiftsError) {
@@ -119,10 +121,13 @@ export async function POST(request: NextRequest) {
         time_slot_id: shift.time_slot_id,
         assignment_type: 'Substitute Shift' as const,
         classroom_id: resolvedClassroomId,
+        coverage_request_shift_id: shift.id, // Required: link to coverage_request_shift
         is_partial: false,
         partial_start_time: null,
         partial_end_time: null,
         notes: null,
+        status: 'active', // Default status
+        assignment_kind: 'absence_coverage', // Default assignment kind
       }
     })
 

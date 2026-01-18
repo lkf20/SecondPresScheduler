@@ -2,7 +2,6 @@ import { getTimeOffRequests } from '@/lib/api/time-off'
 import { getTimeOffShifts, getTimeOffCoverageSummary } from '@/lib/api/time-off-shifts'
 import { getTeacherSchedules } from '@/lib/api/schedules'
 import TimeOffListClient from './TimeOffListClient'
-import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
 import { parseLocalDate } from '@/lib/utils/date'
 import { transformTimeOffCardData } from '@/lib/utils/time-off-card-data'
 import { getHeaderClasses } from '@/lib/utils/colors'
@@ -163,14 +162,6 @@ export default async function TimeOffPage({
 
   return (
     <div className="w-full max-w-4xl">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className={getHeaderClasses('3xl')}>Time Off Requests</h1>
-          <p className="text-muted-foreground mt-2">Manage teacher time off requests</p>
-        </div>
-        <AddTimeOffButton />
-      </div>
-
       <TimeOffListClient
         view={view}
         draftRequests={draftRequests}

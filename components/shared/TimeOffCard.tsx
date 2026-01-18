@@ -40,6 +40,7 @@ export interface TimeOffCardProps {
   isSelected?: boolean
   onSelect?: () => void
   onFindSubs?: () => void
+  onEdit?: () => void // Callback for editing (opens panel instead of navigating)
   loading?: boolean
   className?: string
 }
@@ -68,6 +69,7 @@ export default function TimeOffCard({
   isSelected = false,
   onSelect,
   onFindSubs,
+  onEdit,
   loading = false,
   className,
 }: TimeOffCardProps) {
@@ -93,7 +95,11 @@ export default function TimeOffCard({
   }
 
   const handleTimeOffCardClick = () => {
-    router.push(`/time-off/${id}`)
+    if (onEdit) {
+      onEdit()
+    } else {
+      router.push(`/time-off/${id}`)
+    }
   }
 
   // Sub Finder variant - different layout
@@ -275,13 +281,25 @@ export default function TimeOffCard({
             {uncovered > 0 && <CoverageBadge type="uncovered" count={uncovered} />}
           </div>
           <div className="flex items-center justify-end gap-3 mt-auto">
-            <Link
-              href={`/time-off/${id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="text-sm font-semibold text-teal-700 hover:text-teal-800 hover:underline"
-            >
-              {isTimeOffVariant ? 'Edit' : 'View'}
-            </Link>
+            {onEdit ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onEdit()
+                }}
+                className="text-sm font-semibold text-teal-700 hover:text-teal-800 hover:underline"
+              >
+                {isTimeOffVariant ? 'Edit' : 'View'}
+              </button>
+            ) : (
+              <Link
+                href={`/time-off/${id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="text-sm font-semibold text-teal-700 hover:text-teal-800 hover:underline"
+              >
+                {isTimeOffVariant ? 'Edit' : 'View'}
+              </Link>
+            )}
             {uncovered > 0 && (
               <div onClick={(e) => e.stopPropagation()}>
                 <Button

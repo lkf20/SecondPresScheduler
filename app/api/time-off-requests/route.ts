@@ -160,6 +160,7 @@ export async function GET(request: NextRequest) {
             .from('sub_assignments')
             .select('date, time_slot_id, is_partial, assignment_type, sub:staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name)')
             .eq('teacher_id', request.teacher_id)
+            .eq('status', 'active') // Only active assignments
             .gte('date', requestStartDate)
             .lte('date', requestEndDate)
           

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
-import { getTimeOffRequestById, updateTimeOffRequest, deleteTimeOffRequest } from '@/lib/api/time-off'
+import { 
+  getTimeOffRequestById, 
+  updateTimeOffRequest, 
+  deleteTimeOffRequest,
+  getActiveSubAssignmentsForTimeOffRequest,
+  cancelTimeOffRequest,
+} from '@/lib/api/time-off'
 import {
   getTimeOffShifts,
   createTimeOffShifts,
@@ -134,9 +140,74 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
-    await deleteTimeOffRequest(id)
-    return NextResponse.json({ success: true })
+    const body = await request.json().catch(() => ({}))
+    const { 
+      keepAssignmentsAsExtraCoverage = false,
+      assignmentIdsToKeep = undefined,
+    } = body
+
+    // First, get active sub assignments to return summary
+    const activeAssignments = await getActiveSubAssignmentsForTimeOffRequest(id)
+
+    // If there are assignments, we need the director's choice
+    if (activeAssignments.length > 0 && body.action === undefined) {
+      // Return summary for the UI dialog
+      const { data: timeOffRequest } = await getTimeOffRequestById(id)
+      const teacher = timeOffRequest?.teacher
+
+      // Format assignments for display
+      const formattedAssignments = activeAssignments.map((assignment: any) => {
+        const shift = assignment.coverage_request_shift
+        const sub = assignment.sub
+        const dayName = shift?.days_of_week?.name || ''
+        const timeSlot = shift?.time_slots?.code || ''
+        const classroom = shift?.classrooms?.name || ''
+        const subName = sub?.display_name || `${sub?.first_name || ''} ${sub?.last_name || ''}`.trim() || 'Unknown'
+
+        // Format date: "Mon Feb 10" format
+        const date = new Date(shift?.date || '')
+        const dayNameShort = dayName.substring(0, 3) // "Mon" from "Monday"
+        const monthShort = date.toLocaleDateString('en-US', { month: 'short' })
+        const day = date.getDate()
+        const dateStr = `${dayNameShort} ${monthShort} ${day}`
+
+        return {
+          id: assignment.id,
+          display: `${dateStr} • ${timeSlot} • ${subName} • ${classroom}`,
+          date: shift?.date,
+          dayName,
+          timeSlot,
+          subName,
+          classroom,
+        }
+      })
+
+      return NextResponse.json({
+        hasAssignments: true,
+        assignmentCount: activeAssignments.length,
+        assignments: formattedAssignments,
+        teacherName: teacher?.display_name || `${teacher?.first_name || ''} ${teacher?.last_name || ''}`.trim(),
+      })
+    }
+
+    // Perform cancellation
+    const result = await cancelTimeOffRequest(id, {
+      keepAssignmentsAsExtraCoverage,
+      assignmentIdsToKeep,
+    })
+
+    revalidatePath('/dashboard')
+    revalidatePath('/time-off')
+    revalidatePath('/schedules/weekly')
+    revalidatePath('/sub-finder')
+    revalidatePath('/reports')
+
+    return NextResponse.json({ 
+      success: true,
+      ...result,
+    })
   } catch (error: any) {
+    console.error('Error cancelling time off request:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
