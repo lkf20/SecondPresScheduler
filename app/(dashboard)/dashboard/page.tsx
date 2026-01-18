@@ -31,7 +31,7 @@ const fetchOverview = async (startDate: string, endDate: string) => {
     ? `${baseUrl}/api/dashboard/overview?start_date=${startDate}&end_date=${endDate}`
     : `/api/dashboard/overview?start_date=${startDate}&end_date=${endDate}`
   const response = await fetch(url, {
-    cache: 'no-store',
+    next: { revalidate: 60 }, // Cache for 60 seconds, then revalidate
     headers: cookie ? { cookie } : undefined,
   })
   const contentType = response.headers.get('content-type') || ''

@@ -86,11 +86,14 @@ interface ManualFindInput {
 export function useSubFinderData({
   mode,
   requestedAbsenceId,
+  skipInitialFetch = false,
 }: {
   mode: Mode
   requestedAbsenceId: string | null
+  skipInitialFetch?: boolean
 }) {
   const hasAppliedAbsenceRef = useRef(false)
+  const hasSkippedInitialFetchRef = useRef(skipInitialFetch)
   const [absences, setAbsences] = useState<Absence[]>([])
   const [selectedAbsence, setSelectedAbsence] = useState<Absence | null>(null)
   const [recommendedSubs, setRecommendedSubs] = useState<SubCandidate[]>([])
@@ -267,6 +270,11 @@ export function useSubFinderData({
 
   useEffect(() => {
     if (mode === 'existing') {
+      // Skip initial fetch if we're restoring state (will be called explicitly after restoration)
+      if (hasSkippedInitialFetchRef.current) {
+        hasSkippedInitialFetchRef.current = false // Reset flag after skipping once
+        return
+      }
       fetchAbsences()
     }
   }, [mode, includePartiallyCovered, fetchAbsences])

@@ -37,6 +37,7 @@ export default function SubFinderPage() {
   const [mode, setMode] = useState<Mode>('existing')
   const {
     absences,
+    setAbsences,
     selectedAbsence,
     setSelectedAbsence,
     recommendedSubs,
@@ -56,7 +57,11 @@ export default function SubFinderPage() {
     handleFindSubs,
     handleFindManualSubs,
     applySubResults,
-  } = useSubFinderData({ mode, requestedAbsenceId })
+  } = useSubFinderData({ 
+    mode, 
+    requestedAbsenceId,
+    skipInitialFetch: true, // Skip initial fetch to allow state restoration first
+  })
   const [searchQuery, setSearchQuery] = useState('')
   const [teacherSearchInput, setTeacherSearchInput] = useState('') // Separate state for dropdown input
   const [selectedTeacherIds, setSelectedTeacherIds] = useState<string[]>([]) // Array of selected teacher IDs
@@ -450,10 +455,20 @@ export default function SubFinderPage() {
       setSubSearch(savedState.subSearch)
     }
 
+    // Restore absences if available (this prevents unnecessary fetch)
+    const hasSavedAbsences = savedState.absences && savedState.absences.length > 0
+    if (hasSavedAbsences) {
+      setAbsences(savedState.absences)
+    }
+
     hasRestoredStateRef.current = true
     // Reset flag after a short delay to allow other effects to run
     setTimeout(() => {
       isRestoringStateRef.current = false
+      // Only fetch absences if we're in existing mode and don't have them in saved state
+      if (mode === 'existing' && !hasSavedAbsences) {
+        fetchAbsences()
+      }
     }, 500) // Give enough time for all restoration effects to complete
   }, []) // Only run on mount - eslint-disable-line react-hooks/exhaustive-deps
 
@@ -562,6 +577,7 @@ export default function SubFinderPage() {
       includeFlexibleStaff,
       includeOnlyRecommended,
       subSearch,
+      absences: absences.length > 0 ? absences : undefined,
       recommendedSubs: recommendedSubs.length > 0 ? recommendedSubs : undefined,
       allSubs: allSubs.length > 0 ? allSubs : undefined,
       recommendedCombinations: recommendedCombinations.length > 0 ? recommendedCombinations : undefined,
@@ -578,6 +594,7 @@ export default function SubFinderPage() {
     includeFlexibleStaff,
     includeOnlyRecommended,
     subSearch,
+    absences,
     recommendedSubs,
     allSubs,
     recommendedCombinations,

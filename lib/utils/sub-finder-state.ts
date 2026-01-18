@@ -26,6 +26,7 @@ export interface SubFinderState {
   subSearch: string
   
   // Results (optional - only save if we have results)
+  absences?: any[]
   recommendedSubs?: any[]
   allSubs?: any[]
   recommendedCombinations?: any[]
