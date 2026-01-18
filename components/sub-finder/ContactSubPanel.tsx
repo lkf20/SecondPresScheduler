@@ -1365,6 +1365,9 @@ export default function ContactSubPanel({
                                   >
                                     {formatShiftLabel(shift.date, shift.time_slot_code)}
                                   </Badge>
+                                  <span className="text-xs text-muted-foreground">
+                                    {shift.reason}
+                                  </span>
                                   {isOverridden && (
                                     <>
                                       <AlertTriangle className="h-4 w-4 text-amber-600" />
@@ -1384,9 +1387,6 @@ export default function ContactSubPanel({
                                     </>
                                   )}
                                 </div>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {shift.reason}
-                                </p>
                               </div>
                               <Button
                                 variant="outline"

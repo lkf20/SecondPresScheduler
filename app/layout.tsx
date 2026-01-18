@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/contexts/ThemeContext";
-import { PanelManagerProvider } from "@/lib/contexts/PanelManagerContext";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -60,9 +59,7 @@ export default async function RootLayout({
       </head>
       <body className="antialiased">
         <ThemeProvider initialTheme={initialTheme}>
-          <PanelManagerProvider>
-            {children}
-          </PanelManagerProvider>
+          {children}
         </ThemeProvider>
       </body>
     </html>

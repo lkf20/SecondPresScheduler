@@ -1,3 +1,5 @@
+import { parseLocalDate } from './date'
+
 /**
  * Shared utility for transforming time off request data into a consistent format
  * for use across Dashboard, Sub Finder, and Time Off pages.
@@ -183,10 +185,14 @@ export function transformTimeOffCardData(
       uncovered += 1
     }
 
-    // Build label
+    // Build label in format "Mon AM • Jan 2" (matching formatShiftLabel from ShiftChips)
     const dayName = formatDay(shift.day_of_week?.name)
     const timeCode = shift.time_slot?.code || '—'
-    const label = `${dayName} ${timeCode}`
+    const date = parseLocalDate(shift.date)
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const month = monthNames[date.getMonth()]
+    const day = date.getDate()
+    const label = `${dayName} ${timeCode} • ${month} ${day}`
 
     if (includeDetailedShifts) {
       // Include detailed information

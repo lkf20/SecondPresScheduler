@@ -567,7 +567,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
               <SheetClose asChild>
                 <button
                   type="button"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ml-4"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-100 focus:outline-none ml-4"
                   aria-label="Close"
                 >
                   <X className="h-4 w-4" />
