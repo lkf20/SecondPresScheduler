@@ -166,9 +166,11 @@ export default function ShiftChips({
               <Badge
                 key={`shift-${shift.date}-${shift.time_slot_code}-${idx}`}
                 variant="outline"
-                className={`text-xs border-[1px] border-solid ${getShiftStatusColors(status).text}`}
+                className="text-xs"
                 style={{
                   backgroundColor: colorValues.bg,
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
                   borderColor: colorValues.border,
                   color: colorValues.text,
                 } as React.CSSProperties}
@@ -203,15 +205,39 @@ export default function ShiftChips({
         {showLegend && (
           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1 pb-4">
             <div className="flex items-center gap-1.5">
-              <div className={cn('w-3 h-3 rounded border', getShiftStatusColors('assigned').bg, getShiftStatusColors('assigned').border)} />
+              <div 
+                className="w-3 h-3 rounded"
+                style={{
+                  backgroundColor: shiftStatusColorValues.assigned.bg,
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
+                  borderColor: shiftStatusColorValues.assigned.border,
+                }}
+              />
               <span>Assigned</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className={cn('w-3 h-3 rounded border', getShiftStatusColors('available').bg, getShiftStatusColors('available').border)} />
+              <div 
+                className="w-3 h-3 rounded"
+                style={{
+                  backgroundColor: shiftStatusColorValues.available.bg,
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
+                  borderColor: shiftStatusColorValues.available.border,
+                }}
+              />
               <span>Available</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className={cn('w-3 h-3 rounded border', getShiftStatusColors('unavailable').bg, getShiftStatusColors('unavailable').border)} />
+              <div 
+                className="w-3 h-3 rounded"
+                style={{
+                  backgroundColor: shiftStatusColorValues.unavailable.bg,
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
+                  borderColor: shiftStatusColorValues.unavailable.border,
+                }}
+              />
               <span>Unavailable</span>
             </div>
           </div>

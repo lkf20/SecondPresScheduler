@@ -53,19 +53,24 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
         return {
           backgroundColor: coverageColorValues.covered.bg,
           color: coverageColorValues.covered.text,
+          borderWidth: '1px',
+          borderStyle: 'solid' as const,
           borderColor: coverageColorValues.covered.border,
         }
       case 'partially_covered':
         return {
           backgroundColor: coverageColorValues.partial.bg,
           color: coverageColorValues.partial.text,
-          borderColor: coverageColorValues.partial.border,
+          borderWidth: '1px',
           borderStyle: 'dashed' as const,
+          borderColor: coverageColorValues.partial.border,
         }
       case 'uncovered':
         return {
           backgroundColor: coverageColorValues.uncovered.bg,
           color: coverageColorValues.uncovered.text,
+          borderWidth: '1px',
+          borderStyle: 'solid' as const,
           borderColor: coverageColorValues.uncovered.border,
         }
     }
@@ -140,7 +145,7 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
             <span
               key={shift.id}
               className={cn(
-                'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-normal transition-colors border-[1px] border-solid',
+                'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-normal transition-colors',
                 isClickable ? 'cursor-pointer hover:shadow-sm transition-shadow' : ''
               )}
               style={badgeStyles}

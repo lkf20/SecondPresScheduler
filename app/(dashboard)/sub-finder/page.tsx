@@ -745,20 +745,48 @@ export default function SubFinderPage() {
                   {/* Color Key - Left aligned, bottom aligned */}
                   <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded border bg-blue-50 border-blue-400" />
+                      <div 
+                        className="w-3 h-3 rounded bg-blue-50"
+                        style={{
+                          borderWidth: '1px',
+                          borderStyle: 'solid',
+                          borderColor: 'rgb(96, 165, 250)', // blue-400
+                        }}
+                      />
                       <span>Covered</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded border bg-emerald-50 border-emerald-200" />
+                      <div 
+                        className="w-3 h-3 rounded bg-orange-50"
+                        style={{
+                          borderWidth: '1px',
+                          borderStyle: 'solid',
+                          borderColor: 'rgb(251, 146, 60)', // orange-400
+                        }}
+                      />
+                      <span>Uncovered</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div 
+                        className="w-3 h-3 rounded bg-emerald-50"
+                        style={{
+                          borderWidth: '1px',
+                          borderStyle: 'solid',
+                          borderColor: 'rgb(153, 246, 228)', // teal-200 (emerald-200 equivalent)
+                        }}
+                      />
                       <span>Available</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded border bg-gray-100 border-gray-300" />
+                      <div 
+                        className="w-3 h-3 rounded bg-gray-100"
+                        style={{
+                          borderWidth: '1px',
+                          borderStyle: 'solid',
+                          borderColor: 'rgb(209, 213, 219)', // gray-300
+                        }}
+                      />
                       <span>Unavailable</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded border bg-orange-50 border-orange-400" />
-                      <span>Uncovered</span>
                     </div>
                   </div>
                   {/* Buttons - Right aligned */}

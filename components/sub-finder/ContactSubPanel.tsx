@@ -18,7 +18,7 @@ import { Phone, Mail, AlertTriangle, ChevronDown, ChevronUp, X } from 'lucide-re
 import { parseLocalDate } from '@/lib/utils/date'
 import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { getShiftStatusColorClasses, getButtonColors, getPanelBackgroundClasses, getPanelHeaderBackgroundClasses, panelBackgrounds } from '@/lib/utils/colors'
+import { getShiftStatusColorClasses, getButtonColors, getPanelBackgroundClasses, getPanelHeaderBackgroundClasses, panelBackgrounds, shiftStatusColorValues } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -1144,7 +1144,14 @@ export default function ContactSubPanel({
                             >
                               <Badge
                                 variant="outline"
-                                className={cn('text-xs', getShiftStatusColorClasses('assigned'))}
+                                className="text-xs"
+                                style={{
+                                  backgroundColor: shiftStatusColorValues.assigned.bg,
+                                  borderWidth: '1px',
+                                  borderStyle: 'solid',
+                                  borderColor: shiftStatusColorValues.assigned.border,
+                                  color: shiftStatusColorValues.assigned.text,
+                                } as React.CSSProperties}
                               >
                                 {formatShiftLabel(shift.date, shift.time_slot_code)}
                               </Badge>
@@ -1213,12 +1220,29 @@ export default function ContactSubPanel({
                                         >
                                           <Badge
                                             variant="outline"
-                                            className="text-xs bg-gray-100 text-gray-600 border-gray-300"
+                                            className="text-xs"
+                                            style={{
+                                              backgroundColor: 'rgb(243, 244, 246)', // gray-100
+                                              borderWidth: '1px',
+                                              borderStyle: 'solid',
+                                              borderColor: 'rgb(209, 213, 219)', // gray-300
+                                              color: 'rgb(75, 85, 99)', // gray-600
+                                            } as React.CSSProperties}
                                           >
                                             {formatShiftLabel(shift.date, shift.time_slot_code)}
                                           </Badge>
                                           {shift.class_name && (
-                                            <Badge variant="outline" className="text-xs ml-2 bg-gray-100 text-gray-600 border-gray-300">
+                                            <Badge 
+                                              variant="outline" 
+                                              className="text-xs ml-2"
+                                              style={{
+                                                backgroundColor: 'rgb(243, 244, 246)', // gray-100
+                                                borderWidth: '1px',
+                                                borderStyle: 'solid',
+                                                borderColor: 'rgb(209, 213, 219)', // gray-300
+                                                color: 'rgb(75, 85, 99)', // gray-600
+                                              } as React.CSSProperties}
+                                            >
                                               {shift.class_name}
                                             </Badge>
                                           )}
@@ -1256,7 +1280,14 @@ export default function ContactSubPanel({
                                     >
                                       <Badge
                                         variant="outline"
-                                        className={cn('text-xs', getShiftStatusColorClasses('available'))}
+                                        className="text-xs"
+                                        style={{
+                                          backgroundColor: shiftStatusColorValues.available.bg,
+                                          borderWidth: '1px',
+                                          borderStyle: 'solid',
+                                          borderColor: shiftStatusColorValues.available.border,
+                                          color: shiftStatusColorValues.available.text,
+                                        } as React.CSSProperties}
                                       >
                                         {formatShiftLabel(shift.date, shift.time_slot_code)}
                                       </Badge>
@@ -1312,14 +1343,31 @@ export default function ContactSubPanel({
                                 <div className="flex items-center gap-2">
                                   <Badge
                                     variant="outline"
-                                    className="text-xs bg-gray-100 text-gray-700 border-gray-300"
+                                    className="text-xs"
+                                    style={{
+                                      backgroundColor: 'rgb(243, 244, 246)', // gray-100
+                                      borderWidth: '1px',
+                                      borderStyle: 'solid',
+                                      borderColor: 'rgb(209, 213, 219)', // gray-300
+                                      color: 'rgb(55, 65, 81)', // gray-700
+                                    } as React.CSSProperties}
                                   >
                                     {formatShiftLabel(shift.date, shift.time_slot_code)}
                                   </Badge>
                                   {isOverridden && (
                                     <>
                                       <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                      <Badge variant="outline" className="text-xs bg-amber-100 text-amber-800 border-amber-300">
+                                      <Badge 
+                                        variant="outline" 
+                                        className="text-xs"
+                                        style={{
+                                          backgroundColor: 'rgb(254, 243, 199)', // amber-100
+                                          borderWidth: '1px',
+                                          borderStyle: 'solid',
+                                          borderColor: 'rgb(252, 211, 77)', // amber-300
+                                          color: 'rgb(146, 64, 14)', // amber-800
+                                        } as React.CSSProperties}
+                                      >
                                         Override
                                       </Badge>
                                     </>
