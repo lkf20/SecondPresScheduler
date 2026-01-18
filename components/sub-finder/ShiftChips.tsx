@@ -2,6 +2,7 @@
 
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import { Check } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 import { getShiftStatusColorClasses, getShiftStatusColors, shiftStatusColorValues } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
@@ -29,6 +30,7 @@ interface ShiftChipsProps {
   }>
   showLegend?: boolean // Whether to show the color legend
   isDeclined?: boolean // If true, all chips will be gray
+  recommendedShifts?: Shift[] // Optional list of recommended shifts (for showing checkmarks)
 }
 
 // Format shift label as "Mon AM • Feb 9"
@@ -53,12 +55,13 @@ const formatShiftTooltipLabel = (dateString: string, timeSlotCode: string): stri
 }
 
 export default function ShiftChips({
-  canCover,
-  cannotCover,
+  canCover = [],
+  cannotCover = [],
   assigned = [],
   shifts,
   showLegend = false,
   isDeclined = false,
+  recommendedShifts = [],
 }: ShiftChipsProps) {
   if (canCover.length === 0 && cannotCover.length === 0 && assigned.length === 0 && (!shifts || shifts.length === 0)) {
     return null
@@ -127,6 +130,11 @@ export default function ShiftChips({
         return a.time_slot_code.localeCompare(b.time_slot_code)
       })
 
+  // Create a Set of recommended shift keys for quick lookup
+  const recommendedShiftKeys = new Set(
+    recommendedShifts.map((shift) => `${shift.date}|${shift.time_slot_code}`)
+  )
+
   const getBadgeClassName = (status: 'assigned' | 'available' | 'unavailable') => {
     // If declined, make all chips gray
     if (isDeclined) {
@@ -152,6 +160,8 @@ export default function ShiftChips({
               : classGroupName || 'Classroom unavailable'
             const status = isDeclined ? 'declined' : shift.status
             const colorValues = shiftStatusColorValues[status]
+            const shiftKey = `${shift.date}|${shift.time_slot_code}`
+            const isRecommended = recommendedShiftKeys.has(shiftKey)
             const badge = (
               <Badge
                 key={`shift-${shift.date}-${shift.time_slot_code}-${idx}`}
@@ -163,7 +173,12 @@ export default function ShiftChips({
                   color: colorValues.text,
                 } as React.CSSProperties}
               >
-                {shiftLabel}
+                <span className="inline-flex items-center gap-1.5">
+                  {isRecommended && (
+                    <Check className="h-3 w-3" style={{ color: colorValues.text }} />
+                  )}
+                  {shiftLabel}
+                </span>
               </Badge>
             )
 

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { Users, CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { RecommendedCombination as RecommendedCombinationType } from '@/lib/utils/sub-combination'
+import type { SubCandidate, Absence } from '@/components/sub-finder/hooks/useSubFinderData'
 import SubFinderCard from '@/components/sub-finder/SubFinderCard'
 
 interface RecommendedCombinationProps {
@@ -11,6 +12,8 @@ interface RecommendedCombinationProps {
   onContactSub: (subId: string) => void
   totalShifts: number
   useRemainingLabel?: boolean
+  allSubs?: SubCandidate[] // All subs data to find can_cover/cannot_cover
+  allShifts?: Absence['shifts']['shift_details'] // All shifts that need coverage
 }
 
 export default function RecommendedCombination({
@@ -18,6 +21,8 @@ export default function RecommendedCombination({
   onContactSub,
   totalShifts,
   useRemainingLabel = false,
+  allSubs = [],
+  allShifts = [],
 }: RecommendedCombinationProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
 
@@ -71,22 +76,44 @@ export default function RecommendedCombination({
         </p>
       </CardHeader>
       <div className="space-y-4 px-6 pb-6">
-        {currentCombination.subs.map((assignment) => (
-          <SubFinderCard
-            key={assignment.subId}
-            id={`sub-card-${assignment.subId}`}
-            name={assignment.subName}
-            phone={assignment.phone}
-            shiftsCovered={assignment.shiftsCovered}
-            totalShifts={totalShifts}
-            useRemainingLabel={useRemainingLabel}
-            canCover={assignment.shifts}
-            cannotCover={[]}
-            assigned={[]}
-            conflicts={assignment.conflicts}
-            onContact={() => onContactSub(assignment.subId)}
-          />
-        ))}
+        {currentCombination.subs.map((assignment) => {
+          // Find the sub in allSubs to get can_cover and cannot_cover
+          const subData = allSubs.find((s) => s.id === assignment.subId)
+          const canCoverAll = (subData?.can_cover || []) as Array<{
+            date: string
+            time_slot_code: string
+            classroom_name?: string | null
+            class_name?: string | null
+          }>
+          const cannotCoverAll = (subData?.cannot_cover || []) as Array<{
+            date: string
+            time_slot_code: string
+            classroom_name?: string | null
+            class_name?: string | null
+            reason?: string
+          }>
+
+          return (
+            <SubFinderCard
+              key={assignment.subId}
+              id={`sub-card-${assignment.subId}`}
+              name={assignment.subName}
+              phone={assignment.phone}
+              shiftsCovered={canCoverAll.length}
+              totalShifts={totalShifts}
+              useRemainingLabel={useRemainingLabel}
+              canCover={assignment.shifts}
+              cannotCover={[]}
+              assigned={[]}
+              conflicts={assignment.conflicts}
+              onContact={() => onContactSub(assignment.subId)}
+              recommendedShiftCount={assignment.shifts.length}
+              allShifts={allShifts}
+              allCanCover={canCoverAll}
+              allCannotCover={cannotCoverAll}
+            />
+          )
+        })}
       </div>
       {totalCombinations > 1 && (
         <div className="flex items-center justify-center gap-3 px-6 pb-5">
