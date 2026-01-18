@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Sheet,
   SheetClose,
@@ -112,6 +113,7 @@ export default function ContactSubPanel({
   initialContactData,
   onAssignmentComplete,
 }: ContactSubPanelProps) {
+  const router = useRouter()
   const [isContacted, setIsContacted] = useState(false)
   const [contactedAt, setContactedAt] = useState<string | null>(null)
   const [responseStatus, setResponseStatus] = useState<'none' | 'pending' | 'confirmed' | 'declined_all'>('none')
@@ -748,6 +750,9 @@ export default function ContactSubPanel({
         onAssignmentComplete()
       }
 
+      // Refresh all pages (including Sub Finder) to reflect new assignments
+      router.refresh()
+
       // Refresh remaining shifts to update remaining shifts calculation
       if (coverageRequestId && absence) {
         const refreshResponse = await fetch(`/api/sub-finder/coverage-request/${absence.id}/assigned-shifts`)
@@ -849,6 +854,9 @@ export default function ContactSubPanel({
         if (onAssignmentComplete) {
           onAssignmentComplete()
         }
+
+        // Refresh all pages (including Sub Finder) to reflect status change
+        router.refresh()
 
         // Show success toast
         toast.success('Marked as Declined', {

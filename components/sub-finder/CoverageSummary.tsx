@@ -5,6 +5,7 @@ import { parseLocalDate } from '@/lib/utils/date'
 import CoverageBadge from '@/components/shared/CoverageBadge'
 import { getCoverageColors, getCoverageColorClasses, coverageColorValues, neutralColors, getHeaderClasses } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface ShiftDetail {
   id: string
@@ -135,41 +136,59 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
       <div className={cn('border-t', neutralColors.border)} />
 
       {/* Shift Chips */}
-      <div className="mt-3 flex flex-wrap gap-1.5 pb-2">
-        {sortedShifts.map((shift) => {
-          const isClickable = shift.status === 'fully_covered' || shift.status === 'partially_covered'
-          const baseLabel = formatShiftLabel(shift.date, shift.time_slot_code)
-          const badgeStyles = getBadgeStyles(shift)
-          
-          return (
-            <span
-              key={shift.id}
-              className={cn(
-                'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-normal transition-colors',
-                isClickable ? 'cursor-pointer hover:shadow-sm transition-shadow' : ''
-              )}
-              style={badgeStyles}
-              onClick={() => {
-                if (isClickable && onShiftClick) {
-                  onShiftClick(shift)
-                }
-              }}
-            >
-              {shift.status === 'fully_covered' && shift.sub_name ? (
-                <>
-                  {baseLabel} - <span className="font-bold">{shift.sub_name}</span>
-                </>
-              ) : shift.status === 'partially_covered' && shift.sub_name ? (
-                <>
-                  {baseLabel} - <span className="font-bold">{shift.sub_name}</span> (Partial)
-                </>
-              ) : (
-                baseLabel
-              )}
-            </span>
-          )
-        })}
-      </div>
+      <TooltipProvider>
+        <div className="mt-3 flex flex-wrap gap-1.5 pb-2">
+          {sortedShifts.map((shift) => {
+            const isClickable = shift.status === 'fully_covered' || shift.status === 'partially_covered'
+            const baseLabel = formatShiftLabel(shift.date, shift.time_slot_code)
+            const badgeStyles = getBadgeStyles(shift)
+            const isFullyCovered = shift.status === 'fully_covered' && shift.sub_name
+            
+            const badgeContent = (
+              <span
+                className={cn(
+                  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-normal transition-colors',
+                  isClickable ? 'cursor-pointer hover:shadow-sm transition-shadow' : ''
+                )}
+                style={badgeStyles}
+                onClick={() => {
+                  if (isClickable && onShiftClick) {
+                    onShiftClick(shift)
+                  }
+                }}
+              >
+                {shift.status === 'fully_covered' && shift.sub_name ? (
+                  <>
+                    {baseLabel} - <span className="font-bold">{shift.sub_name}</span>
+                  </>
+                ) : shift.status === 'partially_covered' && shift.sub_name ? (
+                  <>
+                    {baseLabel} - <span className="font-bold">{shift.sub_name}</span> (Partial)
+                  </>
+                ) : (
+                  baseLabel
+                )}
+              </span>
+            )
+
+            // Wrap in tooltip if fully covered with sub name
+            if (isFullyCovered) {
+              return (
+                <Tooltip key={shift.id}>
+                  <TooltipTrigger asChild>
+                    {badgeContent}
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Assigned to {shift.sub_name}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )
+            }
+
+            return badgeContent
+          })}
+        </div>
+      </TooltipProvider>
     </div>
   )
 }
