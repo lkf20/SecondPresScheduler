@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 import { parseLocalDate } from '@/lib/utils/date'
 import CoverageBadge from '@/components/shared/CoverageBadge'
@@ -185,7 +186,8 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
               )
             }
 
-            return badgeContent
+            // Return badgeContent with key using React.cloneElement
+            return React.cloneElement(badgeContent, { key: shift.id })
           })}
         </div>
       </TooltipProvider>

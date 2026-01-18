@@ -319,6 +319,7 @@ export function useSubFinderData({
     recommendedSubs,
     allSubs,
     recommendedCombinations,
+    setRecommendedCombinations,
     loading,
     includePartiallyCovered,
     setIncludePartiallyCovered,
