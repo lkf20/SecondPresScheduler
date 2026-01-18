@@ -249,12 +249,12 @@ export default function SubFinderCard({
       {/* View all shifts collapsible section and Contact & Assign button - full width */}
       {allShifts && allShifts.length > 0 && (allCanCover.length > 0 || allCannotCover.length > 0) && (
         <div className="mb-0 -mt-1 flex items-center justify-between gap-4">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setIsAllShiftsExpanded(!isAllShiftsExpanded)}
-            className="flex items-center gap-2 p-2 hover:bg-gray-100 text-sm font-medium text-slate-700 justify-start"
-          >
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setIsAllShiftsExpanded(!isAllShiftsExpanded)}
+                className="flex items-center gap-2 p-2 hover:underline hover:bg-transparent hover:text-slate-700 text-sm font-medium text-slate-700 justify-start"
+              >
             <span>View all shifts</span>
             {isAllShiftsExpanded ? (
               <ChevronUp className="h-4 w-4 text-muted-foreground" />

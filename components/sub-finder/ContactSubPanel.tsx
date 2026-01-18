@@ -19,6 +19,7 @@ import { parseLocalDate } from '@/lib/utils/date'
 import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { getShiftStatusColorClasses, getButtonColors, getPanelBackgroundClasses, getPanelHeaderBackgroundClasses, panelBackgrounds, shiftStatusColorValues } from '@/lib/utils/colors'
+import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -49,6 +50,9 @@ interface RecommendedSub {
     day_name: string
     time_slot_code: string
     class_name: string | null
+    classroom_name?: string | null
+    classroom_id?: string | null
+    classroom_color?: string | null
     diaper_changing_required?: boolean
     lifting_children_required?: boolean
   }>
@@ -1291,10 +1295,17 @@ export default function ContactSubPanel({
                                       >
                                         {formatShiftLabel(shift.date, shift.time_slot_code)}
                                       </Badge>
-                                      {shift.class_name && (
-                                        <Badge variant="outline" className="text-xs ml-2">
-                                          {shift.class_name}
-                                        </Badge>
+                                      {shift.classroom_name && (
+                                        <span
+                                          className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ml-2"
+                                          style={{
+                                            ...getClassroomPillStyle(shift.classroom_color || null),
+                                            borderWidth: '1px',
+                                            borderStyle: 'solid',
+                                          } as React.CSSProperties}
+                                        >
+                                          {shift.classroom_name}
+                                        </span>
                                       )}
                                     </Label>
                                   </div>
