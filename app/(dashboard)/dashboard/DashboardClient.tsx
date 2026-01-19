@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { getCoverageColors, getStaffingColorClasses, getStaffingColors, neutralColors, coverageColorValues, getButtonColors, staffingColorValues } from '@/lib/utils/colors'
@@ -590,30 +591,48 @@ export default function DashboardClient({
                   item.secondaryRightStyle !== undefined &&
                   item.secondaryRightIconStyle !== undefined ? (
                     <div className="mt-3 flex items-center justify-between">
-                      <div className={cn('flex items-center gap-2 text-3xl font-semibold', item.secondaryStyle)}>
-                        <span>{item.secondaryCount}</span>
-                        <span
-                          className={cn(
-                            'inline-flex h-9 w-9 items-center justify-center rounded-full',
-                            item.secondaryIconStyle
-                          )}
-                        >
-                          <item.secondaryIcon className="h-5 w-5" />
-                        </span>
-                      </div>
-                      <div
-                        className={cn('flex items-center gap-2 text-3xl font-semibold', item.secondaryRightStyle)}
-                      >
-                        <span>{item.secondaryRightCount}</span>
-                        <span
-                          className={cn(
-                            'inline-flex h-9 w-9 items-center justify-center rounded-full',
-                            item.secondaryRightIconStyle
-                          )}
-                        >
-                          <item.secondaryRightIcon className="h-5 w-5" />
-                        </span>
-                      </div>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className={cn('flex items-center gap-2 text-3xl font-semibold', item.secondaryStyle)}>
+                              <span>{item.secondaryCount}</span>
+                              <span
+                                className={cn(
+                                  'inline-flex h-9 w-9 items-center justify-center rounded-full',
+                                  item.secondaryIconStyle
+                                )}
+                              >
+                                <item.secondaryIcon className="h-5 w-5" />
+                              </span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Classrooms below <em>preferred</em> staffing ratio</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div
+                              className={cn('flex items-center gap-2 text-3xl font-semibold', item.secondaryRightStyle)}
+                            >
+                              <span>{item.secondaryRightCount}</span>
+                              <span
+                                className={cn(
+                                  'inline-flex h-9 w-9 items-center justify-center rounded-full',
+                                  item.secondaryRightIconStyle
+                                )}
+                              >
+                                <item.secondaryRightIcon className="h-5 w-5" />
+                              </span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Classrooms below <em>required</em> staffing ratio</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                   ) : null}
                 </CardContent>

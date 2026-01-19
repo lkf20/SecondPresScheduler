@@ -19,6 +19,7 @@ interface Shift {
   class_id?: string | null
   classroom_id?: string | null
   classroom_name?: string | null
+  classroom_color?: string | null
   diaper_changing_required?: boolean
   lifting_children_required?: boolean
   class_group_name?: string | null
@@ -38,6 +39,7 @@ interface SubMatch {
     time_slot_code: string
     class_name: string | null
     classroom_name?: string | null
+    classroom_color?: string | null
     diaper_changing_required?: boolean
     lifting_children_required?: boolean
   }>
@@ -93,9 +95,10 @@ export async function POST(request: NextRequest) {
 
     // Lookup classroom/class names from teacher schedule
     const scheduleLookup = new Map<string, { classrooms: Set<string>; classes: Set<string> }>()
+    const classroomColorMap = new Map<string, string | null>() // classroom_name -> color
     const { data: teacherSchedules, error: scheduleError } = await supabase
       .from('teacher_schedules')
-      .select('day_of_week_id, time_slot_id, classroom:classrooms(name), class:class_groups(name)')
+      .select('day_of_week_id, time_slot_id, classroom:classrooms(name, color), class:class_groups(name)')
       .eq('teacher_id', timeOffRequest.teacher_id)
 
     if (scheduleError) {
@@ -104,7 +107,13 @@ export async function POST(request: NextRequest) {
       ;(teacherSchedules || []).forEach((schedule: any) => {
         const key = `${schedule.day_of_week_id}|${schedule.time_slot_id}`
         const entry = scheduleLookup.get(key) || { classrooms: new Set<string>(), classes: new Set<string>() }
-        if (schedule.classroom?.name) entry.classrooms.add(schedule.classroom.name)
+        if (schedule.classroom?.name) {
+          entry.classrooms.add(schedule.classroom.name)
+          // Store color mapping for this classroom name
+          if (!classroomColorMap.has(schedule.classroom.name)) {
+            classroomColorMap.set(schedule.classroom.name, schedule.classroom.color || null)
+          }
+        }
         if (schedule.class?.name) entry.classes.add(schedule.class.name)
         scheduleLookup.set(key, entry)
       })
@@ -166,8 +175,13 @@ export async function POST(request: NextRequest) {
       }
       const scheduleKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
       const scheduleEntry = scheduleLookup.get(scheduleKey)
-      const classroom_name = scheduleEntry?.classrooms?.size
-        ? Array.from(scheduleEntry.classrooms).join(', ')
+      const classroom_names = scheduleEntry?.classrooms?.size
+        ? Array.from(scheduleEntry.classrooms)
+        : []
+      const classroom_name = classroom_names.length > 0 ? classroom_names.join(', ') : null
+      // Get color from first classroom (or null if multiple)
+      const classroom_color = classroom_names.length === 1 && classroom_names[0]
+        ? classroomColorMap.get(classroom_names[0]) || null
         : null
       const class_name = scheduleEntry?.classes?.size
         ? Array.from(scheduleEntry.classes).join(', ')
@@ -182,6 +196,8 @@ export async function POST(request: NextRequest) {
         class_id: null, // TODO: Get from schedule cells
         classroom_id: null, // TODO: Get from schedule cells
         classroom_name,
+        classroom_color,
+        classroom_color,
         diaper_changing_required: classGroupInfo.diaper_changing_required,
         lifting_children_required: classGroupInfo.lifting_children_required,
         class_group_name: class_name,
@@ -341,6 +357,7 @@ export async function POST(request: NextRequest) {
               time_slot_code: shift.time_slot_code,
               class_name: shift.class_group_name || null,
               classroom_name: shift.classroom_name || null,
+              classroom_color: shift.classroom_color || null,
               diaper_changing_required: shift.diaper_changing_required,
               lifting_children_required: shift.lifting_children_required,
             })

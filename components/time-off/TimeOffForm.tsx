@@ -20,9 +20,17 @@ import { Label } from '@/components/ui/label'
 import FormField from '@/components/shared/FormField'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { Database } from '@/types/database'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 type Staff = Database['public']['Tables']['staff']['Row']
 
@@ -43,10 +51,11 @@ interface TimeOffFormProps {
   showBackLink?: boolean
   onHasUnsavedChanges?: (hasChanges: boolean) => void
   clearDraftOnMount?: boolean // Force clear draft when component mounts
+  timeOffRequestId?: string | null // ID of time off request to edit
 }
 
 const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
-  ({ onSuccess, onCancel, showBackLink = true, onHasUnsavedChanges, clearDraftOnMount = false }, ref) => {
+  ({ onSuccess, onCancel, showBackLink = true, onHasUnsavedChanges, clearDraftOnMount = false, timeOffRequestId = null }, ref) => {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [teachers, setTeachers] = useState<Staff[]>([])
@@ -62,7 +71,26 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
   const [isPastDate, setIsPastDate] = useState(false)
   const hasHydratedDraftRef = useRef(false)
   const [isDraftRestored, setIsDraftRestored] = useState(false)
-  const draftKey = 'time-off:new'
+  const [isLoadingRequest, setIsLoadingRequest] = useState(false)
+  const [showCancelDialog, setShowCancelDialog] = useState(false)
+  const [isCancelling, setIsCancelling] = useState(false)
+  const [assignmentData, setAssignmentData] = useState<{
+    hasAssignments: boolean
+    assignmentCount: number
+    assignments: Array<{
+      id: string
+      display: string
+      date: string
+      dayName: string
+      timeSlot: string
+      subName: string
+      classroom: string
+    }>
+    teacherName: string
+  } | null>(null)
+  const [showAssignmentDetails, setShowAssignmentDetails] = useState(false)
+  const [assignmentHandling, setAssignmentHandling] = useState<'unassign' | 'keep'>('unassign')
+  const draftKey = timeOffRequestId ? `time-off:edit:${timeOffRequestId}` : 'time-off:new'
   const initialFormStateRef = useRef<{
     teacher_id: string
     start_date: string
@@ -119,6 +147,61 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       shift_selection_mode: 'all_scheduled',
     },
   })
+
+  // Load existing time off request data when editing (after useForm is initialized)
+  useEffect(() => {
+    if (!timeOffRequestId) return
+
+    setIsLoadingRequest(true)
+    fetch(`/api/time-off/${timeOffRequestId}`)
+      .then(r => r.json())
+      .then((requestData) => {
+        // Populate form with existing data
+        reset({
+          teacher_id: requestData.teacher_id || '',
+          start_date: requestData.start_date || '',
+          end_date: requestData.end_date || '',
+          shift_selection_mode: requestData.shift_selection_mode || 'all_scheduled',
+          reason: requestData.reason || undefined,
+          notes: requestData.notes || '',
+        })
+
+        // Load existing shifts
+        let loadedShifts: Array<{ date: string; day_of_week_id: string; time_slot_id: string }> = []
+        if (requestData.shifts && Array.isArray(requestData.shifts)) {
+          loadedShifts = requestData.shifts.map((shift: { date: string; day_of_week_id: string; time_slot_id: string }) => ({
+            date: shift.date,
+            day_of_week_id: shift.day_of_week_id || '',
+            time_slot_id: shift.time_slot_id,
+          }))
+          setSelectedShifts(loadedShifts)
+        }
+
+        // Capture initial state immediately after loading (for edit mode)
+        // Use a small delay to ensure form state is settled after reset()
+        setTimeout(() => {
+          const currentValues = getValues()
+          initialFormStateRef.current = {
+            teacher_id: currentValues.teacher_id || '',
+            start_date: currentValues.start_date || '',
+            end_date: currentValues.end_date || undefined,
+            shift_selection_mode: currentValues.shift_selection_mode || 'all_scheduled',
+            reason: currentValues.reason || undefined,
+            notes: currentValues.notes || undefined,
+            selectedShifts: [...loadedShifts],
+          }
+          setIsInitialStateCaptured(true)
+          setIsDraftRestored(true)
+        }, 100)
+
+        setIsLoadingRequest(false)
+      })
+      .catch((error) => {
+        console.error('Failed to load time off request:', error)
+        setError('Failed to load time off request')
+        setIsLoadingRequest(false)
+      })
+  }, [timeOffRequestId, reset, getValues])
   
   // Track if we've captured the initial state yet
   const [isInitialStateCaptured, setIsInitialStateCaptured] = useState(false)
@@ -189,107 +272,93 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
   
   // Track unsaved changes by comparing current state to initial state
   // Only check after initial state has been captured
-  // Also require that user has actually interacted with the form (touched fields)
   const currentValues = watch()
   const hasUnsavedChanges = (() => {
     // Don't show warning if we haven't captured initial state yet
     if (!isInitialStateCaptured || !initialFormStateRef.current) {
-      console.log('[TimeOffForm] Unsaved changes check: Initial state not captured yet', {
-        isInitialStateCaptured,
-        hasInitialState: !!initialFormStateRef.current
-      })
-      return false
-    }
-    
-    // Check if user has actually interacted with the form
-    // If no fields have been touched and form is not dirty, no changes
-    const hasTouchedFields = Object.keys(touchedFields).length > 0
-    if (!hasTouchedFields && !isDirty && selectedShifts.length === 0) {
-      console.log('[TimeOffForm] Unsaved changes check: No user interaction detected', {
-        hasTouchedFields,
-        isDirty,
-        selectedShiftsCount: selectedShifts.length
-      })
       return false
     }
     
     const initial = initialFormStateRef.current
     
-    // Normalize values for comparison (treat empty string and undefined as the same)
-    const normalize = (value: string | undefined): string | undefined => {
-      if (value === '' || value === null) return undefined
-      return value
+    // Normalize values for comparison (treat empty string, null, and undefined as the same)
+    const normalize = (value: string | undefined | null): string | undefined => {
+      if (value === '' || value === null || value === undefined) return undefined
+      return String(value).trim()
+    }
+    
+    // Normalize dates for comparison (handle date format variations)
+    const normalizeDate = (dateStr: string | undefined | null): string | undefined => {
+      if (!dateStr) return undefined
+      // If already in YYYY-MM-DD format, return as is
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
+      // Try to parse and format
+      try {
+        const date = new Date(dateStr)
+        if (isNaN(date.getTime())) return undefined
+        return date.toISOString().split('T')[0]
+      } catch {
+        return undefined
+      }
     }
     
     // Check if form fields have changed
+    const teacherIdChanged = normalize(currentValues.teacher_id) !== normalize(initial.teacher_id)
+    const startDateChanged = normalizeDate(currentValues.start_date) !== normalizeDate(initial.start_date)
+    const endDateChanged = normalizeDate(currentValues.end_date) !== normalizeDate(initial.end_date)
+    const shiftModeChanged = currentValues.shift_selection_mode !== initial.shift_selection_mode
+    const reasonChanged = normalize(currentValues.reason) !== normalize(initial.reason)
+    const notesChanged = normalize(currentValues.notes) !== normalize(initial.notes)
+    
     const formFieldChanges = {
-      teacher_id: normalize(currentValues.teacher_id) !== normalize(initial.teacher_id),
-      start_date: normalize(currentValues.start_date) !== normalize(initial.start_date),
-      end_date: normalize(currentValues.end_date) !== normalize(initial.end_date),
-      shift_selection_mode: currentValues.shift_selection_mode !== initial.shift_selection_mode,
-      reason: normalize(currentValues.reason) !== normalize(initial.reason),
-      notes: normalize(currentValues.notes) !== normalize(initial.notes),
+      teacher_id: teacherIdChanged,
+      start_date: startDateChanged,
+      end_date: endDateChanged,
+      shift_selection_mode: shiftModeChanged,
+      reason: reasonChanged,
+      notes: notesChanged,
     }
     
     const formChanged = Object.values(formFieldChanges).some(Boolean)
     
     // Check if selected shifts have changed
+    // Sort both arrays for consistent comparison
+    const sortShifts = (shifts: Array<{ date: string; day_of_week_id: string; time_slot_id: string }>) => {
+      return [...shifts].sort((a, b) => {
+        const keyA = `${a.date}::${a.time_slot_id}`
+        const keyB = `${b.date}::${b.time_slot_id}`
+        return keyA.localeCompare(keyB)
+      })
+    }
+    
+    const currentShiftsSorted = sortShifts(selectedShifts)
+    const initialShiftsSorted = sortShifts(initial.selectedShifts)
+    
     const shiftsChanged = (() => {
-      if (selectedShifts.length !== initial.selectedShifts.length) {
-        console.log('[TimeOffForm] Shifts count changed', {
-          current: selectedShifts.length,
-          initial: initial.selectedShifts.length
-        })
+      if (currentShiftsSorted.length !== initialShiftsSorted.length) {
         return true
       }
-      const currentKeys = new Set(selectedShifts.map(s => `${s.date}::${s.time_slot_id}`))
-      const initialKeys = new Set(initial.selectedShifts.map(s => `${s.date}::${s.time_slot_id}`))
-      if (currentKeys.size !== initialKeys.size) {
-        console.log('[TimeOffForm] Shifts keys size changed', {
-          current: currentKeys.size,
-          initial: initialKeys.size
-        })
-        return true
-      }
-      for (const key of currentKeys) {
-        if (!initialKeys.has(key)) {
-          console.log('[TimeOffForm] New shift key found', { key })
+      
+      // Compare each shift
+      for (let i = 0; i < currentShiftsSorted.length; i++) {
+        const current = currentShiftsSorted[i]
+        const initial = initialShiftsSorted[i]
+        if (
+          normalizeDate(current.date) !== normalizeDate(initial.date) ||
+          current.time_slot_id !== initial.time_slot_id ||
+          current.day_of_week_id !== initial.day_of_week_id
+        ) {
           return true
         }
       }
+      
       return false
     })()
     
     const result = formChanged || shiftsChanged
     
-    console.log('[TimeOffForm] Unsaved changes check result:', {
-      result,
-      formChanged,
-      shiftsChanged,
-      formFieldChanges,
-      currentValues: {
-        teacher_id: currentValues.teacher_id,
-        start_date: currentValues.start_date,
-        end_date: currentValues.end_date,
-        shift_selection_mode: currentValues.shift_selection_mode,
-        reason: currentValues.reason,
-        notes: currentValues.notes,
-      },
-      initialValues: {
-        teacher_id: initial.teacher_id,
-        start_date: initial.start_date,
-        end_date: initial.end_date,
-        shift_selection_mode: initial.shift_selection_mode,
-        reason: initial.reason,
-        notes: initial.notes,
-      },
-      selectedShiftsCount: selectedShifts.length,
-      initialShiftsCount: initial.selectedShifts.length,
-      hasTouchedFields,
-      isDirty,
-      touchedFields: Object.keys(touchedFields),
-    })
-    
+    // Err on the side of showing the dialog - if we're not 100% sure there are no changes, show it
+    // But if we're certain nothing changed, don't show it
     return result
   })()
   
@@ -304,6 +373,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
   const startDate = watch('start_date')
   const endDate = watch('end_date')
   const shiftMode = watch('shift_selection_mode')
+  const reason = watch('reason')
   const allShiftsRecorded =
     conflictSummary.totalScheduled > 0 &&
     conflictSummary.conflictCount === conflictSummary.totalScheduled
@@ -471,15 +541,19 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         payload.shifts = selectedShifts
       }
 
-      const response = await fetch('/api/time-off', {
-        method: 'POST',
+      const url = timeOffRequestId ? `/api/time-off/${timeOffRequestId}` : '/api/time-off'
+      const method = timeOffRequestId ? 'PUT' : 'POST'
+      
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to create time off request')
+        const action = timeOffRequestId ? 'update' : 'create'
+        throw new Error(errorData.error || `Failed to ${action} time off request`)
       }
 
       if (typeof window !== 'undefined') {
@@ -552,8 +626,11 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         payload.shifts = selectedShifts
       }
 
-      const response = await fetch('/api/time-off', {
-        method: 'POST',
+      const url = timeOffRequestId ? `/api/time-off/${timeOffRequestId}` : '/api/time-off'
+      const method = timeOffRequestId ? 'PUT' : 'POST'
+      
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
@@ -577,15 +654,104 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     }
   }
 
+  const handleCancelClick = async () => {
+    if (!timeOffRequestId) return
+
+    // First, check for assignments
+    try {
+      const response = await fetch(`/api/time-off/${timeOffRequestId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}), // Empty body to trigger summary response
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to check assignments')
+      }
+
+      const data = await response.json()
+      
+      if (data.hasAssignments) {
+        // Show dialog with assignment details
+        setAssignmentData(data)
+        setShowCancelDialog(true)
+        setAssignmentHandling('unassign') // Default to unassign
+      } else {
+        // No assignments, show simple confirmation
+        setAssignmentData(null)
+        setShowCancelDialog(true)
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to check assignments')
+    }
+  }
+
+  const handleCancelConfirm = async () => {
+    if (!timeOffRequestId) return
+
+    setIsCancelling(true)
+    try {
+      const keepAssignments = assignmentData?.hasAssignments && assignmentHandling === 'keep'
+      
+      const response = await fetch(`/api/time-off/${timeOffRequestId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'cancel',
+          keepAssignmentsAsExtraCoverage: keepAssignments,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to cancel time off request')
+      }
+
+      // Clear any draft data
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem(draftKey)
+      }
+
+      // Show success toast
+      const result = await response.json()
+      if (result.assignmentsKept > 0) {
+        toast.success(`Time off request cancelled. ${result.assignmentsKept} assignment${result.assignmentsKept !== 1 ? 's' : ''} kept as extra coverage.`)
+      } else {
+        toast.success('Time off request cancelled')
+      }
+
+      // Close the panel and refresh
+      if (onCancel) {
+        onCancel()
+      }
+      router.refresh()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel time off request')
+      setIsCancelling(false)
+      setShowCancelDialog(false)
+    }
+  }
+
   return (
     <div className="h-full flex flex-col">
       {error && <ErrorMessage message={error} className="mb-6" />}
 
+      {isLoadingRequest && (
+        <div className="flex items-center justify-center py-8">
+          <p className="text-sm text-muted-foreground">Loading time off request...</p>
+        </div>
+      )}
+      
+      {!isLoadingRequest && (
       <form onSubmit={handleSubmit(onSubmit)} className="flex-1 flex flex-col">
         <div className="flex-1 overflow-y-auto space-y-6">
           <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-6">
             <FormField label="Teacher" error={errors.teacher_id?.message} required>
-              <Select onValueChange={value => setValue('teacher_id', value)}>
+              <Select 
+                value={teacherId || ''} 
+                onValueChange={value => setValue('teacher_id', value)}
+              >
                 <SelectTrigger
                   tabIndex={1}
                   onKeyDown={(event) => {
@@ -732,6 +898,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                 onShiftsChange={setSelectedShifts}
                 onConflictSummaryChange={setConflictSummary}
                 onConflictRequestsChange={setConflictingRequests}
+                excludeRequestId={timeOffRequestId || undefined}
                 validateConflicts
                 disabled={shiftMode === 'all_scheduled'}
               />
@@ -748,6 +915,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
             <div className="space-y-6">
               <FormField label="Reason" error={errors.reason?.message}>
                 <RadioGroup
+                  value={reason || ''}
                   onValueChange={value =>
                     setValue('reason', value as 'Vacation' | 'Sick Day' | 'Training' | 'Other')
                   }
@@ -794,34 +962,184 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
           )}
         </div>
 
-        <div className="flex justify-end gap-4 pt-6 pb-8 border-t mt-6">
-          {onCancel && (
+        <div className="flex justify-between items-center pt-6 pb-8 border-t mt-6">
+          {/* Left side - Delete button (only in edit mode) */}
+          <div>
+            {timeOffRequestId && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleCancelClick}
+                tabIndex={14}
+              >
+                Cancel Time Off Request
+              </Button>
+            )}
+          </div>
+
+          {/* Right side - Action buttons */}
+          <div className="flex gap-4">
+            {onCancel && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onCancel}
+                tabIndex={11}
+              >
+                Cancel
+              </Button>
+            )}
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={saveDraft} 
+              tabIndex={12}
+            >
+              Save as Draft
+            </Button>
+            <Button 
+              type="submit"
+              disabled={isSubmitting || allShiftsRecorded} 
+              tabIndex={13}
+            >
+              {isSubmitting 
+                ? (timeOffRequestId ? 'Updating...' : 'Creating...') 
+                : (timeOffRequestId ? 'Update' : 'Create')}
+            </Button>
+          </div>
+        </div>
+      </form>
+      )}
+
+      {/* Cancel Confirmation Dialog */}
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {assignmentData?.hasAssignments 
+                ? 'Cancel time off and sub coverage?'
+                : `Cancel this time off request for ${assignmentData?.teacherName || 'this teacher'}?`}
+            </DialogTitle>
+            <DialogDescription className="space-y-4">
+              {assignmentData?.hasAssignments ? (
+                <>
+                  <p>
+                    This time off request has sub assignment{assignmentData.assignmentCount !== 1 ? 's' : ''} on {assignmentData.assignmentCount} shift{assignmentData.assignmentCount !== 1 ? 's' : ''}.
+                  </p>
+                  
+                  {/* View Details Section */}
+                  <div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setShowAssignmentDetails(!showAssignmentDetails)}
+                      className="w-full flex items-center justify-between p-2 hover:bg-gray-100"
+                    >
+                      <span className="font-medium text-sm">View details</span>
+                      {showAssignmentDetails ? (
+                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </Button>
+                    
+                    {showAssignmentDetails && (
+                      <div className="mt-2 p-4 bg-gray-50 rounded-md border border-gray-200 max-h-60 overflow-y-auto">
+                        <ul className="space-y-2">
+                          {assignmentData.assignments.map((assignment) => (
+                            <li key={assignment.id} className="text-sm text-gray-700">
+                              {assignment.display}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-3 pt-2">
+                    <p className="text-sm font-medium">What would you like to do with {assignmentData.assignmentCount === 1 ? 'this assignment' : 'these assignments'}?</p>
+                    
+                    <RadioGroup
+                      value={assignmentHandling}
+                      onValueChange={(value) => setAssignmentHandling(value as 'unassign' | 'keep')}
+                      className="space-y-3"
+                    >
+                      <div className="flex items-start space-x-3 p-3 border rounded-md hover:bg-gray-50">
+                        <RadioGroupItem value="unassign" id="unassign" className="mt-0.5" />
+                        <div className="flex-1">
+                          <Label htmlFor="unassign" className="font-medium cursor-pointer">
+                            Unassign subs from these shifts
+                          </Label>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Sub coverage for this request will be removed, and these subs will be available for other assignments.
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start space-x-3 p-3 border rounded-md hover:bg-gray-50">
+                        <RadioGroupItem value="keep" id="keep" className="mt-0.5" />
+                        <div className="flex-1">
+                          <Label htmlFor="keep" className="font-medium cursor-pointer">
+                            Keep sub assignments as extra coverage
+                          </Label>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Keep these subs scheduled even though the time off request is cancelled.
+                          </p>
+                        </div>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                </>
+              ) : (
+                <p>
+                  Are you sure you want to cancel this time off request? This action cannot be undone.
+                </p>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
             <Button
-              type="button"
               variant="outline"
-              onClick={onCancel}
-              tabIndex={11}
+              onClick={() => {
+                setShowCancelDialog(false)
+                setShowAssignmentDetails(false)
+                setAssignmentHandling('unassign')
+              }}
+              disabled={isCancelling}
             >
               Cancel
             </Button>
-          )}
-          <Button 
-            type="button" 
-            variant="outline" 
-            onClick={saveDraft} 
-            tabIndex={12}
-          >
-            Save as Draft
-          </Button>
-          <Button 
-            type="submit"
-            disabled={isSubmitting || allShiftsRecorded} 
-            tabIndex={13}
-          >
-            {isSubmitting ? 'Creating...' : 'Create'}
-          </Button>
-        </div>
-      </form>
+            {assignmentData?.hasAssignments ? (
+              <Button
+                variant="destructive"
+                onClick={handleCancelConfirm}
+                disabled={isCancelling}
+              >
+                {isCancelling ? 'Cancelling...' : 'Cancel Time Off'}
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowCancelDialog(false)
+                  }}
+                  disabled={isCancelling}
+                >
+                  Keep Request
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleCancelConfirm}
+                  disabled={isCancelling}
+                >
+                  {isCancelling ? 'Cancelling...' : 'Cancel Time Off'}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 })

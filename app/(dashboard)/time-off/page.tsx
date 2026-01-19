@@ -2,10 +2,16 @@ import { getTimeOffRequests } from '@/lib/api/time-off'
 import { getTimeOffShifts, getTimeOffCoverageSummary } from '@/lib/api/time-off-shifts'
 import { getTeacherSchedules } from '@/lib/api/schedules'
 import TimeOffListClient from './TimeOffListClient'
-import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
 import { parseLocalDate } from '@/lib/utils/date'
 import { transformTimeOffCardData } from '@/lib/utils/time-off-card-data'
-import { getHeaderClasses } from '@/lib/utils/colors'
+import { cache } from 'react'
+
+// Cache the expensive data fetching operation
+const getCachedTimeOffData = cache(async () => {
+  return await getTimeOffRequests({ statuses: ['active', 'draft'] })
+})
+
+export const revalidate = 60 // Revalidate every 60 seconds
 
 export default async function TimeOffPage({
   searchParams,
@@ -13,7 +19,7 @@ export default async function TimeOffPage({
   searchParams?: Promise<{ view?: string }>
 }) {
   const params = await searchParams
-  let requests = await getTimeOffRequests({ statuses: ['active', 'draft'] })
+  let requests = await getCachedTimeOffData()
   type TimeOffRequest = Awaited<ReturnType<typeof getTimeOffRequests>>[number]
   type TimeOffShift = Awaited<ReturnType<typeof getTimeOffShifts>>[number]
   type TeacherSchedule = Awaited<ReturnType<typeof getTeacherSchedules>>[number]
@@ -163,14 +169,6 @@ export default async function TimeOffPage({
 
   return (
     <div className="w-full max-w-4xl">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className={getHeaderClasses('3xl')}>Time Off Requests</h1>
-          <p className="text-muted-foreground mt-2">Manage teacher time off requests</p>
-        </div>
-        <AddTimeOffButton />
-      </div>
-
       <TimeOffListClient
         view={view}
         draftRequests={draftRequests}

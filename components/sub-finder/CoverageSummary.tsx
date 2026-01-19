@@ -1,10 +1,12 @@
 'use client'
 
+import React from 'react'
 import { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 import { parseLocalDate } from '@/lib/utils/date'
 import CoverageBadge from '@/components/shared/CoverageBadge'
 import { getCoverageColors, getCoverageColorClasses, coverageColorValues, neutralColors, getHeaderClasses } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface ShiftDetail {
   id: string
@@ -53,19 +55,24 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
         return {
           backgroundColor: coverageColorValues.covered.bg,
           color: coverageColorValues.covered.text,
+          borderWidth: '1px',
+          borderStyle: 'solid' as const,
           borderColor: coverageColorValues.covered.border,
         }
       case 'partially_covered':
         return {
           backgroundColor: coverageColorValues.partial.bg,
           color: coverageColorValues.partial.text,
-          borderColor: coverageColorValues.partial.border,
+          borderWidth: '1px',
           borderStyle: 'dashed' as const,
+          borderColor: coverageColorValues.partial.border,
         }
       case 'uncovered':
         return {
           backgroundColor: coverageColorValues.uncovered.bg,
           color: coverageColorValues.uncovered.text,
+          borderWidth: '1px',
+          borderStyle: 'solid' as const,
           borderColor: coverageColorValues.uncovered.border,
         }
     }
@@ -130,41 +137,60 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
       <div className={cn('border-t', neutralColors.border)} />
 
       {/* Shift Chips */}
-      <div className="mt-3 flex flex-wrap gap-1.5 pb-2">
-        {sortedShifts.map((shift) => {
-          const isClickable = shift.status === 'fully_covered' || shift.status === 'partially_covered'
-          const baseLabel = formatShiftLabel(shift.date, shift.time_slot_code)
-          const badgeStyles = getBadgeStyles(shift)
-          
-          return (
-            <span
-              key={shift.id}
-              className={cn(
-                'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-normal transition-colors border-[1px] border-solid',
-                isClickable ? 'cursor-pointer hover:shadow-sm transition-shadow' : ''
-              )}
-              style={badgeStyles}
-              onClick={() => {
-                if (isClickable && onShiftClick) {
-                  onShiftClick(shift)
-                }
-              }}
-            >
-              {shift.status === 'fully_covered' && shift.sub_name ? (
-                <>
-                  {baseLabel} - <span className="font-bold">{shift.sub_name}</span>
-                </>
-              ) : shift.status === 'partially_covered' && shift.sub_name ? (
-                <>
-                  {baseLabel} - <span className="font-bold">{shift.sub_name}</span> (Partial)
-                </>
-              ) : (
-                baseLabel
-              )}
-            </span>
-          )
-        })}
-      </div>
+      <TooltipProvider>
+        <div className="mt-3 flex flex-wrap gap-1.5 pb-2">
+          {sortedShifts.map((shift) => {
+            const isClickable = shift.status === 'fully_covered' || shift.status === 'partially_covered'
+            const baseLabel = formatShiftLabel(shift.date, shift.time_slot_code)
+            const badgeStyles = getBadgeStyles(shift)
+            const isFullyCovered = shift.status === 'fully_covered' && shift.sub_name
+            
+            const badgeContent = (
+              <span
+                className={cn(
+                  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-normal transition-colors',
+                  isClickable ? 'cursor-pointer hover:shadow-sm transition-shadow' : ''
+                )}
+                style={badgeStyles}
+                onClick={() => {
+                  if (isClickable && onShiftClick) {
+                    onShiftClick(shift)
+                  }
+                }}
+              >
+                {shift.status === 'fully_covered' && shift.sub_name ? (
+                  <>
+                    {baseLabel} - <span className="font-bold">{shift.sub_name}</span>
+                  </>
+                ) : shift.status === 'partially_covered' && shift.sub_name ? (
+                  <>
+                    {baseLabel} - <span className="font-bold">{shift.sub_name}</span> (Partial)
+                  </>
+                ) : (
+                  baseLabel
+                )}
+              </span>
+            )
+
+            // Wrap in tooltip if fully covered with sub name
+            if (isFullyCovered) {
+              return (
+                <Tooltip key={shift.id}>
+                  <TooltipTrigger asChild>
+                    {badgeContent}
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Assigned to {shift.sub_name}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )
+            }
+
+            // Return badgeContent with key using React.cloneElement
+            return React.cloneElement(badgeContent, { key: shift.id })
+          })}
+        </div>
+      </TooltipProvider>
     </div>
   )
 }

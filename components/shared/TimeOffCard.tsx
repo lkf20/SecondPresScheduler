@@ -10,7 +10,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { parseLocalDate } from '@/lib/utils/date'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
-import { getButtonColors, getCoverageColorClasses, getNeutralChipClasses } from '@/lib/utils/colors'
+import { getButtonColors, getCoverageColorClasses, getNeutralChipClasses, coverageColorValues } from '@/lib/utils/colors'
 
 export type TimeOffCardVariant = 'sub-finder' | 'dashboard' | 'time-off'
 
@@ -40,6 +40,7 @@ export interface TimeOffCardProps {
   isSelected?: boolean
   onSelect?: () => void
   onFindSubs?: () => void
+  onEdit?: () => void // Callback for editing (opens panel instead of navigating)
   loading?: boolean
   className?: string
 }
@@ -68,6 +69,7 @@ export default function TimeOffCard({
   isSelected = false,
   onSelect,
   onFindSubs,
+  onEdit,
   loading = false,
   className,
 }: TimeOffCardProps) {
@@ -93,7 +95,11 @@ export default function TimeOffCard({
   }
 
   const handleTimeOffCardClick = () => {
-    router.push(`/time-off/${id}`)
+    if (onEdit) {
+      onEdit()
+    } else {
+      router.push(`/time-off/${id}`)
+    }
   }
 
   // Sub Finder variant - different layout
@@ -275,13 +281,25 @@ export default function TimeOffCard({
             {uncovered > 0 && <CoverageBadge type="uncovered" count={uncovered} />}
           </div>
           <div className="flex items-center justify-end gap-3 mt-auto">
-            <Link
-              href={`/time-off/${id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="text-sm font-semibold text-teal-700 hover:text-teal-800 hover:underline"
-            >
-              {isTimeOffVariant ? 'Edit' : 'View'}
-            </Link>
+            {onEdit ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onEdit()
+                }}
+                className="text-sm font-semibold text-teal-700 hover:text-teal-800 hover:underline"
+              >
+                {isTimeOffVariant ? 'Edit' : 'View'}
+              </button>
+            ) : (
+              <Link
+                href={`/time-off/${id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="text-sm font-semibold text-teal-700 hover:text-teal-800 hover:underline"
+              >
+                {isTimeOffVariant ? 'Edit' : 'View'}
+              </Link>
+            )}
             {uncovered > 0 && (
               <div onClick={(e) => e.stopPropagation()}>
                 <Button
@@ -305,20 +323,36 @@ export default function TimeOffCard({
             {shiftDetails.map((shift, index) => {
               const label = typeof shift === 'string' ? shift : shift.label
               const status = typeof shift === 'object' ? shift.status : undefined
-              let chipClassName = 'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium'
               
-                     if (status === 'covered') {
-                       chipClassName += ` ${getCoverageColorClasses('covered')}`
-                     } else if (status === 'partial') {
-                       chipClassName += ` ${getCoverageColorClasses('partial')}`
-                     } else if (status === 'uncovered') {
-                       chipClassName += ` ${getCoverageColorClasses('uncovered')}`
-                     } else {
-                       chipClassName += ` ${getNeutralChipClasses()}`
-                     }
+              // Get color values for inline styles (Safari compatibility)
+              let colorValues
+              if (status === 'covered') {
+                colorValues = coverageColorValues.covered
+              } else if (status === 'partial') {
+                colorValues = coverageColorValues.partial
+              } else if (status === 'uncovered') {
+                colorValues = coverageColorValues.uncovered
+              } else {
+                // Neutral colors (no status)
+                colorValues = {
+                  bg: 'rgb(248, 250, 252)', // slate-50
+                  border: 'rgb(226, 232, 240)', // slate-200
+                  text: 'rgb(71, 85, 105)', // slate-600
+                }
+              }
               
               return (
-                <span key={index} className={chipClassName}>
+                <span
+                  key={index}
+                  className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-normal transition-colors"
+                  style={{
+                    backgroundColor: colorValues.bg,
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    borderColor: colorValues.border,
+                    color: colorValues.text,
+                  } as React.CSSProperties}
+                >
                   {label}
                 </span>
               )

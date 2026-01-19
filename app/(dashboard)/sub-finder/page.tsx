@@ -27,6 +27,7 @@ import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
+import { saveSubFinderState, loadSubFinderState } from '@/lib/utils/sub-finder-state'
 
 export default function SubFinderPage() {
   const router = useRouter()
@@ -36,11 +37,13 @@ export default function SubFinderPage() {
   const [mode, setMode] = useState<Mode>('existing')
   const {
     absences,
+    setAbsences,
     selectedAbsence,
     setSelectedAbsence,
     recommendedSubs,
     allSubs,
     recommendedCombinations,
+    setRecommendedCombinations,
     loading,
     includePartiallyCovered,
     setIncludePartiallyCovered,
@@ -54,7 +57,11 @@ export default function SubFinderPage() {
     handleFindSubs,
     handleFindManualSubs,
     applySubResults,
-  } = useSubFinderData({ mode, requestedAbsenceId })
+  } = useSubFinderData({ 
+    mode, 
+    requestedAbsenceId,
+    skipInitialFetch: true, // Skip initial fetch to allow state restoration first
+  })
   const [searchQuery, setSearchQuery] = useState('')
   const [teacherSearchInput, setTeacherSearchInput] = useState('') // Separate state for dropdown input
   const [selectedTeacherIds, setSelectedTeacherIds] = useState<string[]>([]) // Array of selected teacher IDs
@@ -82,6 +89,8 @@ export default function SubFinderPage() {
   const [endDateCorrected, setEndDateCorrected] = useState(false)
   const correctionTimeoutRef = useRef<number | null>(null)
   const isFlexibleStaffChangeUserInitiatedRef = useRef(false)
+  const isRestoringStateRef = useRef(false) // Track if we're restoring state to avoid saving during restoration
+  const hasRestoredStateRef = useRef(false) // Track if we've completed initial state restoration
   const runManualFinder = async () => {
     if (!manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0) return
     setHighlightedSubId(null)
@@ -389,6 +398,207 @@ export default function SubFinderPage() {
       setSelectedAbsence(filteredAbsences[0])
     }
   }, [selectedTeacherIds, filteredAbsences, selectedAbsence, setSelectedAbsence])
+
+  // Load saved state on mount (only if no URL params override)
+  useEffect(() => {
+    // Only restore if we don't have URL params that override
+    if (requestedAbsenceId || requestedTeacherId) {
+      hasRestoredStateRef.current = true // Mark as complete even if we skip restoration
+      return // URL params take precedence
+    }
+
+    const savedState = loadSubFinderState()
+    if (!savedState) {
+      hasRestoredStateRef.current = true // Mark as complete if no saved state
+      return
+    }
+
+    isRestoringStateRef.current = true
+
+    // Restore mode
+    if (savedState.mode) {
+      setMode(savedState.mode)
+    }
+
+    // Restore selected teachers
+    if (savedState.selectedTeacherIds && savedState.selectedTeacherIds.length > 0) {
+      setSelectedTeacherIds(savedState.selectedTeacherIds)
+    }
+
+    // Restore manual coverage state
+    if (savedState.mode === 'manual') {
+      if (savedState.manualTeacherId) {
+        setManualTeacherId(savedState.manualTeacherId)
+      }
+      if (savedState.manualStartDate) {
+        setManualStartDate(savedState.manualStartDate)
+      }
+      if (savedState.manualEndDate) {
+        setManualEndDate(savedState.manualEndDate)
+      }
+      if (savedState.manualSelectedShifts && savedState.manualSelectedShifts.length > 0) {
+        setManualSelectedShifts(savedState.manualSelectedShifts)
+      }
+    }
+
+    // Restore filter options
+    if (typeof savedState.includePartiallyCovered === 'boolean') {
+      setIncludePartiallyCovered(savedState.includePartiallyCovered)
+    }
+    if (typeof savedState.includeFlexibleStaff === 'boolean') {
+      setIncludeFlexibleStaff(savedState.includeFlexibleStaff)
+    }
+    if (typeof savedState.includeOnlyRecommended === 'boolean') {
+      setIncludeOnlyRecommended(savedState.includeOnlyRecommended)
+    }
+    if (savedState.subSearch) {
+      setSubSearch(savedState.subSearch)
+    }
+
+    // Restore absences if available (this prevents unnecessary fetch)
+    const hasSavedAbsences = savedState.absences && savedState.absences.length > 0
+    if (hasSavedAbsences) {
+      setAbsences(savedState.absences)
+    }
+
+    hasRestoredStateRef.current = true
+    // Reset flag after a short delay to allow other effects to run
+    setTimeout(() => {
+      isRestoringStateRef.current = false
+      // Only fetch absences if we're in existing mode and don't have them in saved state
+      if (mode === 'existing' && !hasSavedAbsences) {
+        fetchAbsences()
+      }
+    }, 500) // Give enough time for all restoration effects to complete
+  }, []) // Only run on mount - eslint-disable-line react-hooks/exhaustive-deps
+
+
+  // Restore selected absence after absences are loaded (for existing mode)
+  useEffect(() => {
+    if (requestedAbsenceId || mode !== 'existing') return // URL param takes precedence, or skip if manual mode
+
+    const savedState = loadSubFinderState()
+    if (!savedState?.selectedAbsenceId || selectedAbsence) return // Skip if already have selected absence
+
+    // Check if it's a manual mode absence (starts with 'manual-')
+    if (savedState.selectedAbsenceId.startsWith('manual-')) {
+      // This is handled in manual mode restoration
+      return
+    }
+
+    // Find the absence in the current absences list
+    const absence = absences.find(a => a.id === savedState.selectedAbsenceId)
+    if (absence) {
+      isRestoringStateRef.current = true
+      setSelectedAbsence(absence)
+      
+      // If we have saved results, restore them; otherwise re-run finder
+      if (savedState.recommendedSubs && savedState.recommendedSubs.length > 0) {
+        // Restore saved results
+        applySubResults(savedState.allSubs || savedState.recommendedSubs, {
+          useOnlyRecommended: savedState.includeOnlyRecommended ?? true,
+        })
+        if (savedState.recommendedCombinations && savedState.recommendedCombinations.length > 0) {
+          setRecommendedCombinations(savedState.recommendedCombinations)
+        }
+        isRestoringStateRef.current = false
+        hasRestoredStateRef.current = true
+      } else {
+        // No saved results, re-run finder to get fresh data
+        setTimeout(() => {
+          handleFindSubs(absence).finally(() => {
+            isRestoringStateRef.current = false
+            hasRestoredStateRef.current = true
+          })
+        }, 100)
+      }
+    }
+  }, [absences, requestedAbsenceId, mode, selectedAbsence, setSelectedAbsence, handleFindSubs, applySubResults, setRecommendedCombinations])
+
+  // Restore manual mode results after form data is restored
+  useEffect(() => {
+    if (mode !== 'manual' || !manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0) return
+    if (selectedAbsence) return // Already have an absence, skip
+
+    const savedState = loadSubFinderState()
+    if (!savedState) return
+
+    // Check if we have saved results for manual mode
+    const expectedAbsenceId = `manual-${manualTeacherId}`
+    if (savedState.selectedAbsenceId === expectedAbsenceId && savedState.recommendedSubs && savedState.recommendedSubs.length > 0) {
+      isRestoringStateRef.current = true
+      
+      // Create synthetic absence to match saved state
+      const teacher = teachers.find(t => t.id === manualTeacherId)
+      const teacherName = getDisplayName(teacher, 'Manual Coverage')
+      
+      // Restore results
+      applySubResults(savedState.allSubs || savedState.recommendedSubs, {
+        useOnlyRecommended: savedState.includeOnlyRecommended ?? true,
+      })
+      if (savedState.recommendedCombinations && savedState.recommendedCombinations.length > 0) {
+        setRecommendedCombinations(savedState.recommendedCombinations)
+      }
+      
+      // Create synthetic absence (minimal data since we have results)
+      setSelectedAbsence({
+        id: expectedAbsenceId,
+        teacher_id: manualTeacherId,
+        teacher_name: teacherName,
+        start_date: manualStartDate,
+        end_date: manualEndDate || manualStartDate,
+        reason: null,
+        shifts: {
+          total: manualSelectedShifts.length,
+          uncovered: manualSelectedShifts.length,
+          partially_covered: 0,
+          fully_covered: 0,
+          shift_details: [],
+        },
+      })
+      
+      isRestoringStateRef.current = false
+      hasRestoredStateRef.current = true
+    }
+  }, [mode, manualTeacherId, manualStartDate, manualEndDate, manualSelectedShifts, selectedAbsence, teachers, getDisplayName, applySubResults, setRecommendedCombinations, setSelectedAbsence])
+
+  // Save state whenever it changes (but not during restoration or before initial restoration)
+  useEffect(() => {
+    if (isRestoringStateRef.current || !hasRestoredStateRef.current) return
+    saveSubFinderState({
+      mode,
+      selectedTeacherIds,
+      selectedAbsenceId: selectedAbsence?.id || null,
+      manualTeacherId,
+      manualStartDate,
+      manualEndDate,
+      manualSelectedShifts,
+      includePartiallyCovered,
+      includeFlexibleStaff,
+      includeOnlyRecommended,
+      subSearch,
+      absences: absences.length > 0 ? absences : undefined,
+      recommendedSubs: recommendedSubs.length > 0 ? recommendedSubs : undefined,
+      allSubs: allSubs.length > 0 ? allSubs : undefined,
+      recommendedCombinations: recommendedCombinations.length > 0 ? recommendedCombinations : undefined,
+    })
+  }, [
+    mode,
+    selectedTeacherIds,
+    selectedAbsence?.id,
+    manualTeacherId,
+    manualStartDate,
+    manualEndDate,
+    manualSelectedShifts,
+    includePartiallyCovered,
+    includeFlexibleStaff,
+    includeOnlyRecommended,
+    subSearch,
+    absences,
+    recommendedSubs,
+    allSubs,
+    recommendedCombinations,
+  ])
 
   return (
     <div className="flex h-[calc(100vh-4rem+1.5rem+4rem)] -mx-4 -mt-[calc(1.5rem+4rem)] -mb-6 relative">
@@ -745,20 +955,48 @@ export default function SubFinderPage() {
                   {/* Color Key - Left aligned, bottom aligned */}
                   <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded border bg-blue-50 border-blue-400" />
+                      <div 
+                        className="w-3 h-3 rounded bg-blue-50"
+                        style={{
+                          borderWidth: '1px',
+                          borderStyle: 'solid',
+                          borderColor: 'rgb(96, 165, 250)', // blue-400
+                        }}
+                      />
                       <span>Covered</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded border bg-emerald-50 border-emerald-200" />
+                      <div 
+                        className="w-3 h-3 rounded bg-orange-50"
+                        style={{
+                          borderWidth: '1px',
+                          borderStyle: 'solid',
+                          borderColor: 'rgb(251, 146, 60)', // orange-400
+                        }}
+                      />
+                      <span>Uncovered</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div 
+                        className="w-3 h-3 rounded bg-emerald-50"
+                        style={{
+                          borderWidth: '1px',
+                          borderStyle: 'solid',
+                          borderColor: 'rgb(153, 246, 228)', // teal-200 (emerald-200 equivalent)
+                        }}
+                      />
                       <span>Available</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded border bg-gray-100 border-gray-300" />
+                      <div 
+                        className="w-3 h-3 rounded bg-gray-100"
+                        style={{
+                          borderWidth: '1px',
+                          borderStyle: 'solid',
+                          borderColor: 'rgb(209, 213, 219)', // gray-300
+                        }}
+                      />
                       <span>Unavailable</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded border bg-orange-50 border-orange-400" />
-                      <span>Uncovered</span>
                     </div>
                   </div>
                   {/* Buttons - Right aligned */}
@@ -928,6 +1166,8 @@ export default function SubFinderPage() {
                     onContactSub={handleCombinationContact}
                     totalShifts={selectedAbsence.shifts.total}
                     useRemainingLabel={selectedAbsence.shifts.total > selectedAbsence.shifts.uncovered}
+                    allSubs={allSubs}
+                    allShifts={selectedAbsence.shifts.shift_details || []}
                   />
                   <div className="mt-16 text-sm font-semibold text-slate-700">All Available Subs</div>
                   <div className="mt-2 border-t border-slate-200 pt-6" />

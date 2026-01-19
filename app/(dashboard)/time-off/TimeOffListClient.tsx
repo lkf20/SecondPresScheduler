@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Settings2 } from 'lucide-react'
 import TimeOffCard from '@/components/shared/TimeOffCard'
 import type { ClassroomBadge } from '@/components/shared/TimeOffCard'
+import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
 
 type ClassroomBadge = {
   id: string
@@ -51,10 +52,19 @@ export default function TimeOffListClient({
 }) {
   const router = useRouter()
   const [view, setView] = useState(initialView ?? 'active')
+  const [editingRequestId, setEditingRequestId] = useState<string | null>(null)
   // Default to all coverage filters selected
   const [coverageFilters, setCoverageFilters] = useState<Set<string>>(
     new Set(['covered', 'needs_coverage', 'partially_covered'])
   )
+
+  const handleEdit = (id: string) => {
+    setEditingRequestId(id)
+  }
+
+  const handleEditClose = () => {
+    setEditingRequestId(null)
+  }
 
   useEffect(() => {
     setView(initialView ?? 'active')
@@ -186,8 +196,8 @@ export default function TimeOffListClient({
             className="border-0 shadow-none px-0 py-0"
           />
           <div className="mt-3 flex items-center gap-2">
-            <Button asChild size="sm" variant="outline">
-              <Link href={`/time-off/${row.id}`}>Edit</Link>
+            <Button size="sm" variant="outline" onClick={() => handleEdit(row.id)}>
+              Edit
             </Button>
             <Button size="sm" variant="ghost" onClick={() => handleDeleteDraft(row.id)}>
               Delete
@@ -213,6 +223,7 @@ export default function TimeOffListClient({
         totalShifts={totalShifts}
         shiftDetails={row.shift_details}
         notes={row.notes || null}
+        onEdit={() => handleEdit(row.id)}
       />
     )
   }
@@ -231,6 +242,19 @@ export default function TimeOffListClient({
 
   return (
     <>
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Time Off Requests</h1>
+          <p className="text-muted-foreground mt-2">Manage teacher time off requests</p>
+        </div>
+        <AddTimeOffButton />
+      </div>
+      
+      {/* Separate instance for editing - hidden, only used to control the panel */}
+      {editingRequestId && (
+        <AddTimeOffButton timeOffRequestId={editingRequestId} onClose={handleEditClose} />
+      )}
+      
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {[
           { value: 'active', label: `Active (${upcomingRequests.length})` },

@@ -567,7 +567,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
               <SheetClose asChild>
                 <button
                   type="button"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ml-4"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-100 focus:outline-none ml-4"
                   aria-label="Close"
                 >
                   <X className="h-4 w-4" />
@@ -701,25 +701,64 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
                           {/* Status badges */}
                           <div className="flex flex-wrap gap-2">
                             {!shift.has_time_off && (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                              <span 
+                                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                                style={{
+                                  backgroundColor: 'rgb(248, 250, 252)', // slate-50
+                                  borderWidth: '1px',
+                                  borderStyle: 'solid',
+                                  borderColor: 'rgb(226, 232, 240)', // slate-200
+                                  color: 'rgb(71, 85, 105)', // slate-600
+                                } as React.CSSProperties}
+                              >
                                 <Info className="h-3 w-3" />
                                 No absence recorded - this will be extra coverage
                               </span>
                             )}
                             {shift.status === 'unavailable' && (
-                              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-300">
+                              <Badge 
+                                variant="outline" 
+                                className="text-xs"
+                                style={{
+                                  backgroundColor: 'rgb(255, 251, 235)', // amber-50
+                                  borderWidth: '1px',
+                                  borderStyle: 'solid',
+                                  borderColor: 'rgb(252, 211, 77)', // amber-300
+                                  color: 'rgb(146, 64, 14)', // amber-800
+                                } as React.CSSProperties}
+                              >
                                 <AlertTriangle className="h-3 w-3 mr-1" />
                                 Marked unavailable
                               </Badge>
                             )}
                             {shift.status === 'conflict_teaching' && (
-                              <Badge variant="outline" className="text-xs bg-red-50 text-red-800 border-red-300">
+                              <Badge 
+                                variant="outline" 
+                                className="text-xs"
+                                style={{
+                                  backgroundColor: 'rgb(254, 242, 242)', // red-50
+                                  borderWidth: '1px',
+                                  borderStyle: 'solid',
+                                  borderColor: 'rgb(252, 165, 165)', // red-300
+                                  color: 'rgb(153, 27, 27)', // red-800
+                                } as React.CSSProperties}
+                              >
                                 <AlertTriangle className="h-3 w-3 mr-1" />
                                 Conflict: Assigned to {shift.classroom_name || 'classroom'}
                               </Badge>
                             )}
                             {shift.status === 'conflict_sub' && (
-                              <Badge variant="outline" className="text-xs bg-red-50 text-red-800 border-red-300">
+                              <Badge 
+                                variant="outline" 
+                                className="text-xs"
+                                style={{
+                                  backgroundColor: 'rgb(254, 242, 242)', // red-50
+                                  borderWidth: '1px',
+                                  borderStyle: 'solid',
+                                  borderColor: 'rgb(252, 165, 165)', // red-300
+                                  color: 'rgb(153, 27, 27)', // red-800
+                                } as React.CSSProperties}
+                              >
                                 <AlertTriangle className="h-3 w-3 mr-1" />
                                 Conflict: {shift.conflict_message || 'Assigned to sub'}
                               </Badge>

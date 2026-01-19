@@ -1,6 +1,75 @@
 import { createClient } from '@/lib/supabase/server'
 import { parseLocalDate } from '@/lib/utils/date'
 
+/**
+ * Get active coverage requests (status IN ('open', 'filled'))
+ */
+export async function getActiveCoverageRequests(filters?: {
+  teacher_id?: string
+  start_date?: string
+  end_date?: string
+  request_type?: string
+}) {
+  const supabase = await createClient()
+  let query = supabase
+    .from('coverage_requests')
+    .select('*')
+    .in('status', ['open', 'filled']) // Treat both as active
+    .order('start_date', { ascending: false })
+
+  if (filters?.teacher_id) {
+    query = query.eq('teacher_id', filters.teacher_id)
+  }
+  if (filters?.start_date) {
+    query = query.gte('start_date', filters.start_date)
+  }
+  if (filters?.end_date) {
+    query = query.lte('end_date', filters.end_date)
+  }
+  if (filters?.request_type) {
+    query = query.eq('request_type', filters.request_type)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+  return data || []
+}
+
+/**
+ * Get active coverage request shifts (status = 'active')
+ */
+export async function getActiveCoverageRequestShifts(filters?: {
+  coverage_request_id?: string
+  date?: string
+  start_date?: string
+  end_date?: string
+}) {
+  const supabase = await createClient()
+  let query = supabase
+    .from('coverage_request_shifts')
+    .select('*')
+    .eq('status', 'active')
+    .order('date', { ascending: true })
+    .order('time_slot_id', { ascending: true })
+
+  if (filters?.coverage_request_id) {
+    query = query.eq('coverage_request_id', filters.coverage_request_id)
+  }
+  if (filters?.date) {
+    query = query.eq('date', filters.date)
+  }
+  if (filters?.start_date) {
+    query = query.gte('date', filters.start_date)
+  }
+  if (filters?.end_date) {
+    query = query.lte('date', filters.end_date)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+  return data || []
+}
+
 export interface CoverageRequestWithShifts {
   coverage_request_id: string
   coverage_request_shifts: Array<{
@@ -32,7 +101,7 @@ export async function ensureCoverageRequestForQuickAssign(
     .from('coverage_requests')
     .select('id, start_date, end_date, request_type')
     .eq('teacher_id', teacherId)
-    .eq('status', 'open')
+    .in('status', ['open', 'filled']) // Use active status filter
     .lte('start_date', endDate)
     .gte('end_date', startDate)
 
@@ -265,6 +334,7 @@ export async function ensureCoverageRequestForQuickAssign(
       .from('coverage_request_shifts')
       .select('id, date, day_of_week_id, time_slot_id, classroom_id')
       .eq('coverage_request_id', coverageRequestId)
+      .eq('status', 'active') // Only get active shifts
       .gte('date', startDate)
       .lte('date', endDate)
 
@@ -319,6 +389,7 @@ export async function ensureCoverageRequestForQuickAssign(
       .from('coverage_request_shifts')
       .select('id, date, day_of_week_id, time_slot_id, classroom_id')
       .eq('coverage_request_id', coverageRequestId)
+      .eq('status', 'active') // Only get active shifts
       .gte('date', startDate)
       .lte('date', endDate)
       .order('date', { ascending: true })

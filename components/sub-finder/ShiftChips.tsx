@@ -2,6 +2,7 @@
 
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import { Check } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 import { getShiftStatusColorClasses, getShiftStatusColors, shiftStatusColorValues } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
@@ -29,6 +30,7 @@ interface ShiftChipsProps {
   }>
   showLegend?: boolean // Whether to show the color legend
   isDeclined?: boolean // If true, all chips will be gray
+  recommendedShifts?: Shift[] // Optional list of recommended shifts (for showing checkmarks)
 }
 
 // Format shift label as "Mon AM • Feb 9"
@@ -53,12 +55,13 @@ const formatShiftTooltipLabel = (dateString: string, timeSlotCode: string): stri
 }
 
 export default function ShiftChips({
-  canCover,
-  cannotCover,
+  canCover = [],
+  cannotCover = [],
   assigned = [],
   shifts,
   showLegend = false,
   isDeclined = false,
+  recommendedShifts = [],
 }: ShiftChipsProps) {
   if (canCover.length === 0 && cannotCover.length === 0 && assigned.length === 0 && (!shifts || shifts.length === 0)) {
     return null
@@ -127,6 +130,11 @@ export default function ShiftChips({
         return a.time_slot_code.localeCompare(b.time_slot_code)
       })
 
+  // Create a Set of recommended shift keys for quick lookup
+  const recommendedShiftKeys = new Set(
+    recommendedShifts.map((shift) => `${shift.date}|${shift.time_slot_code}`)
+  )
+
   const getBadgeClassName = (status: 'assigned' | 'available' | 'unavailable') => {
     // If declined, make all chips gray
     if (isDeclined) {
@@ -152,18 +160,27 @@ export default function ShiftChips({
               : classGroupName || 'Classroom unavailable'
             const status = isDeclined ? 'declined' : shift.status
             const colorValues = shiftStatusColorValues[status]
+            const shiftKey = `${shift.date}|${shift.time_slot_code}`
+            const isRecommended = recommendedShiftKeys.has(shiftKey)
             const badge = (
               <Badge
                 key={`shift-${shift.date}-${shift.time_slot_code}-${idx}`}
                 variant="outline"
-                className={`text-xs border-[1px] border-solid ${getShiftStatusColors(status).text}`}
+                className="text-xs"
                 style={{
                   backgroundColor: colorValues.bg,
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
                   borderColor: colorValues.border,
                   color: colorValues.text,
                 } as React.CSSProperties}
               >
-                {shiftLabel}
+                <span className="inline-flex items-center gap-1.5">
+                  {isRecommended && (
+                    <Check className="h-3 w-3" style={{ color: colorValues.text }} />
+                  )}
+                  {shiftLabel}
+                </span>
               </Badge>
             )
 
@@ -188,15 +205,39 @@ export default function ShiftChips({
         {showLegend && (
           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1 pb-4">
             <div className="flex items-center gap-1.5">
-              <div className={cn('w-3 h-3 rounded border', getShiftStatusColors('assigned').bg, getShiftStatusColors('assigned').border)} />
+              <div 
+                className="w-3 h-3 rounded"
+                style={{
+                  backgroundColor: shiftStatusColorValues.assigned.bg,
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
+                  borderColor: shiftStatusColorValues.assigned.border,
+                }}
+              />
               <span>Assigned</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className={cn('w-3 h-3 rounded border', getShiftStatusColors('available').bg, getShiftStatusColors('available').border)} />
+              <div 
+                className="w-3 h-3 rounded"
+                style={{
+                  backgroundColor: shiftStatusColorValues.available.bg,
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
+                  borderColor: shiftStatusColorValues.available.border,
+                }}
+              />
               <span>Available</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className={cn('w-3 h-3 rounded border', getShiftStatusColors('unavailable').bg, getShiftStatusColors('unavailable').border)} />
+              <div 
+                className="w-3 h-3 rounded"
+                style={{
+                  backgroundColor: shiftStatusColorValues.unavailable.bg,
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
+                  borderColor: shiftStatusColorValues.unavailable.border,
+                }}
+              />
               <span>Unavailable</span>
             </div>
           </div>

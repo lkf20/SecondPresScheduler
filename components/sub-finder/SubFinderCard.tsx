@@ -1,8 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { AlertTriangle, ArrowRight } from 'lucide-react'
+import { AlertTriangle, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react'
 import ShiftChips from '@/components/sub-finder/ShiftChips'
 import SubCardHeader from '@/components/sub-finder/SubCardHeader'
 import { cn } from '@/lib/utils'
@@ -48,6 +49,17 @@ interface SubFinderCardProps {
   className?: string
   onContact?: () => void
   showDebugOutlines?: boolean
+  recommendedShiftCount?: number // Number of recommended shifts for this sub
+  allShifts?: Array<{ // All shifts that need coverage
+    id: string
+    date: string
+    day_name: string
+    time_slot_code: string
+    classroom_name?: string | null
+    class_name?: string | null
+  }>
+  allCanCover?: Shift[] // All shifts this sub can cover
+  allCannotCover?: Shift[] // All shifts this sub cannot cover
 }
 
 export default function SubFinderCard({
@@ -57,8 +69,8 @@ export default function SubFinderCard({
   shiftsCovered,
   totalShifts,
   useRemainingLabel = false,
-  canCover,
-  cannotCover,
+  canCover = [],
+  cannotCover = [],
   assigned = [],
   shiftChips,
   notes,
@@ -68,9 +80,33 @@ export default function SubFinderCard({
   className,
   onContact,
   showDebugOutlines = false,
+  recommendedShiftCount,
+  allShifts = [],
+  allCanCover = [],
+  allCannotCover = [],
 }: SubFinderCardProps) {
+  const [isAllShiftsExpanded, setIsAllShiftsExpanded] = useState(false)
   const coveredSegments = Math.min(shiftsCovered, totalShifts)
   const outline = (color: string) => (showDebugOutlines ? { outline: `1px solid ${color}` } : undefined)
+
+  // Build map of available/unavailable shifts for "View all shifts" section
+  const allShiftsStatusMap = new Map<string, 'available' | 'unavailable'>()
+  if (allShifts && allShifts.length > 0 && (allCanCover.length > 0 || allCannotCover.length > 0)) {
+    // Add can cover shifts
+    allCanCover.forEach((shift) => {
+      const key = `${shift.date}|${shift.time_slot_code}`
+      allShiftsStatusMap.set(key, 'available')
+    })
+    
+    // Add cannot cover shifts
+    allCannotCover.forEach((shift) => {
+      const key = `${shift.date}|${shift.time_slot_code}`
+      // Only set if not already marked as available
+      if (!allShiftsStatusMap.has(key)) {
+        allShiftsStatusMap.set(key, 'unavailable')
+      }
+    })
+  }
 
   const renderCoverageBar = () => {
     if (isDeclined) {
@@ -125,30 +161,32 @@ export default function SubFinderCard({
       )}
     >
       <CardContent
-        className="pt-4 px-4 pb-1.5 flex items-stretch gap-4"
+        className="pt-4 px-4 pb-1.5 flex flex-col gap-2"
         style={outline('#60a5fa')}
       >
-        <div className="min-w-0 flex-1 pr-2" style={outline('#34d399')}>
-          <SubCardHeader
-            name={name}
-            phone={phone}
-            shiftsCovered={shiftsCovered}
-            totalShifts={totalShifts}
-            isDeclined={isDeclined}
-            showCoverage={false}
-          />
+        <div className="flex items-stretch gap-4">
+          <div className="min-w-0 flex-1 pr-2" style={outline('#34d399')}>
+            <SubCardHeader
+              name={name}
+              phone={phone}
+              shiftsCovered={shiftsCovered}
+              totalShifts={totalShifts}
+              isDeclined={isDeclined}
+              showCoverage={false}
+            />
 
-          {(canCover.length > 0 || cannotCover.length > 0 || assigned.length > 0 || (shiftChips?.length ?? 0) > 0) && (
-            <div className="mb-3 w-full" style={outline('#7dd3fc')}>
-              <ShiftChips
-                canCover={canCover}
-                cannotCover={cannotCover}
-                assigned={assigned}
-                shifts={shiftChips}
-                isDeclined={isDeclined}
-              />
-            </div>
-          )}
+            {(canCover.length > 0 || cannotCover.length > 0 || assigned.length > 0 || (shiftChips?.length ?? 0) > 0) && recommendedShiftCount === undefined && (
+              <div className="mb-3 w-full" style={outline('#7dd3fc')}>
+                <ShiftChips
+                  canCover={canCover}
+                  cannotCover={cannotCover}
+                  assigned={assigned}
+                  shifts={shiftChips}
+                  isDeclined={isDeclined}
+                  recommendedShifts={canCover}
+                />
+              </div>
+            )}
 
           {notes && (
             <div className="mb-3 p-2 bg-muted rounded border border-border/50 text-xs text-muted-foreground">
@@ -184,17 +222,95 @@ export default function SubFinderCard({
         </div>
         <div className="ml-auto flex flex-col justify-between items-end shrink-0" style={outline('#fbbf24')}>
           {renderCoverageBar()}
+        </div>
+      </div>
+
+      {/* Recommended shifts section - full width */}
+      {recommendedShiftCount !== undefined && recommendedShiftCount > 0 && (
+        <div className="mb-0 -mt-1">
+          <p className="text-sm text-muted-foreground mb-2">
+            Recommended: {recommendedShiftCount} shift{recommendedShiftCount !== 1 ? 's' : ''}
+          </p>
+          {(canCover.length > 0 || cannotCover.length > 0 || assigned.length > 0 || (shiftChips?.length ?? 0) > 0) && (
+            <div className="w-full">
+              <ShiftChips
+                canCover={canCover}
+                cannotCover={cannotCover}
+                assigned={assigned}
+                shifts={shiftChips}
+                isDeclined={isDeclined}
+                recommendedShifts={canCover}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* View all shifts collapsible section and Contact & Assign button - full width */}
+      {allShifts && allShifts.length > 0 && (allCanCover.length > 0 || allCannotCover.length > 0) && (
+        <div className="mb-0 -mt-1 flex items-center justify-between gap-4">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setIsAllShiftsExpanded(!isAllShiftsExpanded)}
+                className="flex items-center gap-2 p-2 hover:underline hover:bg-transparent hover:text-slate-700 text-sm font-medium text-slate-700 justify-start"
+              >
+            <span>View all shifts</span>
+            {isAllShiftsExpanded ? (
+              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            )}
+          </Button>
+          {onContact && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="hover:bg-primary/10 -mr-2"
+              style={{ color: '#115E59' }}
+              onClick={() => onContact?.()}
+            >
+              Contact & Assign <ArrowRight className="h-3.5 w-3.5 ml-0.5" />
+            </Button>
+          )}
+        </div>
+      )}
+      
+      {/* Contact & Assign button when View all shifts is not shown */}
+      {(!allShifts || allShifts.length === 0 || (allCanCover.length === 0 && allCannotCover.length === 0)) && onContact && (
+        <div className="mb-3 flex justify-end">
           <Button
             size="sm"
             variant="ghost"
-            className="-mr-2 hover:bg-primary/10"
+            className="hover:bg-primary/10 -mr-2"
             style={{ color: '#115E59' }}
             onClick={() => onContact?.()}
           >
             Contact & Assign <ArrowRight className="h-3.5 w-3.5 ml-0.5" />
           </Button>
         </div>
-      </CardContent>
+      )}
+      
+      {allShifts && allShifts.length > 0 && (allCanCover.length > 0 || allCannotCover.length > 0) && isAllShiftsExpanded && (
+        <div className="mb-4 mt-0">
+          <ShiftChips
+            shifts={allShifts.map((shift) => {
+              const key = `${shift.date}|${shift.time_slot_code}`
+              const status = allShiftsStatusMap.get(key) || 'unavailable'
+              return {
+                date: shift.date,
+                time_slot_code: shift.time_slot_code,
+                status: status === 'available' ? 'available' : 'unavailable',
+                classroom_name: shift.classroom_name || null,
+                class_name: shift.class_name || null,
+              }
+            })}
+            isDeclined={isDeclined}
+            recommendedShifts={canCover}
+          />
+        </div>
+      )}
+    </CardContent>
     </Card>
   )
 }
