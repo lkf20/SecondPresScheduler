@@ -341,32 +341,32 @@ export default function TimeOffListClient({
 
   return (
     <>
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Time Off Requests</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Time Off Requests</h1>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleRefresh}
+                    disabled={isFetching}
+                    className="h-10 w-10 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Refresh list</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
           <p className="text-muted-foreground mt-2">Manage teacher time off requests</p>
         </div>
-        <div className="flex items-center gap-2">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleRefresh}
-                  disabled={isFetching}
-                  className="h-10 w-10 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-60"
-                >
-                  <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Refresh list</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <AddTimeOffButton />
-        </div>
+        <AddTimeOffButton />
       </div>
       
       {/* Separate instance for editing - hidden, only used to control the panel */}
