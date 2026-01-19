@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getScheduleSettings, updateScheduleSettings } from '@/lib/api/schedule-settings'
+import { getUserSchoolId } from '@/lib/utils/auth'
 
 export async function GET() {
   try {
-    const settings = await getScheduleSettings()
+    const schoolId = await getUserSchoolId()
+    if (!schoolId) {
+      return NextResponse.json(
+        { error: 'User profile not found or missing school_id.' },
+        { status: 403 }
+      )
+    }
+    const settings = await getScheduleSettings(schoolId)
     return NextResponse.json(settings || { selected_day_ids: [] })
   } catch (error: any) {
     console.error('Error fetching schedule settings:', error)
@@ -13,6 +21,13 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
+    const schoolId = await getUserSchoolId()
+    if (!schoolId) {
+      return NextResponse.json(
+        { error: 'User profile not found or missing school_id.' },
+        { status: 403 }
+      )
+    }
     const body = await request.json()
     const { selected_day_ids } = body
 
@@ -23,7 +38,7 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    const settings = await updateScheduleSettings(selected_day_ids)
+    const settings = await updateScheduleSettings(schoolId, selected_day_ids)
     return NextResponse.json(settings)
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })

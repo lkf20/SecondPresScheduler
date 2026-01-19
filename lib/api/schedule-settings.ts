@@ -24,11 +24,12 @@ const normalizeSelectedDayIds = (value: unknown): string[] => {
   return []
 }
 
-export async function getScheduleSettings(): Promise<ScheduleSettings | null> {
+export async function getScheduleSettings(schoolId: string): Promise<ScheduleSettings | null> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('schedule_settings')
     .select('*')
+    .eq('school_id', schoolId)
     .limit(1)
     .single()
 
@@ -54,11 +55,11 @@ export async function getScheduleSettings(): Promise<ScheduleSettings | null> {
   } as ScheduleSettings
 }
 
-export async function updateScheduleSettings(selectedDayIds: string[]): Promise<ScheduleSettings> {
+export async function updateScheduleSettings(schoolId: string, selectedDayIds: string[]): Promise<ScheduleSettings> {
   const supabase = await createClient()
   
   // Check if settings exist
-  const existing = await getScheduleSettings()
+  const existing = await getScheduleSettings(schoolId)
   
   if (existing) {
     // Update existing
@@ -82,6 +83,7 @@ export async function updateScheduleSettings(selectedDayIds: string[]): Promise<
     const { data, error } = await supabase
       .from('schedule_settings')
       .insert({
+        school_id: schoolId,
         selected_day_ids: selectedDayIds,
       })
       .select()

@@ -2,12 +2,18 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { useQueryClient } from '@tanstack/react-query'
 import WeeklyScheduleGridNew from '@/components/schedules/WeeklyScheduleGridNew'
 import FilterPanel, { type FilterState } from '@/components/schedules/FilterPanel'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
 import { Button } from '@/components/ui/button'
 import { Filter } from 'lucide-react'
+import { useWeeklySchedule } from '@/lib/hooks/use-weekly-schedule'
+import { useScheduleSettings } from '@/lib/hooks/use-schedule-settings'
+import { useFilterOptions } from '@/lib/hooks/use-filter-options'
+import { invalidateWeeklySchedule } from '@/lib/utils/invalidation'
+import { useSchool } from '@/lib/contexts/SchoolContext'
 import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 import type { Database } from '@/types/database'
 
@@ -15,18 +21,39 @@ type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
 type TimeSlot = Database['public']['Tables']['time_slots']['Row']
 type Classroom = Database['public']['Tables']['classrooms']['Row']
 
+// Calculate Monday of current week as ISO string for query key
+function getWeekStartISO(): string {
+  const today = new Date()
+  const day = today.getDay()
+  const diff = today.getDate() - day + (day === 0 ? -6 : 1) // Adjust when day is Sunday
+  const monday = new Date(today.setDate(diff))
+  monday.setHours(0, 0, 0, 0)
+  return monday.toISOString().split('T')[0]
+}
+
 export default function WeeklySchedulePage() {
   const searchParams = useSearchParams()
+  const queryClient = useQueryClient()
+  const schoolId = useSchool()
   const focusClassroomId = searchParams.get('classroom_id')
   const focusDayId = searchParams.get('day_of_week_id')
   const focusTimeSlotId = searchParams.get('time_slot_id')
   const hasAppliedFocusRef = useRef(false)
-  const [data, setData] = useState<WeeklyScheduleDataByClassroom[]>([])
-  const [selectedDayIds, setSelectedDayIds] = useState<string[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [settingsLoaded, setSettingsLoaded] = useState(false)
-  const [refreshKey, setRefreshKey] = useState(0)
+  const weekStartISO = getWeekStartISO()
+  
+  // React Query hooks
+  const { data: scheduleData = [], isLoading: isLoadingSchedule, error: scheduleError } = useWeeklySchedule(weekStartISO)
+  const { data: scheduleSettings, isLoading: isLoadingSettings } = useScheduleSettings()
+  const { data: filterOptions, isLoading: isLoadingFilters } = useFilterOptions()
+  
+  const selectedDayIds = scheduleSettings?.selected_day_ids || []
+  const availableDays = filterOptions?.days || []
+  const availableTimeSlots = filterOptions?.timeSlots || []
+  const availableClassrooms = filterOptions?.classrooms || []
+  
+  const loading = isLoadingSchedule || isLoadingSettings || isLoadingFilters
+  const error = scheduleError ? (scheduleError instanceof Error ? scheduleError.message : 'Failed to load weekly schedule') : null
+  
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
   const [filters, setFilters] = useState<FilterState | null>(() => {
     // Load filters from localStorage on mount
@@ -47,9 +74,6 @@ export default function WeeklySchedulePage() {
     }
     return null
   })
-  const [availableDays, setAvailableDays] = useState<DayOfWeek[]>([])
-  const [availableTimeSlots, setAvailableTimeSlots] = useState<TimeSlot[]>([])
-  const [availableClassrooms, setAvailableClassrooms] = useState<Classroom[]>([])
 
   useEffect(() => {
     if (!focusClassroomId || !focusDayId || !focusTimeSlotId) return
@@ -91,100 +115,14 @@ export default function WeeklySchedulePage() {
       localStorage.setItem('weekly-schedule-filters', JSON.stringify(filters))
     }
   }, [filters])
-
-  const fetchData = () => {
-    // Fetch schedule settings for selected days first
-    fetch('/api/schedule-settings')
-      .then(async r => {
-        if (!r.ok) {
-          const text = await r.text()
-          throw new Error(`HTTP error! status: ${r.status}, response: ${text.substring(0, 100)}`)
-        }
-        const contentType = r.headers.get('content-type')
-        if (!contentType || !contentType.includes('application/json')) {
-          const text = await r.text()
-          throw new Error(
-            `Expected JSON but got ${contentType}. Response: ${text.substring(0, 100)}`
-          )
-        }
-        return r.json()
-      })
-      .then(settings => {
-        const dayIds =
-          settings.selected_day_ids && Array.isArray(settings.selected_day_ids)
-            ? settings.selected_day_ids
-            : []
-        setSelectedDayIds(dayIds)
-        setSettingsLoaded(true)
-
-        // Fetch weekly schedule data after we have selectedDayIds
-        // The API will use these to filter, but we also filter in the component as backup
-        // Add cache-busting to ensure fresh data
-        return fetch(`/api/weekly-schedule?t=${Date.now()}`)
-      })
-      .then(async r => {
-        if (!r.ok) {
-          const text = await r.text()
-          throw new Error(`HTTP error! status: ${r.status}, response: ${text.substring(0, 100)}`)
-        }
-        const contentType = r.headers.get('content-type')
-        if (!contentType || !contentType.includes('application/json')) {
-          const text = await r.text()
-          throw new Error(
-            `Expected JSON but got ${contentType}. Response: ${text.substring(0, 100)}`
-          )
-        }
-        return r.json()
-      })
-      .then((responseData) => {
-        setData((responseData || []) as WeeklyScheduleDataByClassroom[])
-        setLoading(false)
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Failed to load weekly schedule')
-        setLoading(false)
-        console.error('Error loading weekly schedule:', err)
-        // Still mark settings as loaded even if schedule fails
-        setSettingsLoaded(true)
-      })
-  }
-
-  // Fetch filter options
-  useEffect(() => {
-    const fetchWithErrorHandling = async (url: string) => {
-      const r = await fetch(url)
-      if (!r.ok) {
-        const text = await r.text()
-        throw new Error(`HTTP error! status: ${r.status}, response: ${text.substring(0, 100)}`)
-      }
-      const contentType = r.headers.get('content-type')
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await r.text()
-        throw new Error(`Expected JSON but got ${contentType}. Response: ${text.substring(0, 100)}`)
-      }
-      return r.json()
+  
+  // Handle refresh - invalidate React Query cache
+  const handleRefresh = () => {
+    if (schoolId) {
+      invalidateWeeklySchedule(queryClient, schoolId)
+      queryClient.invalidateQueries({ queryKey: ['scheduleSettings', schoolId] })
     }
-
-    Promise.all([
-      fetchWithErrorHandling('/api/days-of-week'),
-      fetchWithErrorHandling('/api/timeslots'),
-      fetchWithErrorHandling('/api/classrooms'),
-    ])
-      .then(([days, timeSlots, classrooms]) => {
-        setAvailableDays((days || []) as DayOfWeek[])
-        setAvailableTimeSlots((timeSlots || []) as TimeSlot[])
-        setAvailableClassrooms((classrooms || []) as Classroom[])
-      })
-      .catch((err: unknown) => {
-        console.error('Error fetching filter options:', err)
-        const message = err instanceof Error ? err.message : 'Failed to load filter options'
-        setError(`Failed to load filter options: ${message}`)
-      })
-  }, [])
-
-  useEffect(() => {
-    fetchData()
-  }, [refreshKey])
+  }
 
   // Sort days - only show days selected in Settings > Days and Time Slots
   const sortedDays = useMemo(() => {
@@ -201,9 +139,9 @@ export default function WeeklySchedulePage() {
 
   // Apply filters to data
   const filteredData = useMemo(() => {
-    if (!filters) return data
+    if (!filters) return scheduleData
 
-    return data
+    return scheduleData
       .filter(classroom => filters.selectedClassroomIds.includes(classroom.classroom_id))
       .map(classroom => ({
         ...classroom,
@@ -276,7 +214,7 @@ export default function WeeklySchedulePage() {
           })),
       }))
       .filter(classroom => classroom.days.length > 0)
-  }, [data, filters])
+  }, [scheduleData, filters])
 
   // Calculate slot counts for display
   const slotCounts = useMemo(() => {
@@ -322,7 +260,7 @@ export default function WeeklySchedulePage() {
 
       {error && <ErrorMessage message={error} className="mb-6" />}
 
-      {loading || !settingsLoaded ? (
+      {loading ? (
         <LoadingSpinner />
       ) : (
         <>
@@ -335,7 +273,7 @@ export default function WeeklySchedulePage() {
             data={filteredData}
             selectedDayIds={filters?.selectedDayIds ?? selectedDayIds}
             layout={filters?.layout ?? 'classrooms-x-days'}
-            onRefresh={() => setRefreshKey(prev => prev + 1)}
+            onRefresh={handleRefresh}
             onFilterPanelOpenChange={setFilterPanelOpen}
             filterPanelOpen={filterPanelOpen}
             initialSelectedCell={

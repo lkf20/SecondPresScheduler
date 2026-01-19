@@ -1,6 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
+import { useSubFinderAbsences } from '@/lib/hooks/use-sub-finder-absences'
+import { useSubRecommendations } from '@/lib/hooks/use-sub-recommendations'
 import type { RecommendedCombination } from '@/lib/utils/sub-combination'
 export type Mode = 'existing' | 'manual'
 
@@ -94,16 +96,87 @@ export function useSubFinderData({
 }) {
   const hasAppliedAbsenceRef = useRef(false)
   const hasSkippedInitialFetchRef = useRef(skipInitialFetch)
-  const [absences, setAbsences] = useState<Absence[]>([])
   const [selectedAbsence, setSelectedAbsence] = useState<Absence | null>(null)
   const [recommendedSubs, setRecommendedSubs] = useState<SubCandidate[]>([])
   const [allSubs, setAllSubs] = useState<SubCandidate[]>([])
   const [recommendedCombinations, setRecommendedCombinations] = useState<RecommendedCombination[]>([])
-  const [loading, setLoading] = useState(false)
   const [includePartiallyCovered, setIncludePartiallyCovered] = useState(false)
   const [includeFlexibleStaff, setIncludeFlexibleStaff] = useState(true)
   const [includeOnlyRecommended, setIncludeOnlyRecommended] = useState(true)
   const [teachers, setTeachers] = useState<Teacher[]>([])
+  
+  // Use React Query for absences
+  const { 
+    data: absencesData = [], 
+    isLoading: isLoadingAbsences,
+    refetch: refetchAbsences 
+  } = useSubFinderAbsences(
+    { includePartiallyCovered },
+    skipInitialFetch ? undefined : [] // Don't provide initial data if skipping fetch
+  )
+  
+  // Transform API response to match component's expected Absence format
+  const transformedAbsences: Absence[] = useMemo(() => {
+    return absencesData.map((apiAbsence: any) => ({
+      id: apiAbsence.id,
+      teacher_id: apiAbsence.teacher_id,
+      teacher_name: apiAbsence.teacher_name,
+      start_date: apiAbsence.start_date,
+      end_date: apiAbsence.end_date,
+      reason: apiAbsence.reason,
+      classrooms: apiAbsence.classrooms,
+      shifts: {
+        total: apiAbsence.shifts?.total || 0,
+        uncovered: apiAbsence.shifts?.uncovered || 0,
+        partially_covered: apiAbsence.shifts?.partial || 0,
+        fully_covered: apiAbsence.shifts?.covered || 0,
+        shift_details: (apiAbsence.shifts?.shift_details || []).map((detail: any) => ({
+          id: detail.id || '',
+          date: detail.date,
+          day_name: detail.day_name,
+          time_slot_code: detail.time_slot_code,
+          class_name: detail.class_name || null,
+          classroom_name: detail.classroom_name || null,
+          status: detail.status === 'partial' ? 'partially_covered' : 
+                 detail.status === 'covered' ? 'fully_covered' : 
+                 'uncovered',
+          sub_name: detail.assigned_sub?.name || null,
+          is_partial: detail.status === 'partial',
+        })),
+      },
+    }))
+  }, [absencesData])
+  
+  // Support state restoration - allow setting absences from sessionStorage
+  const [restoredAbsences, setRestoredAbsences] = useState<Absence[] | null>(null)
+  const [shouldUseRestoredAbsences, setShouldUseRestoredAbsences] = useState(false)
+  
+  // Use restored absences if available and we're in restoration mode, otherwise use React Query data
+  // Once restoration is complete, we can merge/update with React Query data
+  const absences = useMemo(() => {
+    if (shouldUseRestoredAbsences && restoredAbsences && restoredAbsences.length > 0) {
+      console.log('[useSubFinderData] Using restored absences:', restoredAbsences.length)
+      return restoredAbsences
+    }
+    console.log('[useSubFinderData] Using transformed absences from React Query:', transformedAbsences.length)
+    return transformedAbsences
+  }, [restoredAbsences, transformedAbsences, shouldUseRestoredAbsences])
+  
+  // Use React Query for sub recommendations when an absence is selected
+  const selectedAbsenceId = selectedAbsence?.id && selectedAbsence.id.startsWith('manual-') 
+    ? null // Manual coverage doesn't use the recommendations API
+    : selectedAbsence?.id || null
+  
+  const { 
+    data: subRecommendationsData,
+    isLoading: isLoadingRecommendations,
+    refetch: refetchRecommendations
+  } = useSubRecommendations(
+    selectedAbsenceId,
+    { includeFlexibleStaff }
+  )
+  
+  const loading = isLoadingAbsences || isLoadingRecommendations
 
   const getDisplayName = useCallback(
     (
@@ -143,61 +216,38 @@ export function useSubFinderData({
     },
     [includeOnlyRecommended]
   )
-
-  const fetchAbsences = useCallback(async () => {
-    setLoading(true)
-    try {
-      const response = await fetch(
-        `/api/sub-finder/absences?include_partially_covered=${includePartiallyCovered}`
-      )
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(errorData.error || 'Failed to fetch absences')
-      }
-      const data = await response.json()
-      setAbsences(data)
-    } catch (error) {
-      console.error('Error fetching absences:', error)
-      setAbsences([])
-    } finally {
-      setLoading(false)
+  
+  // Update recommended subs and combinations when recommendations data changes
+  useEffect(() => {
+    if (subRecommendationsData && selectedAbsenceId) {
+      const subs = (subRecommendationsData.subs || []) as SubCandidate[]
+      const combinations = subRecommendationsData.combinations || []
+      setRecommendedCombinations(combinations)
+      applySubResults(subs)
     }
-  }, [includePartiallyCovered])
+  }, [subRecommendationsData, selectedAbsenceId, applySubResults])
+
+  // Fetch absences using React Query - just trigger refetch
+  const fetchAbsences = useCallback(async () => {
+    await refetchAbsences()
+  }, [refetchAbsences])
 
   const handleFindSubs = useCallback(
     async (absence: Absence) => {
       setSelectedAbsence(absence)
-      setLoading(true)
-      try {
-        const response = await fetch('/api/sub-finder/find-subs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            absence_id: absence.id,
-            include_flexible_staff: includeFlexibleStaff,
-          }),
-        })
-        if (!response.ok) throw new Error('Failed to find subs')
-        const data = await response.json()
-        const subs = Array.isArray(data) ? (data as SubCandidate[]) : ((data.subs || []) as SubCandidate[])
-        const combinations = !Array.isArray(data)
-          ? data.recommended_combinations || (data.recommended_combination ? [data.recommended_combination] : [])
-          : []
-        setRecommendedCombinations(combinations)
-        applySubResults(subs)
-      } catch (error) {
-        console.error('Error finding subs:', error)
-      } finally {
-        setLoading(false)
+      // React Query will automatically fetch recommendations when selectedAbsenceId changes
+      // Just trigger a refetch to ensure we get fresh data
+      if (absence.id && !absence.id.startsWith('manual-')) {
+        await refetchRecommendations()
       }
     },
-    [applySubResults, includeFlexibleStaff]
+    [refetchRecommendations]
   )
 
   const handleFindManualSubs = useCallback(
     async ({ teacherId, startDate, endDate, shifts }: ManualFindInput) => {
       if (!teacherId || !startDate) return
-      setLoading(true)
+      // Manual coverage doesn't use React Query - it's a one-off search
       const teacher = teachers.find((t) => t.id === teacherId)
       const teacherName = getDisplayName(teacher, 'Manual Coverage')
       setSelectedAbsence({
@@ -261,23 +311,13 @@ export function useSubFinderData({
         applySubResults(subs, { forceOnlyRecommended: true })
       } catch (error) {
         console.error('Error finding subs (manual):', error)
-      } finally {
-        setLoading(false)
       }
     },
     [applySubResults, getDisplayName, teachers]
   )
 
-  useEffect(() => {
-    if (mode === 'existing') {
-      // Skip initial fetch if we're restoring state (will be called explicitly after restoration)
-      if (hasSkippedInitialFetchRef.current) {
-        hasSkippedInitialFetchRef.current = false // Reset flag after skipping once
-        return
-      }
-      fetchAbsences()
-    }
-  }, [mode, includePartiallyCovered, fetchAbsences])
+  // React Query automatically refetches when includePartiallyCovered changes
+  // No manual useEffect needed
 
   useEffect(() => {
     if (!requestedAbsenceId) return
@@ -291,6 +331,22 @@ export function useSubFinderData({
       hasAppliedAbsenceRef.current = true
     }
   }, [requestedAbsenceId, absences, handleFindSubs])
+  
+  // Expose setAbsences for state restoration (sessionStorage)
+  const setAbsences = useCallback((newAbsences: Absence[]) => {
+    // Used for state restoration from sessionStorage
+    // This temporarily overrides React Query data until restoration is complete
+    console.log('[useSubFinderData] Setting restored absences:', newAbsences.length)
+    setRestoredAbsences(newAbsences)
+    setShouldUseRestoredAbsences(true)
+  }, [])
+  
+  // Expose function to stop using restored absences (after restoration is complete)
+  const clearRestoredAbsences = useCallback(() => {
+    console.log('[useSubFinderData] Clearing restored absences, switching to React Query data')
+    setShouldUseRestoredAbsences(false)
+    setRestoredAbsences(null)
+  }, [])
 
   useEffect(() => {
     if (allSubs.length > 0 && selectedAbsence) {
@@ -322,6 +378,7 @@ export function useSubFinderData({
   return {
     absences,
     setAbsences,
+    clearRestoredAbsences,
     selectedAbsence,
     setSelectedAbsence,
     recommendedSubs,

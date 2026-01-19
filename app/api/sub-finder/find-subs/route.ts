@@ -9,6 +9,7 @@ import { getTimeOffRequests } from '@/lib/api/time-off'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { findTopCombinations } from '@/lib/utils/sub-combination'
 import { buildShiftChips } from '@/lib/server/coverage/shift-chips'
+import { getUserSchoolId } from '@/lib/utils/auth'
 
 interface Shift {
   date: string
@@ -72,6 +73,15 @@ interface SubMatch {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Require schoolId from session
+    const schoolId = await getUserSchoolId()
+    if (!schoolId) {
+      return NextResponse.json(
+        { error: 'User profile not found or missing school_id. Please ensure your profile is set up.' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const { absence_id, include_flexible_staff = true } = body
 

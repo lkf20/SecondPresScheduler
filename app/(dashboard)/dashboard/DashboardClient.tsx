@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import {
   AlertTriangle,
@@ -25,6 +25,8 @@ import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { getCoverageColors, getStaffingColorClasses, getStaffingColors, neutralColors, coverageColorValues, getButtonColors, staffingColorValues } from '@/lib/utils/colors'
 import TimeOffCard from '@/components/shared/TimeOffCard'
 import { Loader2 } from 'lucide-react'
+import { useDashboard } from '@/lib/hooks/use-dashboard'
+import { useProfile } from '@/lib/hooks/use-profile'
 
 type Summary = {
   absences: number
@@ -213,8 +215,13 @@ export default function DashboardClient({
   startDate: string
   endDate: string
 }) {
-  const [greetingName, setGreetingName] = useState<string | null>(null)
   const [greetingTime, setGreetingTime] = useState('Good Morning')
+  const gridRef = useRef<HTMLDivElement>(null)
+  const [isXlScreen, setIsXlScreen] = useState(false)
+  
+  // Use React Query to cache the profile/name
+  const { data: profile } = useProfile()
+  const greetingName = profile?.first_name?.trim() || null
   const [belowRequiredCollapsed, setBelowRequiredCollapsed] = useState(false)
   const [belowPreferredCollapsed, setBelowPreferredCollapsed] = useState(false)
   const [coverageFilter, setCoverageFilter] = useState<'needs' | 'covered' | 'all'>(
@@ -239,9 +246,6 @@ export default function DashboardClient({
     }
   }, [hasHydratedRange])
   
-  const [overview, setOverview] = useState<DashboardOverview>(initialOverview)
-  const [isLoadingOverview, setIsLoadingOverview] = useState(false)
-  
   // Calculate dates based on selected range
   const calculateDates = (range: CoverageRange) => {
     const today = new Date()
@@ -255,41 +259,20 @@ export default function DashboardClient({
     [coverageRange]
   )
   
-  // Track if this is the initial mount to avoid unnecessary fetch
-  const [isInitialMount, setIsInitialMount] = useState(true)
+  // Determine if we should use initial data (only if it matches the current range)
+  const shouldUseInitialData = useMemo(() => {
+    return coverageRange === '2 weeks' && currentStartDate === initialStartDate && currentEndDate === initialEndDate
+  }, [coverageRange, currentStartDate, currentEndDate, initialStartDate, initialEndDate])
   
-  // Fetch overview data when range changes
-  useEffect(() => {
-    // On initial mount, check if we can use the provided data
-    if (isInitialMount) {
-      setIsInitialMount(false)
-      // Only use initial data if it matches the selected range exactly
-      if (coverageRange === '2 weeks' && currentStartDate === initialStartDate && currentEndDate === initialEndDate) {
-        // Use initial data, no need to fetch
-        return
-      }
-    }
-    
-    // Always fetch when range changes (after initial mount)
-    const fetchOverview = async () => {
-      setIsLoadingOverview(true)
-      try {
-        const response = await fetch(
-          `/api/dashboard/overview?start_date=${currentStartDate}&end_date=${currentEndDate}`
-        )
-        if (response.ok) {
-          const data = await response.json()
-          setOverview(data)
-        }
-      } catch (error) {
-        console.error('Failed to fetch overview:', error)
-      } finally {
-        setIsLoadingOverview(false)
-      }
-    }
-    
-    fetchOverview()
-  }, [coverageRange, currentStartDate, currentEndDate, initialStartDate, initialEndDate, isInitialMount])
+  // Use React Query for dashboard data
+  const { data: overview = initialOverview, isLoading: isLoadingOverview, isFetching } = useDashboard(
+    {
+      preset: coverageRange,
+      startDate: currentStartDate,
+      endDate: currentEndDate,
+    },
+    shouldUseInitialData ? initialOverview : undefined
+  )
   
   // Save to localStorage when range changes
   useEffect(() => {
@@ -303,21 +286,53 @@ export default function DashboardClient({
     const greeting =
       hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening'
     setGreetingTime(greeting)
+  }, [])
 
-    const loadProfile = async () => {
-      try {
-        const response = await fetch('/api/setup/profile')
-        if (!response.ok) return
-        const data = await response.json()
-        const firstName = data?.profile?.first_name
-        if (typeof firstName === 'string' && firstName.trim()) {
-          setGreetingName(firstName.trim())
-        }
-      } catch (error) {
-        console.error('Failed to load profile name:', error)
-      }
+  // Track xl screen size for responsive min-width
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsXlScreen(window.innerWidth >= 1280)
     }
-    loadProfile()
+    checkScreenSize()
+    window.addEventListener('resize', checkScreenSize)
+    return () => window.removeEventListener('resize', checkScreenSize)
+  }, [])
+
+  // Debug grid layout on xl screens
+  useEffect(() => {
+    if (typeof window === 'undefined' || !gridRef.current) return
+    
+    const checkLayout = () => {
+      const el = gridRef.current
+      if (!el) return
+      
+      const isXl = window.innerWidth >= 1280
+      if (!isXl) return
+      
+      const styles = window.getComputedStyle(el)
+      const sections = el.querySelectorAll('section')
+      
+      console.log('[Dashboard Grid Debug]', {
+        windowWidth: window.innerWidth,
+        gridWidth: el.offsetWidth,
+        gridTemplateColumns: styles.gridTemplateColumns,
+        gridTemplateColumnsComputed: styles.getPropertyValue('grid-template-columns'),
+        parentWidth: el.parentElement?.offsetWidth,
+        parentMaxWidth: window.getComputedStyle(el.parentElement!).maxWidth,
+        sections: Array.from(sections).map((section, i) => ({
+          index: i,
+          width: section.offsetWidth,
+          minWidth: window.getComputedStyle(section).minWidth,
+          maxWidth: window.getComputedStyle(section).maxWidth,
+          computedWidth: window.getComputedStyle(section).width,
+        })),
+      })
+    }
+    
+    // Check on mount and resize
+    checkLayout()
+    window.addEventListener('resize', checkLayout)
+    return () => window.removeEventListener('resize', checkLayout)
   }, [])
 
   const belowRequiredClassrooms = useMemo(() => {
@@ -449,17 +464,19 @@ export default function DashboardClient({
   }, [belowPreferredGroups.length])
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-10 -mx-4 md:-mx-8 xl:mx-0">
       <section className="space-y-2">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">
             {greetingTime}
-            {greetingName ? `, ${greetingName}` : ''}!
+            <span className="inline-block min-w-[120px]">
+              {greetingName ? `, ${greetingName}!` : ''}
+            </span>
           </h1>
           <p className="text-xl text-slate-600 mt-1 flex items-center gap-2">
             Here is your coverage outlook for {getRangeLabel(coverageRange)} (
             {formatFullDateLabel(currentStartDate)} - {formatFullDateLabel(currentEndDate)}).
-            {isLoadingOverview && (
+            {(isLoadingOverview || (isFetching && !isLoadingOverview)) && (
               <Loader2 className="h-4 w-4 animate-spin text-slate-500 ml-1" />
             )}
             <Popover>
@@ -642,15 +659,21 @@ export default function DashboardClient({
         </div>
       </section>
 
-      <div className="grid grid-cols-1 gap-6 pt-1 max-w-3xl xl:grid-cols-[minmax(550px,1.4fr)_minmax(400px,0.9fr)_minmax(400px,0.9fr)]">
-        <section className="min-w-[550px] space-y-4 rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">
+      <div 
+        ref={gridRef}
+        className="grid grid-cols-1 gap-6 pt-1 w-full xl:grid-cols-[minmax(550px,1.4fr)_minmax(400px,0.9fr)_minmax(400px,0.9fr)]"
+      >
+        <section 
+          className="xl:w-full xl:max-w-full overflow-hidden space-y-4 rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm xl:col-span-1"
+          style={{ minWidth: isXlScreen ? '0' : '550px' }}
+        >
           <div
             role="button"
             tabIndex={0}
             onClick={() => setCoverageSectionCollapsed(!coverageSectionCollapsed)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
+              if (e?.key === 'Enter' || e?.key === ' ') {
+                e?.preventDefault?.()
                 setCoverageSectionCollapsed(!coverageSectionCollapsed)
               }
             }}
@@ -667,7 +690,7 @@ export default function DashboardClient({
               <button
                 type="button"
                 onClick={(e) => {
-                  e.stopPropagation()
+                  e?.stopPropagation?.()
                   setCoverageFilter('needs')
                 }}
                 className={cn(
@@ -682,7 +705,7 @@ export default function DashboardClient({
               <button
                 type="button"
                 onClick={(e) => {
-                  e.stopPropagation()
+                  e?.stopPropagation?.()
                   setCoverageFilter('covered')
                 }}
                 className={cn(
@@ -697,7 +720,7 @@ export default function DashboardClient({
               <button
                 type="button"
                 onClick={(e) => {
-                  e.stopPropagation()
+                  e?.stopPropagation?.()
                   setCoverageFilter('all')
                 }}
                 className={cn(
@@ -778,14 +801,17 @@ export default function DashboardClient({
 
         </section>
 
-        <section className="min-w-[450px] space-y-4 rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">
+        <section 
+          className="xl:w-full xl:max-w-full overflow-hidden space-y-4 rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm xl:col-span-1"
+          style={{ minWidth: isXlScreen ? '0' : '450px' }}
+        >
           <div
             role="button"
             tabIndex={0}
             onClick={() => setScheduledSubsSectionCollapsed(!scheduledSubsSectionCollapsed)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
+              if (e?.key === 'Enter' || e?.key === ' ') {
+                e?.preventDefault?.()
                 setScheduledSubsSectionCollapsed(!scheduledSubsSectionCollapsed)
               }
             }}
@@ -869,14 +895,17 @@ export default function DashboardClient({
           </div>
         </section>
 
-        <section className="min-w-[450px] space-y-4 rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">
+        <section 
+          className="xl:w-full xl:max-w-full overflow-hidden space-y-4 rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm xl:col-span-1"
+          style={{ minWidth: isXlScreen ? '0' : '450px' }}
+        >
           <div
             role="button"
             tabIndex={0}
             onClick={() => setStaffingTargetSectionCollapsed(!staffingTargetSectionCollapsed)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
+              if (e?.key === 'Enter' || e?.key === ' ') {
+                e?.preventDefault?.()
                 setStaffingTargetSectionCollapsed(!staffingTargetSectionCollapsed)
               }
             }}

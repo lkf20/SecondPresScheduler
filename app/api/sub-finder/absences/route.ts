@@ -5,9 +5,19 @@ import { sortCoverageShifts, buildCoverageSegments } from '@/lib/server/coverage
 import { getTimeOffRequests } from '@/lib/api/time-off'
 import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
 import { transformTimeOffCardData } from '@/lib/utils/time-off-card-data'
+import { getUserSchoolId } from '@/lib/utils/auth'
 
 export async function GET(request: NextRequest) {
   try {
+    // Require schoolId from session
+    const schoolId = await getUserSchoolId()
+    if (!schoolId) {
+      return NextResponse.json(
+        { error: 'User profile not found or missing school_id. Please ensure your profile is set up.' },
+        { status: 403 }
+      )
+    }
+
     const searchParams = request.nextUrl.searchParams
     const includePartiallyCovered = searchParams.get('include_partially_covered') === 'true'
     

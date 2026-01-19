@@ -2,16 +2,19 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Settings2 } from 'lucide-react'
+import { Settings2, RefreshCw } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import TimeOffCard from '@/components/shared/TimeOffCard'
 import type { ClassroomBadge } from '@/components/shared/TimeOffCard'
 import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
+import { useTimeOffRequests } from '@/lib/hooks/use-time-off-requests'
+import { parseLocalDate } from '@/lib/utils/date'
 
 type ClassroomBadge = {
   id: string
@@ -41,14 +44,8 @@ type TimeOffRow = {
 
 export default function TimeOffListClient({
   view: initialView,
-  draftRequests,
-  upcomingRequests,
-  pastRequests,
 }: {
   view: string
-  draftRequests: TimeOffRow[]
-  upcomingRequests: TimeOffRow[]
-  pastRequests: TimeOffRow[]
 }) {
   const router = useRouter()
   const [view, setView] = useState(initialView ?? 'active')
@@ -57,6 +54,86 @@ export default function TimeOffListClient({
   const [coverageFilters, setCoverageFilters] = useState<Set<string>>(
     new Set(['covered', 'needs_coverage', 'partially_covered'])
   )
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  
+  // Use React Query to fetch time off requests
+  const { data: timeOffData, isLoading, error, refetch, isFetching } = useTimeOffRequests({
+    statuses: ['active', 'draft'],
+  })
+  
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    await refetch()
+  }
+  
+  // Transform API response to match component's expected format
+  const allRequests: TimeOffRow[] = useMemo(() => {
+    const apiData = timeOffData?.data || []
+    return apiData.map((item: any) => {
+      // Calculate shifts_display from total
+      const total = item.total || 0
+      const shifts_display = `${total} shift${total !== 1 ? 's' : ''}`
+      
+      // Map coverage status - API uses 'covered' | 'partially_covered' | 'needs_coverage'
+      // Component expects 'draft' | 'completed' | 'covered' | 'partially_covered' | 'needs_coverage'
+      let coverage_status: CoverageStatus = item.status || 'needs_coverage'
+      
+      // Check if it's a draft or completed (past) request
+      const requestEndDate = item.end_date || item.start_date
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const isPast = parseLocalDate(requestEndDate) < today
+      
+      // The API should include status, but we need to check for draft/completed
+      // For now, assume the API handles this, but we can add logic here if needed
+      
+      return {
+        id: item.id,
+        teacher_name: item.teacher_name,
+        start_date: item.start_date,
+        end_date: item.end_date,
+        status: item.status === 'draft' ? 'draft' : 'active', // Map from API status
+        coverage_status: coverage_status as CoverageStatus,
+        coverage_covered: item.covered || 0,
+        coverage_total: item.total || 0,
+        coverage_partial: item.partial || 0,
+        coverage_uncovered: item.uncovered || 0,
+        shifts_display,
+        shift_details: item.shift_details,
+        classrooms: item.classrooms,
+        reason: item.reason,
+        notes: item.notes,
+      }
+    })
+  }, [timeOffData])
+  
+  // Transform and categorize requests
+  const { draftRequests, upcomingRequests, pastRequests } = useMemo(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const ninetyDaysAgo = new Date(today)
+    ninetyDaysAgo.setDate(today.getDate() - 90)
+    
+    const getStartDate = (request: TimeOffRow) => parseLocalDate(request.start_date)
+    const getEndDate = (request: TimeOffRow) =>
+      parseLocalDate(request.end_date || request.start_date)
+    
+    const drafts = allRequests.filter((r: TimeOffRow) => r.status === 'draft')
+    const active = allRequests.filter((r: TimeOffRow) => r.status === 'active')
+    
+    const past = active
+      .filter((r: TimeOffRow) => {
+        const endDate = getEndDate(r)
+        return endDate < today && endDate >= ninetyDaysAgo
+      })
+      .sort((a, b) => getEndDate(b).getTime() - getEndDate(a).getTime())
+    
+    const upcoming = active
+      .filter((r: TimeOffRow) => getEndDate(r) >= today)
+      .sort((a, b) => getStartDate(a).getTime() - getStartDate(b).getTime())
+    
+    return { draftRequests: drafts, upcomingRequests: upcoming, pastRequests: past }
+  }, [allRequests])
 
   const handleEdit = (id: string) => {
     setEditingRequestId(id)
@@ -69,6 +146,28 @@ export default function TimeOffListClient({
   useEffect(() => {
     setView(initialView ?? 'active')
   }, [initialView])
+  
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="w-full max-w-4xl">
+        <div className="flex items-center justify-center py-12">
+          <p className="text-muted-foreground">Loading time off requests...</p>
+        </div>
+      </div>
+    )
+  }
+  
+  // Show error state
+  if (error) {
+    return (
+      <div className="w-full max-w-4xl">
+        <div className="flex items-center justify-center py-12">
+          <p className="text-destructive">Failed to load time off requests. Please try again.</p>
+        </div>
+      </div>
+    )
+  }
 
   const updateView = (nextView: string) => {
     setView(nextView)
@@ -130,8 +229,6 @@ export default function TimeOffListClient({
     return { covered, needsCoverage, partiallyCovered }
   }
 
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
-
   const handleDeleteDraft = async (id: string) => {
     if (!confirm('Delete this draft?')) return
     try {
@@ -140,6 +237,8 @@ export default function TimeOffListClient({
         const errorData = await response.json().catch(() => ({ error: 'Failed to delete draft.' }))
         throw new Error(errorData.error || 'Failed to delete draft.')
       }
+      // React Query will automatically refetch when mutations invalidate the cache
+      // But we can also manually trigger a refetch if needed
       router.refresh()
     } catch (error) {
       console.error('Failed to delete draft:', error)
@@ -242,9 +341,29 @@ export default function TimeOffListClient({
 
   return (
     <>
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Time Off Requests</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Time Off Requests</h1>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleRefresh}
+                    disabled={isFetching}
+                    className="h-10 w-10 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Refresh list</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
           <p className="text-muted-foreground mt-2">Manage teacher time off requests</p>
         </div>
         <AddTimeOffButton />

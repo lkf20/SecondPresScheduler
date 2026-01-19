@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createErrorResponse } from '@/lib/utils/errors'
+import { getUserSchoolId } from '@/lib/utils/auth'
 
 const toDateString = (date: Date) => {
   const year = date.getFullYear()
@@ -25,6 +26,15 @@ const getOverlap = (startDate: string, endDate: string, rangeStart: string, rang
 
 export async function GET(request: NextRequest) {
   try {
+    // Require schoolId from session
+    const schoolId = await getUserSchoolId()
+    if (!schoolId) {
+      return NextResponse.json(
+        { error: 'User profile not found or missing school_id. Please ensure your profile is set up.' },
+        { status: 403 }
+      )
+    }
+
     const searchParams = request.nextUrl.searchParams
     const today = new Date()
     const startDate = searchParams.get('start_date') || toDateString(today)
