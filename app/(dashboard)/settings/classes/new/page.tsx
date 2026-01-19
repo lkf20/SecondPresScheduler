@@ -62,7 +62,7 @@ export default function NewClassPage() {
     watch,
     setValue,
     formState: { errors, isSubmitting },
-  } = useForm<ClassFormData>({
+  } = useForm({
     resolver: zodResolver(classSchema),
     defaultValues: {
       diaper_changing_required: false,

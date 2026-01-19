@@ -18,7 +18,14 @@ const timeslotSchema = z.object({
   name: z.string().optional(),
   default_start_time: z.string().optional(),
   default_end_time: z.string().optional(),
-  display_order: z.coerce.number().int().optional().or(z.literal('')),
+  display_order: z
+    .union([z.string(), z.number(), z.literal('')])
+    .transform((val): number | '' | undefined => {
+      if (val === '' || val === null || val === undefined) return undefined
+      const num = typeof val === 'string' ? Number(val) : val
+      return isNaN(num) ? undefined : num
+    })
+    .optional(),
 })
 
 type TimeSlotFormData = z.infer<typeof timeslotSchema>
@@ -35,7 +42,7 @@ export default function TimeSlotFormClient({ timeslot }: TimeSlotFormClientProps
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<TimeSlotFormData>({
+  } = useForm({
     resolver: zodResolver(timeslotSchema),
     defaultValues: {
       code: timeslot.code,
@@ -75,21 +82,24 @@ export default function TimeSlotFormClient({ timeslot }: TimeSlotFormClientProps
 
       // Handle display_order - allow 0 as a valid value
       // The form field can be a number (from coercion) or empty string
+      const displayOrderValue: unknown = data.display_order
       if (
-        data.display_order === '' ||
-        data.display_order === null ||
-        data.display_order === undefined
+        displayOrderValue === '' ||
+        displayOrderValue === null ||
+        displayOrderValue === undefined
       ) {
         payload.display_order = null
       } else {
         // Convert to number, handling both string and number inputs
         const numValue =
-          typeof data.display_order === 'string'
-            ? data.display_order.trim() === ''
+          typeof displayOrderValue === 'string'
+            ? displayOrderValue.trim() === ''
               ? null
-              : Number(data.display_order)
-            : Number(data.display_order)
-        payload.display_order = isNaN(numValue) ? null : numValue
+              : Number(displayOrderValue)
+            : typeof displayOrderValue === 'number'
+              ? displayOrderValue
+              : Number(displayOrderValue)
+        payload.display_order = numValue === null || isNaN(numValue) ? null : numValue
       }
       const response = await fetch(`/api/timeslots/${timeslot.id}`, {
         method: 'PUT',
