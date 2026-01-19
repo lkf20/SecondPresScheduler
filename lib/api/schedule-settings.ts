@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export interface ScheduleSettings {
   id: string
+  school_id: string
   selected_day_ids: string[]
   created_at: string
   updated_at: string

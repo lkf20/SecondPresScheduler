@@ -68,8 +68,7 @@ export interface WeeklyScheduleDataByClassroom {
 export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: string[]) {
   const supabase = await createClient()
   
-  // Get all days of week and time slots
-  // Note: days_of_week and time_slots are reference data and don't have school_id columns
+  // Get all days of week (reference data - doesn't have school_id, shared across all schools)
   let daysQuery = supabase
     .from('days_of_week')
     .select('*')
@@ -96,6 +95,7 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
   const { data: timeSlots, error: timeSlotsError } = await supabase
     .from('time_slots')
     .select('*')
+    .eq('school_id', schoolId)
     .order('display_order', { ascending: true })
   
   if (timeSlotsError) {
@@ -103,16 +103,12 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
   }
   
   // Get classrooms ordered by order field, then name
-  // Note: classrooms may or may not have school_id - check if column exists before filtering
-  let classroomsQuery = supabase
+  const { data: classrooms, error: classroomsError } = await supabase
     .from('classrooms')
     .select('*')
+    .eq('school_id', schoolId)
     .order('order', { ascending: true, nullsFirst: false })
     .order('name', { ascending: true })
-  
-  // Try to filter by school_id if the column exists (will be handled by RLS if needed)
-  // For now, we'll rely on RLS policies to filter by school
-  const { data: classrooms, error: classroomsError } = await classroomsQuery
   
   if (classroomsError) {
     throw new Error(`Failed to fetch classrooms: ${classroomsError.message}`)
@@ -131,7 +127,6 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
   }
   
   // Get all teacher schedules with related data
-  // Note: teacher_schedules doesn't have school_id column - filtering handled by RLS or other means
   const { data: schedules, error: schedulesError } = await supabase
     .from('teacher_schedules')
     .select(`
@@ -142,6 +137,7 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
       class:class_groups(*),
       classroom:classrooms(*)
     `)
+    .eq('school_id', schoolId)
   
   if (schedulesError) {
     console.error('API Error: Failed to fetch teacher schedules:', schedulesError)
@@ -149,7 +145,6 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
   }
   
   // Get staffing rules
-  // Note: staffing_rules doesn't have school_id column - filtering handled by RLS or other means
   const { data: staffingRules, error: staffingRulesError } = await supabase
     .from('staffing_rules')
     .select(`
@@ -158,6 +153,7 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
       day_of_week:days_of_week(*),
       time_slot:time_slots(*)
     `)
+    .eq('school_id', schoolId)
   
   if (staffingRulesError) {
     console.error('API Error: Failed to fetch staffing rules:', staffingRulesError)
@@ -165,8 +161,6 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
   }
   
   // Get schedule cells (gracefully handle if table doesn't exist yet)
-  // Note: We fetch all schedule cells and filter in memory for flexibility
-  // Note: schedule_cells doesn't have school_id column - filtering handled by RLS or other means
   let scheduleCells: ScheduleCellRaw[] | null = null
   try {
     const { data, error: scheduleCellsError } = await supabase
@@ -177,6 +171,7 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
           class_group:class_groups(id, name, min_age, max_age, required_ratio, preferred_ratio)
         )
       `)
+      .eq('school_id', schoolId)
     
     if (scheduleCellsError) {
       // If table doesn't exist (migration not run), continue without schedule cells

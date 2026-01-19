@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
+import { getUserSchoolId } from '@/lib/utils/auth'
 
 type Classroom = Database['public']['Tables']['classrooms']['Row']
 type AllowedClassJoin = { class: { id: string; name: string } | null }
@@ -9,7 +10,7 @@ type ClassroomWithAllowedClasses = Classroom & {
   allowed_classes_count: number
 }
 
-export async function getClassrooms(includeInactive = false): Promise<ClassroomWithAllowedClasses[]> {
+export async function getClassrooms(includeInactive = false, schoolId?: string): Promise<ClassroomWithAllowedClasses[]> {
   const supabase = await createClient()
   let query = supabase
     .from('classrooms')
@@ -21,6 +22,12 @@ export async function getClassrooms(includeInactive = false): Promise<ClassroomW
     `)
     .order('order', { ascending: true, nullsFirst: false })
     .order('name', { ascending: true })
+
+  // Filter by school_id
+  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  if (effectiveSchoolId) {
+    query = query.eq('school_id', effectiveSchoolId)
+  }
 
   if (!includeInactive) {
     query = query.eq('is_active', true)
@@ -41,13 +48,19 @@ export async function getClassrooms(includeInactive = false): Promise<ClassroomW
   }))
 }
 
-export async function getClassroomById(id: string) {
+export async function getClassroomById(id: string, schoolId?: string) {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  let query = supabase
     .from('classrooms')
     .select('*')
     .eq('id', id)
-    .single()
+
+  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  if (effectiveSchoolId) {
+    query = query.eq('school_id', effectiveSchoolId)
+  }
+
+  const { data, error } = await query.single()
 
   if (error) throw error
   return data as Classroom
@@ -58,14 +71,22 @@ export async function createClassroom(classroom: {
   capacity?: number | null
   order?: number | null
   is_active?: boolean
+  school_id?: string
 }) {
   const supabase = await createClient()
   
-  // If order is not provided, set it to the end (highest order + 1)
+  // Get school_id if not provided
+  const schoolId = classroom.school_id || await getUserSchoolId()
+  if (!schoolId) {
+    throw new Error('school_id is required to create a classroom')
+  }
+  
+  // If order is not provided, set it to the end (highest order + 1) for this school
   if (classroom.order === undefined || classroom.order === null) {
     const { data: existingClassrooms } = await supabase
       .from('classrooms')
       .select('order')
+      .eq('school_id', schoolId)
       .order('order', { ascending: false, nullsFirst: false })
       .limit(1)
     
@@ -76,6 +97,7 @@ export async function createClassroom(classroom: {
   // Default is_active to true if not provided
   const insertData = {
     ...classroom,
+    school_id: schoolId,
     is_active: classroom.is_active ?? true,
   }
   
@@ -89,14 +111,19 @@ export async function createClassroom(classroom: {
   return data as Classroom
 }
 
-export async function updateClassroom(id: string, updates: Partial<Classroom>) {
+export async function updateClassroom(id: string, updates: Partial<Classroom>, schoolId?: string) {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  let query = supabase
     .from('classrooms')
     .update(updates)
     .eq('id', id)
-    .select()
-    .single()
+
+  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  if (effectiveSchoolId) {
+    query = query.eq('school_id', effectiveSchoolId)
+  }
+
+  const { data, error } = await query.select().single()
 
   if (error) throw error
   return data as Classroom
@@ -105,15 +132,19 @@ export async function updateClassroom(id: string, updates: Partial<Classroom>) {
 // Note: We use soft delete (is_active = false) instead of hard delete
 // This function is kept for backward compatibility but should not be used
 // Use updateClassroom to set is_active = false instead
-export async function deleteClassroom(id: string) {
+export async function deleteClassroom(id: string, schoolId?: string) {
   const supabase = await createClient()
-  // Soft delete: set is_active to false
-  const { data, error } = await supabase
+  let query = supabase
     .from('classrooms')
     .update({ is_active: false })
     .eq('id', id)
-    .select()
-    .single()
+
+  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  if (effectiveSchoolId) {
+    query = query.eq('school_id', effectiveSchoolId)
+  }
+
+  const { data, error } = await query.select().single()
 
   if (error) throw error
   return data as Classroom
