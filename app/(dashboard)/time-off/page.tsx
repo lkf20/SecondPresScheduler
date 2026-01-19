@@ -4,7 +4,6 @@ import { getTeacherSchedules } from '@/lib/api/schedules'
 import TimeOffListClient from './TimeOffListClient'
 import { parseLocalDate } from '@/lib/utils/date'
 import { transformTimeOffCardData } from '@/lib/utils/time-off-card-data'
-import { getHeaderClasses } from '@/lib/utils/colors'
 import { cache } from 'react'
 
 // Cache the expensive data fetching operation
