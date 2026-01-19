@@ -47,6 +47,7 @@ export default function Header({ userEmail }: HeaderProps) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [pendingClose, setPendingClose] = useState(false)
   const [clearDraftOnMount, setClearDraftOnMount] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
   const timeOffFormRef = useRef<{ reset: () => void }>(null)
   const { activePanel, savePreviousPanel, restorePreviousPanel, setActivePanel, requestPanelClose } = usePanelManager()
   const [isFindSubPopoverOpen, setIsFindSubPopoverOpen] = useState(false)
@@ -196,6 +197,11 @@ export default function Header({ userEmail }: HeaderProps) {
     }
   }, [isFindSubPopoverOpen])
 
+  // Set mounted state after component mounts to prevent hydration errors with Radix UI
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between px-4">
@@ -223,75 +229,82 @@ export default function Header({ userEmail }: HeaderProps) {
               <CalendarPlus className="h-4 w-4 mr-2" />
               Add Time Off
             </Button>
-            <Popover open={isFindSubPopoverOpen} onOpenChange={setIsFindSubPopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button size="sm" variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-100">
-                  <UserSearch className="h-4 w-4 mr-2" />
-                  Find Sub
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80" align="start">
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-sm">Find sub for:</h3>
-                  <div ref={teacherSearchRef} className="rounded-md border border-slate-200 bg-white">
-                    <div className="border-b border-slate-100 px-2 py-1">
-                      <Input
-                        placeholder="Search or select a teacher..."
-                        value={selectedTeacher ? getTeacherDisplayName(selectedTeacher) : teacherSearch}
-                        onChange={(event) => {
-                          const value = event.target.value
-                          setTeacherSearch(value)
-                          setIsTeacherDropdownOpen(true)
-                          // Clear selection if user is typing
-                          if (selectedTeacherId) {
-                            setSelectedTeacherId('')
-                          }
-                        }}
-                        onFocus={() => setIsTeacherDropdownOpen(true)}
-                        onBlur={() => {
-                          setTimeout(() => setIsTeacherDropdownOpen(false), 150)
-                        }}
-                        className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
-                      />
-                    </div>
-                    {isTeacherDropdownOpen && (
-                      <div className="max-h-52 overflow-y-auto p-2">
-                        {filteredTeachers.length === 0 ? (
-                          <div className="p-2 text-xs text-muted-foreground">No matches</div>
-                        ) : (
-                          <div className="space-y-1">
-                            {filteredTeachers.map((teacher) => {
-                              const name = getTeacherDisplayName(teacher)
-                              return (
-                                <button
-                                  key={teacher.id}
-                                  type="button"
-                                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
-                                  onClick={() => {
-                                    setSelectedTeacherId(teacher.id)
-                                    setTeacherSearch('')
-                                    setIsTeacherDropdownOpen(false)
-                                  }}
-                                >
-                                  {name}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <Button
-                    onClick={handleFindSubGo}
-                    disabled={!selectedTeacherId}
-                    className="w-full"
-                  >
-                    Go
+            {isMounted ? (
+              <Popover open={isFindSubPopoverOpen} onOpenChange={setIsFindSubPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button size="sm" variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-100">
+                    <UserSearch className="h-4 w-4 mr-2" />
+                    Find Sub
                   </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
+                </PopoverTrigger>
+                <PopoverContent className="w-80" align="start">
+                  <div className="space-y-4">
+                    <h3 className="font-semibold text-sm">Find sub for:</h3>
+                    <div ref={teacherSearchRef} className="rounded-md border border-slate-200 bg-white">
+                      <div className="border-b border-slate-100 px-2 py-1">
+                        <Input
+                          placeholder="Search or select a teacher..."
+                          value={selectedTeacher ? getTeacherDisplayName(selectedTeacher) : teacherSearch}
+                          onChange={(event) => {
+                            const value = event.target.value
+                            setTeacherSearch(value)
+                            setIsTeacherDropdownOpen(true)
+                            // Clear selection if user is typing
+                            if (selectedTeacherId) {
+                              setSelectedTeacherId('')
+                            }
+                          }}
+                          onFocus={() => setIsTeacherDropdownOpen(true)}
+                          onBlur={() => {
+                            setTimeout(() => setIsTeacherDropdownOpen(false), 150)
+                          }}
+                          className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
+                        />
+                      </div>
+                      {isTeacherDropdownOpen && (
+                        <div className="max-h-52 overflow-y-auto p-2">
+                          {filteredTeachers.length === 0 ? (
+                            <div className="p-2 text-xs text-muted-foreground">No matches</div>
+                          ) : (
+                            <div className="space-y-1">
+                              {filteredTeachers.map((teacher) => {
+                                const name = getTeacherDisplayName(teacher)
+                                return (
+                                  <button
+                                    key={teacher.id}
+                                    type="button"
+                                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
+                                    onClick={() => {
+                                      setSelectedTeacherId(teacher.id)
+                                      setTeacherSearch('')
+                                      setIsTeacherDropdownOpen(false)
+                                    }}
+                                  >
+                                    {name}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      onClick={handleFindSubGo}
+                      disabled={!selectedTeacherId}
+                      className="w-full"
+                    >
+                      Go
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <Button size="sm" variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-100" disabled>
+                <UserSearch className="h-4 w-4 mr-2" />
+                Find Sub
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"

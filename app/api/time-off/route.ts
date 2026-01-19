@@ -6,9 +6,19 @@ import {
   getTeacherScheduledShifts,
   getTeacherTimeOffShifts,
 } from '@/lib/api/time-off-shifts'
+import { getUserSchoolId } from '@/lib/utils/auth'
 
 export async function GET(request: NextRequest) {
   try {
+    // Require schoolId from session
+    const schoolId = await getUserSchoolId()
+    if (!schoolId) {
+      return NextResponse.json(
+        { error: 'User profile not found or missing school_id. Please ensure your profile is set up.' },
+        { status: 403 }
+      )
+    }
+
     const searchParams = request.nextUrl.searchParams
     const filters: any = {}
     if (searchParams.get('teacher_id')) filters.teacher_id = searchParams.get('teacher_id')
@@ -24,6 +34,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Require schoolId from session
+    const schoolId = await getUserSchoolId()
+    if (!schoolId) {
+      return NextResponse.json(
+        { error: 'User profile not found or missing school_id. Please ensure your profile is set up.' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const { shifts, ...requestData } = body
     const status = requestData.status || 'active'
