@@ -42,8 +42,8 @@ export default function TimeSlotFormClient({ timeslot }: TimeSlotFormClientProps
       name: timeslot.name || '',
       default_start_time: timeslot.default_start_time || '',
       default_end_time: timeslot.default_end_time || '',
-      display_order: timeslot.display_order != null ? timeslot.display_order.toString() : '',
-    },
+      display_order: (timeslot.display_order != null ? timeslot.display_order.toString() : '') as string | undefined,
+    } as z.input<typeof timeslotSchema>,
   })
 
   // Reset form when timeslot data changes
