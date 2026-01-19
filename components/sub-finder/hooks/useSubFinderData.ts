@@ -149,7 +149,18 @@ export function useSubFinderData({
   
   // Support state restoration - allow setting absences from sessionStorage
   const [restoredAbsences, setRestoredAbsences] = useState<Absence[] | null>(null)
-  const absences = restoredAbsences || transformedAbsences
+  const [shouldUseRestoredAbsences, setShouldUseRestoredAbsences] = useState(false)
+  
+  // Use restored absences if available and we're in restoration mode, otherwise use React Query data
+  // Once restoration is complete, we can merge/update with React Query data
+  const absences = useMemo(() => {
+    if (shouldUseRestoredAbsences && restoredAbsences && restoredAbsences.length > 0) {
+      console.log('[useSubFinderData] Using restored absences:', restoredAbsences.length)
+      return restoredAbsences
+    }
+    console.log('[useSubFinderData] Using transformed absences from React Query:', transformedAbsences.length)
+    return transformedAbsences
+  }, [restoredAbsences, transformedAbsences, shouldUseRestoredAbsences])
   
   // Use React Query for sub recommendations when an absence is selected
   const selectedAbsenceId = selectedAbsence?.id && selectedAbsence.id.startsWith('manual-') 
@@ -324,8 +335,17 @@ export function useSubFinderData({
   // Expose setAbsences for state restoration (sessionStorage)
   const setAbsences = useCallback((newAbsences: Absence[]) => {
     // Used for state restoration from sessionStorage
-    // This temporarily overrides React Query data until next refetch
+    // This temporarily overrides React Query data until restoration is complete
+    console.log('[useSubFinderData] Setting restored absences:', newAbsences.length)
     setRestoredAbsences(newAbsences)
+    setShouldUseRestoredAbsences(true)
+  }, [])
+  
+  // Expose function to stop using restored absences (after restoration is complete)
+  const clearRestoredAbsences = useCallback(() => {
+    console.log('[useSubFinderData] Clearing restored absences, switching to React Query data')
+    setShouldUseRestoredAbsences(false)
+    setRestoredAbsences(null)
   }, [])
 
   useEffect(() => {
@@ -358,6 +378,7 @@ export function useSubFinderData({
   return {
     absences,
     setAbsences,
+    clearRestoredAbsences,
     selectedAbsence,
     setSelectedAbsence,
     recommendedSubs,

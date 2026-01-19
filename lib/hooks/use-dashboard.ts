@@ -79,6 +79,6 @@ export function useDashboard(params: DashboardQueryParams, initialData?: Dashboa
     queryFn: () => fetchDashboard(params),
     initialData,
     staleTime: 600000, // 10 minutes
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: true, // Keep enabled for Dashboard to show latest data
   })
 }

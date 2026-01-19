@@ -8,7 +8,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Settings2 } from 'lucide-react'
+import { Settings2, RefreshCw } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import TimeOffCard from '@/components/shared/TimeOffCard'
 import type { ClassroomBadge } from '@/components/shared/TimeOffCard'
 import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
@@ -56,9 +57,14 @@ export default function TimeOffListClient({
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   
   // Use React Query to fetch time off requests
-  const { data: timeOffData, isLoading, error } = useTimeOffRequests({
+  const { data: timeOffData, isLoading, error, refetch, isFetching } = useTimeOffRequests({
     statuses: ['active', 'draft'],
   })
+  
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    await refetch()
+  }
   
   // Transform API response to match component's expected format
   const allRequests: TimeOffRow[] = useMemo(() => {
@@ -340,7 +346,27 @@ export default function TimeOffListClient({
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Time Off Requests</h1>
           <p className="text-muted-foreground mt-2">Manage teacher time off requests</p>
         </div>
-        <AddTimeOffButton />
+        <div className="flex items-center gap-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleRefresh}
+                  disabled={isFetching}
+                  className="h-10 w-10 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Refresh list</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <AddTimeOffButton />
+        </div>
       </div>
       
       {/* Separate instance for editing - hidden, only used to control the panel */}

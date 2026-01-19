@@ -63,6 +63,6 @@ export function useTimeOffRequests(params?: TimeOffRequestsQueryParams, initialD
     queryFn: () => fetchTimeOffRequests(params),
     initialData,
     staleTime: 600000, // 10 minutes
-    refetchOnWindowFocus: true,
+    // refetchOnWindowFocus: false (inherits from global default)
   })
 }

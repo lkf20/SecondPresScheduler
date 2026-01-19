@@ -30,6 +30,6 @@ export function useWeeklySchedule(weekStartISO: string, initialData?: WeeklySche
     queryFn: fetchWeeklySchedule,
     initialData,
     staleTime: 600000, // 10 minutes
-    refetchOnWindowFocus: true,
+    // refetchOnWindowFocus: false (inherits from global default)
   })
 }
