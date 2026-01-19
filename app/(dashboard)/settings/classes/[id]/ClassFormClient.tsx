@@ -17,37 +17,34 @@ type ClassGroup = Database['public']['Tables']['class_groups']['Row']
 
 const classSchema = z.object({
   name: z.string().min(1, 'Class group name is required'),
-  min_age: z
-    .union([z.string(), z.number(), z.null(), z.undefined()])
-    .transform((val): number | null => {
+  min_age: z.preprocess(
+    (val) => {
       if (val === '' || val === null || val === undefined || isNaN(Number(val))) return null
       const num = Number(val)
       if (num < 0 || num > 18 || !Number.isInteger(num)) return null
       return num
-    })
-    .nullable()
-    .optional(),
-  max_age: z
-    .union([z.string(), z.number(), z.null(), z.undefined()])
-    .transform((val): number | null => {
+    },
+    z.number().nullable().optional()
+  ),
+  max_age: z.preprocess(
+    (val) => {
       if (val === '' || val === null || val === undefined || isNaN(Number(val))) return null
       const num = Number(val)
       if (num < 0 || num > 18 || !Number.isInteger(num)) return null
       return num
-    })
-    .nullable()
-    .optional(),
+    },
+    z.number().nullable().optional()
+  ),
   required_ratio: z.number().int().min(1, 'Required ratio must be at least 1'),
-  preferred_ratio: z
-    .union([z.string(), z.number(), z.null(), z.undefined()])
-    .transform((val): number | null => {
+  preferred_ratio: z.preprocess(
+    (val) => {
       if (val === '' || val === null || val === undefined || isNaN(Number(val))) return null
       const num = Number(val)
       if (num < 1 || !Number.isInteger(num)) return null
       return num
-    })
-    .nullable()
-    .optional(),
+    },
+    z.number().nullable().optional()
+  ),
   diaper_changing_required: z.boolean().optional(),
   lifting_children_required: z.boolean().optional(),
   toileting_assistance_required: z.boolean().optional(),

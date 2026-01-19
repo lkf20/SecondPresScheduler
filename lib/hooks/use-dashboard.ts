@@ -5,7 +5,6 @@ import { useSchool } from '@/lib/contexts/SchoolContext'
 import { dashboardKey, type DashboardQueryParams } from '@/lib/utils/query-keys'
 
 type DashboardOverview = {
-  range: { start_date: string; end_date: string }
   summary: {
     absences: number
     uncovered_shifts: number
