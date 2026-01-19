@@ -53,6 +53,7 @@ export default function TimeOffListClient({
   const [coverageFilters, setCoverageFilters] = useState<Set<string>>(
     new Set(['covered', 'needs_coverage', 'partially_covered'])
   )
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   
   // Use React Query to fetch time off requests
   const { data: timeOffData, isLoading, error } = useTimeOffRequests({
@@ -221,8 +222,6 @@ export default function TimeOffListClient({
 
     return { covered, needsCoverage, partiallyCovered }
   }
-
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
   const handleDeleteDraft = async (id: string) => {
     if (!confirm('Delete this draft?')) return
