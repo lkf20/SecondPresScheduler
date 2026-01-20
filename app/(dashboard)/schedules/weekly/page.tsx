@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import WeeklyScheduleGridNew from '@/components/schedules/WeeklyScheduleGridNew'
 import FilterPanel, { type FilterState } from '@/components/schedules/FilterPanel'
+import WeekPicker from '@/components/schedules/WeekPicker'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
 import { Button } from '@/components/ui/button'
@@ -39,7 +40,24 @@ export default function WeeklySchedulePage() {
   const focusDayId = searchParams.get('day_of_week_id')
   const focusTimeSlotId = searchParams.get('time_slot_id')
   const hasAppliedFocusRef = useRef(false)
-  const weekStartISO = getWeekStartISO()
+  
+  // Week state - initialize from localStorage or use current week
+  const [weekStartISO, setWeekStartISO] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const savedWeek = localStorage.getItem('weekly-schedule-week')
+      if (savedWeek) {
+        return savedWeek
+      }
+    }
+    return getWeekStartISO()
+  })
+  
+  // Save week to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('weekly-schedule-week', weekStartISO)
+    }
+  }, [weekStartISO])
   
   // React Query hooks
   const { data: scheduleData = [], isLoading: isLoadingSchedule, error: scheduleError } = useWeeklySchedule(weekStartISO)
@@ -282,14 +300,25 @@ export default function WeeklySchedulePage() {
     }
   }, [filteredData, sortedDays, availableTimeSlots, availableClassrooms])
 
+  const handleTodayClick = () => {
+    setWeekStartISO(getWeekStartISO())
+  }
+
   return (
     <div>
       <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Weekly Schedule</h1>
-          <p className="text-muted-foreground mt-2">
-            Manage staffing by classroom, day, and time slot
-          </p>
+        <div className="flex items-center gap-6">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Weekly Schedule</h1>
+            <p className="text-muted-foreground mt-2">
+              Manage staffing by classroom, day, and time slot
+            </p>
+          </div>
+          <WeekPicker
+            weekStartISO={weekStartISO}
+            onWeekChange={setWeekStartISO}
+            onTodayClick={handleTodayClick}
+          />
         </div>
         <Button
           variant="outline"

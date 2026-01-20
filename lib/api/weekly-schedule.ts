@@ -65,7 +65,7 @@ export interface WeeklyScheduleDataByClassroom {
   }>
 }
 
-export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: string[]) {
+export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: string[], weekStartISO?: string) {
   const supabase = await createClient()
   
   // Get all days of week and time slots
@@ -210,6 +210,73 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
     scheduleCells = null
   }
   
+  // Fetch substitute assignments for the selected week (if weekStartISO is provided)
+  let subAssignments: Array<{
+    id: string
+    date: string
+    day_of_week_id: string | null
+    time_slot_id: string
+    classroom_id: string
+    sub_id: string
+    teacher_id: string
+    sub_name: string
+    teacher_name: string
+    class_id: string | null
+    class_name: string | null
+  }> = []
+  
+  if (weekStartISO) {
+    try {
+      // Calculate week start and end dates
+      const weekStart = new Date(weekStartISO + 'T00:00:00')
+      const weekEnd = new Date(weekStart)
+      weekEnd.setDate(weekEnd.getDate() + 6) // Add 6 days to get Sunday
+      
+      // Fetch sub_assignments for the week
+      const { data: subAssignmentsData, error: subAssignmentsError } = await supabase
+        .from('sub_assignments')
+        .select(`
+          id,
+          date,
+          day_of_week_id,
+          time_slot_id,
+          classroom_id,
+          sub_id,
+          teacher_id,
+          sub:staff!sub_assignments_sub_id_fkey(id, first_name, last_name, display_name),
+          teacher:staff!sub_assignments_teacher_id_fkey(id, first_name, last_name, display_name)
+        `)
+        .gte('date', weekStartISO)
+        .lte('date', weekEnd.toISOString().split('T')[0])
+      
+      if (subAssignmentsError) {
+        console.warn('Error fetching sub_assignments:', subAssignmentsError.message)
+      } else if (subAssignmentsData) {
+        // Map sub_assignments - day_of_week_id is already in the database
+        subAssignments = subAssignmentsData.map((sa: any) => ({
+          id: sa.id,
+          date: sa.date,
+          day_of_week_id: sa.day_of_week_id,
+          time_slot_id: sa.time_slot_id,
+          classroom_id: sa.classroom_id,
+          sub_id: sa.sub_id,
+          teacher_id: sa.teacher_id,
+          sub_name: sa.sub?.display_name || 
+                   `${sa.sub?.first_name || ''} ${sa.sub?.last_name || ''}`.trim() ||
+                   'Unknown',
+          teacher_name: sa.teacher?.display_name || 
+                       `${sa.teacher?.first_name || ''} ${sa.teacher?.last_name || ''}`.trim() ||
+                       'Unknown',
+          class_id: null, // sub_assignments doesn't have class_id - will use first class group from schedule_cell
+          class_name: null,
+        }))
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      console.warn('Error fetching sub_assignments:', errorMessage)
+    }
+  }
+  
   // Build the weekly schedule data structure grouped by classroom
   const weeklyDataByClassroom: WeeklyScheduleDataByClassroom[] = []
   
@@ -312,6 +379,37 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
               preferred_teachers: rule?.preferred_teachers,
               assigned_count: teachers.length,
             })
+          }
+          
+          // Add substitute assignments for this day/time/classroom (if weekStartISO is provided)
+          if (weekStartISO && day.id) {
+            const subsForSlot = subAssignments.filter(
+              (sa) => sa.day_of_week_id === day.id &&
+                     sa.time_slot_id === timeSlot.id &&
+                     sa.classroom_id === classroom.id
+            )
+            
+            for (const sub of subsForSlot) {
+              // Find matching class group if class_id is set
+              const matchingClassGroup = sub.class_id && classGroupIds.includes(sub.class_id)
+                ? classGroups.find(cg => cg.id === sub.class_id)
+                : null
+              
+              assignments.push({
+                id: sub.id,
+                teacher_id: sub.sub_id, // Use sub_id as teacher_id for substitutes
+                teacher_name: sub.sub_name,
+                class_id: sub.class_id || (matchingClassGroup ? matchingClassGroup.id : classGroupIds[0]),
+                class_name: sub.class_name || (matchingClassGroup ? matchingClassGroup.name : 'Unknown'),
+                classroom_id: sub.classroom_id,
+                classroom_name: classroom.name,
+                is_floater: false, // Substitutes are not floaters
+                enrollment: enrollment ?? 0,
+                required_teachers: rule?.required_teachers,
+                preferred_teachers: rule?.preferred_teachers,
+                assigned_count: teachers.length + subsForSlot.length,
+              })
+            }
           }
         }
         
