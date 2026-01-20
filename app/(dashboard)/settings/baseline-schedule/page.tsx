@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import WeeklyScheduleGridNew from '@/components/schedules/WeeklyScheduleGridNew'
@@ -65,9 +65,11 @@ export default function BaselineSchedulePage() {
         try {
           const parsed = JSON.parse(savedFilters)
           // Ensure layout defaults to 'days-x-classrooms' if not set
+          // Always enforce 'permanent-only' for baseline schedule
           return {
             ...parsed,
             layout: parsed.layout || 'days-x-classrooms',
+            displayMode: 'permanent-only',
           }
         } catch (e) {
           console.error('Error parsing saved filters:', e)
@@ -92,6 +94,7 @@ export default function BaselineSchedulePage() {
             setFilters({
               ...parsed,
               layout: parsed.layout || 'days-x-classrooms',
+              displayMode: 'permanent-only', // Always enforce permanent-only for baseline schedule
             })
             return
           } catch (e) {
@@ -110,7 +113,7 @@ export default function BaselineSchedulePage() {
           fullyStaffed: true,
           inactive: true,
         },
-        displayMode: 'all-scheduled-staff',
+        displayMode: 'permanent-only', // Baseline schedule only shows permanent teachers
         layout: 'days-x-classrooms', // Default layout
       })
     }
@@ -137,7 +140,7 @@ export default function BaselineSchedulePage() {
         fullyStaffed: true,
         inactive: true,
       },
-      displayMode: prev?.displayMode ?? 'all-scheduled-staff',
+      displayMode: 'permanent-only', // Baseline schedule only shows permanent teachers
       layout: prev?.layout ?? 'days-x-classrooms',
     }))
     hasAppliedFocusRef.current = true
@@ -336,13 +339,16 @@ export default function BaselineSchedulePage() {
             onClose={() => {
               setFilterPanelOpen(false)
             }}
-            onFiltersChange={newFilters => {
-              setFilters(newFilters)
-            }}
+            onFiltersChange={useCallback((newFilters: FilterState) => {
+              // Ensure displayMode is always permanent-only for baseline schedule
+              setFilters({ ...newFilters, displayMode: 'permanent-only' })
+            }, [])}
             availableDays={availableDays}
             availableTimeSlots={availableTimeSlots}
             availableClassrooms={availableClassrooms}
             selectedDayIdsFromSettings={selectedDayIds}
+            hideStaffSection={true}
+            slotCounts={slotCounts}
             initialFilters={filters ? {
               selectedDayIds: filters.selectedDayIds,
               selectedTimeSlotIds: filters.selectedTimeSlotIds,
@@ -352,6 +358,7 @@ export default function BaselineSchedulePage() {
               layout: filters.layout,
             } : {
               selectedDayIds: selectedDayIds,
+              displayMode: 'permanent-only',
               layout: 'days-x-classrooms',
             }}
           />
