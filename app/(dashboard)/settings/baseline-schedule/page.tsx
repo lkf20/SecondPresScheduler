@@ -1,11 +1,10 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import WeeklyScheduleGridNew from '@/components/schedules/WeeklyScheduleGridNew'
 import FilterPanel, { type FilterState } from '@/components/schedules/FilterPanel'
-import WeekPicker from '@/components/schedules/WeekPicker'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
 import { Button } from '@/components/ui/button'
@@ -32,7 +31,7 @@ function getWeekStartISO(): string {
   return monday.toISOString().split('T')[0]
 }
 
-export default function WeeklySchedulePage() {
+export default function BaselineSchedulePage() {
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
   const schoolId = useSchool()
@@ -41,23 +40,8 @@ export default function WeeklySchedulePage() {
   const focusTimeSlotId = searchParams.get('time_slot_id')
   const hasAppliedFocusRef = useRef(false)
   
-  // Week state - initialize from localStorage or use current week
-  const [weekStartISO, setWeekStartISO] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const savedWeek = localStorage.getItem('weekly-schedule-week')
-      if (savedWeek) {
-        return savedWeek
-      }
-    }
-    return getWeekStartISO()
-  })
-  
-  // Save week to localStorage when it changes
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('weekly-schedule-week', weekStartISO)
-    }
-  }, [weekStartISO])
+  // Always use current week for baseline schedule (no week picker)
+  const weekStartISO = getWeekStartISO()
   
   // React Query hooks
   const { data: scheduleData = [], isLoading: isLoadingSchedule, error: scheduleError } = useWeeklySchedule(weekStartISO)
@@ -70,20 +54,22 @@ export default function WeeklySchedulePage() {
   const availableClassrooms = filterOptions?.classrooms || []
   
   const loading = isLoadingSchedule || isLoadingSettings || isLoadingFilters
-  const error = scheduleError ? (scheduleError instanceof Error ? scheduleError.message : 'Failed to load weekly schedule') : null
+  const error = scheduleError ? (scheduleError instanceof Error ? scheduleError.message : 'Failed to load baseline schedule') : null
   
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
   const [filters, setFilters] = useState<FilterState | null>(() => {
-    // Load filters from localStorage on mount
+    // Load filters from localStorage on mount (using separate key for baseline schedule)
     if (typeof window !== 'undefined') {
-      const savedFilters = localStorage.getItem('weekly-schedule-filters')
+      const savedFilters = localStorage.getItem('baseline-schedule-filters')
       if (savedFilters) {
         try {
           const parsed = JSON.parse(savedFilters)
           // Ensure layout defaults to 'days-x-classrooms' if not set
+          // Always enforce 'permanent-only' for baseline schedule
           return {
             ...parsed,
             layout: parsed.layout || 'days-x-classrooms',
+            displayMode: 'permanent-only',
           }
         } catch (e) {
           console.error('Error parsing saved filters:', e)
@@ -101,13 +87,14 @@ export default function WeeklySchedulePage() {
       hasInitializedFilters.current = true
       // Load from localStorage again in case it was set between renders
       if (typeof window !== 'undefined') {
-        const savedFilters = localStorage.getItem('weekly-schedule-filters')
+        const savedFilters = localStorage.getItem('baseline-schedule-filters')
         if (savedFilters) {
           try {
             const parsed = JSON.parse(savedFilters)
             setFilters({
               ...parsed,
               layout: parsed.layout || 'days-x-classrooms',
+              displayMode: 'permanent-only', // Always enforce permanent-only for baseline schedule
             })
             return
           } catch (e) {
@@ -126,7 +113,7 @@ export default function WeeklySchedulePage() {
           fullyStaffed: true,
           inactive: true,
         },
-        displayMode: 'all-scheduled-staff',
+        displayMode: 'permanent-only', // Baseline schedule only shows permanent teachers
         layout: 'days-x-classrooms', // Default layout
       })
     }
@@ -153,7 +140,7 @@ export default function WeeklySchedulePage() {
         fullyStaffed: true,
         inactive: true,
       },
-      displayMode: prev?.displayMode ?? 'all-scheduled-staff',
+      displayMode: 'permanent-only', // Baseline schedule only shows permanent teachers
       layout: prev?.layout ?? 'days-x-classrooms',
     }))
     hasAppliedFocusRef.current = true
@@ -166,11 +153,11 @@ export default function WeeklySchedulePage() {
     availableClassrooms.length,
   ])
 
-  // Save filters to localStorage whenever they change (with debounce to avoid excessive writes)
+  // Save filters to localStorage whenever they change (using separate key for baseline schedule)
   useEffect(() => {
     if (filters && typeof window !== 'undefined') {
       try {
-        localStorage.setItem('weekly-schedule-filters', JSON.stringify(filters))
+        localStorage.setItem('baseline-schedule-filters', JSON.stringify(filters))
       } catch (e) {
         console.error('Error saving filters to localStorage:', e)
       }
@@ -300,25 +287,14 @@ export default function WeeklySchedulePage() {
     }
   }, [filteredData, sortedDays, availableTimeSlots, availableClassrooms])
 
-  const handleTodayClick = () => {
-    setWeekStartISO(getWeekStartISO())
-  }
-
   return (
     <div>
       <div className="mb-8 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Weekly Schedule</h1>
-            <p className="text-muted-foreground mt-2">
-              Manage staffing by classroom, day, and time slot
-            </p>
-          </div>
-          <WeekPicker
-            weekStartISO={weekStartISO}
-            onWeekChange={setWeekStartISO}
-            onTodayClick={handleTodayClick}
-          />
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Baseline Schedule</h1>
+          <p className="text-muted-foreground mt-2">
+            Manage staffing by classroom, day, and time slot
+          </p>
         </div>
         <Button
           variant="outline"
@@ -363,13 +339,16 @@ export default function WeeklySchedulePage() {
             onClose={() => {
               setFilterPanelOpen(false)
             }}
-            onFiltersChange={newFilters => {
-              setFilters(newFilters)
-            }}
+            onFiltersChange={useCallback((newFilters: FilterState) => {
+              // Ensure displayMode is always permanent-only for baseline schedule
+              setFilters({ ...newFilters, displayMode: 'permanent-only' })
+            }, [])}
             availableDays={availableDays}
             availableTimeSlots={availableTimeSlots}
             availableClassrooms={availableClassrooms}
             selectedDayIdsFromSettings={selectedDayIds}
+            hideStaffSection={true}
+            slotCounts={slotCounts}
             initialFilters={filters ? {
               selectedDayIds: filters.selectedDayIds,
               selectedTimeSlotIds: filters.selectedTimeSlotIds,
@@ -379,6 +358,7 @@ export default function WeeklySchedulePage() {
               layout: filters.layout,
             } : {
               selectedDayIds: selectedDayIds,
+              displayMode: 'permanent-only',
               layout: 'days-x-classrooms',
             }}
           />

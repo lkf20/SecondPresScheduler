@@ -5,8 +5,12 @@ import { useSchool } from '@/lib/contexts/SchoolContext'
 import { weeklyScheduleKey } from '@/lib/utils/query-keys'
 import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 
-async function fetchWeeklySchedule(): Promise<WeeklyScheduleDataByClassroom[]> {
-  const response = await fetch('/api/weekly-schedule')
+async function fetchWeeklySchedule(weekStartISO: string): Promise<WeeklyScheduleDataByClassroom[]> {
+  const url = new URL('/api/weekly-schedule', window.location.origin)
+  if (weekStartISO) {
+    url.searchParams.set('weekStartISO', weekStartISO)
+  }
+  const response = await fetch(url.toString())
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Failed to fetch weekly schedule' }))
@@ -18,16 +22,15 @@ async function fetchWeeklySchedule(): Promise<WeeklyScheduleDataByClassroom[]> {
 
 /**
  * Hook for fetching weekly schedule data
- * Note: The API returns all schedule data; filtering is done client-side
- * We use a weekStartISO key for consistency, but the API doesn't filter by week
- * For now, we use a constant weekStartISO since the schedule is not week-specific
+ * The API fetches recurring teacher schedules and date-specific substitute assignments for the selected week
+ * weekStartISO should be the Monday of the week in ISO format (YYYY-MM-DD)
  */
 export function useWeeklySchedule(weekStartISO: string, initialData?: WeeklyScheduleDataByClassroom[]) {
   const schoolId = useSchool()
 
   return useQuery({
     queryKey: weeklyScheduleKey(schoolId, weekStartISO),
-    queryFn: fetchWeeklySchedule,
+    queryFn: () => fetchWeeklySchedule(weekStartISO),
     initialData,
     staleTime: 600000, // 10 minutes
     // refetchOnWindowFocus: false (inherits from global default)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   Sheet,
   SheetContent,
@@ -61,6 +61,8 @@ interface FilterPanelProps {
   availableTimeSlots: TimeSlot[]
   availableClassrooms: Classroom[]
   selectedDayIdsFromSettings?: string[] // Days selected in Settings > Days and Time Slots
+  hideStaffSection?: boolean // If true, hide "Show Staff" section and default to permanent-only
+  slotCounts?: { shown: number; total: number } // Actual slot counts from the filtered data
 }
 
 export default function FilterPanel({
@@ -72,12 +74,19 @@ export default function FilterPanel({
   availableTimeSlots,
   availableClassrooms,
   selectedDayIdsFromSettings = [],
+  hideStaffSection = false,
+  slotCounts,
 }: FilterPanelProps) {
   // Initialize filters with defaults - only include days from settings
   const [filters, setFilters] = useState<FilterState>(() => {
     const daysToShow = selectedDayIdsFromSettings.length > 0
       ? availableDays.filter(d => selectedDayIdsFromSettings.includes(d.id))
       : availableDays
+    // If hideStaffSection is true, always use 'permanent-only' regardless of initialFilters
+    const displayMode = hideStaffSection 
+      ? 'permanent-only' 
+      : (initialFilters?.displayMode ?? 'all-scheduled-staff')
+    
     return {
       selectedDayIds: initialFilters?.selectedDayIds ?? daysToShow.map(d => d.id),
       selectedTimeSlotIds: initialFilters?.selectedTimeSlotIds ?? availableTimeSlots.map(ts => ts.id),
@@ -88,8 +97,8 @@ export default function FilterPanel({
         fullyStaffed: initialFilters?.displayFilters?.fullyStaffed ?? true,
         inactive: initialFilters?.displayFilters?.inactive ?? true,
       },
-      displayMode: initialFilters?.displayMode ?? 'all-scheduled-staff',
-      layout: initialFilters?.layout ?? 'classrooms-x-days', // Default: Classrooms across the top
+      displayMode,
+      layout: initialFilters?.layout ?? 'days-x-classrooms', // Default: Days across the top
     }
   })
 
@@ -126,9 +135,23 @@ export default function FilterPanel({
     )
   }, [availableClassrooms, classroomSearch])
 
-  // Update parent when filters change
+  // Ensure displayMode is permanent-only when hideStaffSection is true
   useEffect(() => {
-    onFiltersChange(filters)
+    if (hideStaffSection && filters.displayMode !== 'permanent-only') {
+      setFilters(prev => ({ ...prev, displayMode: 'permanent-only' }))
+    }
+  }, [hideStaffSection, filters.displayMode])
+
+  // Update parent when filters change (skip initial mount to avoid overwriting saved state)
+  const isInitialMount = useRef(true)
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      // Still call onFiltersChange on mount to ensure parent has the correct state
+      onFiltersChange(filters)
+    } else {
+      onFiltersChange(filters)
+    }
   }, [filters, onFiltersChange])
 
   const toggleDay = (dayId: string) => {
@@ -186,16 +209,19 @@ export default function FilterPanel({
   const allClassroomsSelected = selectedClassroomsCount === availableClassrooms.length
   const someClassroomsSelected = selectedClassroomsCount > 0 && selectedClassroomsCount < availableClassrooms.length
 
-  // Calculate total possible slots based on selected filters
-  const totalPossibleSlots = filters.selectedDayIds.length * 
-                             filters.selectedTimeSlotIds.length * 
-                             filters.selectedClassroomIds.length
+  // Use provided slot counts if available, otherwise calculate from filters
+  // The provided counts are more accurate as they reflect actual data after display filters
+  const totalPossibleSlots = slotCounts?.shown ?? (
+    filters.selectedDayIds.length * 
+    filters.selectedTimeSlotIds.length * 
+    filters.selectedClassroomIds.length
+  )
   
-  // Calculate total slots if all filters were selected
-  // Only use days that are selected in Settings (not all available days)
-  const totalSlotsIfAllSelected = sortedDays.length * 
-                                   availableTimeSlots.length * 
-                                   availableClassrooms.length
+  const totalSlotsIfAllSelected = slotCounts?.total ?? (
+    sortedDays.length * 
+    availableTimeSlots.length * 
+    availableClassrooms.length
+  )
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
@@ -436,54 +462,56 @@ export default function FilterPanel({
             </p>
           </div>
 
-          {/* Display Mode */}
-          <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
-            <Label className="text-base font-medium">Show Staff</Label>
-            <RadioGroup
-              value={filters.displayMode}
-              onValueChange={(value) => setFilters(prev => ({
-                ...prev,
-                displayMode: value as FilterState['displayMode']
-              }))}
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="permanent-only" id="permanent-only" />
-                <label
-                  htmlFor="permanent-only"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                >
-                  Permanent teachers
-                </label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="permanent-flexible" id="permanent-flexible" />
-                <label
-                  htmlFor="permanent-flexible"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                >
-                  Permanent + Flexible teachers
-                </label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="substitutes-only" id="substitutes-only" />
-                <label
-                  htmlFor="substitutes-only"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                >
-                  Substitutes only
-                </label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="all-scheduled-staff" id="all-scheduled-staff" />
-                <label
-                  htmlFor="all-scheduled-staff"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                >
-                  All scheduled staff
-                </label>
-              </div>
-            </RadioGroup>
-          </div>
+          {/* Display Mode - Hide for Baseline Schedule */}
+          {!hideStaffSection && (
+            <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
+              <Label className="text-base font-medium">Show Staff</Label>
+              <RadioGroup
+                value={filters.displayMode}
+                onValueChange={(value) => setFilters(prev => ({
+                  ...prev,
+                  displayMode: value as FilterState['displayMode']
+                }))}
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="permanent-only" id="permanent-only" />
+                  <label
+                    htmlFor="permanent-only"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    Permanent teachers
+                  </label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="permanent-flexible" id="permanent-flexible" />
+                  <label
+                    htmlFor="permanent-flexible"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    Permanent + Flexible teachers
+                  </label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="substitutes-only" id="substitutes-only" />
+                  <label
+                    htmlFor="substitutes-only"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    Substitutes only
+                  </label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="all-scheduled-staff" id="all-scheduled-staff" />
+                  <label
+                    htmlFor="all-scheduled-staff"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    All scheduled staff
+                  </label>
+                </div>
+              </RadioGroup>
+            </div>
+          )}
 
           {/* Layout */}
           <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
@@ -496,21 +524,21 @@ export default function FilterPanel({
               }))}
             >
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="classrooms-x-days" id="classrooms-x-days" />
-                <label
-                  htmlFor="classrooms-x-days"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                >
-                  Classrooms × Days
-                </label>
-              </div>
-              <div className="flex items-center space-x-2">
                 <RadioGroupItem value="days-x-classrooms" id="days-x-classrooms" />
                 <label
                   htmlFor="days-x-classrooms"
                   className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                 >
                   Days × Classrooms
+                </label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="classrooms-x-days" id="classrooms-x-days" />
+                <label
+                  htmlFor="classrooms-x-days"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Classrooms × Days
                 </label>
               </div>
             </RadioGroup>

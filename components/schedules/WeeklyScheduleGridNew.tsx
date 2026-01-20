@@ -44,8 +44,8 @@ function generateDaysXClassroomsGridTemplate(
   days: Array<{ id: string; name: string; number: number }>,
   timeSlots: Array<{ id: string; code: string }>
 ): { columns: string; rows: string } {
-  // Columns: Combined Day/Time (120px) + Classrooms (minmax(180px, 1fr) each) - widened for better card fit
-  const columns = `120px repeat(${classroomCount}, minmax(180px, 1fr))`
+  // Columns: Combined Day/Time (120px) + Classrooms (minmax(230px, 1fr) each) - matches Classrooms x Days
+  const columns = `120px repeat(${classroomCount}, minmax(230px, 1fr))`
   
   // Rows: Header (auto) + (Spacer row + Day header + time slots for each day)
   // For the first day: no spacer, just day header + time slots
@@ -53,6 +53,7 @@ function generateDaysXClassroomsGridTemplate(
   const dayRows = days.map((day, dayIndex) => {
     const spacerRow = dayIndex === 0 ? '' : '16px' // Add spacer before each day except the first
     const dayHeaderRow = '36px' // Fixed small height for day headers (accommodates padding + text)
+    // Use 120px minimum to match Classrooms x Days layout
     const timeSlotRows = timeSlots.map(() => 'minmax(120px, auto)').join(' ')
     return dayIndex === 0 
       ? `${dayHeaderRow} ${timeSlotRows}`
@@ -69,9 +70,10 @@ function generateClassroomsXDaysGridTemplate(
   dayCount: number,
   timeSlotCount: number
 ): { columns: string; rows: string } {
-  // Columns: Classroom (150px) + (Day columns: each day has timeSlotCount columns)
-  const dayColumns = Array(dayCount).fill(`repeat(${timeSlotCount}, minmax(140px, 1fr))`).join(' ')
-  const columns = `150px ${dayColumns}`
+  // Columns: Classroom (110px - reduced to fit "Kindergarten" while saving space) + (Day columns: each day has timeSlotCount columns)
+  // Column width: 220px card + 10px left margin + 10px right margin = 220px + 20px = 240px minimum, using 230px for tighter spacing
+  const dayColumns = Array(dayCount).fill(`repeat(${timeSlotCount}, minmax(230px, 1fr))`).join(' ')
+  const columns = `110px ${dayColumns}`
   
   // Rows: 2 header rows + 1 row per classroom
   const rows = `auto auto repeat(${dayCount > 0 ? 'auto' : '0'}, minmax(120px, auto))`
@@ -489,8 +491,8 @@ export default function WeeklyScheduleGridNew({
                           gridColumn: 1,
                           gridRow: spacerRow,
                           zIndex: 10,
-                          borderRight: '1px solid #e5e7eb',
-                          boxShadow: '2px 0 4px -2px rgba(0, 0, 0, 0.1)',
+                          borderRight: '1px solid #f3f4f6',
+                          boxShadow: '2px 0 8px -2px rgba(0, 0, 0, 0.1)',
                         }}
                       />
                       {/* Classroom column spacers (with classroom colors) */}
@@ -523,7 +525,7 @@ export default function WeeklyScheduleGridNew({
                       backgroundColor: '#f9fafb',
                       borderTop: '1px solid #e5e7eb',
                       borderLeft: '1px solid #e5e7eb',
-                      borderRight: '1px solid #e5e7eb',
+                      borderRight: '1px solid #f3f4f6',
                       borderBottom: '2px solid #e5e7eb',
                       boxShadow: '0 2px 4px -2px rgba(0, 0, 0, 0.1)',
                       gridColumn: '1 / -1',
@@ -562,8 +564,8 @@ export default function WeeklyScheduleGridNew({
                             minHeight: '120px', // Ensure minimum height to prevent squishing
                             paddingTop: '8px',
                             zIndex: 10, // Above scrolling content but below day headers
-                            borderRight: '1px solid #e5e7eb',
-                            boxShadow: '2px 0 4px -2px rgba(0, 0, 0, 0.1)',
+                            borderRight: '1px solid #f3f4f6',
+                            boxShadow: '2px 0 8px -2px rgba(0, 0, 0, 0.1)',
                           }}
                         >
                           <span className="inline-flex items-center px-4 py-2.5 rounded-full bg-gray-100 text-gray-700 text-sm font-medium">
@@ -580,20 +582,29 @@ export default function WeeklyScheduleGridNew({
                           return (
                             <div
                               key={`cell-${classroom.classroomId}-${day.id}-${timeSlot.id}`}
-                              className="p-0"
+                              className="p-0 flex items-center justify-center"
                               style={{
                                 backgroundColor: classroomColor 
                                   ? hexToRgba(classroomColor, 0.08)
                                   : 'transparent',
                                 gridColumn: classroomIndex + 2,
                                 gridRow: dataRow,
-                                paddingTop: '8px', // Reduced padding to prevent overlap
+                                minHeight: '120px', // Ensure minimum height for Safari compatibility (matches grid row minmax)
                               }}
                             >
                               <div
-                                className={`rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 min-h-[120px] min-w-[160px] m-1.5 cursor-pointer ${
+                                className={`rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 min-h-[120px] flex-shrink-0 cursor-pointer ${
                                   isInactive ? 'opacity-60 bg-gray-50' : ''
                                 }`}
+                                style={{
+                                  width: '220px',
+                                  minWidth: '220px',
+                                  maxWidth: '220px',
+                                  marginTop: '6px',
+                                  marginBottom: '6px',
+                                  marginLeft: '10px',
+                                  marginRight: '10px',
+                                }}
                                 onClick={() =>
                                   handleCellClick(
                                     day.id,
@@ -676,36 +687,43 @@ export default function WeeklyScheduleGridNew({
           </div>
         </div>
 
-        <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)]">
+        <div>
           <div
-            className="grid"
+            className="grid overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)]"
             style={{
               gridTemplateColumns: classroomsXDaysGrid.columns,
               gridTemplateRows: classroomsXDaysGrid.rows,
-              minWidth: 'fit-content',
-            }}
+              width: '100%', // Constrain to parent width
+              maxWidth: '100%', // Ensure it doesn't exceed parent
+              minWidth: 0, // Allow grid to shrink below content size, enabling internal scrolling
+              // CSS custom properties for header heights and column widths
+              '--header-row-1-height': 'calc(0.5rem + 1.5rem + 0.125rem)', // Day header: pt-2 + text-base line-height + pb-0.5
+              '--header-row-2-height': 'calc(0.5rem + 1.5rem + 0.75rem)', // Time slot header: pt-2 + chip height ~1.5rem + pb-3
+              '--classroom-column-width': '110px', // Classroom column width
+            } as React.CSSProperties}
           >
             {/* Header Row 1: Day Names */}
+            {/* Empty cell in column 1 to prevent classroom column from scrolling into header area */}
             <div
-              className="sticky top-0 left-0 z-40 pt-2 pb-0.5"
-              style={{ 
-                backgroundColor: 'white', 
-                gridColumn: 1, 
+              style={{
+                gridColumn: 1,
                 gridRow: 1,
-                borderBottom: '1px solid #e5e7eb',
+                backgroundColor: 'transparent',
               }}
-            >
-              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Classroom</div>
-            </div>
+            />
             {filteredDays.map((day, dayIndex) => (
               <div
                 key={`day-header-${day.id}`}
-                className="sticky top-0 z-40 text-center pt-2 pb-0.5"
+                className="sticky top-0 z-30 text-center pt-2 pb-0.5"
                 style={{
-                  backgroundColor: 'white',
+                  backgroundColor: dayIndex % 2 === 0 ? 'white' : '#f3f4f6',
                   gridColumn: `${dayIndex * timeSlots.length + 2} / ${(dayIndex + 1) * timeSlots.length + 2}`,
                   gridRow: 1,
                   borderBottom: '1px solid #e5e7eb',
+                  borderRight: dayIndex < filteredDays.length - 1 ? '1px solid #e5e7eb' : 'none',
+                  position: 'sticky',
+                  top: 0,
+                  left: 'var(--classroom-column-width)', // Stop at right edge of classroom column
                 }}
               >
                 <div className="text-base font-bold text-gray-800">{day.name}</div>
@@ -713,25 +731,30 @@ export default function WeeklyScheduleGridNew({
             ))}
 
             {/* Header Row 2: Time Slot Codes */}
+            {/* Empty cell in column 1 to prevent classroom column from scrolling into header area */}
             <div
-              className="sticky top-0 left-0 z-40 pt-2 pb-0.5"
-              style={{ 
-                backgroundColor: 'white', 
-                gridColumn: 1, 
+              style={{
+                gridColumn: 1,
                 gridRow: 2,
-                borderBottom: '1px solid #e5e7eb',
+                backgroundColor: 'transparent',
               }}
-            ></div>
+            />
             {filteredDays.map((day, dayIndex) =>
               timeSlots.map((slot, slotIndex) => (
                 <div
                   key={`time-header-${day.id}-${slot.id}`}
-                  className="sticky top-0 z-40 text-center pt-2 pb-0.5"
+                  className="sticky z-30 text-center pt-2 pb-3"
                   style={{
                     backgroundColor: 'white',
                     gridColumn: dayIndex * timeSlots.length + slotIndex + 2,
                     gridRow: 2,
                     borderBottom: '1px solid #e5e7eb',
+                    borderRight: slotIndex < timeSlots.length - 1 || (slotIndex === timeSlots.length - 1 && dayIndex < filteredDays.length - 1) ? '1px solid #e5e7eb' : 'none',
+                    borderLeft: 'none',
+                    boxShadow: '0 2px 4px -2px rgba(0, 0, 0, 0.08)',
+                    position: 'sticky',
+                    top: 'calc(0.5rem + 1.5rem + 0.125rem)', // Match day header height exactly
+                    left: 'var(--classroom-column-width)', // Stop at right edge of classroom column
                   }}
                 >
                   <span className="inline-flex items-center px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
@@ -748,20 +771,59 @@ export default function WeeklyScheduleGridNew({
                 <React.Fragment key={`classroom-row-${classroom.classroom_id}`}>
                   {/* Classroom Name Column */}
                   <div
-                    className="sticky left-0 z-10 pt-2"
+                    className="z-20 flex items-center justify-center"
                     style={{
                       backgroundColor: 'white',
-                      gridColumn: 1,
+                      gridColumn: 1, // Use simple column index
                       gridRow: rowIndex,
+                      position: 'sticky',
+                      left: 0,
+                      top: 'calc(var(--header-row-1-height) + var(--header-row-2-height) + 5px)', // Sum of both header rows + small offset for borders/padding
+                      width: '110px', // Fixed width to match column width
+                      minWidth: '110px', // Ensure minimum width
+                      maxWidth: '110px', // Constrain to column width to prevent scrolling into header area
+                      borderRight: '1px solid #e5e7eb',
+                      borderBottom: classroomIndex < data.length - 1 ? '1px solid #e5e7eb' : 'none',
+                      boxShadow: '2px 0 8px -2px rgba(0, 0, 0, 0.1)',
                     }}
                   >
                     <div
-                      className="text-sm font-semibold"
+                      className="text-sm font-semibold text-center"
                       style={{
                         color: classroom.classroom_color || '#1f2937'
                       }}
                     >
-                      {classroom.classroom_name}
+                      {(() => {
+                        const name = classroom.classroom_name
+                        const roomIndex = name.indexOf(' Room')
+                        if (roomIndex > 0) {
+                          // Split before "Room" - e.g., "Toddler A Room" -> "Toddler A<br>Room"
+                          const beforeRoom = name.substring(0, roomIndex)
+                          const room = name.substring(roomIndex + 1) // +1 to skip the space
+                          return (
+                            <>
+                              {beforeRoom}
+                              <br />
+                              {room}
+                            </>
+                          )
+                        }
+                        // If no " Room" found, split on last space as fallback
+                        const lastSpaceIndex = name.lastIndexOf(' ')
+                        if (lastSpaceIndex > 0) {
+                          const firstPart = name.substring(0, lastSpaceIndex)
+                          const secondPart = name.substring(lastSpaceIndex + 1)
+                          return (
+                            <>
+                              {firstPart}
+                              <br />
+                              {secondPart}
+                            </>
+                          )
+                        }
+                        // If no space found, return as-is
+                        return name
+                      })()}
                     </div>
                   </div>
 
@@ -794,19 +856,37 @@ export default function WeeklyScheduleGridNew({
                       return (
                         <div
                           key={`cell-${classroom.classroom_id}-${day.id}-${slot.id}`}
-                          className="p-0 pt-2"
+                          className="p-0"
                           style={{
-                            backgroundColor: classroomColor 
-                              ? hexToRgba(classroomColor, 0.08)
-                              : 'transparent',
+                            backgroundColor: classroomColor ? hexToRgba(classroomColor, 0.08) : 'transparent',
                             gridColumn: colIndex,
                             gridRow: rowIndex,
+                            borderRight: slotIndex < timeSlots.length - 1 || (slotIndex === timeSlots.length - 1 && dayIndex < filteredDays.length - 1) ? '1px solid #e5e7eb' : 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '100%',
+                            height: '100%',
+                            minHeight: '120px', // Ensure minimum height for Safari compatibility (matches grid row minmax)
                           }}
                         >
                           <div
-                            className={`rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 min-h-[120px] min-w-[140px] m-1.5 cursor-pointer ${
+                            className={`rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer ${
                               isInactive ? 'opacity-60 bg-gray-50' : ''
                             }`}
+                            style={{
+                              width: '220px',
+                              minWidth: '220px',
+                              maxWidth: '220px',
+                              minHeight: '120px',
+                              boxSizing: 'border-box',
+                              flexShrink: 0,
+                              flexGrow: 0,
+                              marginTop: '10px',
+                              marginBottom: '10px',
+                              marginLeft: '10px',
+                              marginRight: '10px',
+                            }}
                             onClick={() =>
                               handleCellClick(
                                 day.id,

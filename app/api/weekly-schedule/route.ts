@@ -3,7 +3,7 @@ import { getWeeklyScheduleData } from '@/lib/api/weekly-schedule'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
 import { getUserSchoolId } from '@/lib/utils/auth'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     // Require schoolId from session
     const schoolId = await getUserSchoolId()
@@ -13,6 +13,11 @@ export async function GET() {
         { status: 403 }
       )
     }
+    
+    // Get weekStartISO from query params
+    const { searchParams } = new URL(request.url)
+    const weekStartISO = searchParams.get('weekStartISO')
+    
     // Get selected days from schedule settings (gracefully handle if table doesn't exist)
     let selectedDayIds: string[] = []
     try {
@@ -26,7 +31,8 @@ export async function GET() {
     // If no days selected, use all days (fallback)
     const data = await getWeeklyScheduleData(
       schoolId,
-      selectedDayIds.length > 0 ? selectedDayIds : undefined
+      selectedDayIds.length > 0 ? selectedDayIds : undefined,
+      weekStartISO || undefined
     )
     return NextResponse.json(data)
   } catch (error: any) {
