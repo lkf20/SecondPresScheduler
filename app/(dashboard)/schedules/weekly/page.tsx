@@ -306,28 +306,28 @@ export default function WeeklySchedulePage() {
 
   return (
     <div>
-      <div className="mb-8 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <div>
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-4">
             <h1 className="text-3xl font-bold tracking-tight text-slate-900">Weekly Schedule</h1>
-            <p className="text-muted-foreground mt-2">
-              Manage staffing by classroom, day, and time slot
-            </p>
+            <WeekPicker
+              weekStartISO={weekStartISO}
+              onWeekChange={setWeekStartISO}
+              onTodayClick={handleTodayClick}
+            />
           </div>
-          <WeekPicker
-            weekStartISO={weekStartISO}
-            onWeekChange={setWeekStartISO}
-            onTodayClick={handleTodayClick}
-          />
+          <Button
+            variant="outline"
+            onClick={() => setFilterPanelOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            Views & Filters
+          </Button>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => setFilterPanelOpen(true)}
-          className="flex items-center gap-2"
-        >
-          <Filter className="h-4 w-4" />
-          Views & Filters
-        </Button>
+        <p className="text-muted-foreground">
+          Manage staffing by classroom, day, and time slot
+        </p>
       </div>
 
       {error && <ErrorMessage message={error} className="mb-6" />}

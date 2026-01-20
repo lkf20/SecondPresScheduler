@@ -54,10 +54,10 @@ export default function WeekPicker({ weekStartISO, onWeekChange, onTodayClick }:
   return (
     <div className="flex items-center gap-3">
       <Button
-        variant="outline"
+        variant="ghost"
         size="icon"
         onClick={handlePreviousWeek}
-        className="h-9 w-9"
+        className="h-9 w-9 -mr-4"
         aria-label="Previous week"
       >
         <ChevronLeft className="h-4 w-4" />
@@ -68,19 +68,19 @@ export default function WeekPicker({ weekStartISO, onWeekChange, onTodayClick }:
       </div>
       
       <Button
-        variant="outline"
+        variant="ghost"
         size="icon"
         onClick={handleNextWeek}
-        className="h-9 w-9"
+        className="h-9 w-9 -ml-4"
         aria-label="Next week"
       >
         <ChevronRight className="h-4 w-4" />
       </Button>
       
       <Button
-        variant="outline"
+        variant="ghost"
         onClick={onTodayClick}
-        className="ml-2"
+        className="ml-2 bg-[#ebedef] hover:bg-[#d9dce0]"
       >
         Today
       </Button>
