@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { BookOpen, Building2, Clock, Users, UserCheck } from 'lucide-react'
+import { BookOpen, Building2, Clock, Users, UserCheck, CalendarCheck } from 'lucide-react'
 import { getHeaderClasses } from '@/lib/utils/colors'
 
 const settingsCategories = [
@@ -33,6 +33,12 @@ const settingsCategories = [
     description: 'Configure which days appear in the weekly schedule and manage time periods',
     href: '/settings/timeslots',
     icon: Clock,
+  },
+  {
+    name: 'Baseline Schedule',
+    description: 'Manage baseline staffing assignments by classroom, day, and time slot',
+    href: '/settings/baseline-schedule',
+    icon: CalendarCheck,
   },
 ]
 
