@@ -172,6 +172,11 @@ export default function BaselineSchedulePage() {
     }
   }
 
+  // Handle filter changes - ensure displayMode is always permanent-only for baseline schedule
+  const handleFiltersChange = useCallback((newFilters: FilterState) => {
+    setFilters({ ...newFilters, displayMode: 'permanent-only' })
+  }, [])
+
   // Sort days - only show days selected in Settings > Days and Time Slots
   const sortedDays = useMemo(() => {
     const filtered =
@@ -339,10 +344,7 @@ export default function BaselineSchedulePage() {
             onClose={() => {
               setFilterPanelOpen(false)
             }}
-            onFiltersChange={useCallback((newFilters: FilterState) => {
-              // Ensure displayMode is always permanent-only for baseline schedule
-              setFilters({ ...newFilters, displayMode: 'permanent-only' })
-            }, [])}
+            onFiltersChange={handleFiltersChange}
             availableDays={availableDays}
             availableTimeSlots={availableTimeSlots}
             availableClassrooms={availableClassrooms}
