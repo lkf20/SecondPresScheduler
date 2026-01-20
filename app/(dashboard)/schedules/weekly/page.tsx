@@ -348,6 +348,7 @@ export default function WeeklySchedulePage() {
             onRefresh={handleRefresh}
             onFilterPanelOpenChange={setFilterPanelOpen}
             filterPanelOpen={filterPanelOpen}
+            allowCardClick={false}
             initialSelectedCell={
               focusClassroomId && focusDayId && focusTimeSlotId
                 ? {

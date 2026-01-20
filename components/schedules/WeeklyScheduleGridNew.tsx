@@ -19,6 +19,7 @@ interface WeeklyScheduleGridNewProps {
     dayId: string
     timeSlotId: string
   } | null
+  allowCardClick?: boolean // If false, cards are not clickable (default: true)
 }
 
 type WeeklyScheduleCellData = WeeklyScheduleData & {
@@ -89,6 +90,7 @@ export default function WeeklyScheduleGridNew({
   onFilterPanelOpenChange,
   filterPanelOpen = false,
   initialSelectedCell = null,
+  allowCardClick = true, // Default to allowing clicks
 }: WeeklyScheduleGridNewProps) {
   const [selectedCell, setSelectedCell] = useState<{
     dayId: string
@@ -593,7 +595,9 @@ export default function WeeklyScheduleGridNew({
                               }}
                             >
                               <div
-                                className={`rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 min-h-[120px] flex-shrink-0 cursor-pointer ${
+                                className={`rounded-lg border border-gray-200 bg-white shadow-sm transition-all duration-200 min-h-[120px] flex-shrink-0 ${
+                                  allowCardClick ? 'hover:shadow-md cursor-pointer' : 'cursor-default'
+                                } ${
                                   isInactive ? 'opacity-60 bg-gray-50' : ''
                                 }`}
                                 style={{
@@ -605,7 +609,7 @@ export default function WeeklyScheduleGridNew({
                                   marginLeft: '10px',
                                   marginRight: '10px',
                                 }}
-                                onClick={() =>
+                                onClick={allowCardClick ? () =>
                                   handleCellClick(
                                     day.id,
                                     day.name,
@@ -614,7 +618,7 @@ export default function WeeklyScheduleGridNew({
                                     classroom.classroomId,
                                     classroom.classroomName
                                   )
-                                }
+                                : undefined}
                               >
                                 <ScheduleCell data={classroom.cellData} />
                               </div>
@@ -871,7 +875,9 @@ export default function WeeklyScheduleGridNew({
                           }}
                         >
                           <div
-                            className={`rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer ${
+                            className={`rounded-lg border border-gray-200 bg-white shadow-sm transition-all duration-200 ${
+                              allowCardClick ? 'hover:shadow-md cursor-pointer' : 'cursor-default'
+                            } ${
                               isInactive ? 'opacity-60 bg-gray-50' : ''
                             }`}
                             style={{
@@ -887,7 +893,7 @@ export default function WeeklyScheduleGridNew({
                               marginLeft: '10px',
                               marginRight: '10px',
                             }}
-                            onClick={() =>
+                            onClick={allowCardClick ? () =>
                               handleCellClick(
                                 day.id,
                                 day.name,
@@ -896,7 +902,7 @@ export default function WeeklyScheduleGridNew({
                                 classroom.classroom_id,
                                 classroom.classroom_name
                               )
-                            }
+                            : undefined}
                           >
                             <ScheduleCell data={cellData} />
                           </div>
