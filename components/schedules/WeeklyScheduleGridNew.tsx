@@ -687,8 +687,14 @@ export default function WeeklyScheduleGridNew({
             style={{
               gridTemplateColumns: classroomsXDaysGrid.columns,
               gridTemplateRows: classroomsXDaysGrid.rows,
-              minWidth: 'fit-content',
-            }}
+              width: '100%', // Constrain to parent width
+              maxWidth: '100%', // Ensure it doesn't exceed parent
+              minWidth: 0, // Allow grid to shrink below content size, enabling internal scrolling
+              // CSS custom properties for header heights and column widths
+              '--header-row-1-height': 'calc(0.5rem + 1.5rem + 0.125rem)', // Day header: pt-2 + text-base line-height + pb-0.5
+              '--header-row-2-height': 'calc(0.5rem + 1.5rem + 0.75rem)', // Time slot header: pt-2 + chip height ~1.5rem + pb-3
+              '--classroom-column-width': '110px', // Classroom column width
+            } as React.CSSProperties}
           >
             {/* Header Row 1: Day Names */}
             {/* Empty cell in column 1 to prevent classroom column from scrolling into header area */}
@@ -702,7 +708,7 @@ export default function WeeklyScheduleGridNew({
             {filteredDays.map((day, dayIndex) => (
               <div
                 key={`day-header-${day.id}`}
-                className="sticky top-0 z-50 text-center pt-2 pb-0.5"
+                className="sticky top-0 z-30 text-center pt-2 pb-0.5"
                 style={{
                   backgroundColor: dayIndex % 2 === 0 ? 'white' : '#f3f4f6',
                   gridColumn: `${dayIndex * timeSlots.length + 2} / ${(dayIndex + 1) * timeSlots.length + 2}`,
@@ -711,6 +717,7 @@ export default function WeeklyScheduleGridNew({
                   borderRight: dayIndex < filteredDays.length - 1 ? '1px solid #e5e7eb' : 'none',
                   position: 'sticky',
                   top: 0,
+                  left: 'var(--classroom-column-width)', // Stop at right edge of classroom column
                 }}
               >
                 <div className="text-base font-bold text-gray-800">{day.name}</div>
@@ -730,7 +737,7 @@ export default function WeeklyScheduleGridNew({
               timeSlots.map((slot, slotIndex) => (
                 <div
                   key={`time-header-${day.id}-${slot.id}`}
-                  className="sticky z-40 text-center pt-2 pb-3"
+                  className="sticky z-30 text-center pt-2 pb-3"
                   style={{
                     backgroundColor: 'white',
                     gridColumn: dayIndex * timeSlots.length + slotIndex + 2,
@@ -741,6 +748,7 @@ export default function WeeklyScheduleGridNew({
                     boxShadow: '0 2px 4px -2px rgba(0, 0, 0, 0.08)',
                     position: 'sticky',
                     top: 'calc(0.5rem + 1.5rem + 0.125rem)', // Match day header height exactly
+                    left: 'var(--classroom-column-width)', // Stop at right edge of classroom column
                   }}
                 >
                   <span className="inline-flex items-center px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
@@ -757,13 +765,16 @@ export default function WeeklyScheduleGridNew({
                 <React.Fragment key={`classroom-row-${classroom.classroom_id}`}>
                   {/* Classroom Name Column */}
                   <div
-                    className="sticky z-10 flex items-center justify-center"
+                    className="z-20 flex items-center justify-center"
                     style={{
                       backgroundColor: 'white',
-                      gridColumn: 1,
+                      gridColumn: 1, // Use simple column index
                       gridRow: rowIndex,
+                      position: 'sticky',
                       left: 0,
-                      top: 'calc(0.5rem + 1.5rem + 0.125rem + 0.5rem + 1.5rem + 0.75rem + 5px)', // Day header (pt-2 + text-base line-height + pb-0.5) + Time slot header (pt-2 + chip height ~1.5rem + pb-3) + offset
+                      top: 'calc(var(--header-row-1-height) + var(--header-row-2-height) + 5px)', // Sum of both header rows + small offset for borders/padding
+                      width: '110px', // Fixed width to match column width
+                      minWidth: '110px', // Ensure minimum width
                       maxWidth: '110px', // Constrain to column width to prevent scrolling into header area
                       borderRight: '1px solid #e5e7eb',
                       borderBottom: classroomIndex < data.length - 1 ? '1px solid #e5e7eb' : 'none',
