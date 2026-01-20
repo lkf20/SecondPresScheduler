@@ -152,7 +152,7 @@ export async function GET(request: NextRequest) {
     const results = await Promise.all(
       filteredRequests.map(async (request) => {
         // Get shifts
-        let shifts
+        let shifts: Awaited<ReturnType<typeof getTimeOffShifts>>
         try {
           shifts = await getTimeOffShifts(request.id)
         } catch (error) {

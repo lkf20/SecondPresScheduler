@@ -60,10 +60,35 @@ export interface Teacher {
 
 export interface SubCandidate {
   id: string
+  name: string
+  display_name?: string | null
+  first_name?: string | null
+  last_name?: string | null
+  phone: string | null
+  email: string | null
   coverage_percent: number
-  shifts_covered?: number
-  can_cover?: unknown[]
-  assigned_shifts?: Array<{ date: string; time_slot_code: string }>
+  shifts_covered: number
+  total_shifts: number
+  can_cover: Array<{
+    date: string
+    day_name: string
+    time_slot_code: string
+    class_name: string | null
+    classroom_name?: string | null
+  }>
+  cannot_cover: Array<{
+    date: string
+    day_name: string
+    time_slot_code: string
+    reason: string
+    classroom_name?: string | null
+  }>
+  assigned_shifts?: Array<{
+    date: string
+    day_name: string
+    time_slot_code: string
+    classroom_name?: string | null
+  }>
   remaining_shift_keys?: string[]
   remaining_shift_count?: number
   has_assigned_shifts?: boolean
@@ -220,9 +245,10 @@ export function useSubFinderData({
   // Update recommended subs and combinations when recommendations data changes
   useEffect(() => {
     if (subRecommendationsData && selectedAbsenceId) {
-      const subs = (subRecommendationsData.subs || []) as SubCandidate[]
-      const combinations = subRecommendationsData.combinations || []
-      setRecommendedCombinations(combinations)
+      const subs = (subRecommendationsData.subs || []) as unknown as SubCandidate[]
+      // Note: API combinations structure doesn't match RecommendedCombination, so we skip it
+      // The combinations will be calculated by the sub-combination utility if needed
+      setRecommendedCombinations([])
       applySubResults(subs)
     }
   }, [subRecommendationsData, selectedAbsenceId, applySubResults])

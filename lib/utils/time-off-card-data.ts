@@ -208,11 +208,11 @@ export function transformTimeOffCardData(
         label,
         status,
         date: shift.date,
-        day_name: shift.day_of_week?.name || null,
-        time_slot_code: shift.time_slot?.code || null,
-        class_name: className,
-        classroom_name: classroom?.name || null,
-        sub_name: assignment?.subName || null,
+        day_name: shift.day_of_week?.name || undefined,
+        time_slot_code: shift.time_slot?.code || undefined,
+        class_name: className || undefined,
+        classroom_name: classroom?.name || undefined,
+        sub_name: assignment?.subName || undefined,
         is_partial: assignment?.hasPartial && !assignment?.hasFull,
       })
     } else {

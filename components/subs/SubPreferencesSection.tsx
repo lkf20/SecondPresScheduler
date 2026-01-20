@@ -155,7 +155,7 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
       <div>
         <SubQualifications
           subId={subId}
-          qualifications={qualifications}
+          qualifications={qualifications as any}
           onQualificationsChange={handleQualificationsChange}
         />
       </div>

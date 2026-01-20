@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Badge } from '@/components/ui/badge'
 import AbsenceList from '@/components/sub-finder/AbsenceList'
 import RecommendedSubsList from '@/components/sub-finder/RecommendedSubsList'
+import type { RecommendedSub } from '@/components/sub-finder/ContactSubPanel'
 import RecommendedCombination from '@/components/sub-finder/RecommendedCombination'
 import ContactSubPanel from '@/components/sub-finder/ContactSubPanel'
 import CoverageSummary from '@/components/sub-finder/CoverageSummary'
@@ -329,7 +330,7 @@ export default function SubFinderPage() {
   }
 
   // Handle shift click to scroll to sub card
-  const handleShiftClick = (shift: Absence['shifts']['shift_details'][number]) => {
+  const handleShiftClick = (shift: { id: string; date: string; day_name: string; time_slot_code: string; status: 'uncovered' | 'partially_covered' | 'fully_covered'; sub_name?: string | null; is_partial?: boolean }) => {
     if (!shift.sub_name) return
     
     // Find the sub in recommendedSubs by matching assigned shifts
@@ -470,7 +471,7 @@ export default function SubFinderPage() {
 
     // Restore absences if available (this prevents unnecessary fetch)
     const hasSavedAbsences = savedState.absences && savedState.absences.length > 0
-    if (hasSavedAbsences) {
+    if (hasSavedAbsences && savedState.absences) {
       console.log('[SubFinder] Restoring saved absences:', savedState.absences.length)
       setAbsences(savedState.absences)
     }
@@ -799,7 +800,7 @@ export default function SubFinderPage() {
                           .map((name) => {
                             const teacher = teachers.find(t => getDisplayName(t) === name)
                             const teacherId = teacher?.id
-                            const isSelected = teacherId && selectedTeacherIds.includes(teacherId)
+                            const isSelected = Boolean(teacherId && selectedTeacherIds.includes(teacherId))
                             return (
                               <button
                                 key={name}
@@ -1292,12 +1293,11 @@ export default function SubFinderPage() {
               )}
 
               <RecommendedSubsList
-                subs={recommendedSubs}
+                subs={recommendedSubs as any}
                 loading={loading}
                 absence={selectedAbsence}
                 showAllSubs={!includeOnlyRecommended}
-                onContactSub={handleContactSub}
-                onViewDetails={handleViewDetails}
+                onContactSub={handleContactSub as any}
                 hideHeader
                 highlightedSubId={highlightedSubId}
               />
@@ -1320,11 +1320,11 @@ export default function SubFinderPage() {
         <ContactSubPanel
           isOpen={isContactPanelOpen}
           onClose={handleCloseContactPanel}
-          sub={selectedSub}
+          sub={selectedSub as RecommendedSub | null}
           absence={selectedAbsence}
           initialContactData={
             selectedSub && selectedAbsence
-              ? contactDataCache.get(getCacheKey(selectedSub.id, selectedAbsence.id))
+              ? (contactDataCache.get(getCacheKey(selectedSub.id, selectedAbsence.id)) as any)
               : undefined
           }
           onAssignmentComplete={async () => {

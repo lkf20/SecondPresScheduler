@@ -189,10 +189,11 @@ export async function ensureCoverageRequestForQuickAssign(
           name: entry.days_of_week[0]?.name ?? null,
           day_number: entry.days_of_week[0]?.day_number ?? null,
         }
-      } else if (typeof entry.days_of_week === 'object' && entry.days_of_week.name !== undefined) {
+      } else if (typeof entry.days_of_week === 'object' && !Array.isArray(entry.days_of_week)) {
+        const dow = entry.days_of_week as { name?: string; day_number?: number }
         daysOfWeek = {
-          name: entry.days_of_week.name ?? null,
-          day_number: entry.days_of_week.day_number ?? null,
+          name: dow.name ?? null,
+          day_number: dow.day_number ?? null,
         }
       }
     }
@@ -204,10 +205,11 @@ export async function ensureCoverageRequestForQuickAssign(
           code: entry.time_slots[0]?.code ?? null,
           name: entry.time_slots[0]?.name ?? null,
         }
-      } else if (typeof entry.time_slots === 'object' && entry.time_slots.code !== undefined) {
+      } else if (typeof entry.time_slots === 'object' && !Array.isArray(entry.time_slots)) {
+        const ts = entry.time_slots as { code?: string; name?: string }
         timeSlots = {
-          code: entry.time_slots.code ?? null,
-          name: entry.time_slots.name ?? null,
+          code: ts.code ?? null,
+          name: ts.name ?? null,
         }
       }
     }

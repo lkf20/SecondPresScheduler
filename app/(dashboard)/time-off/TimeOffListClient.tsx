@@ -10,17 +10,10 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Settings2, RefreshCw } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import TimeOffCard from '@/components/shared/TimeOffCard'
-import type { ClassroomBadge } from '@/components/shared/TimeOffCard'
+import TimeOffCard, { type ClassroomBadge } from '@/components/shared/TimeOffCard'
 import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
 import { useTimeOffRequests } from '@/lib/hooks/use-time-off-requests'
 import { parseLocalDate } from '@/lib/utils/date'
-
-type ClassroomBadge = {
-  id: string
-  name: string
-  color: string | null
-}
 
 type CoverageStatus = 'draft' | 'completed' | 'covered' | 'partially_covered' | 'needs_coverage'
 

@@ -51,11 +51,15 @@ export async function createSub(sub: {
   // Exclude id from the insert if it's undefined or empty
   const { id, ...subData } = sub
   const insertData: Partial<Staff> & { id: string } = {
-    ...subData,
-    email: sub.email && sub.email.trim() !== '' ? sub.email : null,
+    first_name: subData.first_name,
+    last_name: subData.last_name,
+    display_name: subData.display_name || null,
+    phone: subData.phone || null,
+    ...(sub.email && sub.email.trim() !== '' ? { email: sub.email } : {}),
     is_sub: true,
     is_teacher: sub.is_teacher ?? false, // Preserve is_teacher flag
-  }
+    active: subData.active ?? true,
+  } as Partial<Staff> & { id: string }
   
   // Generate UUID if not provided
   if (id && id.trim() !== '') {

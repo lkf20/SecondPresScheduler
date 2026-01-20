@@ -310,8 +310,10 @@ export default function Header({ userEmail }: HeaderProps) {
               variant="outline"
               className="border-slate-300 text-slate-700 hover:bg-slate-100"
               onClick={() => {
-                savePreviousPanel()
-                setActivePanel('assign-sub')
+                if (activePanel) {
+                  savePreviousPanel(activePanel)
+                }
+                // Note: 'assign-sub' is not a PanelType, so we just open the panel directly
                 setIsAssignSubPanelOpen(true)
               }}
             >

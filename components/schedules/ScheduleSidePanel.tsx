@@ -34,7 +34,7 @@ import { getPanelBackgroundClasses, getPanelHeaderBackgroundClasses, panelBackgr
 interface Teacher {
   id: string
   name: string
-  teacher_id: string
+  teacher_id?: string
   is_floater?: boolean
 }
 
@@ -43,7 +43,12 @@ type ClassGroupWithMeta = ClassGroup & {
 }
 
 type SelectedCellData = WeeklyScheduleData & {
-  schedule_cell: ScheduleCellWithDetails | null
+  schedule_cell: Partial<ScheduleCellWithDetails> & {
+    id: string
+    is_active: boolean
+    enrollment_for_staffing: number | null
+    notes: string | null
+  } | null
 }
 
 interface ScheduleSidePanelProps {
@@ -78,7 +83,12 @@ export default function ScheduleSidePanel({
   selectedCellData,
   onSave,
 }: ScheduleSidePanelProps) {
-  const [cell, setCell] = useState<ScheduleCellWithDetails | null>(null)
+  const [cell, setCell] = useState<(Partial<ScheduleCellWithDetails> & {
+    id: string
+    is_active: boolean
+    enrollment_for_staffing: number | null
+    notes: string | null
+  }) | null>(null)
   const [isActive, setIsActive] = useState(true)
   const [classGroupIds, setClassGroupIds] = useState<string[]>([])
   const [enrollment, setEnrollment] = useState<number | null>(null)
@@ -128,6 +138,7 @@ export default function ScheduleSidePanel({
   const normalizeClassGroup = (cg: {
     id: string
     name: string
+    parent_class_id?: string | null
     min_age: number | null
     max_age: number | null
     required_ratio: number
@@ -137,6 +148,7 @@ export default function ScheduleSidePanel({
   }): ClassGroupWithMeta => ({
     id: cg.id,
     name: cg.name || '',
+    parent_class_id: cg.parent_class_id ?? null,
     min_age: cg.min_age ?? null,
     max_age: cg.max_age ?? null,
     required_ratio: cg.required_ratio ?? 8,
@@ -220,7 +232,7 @@ export default function ScheduleSidePanel({
           const cellData = data[0]
           setCell(cellData)
           setIsActive(cellData.is_active ?? true)
-          const classGroupIds = cellData.class_groups?.map((cg) => cg.id) || []
+          const classGroupIds = cellData.class_groups?.map((cg: ClassGroup) => cg.id) || []
           console.log('[ScheduleSidePanel] API fetch - classGroupIds:', classGroupIds)
           console.log('[ScheduleSidePanel] API fetch - cellData.class_groups:', cellData.class_groups)
           initialClassGroupIdsRef.current = classGroupIds
@@ -230,7 +242,7 @@ export default function ScheduleSidePanel({
           // Set classGroups from cell data initially (will be updated by useEffect when allAvailableClassGroups loads)
           if (cellData.class_groups && cellData.class_groups.length > 0) {
             // Map the class groups, ensuring all fields are present
-            const mappedClassGroups = cellData.class_groups.map((cg) => normalizeClassGroup(cg))
+            const mappedClassGroups = cellData.class_groups.map((cg: ClassGroup) => normalizeClassGroup(cg))
             console.log('[ScheduleSidePanel] API fetch - mappedClassGroups:', mappedClassGroups)
             setClassGroups(mappedClassGroups)
             hasLoadedInitialDataRef.current = true
@@ -611,6 +623,9 @@ export default function ScheduleSidePanel({
         timeSlotsToUpdate = [timeSlotId]
       }
 
+      // Use first class group ID for class_id (primary class group)
+      const primaryClassGroupId = classGroupIds.length > 0 ? classGroupIds[0] : null
+
       // Update cells for each day/time slot combination
       const updates: Array<{
         classroom_id: string
@@ -625,9 +640,13 @@ export default function ScheduleSidePanel({
       for (const updateDayId of daysToUpdate) {
         for (const updateTimeSlotId of timeSlotsToUpdate) {
           updates.push({
-            ...cellData,
+            classroom_id: cellData.classroom_id,
             day_of_week_id: updateDayId,
             time_slot_id: updateTimeSlotId,
+            is_active: cellData.is_active,
+            class_id: primaryClassGroupId,
+            enrollment_for_staffing: cellData.enrollment_for_staffing,
+            notes: cellData.notes,
           })
         }
       }
@@ -676,8 +695,8 @@ export default function ScheduleSidePanel({
           // If classGroupIds is set, filter to schedules matching the primary class group
           // If no class groups, get schedules with null class_id (assigned without class groups)
           const schedulesForThisSlot = primaryClassGroupId
-            ? currentSchedules.filter((s) => s.class_id === primaryClassGroupId)
-            : currentSchedules.filter((s) => s.class_id === null || s.class_id === undefined)
+            ? currentSchedules.filter((s: TeacherSchedule) => s.class_id === primaryClassGroupId)
+            : currentSchedules.filter((s: TeacherSchedule) => s.class_id === null || s.class_id === undefined)
           
           // Update teacher assignments (works for both with and without class groups)
           // Note: This code path should only run when saving, and we validate classGroupIds.length > 0 before saving
@@ -754,7 +773,7 @@ export default function ScheduleSidePanel({
               
               // Check if teacher already has a schedule for this slot with matching class_id
               const teacherScheduleForThisSlot = schedulesForThisSlot.find(
-                (s) => s.teacher_id === teacher.teacher_id
+                (s: TeacherSchedule) => s.teacher_id === teacher.teacher_id
               )
               
               console.log('[ScheduleSidePanel] Teacher:', teacher.name, 'hasSchedule:', !!teacherScheduleForThisSlot)
@@ -764,7 +783,7 @@ export default function ScheduleSidePanel({
                 // Check if they have one with wrong class_id - if so, it should have been updated above
                 // But if it wasn't (edge case), we'll create a new one
                 const teacherScheduleForOtherClass = currentSchedules.find(
-                  (s) => s.teacher_id === teacher.teacher_id && s.class_id !== primaryClassGroupId
+                  (s: TeacherSchedule) => s.teacher_id === teacher.teacher_id && s.class_id !== primaryClassGroupId
                 )
                 
                 if (teacherScheduleForOtherClass) {
@@ -949,7 +968,7 @@ export default function ScheduleSidePanel({
       // Remove teachers that were canceled
       if (teachersToRemove.length > 0) {
         setSelectedTeachers((prev) => 
-          prev.filter((t) => !teachersToRemove.includes(t.teacher_id))
+          prev.filter((t) => t.teacher_id && !teachersToRemove.includes(t.teacher_id))
         )
       }
 
@@ -1076,7 +1095,7 @@ export default function ScheduleSidePanel({
                   }}
                   allowedClassGroupIds={allowedClassGroupIds.length > 0 ? allowedClassGroupIds : undefined}
                   disabled={fieldsDisabled}
-                  existingClassGroups={classGroups}
+                  existingClassGroups={classGroups as ClassGroup[]}
                 />
                 <div className="pt-2 pb-3 border-b border-gray-200"></div>
                 {isActive && classGroupIds.length === 0 && (
@@ -1154,7 +1173,7 @@ export default function ScheduleSidePanel({
                 <Label className="text-base font-medium text-foreground block mb-6">Assigned Teachers</Label>
                 <TeacherMultiSelect
                   selectedTeachers={selectedTeachers}
-                  onTeachersChange={setSelectedTeachers}
+                  onTeachersChange={(teachers) => setSelectedTeachers(teachers)}
                   requiredCount={classGroupIds.length > 0 ? requiredTeachers : undefined}
                   preferredCount={classGroupIds.length > 0 ? preferredTeachers : undefined}
                   disabled={fieldsDisabled}

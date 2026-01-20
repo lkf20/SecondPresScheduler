@@ -13,16 +13,17 @@ import { Database } from '@/types/database'
 
 type TimeSlot = Database['public']['Tables']['time_slots']['Row']
 
-// TODO: Fix TypeScript error with display_order field - Known limitation between Zod and react-hook-form
-// where optional string fields get inferred as `unknown` in input type, causing type mismatch with defaultValues.
-// Runtime validation works correctly via zodResolver. Consider: using @ts-ignore on the useForm call,
-// refactoring to use a different form typing approach, or waiting for improved Zod/react-hook-form typings.
 const timeslotSchema = z.object({
   code: z.string().min(1, 'Code is required'),
   name: z.string().optional(),
   default_start_time: z.string().optional(),
   default_end_time: z.string().optional(),
-  display_order: z.string().optional(),
+  display_order: z
+    .number()
+    .int('Display order must be an integer')
+    .min(0, 'Display order cannot be negative')
+    .nullable()
+    .optional(),
 })
 
 type TimeSlotFormData = z.infer<typeof timeslotSchema>
@@ -34,61 +35,60 @@ interface TimeSlotFormClientProps {
 export default function TimeSlotFormClient({ timeslot }: TimeSlotFormClientProps) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
+  
+  const form = useForm<TimeSlotFormData>({
+    resolver: zodResolver(timeslotSchema),
+    defaultValues: {
+      code: timeslot.code ?? '',
+      name: timeslot.name ?? '',
+      default_start_time: timeslot.default_start_time ?? '',
+      default_end_time: timeslot.default_end_time ?? '',
+      display_order: timeslot.display_order ?? null,
+    },
+  })
+
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm({
-    // @ts-expect-error - Known limitation: Zod infers optional string fields (display_order) as `unknown` in input type, but react-hook-form expects the input type to match defaultValues. Runtime validation works correctly via zodResolver. TODO: Revisit if Zod/react-hook-form typings improve or we refactor form typing approach.
-    resolver: zodResolver(timeslotSchema),
-    defaultValues: {
-      code: timeslot.code,
-      name: timeslot.name || '',
-      default_start_time: timeslot.default_start_time || '',
-      default_end_time: timeslot.default_end_time || '',
-      display_order: (timeslot.display_order != null ? timeslot.display_order.toString() : '') as string | undefined,
-    } as z.input<typeof timeslotSchema>,
-  })
+  } = form
 
   // Reset form when timeslot data changes
   useEffect(() => {
     reset({
-      code: timeslot.code,
-      name: timeslot.name || '',
-      default_start_time: timeslot.default_start_time || '',
-      default_end_time: timeslot.default_end_time || '',
-      display_order: timeslot.display_order != null ? timeslot.display_order.toString() : '',
+      code: timeslot.code ?? '',
+      name: timeslot.name ?? '',
+      default_start_time: timeslot.default_start_time ?? '',
+      default_end_time: timeslot.default_end_time ?? '',
+      display_order: timeslot.display_order ?? null,
     })
   }, [timeslot, reset])
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: TimeSlotFormData) => {
     try {
       setError(null)
+      
+      // Handle display_order: NaN from empty input becomes null
+      let displayOrder: number | null = null
+      if (data.display_order !== null && data.display_order !== undefined) {
+        if (typeof data.display_order === 'number' && !Number.isNaN(data.display_order)) {
+          displayOrder = data.display_order
+        }
+      }
+      
       const payload: {
         code: string
         name: string | null
         default_start_time: string | null
         default_end_time: string | null
-        display_order?: number | null
+        display_order: number | null
       } = {
         code: data.code,
         name: data.name || null,
         default_start_time: data.default_start_time || null,
         default_end_time: data.default_end_time || null,
-      }
-
-      // Handle display_order - allow 0 as a valid value
-      // The form field is a string that may be empty
-      if (
-        !data.display_order ||
-        data.display_order === '' ||
-        data.display_order.trim() === ''
-      ) {
-        payload.display_order = null
-      } else {
-        const numValue = Number(data.display_order)
-        payload.display_order = isNaN(numValue) ? null : numValue
+        display_order: displayOrder, // 0, some number, or null
       }
       const response = await fetch(`/api/timeslots/${timeslot.id}`, {
         method: 'PUT',
@@ -157,7 +157,11 @@ export default function TimeSlotFormClient({ timeslot }: TimeSlotFormClientProps
           </FormField>
 
           <FormField label="Display Order" error={errors.display_order?.message}>
-            <Input type="number" {...register('display_order')} placeholder="Optional" />
+            <Input
+              type="number"
+              {...register('display_order', { valueAsNumber: true })}
+              placeholder="Optional"
+            />
           </FormField>
 
           <div className="flex justify-end gap-4">

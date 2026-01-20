@@ -38,7 +38,7 @@ type ShiftOverride = {
   } | null
 }
 
-interface RecommendedSub {
+export interface RecommendedSub {
   id: string
   name: string
   phone: string | null
@@ -65,6 +65,7 @@ interface RecommendedSub {
     coverage_request_shift_id?: string
   }>
   assigned_shifts?: Array<{
+    coverage_request_shift_id: string
     date: string
     day_name: string
     time_slot_code: string
@@ -667,7 +668,9 @@ export default function ContactSubPanel({
         try {
           if (errorText) {
             errorData = JSON.parse(errorText)
-            errorMessage = errorData.error || errorData.message || errorMessage
+            const error = typeof errorData.error === 'string' ? errorData.error : null
+            const message = typeof errorData.message === 'string' ? errorData.message : null
+            errorMessage = error || message || errorMessage
           }
         } catch {
           // If JSON parsing fails, use the raw text
@@ -711,7 +714,9 @@ export default function ContactSubPanel({
         try {
           if (errorText) {
             errorData = JSON.parse(errorText)
-            errorMessage = errorData.error || errorData.message || errorMessage
+            const error = typeof errorData.error === 'string' ? errorData.error : null
+            const message = typeof errorData.message === 'string' ? errorData.message : null
+            errorMessage = error || message || errorMessage
           }
         } catch {
           errorMessage = errorText || errorMessage

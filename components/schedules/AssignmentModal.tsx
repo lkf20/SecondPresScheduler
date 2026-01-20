@@ -229,7 +229,6 @@ export default function AssignmentModal({
                       )}
                     </div>
                     <RatioIndicator
-                      enrollment={group.enrollment}
                       required={group.required_teachers}
                       preferred={group.preferred_teachers}
                       assigned={group.assigned_teachers.length}

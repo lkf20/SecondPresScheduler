@@ -7,7 +7,7 @@ import { parseLocalDate } from '@/lib/utils/date'
 import { useEffect, useMemo, useState } from 'react'
 import SubFinderCard from '@/components/sub-finder/SubFinderCard'
 
-interface RecommendedSub {
+export interface RecommendedSub {
   id: string
   name: string
   phone: string | null
@@ -57,6 +57,13 @@ interface RecommendedSubsListProps {
     teacher_name: string
     start_date: string
     end_date: string | null
+    shifts?: {
+      shift_details?: Array<{
+        date?: string
+        time_slot_code?: string
+        classroom_name?: string | null
+      }>
+    }
   }
   showAllSubs?: boolean
   onContactSub?: (sub: RecommendedSub) => void
@@ -102,7 +109,7 @@ export default function RecommendedSubsList({
     }
 
     const lookup = new Map<string, string>()
-    absence.shifts?.shift_details?.forEach((shift) => {
+    absence.shifts?.shift_details?.forEach((shift: { date?: string; time_slot_code?: string; classroom_name?: string | null }) => {
       if (shift.classroom_name) {
         lookup.set(`${shift.date}|${shift.time_slot_code}`, shift.classroom_name)
       }
@@ -324,8 +331,8 @@ export default function RecommendedSubsList({
                         name={sub.name}
                         phone={sub.phone}
                         shiftsCovered={shiftsCovered}
-                        totalShifts={totalShiftsNeedingCoverage}
-                        useRemainingLabel={hasAssignedShifts}
+                        totalShifts={derived.totalShiftsNeedingCoverage}
+                        useRemainingLabel={derived.hasAssignedShifts}
                         canCover={canCoverWithClassrooms}
                         cannotCover={cannotCoverWithClassrooms}
                         assigned={[]}

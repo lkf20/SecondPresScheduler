@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
     // Get existing sub assignments
     const { data: existingAssignments } = await supabase
       .from('sub_assignments')
-      .select('date, time_slot_id, teacher_id, staff:teacher_id(first_name, last_name, display_name)')
+      .select('date, time_slot_id, teacher_id, classroom_id, staff:teacher_id(first_name, last_name, display_name)')
       .eq('sub_id', sub_id)
       .gte('date', startDate)
       .lte('date', endDate)
