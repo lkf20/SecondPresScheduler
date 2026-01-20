@@ -44,8 +44,8 @@ function generateDaysXClassroomsGridTemplate(
   days: Array<{ id: string; name: string; number: number }>,
   timeSlots: Array<{ id: string; code: string }>
 ): { columns: string; rows: string } {
-  // Columns: Combined Day/Time (120px) + Classrooms (minmax(220px, 1fr) each) - widened for better card fit
-  const columns = `120px repeat(${classroomCount}, minmax(220px, 1fr))`
+  // Columns: Combined Day/Time (120px) + Classrooms (minmax(230px, 1fr) each) - matches Classrooms x Days
+  const columns = `120px repeat(${classroomCount}, minmax(230px, 1fr))`
   
   // Rows: Header (auto) + (Spacer row + Day header + time slots for each day)
   // For the first day: no spacer, just day header + time slots
@@ -53,6 +53,7 @@ function generateDaysXClassroomsGridTemplate(
   const dayRows = days.map((day, dayIndex) => {
     const spacerRow = dayIndex === 0 ? '' : '16px' // Add spacer before each day except the first
     const dayHeaderRow = '36px' // Fixed small height for day headers (accommodates padding + text)
+    // Use 120px minimum to match Classrooms x Days layout
     const timeSlotRows = timeSlots.map(() => 'minmax(120px, auto)').join(' ')
     return dayIndex === 0 
       ? `${dayHeaderRow} ${timeSlotRows}`
@@ -588,16 +589,21 @@ export default function WeeklyScheduleGridNew({
                                   : 'transparent',
                                 gridColumn: classroomIndex + 2,
                                 gridRow: dataRow,
+                                minHeight: '120px', // Ensure minimum height for Safari compatibility (matches grid row minmax)
                               }}
                             >
                               <div
-                                className={`rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 min-h-[120px] flex-shrink-0 my-1.5 mx-3 cursor-pointer ${
+                                className={`rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 min-h-[120px] flex-shrink-0 cursor-pointer ${
                                   isInactive ? 'opacity-60 bg-gray-50' : ''
                                 }`}
                                 style={{
-                                  width: '200px',
-                                  maxWidth: '200px',
-                                  minWidth: '200px',
+                                  width: '220px',
+                                  minWidth: '220px',
+                                  maxWidth: '220px',
+                                  marginTop: '6px',
+                                  marginBottom: '6px',
+                                  marginLeft: '10px',
+                                  marginRight: '10px',
                                 }}
                                 onClick={() =>
                                   handleCellClick(
@@ -861,6 +867,7 @@ export default function WeeklyScheduleGridNew({
                             justifyContent: 'center',
                             width: '100%',
                             height: '100%',
+                            minHeight: '120px', // Ensure minimum height for Safari compatibility (matches grid row minmax)
                           }}
                         >
                           <div
