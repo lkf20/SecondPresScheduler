@@ -403,6 +403,16 @@ export default function WeeklyScheduleGridNew({
               </span>
             </div>
             <div className="flex items-center gap-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200">
+                Substitute
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+                Absent
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <span className="text-gray-600">Meets preferred</span>
             </div>
@@ -674,6 +684,16 @@ export default function WeeklyScheduleGridNew({
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-300 border-dashed">
                 Floater
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200">
+                Substitute
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+                Absent
               </span>
             </div>
             <div className="flex items-center gap-2">
