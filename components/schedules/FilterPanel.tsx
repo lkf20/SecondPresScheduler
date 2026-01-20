@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   Sheet,
   SheetContent,
@@ -89,7 +89,7 @@ export default function FilterPanel({
         inactive: initialFilters?.displayFilters?.inactive ?? true,
       },
       displayMode: initialFilters?.displayMode ?? 'all-scheduled-staff',
-      layout: initialFilters?.layout ?? 'classrooms-x-days', // Default: Classrooms across the top
+      layout: initialFilters?.layout ?? 'days-x-classrooms', // Default: Days across the top
     }
   })
 
@@ -126,9 +126,16 @@ export default function FilterPanel({
     )
   }, [availableClassrooms, classroomSearch])
 
-  // Update parent when filters change
+  // Update parent when filters change (skip initial mount to avoid overwriting saved state)
+  const isInitialMount = useRef(true)
   useEffect(() => {
-    onFiltersChange(filters)
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      // Still call onFiltersChange on mount to ensure parent has the correct state
+      onFiltersChange(filters)
+    } else {
+      onFiltersChange(filters)
+    }
   }, [filters, onFiltersChange])
 
   const toggleDay = (dayId: string) => {
@@ -496,21 +503,21 @@ export default function FilterPanel({
               }))}
             >
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="classrooms-x-days" id="classrooms-x-days" />
-                <label
-                  htmlFor="classrooms-x-days"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                >
-                  Classrooms × Days
-                </label>
-              </div>
-              <div className="flex items-center space-x-2">
                 <RadioGroupItem value="days-x-classrooms" id="days-x-classrooms" />
                 <label
                   htmlFor="days-x-classrooms"
                   className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                 >
                   Days × Classrooms
+                </label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="classrooms-x-days" id="classrooms-x-days" />
+                <label
+                  htmlFor="classrooms-x-days"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Classrooms × Days
                 </label>
               </div>
             </RadioGroup>

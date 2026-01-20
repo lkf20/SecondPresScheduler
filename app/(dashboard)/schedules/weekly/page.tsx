@@ -62,10 +62,10 @@ export default function WeeklySchedulePage() {
       if (savedFilters) {
         try {
           const parsed = JSON.parse(savedFilters)
-          // Ensure layout defaults to 'classrooms-x-days' if not set
+          // Ensure layout defaults to 'days-x-classrooms' if not set
           return {
             ...parsed,
-            layout: parsed.layout || 'classrooms-x-days',
+            layout: parsed.layout || 'days-x-classrooms',
           }
         } catch (e) {
           console.error('Error parsing saved filters:', e)
@@ -74,6 +74,45 @@ export default function WeeklySchedulePage() {
     }
     return null
   })
+
+  // Initialize filters with default layout if null (ensures layout is always set)
+  const hasInitializedFilters = useRef(false)
+  useEffect(() => {
+    if (hasInitializedFilters.current) return
+    if (filters === null && availableDays.length > 0 && availableTimeSlots.length > 0 && availableClassrooms.length > 0) {
+      hasInitializedFilters.current = true
+      // Load from localStorage again in case it was set between renders
+      if (typeof window !== 'undefined') {
+        const savedFilters = localStorage.getItem('weekly-schedule-filters')
+        if (savedFilters) {
+          try {
+            const parsed = JSON.parse(savedFilters)
+            setFilters({
+              ...parsed,
+              layout: parsed.layout || 'days-x-classrooms',
+            })
+            return
+          } catch (e) {
+            console.error('Error parsing saved filters:', e)
+          }
+        }
+      }
+      // If no saved filters, initialize with defaults
+      setFilters({
+        selectedDayIds: selectedDayIds.length > 0 ? selectedDayIds : availableDays.map(d => d.id),
+        selectedTimeSlotIds: availableTimeSlots.map(ts => ts.id),
+        selectedClassroomIds: availableClassrooms.map(c => c.id),
+        displayFilters: {
+          belowRequired: true,
+          belowPreferred: true,
+          fullyStaffed: true,
+          inactive: true,
+        },
+        displayMode: 'all-scheduled-staff',
+        layout: 'days-x-classrooms', // Default layout
+      })
+    }
+  }, [filters, availableDays.length, availableTimeSlots.length, availableClassrooms.length, selectedDayIds])
 
   useEffect(() => {
     if (!focusClassroomId || !focusDayId || !focusTimeSlotId) return
@@ -97,7 +136,7 @@ export default function WeeklySchedulePage() {
         inactive: true,
       },
       displayMode: prev?.displayMode ?? 'all-scheduled-staff',
-      layout: prev?.layout ?? 'classrooms-x-days',
+      layout: prev?.layout ?? 'days-x-classrooms',
     }))
     hasAppliedFocusRef.current = true
   }, [
@@ -109,10 +148,14 @@ export default function WeeklySchedulePage() {
     availableClassrooms.length,
   ])
 
-  // Save filters to localStorage whenever they change
+  // Save filters to localStorage whenever they change (with debounce to avoid excessive writes)
   useEffect(() => {
     if (filters && typeof window !== 'undefined') {
-      localStorage.setItem('weekly-schedule-filters', JSON.stringify(filters))
+      try {
+        localStorage.setItem('weekly-schedule-filters', JSON.stringify(filters))
+      } catch (e) {
+        console.error('Error saving filters to localStorage:', e)
+      }
     }
   }, [filters])
   
@@ -272,7 +315,7 @@ export default function WeeklySchedulePage() {
           <WeeklyScheduleGridNew
             data={filteredData}
             selectedDayIds={filters?.selectedDayIds ?? selectedDayIds}
-            layout={filters?.layout ?? 'classrooms-x-days'}
+            layout={filters?.layout ?? 'days-x-classrooms'}
             onRefresh={handleRefresh}
             onFilterPanelOpenChange={setFilterPanelOpen}
             filterPanelOpen={filterPanelOpen}
@@ -298,9 +341,16 @@ export default function WeeklySchedulePage() {
             availableTimeSlots={availableTimeSlots}
             availableClassrooms={availableClassrooms}
             selectedDayIdsFromSettings={selectedDayIds}
-            initialFilters={{
+            initialFilters={filters ? {
+              selectedDayIds: filters.selectedDayIds,
+              selectedTimeSlotIds: filters.selectedTimeSlotIds,
+              selectedClassroomIds: filters.selectedClassroomIds,
+              displayFilters: filters.displayFilters,
+              displayMode: filters.displayMode,
+              layout: filters.layout,
+            } : {
               selectedDayIds: selectedDayIds,
-              layout: filters?.layout ?? 'classrooms-x-days',
+              layout: 'days-x-classrooms',
             }}
           />
         </>
