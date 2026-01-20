@@ -681,9 +681,9 @@ export default function WeeklyScheduleGridNew({
           </div>
         </div>
 
-        <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)]">
+        <div>
           <div
-            className="grid"
+            className="grid overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)]"
             style={{
               gridTemplateColumns: classroomsXDaysGrid.columns,
               gridTemplateRows: classroomsXDaysGrid.rows,
@@ -691,22 +691,14 @@ export default function WeeklyScheduleGridNew({
             }}
           >
             {/* Header Row 1: Day Names */}
+            {/* Empty cell in column 1 to prevent classroom column from scrolling into header area */}
             <div
-              className="sticky top-0 left-0 z-50 pt-2 pb-0.5"
-              style={{ 
-                backgroundColor: 'white', 
-                gridColumn: 1, 
+              style={{
+                gridColumn: 1,
                 gridRow: 1,
-                borderTop: 'none',
-                borderBottom: 'none',
-                borderLeft: 'none',
-                borderRight: 'none',
-                boxShadow: 'none',
-                position: 'sticky',
-                top: 0,
+                backgroundColor: 'transparent',
               }}
-            >
-            </div>
+            />
             {filteredDays.map((day, dayIndex) => (
               <div
                 key={`day-header-${day.id}`}
@@ -726,20 +718,14 @@ export default function WeeklyScheduleGridNew({
             ))}
 
             {/* Header Row 2: Time Slot Codes */}
+            {/* Empty cell in column 1 to prevent classroom column from scrolling into header area */}
             <div
-              className="sticky left-0 z-40 pt-2 pb-0.5"
-              style={{ 
-                backgroundColor: 'white', 
-                gridColumn: 1, 
+              style={{
+                gridColumn: 1,
                 gridRow: 2,
-                borderBottom: '1px solid #e5e7eb',
-                borderRight: 'none',
-                borderTop: 'none',
-                boxShadow: '0 2px 8px -2px rgba(0, 0, 0, 0.1)',
-                position: 'sticky',
-                top: 'calc(0.5rem + 1.5rem + 0.125rem)', // pt-2 (0.5rem) + text-base font-bold line-height (1.5rem) + pb-0.5 (0.125rem) = ~35px
+                backgroundColor: 'transparent',
               }}
-            ></div>
+            />
             {filteredDays.map((day, dayIndex) =>
               timeSlots.map((slot, slotIndex) => (
                 <div
@@ -771,11 +757,14 @@ export default function WeeklyScheduleGridNew({
                 <React.Fragment key={`classroom-row-${classroom.classroom_id}`}>
                   {/* Classroom Name Column */}
                   <div
-                    className="sticky left-0 z-10 flex items-center justify-center"
+                    className="sticky z-10 flex items-center justify-center"
                     style={{
                       backgroundColor: 'white',
                       gridColumn: 1,
                       gridRow: rowIndex,
+                      left: 0,
+                      top: 'calc(0.5rem + 1.5rem + 0.125rem + 0.5rem + 1.5rem + 0.75rem + 5px)', // Day header (pt-2 + text-base line-height + pb-0.5) + Time slot header (pt-2 + chip height ~1.5rem + pb-3) + offset
+                      maxWidth: '110px', // Constrain to column width to prevent scrolling into header area
                       borderRight: '1px solid #e5e7eb',
                       borderBottom: classroomIndex < data.length - 1 ? '1px solid #e5e7eb' : 'none',
                       boxShadow: '2px 0 8px -2px rgba(0, 0, 0, 0.1)',
