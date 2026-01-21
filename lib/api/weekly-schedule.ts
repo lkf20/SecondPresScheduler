@@ -159,6 +159,14 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
     .order('display_order', { ascending: true })
   
   if (timeSlotsError) {
+    console.error('Error fetching time slots:', {
+      error: timeSlotsError,
+      schoolId,
+      message: timeSlotsError.message,
+      code: timeSlotsError.code,
+      details: timeSlotsError.details,
+      hint: timeSlotsError.hint
+    })
     throw new Error(`Failed to fetch time slots: ${timeSlotsError.message}`)
   }
   
@@ -171,6 +179,14 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
     .order('name', { ascending: true })
   
   if (classroomsError) {
+    console.error('Error fetching classrooms:', {
+      error: classroomsError,
+      schoolId,
+      message: classroomsError.message,
+      code: classroomsError.code,
+      details: classroomsError.details,
+      hint: classroomsError.hint
+    })
     throw new Error(`Failed to fetch classrooms: ${classroomsError.message}`)
   }
   

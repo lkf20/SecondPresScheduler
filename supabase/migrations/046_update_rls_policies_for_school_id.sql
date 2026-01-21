@@ -17,6 +17,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Update RLS policies for classrooms
 DROP POLICY IF EXISTS "Reference data is viewable by authenticated users" ON classrooms;
+DROP POLICY IF EXISTS "Classrooms are viewable by users in same school" ON classrooms;
+DROP POLICY IF EXISTS "Classrooms are manageable by users in same school" ON classrooms;
 CREATE POLICY "Classrooms are viewable by users in same school"
   ON classrooms FOR SELECT
   TO authenticated
@@ -30,6 +32,8 @@ CREATE POLICY "Classrooms are manageable by users in same school"
 
 -- Update RLS policies for time_slots
 DROP POLICY IF EXISTS "Reference data is viewable by authenticated users" ON time_slots;
+DROP POLICY IF EXISTS "Time slots are viewable by users in same school" ON time_slots;
+DROP POLICY IF EXISTS "Time slots are manageable by users in same school" ON time_slots;
 CREATE POLICY "Time slots are viewable by users in same school"
   ON time_slots FOR SELECT
   TO authenticated
@@ -43,6 +47,8 @@ CREATE POLICY "Time slots are manageable by users in same school"
 
 -- Update RLS policies for class_groups (formerly classes)
 DROP POLICY IF EXISTS "Reference data is viewable by authenticated users" ON class_groups;
+DROP POLICY IF EXISTS "Class groups are viewable by users in same school" ON class_groups;
+DROP POLICY IF EXISTS "Class groups are manageable by users in same school" ON class_groups;
 CREATE POLICY "Class groups are viewable by users in same school"
   ON class_groups FOR SELECT
   TO authenticated
@@ -57,6 +63,8 @@ CREATE POLICY "Class groups are manageable by users in same school"
 -- Update RLS policies for teacher_schedules
 DROP POLICY IF EXISTS "Schedules are viewable by authenticated users" ON teacher_schedules;
 DROP POLICY IF EXISTS "Schedules are manageable by authenticated users" ON teacher_schedules;
+DROP POLICY IF EXISTS "Teacher schedules are viewable by users in same school" ON teacher_schedules;
+DROP POLICY IF EXISTS "Teacher schedules are manageable by users in same school" ON teacher_schedules;
 CREATE POLICY "Teacher schedules are viewable by users in same school"
   ON teacher_schedules FOR SELECT
   TO authenticated
@@ -71,6 +79,8 @@ CREATE POLICY "Teacher schedules are manageable by users in same school"
 -- Update RLS policies for staffing_rules
 DROP POLICY IF EXISTS "Staffing rules are viewable by authenticated users" ON staffing_rules;
 DROP POLICY IF EXISTS "Staffing rules are manageable by authenticated users" ON staffing_rules;
+DROP POLICY IF EXISTS "Staffing rules are viewable by users in same school" ON staffing_rules;
+DROP POLICY IF EXISTS "Staffing rules are manageable by users in same school" ON staffing_rules;
 CREATE POLICY "Staffing rules are viewable by users in same school"
   ON staffing_rules FOR SELECT
   TO authenticated
@@ -85,6 +95,8 @@ CREATE POLICY "Staffing rules are manageable by users in same school"
 -- Update RLS policies for schedule_cells
 DROP POLICY IF EXISTS "Schedule cells are viewable by authenticated users" ON schedule_cells;
 DROP POLICY IF EXISTS "Schedule cells are manageable by authenticated users" ON schedule_cells;
+DROP POLICY IF EXISTS "Schedule cells are viewable by users in same school" ON schedule_cells;
+DROP POLICY IF EXISTS "Schedule cells are manageable by users in same school" ON schedule_cells;
 CREATE POLICY "Schedule cells are viewable by users in same school"
   ON schedule_cells FOR SELECT
   TO authenticated
@@ -100,6 +112,8 @@ CREATE POLICY "Schedule cells are manageable by users in same school"
 DROP POLICY IF EXISTS "Schedule settings are viewable by authenticated users" ON schedule_settings;
 DROP POLICY IF EXISTS "Schedule settings are manageable by authenticated users" ON schedule_settings;
 DROP POLICY IF EXISTS "Schedule settings are updatable by authenticated users" ON schedule_settings;
+DROP POLICY IF EXISTS "Schedule settings are viewable by users in same school" ON schedule_settings;
+DROP POLICY IF EXISTS "Schedule settings are manageable by users in same school" ON schedule_settings;
 CREATE POLICY "Schedule settings are viewable by users in same school"
   ON schedule_settings FOR SELECT
   TO authenticated
