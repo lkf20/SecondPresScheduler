@@ -27,6 +27,12 @@ interface WeeklyScheduleGridNewProps {
 
 type WeeklyScheduleCellData = WeeklyScheduleData & {
   schedule_cell: WeeklyScheduleDataByClassroom['days'][number]['time_slots'][number]['schedule_cell']
+  absences?: Array<{
+    teacher_id: string
+    teacher_name: string
+    has_sub: boolean
+    is_partial: boolean
+  }>
 }
 
 // Helper function to convert hex color to rgba with opacity
@@ -369,6 +375,7 @@ export default function WeeklyScheduleGridNew({
           time_slot_display_order: timeSlot.time_slot_display_order,
           assignments: timeSlot.assignments,
           schedule_cell: timeSlot.schedule_cell || null,
+          absences: timeSlot.absences,
         } : undefined
       })()
     : undefined
@@ -421,6 +428,7 @@ export default function WeeklyScheduleGridNew({
                 time_slot_display_order: timeSlot.display_order,
                 assignments: timeSlotData.assignments,
                 schedule_cell: timeSlotData.schedule_cell || null,
+                absences: timeSlotData.absences,
               }
             : undefined
 
@@ -1006,6 +1014,7 @@ export default function WeeklyScheduleGridNew({
                             time_slot_display_order: slot.display_order,
                             assignments: timeSlotData.assignments,
                             schedule_cell: timeSlotData.schedule_cell || null,
+                            absences: timeSlotData.absences,
                           }
                         : undefined
 

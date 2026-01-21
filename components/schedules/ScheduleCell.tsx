@@ -25,6 +25,12 @@ interface ScheduleCellProps {
         preferred_ratio: number | null
       }>
     } | null
+    absences?: Array<{
+      teacher_id: string
+      teacher_name: string
+      has_sub: boolean
+      is_partial: boolean
+    }>
   }
   onClick?: () => void
 }
@@ -177,19 +183,33 @@ export default function ScheduleCell({ data, onClick }: ScheduleCellProps) {
             // Combine: regular teachers first, then floaters
             const sortedAssignments = [...sortedRegular, ...sortedFloaters]
             
-            return sortedAssignments.map((assignment) => (
-              <span
-                key={assignment.id || assignment.teacher_id}
-                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold w-fit ${
-                  assignment.is_floater
-                    ? 'bg-purple-100 text-purple-800 border border-purple-300 border-dashed'
-                    : 'bg-blue-100 text-blue-800'
-                }`}
-                title={assignment.is_floater ? 'Floater assignment' : undefined}
-              >
-                {assignment.teacher_name || 'Unknown'}
-              </span>
-            ))
+            return sortedAssignments.map((assignment) => {
+              // Check if this teacher is absent
+              const isAbsent = data?.absences?.some(absence => absence.teacher_id === assignment.teacher_id) ?? false
+              
+              let className = 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold w-fit '
+              let title: string | undefined = undefined
+              
+              if (isAbsent) {
+                // Gray styling for absent teachers (matches the key)
+                className += 'bg-gray-100 text-gray-700 border border-gray-300'
+              } else if (assignment.is_floater) {
+                className += 'bg-purple-100 text-purple-800 border border-purple-300 border-dashed'
+                title = 'Floater assignment'
+              } else {
+                className += 'bg-blue-100 text-blue-800'
+              }
+              
+              return (
+                <span
+                  key={assignment.id || assignment.teacher_id}
+                  className={className}
+                  title={title}
+                >
+                  {assignment.teacher_name || 'Unknown'}
+                </span>
+              )
+            })
           })()}
         </div>
       )}

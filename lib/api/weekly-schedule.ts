@@ -26,6 +26,7 @@ export interface WeeklyScheduleData {
     classroom_id: string
     classroom_name: string
     is_floater?: boolean
+    is_substitute?: boolean // True if this assignment comes from sub_assignments (week-specific)
     enrollment?: number
     required_teachers?: number
     preferred_teachers?: number
@@ -391,6 +392,15 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
         // Build assignments array - use schedule_cell as the source of truth
         const assignments: WeeklyScheduleData['assignments'] = []
         
+        // Track absences from sub_assignments and time_off_shifts
+        // Initialize outside the if block so it's always defined
+        const absences: Array<{
+          teacher_id: string
+          teacher_name: string
+          has_sub: boolean
+          is_partial: boolean
+        }> = []
+        
         // Only process if schedule_cell exists and is active with class groups
         // Handle both class_groups (from transformed data) and schedule_cell_class_groups (from raw query)
         const classGroups = scheduleCell?.class_groups || []
@@ -437,14 +447,6 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
             })
           }
           
-          // Track absences from sub_assignments and time_off_shifts
-          const absences: Array<{
-            teacher_id: string
-            teacher_name: string
-            has_sub: boolean
-            is_partial: boolean
-          }> = []
-          
           // Track unique absent teachers from sub_assignments (covered absences)
           const absentTeachers = new Map<string, { teacher_id: string; teacher_name: string; has_sub: boolean; is_partial: boolean }>()
           
@@ -481,6 +483,7 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
                 classroom_id: sub.classroom_id,
                 classroom_name: classroom.name,
                 is_floater: false, // Substitutes are not floaters
+                is_substitute: true, // Mark as substitute (week-specific)
                 enrollment: enrollment ?? 0,
                 required_teachers: rule?.required_teachers,
                 preferred_teachers: rule?.preferred_teachers,
@@ -490,43 +493,73 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
           }
           
           // Check for uncovered absences from time_off_shifts (if weekStartISO is provided)
+          // Only add absences for teachers who are actually assigned to this classroom
           if (weekStartISO && day.id) {
             const timeOffForSlot = timeOffShifts.filter(
               (tos) => tos.day_of_week_id === day.id &&
                       tos.time_slot_id === timeSlot.id
             )
             
-            // Get teacher names for time off shifts
-            const teacherIds = Array.from(new Set(timeOffForSlot.map(tos => tos.teacher_id)))
-            const { data: teachersData } = await supabase
-              .from('staff')
-              .select('id, first_name, last_name, display_name')
-              .in('id', teacherIds)
+            // First, identify which teachers are assigned to this classroom at this time
+            const teachersAssignedToThisClassroom = new Set<string>()
             
-            const teachersMap = new Map(
-              (teachersData || []).map((t: any) => [
-                t.id,
-                t.display_name || `${t.first_name || ''} ${t.last_name || ''}`.trim() || 'Unknown'
-              ])
+            // Check permanent assignments
+            for (const assignment of assignmentsForSlot) {
+              if (assignment.classroom_id === classroom.id && assignment.teacher_id) {
+                teachersAssignedToThisClassroom.add(assignment.teacher_id)
+              }
+            }
+            
+            // Check sub_assignments - the absent teacher is assigned here
+            const subsForSlot = subAssignments.filter(
+              (sa) => sa.day_of_week_id === day.id &&
+                     sa.time_slot_id === timeSlot.id &&
+                     sa.classroom_id === classroom.id
+            )
+            for (const sub of subsForSlot) {
+              if (sub.teacher_id) {
+                teachersAssignedToThisClassroom.add(sub.teacher_id) // The absent teacher
+              }
+            }
+            
+            // Filter to only time_off_shifts for teachers assigned to this classroom
+            const relevantTimeOffShifts = timeOffForSlot.filter(
+              tos => teachersAssignedToThisClassroom.has(tos.teacher_id)
             )
             
-            for (const timeOff of timeOffForSlot) {
-              // Check if this absence is already covered by a sub_assignment
-              const hasSub = subAssignments.some(
-                (sa) => sa.teacher_id === timeOff.teacher_id &&
-                       sa.day_of_week_id === day.id &&
-                       sa.time_slot_id === timeSlot.id &&
-                       sa.classroom_id === classroom.id
+            // Get teacher names for relevant time off shifts (batch fetch)
+            if (relevantTimeOffShifts.length > 0) {
+              const teacherIds = Array.from(new Set(relevantTimeOffShifts.map(tos => tos.teacher_id)))
+              const { data: teachersData } = await supabase
+                .from('staff')
+                .select('id, first_name, last_name, display_name')
+                .in('id', teacherIds)
+              
+              const teachersMap = new Map(
+                (teachersData || []).map((t: any) => [
+                  t.id,
+                  t.display_name || `${t.first_name || ''} ${t.last_name || ''}`.trim() || 'Unknown'
+                ])
               )
               
-              // Only add if not already tracked (from sub_assignments) or if uncovered
-              if (!absentTeachers.has(timeOff.teacher_id)) {
-                absentTeachers.set(timeOff.teacher_id, {
-                  teacher_id: timeOff.teacher_id,
-                  teacher_name: teachersMap.get(timeOff.teacher_id) || 'Unknown',
-                  has_sub: hasSub,
-                  is_partial: false, // TODO: Determine if partial based on coverage
-                })
+              for (const timeOff of relevantTimeOffShifts) {
+                // Check if this absence is already covered by a sub_assignment
+                const hasSub = subAssignments.some(
+                  (sa) => sa.teacher_id === timeOff.teacher_id &&
+                         sa.day_of_week_id === day.id &&
+                         sa.time_slot_id === timeSlot.id &&
+                         sa.classroom_id === classroom.id
+                )
+                
+                // Only add if not already tracked (from sub_assignments)
+                if (!absentTeachers.has(timeOff.teacher_id)) {
+                  absentTeachers.set(timeOff.teacher_id, {
+                    teacher_id: timeOff.teacher_id,
+                    teacher_name: teachersMap.get(timeOff.teacher_id) || 'Unknown',
+                    has_sub: hasSub,
+                    is_partial: false, // TODO: Determine if partial based on coverage
+                  })
+                }
               }
             }
           }

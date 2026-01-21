@@ -257,9 +257,11 @@ export default function WeeklySchedulePage() {
 
                 // Get class group IDs for filtering assignments
                 const classGroupIds = classGroups.map(cg => cg.id)
-                const assignedCount = slot.assignments.filter(
+                // Filter assignments for this slot (week-specific data already includes substitutes)
+                const slotAssignments = slot.assignments.filter(
                   a => a.teacher_id && a.class_id && classGroupIds.includes(a.class_id)
-                ).length
+                )
+                const assignedCount = slotAssignments.length
 
                 const belowRequired =
                   requiredTeachers !== undefined && assignedCount < requiredTeachers
@@ -270,15 +272,24 @@ export default function WeeklySchedulePage() {
                   assignedCount >= requiredTeachers &&
                   (preferredTeachers === undefined || assignedCount >= preferredTeachers)
 
-                // Handle coverage-issues mode
+                // Handle substitutes-only mode (week-specific)
+                if (filters.displayMode === 'substitutes-only') {
+                  // Show only slots that have substitutes for the selected week
+                  const hasSubstitute = slotAssignments.some(a => a.is_substitute === true)
+                  return hasSubstitute
+                }
+
+                // Handle coverage-issues mode (week-specific, includes substitutes for that week)
                 if (filters.displayMode === 'coverage-issues') {
                   // Show only slots with coverage issues: belowRequired or belowPreferred
+                  // Coverage calculation already includes week-specific substitutes
                   return belowRequired || belowPreferred
                 }
 
-                // Handle absences mode
+                // Handle absences mode (week-specific)
                 if (filters.displayMode === 'absences') {
-                  // Show only slots with absences (uncovered, partial coverage, or any absence)
+                  // Show only slots with absences for the selected week (uncovered, partial coverage, or any absence)
+                  // Absences are already week-specific from the API
                   return slot.absences && slot.absences.length > 0
                 }
 
@@ -290,7 +301,7 @@ export default function WeeklySchedulePage() {
           })),
       }))
       .filter(classroom => classroom.days.length > 0)
-  }, [scheduleData, filters])
+  }, [scheduleData, filters, weekStartISO])
 
   // Calculate slot counts for display
   const slotCounts = useMemo(() => {
@@ -341,7 +352,7 @@ export default function WeeklySchedulePage() {
           </Button>
         </div>
         <p className="text-muted-foreground">
-          Manage staffing by classroom, day, and time slot
+          View staffing by classroom, day, and time slot
         </p>
       </div>
 
