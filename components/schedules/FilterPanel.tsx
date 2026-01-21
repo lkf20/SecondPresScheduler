@@ -135,22 +135,58 @@ export default function FilterPanel({
     )
   }, [availableClassrooms, classroomSearch])
 
+  // Track whether a change originated from internal state or external props
+  const changeSourceRef = useRef<'internal' | 'external'>('internal')
+
+  // Track previous initialFilters to detect external changes (like from filter chips)
+  const prevInitialFiltersRef = useRef<Partial<FilterState> | undefined>(initialFilters)
+
+  // Sync internal state when initialFilters changes from external sources (like filter chips)
+  // Only sync displayMode since that's what the filter chips control
+  useEffect(() => {
+    if (initialFilters && initialFilters.displayMode !== undefined) {
+      const prevInitialFilters = prevInitialFiltersRef.current
+      prevInitialFiltersRef.current = initialFilters
+      
+      // Only sync if displayMode actually changed from external source
+      if (prevInitialFilters?.displayMode !== initialFilters.displayMode && filters.displayMode !== initialFilters.displayMode) {
+        changeSourceRef.current = 'external'
+        setFilters(prev => ({
+          ...prev,
+          displayMode: hideStaffSection ? 'permanent-only' : (initialFilters.displayMode ?? prev.displayMode),
+        }))
+      }
+    }
+  }, [initialFilters?.displayMode, hideStaffSection, filters.displayMode])
+
   // Ensure displayMode is permanent-only when hideStaffSection is true
   useEffect(() => {
     if (hideStaffSection && filters.displayMode !== 'permanent-only') {
+      // This is an internal enforcement, not from user interaction
+      // Don't mark as internal to avoid triggering onFiltersChange unnecessarily
+      // since this is just enforcing a constraint
       setFilters(prev => ({ ...prev, displayMode: 'permanent-only' }))
     }
   }, [hideStaffSection, filters.displayMode])
 
   // Update parent when filters change (skip initial mount to avoid overwriting saved state)
+  // Don't update parent if change came from external source (to prevent infinite loops)
   const isInitialMount = useRef(true)
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false
       // Still call onFiltersChange on mount to ensure parent has the correct state
       onFiltersChange(filters)
-    } else {
+      changeSourceRef.current = 'internal'
+      return
+    }
+    
+    // Only update parent if change came from internal state (user interaction)
+    if (changeSourceRef.current === 'internal') {
       onFiltersChange(filters)
+    } else {
+      // Reset the flag after skipping external update
+      changeSourceRef.current = 'internal'
     }
   }, [filters, onFiltersChange])
 
@@ -468,10 +504,13 @@ export default function FilterPanel({
               <Label className="text-base font-medium">Show Staff</Label>
               <RadioGroup
                 value={filters.displayMode}
-                onValueChange={(value) => setFilters(prev => ({
-                  ...prev,
-                  displayMode: value as FilterState['displayMode']
-                }))}
+                onValueChange={(value) => {
+                  changeSourceRef.current = 'internal'
+                  setFilters(prev => ({
+                    ...prev,
+                    displayMode: value as FilterState['displayMode']
+                  }))
+                }}
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="permanent-only" id="permanent-only" />

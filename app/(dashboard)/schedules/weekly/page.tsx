@@ -81,9 +81,11 @@ export default function WeeklySchedulePage() {
         try {
           const parsed = JSON.parse(savedFilters)
           // Ensure layout defaults to 'days-x-classrooms' if not set
+          // Ensure displayMode defaults to 'all-scheduled-staff' if not set
           return {
             ...parsed,
             layout: parsed.layout || 'days-x-classrooms',
+            displayMode: parsed.displayMode || 'all-scheduled-staff',
           }
         } catch (e) {
           console.error('Error parsing saved filters:', e)
@@ -108,6 +110,7 @@ export default function WeeklySchedulePage() {
             setFilters({
               ...parsed,
               layout: parsed.layout || 'days-x-classrooms',
+              displayMode: parsed.displayMode || 'all-scheduled-staff',
             })
             return
           } catch (e) {
@@ -336,11 +339,6 @@ export default function WeeklySchedulePage() {
         <LoadingSpinner />
       ) : (
         <>
-          <div className="mb-4">
-            <p className="text-sm text-muted-foreground italic">
-              Showing {slotCounts.shown} of {slotCounts.total} slots
-            </p>
-          </div>
           <WeeklyScheduleGridNew
             data={filteredData}
             selectedDayIds={filters?.selectedDayIds ?? selectedDayIds}
@@ -349,6 +347,29 @@ export default function WeeklySchedulePage() {
             onFilterPanelOpenChange={setFilterPanelOpen}
             filterPanelOpen={filterPanelOpen}
             allowCardClick={false}
+            displayMode={filters?.displayMode ?? 'all-scheduled-staff'}
+            onDisplayModeChange={(mode) => {
+              setFilters(prev => {
+                if (prev) {
+                  return { ...prev, displayMode: mode }
+                }
+                // If filters is null, initialize with defaults
+                return {
+                  selectedDayIds: selectedDayIds.length > 0 ? selectedDayIds : availableDays.map(d => d.id),
+                  selectedTimeSlotIds: availableTimeSlots.map(ts => ts.id),
+                  selectedClassroomIds: availableClassrooms.map(c => c.id),
+                  displayFilters: {
+                    belowRequired: true,
+                    belowPreferred: true,
+                    fullyStaffed: true,
+                    inactive: true,
+                  },
+                  displayMode: mode,
+                  layout: 'days-x-classrooms' as const,
+                }
+              })
+            }}
+            slotCounts={slotCounts}
             initialSelectedCell={
               focusClassroomId && focusDayId && focusTimeSlotId
                 ? {

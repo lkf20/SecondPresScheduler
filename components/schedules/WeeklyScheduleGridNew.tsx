@@ -20,6 +20,9 @@ interface WeeklyScheduleGridNewProps {
     timeSlotId: string
   } | null
   allowCardClick?: boolean // If false, cards are not clickable (default: true)
+  displayMode?: 'permanent-only' | 'permanent-flexible' | 'substitutes-only' | 'all-scheduled-staff'
+  onDisplayModeChange?: (mode: 'permanent-only' | 'permanent-flexible' | 'substitutes-only' | 'all-scheduled-staff') => void
+  slotCounts?: { shown: number; total: number } // Slot counts for display
 }
 
 type WeeklyScheduleCellData = WeeklyScheduleData & {
@@ -91,6 +94,9 @@ export default function WeeklyScheduleGridNew({
   filterPanelOpen = false,
   initialSelectedCell = null,
   allowCardClick = true, // Default to allowing clicks
+  displayMode = 'all-scheduled-staff',
+  onDisplayModeChange,
+  slotCounts,
 }: WeeklyScheduleGridNewProps) {
   const [selectedCell, setSelectedCell] = useState<{
     dayId: string
@@ -105,6 +111,32 @@ export default function WeeklyScheduleGridNew({
   } | null>(null)
   const { setActivePanel, previousPanel, restorePreviousPanel, registerPanelCloseHandler } = usePanelManager()
   const savedCellRef = useRef<typeof selectedCell>(null)
+
+  // Calculate assignment counts for filter chips
+  // Note: Since substitutes are merged into assignments with teacher_id, we can't distinguish them directly
+  // For now, count all assignments, and separate permanent teachers from floaters
+  const assignmentCounts = useMemo(() => {
+    let allCount = 0
+    let permanentCount = 0
+
+    data.forEach((classroom) => {
+      classroom.days.forEach((day) => {
+        day.time_slots.forEach((slot) => {
+          slot.assignments.forEach((assignment) => {
+            allCount++
+            // Count permanent teachers (non-floaters with teacher_id)
+            if (assignment.teacher_id && !assignment.is_floater) {
+              permanentCount++
+            }
+          })
+        })
+      })
+    })
+
+    // For now, use the same count for all (since we can't distinguish substitutes)
+    // The actual filtering happens via displayMode in FilterPanel
+    return { all: allCount, subs: allCount, permanent: permanentCount }
+  }, [data])
 
   // Extract unique days and time slots from data, filtered by selectedDayIds
   const { days, timeSlots } = useMemo(() => {
@@ -426,6 +458,36 @@ export default function WeeklyScheduleGridNew({
             </div>
           </div>
         </div>
+        {/* Filter chips - separate row below legend */}
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {[
+            { value: 'all-scheduled-staff' as const, label: `All (${assignmentCounts.all})` },
+            { value: 'substitutes-only' as const, label: `Subs only (${assignmentCounts.subs})` },
+            { value: 'permanent-only' as const, label: `Permanent staff only (${assignmentCounts.permanent})` },
+          ].map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onDisplayModeChange?.(option.value)
+              }}
+              className={
+                displayMode === option.value
+                  ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
+                  : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
+              }
+            >
+              {option.label}
+            </button>
+          ))}
+          {slotCounts && (
+            <p className="ml-4 text-sm text-muted-foreground italic">
+              Showing {slotCounts.shown} of {slotCounts.total} slots
+            </p>
+          )}
+        </div>
 
         <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)]" style={{ position: 'relative' }}>
           <div
@@ -709,6 +771,36 @@ export default function WeeklyScheduleGridNew({
               <span className="text-gray-600">Below required</span>
             </div>
           </div>
+        </div>
+        {/* Filter chips - separate row below legend */}
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {[
+            { value: 'all-scheduled-staff' as const, label: `All (${assignmentCounts.all})` },
+            { value: 'substitutes-only' as const, label: `Subs only (${assignmentCounts.subs})` },
+            { value: 'permanent-only' as const, label: `Permanent staff only (${assignmentCounts.permanent})` },
+          ].map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onDisplayModeChange?.(option.value)
+              }}
+              className={
+                displayMode === option.value
+                  ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
+                  : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
+              }
+            >
+              {option.label}
+            </button>
+          ))}
+          {slotCounts && (
+            <p className="ml-4 text-sm text-muted-foreground italic">
+              Showing {slotCounts.shown} of {slotCounts.total} slots
+            </p>
+          )}
         </div>
 
         <div>
