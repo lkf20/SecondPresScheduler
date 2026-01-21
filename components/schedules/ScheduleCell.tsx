@@ -32,7 +32,9 @@ interface ScheduleCellProps {
       teacher_name: string
       has_sub: boolean
       is_partial: boolean
+      time_off_request_id?: string
     }>
+    classroom_name?: string
   }
   onClick?: () => void
   displayMode?: 'permanent-only' | 'permanent-flexible' | 'substitutes-only' | 'all-scheduled-staff' | 'coverage-issues' | 'absences'

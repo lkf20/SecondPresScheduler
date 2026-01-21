@@ -43,34 +43,36 @@ export interface WeeklyScheduleDataByClassroom {
     day_of_week_id: string
     day_name: string
     day_number: number
-        time_slots: Array<{
-          time_slot_id: string
-          time_slot_code: string
-          time_slot_name: string | null
-          time_slot_display_order: number | null
-          assignments: WeeklyScheduleData['assignments']
-          absences?: Array<{
-            teacher_id: string
-            teacher_name: string
-            has_sub: boolean
-            is_partial: boolean
-            time_off_request_id?: string // ID of the time off request this absence belongs to
-          }>
-          schedule_cell: {
-            id: string
-            is_active: boolean
-            enrollment_for_staffing: number | null
-            notes: string | null
-            class_groups?: Array<{
-              id: string
-              name: string
-              min_age: number | null
-              max_age: number | null
-              required_ratio: number
-              preferred_ratio: number | null
-            }>
-          } | null
+    time_slots: Array<{
+      time_slot_id: string
+      time_slot_code: string
+      time_slot_name: string | null
+      time_slot_display_order: number | null
+      time_slot_start_time: string | null
+      time_slot_end_time: string | null
+      assignments: WeeklyScheduleData['assignments']
+      absences?: Array<{
+        teacher_id: string
+        teacher_name: string
+        has_sub: boolean
+        is_partial: boolean
+        time_off_request_id?: string // ID of the time off request this absence belongs to
+      }>
+      schedule_cell: {
+        id: string
+        is_active: boolean
+        enrollment_for_staffing: number | null
+        notes: string | null
+        class_groups?: Array<{
+          id: string
+          name: string
+          min_age: number | null
+          max_age: number | null
+          required_ratio: number
+          preferred_ratio: number | null
         }>
+      } | null
+    }>
   }>
 }
 
@@ -469,7 +471,7 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
                   teacher_name: sub.teacher_name,
                   has_sub: true, // If there's a sub_assignment, there's a sub
                   is_partial: false, // TODO: Determine if partial based on is_partial field
-                  time_off_request_id: sub.time_off_request_id, // Include time_off_request_id if available
+                  time_off_request_id: undefined, // sub_assignments doesn't have time_off_request_id, will be set from time_off_shifts if needed
                 })
               }
               
@@ -590,7 +592,7 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
             time_slot_start_time: timeSlot.default_start_time,
             time_slot_end_time: timeSlot.default_end_time,
             assignments,
-            absences: absences.length > 0 ? absences : undefined,
+            ...(absences.length > 0 ? { absences } : {}),
             schedule_cell: scheduleCell ? {
               id: scheduleCell.id,
               is_active: scheduleCell.is_active,
@@ -598,7 +600,7 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
               notes: scheduleCell.notes,
               class_groups: classGroups || [],
             } : null,
-          })
+          } as WeeklyScheduleDataByClassroom['days'][0]['time_slots'][0])
       }
       
       classroomDays.push({
