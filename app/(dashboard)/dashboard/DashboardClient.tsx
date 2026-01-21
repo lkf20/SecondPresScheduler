@@ -356,7 +356,7 @@ export default function DashboardClient({
     const partialColors = getCoverageColors('partial')
     const infoColors = { text: 'text-blue-600', bg: 'bg-blue-100', icon: 'text-blue-600' }
     const tealColors = { text: 'text-teal-700', bg: 'bg-teal-100', icon: 'text-teal-600' }
-    const purpleColors = { text: 'text-purple-800', bg: 'bg-purple-100', icon: 'text-purple-800' }
+    const purpleColors = { text: 'text-purple-800', bg: 'bg-blue-100', icon: 'text-purple-800' }
     
     return [
       {
@@ -558,9 +558,9 @@ export default function DashboardClient({
                             : item.key === 'partial'
                             ? { color: coverageColorValues.partial.text } as React.CSSProperties
                             : item.key === 'scheduled'
-                            ? { color: 'rgb(37, 99, 235)' } as React.CSSProperties // blue-600
+                            ? { color: '#0D9488' } as React.CSSProperties // teal-600
                             : item.key === 'absences'
-                            ? { color: 'rgb(13, 148, 136)' } as React.CSSProperties // teal-600 (matches icon)
+                            ? { color: 'rgba(55, 65, 81, 1)' } as React.CSSProperties // gray-700
                             : undefined
                         }
                       >
@@ -580,15 +580,23 @@ export default function DashboardClient({
                                   backgroundColor: coverageColorValues.partial.bg,
                                   color: coverageColorValues.partial.icon,
                                 } as React.CSSProperties
-                              : item.key === 'scheduled'
-                              ? {
-                                  backgroundColor: 'rgb(219, 234, 254)', // blue-100
-                                  color: 'rgb(37, 99, 235)', // blue-600
-                                } as React.CSSProperties
+                            : item.key === 'scheduled'
+                            ? {
+                                backgroundColor: 'rgba(236, 253, 245, 1)', // emerald-50
+                                color: '#0D9488', // teal-600
+                                borderWidth: '0px',
+                                borderStyle: 'none',
+                                borderColor: 'rgba(0, 0, 0, 0)',
+                                borderImage: 'none',
+                              } as React.CSSProperties
                               : item.key === 'absences'
                               ? {
-                                  backgroundColor: 'rgb(204, 251, 241)', // teal-100
-                                  color: 'rgb(13, 148, 136)', // teal-600
+                                  backgroundColor: 'rgba(243, 244, 246, 1)', // gray-100
+                                  color: 'rgba(55, 65, 81, 1)', // gray-700
+                                  borderWidth: '0px',
+                                  borderStyle: 'none',
+                                  borderColor: 'rgba(0, 0, 0, 0)',
+                                  borderImage: 'none',
                                 } as React.CSSProperties
                               : undefined
                           }
@@ -611,13 +619,20 @@ export default function DashboardClient({
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <div className={cn('flex items-center gap-2 text-3xl font-semibold', item.secondaryStyle)}>
-                              <span>{item.secondaryCount}</span>
+                            <div 
+                              className={cn('flex items-center gap-2 text-3xl font-semibold', item.secondaryStyle)}
+                              style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}
+                            >
+                              <span style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}>{item.secondaryCount}</span>
                               <span
                                 className={cn(
                                   'inline-flex h-9 w-9 items-center justify-center rounded-full',
                                   item.secondaryIconStyle
                                 )}
+                                style={{ 
+                                  backgroundColor: 'rgba(219, 234, 254, 1)', // blue-100
+                                  color: 'rgba(37, 99, 235, 1)' // blue-600
+                                } as React.CSSProperties}
                               >
                                 <item.secondaryIcon className="h-5 w-5" />
                               </span>
@@ -633,13 +648,18 @@ export default function DashboardClient({
                           <TooltipTrigger asChild>
                             <div
                               className={cn('flex items-center gap-2 text-3xl font-semibold', item.secondaryRightStyle)}
+                              style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}
                             >
-                              <span>{item.secondaryRightCount}</span>
+                              <span style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}>{item.secondaryRightCount}</span>
                               <span
                                 className={cn(
                                   'inline-flex h-9 w-9 items-center justify-center rounded-full',
                                   item.secondaryRightIconStyle
                                 )}
+                                style={{ 
+                                  backgroundColor: 'rgba(219, 234, 254, 1)', // blue-100
+                                  color: 'rgba(37, 99, 235, 1)' // blue-600
+                                } as React.CSSProperties}
                               >
                                 <item.secondaryRightIcon className="h-5 w-5" />
                               </span>
