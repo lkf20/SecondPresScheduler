@@ -1,0 +1,40 @@
+# Dependencies
+node_modules
+.next
+out
+dist
+build
+
+# Generated files
+*.tsbuildinfo
+.next
+.vercel
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env*.local
+
+# Package manager files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Database
+*.db
+*.sqlite
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+
+

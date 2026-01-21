@@ -2,13 +2,13 @@
 
 -- Insert Days of Week
 INSERT INTO days_of_week (name, day_number, display_order) VALUES
-  ('Sunday', 0, 0),
   ('Monday', 1, 1),
   ('Tuesday', 2, 2),
   ('Wednesday', 3, 3),
   ('Thursday', 4, 4),
   ('Friday', 5, 5),
-  ('Saturday', 6, 6)
+  ('Saturday', 6, 6),
+  ('Sunday', 7, 7)
 ON CONFLICT (name) DO NOTHING;
 
 -- Insert Time Slots

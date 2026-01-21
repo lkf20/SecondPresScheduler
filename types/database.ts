@@ -19,6 +19,9 @@ export interface Database {
           id: string
           name: string
           capacity: number | null
+          color: string | null
+          order: number | null
+          is_active: boolean
           created_at: string
           updated_at: string
         }
@@ -26,6 +29,9 @@ export interface Database {
           id?: string
           name: string
           capacity?: number | null
+          color?: string | null
+          order?: number | null
+          is_active?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -33,15 +39,27 @@ export interface Database {
           id?: string
           name?: string
           capacity?: number | null
+          color?: string | null
+          order?: number | null
+          is_active?: boolean
           created_at?: string
           updated_at?: string
         }
       }
-      classes: {
+      class_groups: {
         Row: {
           id: string
           name: string
           parent_class_id: string | null
+          min_age: number | null
+          max_age: number | null
+          required_ratio: number
+          preferred_ratio: number | null
+          diaper_changing_required: boolean | null
+          lifting_children_required: boolean | null
+          toileting_assistance_required: boolean | null
+          order: number | null
+          is_active: boolean
           created_at: string
           updated_at: string
         }
@@ -49,6 +67,15 @@ export interface Database {
           id?: string
           name: string
           parent_class_id?: string | null
+          min_age?: number | null
+          max_age?: number | null
+          required_ratio?: number
+          preferred_ratio?: number | null
+          diaper_changing_required?: boolean | null
+          lifting_children_required?: boolean | null
+          toileting_assistance_required?: boolean | null
+          order?: number | null
+          is_active?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -56,8 +83,37 @@ export interface Database {
           id?: string
           name?: string
           parent_class_id?: string | null
+          min_age?: number | null
+          max_age?: number | null
+          required_ratio?: number
+          preferred_ratio?: number | null
+          diaper_changing_required?: boolean | null
+          lifting_children_required?: boolean | null
+          toileting_assistance_required?: boolean | null
+          order?: number | null
+          is_active?: boolean
           created_at?: string
           updated_at?: string
+        }
+      }
+      schedule_cell_class_groups: {
+        Row: {
+          id: string
+          schedule_cell_id: string
+          class_group_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          schedule_cell_id: string
+          class_group_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          schedule_cell_id?: string
+          class_group_id?: string
+          created_at?: string
         }
       }
       time_slots: {
@@ -112,6 +168,38 @@ export interface Database {
           created_at?: string
         }
       }
+      staff_role_types: {
+        Row: {
+          id: string
+          code: string
+          label: string
+          is_system: boolean
+          sort_order: number | null
+          active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          code: string
+          label: string
+          is_system?: boolean
+          sort_order?: number | null
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          code?: string
+          label?: string
+          is_system?: boolean
+          sort_order?: number | null
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
       staff: {
         Row: {
           id: string
@@ -120,9 +208,14 @@ export interface Database {
           display_name: string | null
           phone: string | null
           email: string
+          role_type_id: string | null
           is_teacher: boolean
           is_sub: boolean
           active: boolean
+          can_change_diapers: boolean | null
+          can_lift_children: boolean | null
+          can_assist_with_toileting: boolean | null
+          capabilities_notes: string | null
           created_at: string
           updated_at: string
         }
@@ -133,9 +226,14 @@ export interface Database {
           display_name?: string | null
           phone?: string | null
           email: string
+          role_type_id?: string | null
           is_teacher?: boolean
           is_sub?: boolean
           active?: boolean
+          can_change_diapers?: boolean | null
+          can_lift_children?: boolean | null
+          can_assist_with_toileting?: boolean | null
+          capabilities_notes?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -146,9 +244,14 @@ export interface Database {
           display_name?: string | null
           phone?: string | null
           email?: string
+          role_type_id?: string | null
           is_teacher?: boolean
           is_sub?: boolean
           active?: boolean
+          can_change_diapers?: boolean | null
+          can_lift_children?: boolean | null
+          can_assist_with_toileting?: boolean | null
+          capabilities_notes?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -161,6 +264,7 @@ export interface Database {
           time_slot_id: string
           class_id: string
           classroom_id: string
+          is_floater: boolean
           created_at: string
           updated_at: string
         }
@@ -171,6 +275,7 @@ export interface Database {
           time_slot_id: string
           class_id: string
           classroom_id: string
+          is_floater?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -181,8 +286,59 @@ export interface Database {
           time_slot_id?: string
           class_id?: string
           classroom_id?: string
+          is_floater?: boolean
           created_at?: string
           updated_at?: string
+        }
+      }
+      teacher_schedule_audit_log: {
+        Row: {
+          id: string
+          teacher_schedule_id: string | null
+          teacher_id: string
+          action: string
+          action_details: Json | null
+          removed_from_classroom_id: string | null
+          removed_from_day_id: string | null
+          removed_from_time_slot_id: string | null
+          added_to_classroom_id: string | null
+          added_to_day_id: string | null
+          added_to_time_slot_id: string | null
+          reason: string | null
+          user_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          teacher_schedule_id?: string | null
+          teacher_id: string
+          action: string
+          action_details?: Json | null
+          removed_from_classroom_id?: string | null
+          removed_from_day_id?: string | null
+          removed_from_time_slot_id?: string | null
+          added_to_classroom_id?: string | null
+          added_to_day_id?: string | null
+          added_to_time_slot_id?: string | null
+          reason?: string | null
+          user_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          teacher_schedule_id?: string | null
+          teacher_id?: string
+          action?: string
+          action_details?: Json | null
+          removed_from_classroom_id?: string | null
+          removed_from_day_id?: string | null
+          removed_from_time_slot_id?: string | null
+          added_to_classroom_id?: string | null
+          added_to_day_id?: string | null
+          added_to_time_slot_id?: string | null
+          reason?: string | null
+          user_id?: string | null
+          created_at?: string
         }
       }
       sub_availability: {
@@ -221,6 +377,7 @@ export interface Database {
           date: string
           time_slot_id: string
           available: boolean
+          exception_header_id: string | null
           created_at: string
         }
         Insert: {
@@ -229,6 +386,7 @@ export interface Database {
           date: string
           time_slot_id: string
           available?: boolean
+          exception_header_id?: string | null
           created_at?: string
         }
         Update: {
@@ -237,7 +395,104 @@ export interface Database {
           date?: string
           time_slot_id?: string
           available?: boolean
+          exception_header_id?: string | null
           created_at?: string
+        }
+      }
+      sub_availability_exception_headers: {
+        Row: {
+          id: string
+          sub_id: string
+          start_date: string
+          end_date: string
+          available: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          sub_id: string
+          start_date: string
+          end_date: string
+          available: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          sub_id?: string
+          start_date?: string
+          end_date?: string
+          available?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      qualification_definitions: {
+        Row: {
+          id: string
+          name: string
+          category: string | null
+          is_system: boolean
+          school_id: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          category?: string | null
+          is_system?: boolean
+          school_id?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          category?: string | null
+          is_system?: boolean
+          school_id?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      staff_qualifications: {
+        Row: {
+          id: string
+          staff_id: string
+          qualification_id: string
+          level: string | null
+          expires_on: string | null
+          verified: boolean | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          staff_id: string
+          qualification_id: string
+          level?: string | null
+          expires_on?: string | null
+          verified?: boolean | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          staff_id?: string
+          qualification_id?: string
+          level?: string | null
+          expires_on?: string | null
+          verified?: boolean | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
         }
       }
       sub_class_preferences: {
@@ -388,8 +643,10 @@ export interface Database {
           teacher_id: string
           start_date: string
           end_date: string
-          time_slot_id: string | null
+          reason: string | null
           notes: string | null
+          shift_selection_mode: string | null
+          status: string
           created_at: string
           updated_at: string
         }
@@ -398,8 +655,10 @@ export interface Database {
           teacher_id: string
           start_date: string
           end_date: string
-          time_slot_id?: string | null
+          reason?: string | null
           notes?: string | null
+          shift_selection_mode?: string | null
+          status?: string
           created_at?: string
           updated_at?: string
         }
@@ -408,10 +667,47 @@ export interface Database {
           teacher_id?: string
           start_date?: string
           end_date?: string
-          time_slot_id?: string | null
+          reason?: string | null
           notes?: string | null
+          shift_selection_mode?: string | null
+          status?: string
           created_at?: string
           updated_at?: string
+        }
+      }
+      time_off_shifts: {
+        Row: {
+          id: string
+          time_off_request_id: string
+          date: string
+          day_of_week_id: string | null
+          time_slot_id: string
+          is_partial: boolean
+          start_time: string | null
+          end_time: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          time_off_request_id: string
+          date: string
+          day_of_week_id?: string | null
+          time_slot_id: string
+          is_partial?: boolean
+          start_time?: string | null
+          end_time?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          time_off_request_id?: string
+          date?: string
+          day_of_week_id?: string | null
+          time_slot_id?: string
+          is_partial?: boolean
+          start_time?: string | null
+          end_time?: string | null
+          created_at?: string
         }
       }
       sub_assignments: {
@@ -540,6 +836,41 @@ export interface Database {
           created_at?: string
         }
       }
+      schedule_cells: {
+        Row: {
+          id: string
+          classroom_id: string
+          day_of_week_id: string
+          time_slot_id: string
+          is_active: boolean
+          enrollment_for_staffing: number | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          classroom_id: string
+          day_of_week_id: string
+          time_slot_id: string
+          is_active?: boolean
+          enrollment_for_staffing?: number | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          classroom_id?: string
+          day_of_week_id?: string
+          time_slot_id?: string
+          is_active?: boolean
+          enrollment_for_staffing?: number | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -552,4 +883,3 @@ export interface Database {
     }
   }
 }
-

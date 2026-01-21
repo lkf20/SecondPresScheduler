@@ -1,0 +1,537 @@
+'use client'
+
+import { useState, useEffect, useMemo, useRef } from 'react'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Button } from '@/components/ui/button'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import { Input } from '@/components/ui/input'
+import { Search, X } from 'lucide-react'
+
+interface Day {
+  id: string
+  name: string
+  day_number: number
+}
+
+interface TimeSlot {
+  id: string
+  code: string
+  name: string | null
+  display_order: number | null
+}
+
+interface Classroom {
+  id: string
+  name: string
+}
+
+export interface FilterState {
+  selectedDayIds: string[]
+  selectedTimeSlotIds: string[]
+  selectedClassroomIds: string[]
+  displayFilters: {
+    belowRequired: boolean
+    belowPreferred: boolean
+    fullyStaffed: boolean
+    inactive: boolean
+  }
+  displayMode: 'permanent-only' | 'permanent-flexible' | 'substitutes-only' | 'all-scheduled-staff' | 'coverage-issues' | 'absences'
+  layout: 'classrooms-x-days' | 'days-x-classrooms'
+}
+
+interface FilterPanelProps {
+  isOpen: boolean
+  onClose: () => void
+  onFiltersChange: (filters: FilterState) => void
+  initialFilters?: Partial<FilterState>
+  availableDays: Day[]
+  availableTimeSlots: TimeSlot[]
+  availableClassrooms: Classroom[]
+  selectedDayIdsFromSettings?: string[] // Days selected in Settings > Days and Time Slots
+  hideStaffSection?: boolean // If true, hide "Show Staff" section and default to permanent-only
+  slotCounts?: { shown: number; total: number } // Actual slot counts from the filtered data
+}
+
+export default function FilterPanel({
+  isOpen,
+  onClose,
+  onFiltersChange,
+  initialFilters,
+  availableDays,
+  availableTimeSlots,
+  availableClassrooms,
+  selectedDayIdsFromSettings = [],
+  hideStaffSection = false,
+  slotCounts,
+}: FilterPanelProps) {
+  // Initialize filters with defaults - only include days from settings
+  const [filters, setFilters] = useState<FilterState>(() => {
+    const daysToShow = selectedDayIdsFromSettings.length > 0
+      ? availableDays.filter(d => selectedDayIdsFromSettings.includes(d.id))
+      : availableDays
+    // If hideStaffSection is true, always use 'permanent-only' regardless of initialFilters
+    const displayMode = hideStaffSection 
+      ? 'permanent-only' 
+      : (initialFilters?.displayMode ?? 'all-scheduled-staff')
+    
+    return {
+      selectedDayIds: initialFilters?.selectedDayIds ?? daysToShow.map(d => d.id),
+      selectedTimeSlotIds: initialFilters?.selectedTimeSlotIds ?? availableTimeSlots.map(ts => ts.id),
+      selectedClassroomIds: initialFilters?.selectedClassroomIds ?? availableClassrooms.map(c => c.id),
+      displayFilters: {
+        belowRequired: initialFilters?.displayFilters?.belowRequired ?? true,
+        belowPreferred: initialFilters?.displayFilters?.belowPreferred ?? true,
+        fullyStaffed: initialFilters?.displayFilters?.fullyStaffed ?? true,
+        inactive: initialFilters?.displayFilters?.inactive ?? true,
+      },
+      displayMode,
+      layout: initialFilters?.layout ?? 'days-x-classrooms', // Default: Days across the top
+    }
+  })
+
+  const [classroomSearch, setClassroomSearch] = useState('')
+  const [classroomPopoverOpen, setClassroomPopoverOpen] = useState(false)
+
+  // Filter and sort days - only show days selected in Settings > Days and Time Slots
+  const sortedDays = useMemo(() => {
+    const filtered = selectedDayIdsFromSettings.length > 0
+      ? availableDays.filter(day => selectedDayIdsFromSettings.includes(day.id))
+      : availableDays
+    return filtered.sort((a, b) => {
+      const aNum = a.day_number === 0 ? 7 : a.day_number
+      const bNum = b.day_number === 0 ? 7 : b.day_number
+      return aNum - bNum
+    })
+  }, [availableDays, selectedDayIdsFromSettings])
+
+  // Sort time slots by display_order
+  const sortedTimeSlots = useMemo(() => {
+    return [...availableTimeSlots].sort((a, b) => {
+      const orderA = a.display_order ?? 999
+      const orderB = b.display_order ?? 999
+      return orderA - orderB
+    })
+  }, [availableTimeSlots])
+
+  // Filter classrooms by search
+  const filteredClassrooms = useMemo(() => {
+    if (!classroomSearch) return availableClassrooms
+    const searchLower = classroomSearch.toLowerCase()
+    return availableClassrooms.filter(c => 
+      c.name.toLowerCase().includes(searchLower)
+    )
+  }, [availableClassrooms, classroomSearch])
+
+  // Track whether a change originated from internal state or external props
+  const changeSourceRef = useRef<'internal' | 'external'>('internal')
+
+  // Track previous initialFilters to detect external changes (like from filter chips)
+  const prevInitialFiltersRef = useRef<Partial<FilterState> | undefined>(initialFilters)
+
+  // Sync internal state when initialFilters changes from external sources (like filter chips)
+  // Only sync displayMode since that's what the filter chips control
+  useEffect(() => {
+    if (initialFilters && initialFilters.displayMode !== undefined) {
+      const prevInitialFilters = prevInitialFiltersRef.current
+      prevInitialFiltersRef.current = initialFilters
+      
+      // Only sync if displayMode actually changed from external source
+      if (prevInitialFilters?.displayMode !== initialFilters.displayMode && filters.displayMode !== initialFilters.displayMode) {
+        changeSourceRef.current = 'external'
+        setFilters(prev => ({
+          ...prev,
+          displayMode: hideStaffSection ? 'permanent-only' : (initialFilters.displayMode ?? prev.displayMode),
+        }))
+      }
+    }
+  }, [initialFilters?.displayMode, hideStaffSection, filters.displayMode])
+
+  // Ensure displayMode is permanent-only when hideStaffSection is true
+  useEffect(() => {
+    if (hideStaffSection && filters.displayMode !== 'permanent-only') {
+      // This is an internal enforcement, not from user interaction
+      // Don't mark as internal to avoid triggering onFiltersChange unnecessarily
+      // since this is just enforcing a constraint
+      setFilters(prev => ({ ...prev, displayMode: 'permanent-only' }))
+    }
+  }, [hideStaffSection, filters.displayMode])
+
+  // Update parent when filters change (skip initial mount to avoid overwriting saved state)
+  // Don't update parent if change came from external source (to prevent infinite loops)
+  const isInitialMount = useRef(true)
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      // Still call onFiltersChange on mount to ensure parent has the correct state
+      onFiltersChange(filters)
+      changeSourceRef.current = 'internal'
+      return
+    }
+    
+    // Only update parent if change came from internal state (user interaction)
+    if (changeSourceRef.current === 'internal') {
+      onFiltersChange(filters)
+    } else {
+      // Reset the flag after skipping external update
+      changeSourceRef.current = 'internal'
+    }
+  }, [filters, onFiltersChange])
+
+  const toggleDay = (dayId: string) => {
+    setFilters(prev => ({
+      ...prev,
+      selectedDayIds: prev.selectedDayIds.includes(dayId)
+        ? prev.selectedDayIds.filter(id => id !== dayId)
+        : [...prev.selectedDayIds, dayId]
+    }))
+  }
+
+  const toggleTimeSlot = (timeSlotId: string) => {
+    setFilters(prev => ({
+      ...prev,
+      selectedTimeSlotIds: prev.selectedTimeSlotIds.includes(timeSlotId)
+        ? prev.selectedTimeSlotIds.filter(id => id !== timeSlotId)
+        : [...prev.selectedTimeSlotIds, timeSlotId]
+    }))
+  }
+
+  const toggleClassroom = (classroomId: string) => {
+    setFilters(prev => ({
+      ...prev,
+      selectedClassroomIds: prev.selectedClassroomIds.includes(classroomId)
+        ? prev.selectedClassroomIds.filter(id => id !== classroomId)
+        : [...prev.selectedClassroomIds, classroomId]
+    }))
+  }
+
+  const selectAllClassrooms = () => {
+    setFilters(prev => ({
+      ...prev,
+      selectedClassroomIds: availableClassrooms.map(c => c.id)
+    }))
+  }
+
+  const clearAllClassrooms = () => {
+    setFilters(prev => ({
+      ...prev,
+      selectedClassroomIds: []
+    }))
+  }
+
+  const toggleDisplayFilter = (key: keyof FilterState['displayFilters']) => {
+    setFilters(prev => ({
+      ...prev,
+      displayFilters: {
+        ...prev.displayFilters,
+        [key]: !prev.displayFilters[key]
+      }
+    }))
+  }
+
+  const selectedClassroomsCount = filters.selectedClassroomIds.length
+  const allClassroomsSelected = selectedClassroomsCount === availableClassrooms.length
+  const someClassroomsSelected = selectedClassroomsCount > 0 && selectedClassroomsCount < availableClassrooms.length
+
+  // Use provided slot counts if available, otherwise calculate from filters
+  // The provided counts are more accurate as they reflect actual data after display filters
+  const totalPossibleSlots = slotCounts?.shown ?? (
+    filters.selectedDayIds.length * 
+    filters.selectedTimeSlotIds.length * 
+    filters.selectedClassroomIds.length
+  )
+  
+  const totalSlotsIfAllSelected = slotCounts?.total ?? (
+    sortedDays.length * 
+    availableTimeSlots.length * 
+    availableClassrooms.length
+  )
+
+  return (
+    <Sheet open={isOpen} onOpenChange={onClose}>
+      <SheetContent className="w-full sm:max-w-md overflow-y-auto bg-gray-50">
+        <SheetHeader>
+          <SheetTitle>Filters</SheetTitle>
+          <SheetDescription>
+            Filter the weekly schedule view
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="mt-6 mb-4">
+          <p className="text-sm text-muted-foreground">
+            Showing {totalPossibleSlots} of {totalSlotsIfAllSelected} slots
+          </p>
+        </div>
+
+        <div className="space-y-10">
+          {/* Day Selector */}
+          <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
+            <Label className="text-base font-medium">Show Days</Label>
+            <div className="flex flex-wrap gap-2">
+              {sortedDays.map((day) => {
+                const isSelected = filters.selectedDayIds.includes(day.id)
+                return (
+                  <button
+                    key={day.id}
+                    type="button"
+                    onClick={() => toggleDay(day.id)}
+                    className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      isSelected
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    {day.name.slice(0, 3)}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Time Slot Selector */}
+          <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
+            <Label className="text-base font-medium">Show Time Slots</Label>
+            <div className="flex flex-wrap gap-2">
+              {sortedTimeSlots.map((timeSlot) => {
+                const isSelected = filters.selectedTimeSlotIds.includes(timeSlot.id)
+                return (
+                  <button
+                    key={timeSlot.id}
+                    type="button"
+                    onClick={() => toggleTimeSlot(timeSlot.id)}
+                    className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      isSelected
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    {timeSlot.code}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Classroom Selector */}
+          <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
+            <Label className="text-base font-medium">Show Classrooms</Label>
+            <Popover open={classroomPopoverOpen} onOpenChange={setClassroomPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className="w-full justify-between"
+                >
+                  {allClassroomsSelected
+                    ? 'All Classrooms'
+                    : someClassroomsSelected
+                    ? `${selectedClassroomsCount} selected`
+                    : 'Select Classrooms'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0" align="start">
+                <div className="p-2 space-y-2">
+                  {/* Search */}
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search classrooms..."
+                      value={classroomSearch}
+                      onChange={(e) => setClassroomSearch(e.target.value)}
+                      className="pl-8"
+                    />
+                  </div>
+
+                  {/* Select All / Clear All */}
+                  <div className="flex gap-2 pb-2 border-b">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={selectAllClassrooms}
+                      className="h-8 text-xs"
+                    >
+                      Select All
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearAllClassrooms}
+                      className="h-8 text-xs"
+                    >
+                      Clear All
+                    </Button>
+                  </div>
+
+                  {/* Classroom Checkboxes */}
+                  <div className="max-h-[300px] overflow-y-auto space-y-2">
+                    {filteredClassrooms.length === 0 ? (
+                      <div className="text-sm text-muted-foreground text-center py-4">
+                        No classrooms found
+                      </div>
+                    ) : (
+                      filteredClassrooms.map((classroom) => {
+                        const isSelected = filters.selectedClassroomIds.includes(classroom.id)
+                        return (
+                          <div
+                            key={classroom.id}
+                            className="flex items-center space-x-2 p-2 hover:bg-muted rounded"
+                          >
+                            <Checkbox
+                              id={`classroom-${classroom.id}`}
+                              checked={isSelected}
+                              onCheckedChange={() => toggleClassroom(classroom.id)}
+                            />
+                            <label
+                              htmlFor={`classroom-${classroom.id}`}
+                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                            >
+                              {classroom.name}
+                            </label>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+            
+            {/* Show selected classrooms as pills when not all are selected */}
+            {!allClassroomsSelected && filters.selectedClassroomIds.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-2">
+                {filters.selectedClassroomIds.map((classroomId) => {
+                  const classroom = availableClassrooms.find(c => c.id === classroomId)
+                  if (!classroom) return null
+                  return (
+                    <div
+                      key={classroomId}
+                      className="inline-flex items-center gap-1 bg-primary/10 text-primary rounded-full px-2.5 py-0.5 text-xs font-medium"
+                    >
+                      <span>{classroom.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => toggleClassroom(classroomId)}
+                        className="hover:bg-primary/20 rounded-full p-0.5 -mr-1"
+                        aria-label={`Remove ${classroom.name}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Display Filter */}
+          <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
+            <Label className="text-base font-medium">Show Slots With</Label>
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="below-required"
+                  checked={filters.displayFilters.belowRequired}
+                  onCheckedChange={() => toggleDisplayFilter('belowRequired')}
+                />
+                <label
+                  htmlFor="below-required"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Below required staffing
+                </label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="below-preferred"
+                  checked={filters.displayFilters.belowPreferred}
+                  onCheckedChange={() => toggleDisplayFilter('belowPreferred')}
+                />
+                <label
+                  htmlFor="below-preferred"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Below preferred staffing
+                </label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="fully-staffed"
+                  checked={filters.displayFilters.fullyStaffed}
+                  onCheckedChange={() => toggleDisplayFilter('fullyStaffed')}
+                />
+                <label
+                  htmlFor="fully-staffed"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Fully staffed
+                </label>
+              </div>
+              <div className="border-t border-gray-200 my-3"></div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="inactive"
+                  checked={filters.displayFilters.inactive}
+                  onCheckedChange={() => toggleDisplayFilter('inactive')}
+                />
+                <label
+                  htmlFor="inactive"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Inactive
+                </label>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Unchecked items will be hidden
+            </p>
+          </div>
+
+
+          {/* Layout */}
+          <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
+            <Label className="text-base font-medium">Layout</Label>
+            <RadioGroup
+              value={filters.layout}
+              onValueChange={(value) => setFilters(prev => ({
+                ...prev,
+                layout: value as FilterState['layout']
+              }))}
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="days-x-classrooms" id="days-x-classrooms" />
+                <label
+                  htmlFor="days-x-classrooms"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Days × Classrooms
+                </label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="classrooms-x-days" id="classrooms-x-days" />
+                <label
+                  htmlFor="classrooms-x-days"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Classrooms × Days
+                </label>
+              </div>
+            </RadioGroup>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}
+

@@ -1,8 +1,8 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
-import TeacherForm from '@/components/teachers/TeacherForm'
+import TeacherForm, { type TeacherFormData } from '@/components/teachers/TeacherForm'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import { Database } from '@/types/database'
 
@@ -14,15 +14,36 @@ interface TeacherFormClientProps {
 
 export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = async (data: any) => {
+  // Get return page and search from URL params
+  const returnPage = searchParams.get('returnPage') || '1'
+  const returnSearch = searchParams.get('returnSearch')
+
+  // Build return URL with preserved pagination
+  const getReturnUrl = () => {
+    const params = new URLSearchParams()
+    if (returnPage !== '1') {
+      params.set('page', returnPage)
+    }
+    if (returnSearch) {
+      params.set('search', returnSearch)
+    }
+    const queryString = params.toString()
+    return `/teachers${queryString ? `?${queryString}` : ''}`
+  }
+
+  const handleSubmit = async (data: TeacherFormData) => {
     try {
       setError(null)
       // Convert empty email to null
       const payload = {
         ...data,
         email: data.email && data.email.trim() !== '' ? data.email : null,
+        is_teacher: true, // Always true when updating from teacher form
+        is_sub: data.is_sub ?? false, // Include the checkbox value
+        role_type_id: data.role_type_id, // Include the role type
       }
       const response = await fetch(`/api/teachers/${teacher.id}`, {
         method: 'PUT',
@@ -35,10 +56,10 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
         throw new Error(errorData.error || 'Failed to update teacher')
       }
 
-      router.push('/teachers')
+      router.push(getReturnUrl())
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update teacher')
     }
   }
 
@@ -56,17 +77,17 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
         throw new Error(errorData.error || 'Failed to delete teacher')
       }
 
-      router.push('/teachers')
+      router.push(getReturnUrl())
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete teacher')
     }
   }
 
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Edit Teacher</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Edit Teacher</h1>
         <p className="text-muted-foreground mt-2">
           {teacher.display_name || `${teacher.first_name} ${teacher.last_name}`}
         </p>
@@ -75,12 +96,13 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
       {error && <ErrorMessage message={error} className="mb-6" />}
 
       <div className="max-w-2xl">
-        <TeacherForm teacher={teacher} onSubmit={handleSubmit} onCancel={() => router.push('/teachers')} />
+        <TeacherForm
+          teacher={teacher}
+          onSubmit={handleSubmit}
+          onCancel={() => router.push(getReturnUrl())}
+        />
         <div className="mt-6 pt-6 border-t">
-          <button
-            onClick={handleDelete}
-            className="text-sm text-destructive hover:underline"
-          >
+          <button onClick={handleDelete} className="text-sm text-destructive hover:underline">
             Delete Teacher
           </button>
         </div>
@@ -88,4 +110,3 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
     </div>
   )
 }
-

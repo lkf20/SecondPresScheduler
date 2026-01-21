@@ -4,7 +4,7 @@ export default function SubAvailabilityReportPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Sub Availability</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Sub Availability</h1>
         <p className="text-muted-foreground mt-2">View sub availability matrix</p>
       </div>
 
@@ -15,11 +15,11 @@ export default function SubAvailabilityReportPage() {
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground">
-            This report will display a matrix of all subs and their availability by day and time slot.
+            This report will display a matrix of all subs and their availability by day and time
+            slot.
           </p>
         </CardContent>
       </Card>
     </div>
   )
 }
-

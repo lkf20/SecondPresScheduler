@@ -1,58 +1,47 @@
 import Link from 'next/link'
-import { getClasses } from '@/lib/api/classes'
-import DataTable, { Column } from '@/components/shared/DataTable'
+import { getClassGroups } from '@/lib/api/class-groups'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 import { Database } from '@/types/database'
 import ErrorMessage from '@/components/shared/ErrorMessage'
+import SortableClassesTable from '@/components/settings/SortableClassesTable'
 
-type Class = Database['public']['Tables']['classes']['Row']
+type ClassGroup = Database['public']['Tables']['class_groups']['Row']
 
 export default async function ClassesPage() {
-  let classes: Class[] = []
+  let classGroups: ClassGroup[] = []
   let error: string | null = null
 
   try {
-    classes = await getClasses()
-  } catch (err: any) {
-    error = err.message || 'Failed to load classes'
-    console.error('Error loading classes:', err)
+    // Fetch all class groups (including inactive) for the list view
+    classGroups = await getClassGroups(true)
+  } catch (err: unknown) {
+    error = err instanceof Error ? err.message : 'Failed to load class groups'
+    console.error('Error loading class groups:', err)
   }
-
-  const columns: Column<Class>[] = [
-    {
-      key: 'name',
-      header: 'Name',
-      sortable: true,
-      linkBasePath: '/settings/classes',
-    },
-  ]
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Classes</h1>
-          <p className="text-muted-foreground mt-2">Manage class names</p>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-8">
+        <div className="flex-1">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Class Groups</h1>
+          <p className="text-muted-foreground mt-2">
+            Manage class group names. Drag rows to reorder.
+          </p>
         </div>
-        <Link href="/settings/classes/new">
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Class
-          </Button>
-        </Link>
+        <div className="flex-shrink-0">
+          <Link href="/settings/classes/new">
+            <Button className="w-full sm:w-auto">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Class Group
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {error && <ErrorMessage message={error} className="mb-6" />}
 
-      <DataTable
-        data={classes}
-        columns={columns}
-        searchable
-        searchPlaceholder="Search classes..."
-        emptyMessage="No classes found. Add your first class to get started."
-      />
+      <SortableClassesTable classes={classGroups} />
     </div>
   )
 }
-

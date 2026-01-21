@@ -23,6 +23,20 @@
   --input: 0 0% 89.8%;
   --ring: 0 0% 3.9%;
   --radius: 0.5rem;
+  
+  /* Sidebar colors - default to system theme values */
+  --sidebar-bg: 0 0% 100%;
+  --sidebar-foreground: 0 0% 3.9%;
+  --sidebar-accent: 0 0% 96.1%;
+  --sidebar-accent-foreground: 0 0% 9%;
+  --sidebar-hover: 0 0% 96.1%;
+  --sidebar-active: 0 0% 96.1%;
+  --sidebar-active-foreground: 0 0% 9%;
+  
+  /* Button fill color - default to slate-900 for system theme */
+  --button-fill: 222 47% 11%;
+  --button-fill-foreground: 0 0% 98%;
+  --button-fill-hover: 222 47% 14%;
 }
 
 .dark {
@@ -47,7 +61,90 @@
   --ring: 0 0% 83.1%;
 }
 
+/* Accented theme: Dark navy sidebar, teal/turquoise buttons */
+[data-theme="accented"] {
+  /* Sidebar colors - dark navy */
+  --sidebar-bg: 220 40% 15%;
+  --sidebar-foreground: 0 0% 95%;
+  --sidebar-accent: 180 70% 38%;
+  --sidebar-accent-foreground: 0 0% 98%;
+  --sidebar-hover: 220 40% 20%;
+  --sidebar-active: 180 70% 38%;
+  --sidebar-active-foreground: 0 0% 98%;
+  
+  /* Override primary colors for buttons - teal/turquoise (darker shade) */
+  --primary: 180 70% 38%;
+  --primary-foreground: 0 0% 98%;
+  
+  /* Primary button colors - teal/turquoise (for explicit use) */
+  --primary-accent: 180 70% 38%;
+  --primary-accent-foreground: 0 0% 98%;
+  --primary-accent-hover: 180 70% 35%;
+  
+  /* Outline button colors */
+  --outline-accent: 180 70% 38%;
+  --outline-navy: 220 40% 25%;
+  
+  /* Button fill color - dark navy (matches sidebar) */
+  --button-fill: 220 40% 15%;
+  --button-fill-foreground: 0 0% 98%;
+  --button-fill-hover: 220 40% 20%;
+}
+
 body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
+}
+
+/* Safari-specific fixes */
+@supports (-webkit-appearance: none) {
+  /* Ensure gap works in flexbox for Safari */
+  .flex {
+    -webkit-box-align: stretch;
+    -webkit-box-direction: normal;
+    -webkit-box-orient: horizontal;
+  }
+  
+  /* Fix for backdrop-filter */
+  [class*="backdrop-blur"] {
+    -webkit-backdrop-filter: blur(8px);
+  }
+  
+  /* Ensure proper flexbox rendering */
+  .flex-wrap {
+    -webkit-flex-wrap: wrap;
+  }
+  
+  /* Fix for space utilities */
+  .space-x-2 > * + * {
+    margin-left: 0.5rem;
+  }
+  
+  .space-y-2 > * + * {
+    margin-top: 0.5rem;
+  }
+  
+  .space-x-3 > * + * {
+    margin-left: 0.75rem;
+  }
+  
+  .space-y-3 > * + * {
+    margin-top: 0.75rem;
+  }
+  
+  .space-x-4 > * + * {
+    margin-left: 1rem;
+  }
+  
+  .space-y-4 > * + * {
+    margin-top: 1rem;
+  }
+  
+  .space-y-6 > * + * {
+    margin-top: 1.5rem;
+  }
+  
+  .space-y-10 > * + * {
+    margin-top: 2.5rem;
+  }
 }

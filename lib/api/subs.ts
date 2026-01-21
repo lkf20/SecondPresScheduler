@@ -9,10 +9,17 @@ export async function getSubs() {
     .from('staff')
     .select('*')
     .eq('is_sub', true)
-    .order('last_name', { ascending: true })
 
   if (error) throw error
-  return data as Staff[]
+  
+  // Sort by display_name, falling back to first_name + last_name if display_name is null
+  const sorted = (data as Staff[]).sort((a, b) => {
+    const nameA = a.display_name || `${a.first_name} ${a.last_name}` || ''
+    const nameB = b.display_name || `${b.first_name} ${b.last_name}` || ''
+    return nameA.localeCompare(nameB)
+  })
+  
+  return sorted
 }
 
 export async function getSubById(id: string) {
@@ -34,18 +41,37 @@ export async function createSub(sub: {
   last_name: string
   display_name?: string
   phone?: string
-  email: string
+  email?: string
   is_teacher?: boolean
   is_sub: boolean
   active?: boolean
 }) {
   const supabase = await createClient()
+  
+  // Exclude id from the insert if it's undefined or empty
+  const { id, ...subData } = sub
+  const insertData: Partial<Staff> & { id: string } = {
+    first_name: subData.first_name,
+    last_name: subData.last_name,
+    display_name: subData.display_name || null,
+    phone: subData.phone || null,
+    ...(sub.email && sub.email.trim() !== '' ? { email: sub.email } : {}),
+    is_sub: true,
+    is_teacher: sub.is_teacher ?? false, // Preserve is_teacher flag
+    active: subData.active ?? true,
+  } as Partial<Staff> & { id: string }
+  
+  // Generate UUID if not provided
+  if (id && id.trim() !== '') {
+    insertData.id = id
+  } else {
+    // Generate UUID - using crypto.randomUUID() which is available in Node.js
+    insertData.id = crypto.randomUUID()
+  }
+  
   const { data, error } = await supabase
     .from('staff')
-    .insert({
-      ...sub,
-      is_sub: true,
-    })
+    .insert(insertData)
     .select()
     .single()
 
@@ -72,4 +98,3 @@ export async function deleteSub(id: string) {
 
   if (error) throw error
 }
-

@@ -1,0 +1,355 @@
+'use client'
+
+import { Button } from '@/components/ui/button'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { ChevronDown, ChevronUp } from 'lucide-react'
+import { parseLocalDate } from '@/lib/utils/date'
+import { useEffect, useMemo, useState } from 'react'
+import SubFinderCard from '@/components/sub-finder/SubFinderCard'
+
+export interface RecommendedSub {
+  id: string
+  name: string
+  phone: string | null
+  coverage_percent: number
+  shifts_covered: number
+  total_shifts: number
+  can_cover: Array<{
+    date: string
+    day_name: string
+    time_slot_code: string
+    class_name: string | null
+    classroom_name?: string | null
+  }>
+  cannot_cover: Array<{
+    date: string
+    day_name: string
+    time_slot_code: string
+    reason: string
+    classroom_name?: string | null
+  }>
+  assigned_shifts?: Array<{
+    date: string
+    day_name: string
+    time_slot_code: string
+    classroom_name?: string | null
+  }>
+  shift_chips?: Array<{
+    date: string
+    time_slot_code: string
+    status: 'assigned' | 'available' | 'unavailable'
+    reason?: string
+    classroom_name?: string | null
+    class_name?: string | null
+  }>
+  remaining_shift_keys?: string[]
+  remaining_shift_count?: number
+  has_assigned_shifts?: boolean
+  notes?: string
+  response_status?: string | null
+}
+
+interface RecommendedSubsListProps {
+  subs: RecommendedSub[]
+  loading: boolean
+  absence: {
+    id: string
+    teacher_name: string
+    start_date: string
+    end_date: string | null
+    shifts?: {
+      shift_details?: Array<{
+        date?: string
+        time_slot_code?: string
+        classroom_name?: string | null
+      }>
+    }
+  }
+  showAllSubs?: boolean
+  onContactSub?: (sub: RecommendedSub) => void
+  hideHeader?: boolean
+  highlightedSubId?: string | null
+}
+
+export default function RecommendedSubsList({
+  subs,
+  loading,
+  absence,
+  showAllSubs = false,
+  onContactSub,
+  hideHeader = false,
+  highlightedSubId = null,
+}: RecommendedSubsListProps) {
+  const [isDeclinedExpanded, setIsDeclinedExpanded] = useState(false)
+  // Format date as "Mon Jan 11"
+  const formatDate = (dateString: string) => {
+    const date = parseLocalDate(dateString)
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const dayName = dayNames[date.getDay()]
+    const month = monthNames[date.getMonth()]
+    const day = date.getDate()
+    return `${dayName} ${month} ${day}`
+  }
+
+
+  // Format date range for display
+  const formatDateRange = () => {
+    const startDate = formatDate(absence.start_date)
+    if (absence.end_date && absence.end_date !== absence.start_date) {
+      const endDate = formatDate(absence.end_date)
+      return `${startDate} - ${endDate}`
+    }
+    return startDate
+  }
+
+  const classroomLookup = useMemo(() => {
+    if (loading || subs.length === 0) {
+      return new Map<string, string>()
+    }
+
+    const lookup = new Map<string, string>()
+    absence.shifts?.shift_details?.forEach((shift: { date?: string; time_slot_code?: string; classroom_name?: string | null }) => {
+      if (shift.classroom_name) {
+        lookup.set(`${shift.date}|${shift.time_slot_code}`, shift.classroom_name)
+      }
+    })
+    return lookup
+  }, [absence.shifts?.shift_details, loading, subs])
+
+  const derived = useMemo(() => {
+    if (loading || subs.length === 0) {
+      return {
+        totalShiftsNeedingCoverage: 0,
+        hasAssignedShifts: false,
+        remainingShiftKeys: new Set<string>(),
+        nonDeclinedSubs: [] as Array<{ sub: RecommendedSub; shiftsCovered: number; isDeclined: boolean }>,
+        declinedSubs: [] as Array<{ sub: RecommendedSub; shiftsCovered: number; isDeclined: boolean }>,
+        canPaginate: false,
+      }
+    }
+
+    const totalShiftsNeedingCoverage = subs[0]?.total_shifts || 0
+    const hasRemainingShiftMeta = Array.isArray(subs[0]?.remaining_shift_keys)
+    const remainingShiftKeys = hasRemainingShiftMeta
+      ? new Set(subs[0]?.remaining_shift_keys)
+      : new Set<string>()
+    let hasAssignedShifts = subs[0]?.has_assigned_shifts ?? false
+
+    if (!hasRemainingShiftMeta) {
+      const allShiftsNeedingCoverage = new Set<string>()
+      subs.forEach((s) => {
+        s.can_cover?.forEach((shift) => {
+          const key = `${shift.date}|${shift.time_slot_code}`
+          allShiftsNeedingCoverage.add(key)
+        })
+        s.cannot_cover?.forEach((shift) => {
+          const key = `${shift.date}|${shift.time_slot_code}`
+          allShiftsNeedingCoverage.add(key)
+        })
+        s.assigned_shifts?.forEach((shift) => {
+          const key = `${shift.date}|${shift.time_slot_code}`
+          allShiftsNeedingCoverage.add(key)
+        })
+      })
+
+      const allAssignedShifts = new Set<string>()
+      subs.forEach((s) => {
+        s.assigned_shifts?.forEach((shift) => {
+          const key = `${shift.date}|${shift.time_slot_code}`
+          allAssignedShifts.add(key)
+        })
+      })
+
+      allShiftsNeedingCoverage.forEach((shiftKey) => {
+        if (!allAssignedShifts.has(shiftKey)) {
+          remainingShiftKeys.add(shiftKey)
+        }
+      })
+
+      hasAssignedShifts = allAssignedShifts.size > 0
+    }
+
+    const isDeclined = (sub: RecommendedSub) => sub.response_status === 'declined_all'
+
+    const processedSubs = subs.map((sub) => {
+      let shiftsCovered = 0
+      sub.can_cover?.forEach((shift) => {
+        const shiftKey = `${shift.date}|${shift.time_slot_code}`
+        if (remainingShiftKeys.has(shiftKey)) {
+          shiftsCovered++
+        }
+      })
+
+      return { sub, shiftsCovered, isDeclined: isDeclined(sub) }
+    })
+
+    const filteredSubs = processedSubs.filter(({ shiftsCovered, isDeclined }) => {
+      if (isDeclined) return true
+      if (!showAllSubs) {
+        return shiftsCovered > 0
+      }
+      return true
+    })
+
+    const nonDeclinedSubs = filteredSubs.filter(({ isDeclined }) => !isDeclined)
+    let declinedSubs: Array<{ sub: RecommendedSub; shiftsCovered: number; isDeclined: boolean }> = []
+
+    nonDeclinedSubs.sort((a, b) => b.shiftsCovered - a.shiftsCovered)
+    if (isDeclinedExpanded) {
+      declinedSubs = filteredSubs.filter(({ isDeclined }) => isDeclined)
+      declinedSubs.sort((a, b) => b.shiftsCovered - a.shiftsCovered)
+    }
+
+    return {
+      totalShiftsNeedingCoverage,
+      hasAssignedShifts,
+      remainingShiftKeys,
+      nonDeclinedSubs,
+      declinedSubs,
+      canPaginate: false, // Always show all subs in scrollable list
+    }
+  }, [isDeclinedExpanded, loading, showAllSubs, subs])
+
+  const filterRemainingShifts = (shifts?: { date: string; time_slot_code: string }[]) =>
+    (shifts || []).filter((shift) => derived.remainingShiftKeys.has(`${shift.date}|${shift.time_slot_code}`))
+
+  const withClassroomName = <T extends { date: string; time_slot_code: string; classroom_name?: string | null }>(
+    shifts: T[]
+  ) =>
+    shifts.map((shift) => ({
+      ...shift,
+      classroom_name:
+        shift.classroom_name ??
+        classroomLookup.get(`${shift.date}|${shift.time_slot_code}`) ??
+        null,
+    }))
+
+
+  const renderSubCard = ({ sub, shiftsCovered }: { sub: RecommendedSub; shiftsCovered: number }) => {
+    const remainingCanCover = filterRemainingShifts(sub.can_cover)
+    const remainingCannotCover = filterRemainingShifts(sub.cannot_cover)
+    const canCoverWithClassrooms = withClassroomName(remainingCanCover)
+    const cannotCoverWithClassrooms = withClassroomName(remainingCannotCover)
+    const shiftChips = sub.shift_chips
+
+    return (
+      <SubFinderCard
+        key={sub.id}
+        id={`sub-card-${sub.id}`}
+        name={sub.name}
+        phone={sub.phone}
+        shiftsCovered={shiftsCovered}
+        totalShifts={derived.totalShiftsNeedingCoverage}
+        useRemainingLabel={derived.hasAssignedShifts}
+        canCover={canCoverWithClassrooms}
+        cannotCover={cannotCoverWithClassrooms}
+        assigned={[]}
+        shiftChips={shiftChips}
+        notes={sub.notes}
+        isDeclined={sub.response_status === 'declined_all'}
+        highlighted={highlightedSubId === sub.id}
+        onContact={() => onContactSub?.(sub)}
+      />
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2" />
+          <p className="text-muted-foreground">Finding recommended subs...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (subs.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full text-muted-foreground">
+        <div className="text-center">
+          <p className="text-lg mb-2">No recommended subs found</p>
+          <p className="text-sm">Try adjusting your filters or check sub availability</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <TooltipProvider>
+      <div className="space-y-4">
+        {/* Conditionally render header only if not hidden */}
+        {!hideHeader && (
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold mb-1 flex items-center gap-3">
+              <span>{showAllSubs ? 'All Subs' : 'Recommended Subs'} for {absence.teacher_name}</span>
+              <span className="h-5 w-px bg-border" aria-hidden="true" />
+              <span className="text-muted-foreground font-normal">{formatDateRange()}</span>
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {showAllSubs
+                ? 'Showing all subs with coverage details'
+                : 'Sorted by coverage percentage (highest first)'}
+            </p>
+          </div>
+        )}
+
+        {derived.nonDeclinedSubs.map(({ sub, shiftsCovered }) => renderSubCard({ sub, shiftsCovered }))}
+        
+        {/* Declined Subs Collapsible Section */}
+        {derived.declinedSubs.length > 0 && (
+          <div className="mt-6 border-t pt-4">
+              <Button
+                variant="ghost"
+                onClick={() => setIsDeclinedExpanded(!isDeclinedExpanded)}
+                className="w-full flex items-center justify-between p-2 hover:bg-gray-100"
+              >
+                <span className="font-medium text-sm">
+                  Declined ({derived.declinedSubs.length})
+                </span>
+                {isDeclinedExpanded ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </Button>
+              
+              {isDeclinedExpanded && (
+                <div className="mt-4 space-y-4">
+                  {derived.declinedSubs.map(({ sub, shiftsCovered }) => {
+                    const remainingCanCover = filterRemainingShifts(sub.can_cover)
+                    const remainingCannotCover = filterRemainingShifts(sub.cannot_cover)
+                    const canCoverWithClassrooms = withClassroomName(remainingCanCover)
+                    const cannotCoverWithClassrooms = withClassroomName(remainingCannotCover)
+                    const shiftChips = sub.shift_chips
+
+                    return (
+                      <SubFinderCard
+                        key={sub.id}
+                        id={`sub-card-${sub.id}`}
+                        name={sub.name}
+                        phone={sub.phone}
+                        shiftsCovered={shiftsCovered}
+                        totalShifts={derived.totalShiftsNeedingCoverage}
+                        useRemainingLabel={derived.hasAssignedShifts}
+                        canCover={canCoverWithClassrooms}
+                        cannotCover={cannotCoverWithClassrooms}
+                        assigned={[]}
+                        shiftChips={shiftChips}
+                        notes={sub.notes}
+                        isDeclined={true}
+                        highlighted={highlightedSubId === sub.id}
+                        className="bg-gray-100/50 opacity-75"
+                        onContact={() => onContactSub?.(sub)}
+                      />
+                    )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </TooltipProvider>
+  )
+}

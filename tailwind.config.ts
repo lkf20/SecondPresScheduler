@@ -44,6 +44,24 @@ const config: Config = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+        // Accented theme colors
+        "sidebar-bg": "hsl(var(--sidebar-bg))",
+        "sidebar-foreground": "hsl(var(--sidebar-foreground))",
+        "sidebar-accent": "hsl(var(--sidebar-accent))",
+        "sidebar-accent-foreground": "hsl(var(--sidebar-accent-foreground))",
+        "sidebar-hover": "hsl(var(--sidebar-hover))",
+        "sidebar-active": "hsl(var(--sidebar-active))",
+        "sidebar-active-foreground": "hsl(var(--sidebar-active-foreground))",
+        "primary-accent": "hsl(var(--primary-accent))",
+        "primary-accent-foreground": "hsl(var(--primary-accent-foreground))",
+        "primary-accent-hover": "hsl(var(--primary-accent-hover))",
+        "outline-accent": "hsl(var(--outline-accent))",
+        "outline-navy": "hsl(var(--outline-navy))",
+        "button-fill": {
+          DEFAULT: "hsl(var(--button-fill))",
+          foreground: "hsl(var(--button-fill-foreground))",
+          hover: "hsl(var(--button-fill-hover))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -56,4 +74,6 @@ const config: Config = {
 };
 
 export default config;
+
+
 

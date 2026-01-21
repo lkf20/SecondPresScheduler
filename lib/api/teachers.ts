@@ -2,17 +2,25 @@ import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
 
 type Staff = Database['public']['Tables']['staff']['Row']
+type StaffRoleType = Database['public']['Tables']['staff_role_types']['Row']
+
+export type StaffWithRole = Staff & {
+  staff_role_types?: StaffRoleType | null
+}
 
 export async function getTeachers() {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('staff')
-    .select('*')
+    .select(`
+      *,
+      staff_role_types (*)
+    `)
     .eq('is_teacher', true)
     .order('last_name', { ascending: true })
 
   if (error) throw error
-  return data as Staff[]
+  return data as StaffWithRole[]
 }
 
 export async function getTeacherById(id: string) {
@@ -35,6 +43,7 @@ export async function createTeacher(teacher: {
   display_name?: string
   phone?: string
   email?: string
+  role_type_id?: string
   is_teacher: boolean
   is_sub?: boolean
   active?: boolean
@@ -43,19 +52,16 @@ export async function createTeacher(teacher: {
   
   // Exclude id from the insert if it's undefined or empty
   const { id, ...teacherData } = teacher
-  const insertData: any = {
-    ...teacherData,
-    email: teacher.email && teacher.email.trim() !== '' ? teacher.email : null,
-    is_teacher: true,
-  }
-  
   // Generate UUID if not provided
-  // This ensures we always have an id, even if the database default isn't set
-  if (id && id.trim() !== '') {
-    insertData.id = id
-  } else {
-    // Generate UUID using crypto.randomUUID() which is available in Node.js
-    insertData.id = crypto.randomUUID()
+  const teacherId = id && id.trim() !== '' ? id : crypto.randomUUID()
+  
+  const insertData: Partial<Staff> & { id: string } = {
+    ...teacherData,
+    id: teacherId,
+    email: teacher.email && teacher.email.trim() !== '' ? teacher.email : undefined,
+    is_teacher: true,
+    is_sub: teacher.is_sub ?? false, // Preserve is_sub flag
+    role_type_id: teacher.role_type_id, // Include role_type_id
   }
   
   const { data, error } = await supabase
@@ -87,4 +93,3 @@ export async function deleteTeacher(id: string) {
 
   if (error) throw error
 }
-

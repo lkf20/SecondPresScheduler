@@ -14,8 +14,8 @@ export default async function SubsPage() {
 
   try {
     subs = await getSubs()
-  } catch (err: any) {
-    error = err.message || 'Failed to load subs'
+  } catch (err: unknown) {
+    error = err instanceof Error ? err.message : 'Failed to load subs'
     console.error('Error loading subs:', err)
   }
 
@@ -45,7 +45,7 @@ export default async function SubsPage() {
     <div>
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Subs</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Subs</h1>
           <p className="text-muted-foreground mt-2">Manage substitute teacher information</p>
         </div>
         <Link href="/subs/new">
@@ -68,4 +68,3 @@ export default async function SubsPage() {
     </div>
   )
 }
-

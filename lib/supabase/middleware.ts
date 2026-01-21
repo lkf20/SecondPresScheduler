@@ -76,7 +76,7 @@ export async function updateSession(request: NextRequest) {
     // of sync and terminate the user's session prematurely.
 
     return supabaseResponse
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Middleware error:', error)
     // On error, allow access to login page, otherwise return error response
     if (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/auth')) {
@@ -88,4 +88,3 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 }
-
