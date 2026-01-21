@@ -29,11 +29,14 @@ export async function GET(request: NextRequest) {
     // Require schoolId from session
     const schoolId = await getUserSchoolId()
     if (!schoolId) {
+      console.error('[Dashboard API] No schoolId found for user')
       return NextResponse.json(
         { error: 'User profile not found or missing school_id. Please ensure your profile is set up.' },
         { status: 403 }
       )
     }
+
+    console.log('[Dashboard API] Starting with schoolId:', schoolId)
 
     const searchParams = request.nextUrl.searchParams
     const today = new Date()
@@ -42,9 +45,15 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createClient()
 
-    const { data: daysOfWeek } = await supabase
+    console.log('[Dashboard API] Fetching days_of_week...')
+    const { data: daysOfWeek, error: daysError } = await supabase
       .from('days_of_week')
       .select('id, name, day_number')
+    
+    if (daysError) {
+      console.error('[Dashboard API] Error fetching days_of_week:', daysError)
+      return createErrorResponse(daysError, 'Failed to fetch days of week', 500)
+    }
 
     const dayIdByNumber = new Map<number, { id: string; name: string }>()
     ;(daysOfWeek || []).forEach((day) => {
@@ -55,11 +64,29 @@ export async function GET(request: NextRequest) {
 
     // Fetch coverage requests using unified API logic directly
     // (Calling the transformation logic directly instead of HTTP to avoid overhead)
+    console.log('[Dashboard API] Fetching time off requests...')
     const { getTimeOffRequests } = await import('@/lib/api/time-off')
     const { getTimeOffShifts } = await import('@/lib/api/time-off-shifts')
     const { transformTimeOffCardData } = await import('@/lib/utils/time-off-card-data')
     
-    const timeOffRequests = await getTimeOffRequests({ statuses: ['active'] })
+    let timeOffRequests
+    try {
+      // Add a timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout: getTimeOffRequests took too long')), 10000)
+      )
+      timeOffRequests = await Promise.race([
+        getTimeOffRequests({ statuses: ['active'] }),
+        timeoutPromise
+      ]) as Awaited<ReturnType<typeof getTimeOffRequests>>
+      console.log('[Dashboard API] Fetched', timeOffRequests.length, 'time off requests')
+    } catch (error) {
+      console.error('[Dashboard API] Error fetching time off requests:', error)
+      if (error instanceof Error && error.message.includes('Timeout')) {
+        return createErrorResponse(error, 'Request timed out while fetching time off requests. This may indicate a database connection issue.', 500)
+      }
+      return createErrorResponse(error, 'Failed to fetch time off requests', 500)
+    }
     
     // Filter by date range
     const requestsInRange = timeOffRequests.filter((request) =>
@@ -83,6 +110,9 @@ export async function GET(request: NextRequest) {
     const timeOffShifts = allShifts.flat()
     
     // Fetch assignments
+    // Note: sub_assignments doesn't have school_id, but it references classrooms and time_slots
+    // which are filtered by RLS, so results should be filtered automatically
+    console.log('[Dashboard API] Fetching sub assignments...')
     const { data: subAssignments, error: assignmentsError } = await supabase
       .from('sub_assignments')
       .select(
@@ -92,8 +122,10 @@ export async function GET(request: NextRequest) {
       .lte('date', endDate)
 
     if (assignmentsError) {
+      console.error('[Dashboard API] Error fetching sub assignments:', assignmentsError)
       return createErrorResponse(assignmentsError, 'Failed to fetch sub assignments', 500)
     }
+    console.log('[Dashboard API] Fetched', subAssignments?.length || 0, 'sub assignments')
     
     // Build classroom lookup
     const classroomMap = new Map<string, string>()
@@ -104,12 +136,19 @@ export async function GET(request: NextRequest) {
     >()
     
     if (teacherIds.length > 0) {
-      const { data: teacherSchedules } = await supabase
+      console.log('[Dashboard API] Fetching teacher schedules for', teacherIds.length, 'teachers...')
+      const { data: teacherSchedules, error: schedulesError } = await supabase
         .from('teacher_schedules')
         .select(
           'teacher_id, day_of_week_id, time_slot_id, classroom_id, class_id, is_floater, classroom:classrooms(name, color)'
         )
+        .eq('school_id', schoolId)
         .in('teacher_id', teacherIds)
+      
+      if (schedulesError) {
+        console.error('[Dashboard API] Error fetching teacher schedules:', schedulesError)
+        return createErrorResponse(schedulesError, 'Failed to fetch teacher schedules', 500)
+      }
 
       ;(teacherSchedules || []).forEach((schedule) => {
         const key = `${schedule.teacher_id}|${schedule.day_of_week_id}|${schedule.time_slot_id}`
@@ -243,6 +282,7 @@ export async function GET(request: NextRequest) {
     }> = []
 
     try {
+      console.log('[Dashboard API] Fetching schedule cells...')
       const { data: rawScheduleCells, error: scheduleCellsError } = await supabase
         .from('schedule_cells')
         .select(
@@ -260,8 +300,10 @@ export async function GET(request: NextRequest) {
           )
         `
         )
+        .eq('school_id', schoolId)
 
       if (scheduleCellsError) {
+        console.error('[Dashboard API] Error fetching schedule cells:', scheduleCellsError)
         if (
           scheduleCellsError.code !== '42P01' &&
           !scheduleCellsError.message?.includes('does not exist')
@@ -295,12 +337,15 @@ export async function GET(request: NextRequest) {
         new Set(scheduleCells.map((cell) => cell.classroom_id))
       )
 
+      console.log('[Dashboard API] Fetching staffing schedules for', staffingClassroomIds.length, 'classrooms...')
       const { data: staffingSchedules, error: staffingSchedulesError } = await supabase
         .from('teacher_schedules')
         .select('classroom_id, day_of_week_id, time_slot_id, class_id, is_floater')
+        .eq('school_id', schoolId)
         .in('classroom_id', staffingClassroomIds)
 
       if (staffingSchedulesError) {
+        console.error('[Dashboard API] Error fetching staffing schedules:', staffingSchedulesError)
         return createErrorResponse(staffingSchedulesError, 'Failed to fetch staffing schedules', 500)
       }
 
@@ -654,6 +699,10 @@ export async function GET(request: NextRequest) {
       scheduled_subs: scheduledSubs,
     })
   } catch (error) {
+    console.error('[Dashboard API] Unhandled error:', error)
+    if (error instanceof Error) {
+      console.error('[Dashboard API] Error stack:', error.stack)
+    }
     return createErrorResponse(error, 'Failed to build dashboard overview', 500)
   }
 }

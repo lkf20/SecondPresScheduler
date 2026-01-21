@@ -37,10 +37,23 @@ export async function GET(request: Request) {
     return NextResponse.json(data)
   } catch (error: any) {
     console.error('Error fetching weekly schedule:', error)
+    console.error('Error message:', error.message)
     console.error('Error stack:', error.stack)
+    console.error('Error details:', {
+      name: error.name,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    })
     return NextResponse.json({ 
-      error: error.message,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      error: error.message || 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? {
+        message: error.message,
+        stack: error.stack,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      } : undefined
     }, { status: 500 })
   }
 }

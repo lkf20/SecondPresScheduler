@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
+import { getUserSchoolId } from '@/lib/utils/auth'
 
 type TeacherSchedule = Database['public']['Tables']['teacher_schedules']['Row']
 type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
@@ -25,13 +26,19 @@ type SupabaseErrorDetails = Error & {
   hint?: string | null
 }
 
-export async function getTeacherSchedules(teacherId: string): Promise<TeacherScheduleWithDetails[]> {
+export async function getTeacherSchedules(teacherId: string, schoolId?: string): Promise<TeacherScheduleWithDetails[]> {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  let query = supabase
     .from('teacher_schedules')
     .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), class:class_groups(*), classroom:classrooms(*)')
     .eq('teacher_id', teacherId)
 
+  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  if (effectiveSchoolId) {
+    query = query.eq('school_id', effectiveSchoolId)
+  }
+
+  const { data, error } = await query
   if (error) throw error
   return (data || []) as TeacherScheduleWithDetails[]
 }
@@ -43,10 +50,19 @@ export async function createTeacherSchedule(schedule: {
   class_id: string | null
   classroom_id: string
   is_floater?: boolean
+  school_id?: string
 }) {
   const supabase = await createClient()
+  
+  // Get school_id if not provided
+  const schoolId = schedule.school_id || await getUserSchoolId()
+  if (!schoolId) {
+    throw new Error('school_id is required to create a teacher schedule')
+  }
+
   const insertData = {
     ...schedule,
+    school_id: schoolId,
     is_floater: schedule.is_floater ?? false,
   }
   
@@ -67,40 +83,58 @@ export async function createTeacherSchedule(schedule: {
   return data as TeacherSchedule
 }
 
-export async function deleteTeacherSchedule(id: string) {
+export async function deleteTeacherSchedule(id: string, schoolId?: string) {
   const supabase = await createClient()
-  const { error } = await supabase.from('teacher_schedules').delete().eq('id', id)
+  let query = supabase.from('teacher_schedules').delete().eq('id', id)
 
+  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  if (effectiveSchoolId) {
+    query = query.eq('school_id', effectiveSchoolId)
+  }
+
+  const { error } = await query
   if (error) throw error
 }
 
-export async function getTeacherScheduleById(id: string): Promise<TeacherScheduleWithTeacher> {
+export async function getTeacherScheduleById(id: string, schoolId?: string): Promise<TeacherScheduleWithTeacher> {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  let query = supabase
     .from('teacher_schedules')
     .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), class:class_groups(*), classroom:classrooms(*), teacher:staff(*)')
     .eq('id', id)
-    .single()
+
+  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  if (effectiveSchoolId) {
+    query = query.eq('school_id', effectiveSchoolId)
+  }
+
+  const { data, error } = await query.single()
 
   if (error) throw error
   return data as TeacherScheduleWithTeacher
 }
 
-export async function updateTeacherSchedule(id: string, updates: Partial<TeacherSchedule>) {
+export async function updateTeacherSchedule(id: string, updates: Partial<TeacherSchedule>, schoolId?: string) {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  let query = supabase
     .from('teacher_schedules')
     .update(updates)
     .eq('id', id)
-    .select()
-    .single()
+
+  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  if (effectiveSchoolId) {
+    query = query.eq('school_id', effectiveSchoolId)
+  }
+
+  const { data, error } = await query.select().single()
 
   if (error) throw error
   return data as TeacherSchedule
 }
 
 export async function getAllTeacherSchedules(
-  filters?: { teacher_id?: string }
+  filters?: { teacher_id?: string },
+  schoolId?: string
 ): Promise<TeacherScheduleWithTeacher[]> {
   const supabase = await createClient()
   let query = supabase
@@ -109,6 +143,11 @@ export async function getAllTeacherSchedules(
     .order('teacher_id', { ascending: true })
     .order('day_of_week_id', { ascending: true })
     .order('time_slot_id', { ascending: true })
+
+  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  if (effectiveSchoolId) {
+    query = query.eq('school_id', effectiveSchoolId)
+  }
 
   if (filters?.teacher_id) {
     query = query.eq('teacher_id', filters.teacher_id)
@@ -127,11 +166,19 @@ export async function bulkCreateTeacherSchedules(
     time_slot_id: string
     class_id: string
     classroom_id: string
-  }>
+  }>,
+  schoolId?: string
 ) {
   const supabase = await createClient()
+  
+  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  if (!effectiveSchoolId) {
+    throw new Error('school_id is required to create teacher schedules')
+  }
+
   const scheduleData = schedules.map((schedule) => ({
     teacher_id: teacherId,
+    school_id: effectiveSchoolId,
     ...schedule,
   }))
 
@@ -144,29 +191,43 @@ export async function bulkCreateTeacherSchedules(
   return data as TeacherSchedule[]
 }
 
-export async function deleteTeacherSchedulesByTeacher(teacherId: string) {
+export async function deleteTeacherSchedulesByTeacher(teacherId: string, schoolId?: string) {
   const supabase = await createClient()
-  const { error } = await supabase
+  let query = supabase
     .from('teacher_schedules')
     .delete()
     .eq('teacher_id', teacherId)
 
+  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  if (effectiveSchoolId) {
+    query = query.eq('school_id', effectiveSchoolId)
+  }
+
+  const { error } = await query
   if (error) throw error
 }
 
 export async function getScheduleByDayAndSlot(
   teacherId: string,
   dayOfWeekId: string,
-  timeSlotId: string
+  timeSlotId: string,
+  schoolId?: string
 ): Promise<TeacherScheduleWithDetails | null> {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  
+  let query = supabase
     .from('teacher_schedules')
     .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), class:class_groups(*), classroom:classrooms(*)')
     .eq('teacher_id', teacherId)
     .eq('day_of_week_id', dayOfWeekId)
     .eq('time_slot_id', timeSlotId)
-    .maybeSingle()
+  
+  if (effectiveSchoolId) {
+    query = query.eq('school_id', effectiveSchoolId)
+  }
+
+  const { data, error } = await query.maybeSingle()
 
   if (error) throw error
   return data as TeacherScheduleWithDetails | null
