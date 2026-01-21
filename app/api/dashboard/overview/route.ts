@@ -114,17 +114,21 @@ export async function GET(request: NextRequest) {
       ;(teacherSchedules || []).forEach((schedule) => {
         const key = `${schedule.teacher_id}|${schedule.day_of_week_id}|${schedule.time_slot_id}`
         if (!classroomMap.has(key)) {
-          classroomMap.set(key, schedule.classroom?.name || 'Classroom unavailable')
+          const classroom = Array.isArray(schedule.classroom) ? schedule.classroom[0] : schedule.classroom
+          classroomMap.set(key, classroom?.name || 'Classroom unavailable')
         }
         if (!classroomIdMap.has(key) && schedule.classroom_id) {
           classroomIdMap.set(key, schedule.classroom_id)
         }
-        if (schedule.classroom_id && schedule.classroom?.name) {
-          classroomDetailsById.set(schedule.classroom_id, {
-            id: schedule.classroom_id,
-            name: schedule.classroom.name,
-            color: schedule.classroom.color ?? null,
-          })
+        if (schedule.classroom_id) {
+          const classroom = Array.isArray(schedule.classroom) ? schedule.classroom[0] : schedule.classroom
+          if (classroom?.name) {
+            classroomDetailsById.set(schedule.classroom_id, {
+              id: schedule.classroom_id,
+              name: classroom.name,
+              color: classroom.color ?? null,
+            })
+          }
         }
       })
     }
@@ -197,7 +201,7 @@ export async function GET(request: NextRequest) {
             date: assignment.date,
             time_slot_id: assignment.time_slot_id,
             is_partial: assignment.is_partial,
-            assignment_type: assignment.assignment_type || null,
+            assignment_type: (assignment as any).assignment_type || null,
             sub: assignment.sub as any,
           })),
           classroomList,
@@ -226,7 +230,7 @@ export async function GET(request: NextRequest) {
       time_slot_id: string
       is_active: boolean
       enrollment_for_staffing: number | null
-      classroom?: { name: string | null }
+      classroom?: { name: string | null; color: string | null }
       time_slot?: { code: string | null; display_order: number | null }
       class_groups?: Array<{
         id: string
@@ -606,7 +610,10 @@ export async function GET(request: NextRequest) {
     })
 
     const scheduledSubs = (subAssignments || [])
-      .map((assignment) => ({
+      .map((assignment: any) => {
+        const timeSlot = Array.isArray(assignment.time_slot) ? assignment.time_slot[0] : assignment.time_slot
+        const classroom = Array.isArray(assignment.classroom) ? assignment.classroom[0] : assignment.classroom
+        return {
         id: assignment.id,
         date: assignment.date,
         day_name:
@@ -615,10 +622,10 @@ export async function GET(request: NextRequest) {
               ? 7
               : new Date(`${assignment.date}T00:00:00`).getDay()
           )?.name || '',
-        time_slot_code: assignment.time_slot?.code || '—',
-        time_slot_order: assignment.time_slot?.display_order ?? 999,
-        classroom_name: assignment.classroom?.name || 'Classroom unavailable',
-        classroom_color: assignment.classroom?.color ?? null,
+          time_slot_code: timeSlot?.code || '—',
+          time_slot_order: timeSlot?.display_order ?? 999,
+          classroom_name: classroom?.name || 'Classroom unavailable',
+          classroom_color: classroom?.color ?? null,
         notes: assignment.notes || null,
         sub_name:
           assignment.sub?.display_name ||
@@ -628,7 +635,8 @@ export async function GET(request: NextRequest) {
           assignment.teacher?.display_name ||
           `${assignment.teacher?.first_name || ''} ${assignment.teacher?.last_name || ''}`.trim() ||
           'Teacher',
-      }))
+        }
+      })
       .sort((a, b) =>
         a.date.localeCompare(b.date) || a.time_slot_order - b.time_slot_order
       )

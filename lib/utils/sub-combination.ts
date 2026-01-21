@@ -193,14 +193,16 @@ function buildCombinationFromSubs(
       return null
     }
 
-    const shift = bestSub.availableShifts.get(shiftKey) ?? selectedShiftMap.get(shiftKey)
+    // TypeScript type narrowing - bestSub is guaranteed to be non-null here
+    const bestSubData: SubShiftCoverage = bestSub
+    const shift = bestSubData.availableShifts.get(shiftKey) ?? selectedShiftMap.get(shiftKey)
     if (!shift) {
       return null
     }
 
-    const assigned = assignmentsBySub.get(bestSub.sub.id) || []
+    const assigned = assignmentsBySub.get(bestSubData.sub.id) || []
     assigned.push(shift)
-    assignmentsBySub.set(bestSub.sub.id, assigned)
+    assignmentsBySub.set(bestSubData.sub.id, assigned)
     coveredShifts.add(shiftKey)
   }
 

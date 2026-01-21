@@ -152,7 +152,7 @@ export async function DELETE(
     // If there are assignments, we need the director's choice
     if (activeAssignments.length > 0 && body.action === undefined) {
       // Return summary for the UI dialog
-      const { data: timeOffRequest } = await getTimeOffRequestById(id)
+      const timeOffRequest = await getTimeOffRequestById(id)
       const teacher = timeOffRequest?.teacher
 
       // Format assignments for display

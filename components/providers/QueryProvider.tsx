@@ -10,7 +10,8 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            refetchOnWindowFocus: true,
+            refetchOnWindowFocus: false, // Disabled globally - enable per query if needed
+            refetchOnReconnect: false, // Disabled globally - rely on manual refresh/invalidation
             retry: 1,
             staleTime: 0, // Override per query
           },

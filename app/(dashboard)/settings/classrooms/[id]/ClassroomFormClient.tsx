@@ -131,11 +131,7 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
           </FormField>
 
           <FormField
-            label={
-              <span>
-                Color <span className="text-muted-foreground font-normal">(Optional)</span>
-              </span>
-            }
+            label="Color (Optional)"
             error={errors.color?.message}
           >
             <ClassroomColorPicker value={selectedColor} onChange={setSelectedColor} />

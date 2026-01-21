@@ -89,6 +89,6 @@ export function useSubRecommendations(
     enabled: !!coverageRequestId,
     initialData,
     staleTime: 10 * 60 * 1000, // 10 minutes
-    refetchOnWindowFocus: true,
+    // refetchOnWindowFocus: false (inherits from global default)
   })
 }

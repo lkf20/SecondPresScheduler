@@ -294,6 +294,8 @@ export default function SubFinderCard({
       {allShifts && allShifts.length > 0 && (allCanCover.length > 0 || allCannotCover.length > 0) && isAllShiftsExpanded && (
         <div className="mb-4 mt-0">
           <ShiftChips
+            canCover={allCanCover}
+            cannotCover={allCannotCover}
             shifts={allShifts.map((shift) => {
               const key = `${shift.date}|${shift.time_slot_code}`
               const status = allShiftsStatusMap.get(key) || 'unavailable'

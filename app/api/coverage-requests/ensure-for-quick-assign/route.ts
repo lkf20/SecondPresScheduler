@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
 
 
     if (!teacher_id || !start_date) {
-      return createErrorResponse('Missing required fields: teacher_id, start_date', 400)
+      return createErrorResponse(new Error('Missing required fields: teacher_id, start_date'), 'Missing required fields: teacher_id, start_date', 400)
     }
 
     // Default end_date to start_date if not provided
@@ -30,6 +30,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result)
   } catch (error) {
     console.error('Error ensuring coverage request:', error)
-    return createErrorResponse(getErrorMessage(error), 500)
+    return createErrorResponse(error, getErrorMessage(error), 500)
   }
 }

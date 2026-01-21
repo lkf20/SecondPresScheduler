@@ -1,25 +1,19 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Settings2 } from 'lucide-react'
-import TimeOffCard from '@/components/shared/TimeOffCard'
-import type { ClassroomBadge } from '@/components/shared/TimeOffCard'
+import { Settings2, RefreshCw } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import TimeOffCard, { type ClassroomBadge } from '@/components/shared/TimeOffCard'
 import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
 import { useTimeOffRequests } from '@/lib/hooks/use-time-off-requests'
 import { parseLocalDate } from '@/lib/utils/date'
-
-type ClassroomBadge = {
-  id: string
-  name: string
-  color: string | null
-}
 
 type CoverageStatus = 'draft' | 'completed' | 'covered' | 'partially_covered' | 'needs_coverage'
 
@@ -47,17 +41,25 @@ export default function TimeOffListClient({
   view: string
 }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const editParam = searchParams.get('edit')
   const [view, setView] = useState(initialView ?? 'active')
-  const [editingRequestId, setEditingRequestId] = useState<string | null>(null)
+  const [editingRequestId, setEditingRequestId] = useState<string | null>(editParam || null)
   // Default to all coverage filters selected
   const [coverageFilters, setCoverageFilters] = useState<Set<string>>(
     new Set(['covered', 'needs_coverage', 'partially_covered'])
   )
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   
   // Use React Query to fetch time off requests
-  const { data: timeOffData, isLoading, error } = useTimeOffRequests({
+  const { data: timeOffData, isLoading, error, refetch, isFetching } = useTimeOffRequests({
     statuses: ['active', 'draft'],
   })
+  
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    await refetch()
+  }
   
   // Transform API response to match component's expected format
   const allRequests: TimeOffRow[] = useMemo(() => {
@@ -139,6 +141,14 @@ export default function TimeOffListClient({
   useEffect(() => {
     setView(initialView ?? 'active')
   }, [initialView])
+
+  // Handle edit query parameter
+  useEffect(() => {
+    const editParam = searchParams.get('edit')
+    if (editParam && editParam !== editingRequestId) {
+      setEditingRequestId(editParam)
+    }
+  }, [searchParams, editingRequestId])
   
   // Show loading state
   if (isLoading) {
@@ -221,8 +231,6 @@ export default function TimeOffListClient({
 
     return { covered, needsCoverage, partiallyCovered }
   }
-
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
   const handleDeleteDraft = async (id: string) => {
     if (!confirm('Delete this draft?')) return
@@ -336,9 +344,29 @@ export default function TimeOffListClient({
 
   return (
     <>
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Time Off Requests</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Time Off Requests</h1>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleRefresh}
+                    disabled={isFetching}
+                    className="h-10 w-10 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Refresh list</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
           <p className="text-muted-foreground mt-2">Manage teacher time off requests</p>
         </div>
         <AddTimeOffButton />

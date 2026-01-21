@@ -89,8 +89,12 @@ export default function DataTable<T extends Record<string, unknown>>({
   // Sort data
   const sortedData = sortKey
     ? [...filteredData].sort((a, b) => {
-        const aVal = a[sortKey]
-        const bVal = b[sortKey]
+        const aVal = a[sortKey] as unknown
+        const bVal = b[sortKey] as unknown
+        // Handle comparison for different types
+        if (aVal === bVal) return 0
+        if (aVal == null) return 1
+        if (bVal == null) return -1
         const comparison = aVal < bVal ? -1 : aVal > bVal ? 1 : 0
         return sortDirection === 'asc' ? comparison : -comparison
       })
@@ -184,12 +188,12 @@ export default function DataTable<T extends Record<string, unknown>>({
                 >
                   {columns.map((column) => {
                     // Get cell content - handle cell function if provided, otherwise use row data
-                    let cellContent = row[column.key] as React.ReactNode
+                    let cellContent = (row[column.key] as unknown) as React.ReactNode
                     if (column.cell) {
                       try {
                         cellContent = column.cell(row)
                       } catch {
-                        cellContent = row[column.key]
+                        cellContent = (row[column.key] as unknown) as React.ReactNode
                       }
                     }
                     

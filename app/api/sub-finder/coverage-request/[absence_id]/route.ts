@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getTimeOffRequestById } from '@/lib/api/time-off'
 import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
@@ -9,12 +9,11 @@ import { createErrorResponse, getErrorMessage } from '@/lib/utils/errors'
  * Get coverage_request_id and shift mappings for a time_off_request
  */
 export async function GET(
-  request: Request,
-  { params }: { params?: { absence_id?: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ absence_id: string }> }
 ) {
   try {
-    const absence_id =
-      params?.absence_id || request.url.split('/').pop()?.split('?')[0]
+    const { absence_id } = await params
 
     if (!absence_id) {
       return createErrorResponse('Missing absence_id', 'Missing absence_id', 400)

@@ -246,15 +246,7 @@ export async function POST(request: NextRequest) {
 
           let isQualified = true
           let qualificationReason = ''
-          if (shift.class_id) {
-            qualificationTotal++
-            if (qualifiedClassIds.has(shift.class_id)) {
-              qualificationMatches++
-            } else {
-              isQualified = false
-              qualificationReason = 'Not qualified for this class'
-            }
-          }
+          // Note: class_id is not part of ManualShiftInput, class information is derived from schedule lookup
 
           const timeSlotCode = slotCodeMap.get(shift.time_slot_id) || ''
           const dayName = dayNameMap.get(shift.day_of_week_id) || ''

@@ -56,6 +56,11 @@ interface SubMatch {
   qualification_total: number
   can_change_diapers?: boolean
   can_lift_children?: boolean
+  assigned_shifts?: Array<{
+    date: string
+    day_name: string
+    time_slot_code: string
+  }>
 }
 
 /**
@@ -207,7 +212,6 @@ export async function POST(request: NextRequest) {
         classroom_id: null, // TODO: Get from schedule cells
         classroom_name,
         classroom_color,
-        classroom_color,
         diaper_changing_required: classGroupInfo.diaper_changing_required,
         lifting_children_required: classGroupInfo.lifting_children_required,
         class_group_name: class_name,
@@ -318,6 +322,7 @@ export async function POST(request: NextRequest) {
           time_slot_code: string
           class_name: string | null
           classroom_name?: string | null
+          classroom_color?: string | null
           diaper_changing_required?: boolean
           lifting_children_required?: boolean
         }> = []

@@ -96,13 +96,44 @@ export function logError(context: string, error: unknown, additionalInfo?: Recor
 
 /**
  * Creates a standardized API error response
+ * Supports two call patterns:
+ * 1. createErrorResponse(message: string, statusCode: number)
+ * 2. createErrorResponse(error: unknown, defaultMessage?: string, statusCode?: number, context?: string)
  */
 export function createErrorResponse(
+  message: string,
+  statusCode: number
+): Response
+export function createErrorResponse(
   error: unknown,
-  defaultMessage = 'An error occurred',
-  statusCode = 500,
+  defaultMessage?: string,
+  statusCode?: number,
+  context?: string
+): Response
+export function createErrorResponse(
+  errorOrMessage: unknown,
+  defaultMessageOrStatusCode?: string | number,
+  statusCode?: number,
   context?: string
 ): Response {
+  // Check if first argument is a string (simple message pattern)
+  if (typeof errorOrMessage === 'string') {
+    // Pattern 1: createErrorResponse(message: string, statusCode: number)
+    const message = errorOrMessage
+    const status = typeof defaultMessageOrStatusCode === 'number' 
+      ? defaultMessageOrStatusCode 
+      : 500
+    
+    return Response.json({ error: message }, { status })
+  }
+  
+  // Pattern 2: createErrorResponse(error: unknown, defaultMessage?: string, statusCode?: number, context?: string)
+  const error = errorOrMessage
+  const defaultMessage = typeof defaultMessageOrStatusCode === 'string' 
+    ? defaultMessageOrStatusCode 
+    : 'An error occurred'
+  const status = statusCode ?? (typeof defaultMessageOrStatusCode === 'number' ? defaultMessageOrStatusCode : 500)
+  
   const message = getErrorMessage(error) || defaultMessage
   
   if (context) {
@@ -120,5 +151,5 @@ export function createErrorResponse(
     }
   }
   
-  return Response.json(errorResponse, { status: statusCode })
+  return Response.json(errorResponse, { status })
 }

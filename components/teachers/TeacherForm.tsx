@@ -47,6 +47,7 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
     existingTeacher: { first_name: string; last_name: string; email: string | null }
   } | null>(null)
   const [proceedWithDuplicate, setProceedWithDuplicate] = useState(false)
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false)
 
   const {
     register,
@@ -55,7 +56,7 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
     setValue,
     watch,
   } = useForm<TeacherFormData>({
-    resolver: zodResolver(teacherSchema),
+    resolver: zodResolver(teacherSchema) as any,
     defaultValues: teacher
       ? {
           first_name: teacher.first_name,
@@ -272,7 +273,7 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
         )}
         <Button 
           type="submit" 
-          disabled={isSubmitting || (duplicateWarning && !proceedWithDuplicate)}
+          disabled={isSubmitting || (duplicateWarning ? !proceedWithDuplicate : false)}
         >
           {isSubmitting ? 'Saving...' : teacher ? 'Update' : 'Create'}
         </Button>

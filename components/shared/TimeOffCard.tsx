@@ -108,7 +108,7 @@ export default function TimeOffCard({
       <Card
         className={cn(
           'group cursor-pointer transition-all hover:shadow-md hover:scale-[1.01] border border-slate-200 relative',
-          isSelected && 'ring-1 ring-slate-300 shadow-md border-l-4 border-l-blue-500 animate-in fade-in-50 duration-200',
+          isSelected && 'ring-1 ring-slate-300 shadow-md border-l-4 border-l-blue-500',
           className
         )}
         onClick={handleCardClick}

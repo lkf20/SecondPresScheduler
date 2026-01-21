@@ -13,8 +13,7 @@ export default function NewTeacherPage() {
     try {
       setError(null)
       // Convert empty email to null and exclude id (should not be sent for new teachers)
-      const { id, ...teacherData } = data
-      void id
+      const { id: _, ...teacherData } = data as any
       const payload = {
         ...teacherData,
         email: data.email && data.email.trim() !== '' ? data.email : null,

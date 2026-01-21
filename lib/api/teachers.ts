@@ -52,21 +52,16 @@ export async function createTeacher(teacher: {
   
   // Exclude id from the insert if it's undefined or empty
   const { id, ...teacherData } = teacher
+  // Generate UUID if not provided
+  const teacherId = id && id.trim() !== '' ? id : crypto.randomUUID()
+  
   const insertData: Partial<Staff> & { id: string } = {
     ...teacherData,
+    id: teacherId,
     email: teacher.email && teacher.email.trim() !== '' ? teacher.email : undefined,
     is_teacher: true,
     is_sub: teacher.is_sub ?? false, // Preserve is_sub flag
     role_type_id: teacher.role_type_id, // Include role_type_id
-  }
-  
-  // Generate UUID if not provided
-  // This ensures we always have an id, even if the database default isn't set
-  if (id && id.trim() !== '') {
-    insertData.id = id
-  } else {
-    // Generate UUID using crypto.randomUUID() which is available in Node.js
-    insertData.id = crypto.randomUUID()
   }
   
   const { data, error } = await supabase

@@ -15,7 +15,12 @@ const timeslotSchema = z.object({
   name: z.string().optional(),
   default_start_time: z.string().optional(),
   default_end_time: z.string().optional(),
-  display_order: z.coerce.number().int().optional().or(z.literal('')),
+  display_order: z
+    .number()
+    .int('Display order must be an integer')
+    .min(0, 'Display order cannot be negative')
+    .nullable()
+    .optional(),
 })
 
 type TimeSlotFormData = z.infer<typeof timeslotSchema>
@@ -23,31 +28,48 @@ type TimeSlotFormData = z.infer<typeof timeslotSchema>
 export default function NewTimeSlotPage() {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
+  
+  const form = useForm<TimeSlotFormData>({
+    resolver: zodResolver(timeslotSchema),
+    defaultValues: {
+      code: '',
+      name: '',
+      default_start_time: '',
+      default_end_time: '',
+      display_order: null,
+    },
+  })
+
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<TimeSlotFormData>({
-    resolver: zodResolver(timeslotSchema),
-  })
+  } = form
 
   const onSubmit = async (data: TimeSlotFormData) => {
     try {
       setError(null)
+      
+      // Handle display_order: NaN from empty input becomes null
+      let displayOrder: number | null = null
+      if (data.display_order !== null && data.display_order !== undefined) {
+        if (typeof data.display_order === 'number' && !Number.isNaN(data.display_order)) {
+          displayOrder = data.display_order
+        }
+      }
+      
       const payload: {
         code: string
         name: string | null
         default_start_time: string | null
         default_end_time: string | null
-        display_order?: number
+        display_order: number | null
       } = {
         code: data.code,
         name: data.name || null,
         default_start_time: data.default_start_time || null,
         default_end_time: data.default_end_time || null,
-      }
-      if (data.display_order && data.display_order !== '') {
-        payload.display_order = Number(data.display_order)
+        display_order: displayOrder, // 0, some number, or null
       }
       const response = await fetch('/api/timeslots', {
         method: 'POST',
@@ -95,7 +117,11 @@ export default function NewTimeSlotPage() {
           </FormField>
 
           <FormField label="Display Order" error={errors.display_order?.message}>
-            <Input type="number" {...register('display_order')} placeholder="Optional" />
+            <Input
+              type="number"
+              {...register('display_order', { valueAsNumber: true })}
+              placeholder="Optional"
+            />
           </FormField>
 
           <div className="flex justify-end gap-4">

@@ -15,39 +15,26 @@ import { Database } from '@/types/database'
 
 type ClassGroup = Database['public']['Tables']['class_groups']['Row']
 
+// Helper function to create a nullable number schema that accepts string, number, null, or undefined
+const nullableNumberSchema = (min?: number, max?: number) =>
+  z
+    .union([z.string(), z.number(), z.null(), z.undefined()])
+    .transform((val): number | null | undefined => {
+      if (val === '' || val === null || val === undefined || isNaN(Number(val))) return undefined
+      const num = Number(val)
+      if (!Number.isInteger(num)) return undefined
+      if (min !== undefined && num < min) return undefined
+      if (max !== undefined && num > max) return undefined
+      return num
+    })
+    .optional()
+
 const classSchema = z.object({
   name: z.string().min(1, 'Class group name is required'),
-  min_age: z
-    .union([z.string(), z.number(), z.null(), z.undefined()])
-    .transform((val): number | null => {
-      if (val === '' || val === null || val === undefined || isNaN(Number(val))) return null
-      const num = Number(val)
-      if (num < 0 || num > 18 || !Number.isInteger(num)) return null
-      return num
-    })
-    .nullable()
-    .optional(),
-  max_age: z
-    .union([z.string(), z.number(), z.null(), z.undefined()])
-    .transform((val): number | null => {
-      if (val === '' || val === null || val === undefined || isNaN(Number(val))) return null
-      const num = Number(val)
-      if (num < 0 || num > 18 || !Number.isInteger(num)) return null
-      return num
-    })
-    .nullable()
-    .optional(),
+  min_age: nullableNumberSchema(0, 18),
+  max_age: nullableNumberSchema(0, 18),
   required_ratio: z.number().int().min(1, 'Required ratio must be at least 1'),
-  preferred_ratio: z
-    .union([z.string(), z.number(), z.null(), z.undefined()])
-    .transform((val): number | null => {
-      if (val === '' || val === null || val === undefined || isNaN(Number(val))) return null
-      const num = Number(val)
-      if (num < 1 || !Number.isInteger(num)) return null
-      return num
-    })
-    .nullable()
-    .optional(),
+  preferred_ratio: nullableNumberSchema(1),
   diaper_changing_required: z.boolean().optional(),
   lifting_children_required: z.boolean().optional(),
   toileting_assistance_required: z.boolean().optional(),
@@ -69,7 +56,7 @@ export default function ClassFormClient({ classData }: ClassFormClientProps) {
     watch,
     setValue,
     formState: { errors, isSubmitting },
-  } = useForm<ClassFormData>({
+  } = useForm({
     resolver: zodResolver(classSchema),
     defaultValues: {
       name: classData.name,

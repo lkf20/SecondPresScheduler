@@ -43,7 +43,7 @@ export default function SubForm({ sub, onSubmit, onCancel }: SubFormProps) {
     setValue,
     watch,
   } = useForm<SubFormData>({
-    resolver: zodResolver(subSchema),
+    resolver: zodResolver(subSchema) as any,
     defaultValues: sub
       ? {
           first_name: sub.first_name,
@@ -64,7 +64,7 @@ export default function SubForm({ sub, onSubmit, onCancel }: SubFormProps) {
   const isTeacher = watch('is_teacher')
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <FormField label="First Name" error={errors.first_name?.message} required>
           <Input {...register('first_name')} />

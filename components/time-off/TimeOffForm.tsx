@@ -142,7 +142,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     reset,
     getValues,
   } = useForm<TimeOffFormData>({
-    resolver: zodResolver(timeOffSchema),
+    resolver: zodResolver(timeOffSchema) as any,
     defaultValues: {
       shift_selection_mode: 'all_scheduled',
     },
@@ -744,7 +744,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       )}
       
       {!isLoadingRequest && (
-      <form onSubmit={handleSubmit(onSubmit)} className="flex-1 flex flex-col">
+      <form onSubmit={handleSubmit(onSubmit as any)} className="flex-1 flex flex-col">
         <div className="flex-1 overflow-y-auto space-y-6">
           <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-6">
             <FormField label="Teacher" error={errors.teacher_id?.message} required>

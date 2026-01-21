@@ -5,7 +5,6 @@ import { useSchool } from '@/lib/contexts/SchoolContext'
 import { dashboardKey, type DashboardQueryParams } from '@/lib/utils/query-keys'
 
 type DashboardOverview = {
-  range: { start_date: string; end_date: string }
   summary: {
     absences: number
     uncovered_shifts: number
@@ -79,6 +78,6 @@ export function useDashboard(params: DashboardQueryParams, initialData?: Dashboa
     queryFn: () => fetchDashboard(params),
     initialData,
     staleTime: 600000, // 10 minutes
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: true, // Keep enabled for Dashboard to show latest data
   })
 }

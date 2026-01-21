@@ -35,8 +35,9 @@ export async function POST(request: NextRequest) {
     }
 
     const shiftIdMap = new Map<string, string>()
-    ;(shifts || []).forEach((shift) => {
-      const timeSlotCode = shift.time_slots?.code || ''
+    ;(shifts || []).forEach((shift: any) => {
+      const timeSlot = Array.isArray(shift.time_slots) ? shift.time_slots[0] : shift.time_slots
+      const timeSlotCode = timeSlot?.code || ''
       if (!shift.date || !timeSlotCode) return
       shiftIdMap.set(`${shift.date}|${timeSlotCode}`, shift.id)
     })

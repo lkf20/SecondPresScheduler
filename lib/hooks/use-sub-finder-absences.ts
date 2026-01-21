@@ -62,6 +62,6 @@ export function useSubFinderAbsences(params?: SubFinderAbsencesQueryParams, init
     queryFn: () => fetchSubFinderAbsences(params),
     initialData,
     staleTime: 600000, // 10 minutes
-    refetchOnWindowFocus: true,
+    // refetchOnWindowFocus: false (inherits from global default)
   })
 }

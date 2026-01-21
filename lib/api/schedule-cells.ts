@@ -140,6 +140,7 @@ export async function createScheduleCell(cell: {
   enrollment_for_staffing?: number | null
   notes?: string | null
 }): Promise<ScheduleCell> {
+  const supabase = await createClient()
   // Create the schedule cell
   const { data: cellData, error: cellError } = await supabase
     .from('schedule_cells')
@@ -163,7 +164,8 @@ export async function createScheduleCell(cell: {
       class_group_id,
     }))
 
-    const { error: joinError } = await supabase
+    const supabase2 = await createClient()
+    const { error: joinError } = await supabase2
       .from('schedule_cell_class_groups')
       .insert(joinRows)
 
