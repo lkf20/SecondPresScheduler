@@ -22,6 +22,15 @@ interface WeeklyScheduleGridNewProps {
   allowCardClick?: boolean // If false, cards are not clickable (default: true)
   displayMode?: 'permanent-only' | 'permanent-flexible' | 'substitutes-only' | 'all-scheduled-staff' | 'coverage-issues' | 'absences'
   onDisplayModeChange?: (mode: 'permanent-only' | 'permanent-flexible' | 'substitutes-only' | 'all-scheduled-staff' | 'coverage-issues' | 'absences') => void
+  // Optional: provide counts computed from the unfiltered (base) dataset so chip counts
+  // don't change when a displayMode is selected.
+  displayModeCounts?: {
+    all: number
+    permanent: number
+    coverageIssues: number
+    absences: number
+    subs: number
+  }
   slotCounts?: { shown: number; total: number } // Slot counts for display
 }
 
@@ -102,6 +111,7 @@ export default function WeeklyScheduleGridNew({
   allowCardClick = true, // Default to allowing clicks
   displayMode = 'all-scheduled-staff',
   onDisplayModeChange,
+  displayModeCounts,
   slotCounts,
 }: WeeklyScheduleGridNewProps) {
   const [selectedCell, setSelectedCell] = useState<{
@@ -184,17 +194,10 @@ export default function WeeklyScheduleGridNew({
       })
     })
 
-    // Debug: Log counts
-    console.log('[WeeklyScheduleGridNew] Assignment counts:', {
-      all: allCount,
-      subs: subsCount,
-      permanent: permanentCount,
-      coverageIssues: coverageIssuesCount,
-      absences: absencesCount
-    })
-
     return { all: allCount, subs: subsCount, permanent: permanentCount, coverageIssues: coverageIssuesCount, absences: absencesCount }
   }, [data])
+
+  const countsForChips = displayModeCounts ?? assignmentCounts
 
   // Extract unique days and time slots from data, filtered by selectedDayIds
   const { days, timeSlots } = useMemo(() => {
@@ -521,11 +524,11 @@ export default function WeeklyScheduleGridNew({
         {/* Filter chips - separate row below legend */}
         <div className="mb-4 flex flex-wrap items-center gap-2">
           {[
-            { value: 'all-scheduled-staff' as const, label: `All (${assignmentCounts.all})` },
-            { value: 'coverage-issues' as const, label: `Coverage Issues (${assignmentCounts.coverageIssues})` },
-            { value: 'substitutes-only' as const, label: `Subs (${assignmentCounts.subs})` },
-            { value: 'absences' as const, label: `Absences (${assignmentCounts.absences})` },
-            { value: 'permanent-only' as const, label: `Permanent staff (${assignmentCounts.permanent})` },
+            { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
+            { value: 'coverage-issues' as const, label: `Coverage Issues (${countsForChips.coverageIssues})` },
+            { value: 'substitutes-only' as const, label: `Subs (${countsForChips.subs})` },
+            { value: 'absences' as const, label: `Absences (${countsForChips.absences})` },
+            { value: 'permanent-only' as const, label: `Permanent staff (${countsForChips.permanent})` },
           ].map((option) => (
             <button
               key={option.value}
@@ -837,11 +840,11 @@ export default function WeeklyScheduleGridNew({
         {/* Filter chips - separate row below legend */}
         <div className="mb-4 flex flex-wrap items-center gap-2">
           {[
-            { value: 'all-scheduled-staff' as const, label: `All (${assignmentCounts.all})` },
-            { value: 'coverage-issues' as const, label: `Coverage Issues (${assignmentCounts.coverageIssues})` },
-            { value: 'substitutes-only' as const, label: `Subs (${assignmentCounts.subs})` },
-            { value: 'absences' as const, label: `Absences (${assignmentCounts.absences})` },
-            { value: 'permanent-only' as const, label: `Permanent staff (${assignmentCounts.permanent})` },
+            { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
+            { value: 'coverage-issues' as const, label: `Coverage Issues (${countsForChips.coverageIssues})` },
+            { value: 'substitutes-only' as const, label: `Subs (${countsForChips.subs})` },
+            { value: 'absences' as const, label: `Absences (${countsForChips.absences})` },
+            { value: 'permanent-only' as const, label: `Permanent staff (${countsForChips.permanent})` },
           ].map((option) => (
             <button
               key={option.value}

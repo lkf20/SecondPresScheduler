@@ -498,59 +498,6 @@ export default function FilterPanel({
             </p>
           </div>
 
-          {/* Display Mode - Hide for Baseline Schedule */}
-          {!hideStaffSection && (
-            <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
-              <Label className="text-base font-medium">Show Staff</Label>
-              <RadioGroup
-                value={filters.displayMode}
-                onValueChange={(value) => {
-                  changeSourceRef.current = 'internal'
-                  setFilters(prev => ({
-                    ...prev,
-                    displayMode: value as FilterState['displayMode']
-                  }))
-                }}
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="permanent-only" id="permanent-only" />
-                  <label
-                    htmlFor="permanent-only"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                  >
-                    Permanent teachers
-                  </label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="permanent-flexible" id="permanent-flexible" />
-                  <label
-                    htmlFor="permanent-flexible"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                  >
-                    Permanent + Flexible teachers
-                  </label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="substitutes-only" id="substitutes-only" />
-                  <label
-                    htmlFor="substitutes-only"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                  >
-                    Substitutes only
-                  </label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="all-scheduled-staff" id="all-scheduled-staff" />
-                  <label
-                    htmlFor="all-scheduled-staff"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                  >
-                    All scheduled staff
-                  </label>
-                </div>
-              </RadioGroup>
-            </div>
-          )}
 
           {/* Layout */}
           <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">

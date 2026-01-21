@@ -220,6 +220,97 @@ export default function WeeklySchedulePage() {
             time_slots: day.time_slots
               .filter(slot => filters.selectedTimeSlotIds.includes(slot.time_slot_id))
               .filter(slot => {
+                // In Absences mode, we ONLY want slots that actually contain absences.
+                // Do this before scheduleCell/staffing checks, since those checks can otherwise
+                // "let through" lots of inactive/missing slots via displayFilters.inactive.
+                if (filters.displayMode === 'absences') {
+                  const hasAbsence = slot.absences && slot.absences.length > 0
+
+                  if (hasAbsence) {
+                    console.log('[WeeklySchedulePage] Absences filter - Slot passed:', {
+                      weekStartISO,
+                      classroom: classroom.classroom_name,
+                      day: day.day_name,
+                      timeSlot: slot.time_slot_code || slot.time_slot_id,
+                      absencesCount: slot.absences?.length || 0,
+                      absences: slot.absences?.map(a => ({
+                        teacher_id: a.teacher_id,
+                        teacher_name: a.teacher_name,
+                        has_sub: a.has_sub
+                      }))
+                    })
+                  }
+
+                  return hasAbsence
+                }
+
+                // In Subs mode, ONLY show slots that actually have a substitute assignment for this week.
+                // Don't rely on class_id filtering since sub assignments may not have a class_id.
+                if (filters.displayMode === 'substitutes-only') {
+                  return (slot.assignments || []).some(a => a.is_substitute === true)
+                }
+
+                // In Permanent staff mode, ONLY show slots that have at least one non-floater, non-substitute teacher.
+                // (This matches the chip intent: show where permanent staff are scheduled.)
+                if (filters.displayMode === 'permanent-only') {
+                  return (slot.assignments || []).some(
+                    a => !!a.teacher_id && !a.is_floater && a.is_substitute !== true
+                  )
+                }
+
+                // In Coverage Issues mode, ONLY show slots that are below required/preferred staffing.
+                // Important: do this before "inactive" checks so we don't accidentally include lots of
+                // inactive/missing scheduleCell slots via displayFilters.inactive.
+                if (filters.displayMode === 'coverage-issues') {
+                  const scheduleCell = slot.schedule_cell
+                  if (!scheduleCell) return false
+                  if (!scheduleCell.is_active) return false
+                  if (
+                    !scheduleCell.class_groups ||
+                    scheduleCell.class_groups.length === 0 ||
+                    !scheduleCell.enrollment_for_staffing
+                  ) {
+                    return false
+                  }
+
+                  const classGroups = scheduleCell.class_groups
+                  const classGroupForRatio = classGroups.reduce((lowest, current) => {
+                    const currentMinAge = current.min_age ?? Infinity
+                    const lowestMinAge = lowest.min_age ?? Infinity
+                    return currentMinAge < lowestMinAge ? current : lowest
+                  })
+
+                  const requiredTeachers = classGroupForRatio.required_ratio
+                    ? Math.ceil(
+                        scheduleCell.enrollment_for_staffing / classGroupForRatio.required_ratio
+                      )
+                    : undefined
+                  const preferredTeachers = classGroupForRatio.preferred_ratio
+                    ? Math.ceil(
+                        scheduleCell.enrollment_for_staffing / classGroupForRatio.preferred_ratio
+                      )
+                    : undefined
+
+                  const classGroupIds = classGroups.map(cg => cg.id)
+
+                  // Include substitutes for coverage counts even if they don't have class_id,
+                  // since they cover the slot. Exclude floaters.
+                  const coverageAssignments = (slot.assignments || []).filter(a => {
+                    if (!a.teacher_id) return false
+                    if (a.is_floater) return false
+                    if (a.is_substitute === true) return true
+                    return !!a.class_id && classGroupIds.includes(a.class_id)
+                  })
+
+                  const assignedCount = coverageAssignments.length
+                  const belowRequired =
+                    requiredTeachers !== undefined && assignedCount < requiredTeachers
+                  const belowPreferred =
+                    preferredTeachers !== undefined && assignedCount < preferredTeachers
+
+                  return belowRequired || belowPreferred
+                }
+
                 const scheduleCell = slot.schedule_cell
                 if (!scheduleCell) return filters.displayFilters.inactive
 
@@ -276,43 +367,7 @@ export default function WeeklySchedulePage() {
                   assignedCount >= requiredTeachers &&
                   (preferredTeachers === undefined || assignedCount >= preferredTeachers)
 
-                // Handle substitutes-only mode (week-specific)
-                if (filters.displayMode === 'substitutes-only') {
-                  // Show only slots that have substitutes for the selected week
-                  const hasSubstitute = slotAssignments.some(a => a.is_substitute === true)
-                  
-                  // Debug: Log filtering for substitutes
-                  if (hasSubstitute) {
-                    console.log('[WeeklySchedulePage] Filtering substitutes for slot:', {
-                      weekStartISO,
-                      classroom: classroom.classroom_name,
-                      day: day.day_name,
-                      timeSlot: slot.time_slot_code || slot.time_slot_id,
-                      slotAssignmentsCount: slotAssignments.length,
-                      substitutes: slotAssignments.filter(a => a.is_substitute === true).map(a => ({
-                        teacher_id: a.teacher_id,
-                        teacher_name: a.teacher_name,
-                        is_substitute: a.is_substitute
-                      }))
-                    })
-                  }
-                  
-                  return hasSubstitute
-                }
-
-                // Handle coverage-issues mode (week-specific, includes substitutes for that week)
-                if (filters.displayMode === 'coverage-issues') {
-                  // Show only slots with coverage issues: belowRequired or belowPreferred
-                  // Coverage calculation already includes week-specific substitutes
-                  return belowRequired || belowPreferred
-                }
-
-                // Handle absences mode (week-specific)
-                if (filters.displayMode === 'absences') {
-                  // Show only slots with absences for the selected week (uncovered, partial coverage, or any absence)
-                  // Absences are already week-specific from the API
-                  return slot.absences && slot.absences.length > 0
-                }
+                // (absences/subs/permanent-only/coverage-issues modes handled above)
 
                 if (belowRequired) return filters.displayFilters.belowRequired
                 if (belowPreferred) return filters.displayFilters.belowPreferred
@@ -350,6 +405,109 @@ export default function WeeklySchedulePage() {
     return result
   }, [scheduleData, filters, weekStartISO])
 
+  // Base data for chip counts: apply only day/time/classroom selections, but NOT displayMode.
+  // This keeps chip counts stable and non-confusing when a displayMode is selected.
+  const baseDataForCounts = useMemo(() => {
+    if (!filters) return scheduleData
+
+    return scheduleData
+      .filter(classroom => filters.selectedClassroomIds.includes(classroom.classroom_id))
+      .map(classroom => ({
+        ...classroom,
+        days: classroom.days
+          .filter(day => filters.selectedDayIds.includes(day.day_of_week_id))
+          .map(day => ({
+            ...day,
+            time_slots: day.time_slots.filter(slot =>
+              filters.selectedTimeSlotIds.includes(slot.time_slot_id)
+            ),
+          })),
+      }))
+  }, [scheduleData, filters])
+
+  const displayModeCounts = useMemo(() => {
+    let all = 0
+    let permanent = 0
+    let subs = 0
+    let absences = 0
+    let coverageIssues = 0
+
+    baseDataForCounts.forEach(classroom => {
+      classroom.days.forEach(day => {
+        day.time_slots.forEach(slot => {
+          // Total slots (cells)
+          all += 1
+
+          // Permanent staff: at least one non-floater, non-sub assignment
+          if (
+            (slot.assignments || []).some(
+              a => !!a.teacher_id && !a.is_floater && a.is_substitute !== true
+            )
+          ) {
+            permanent += 1
+          }
+
+          // Subs: at least one substitute assignment
+          if ((slot.assignments || []).some(a => a.is_substitute === true)) {
+            subs += 1
+          }
+
+          // Absences: any absence on the slot
+          if (slot.absences && slot.absences.length > 0) {
+            absences += 1
+          }
+
+          // Coverage issues: below required or preferred
+          const scheduleCell = slot.schedule_cell
+          if (
+            scheduleCell &&
+            scheduleCell.is_active &&
+            scheduleCell.class_groups &&
+            scheduleCell.class_groups.length > 0 &&
+            scheduleCell.enrollment_for_staffing
+          ) {
+            const classGroupForRatio = scheduleCell.class_groups.reduce((lowest, current) => {
+              const currentMinAge = current.min_age ?? Infinity
+              const lowestMinAge = lowest.min_age ?? Infinity
+              return currentMinAge < lowestMinAge ? current : lowest
+            })
+
+            const requiredTeachers = classGroupForRatio.required_ratio
+              ? Math.ceil(
+                  scheduleCell.enrollment_for_staffing / classGroupForRatio.required_ratio
+                )
+              : undefined
+            const preferredTeachers = classGroupForRatio.preferred_ratio
+              ? Math.ceil(
+                  scheduleCell.enrollment_for_staffing / classGroupForRatio.preferred_ratio
+                )
+              : undefined
+
+            const classGroupIds = scheduleCell.class_groups.map(cg => cg.id)
+            const coverageAssignments = (slot.assignments || []).filter(a => {
+              if (!a.teacher_id) return false
+              if (a.is_floater) return false
+              if (a.is_substitute === true) return true
+              return !!a.class_id && classGroupIds.includes(a.class_id)
+            })
+
+            const assignedCount = coverageAssignments.length
+            const belowRequired =
+              requiredTeachers !== undefined && assignedCount < requiredTeachers
+            const belowPreferred =
+              preferredTeachers !== undefined && assignedCount < preferredTeachers
+
+            if (belowRequired || belowPreferred) {
+              coverageIssues += 1
+            }
+          }
+        })
+      })
+    })
+
+    return { all, permanent, subs, absences, coverageIssues }
+  }, [baseDataForCounts])
+
   // Calculate slot counts for display
   const slotCounts = useMemo(() => {
     // Count actual slots currently shown
@@ -362,16 +520,31 @@ export default function WeeklySchedulePage() {
       )
     }, 0)
 
-    // Calculate total slots if all filters were selected
-    // Only use days that are selected in Settings (not all available days)
-    const totalIfAllSelected =
-      sortedDays.length * availableTimeSlots.length * availableClassrooms.length
+    // Total possible slots should reflect the actual schedule grid data for the week,
+    // not a theoretical cartesian product (which can include combinations that don't exist).
+    const totalActualForWeek = scheduleData
+      .filter(classroom => filters?.selectedClassroomIds?.includes(classroom.classroom_id) ?? true)
+      .reduce((sum, classroom) => {
+        return (
+          sum +
+          classroom.days
+            .filter(day => filters?.selectedDayIds?.includes(day.day_of_week_id) ?? true)
+            .reduce((daySum, day) => {
+              return (
+                daySum +
+                day.time_slots.filter(slot =>
+                  filters?.selectedTimeSlotIds?.includes(slot.time_slot_id) ?? true
+                ).length
+              )
+            }, 0)
+        )
+      }, 0)
 
     return {
       shown: totalShown,
-      total: totalIfAllSelected,
+      total: totalActualForWeek,
     }
-  }, [filteredData, sortedDays, availableTimeSlots, availableClassrooms])
+  }, [filteredData, scheduleData, filters])
 
   const handleTodayClick = () => {
     setWeekStartISO(getWeekStartISO())
@@ -437,6 +610,7 @@ export default function WeeklySchedulePage() {
             onFilterPanelOpenChange={setFilterPanelOpen}
             filterPanelOpen={filterPanelOpen}
             allowCardClick={false}
+            displayModeCounts={displayModeCounts}
             displayMode={filters?.displayMode ?? 'all-scheduled-staff'}
             onDisplayModeChange={(mode) => {
               setFilters(prev => {
