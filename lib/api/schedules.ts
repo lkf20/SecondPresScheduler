@@ -214,25 +214,20 @@ export async function getScheduleByDayAndSlot(
   schoolId?: string
 ): Promise<TeacherScheduleWithDetails | null> {
   const supabase = await createClient()
+  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  
   let query = supabase
     .from('teacher_schedules')
     .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), class:class_groups(*), classroom:classrooms(*)')
     .eq('teacher_id', teacherId)
     .eq('day_of_week_id', dayOfWeekId)
     .eq('time_slot_id', timeSlotId)
-
-  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  
   if (effectiveSchoolId) {
     query = query.eq('school_id', effectiveSchoolId)
   }
 
-  const { data, error } = await query
-    .from('teacher_schedules')
-    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), class:class_groups(*), classroom:classrooms(*)')
-    .eq('teacher_id', teacherId)
-    .eq('day_of_week_id', dayOfWeekId)
-    .eq('time_slot_id', timeSlotId)
-    .maybeSingle()
+  const { data, error } = await query.maybeSingle()
 
   if (error) throw error
   return data as TeacherScheduleWithDetails | null
