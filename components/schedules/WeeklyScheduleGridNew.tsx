@@ -20,8 +20,8 @@ interface WeeklyScheduleGridNewProps {
     timeSlotId: string
   } | null
   allowCardClick?: boolean // If false, cards are not clickable (default: true)
-  displayMode?: 'permanent-only' | 'permanent-flexible' | 'substitutes-only' | 'all-scheduled-staff'
-  onDisplayModeChange?: (mode: 'permanent-only' | 'permanent-flexible' | 'substitutes-only' | 'all-scheduled-staff') => void
+  displayMode?: 'permanent-only' | 'permanent-flexible' | 'substitutes-only' | 'all-scheduled-staff' | 'coverage-issues' | 'absences'
+  onDisplayModeChange?: (mode: 'permanent-only' | 'permanent-flexible' | 'substitutes-only' | 'all-scheduled-staff' | 'coverage-issues' | 'absences') => void
   slotCounts?: { shown: number; total: number } // Slot counts for display
 }
 
@@ -118,6 +118,8 @@ export default function WeeklyScheduleGridNew({
   const assignmentCounts = useMemo(() => {
     let allCount = 0
     let permanentCount = 0
+    let coverageIssuesCount = 0
+    let absencesCount = 0
 
     data.forEach((classroom) => {
       classroom.days.forEach((day) => {
@@ -129,13 +131,50 @@ export default function WeeklyScheduleGridNew({
               permanentCount++
             }
           })
+
+          // Count absences from the absences array (if available)
+          if (slot.absences && slot.absences.length > 0) {
+            absencesCount++
+          }
+
+          // Check if slot has coverage issues
+          const scheduleCell = slot.schedule_cell
+          if (scheduleCell && scheduleCell.is_active && scheduleCell.class_groups && scheduleCell.class_groups.length > 0) {
+            // Find class group with lowest min_age for ratio calculation
+            const classGroupForRatio = scheduleCell.class_groups.reduce((lowest, current) => {
+              const currentMinAge = current.min_age ?? Infinity
+              const lowestMinAge = lowest.min_age ?? Infinity
+              return currentMinAge < lowestMinAge ? current : lowest
+            })
+
+            const requiredTeachers = classGroupForRatio.required_ratio
+              ? Math.ceil(scheduleCell.enrollment_for_staffing! / classGroupForRatio.required_ratio)
+              : undefined
+            const preferredTeachers = classGroupForRatio.preferred_ratio
+              ? Math.ceil(scheduleCell.enrollment_for_staffing! / classGroupForRatio.preferred_ratio)
+              : undefined
+
+            const classGroupIds = scheduleCell.class_groups.map(cg => cg.id)
+            const assignedCount = slot.assignments.filter(
+              a => a.teacher_id && a.class_id && classGroupIds.includes(a.class_id)
+            ).length
+
+            const belowRequired = requiredTeachers !== undefined && assignedCount < requiredTeachers
+            const belowPreferred = preferredTeachers !== undefined && assignedCount < preferredTeachers
+
+            // Count as coverage issue if below required or below preferred
+            if (belowRequired || belowPreferred) {
+              coverageIssuesCount++
+            }
+          }
         })
       })
     })
 
     // For now, use the same count for all (since we can't distinguish substitutes)
     // The actual filtering happens via displayMode in FilterPanel
-    return { all: allCount, subs: allCount, permanent: permanentCount }
+    // Absences count is a placeholder - need to implement proper absence detection
+    return { all: allCount, subs: allCount, permanent: permanentCount, coverageIssues: coverageIssuesCount, absences: absencesCount }
   }, [data])
 
   // Extract unique days and time slots from data, filtered by selectedDayIds
@@ -419,7 +458,7 @@ export default function WeeklyScheduleGridNew({
     return (
       <>
         {/* Legend */}
-        <div className="mb-4 p-3 bg-gray-50 rounded-md border border-gray-200">
+        <div className="mb-6 p-3 bg-gray-100 rounded-md border border-gray-200">
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-gray-700">Key:</span>
@@ -462,8 +501,10 @@ export default function WeeklyScheduleGridNew({
         <div className="mb-4 flex flex-wrap items-center gap-2">
           {[
             { value: 'all-scheduled-staff' as const, label: `All (${assignmentCounts.all})` },
-            { value: 'substitutes-only' as const, label: `Subs only (${assignmentCounts.subs})` },
-            { value: 'permanent-only' as const, label: `Permanent staff only (${assignmentCounts.permanent})` },
+            { value: 'coverage-issues' as const, label: `Coverage Issues (${assignmentCounts.coverageIssues})` },
+            { value: 'substitutes-only' as const, label: `Subs (${assignmentCounts.subs})` },
+            { value: 'absences' as const, label: `Absences (${assignmentCounts.absences})` },
+            { value: 'permanent-only' as const, label: `Permanent staff (${assignmentCounts.permanent})` },
           ].map((option) => (
             <button
               key={option.value}
@@ -733,7 +774,7 @@ export default function WeeklyScheduleGridNew({
     return (
       <>
         {/* Legend */}
-        <div className="mb-4 p-3 bg-gray-50 rounded-md border border-gray-200">
+        <div className="mb-6 p-3 bg-gray-100 rounded-md border border-gray-200">
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-gray-700">Key:</span>
@@ -776,8 +817,10 @@ export default function WeeklyScheduleGridNew({
         <div className="mb-4 flex flex-wrap items-center gap-2">
           {[
             { value: 'all-scheduled-staff' as const, label: `All (${assignmentCounts.all})` },
-            { value: 'substitutes-only' as const, label: `Subs only (${assignmentCounts.subs})` },
-            { value: 'permanent-only' as const, label: `Permanent staff only (${assignmentCounts.permanent})` },
+            { value: 'coverage-issues' as const, label: `Coverage Issues (${assignmentCounts.coverageIssues})` },
+            { value: 'substitutes-only' as const, label: `Subs (${assignmentCounts.subs})` },
+            { value: 'absences' as const, label: `Absences (${assignmentCounts.absences})` },
+            { value: 'permanent-only' as const, label: `Permanent staff (${assignmentCounts.permanent})` },
           ].map((option) => (
             <button
               key={option.value}

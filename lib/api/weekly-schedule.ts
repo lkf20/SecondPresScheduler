@@ -47,6 +47,12 @@ export interface WeeklyScheduleDataByClassroom {
           time_slot_name: string | null
           time_slot_display_order: number | null
           assignments: WeeklyScheduleData['assignments']
+          absences?: Array<{
+            teacher_id: string
+            teacher_name: string
+            has_sub: boolean
+            is_partial: boolean
+          }>
           schedule_cell: {
             id: string
             is_active: boolean
@@ -67,6 +73,54 @@ export interface WeeklyScheduleDataByClassroom {
 
 export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: string[], weekStartISO?: string) {
   const supabase = await createClient()
+  
+  // Fetch time off shifts for the week to identify uncovered absences
+  let timeOffShifts: Array<{
+    id: string
+    date: string
+    day_of_week_id: string | null
+    time_slot_id: string
+    teacher_id: string
+    time_off_request_id: string
+  }> = []
+  
+  if (weekStartISO) {
+    try {
+      const weekStart = new Date(weekStartISO + 'T00:00:00')
+      const weekEnd = new Date(weekStart)
+      weekEnd.setDate(weekEnd.getDate() + 6)
+      
+      const { data: timeOffShiftsData, error: timeOffShiftsError } = await supabase
+        .from('time_off_shifts')
+        .select(`
+          id,
+          date,
+          day_of_week_id,
+          time_slot_id,
+          time_off_request_id,
+          time_off_requests!inner(teacher_id, status)
+        `)
+        .gte('date', weekStartISO)
+        .lte('date', weekEnd.toISOString().split('T')[0])
+        .eq('time_off_requests.status', 'active')
+      
+      if (timeOffShiftsError) {
+        console.warn('Error fetching time_off_shifts:', timeOffShiftsError.message)
+      } else if (timeOffShiftsData) {
+        timeOffShifts = timeOffShiftsData.map((shift: any) => ({
+          id: shift.id,
+          date: shift.date,
+          day_of_week_id: shift.day_of_week_id,
+          time_slot_id: shift.time_slot_id,
+          teacher_id: shift.time_off_requests?.teacher_id || '',
+          time_off_request_id: shift.time_off_request_id,
+        }))
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      console.warn('Error fetching time_off_shifts:', errorMessage)
+    }
+  }
   
   // Get all days of week and time slots
   // Note: days_of_week and time_slots are reference data and don't have school_id columns
@@ -269,6 +323,8 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
                        'Unknown',
           class_id: null, // sub_assignments doesn't have class_id - will use first class group from schedule_cell
           class_name: null,
+          // Note: teacher_id in sub_assignments represents the absent teacher
+          // sub_id represents the substitute covering for them
         }))
       }
     } catch (err) {
@@ -381,6 +437,17 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
             })
           }
           
+          // Track absences from sub_assignments and time_off_shifts
+          const absences: Array<{
+            teacher_id: string
+            teacher_name: string
+            has_sub: boolean
+            is_partial: boolean
+          }> = []
+          
+          // Track unique absent teachers from sub_assignments (covered absences)
+          const absentTeachers = new Map<string, { teacher_id: string; teacher_name: string; has_sub: boolean; is_partial: boolean }>()
+          
           // Add substitute assignments for this day/time/classroom (if weekStartISO is provided)
           if (weekStartISO && day.id) {
             const subsForSlot = subAssignments.filter(
@@ -390,6 +457,16 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
             )
             
             for (const sub of subsForSlot) {
+              // sub.teacher_id is the absent teacher, sub.sub_id is the substitute
+              if (sub.teacher_id && !absentTeachers.has(sub.teacher_id)) {
+                absentTeachers.set(sub.teacher_id, {
+                  teacher_id: sub.teacher_id,
+                  teacher_name: sub.teacher_name,
+                  has_sub: true, // If there's a sub_assignment, there's a sub
+                  is_partial: false, // TODO: Determine if partial based on is_partial field
+                })
+              }
+              
               // Find matching class group if class_id is set
               const matchingClassGroup = sub.class_id && classGroupIds.includes(sub.class_id)
                 ? classGroups.find(cg => cg.id === sub.class_id)
@@ -411,6 +488,53 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
               })
             }
           }
+          
+          // Check for uncovered absences from time_off_shifts (if weekStartISO is provided)
+          if (weekStartISO && day.id) {
+            const timeOffForSlot = timeOffShifts.filter(
+              (tos) => tos.day_of_week_id === day.id &&
+                      tos.time_slot_id === timeSlot.id
+            )
+            
+            // Get teacher names for time off shifts
+            const teacherIds = Array.from(new Set(timeOffForSlot.map(tos => tos.teacher_id)))
+            const { data: teachersData } = await supabase
+              .from('staff')
+              .select('id, first_name, last_name, display_name')
+              .in('id', teacherIds)
+            
+            const teachersMap = new Map(
+              (teachersData || []).map((t: any) => [
+                t.id,
+                t.display_name || `${t.first_name || ''} ${t.last_name || ''}`.trim() || 'Unknown'
+              ])
+            )
+            
+            for (const timeOff of timeOffForSlot) {
+              // Check if this absence is already covered by a sub_assignment
+              const hasSub = subAssignments.some(
+                (sa) => sa.teacher_id === timeOff.teacher_id &&
+                       sa.day_of_week_id === day.id &&
+                       sa.time_slot_id === timeSlot.id &&
+                       sa.classroom_id === classroom.id
+              )
+              
+              // Only add if not already tracked (from sub_assignments) or if uncovered
+              if (!absentTeachers.has(timeOff.teacher_id)) {
+                absentTeachers.set(timeOff.teacher_id, {
+                  teacher_id: timeOff.teacher_id,
+                  teacher_name: teachersMap.get(timeOff.teacher_id) || 'Unknown',
+                  has_sub: hasSub,
+                  is_partial: false, // TODO: Determine if partial based on coverage
+                })
+              }
+            }
+          }
+          
+          // Convert absent teachers map to array
+          for (const [_, absence] of absentTeachers) {
+            absences.push(absence)
+          }
         }
         
           dayTimeSlots.push({
@@ -421,6 +545,7 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
             time_slot_start_time: timeSlot.default_start_time,
             time_slot_end_time: timeSlot.default_end_time,
             assignments,
+            absences: absences.length > 0 ? absences : undefined,
             schedule_cell: scheduleCell ? {
               id: scheduleCell.id,
               is_active: scheduleCell.is_active,

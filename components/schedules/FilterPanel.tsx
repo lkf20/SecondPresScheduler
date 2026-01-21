@@ -48,7 +48,7 @@ export interface FilterState {
     fullyStaffed: boolean
     inactive: boolean
   }
-  displayMode: 'permanent-only' | 'permanent-flexible' | 'substitutes-only' | 'all-scheduled-staff'
+  displayMode: 'permanent-only' | 'permanent-flexible' | 'substitutes-only' | 'all-scheduled-staff' | 'coverage-issues' | 'absences'
   layout: 'classrooms-x-days' | 'days-x-classrooms'
 }
 

@@ -270,6 +270,18 @@ export default function WeeklySchedulePage() {
                   assignedCount >= requiredTeachers &&
                   (preferredTeachers === undefined || assignedCount >= preferredTeachers)
 
+                // Handle coverage-issues mode
+                if (filters.displayMode === 'coverage-issues') {
+                  // Show only slots with coverage issues: belowRequired or belowPreferred
+                  return belowRequired || belowPreferred
+                }
+
+                // Handle absences mode
+                if (filters.displayMode === 'absences') {
+                  // Show only slots with absences (uncovered, partial coverage, or any absence)
+                  return slot.absences && slot.absences.length > 0
+                }
+
                 if (belowRequired) return filters.displayFilters.belowRequired
                 if (belowPreferred) return filters.displayFilters.belowPreferred
                 if (fullyStaffed) return filters.displayFilters.fullyStaffed
