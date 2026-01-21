@@ -177,9 +177,11 @@ export default function WeeklyScheduleGridNew({
               ? Math.ceil(scheduleCell.enrollment_for_staffing! / classGroupForRatio.preferred_ratio)
               : undefined
 
-            const classGroupIds = scheduleCell.class_groups.map(cg => cg.id)
+            // Count all teachers assigned to this classroom/day/time slot
+            // Teachers are assigned to classrooms, not specific class groups
+            // All teachers in the assignments array are already filtered by classroom_id in the API
             const assignedCount = slot.assignments.filter(
-              a => a.teacher_id && a.class_id && classGroupIds.includes(a.class_id)
+              a => a.teacher_id && !a.is_substitute // Count regular teachers, exclude substitutes (they're counted separately)
             ).length
 
             const belowRequired = requiredTeachers !== undefined && assignedCount < requiredTeachers

@@ -208,7 +208,6 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
     .select(`
       *,
       teacher:staff!teacher_schedules_teacher_id_fkey(id, first_name, last_name, display_name),
-      class:class_groups(id, name),
       day_of_week:days_of_week(*),
       time_slot:time_slots(*),
       classroom:classrooms(*)
@@ -218,6 +217,25 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
   if (schedulesError) {
     console.error('API Error: Failed to fetch teacher schedules:', schedulesError)
     throw new Error(`Failed to fetch teacher schedules: ${schedulesError.message}`)
+  }
+  
+  // Fetch class_groups separately if class_id exists
+  // This avoids the schema cache issue with nullable foreign keys
+  if (schedules && schedules.length > 0) {
+    const classIds = [...new Set(schedules.map((s: any) => s.class_id).filter(Boolean))]
+    if (classIds.length > 0) {
+      const { data: classGroups } = await supabase
+        .from('class_groups')
+        .select('id, name')
+        .in('id', classIds)
+      
+      const classGroupsMap = new Map((classGroups || []).map((cg: any) => [cg.id, cg]))
+      schedules.forEach((schedule: any) => {
+        if (schedule.class_id) {
+          schedule.class = classGroupsMap.get(schedule.class_id) || null
+        }
+      })
+    }
   }
   
   // Get staffing rules

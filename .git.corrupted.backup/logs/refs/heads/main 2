@@ -1,0 +1,3 @@
+0000000000000000000000000000000000000000 0fd85c2500098170cbdc26b274ad028e87a376f3 Lisa Bohn <lisafbohn@gmail.com> 1766536161 -0500	commit (initial): Initial commit from Create Next App
+0fd85c2500098170cbdc26b274ad028e87a376f3 fdd2d5bab2008007511a9693ebbb2dbc5407352a Lisa Bohn <lisafbohn@gmail.com> 1766613485 -0500	commit: Initial commit: Next.js scheduler app with Supabase integration
+fdd2d5bab2008007511a9693ebbb2dbc5407352a fdd2d5bab2008007511a9693ebbb2dbc5407352a Lisa Bohn <lisafbohn@gmail.com> 1766613663 -0500	Branch: renamed refs/heads/main to refs/heads/main
