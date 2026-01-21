@@ -1,0 +1,40 @@
+0000000000000000000000000000000000000000 fdd2d5bab2008007511a9693ebbb2dbc5407352a Lisa Bohn <lisafbohn@gmail.com> 1766613727 -0500	branch: Created from HEAD
+fdd2d5bab2008007511a9693ebbb2dbc5407352a 04d0a3011ddc97461266bd38357f5c3abc0dcb21 Lisa Bohn <lisafbohn@gmail.com> 1766852971 -0500	commit: Major feature updates: drag-and-drop sorting, weekly schedule restructure, and UI improvements
+04d0a3011ddc97461266bd38357f5c3abc0dcb21 ecda643fe914bc7b9909c3294365f6928a0aebd1 Lisa Bohn <lisafbohn@gmail.com> 1767639576 -0500	commit: Improve weekly schedule grid: add spacer rows between days, freeze time column, and add visual separation
+ecda643fe914bc7b9909c3294365f6928a0aebd1 9228bf4baff08b04902abfecfa92220ecaa4ee7a Lisa Bohn <lisafbohn@gmail.com> 1767732578 -0500	commit: Fix class groups display and real-time updates in schedule side panel
+9228bf4baff08b04902abfecfa92220ecaa4ee7a 1bb05747fb1ec040fd1944d6f2fe12d4820b00c3 Lisa Bohn <lisafbohn@gmail.com> 1767733726 -0500	commit: chore: set up pre-commit hooks and fix TypeScript errors
+1bb05747fb1ec040fd1944d6f2fe12d4820b00c3 93b77ea963bcbd13ada33d88d8d740243625f0e8 Lisa Bohn <lisafbohn@gmail.com> 1767733747 -0500	commit: fix: update TypeScript fixes for class groups and schedules
+93b77ea963bcbd13ada33d88d8d740243625f0e8 5048d2006a626d7b7f0e2afbb3cc262900b47c30 Lisa Bohn <lisafbohn@gmail.com> 1767734094 -0500	merge feature/setup-prettier-and-improvements: Fast-forward
+5048d2006a626d7b7f0e2afbb3cc262900b47c30 5622618295ac1a5c3947fc8e0e2cacdfaab02c94 Lisa Bohn <lisafbohn@gmail.com> 1767734236 -0500	merge chore/format-codebase: Fast-forward
+5622618295ac1a5c3947fc8e0e2cacdfaab02c94 ed928fb041ab9a355597d144f2db820c13a8d990 Lisa Bohn <lisafbohn@gmail.com> 1767734526 -0500	merge test/add-critical-tests: Fast-forward
+ed928fb041ab9a355597d144f2db820c13a8d990 541961b8e117a863ba6b0eea26fe2073b7526043 Lisa Bohn <lisafbohn@gmail.com> 1767738670 -0500	merge test/add-datatable-tests: Fast-forward
+541961b8e117a863ba6b0eea26fe2073b7526043 f8deb596b69b379fcdf6d69e5880b934bcb6a580 Lisa Bohn <lisafbohn@gmail.com> 1767738967 -0500	merge feat/improve-teacher-chip-styling: Fast-forward
+f8deb596b69b379fcdf6d69e5880b934bcb6a580 984785be2f38ec8670e2cfde3f373d968f362117 Lisa Bohn <lisafbohn@gmail.com> 1767739297 -0500	merge fix/class-group-teacher-alignment: Fast-forward
+984785be2f38ec8670e2cfde3f373d968f362117 5c4cf0f100c91c10d2bf66ac03a3411973cf62fa Lisa Bohn <lisafbohn@gmail.com> 1767740312 -0500	merge feat/allow-teachers-without-class-groups: Fast-forward
+5c4cf0f100c91c10d2bf66ac03a3411973cf62fa 83597014050bf0d332dfc3aa0c97d63b6a72fec0 Lisa Bohn <lisafbohn@gmail.com> 1767740412 -0500	merge fix/change-teacher-info-message-color: Fast-forward
+83597014050bf0d332dfc3aa0c97d63b6a72fec0 dfbee4c45cff7ea5e0a9e9f79b01a83735f6c636 Lisa Bohn <lisafbohn@gmail.com> 1767740574 -0500	merge fix/preserve-teachers-when-adding-class-groups: Fast-forward
+dfbee4c45cff7ea5e0a9e9f79b01a83735f6c636 f5225de1c239ad64b65cd616cb9e50e51ec2771d Lisa Bohn <lisafbohn@gmail.com> 1767749265 -0500	commit: fix: improve teacher assignment UX when class groups change
+f5225de1c239ad64b65cd616cb9e50e51ec2771d fab5a9f33e64292ac5ddd0cc39f75660ed341a01 Lisa Bohn <lisafbohn@gmail.com> 1767749566 -0500	commit: docs: add future features and testing items to TODO tracker
+fab5a9f33e64292ac5ddd0cc39f75660ed341a01 e4a1c334a3e503404fbd2d9f5d8cd5743cb8e3d4 Lisa Bohn <lisafbohn@gmail.com> 1767750097 -0500	merge test/deletion-deactivation-handling: Merge made by the 'ort' strategy.
+e4a1c334a3e503404fbd2d9f5d8cd5743cb8e3d4 db40bbee133f7469d850e76019f6e3d725ded3ae Lisa Bohn <lisafbohn@gmail.com> 1767750431 -0500	merge fix/sub-finder-api-endpoint: Merge made by the 'ort' strategy.
+db40bbee133f7469d850e76019f6e3d725ded3ae b71986918b63ceedf81899f1bc0b71a51182327d Lisa Bohn <lisafbohn@gmail.com> 1767750671 -0500	merge fix/sub-finder-data-structure: Merge made by the 'ort' strategy.
+b71986918b63ceedf81899f1bc0b71a51182327d 5e09076e5655d30e8d741d506964e9db096ecfcc Lisa Bohn <lisafbohn@gmail.com> 1767751012 -0500	merge feature/sub-finder-filters-popover: Merge made by the 'ort' strategy.
+5e09076e5655d30e8d741d506964e9db096ecfcc ca72cf29b80bc9d2b46f259e19876198bdd0df50 Lisa Bohn <lisafbohn@gmail.com> 1767751030 -0500	commit: fix: update useEffect dependencies for filter changes
+ca72cf29b80bc9d2b46f259e19876198bdd0df50 b2d8ee30331ab9f9b68aa31d5fc6b78a43f4bc8c Lisa Bohn <lisafbohn@gmail.com> 1767751252 -0500	merge feature/prominent-dates-in-header: Merge made by the 'ort' strategy.
+b2d8ee30331ab9f9b68aa31d5fc6b78a43f4bc8c 714425877dcdb66f60313cbe85e04ef416d846dc Lisa Bohn <lisafbohn@gmail.com> 1767751563 -0500	commit: refactor: remove duplicate dates from toolbar and add vertical separator
+714425877dcdb66f60313cbe85e04ef416d846dc dbc991f1d3f581ea46431fd06cc860429e30380a Lisa Bohn <lisafbohn@gmail.com> 1768359868 -0500	merge feature/two-theme-system: Fast-forward
+dbc991f1d3f581ea46431fd06cc860429e30380a 14839f46b9c20fe807f2392e32ff7028e852b00c Lisa Bohn <lisafbohn@gmail.com> 1768360888 -0500	merge feature/ui-nav-spacing: Fast-forward
+14839f46b9c20fe807f2392e32ff7028e852b00c 6f93e301e540807cf80f0d8f2323f2f8dc82beea Lisa Bohn <lisafbohn@gmail.com> 1768361446 -0500	merge feature/instant-theme-load: Fast-forward
+6f93e301e540807cf80f0d8f2323f2f8dc82beea ba832fc33499fdca07094572bcb01b3c206819de Lisa Bohn <lisafbohn@gmail.com> 1768413160 -0500	merge feature/dashboard-ui-improvements: Fast-forward
+ba832fc33499fdca07094572bcb01b3c206819de 23c7097d120ed64be0f5ba7387049874a0671c6f Lisa Bohn <lisafbohn@gmail.com> 1768413635 -0500	merge bugfix/typescript-errors-and-test-failures: Fast-forward
+23c7097d120ed64be0f5ba7387049874a0671c6f 40cf0fe2070a75a849d9513f2b767f8b355a548f Lisa Bohn <lisafbohn@gmail.com> 1768413812 -0500	merge fix/summary-cards-width: Fast-forward
+40cf0fe2070a75a849d9513f2b767f8b355a548f baa016f05937aec2b7de2a66715d06cb3fb0ea1b Lisa Bohn <lisafbohn@gmail.com> 1768504810 -0500	merge refactor/shared-time-off-card-component: Fast-forward
+baa016f05937aec2b7de2a66715d06cb3fb0ea1b 27b418eb251ae300dfda586693166eff534d4868 Lisa Bohn <lisafbohn@gmail.com> 1768514347 -0500	merge refactor/standardize-ui-colors-components: Fast-forward
+27b418eb251ae300dfda586693166eff534d4868 e748b40893416eb84855722f97e4b6a18489f447 Lisa Bohn <lisafbohn@gmail.com> 1768686227 -0500	merge feature/quick-actions: Merge made by the 'ort' strategy.
+e748b40893416eb84855722f97e4b6a18489f447 0edf474998020959b21b2206d8b8076ce9d3829b Lisa Bohn <lisafbohn@gmail.com> 1768821827 -0500	merge feature/ui-improvements: Merge made by the 'ort' strategy.
+0edf474998020959b21b2206d8b8076ce9d3829b fc36f4ed15f5b0ddaf4e2abdba6237fa14f068dd Lisa Bohn <lisafbohn@gmail.com> 1768852051 -0500	merge feature/react-query: Merge made by the 'ort' strategy.
+fc36f4ed15f5b0ddaf4e2abdba6237fa14f068dd 72c62398a6f6c95579950b751cd87692f5d4701f Lisa Bohn <lisafbohn@gmail.com> 1768852376 -0500	commit: fix(build): Restore missing route files after merge
+72c62398a6f6c95579950b751cd87692f5d4701f 37046b289e45254d947c37fd1c14bfc7c69d6f2d Lisa Bohn <lisafbohn@gmail.com> 1768854373 -0500	merge fix/class-form-typescript-error: Merge made by the 'ort' strategy.
+37046b289e45254d947c37fd1c14bfc7c69d6f2d 3a3f34d311280065a4509de62a00b47d49cd0d1b Lisa Bohn <lisafbohn@gmail.com> 1768915954 -0500	merge fix/typescript-build-errors: Fast-forward
+3a3f34d311280065a4509de62a00b47d49cd0d1b 6b34fcc5babc9cd5938f44465bb5a73df57a7a7e Lisa Bohn <lisafbohn@gmail.com> 1768948420 -0500	merge feature/add-baseline-schedule: Merge made by the 'ort' strategy.
+6b34fcc5babc9cd5938f44465bb5a73df57a7a7e 01493b43a8c6c44556eb157e496a38e6a59c6a58 Lisa Bohn <lisafbohn@gmail.com> 1768948541 -0500	commit: fix(baseline-schedule): Move useCallback to top level to fix hooks error

@@ -129,15 +129,6 @@ export async function POST(request: Request) {
  */
 export async function GET() {
   try {
-    // Require schoolId from session
-    const schoolId = await getUserSchoolId()
-    if (!schoolId) {
-      return NextResponse.json(
-        { error: 'User profile not found or missing school_id. Please ensure your profile is set up.' },
-        { status: 403 }
-      )
-    }
-
     const supabase = await createClient()
 
     // Get current user

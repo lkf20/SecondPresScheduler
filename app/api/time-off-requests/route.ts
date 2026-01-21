@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getTimeOffRequests } from '@/lib/api/time-off'
-import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
+import { getTimeOffShifts, type TimeOffShiftWithDetails } from '@/lib/api/time-off-shifts'
 import { transformTimeOffCardData, type TimeOffCardData } from '@/lib/utils/time-off-card-data'
 import { createErrorResponse } from '@/lib/utils/errors'
-import { getUserSchoolId } from '@/lib/utils/auth'
 
 /**
  * Unified API endpoint for time off requests
@@ -24,15 +23,6 @@ import { getUserSchoolId } from '@/lib/utils/auth'
  */
 export async function GET(request: NextRequest) {
   try {
-    // Require schoolId from session
-    const schoolId = await getUserSchoolId()
-    if (!schoolId) {
-      return NextResponse.json(
-        { error: 'User profile not found or missing school_id. Please ensure your profile is set up.' },
-        { status: 403 }
-      )
-    }
-
     const searchParams = request.nextUrl.searchParams
     
     // Parse filters
@@ -54,30 +44,6 @@ export async function GET(request: NextRequest) {
     
     // Fetch time off requests
     const timeOffRequests = await getTimeOffRequests({ statuses: statuses as any[] })
-    
-    // Log for debugging - check for Anupa B.
-    console.log('[Time Off Requests] Total requests fetched:', timeOffRequests.length)
-    const anupaRequest = timeOffRequests.find((req: any) => {
-      const teacher = req.teacher
-      const name = teacher?.display_name || `${teacher?.first_name} ${teacher?.last_name}`.trim() || ''
-      return name.toLowerCase().includes('anupa') || name.toLowerCase().includes('b.')
-    })
-    if (anupaRequest) {
-      console.log('[Time Off Requests] Found Anupa B. request:', {
-        id: anupaRequest.id,
-        teacher_id: anupaRequest.teacher_id,
-        start_date: anupaRequest.start_date,
-        end_date: anupaRequest.end_date,
-        status: anupaRequest.status,
-        teacher_name: anupaRequest.teacher?.display_name || `${anupaRequest.teacher?.first_name} ${anupaRequest.teacher?.last_name}`.trim(),
-      })
-    } else {
-      console.log('[Time Off Requests] Anupa B. request NOT found in database query')
-      console.log('[Time Off Requests] Status filter:', statuses)
-      console.log('[Time Off Requests] Sample teacher names:', timeOffRequests.slice(0, 5).map((r: any) => 
-        r.teacher?.display_name || `${r.teacher?.first_name} ${r.teacher?.last_name}`.trim()
-      ))
-    }
     
     // Apply date range filter
     const getOverlap = (reqStart: string, reqEnd: string, rangeStart: string | null, rangeEnd: string | null) => {
@@ -125,7 +91,7 @@ export async function GET(request: NextRequest) {
     if (includeClassrooms && teacherIds.length > 0) {
       const { data: teacherSchedules } = await supabase
         .from('teacher_schedules')
-        .select('teacher_id, day_of_week_id, time_slot_id, classroom:classrooms(id, name, color), class:class_groups(name)')
+        .select('teacher_id, day_of_week_id, time_slot_id, classroom:classrooms(id, name, color)')
         .in('teacher_id', teacherIds)
       
       ;(teacherSchedules || []).forEach((schedule: any) => {
@@ -152,7 +118,7 @@ export async function GET(request: NextRequest) {
     const results = await Promise.all(
       filteredRequests.map(async (request) => {
         // Get shifts
-        let shifts: Awaited<ReturnType<typeof getTimeOffShifts>>
+        let shifts: TimeOffShiftWithDetails[] = []
         try {
           shifts = await getTimeOffShifts(request.id)
         } catch (error) {
@@ -170,7 +136,6 @@ export async function GET(request: NextRequest) {
             .from('sub_assignments')
             .select('date, time_slot_id, is_partial, assignment_type, sub:staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name)')
             .eq('teacher_id', request.teacher_id)
-            .eq('status', 'active') // Only active assignments
             .gte('date', requestStartDate)
             .lte('date', requestEndDate)
           

@@ -224,6 +224,9 @@ export async function cancelTimeOffRequest(
     const startDate = dates[0]
     const endDate = dates[dates.length - 1]
 
+    // Get school_id from the original coverage request
+    const schoolId = (coverageRequest as any).school_id || '00000000-0000-0000-0000-000000000001'
+
     // Create new coverage request for extra coverage
     const { data: newCoverageRequest, error: newCrError } = await supabase
       .from('coverage_requests')
@@ -236,6 +239,7 @@ export async function cancelTimeOffRequest(
         status: 'open', // Will be updated to 'filled' if all shifts are covered
         total_shifts: shiftsToKeep.length,
         covered_shifts: assignmentsToKeep.length,
+        school_id: schoolId,
       })
       .select()
       .single()
@@ -257,6 +261,7 @@ export async function cancelTimeOffRequest(
       start_time: shift.start_time,
       end_time: shift.end_time,
       status: 'active',
+      school_id: schoolId,
     }))
 
     const { data: newShifts, error: newShiftsError } = await supabase

@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
     const classroomColorMap = new Map<string, string | null>() // classroom_name -> color
     const { data: teacherSchedules, error: scheduleError } = await supabase
       .from('teacher_schedules')
-      .select('day_of_week_id, time_slot_id, classroom:classrooms(name, color), class:class_groups(name)')
+      .select('day_of_week_id, time_slot_id, classroom:classrooms(name, color)')
       .eq('teacher_id', timeOffRequest.teacher_id)
 
     if (scheduleError) {
@@ -129,7 +129,8 @@ export async function POST(request: NextRequest) {
             classroomColorMap.set(schedule.classroom.name, schedule.classroom.color || null)
           }
         }
-        if (schedule.class?.name) entry.classes.add(schedule.class.name)
+        // Note: class groups are no longer directly on teacher_schedules
+        // They can be retrieved from class_classroom_mappings if needed
         scheduleLookup.set(key, entry)
       })
     }

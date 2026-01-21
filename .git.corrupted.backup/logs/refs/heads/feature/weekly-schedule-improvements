@@ -1,0 +1,19 @@
+0000000000000000000000000000000000000000 37046b289e45254d947c37fd1c14bfc7c69d6f2d Lisa Bohn <lisafbohn@gmail.com> 1768854379 -0500	branch: Created from HEAD
+37046b289e45254d947c37fd1c14bfc7c69d6f2d 5b5396d343c07c3ee2764dfa8e1e67e759c295cf Lisa Bohn <lisafbohn@gmail.com> 1768854617 -0500	commit: fix(auth): Handle null schoolId in SchoolProvider to prevent Internal Server Error
+5b5396d343c07c3ee2764dfa8e1e67e759c295cf 3a3f34d311280065a4509de62a00b47d49cd0d1b Lisa Bohn <lisafbohn@gmail.com> 1768918212 -0500	merge develop: Fast-forward
+3a3f34d311280065a4509de62a00b47d49cd0d1b b6bb52aecec1690c548117854bba8092ce0a67be Lisa Bohn <lisafbohn@gmail.com> 1768920435 -0500	commit: feat(weekly-schedule): Improve layout persistence and set Days × Classrooms as default
+b6bb52aecec1690c548117854bba8092ce0a67be 5410247c71e942e12c73db5f7900f895d1da327f Lisa Bohn <lisafbohn@gmail.com> 1768939255 -0500	commit: feat(schedules): Improve Weekly Schedule Classrooms x Days layout
+5410247c71e942e12c73db5f7900f895d1da327f d2e97bfff16bb3e989d3378753ec9782630b3cf9 Lisa Bohn <lisafbohn@gmail.com> 1768941091 -0500	commit: feat(schedules): Fix sticky positioning for Weekly Schedule headers
+d2e97bfff16bb3e989d3378753ec9782630b3cf9 a1e1ac604674494972696457a2a9a55f284e49f3 Lisa Bohn <lisafbohn@gmail.com> 1768943495 -0500	commit: fix(schedules): Constrain grid container width to prevent page-level horizontal scroll
+a1e1ac604674494972696457a2a9a55f284e49f3 8ae9d004b4c36b00c7106ff139fdb55bf22c210b Lisa Bohn <lisafbohn@gmail.com> 1768944614 -0500	commit: feat(schedules): Standardize row heights and card dimensions across layouts
+8ae9d004b4c36b00c7106ff139fdb55bf22c210b d344e11df05e47c9ec2fcb841f1aae5f9ed44758 Lisa Bohn <lisafbohn@gmail.com> 1768947584 -0500	commit: feat(weekly-schedule): Add week picker for navigating between weeks
+d344e11df05e47c9ec2fcb841f1aae5f9ed44758 b76c3296bb7ba1362f3f8db7243b059f1fa6dd43 Lisa Bohn <lisafbohn@gmail.com> 1768948663 -0500	merge develop: Merge made by the 'ort' strategy.
+b76c3296bb7ba1362f3f8db7243b059f1fa6dd43 bac44edce8f83d25be9664caa6a3dad0a9ce83df Lisa Bohn <lisafbohn@gmail.com> 1768949476 -0500	commit: feat(weekly-schedule): Disable card clicking for Weekly Schedule view
+bac44edce8f83d25be9664caa6a3dad0a9ce83df 3857203ad3b11f2efa61464b1984508d80c89c8c Lisa Bohn <lisafbohn@gmail.com> 1768949860 -0500	commit: feat(weekly-schedule): Improve week picker styling and layout
+3857203ad3b11f2efa61464b1984508d80c89c8c dbab127493cfaa5d558237400ebe09be7707d731 Lisa Bohn <lisafbohn@gmail.com> 1768950249 -0500	commit: feat(weekly-schedule): Add Substitute and Absent key items to legend
+dbab127493cfaa5d558237400ebe09be7707d731 ccf59913ddb48bd34d43d4eb8be26a63f20d20fe Lisa Bohn <lisafbohn@gmail.com> 1768954758 -0500	commit: feat(weekly-schedule): Add filter chips for display mode selection
+ccf59913ddb48bd34d43d4eb8be26a63f20d20fe 2b432ae9c852bb2adf151fad1d44ee03c30535fe Lisa Bohn <lisafbohn@gmail.com> 1768961313 -0500	commit: feat(schedules): Add Absences filter and update filter labels
+2b432ae9c852bb2adf151fad1d44ee03c30535fe 8d9f51566c640b31b4febcec8fdf5869463034e8 Lisa Bohn <lisafbohn@gmail.com> 1768962527 -0500	commit: fix(schedules): Fix absences filter and improve week-specific filtering
+8d9f51566c640b31b4febcec8fdf5869463034e8 f160d2b860f43b58f52f4cbda3a72d6726ed6969 Lisa Bohn <lisafbohn@gmail.com> 1768964753 -0500	commit: feat(schedules): improve absence UX and sub linking
+f160d2b860f43b58f52f4cbda3a72d6726ed6969 0b86383ec67422634805b6a731303db74086d3ce Lisa Bohn <lisafbohn@gmail.com> 1768965868 -0500	commit: fix(schedules): Fix filter counts and improve filtering logic
+0b86383ec67422634805b6a731303db74086d3ce eec77a6a9cc102c8ad52ce15220ef4904c43be2b Lisa Bohn <lisafbohn@gmail.com> 1768966388 -0500	commit: feat(schedules): Filter display by mode and prevent duplicate teachers

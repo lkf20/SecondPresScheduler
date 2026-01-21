@@ -28,14 +28,14 @@ loadEnv()
 const { createClient } = require('@supabase/supabase-js')
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-// Try service role key first, fall back to anon key
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+// Try service role key first, fall back to publishable key
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('❌ Missing required environment variables:')
   console.error('   NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl ? '✓' : '✗')
-  console.error('   SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY:', supabaseKey ? '✓' : '✗')
-  console.error('\nNote: Using anon key may have RLS restrictions. Service role key is preferred for testing.')
+  console.error('   SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:', supabaseKey ? '✓' : '✗')
+  console.error('\nNote: Using publishable key may have RLS restrictions. Service role key is preferred for testing.')
   if (!supabaseKey) process.exit(1)
 }
 
@@ -47,7 +47,7 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
 })
 
 if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  console.warn('⚠️  Warning: Using anon key instead of service role key. Some tests may fail due to RLS policies.\n')
+  console.warn('⚠️  Warning: Using publishable key instead of service role key. Some tests may fail due to RLS policies.\n')
 }
 
 const results = []

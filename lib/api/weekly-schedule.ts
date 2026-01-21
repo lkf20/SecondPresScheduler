@@ -21,8 +21,8 @@ export interface WeeklyScheduleData {
     id: string
     teacher_id: string
     teacher_name: string
-    class_id: string
-    class_name: string
+    class_id?: string // Optional: teachers are assigned to classrooms, not specific class groups
+    class_name?: string // Optional: teachers are assigned to classrooms, not specific class groups
     classroom_id: string
     classroom_name: string
     is_floater?: boolean
@@ -210,7 +210,6 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
       teacher:staff!teacher_schedules_teacher_id_fkey(id, first_name, last_name, display_name),
       day_of_week:days_of_week(*),
       time_slot:time_slots(*),
-      class:class_groups(*),
       classroom:classrooms(*)
     `)
     .eq('school_id', schoolId)
@@ -425,18 +424,16 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
         if (scheduleCell && classGroups && classGroups.length > 0 && scheduleCell.is_active) {
           const classGroupIds = classGroups.map((cg) => cg.id)
           
-          // Get teachers assigned to this slot (teachers are assigned to the slot, not individual class groups)
-          // Filter by any of the class groups in the slot
+          // Get teachers assigned to this slot
+          // Teachers are now assigned to classrooms, not specific class groups.
+          // All teachers assigned to this classroom/day/time are included.
           const teachers = assignmentsForSlot
-            .filter(a => a.class_id && classGroupIds.includes(a.class_id))
             .map(assignment => ({
               id: assignment.id,
               teacher_id: assignment.teacher_id,
               teacher_name: assignment.teacher?.display_name || 
                             `${assignment.teacher?.first_name || ''} ${assignment.teacher?.last_name || ''}`.trim() ||
                             'Unknown',
-              class_id: assignment.class_id,
-              class_name: assignment.class?.name || 'Unknown',
               classroom_id: assignment.classroom_id,
               classroom_name: assignment.classroom?.name || 'Unknown',
               is_floater: assignment.is_floater || false,
