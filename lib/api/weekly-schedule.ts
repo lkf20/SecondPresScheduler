@@ -208,6 +208,7 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
     .select(`
       *,
       teacher:staff!teacher_schedules_teacher_id_fkey(id, first_name, last_name, display_name),
+      class:class_groups(id, name),
       day_of_week:days_of_week(*),
       time_slot:time_slots(*),
       classroom:classrooms(*)
@@ -434,6 +435,8 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
               teacher_name: assignment.teacher?.display_name || 
                             `${assignment.teacher?.first_name || ''} ${assignment.teacher?.last_name || ''}`.trim() ||
                             'Unknown',
+              class_id: assignment.class_id || undefined, // Include class_id for filtering
+              class_name: assignment.class?.name || undefined, // Include class_name for display
               classroom_id: assignment.classroom_id,
               classroom_name: assignment.classroom?.name || 'Unknown',
               is_floater: assignment.is_floater || false,
