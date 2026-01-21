@@ -56,7 +56,7 @@ export default async function DashboardPage() {
   const endDate = toDateString(endDateDate)
   const overview = await fetchOverview(startDate, endDate)
   return (
-    <div>
+    <div className="w-full">
       {overview && !('error' in overview) ? (
         <DashboardClient
           overview={overview}

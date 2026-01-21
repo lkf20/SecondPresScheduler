@@ -464,7 +464,7 @@ export default function DashboardClient({
   }, [belowPreferredGroups.length])
 
   return (
-    <div className="space-y-10 -mx-4 md:-mx-8 xl:mx-0">
+    <div className="space-y-10">
       <section className="space-y-2">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">
