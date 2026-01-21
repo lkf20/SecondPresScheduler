@@ -177,12 +177,12 @@ export async function GET(request: NextRequest) {
           id,
           name,
           day_number,
-          day_order
+          display_order
         ),
         time_slot:time_slots(
           id,
           code,
-          time_slot_order
+          display_order
         ),
         class:class_groups(
           id,
@@ -375,10 +375,10 @@ export async function GET(request: NextRequest) {
         day_of_week_id: rule.day_of_week_id,
         day_name: dayOfWeek?.name || 'Unknown',
         day_number: dayOfWeek?.day_number || 0,
-        day_order: dayOfWeek?.day_order || 0,
+        day_order: dayOfWeek?.display_order || 0,
         time_slot_id: rule.time_slot_id,
         time_slot_code: timeSlot?.code || 'Unknown',
-        time_slot_order: timeSlot?.time_slot_order || 0,
+        time_slot_order: timeSlot?.display_order || 0,
         classroom_id: classroom?.id || '',
         classroom_name: classroom?.name || classGroup?.name || 'Unknown',
         classroom_color: classroom?.color || null,
