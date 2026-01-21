@@ -14,69 +14,62 @@ const addDays = (date: Date, days: number) => {
   return next
 }
 
+
+const getBaseUrl = async () => {
+  const headerList = await headers()
+  const host = headerList.get('x-forwarded-host') || headerList.get('host')
+  const protocol = headerList.get('x-forwarded-proto') || 'http'
+  if (!host) return ''
+  return `${protocol}://${host}`
+}
+
 const fetchOverview = async (startDate: string, endDate: string) => {
-  try {
-    const headersList = await headers()
-    const host = headersList.get('host') || 'localhost:3001'
-    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http'
-    const url = `${protocol}://${host}/api/dashboard/overview?start_date=${startDate}&end_date=${endDate}`
-    
-    const response = await fetch(url, {
-      next: { revalidate: 0 }, // Don't cache for debugging
-      headers: {
-        cookie: headersList.get('cookie') || '',
-      },
-    })
-    
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unknown error')
-      let errorData
-      try {
-        errorData = JSON.parse(errorText)
-      } catch {
-        errorData = { error: errorText || `Failed to load dashboard data. Status ${response.status}.` }
-      }
-      return { error: errorData?.error || `Failed to load dashboard data. Status ${response.status}.` }
-    }
-    
-    return await response.json()
-  } catch (error) {
+  const baseUrl = await getBaseUrl()
+  const headerList = await headers()
+  const cookie = headerList.get('cookie')
+  const url = baseUrl
+    ? `${baseUrl}/api/dashboard/overview?start_date=${startDate}&end_date=${endDate}`
+    : `/api/dashboard/overview?start_date=${startDate}&end_date=${endDate}`
+  const response = await fetch(url, {
+    next: { revalidate: 60 }, // Cache for 60 seconds, then revalidate
+    headers: cookie ? { cookie } : undefined,
+  })
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) {
+    const fallbackText = await response.text().catch(() => '')
+    const snippet = fallbackText.trim().slice(0, 200)
     return {
-      error: error instanceof Error ? error.message : 'Failed to load dashboard data. Please try again.',
+      error: `Dashboard data response was not JSON. Status ${response.status}. Content-Type ${contentType || 'unknown'}. URL ${response.url || url}. ${snippet || 'No body.'}`,
     }
   }
+  const data = await response.json()
+  if (!response.ok) {
+    return { error: data?.error || `Failed to load dashboard data. Status ${response.status}.` }
+  }
+  return data
 }
 
 export default async function DashboardPage() {
-  try {
-    const today = new Date()
-    const startDate = toDateString(today)
-    const endDateDate = addDays(today, 13)
-    const endDate = toDateString(endDateDate)
-    const overview = await fetchOverview(startDate, endDate)
-    
-    return (
-      <div>
-        {overview && !('error' in overview) ? (
-          <DashboardClient
-            overview={overview}
-            startDate={startDate}
-            endDate={endDate}
-          />
-        ) : (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-            {overview && 'error' in overview
-              ? overview.error
-              : 'Dashboard data is unavailable right now. Please try again.'}
-          </div>
-        )}
-      </div>
-    )
-  } catch (error) {
-    return (
-      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-        An error occurred while loading the dashboard: {error instanceof Error ? error.message : 'Unknown error'}
-      </div>
-    )
-  }
+  const today = new Date()
+  const startDate = toDateString(today)
+  const endDateDate = addDays(today, 13)
+  const endDate = toDateString(endDateDate)
+  const overview = await fetchOverview(startDate, endDate)
+  return (
+    <div>
+      {overview && !('error' in overview) ? (
+        <DashboardClient
+          overview={overview}
+          startDate={startDate}
+          endDate={endDate}
+        />
+      ) : (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+          {overview && 'error' in overview
+            ? overview.error
+            : 'Dashboard data is unavailable right now. Please try again.'}
+        </div>
+      )}
+    </div>
+  )
 }
