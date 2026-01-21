@@ -23,6 +23,7 @@ import { getShiftStatusColorClasses, getButtonColors, getPanelBackgroundClasses,
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { useAssignSubShifts } from '@/lib/hooks/use-sub-assignment-mutations'
 
 type ResponseStatus = 'none' | 'pending' | 'confirmed' | 'declined_all'
 
@@ -115,6 +116,7 @@ export default function ContactSubPanel({
   onAssignmentComplete,
 }: ContactSubPanelProps) {
   const router = useRouter()
+  const assignSubShiftsMutation = useAssignSubShifts()
   const [isContacted, setIsContacted] = useState(false)
   const [contactedAt, setContactedAt] = useState<string | null>(null)
   const [responseStatus, setResponseStatus] = useState<'none' | 'pending' | 'confirmed' | 'declined_all'>('none')
@@ -689,66 +691,25 @@ export default function ContactSubPanel({
         throw new Error(errorMessage)
       }
 
-      // Create calendar entries (sub_assignments)
+      // Create calendar entries (sub_assignments) using mutation hook
+      // This ensures React Query cache is properly invalidated, including weekly schedule
+      if (!coverageRequestId) {
+        throw new Error('Coverage request ID is missing. Please try opening the panel again.')
+      }
+
       const assignPayload = {
         coverage_request_id: coverageRequestId,
         sub_id: sub.id,
         selected_shift_ids: selectedShiftIds,
       }
 
-      if (!coverageRequestId) {
-        throw new Error('Coverage request ID is missing. Please try opening the panel again.')
-      }
-
-      const assignResponse = await fetch('/api/sub-finder/assign-shifts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(assignPayload),
-      })
-
-      if (!assignResponse.ok) {
-        const errorText = await assignResponse.text()
-        let errorData: Record<string, unknown> = {}
-        let errorMessage = `Failed to assign shifts (${assignResponse.status} ${assignResponse.statusText})`
-        
-        try {
-          if (errorText) {
-            errorData = JSON.parse(errorText)
-            const error = typeof errorData.error === 'string' ? errorData.error : null
-            const message = typeof errorData.message === 'string' ? errorData.message : null
-            errorMessage = error || message || errorMessage
-          }
-        } catch {
-          errorMessage = errorText || errorMessage
-          errorData = { rawError: errorText }
-        }
-        
-        console.error('Assign shifts error:', {
-          status: assignResponse.status,
-          statusText: assignResponse.statusText,
-          errorText,
-          errorData,
-          payload: assignPayload,
-        })
-        
-        throw new Error(errorMessage)
-      }
+      // Use the mutation hook which handles cache invalidation automatically
+      const assignData = await assignSubShiftsMutation.mutateAsync(assignPayload)
 
       // Update assigned shifts state with response data
-      const assignData = await assignResponse.json()
       if (assignData.assigned_shifts) {
         setAssignedShifts(assignData.assigned_shifts)
       }
-
-      // Show success toast
-      const shiftCount = selectedShiftIds.length
-      const teacherName = absence?.teacher_name || 'teacher'
-      toast.success(
-        `Assigned ${shiftCount} shift${shiftCount !== 1 ? 's' : ''} to ${sub.name} for ${teacherName}`,
-        {
-          description: `Coverage has been scheduled and updated in the calendar.`,
-        }
-      )
 
       // Refresh parent data (absences and recommended subs)
       if (onAssignmentComplete) {

@@ -27,6 +27,7 @@ export interface WeeklyScheduleData {
     classroom_name: string
     is_floater?: boolean
     is_substitute?: boolean // True if this assignment comes from sub_assignments (week-specific)
+    absent_teacher_id?: string // If this is a substitute, the ID of the teacher being replaced
     enrollment?: number
     required_teachers?: number
     preferred_teachers?: number
@@ -53,6 +54,7 @@ export interface WeeklyScheduleDataByClassroom {
             teacher_name: string
             has_sub: boolean
             is_partial: boolean
+            time_off_request_id?: string // ID of the time off request this absence belongs to
           }>
           schedule_cell: {
             id: string
@@ -399,6 +401,7 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
           teacher_name: string
           has_sub: boolean
           is_partial: boolean
+          time_off_request_id?: string
         }> = []
         
         // Only process if schedule_cell exists and is active with class groups
@@ -448,7 +451,7 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
           }
           
           // Track unique absent teachers from sub_assignments (covered absences)
-          const absentTeachers = new Map<string, { teacher_id: string; teacher_name: string; has_sub: boolean; is_partial: boolean }>()
+          const absentTeachers = new Map<string, { teacher_id: string; teacher_name: string; has_sub: boolean; is_partial: boolean; time_off_request_id?: string }>()
           
           // Add substitute assignments for this day/time/classroom (if weekStartISO is provided)
           if (weekStartISO && day.id) {
@@ -466,6 +469,7 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
                   teacher_name: sub.teacher_name,
                   has_sub: true, // If there's a sub_assignment, there's a sub
                   is_partial: false, // TODO: Determine if partial based on is_partial field
+                  time_off_request_id: sub.time_off_request_id, // Include time_off_request_id if available
                 })
               }
               
@@ -484,6 +488,7 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
                 classroom_name: classroom.name,
                 is_floater: false, // Substitutes are not floaters
                 is_substitute: true, // Mark as substitute (week-specific)
+                absent_teacher_id: sub.teacher_id, // Track which teacher this substitute is replacing
                 enrollment: enrollment ?? 0,
                 required_teachers: rule?.required_teachers,
                 preferred_teachers: rule?.preferred_teachers,
@@ -558,7 +563,14 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
                     teacher_name: teachersMap.get(timeOff.teacher_id) || 'Unknown',
                     has_sub: hasSub,
                     is_partial: false, // TODO: Determine if partial based on coverage
+                    time_off_request_id: timeOff.time_off_request_id, // Include time_off_request_id
                   })
+                } else {
+                  // Update existing absence with time_off_request_id if not already set
+                  const existing = absentTeachers.get(timeOff.teacher_id)
+                  if (existing && !existing.time_off_request_id) {
+                    existing.time_off_request_id = timeOff.time_off_request_id
+                  }
                 }
               }
             }

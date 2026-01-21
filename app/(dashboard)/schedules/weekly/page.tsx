@@ -9,7 +9,8 @@ import WeekPicker from '@/components/schedules/WeekPicker'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
 import { Button } from '@/components/ui/button'
-import { Filter } from 'lucide-react'
+import { Filter, RefreshCw } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useWeeklySchedule } from '@/lib/hooks/use-weekly-schedule'
 import { useScheduleSettings } from '@/lib/hooks/use-schedule-settings'
 import { useFilterOptions } from '@/lib/hooks/use-filter-options'
@@ -60,7 +61,7 @@ export default function WeeklySchedulePage() {
   }, [weekStartISO])
   
   // React Query hooks
-  const { data: scheduleData = [], isLoading: isLoadingSchedule, error: scheduleError } = useWeeklySchedule(weekStartISO)
+  const { data: scheduleData = [], isLoading: isLoadingSchedule, isFetching: isFetchingSchedule, error: scheduleError } = useWeeklySchedule(weekStartISO)
   const { data: scheduleSettings, isLoading: isLoadingSettings } = useScheduleSettings()
   const { data: filterOptions, isLoading: isLoadingFilters } = useFilterOptions()
   
@@ -205,7 +206,10 @@ export default function WeeklySchedulePage() {
   const filteredData = useMemo(() => {
     if (!filters) return scheduleData
 
-    return scheduleData
+    console.log('[WeeklySchedulePage] Filtering with displayMode:', filters.displayMode)
+    console.log('[WeeklySchedulePage] Total scheduleData classrooms:', scheduleData.length)
+
+    const result = scheduleData
       .filter(classroom => filters.selectedClassroomIds.includes(classroom.classroom_id))
       .map(classroom => ({
         ...classroom,
@@ -276,6 +280,23 @@ export default function WeeklySchedulePage() {
                 if (filters.displayMode === 'substitutes-only') {
                   // Show only slots that have substitutes for the selected week
                   const hasSubstitute = slotAssignments.some(a => a.is_substitute === true)
+                  
+                  // Debug: Log filtering for substitutes
+                  if (hasSubstitute) {
+                    console.log('[WeeklySchedulePage] Filtering substitutes for slot:', {
+                      weekStartISO,
+                      classroom: classroom.classroom_name,
+                      day: day.day_name,
+                      timeSlot: slot.time_slot_code || slot.time_slot_id,
+                      slotAssignmentsCount: slotAssignments.length,
+                      substitutes: slotAssignments.filter(a => a.is_substitute === true).map(a => ({
+                        teacher_id: a.teacher_id,
+                        teacher_name: a.teacher_name,
+                        is_substitute: a.is_substitute
+                      }))
+                    })
+                  }
+                  
                   return hasSubstitute
                 }
 
@@ -301,6 +322,32 @@ export default function WeeklySchedulePage() {
           })),
       }))
       .filter(classroom => classroom.days.length > 0)
+
+    // Debug: Log filtered results for substitutes mode
+    if (filters.displayMode === 'substitutes-only') {
+      const totalFilteredSlots = result.reduce((sum, classroom) => {
+        return sum + classroom.days.reduce((daySum, day) => {
+          return daySum + day.time_slots.length
+        }, 0)
+      }, 0)
+      console.log('[WeeklySchedulePage] Filtered results for substitutes-only:', {
+        totalFilteredClassrooms: result.length,
+        totalFilteredSlots,
+        classrooms: result.map(c => ({
+          name: c.classroom_name,
+          days: c.days.map(d => ({
+            day: d.day_name,
+            timeSlots: d.time_slots.map(ts => ({
+              code: ts.time_slot_code,
+              hasSubstitute: ts.assignments?.some(a => a.is_substitute === true) || false,
+              substituteNames: ts.assignments?.filter(a => a.is_substitute === true).map(a => a.teacher_name) || []
+            }))
+          }))
+        }))
+      })
+    }
+
+    return result
   }, [scheduleData, filters, weekStartISO])
 
   // Calculate slot counts for display
@@ -335,7 +382,27 @@ export default function WeeklySchedulePage() {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-4">
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Weekly Schedule</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Weekly Schedule</h1>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleRefresh}
+                      disabled={isFetchingSchedule}
+                      className="h-10 w-10 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${isFetchingSchedule ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Refresh schedule</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             <WeekPicker
               weekStartISO={weekStartISO}
               onWeekChange={setWeekStartISO}

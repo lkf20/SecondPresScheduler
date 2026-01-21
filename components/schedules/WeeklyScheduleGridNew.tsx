@@ -124,6 +124,7 @@ export default function WeeklyScheduleGridNew({
   const assignmentCounts = useMemo(() => {
     let allCount = 0
     let permanentCount = 0
+    let subsCount = 0 // Count slots with substitutes
     let coverageIssuesCount = 0
     let absencesCount = 0
 
@@ -137,6 +138,12 @@ export default function WeeklyScheduleGridNew({
               permanentCount++
             }
           })
+
+          // Count slots with substitutes (check if any assignment is marked as substitute)
+          const hasSubstitute = slot.assignments.some(a => a.is_substitute === true)
+          if (hasSubstitute) {
+            subsCount++
+          }
 
           // Count absences from the absences array (if available)
           if (slot.absences && slot.absences.length > 0) {
@@ -177,10 +184,16 @@ export default function WeeklyScheduleGridNew({
       })
     })
 
-    // For now, use the same count for all (since we can't distinguish substitutes)
-    // The actual filtering happens via displayMode in FilterPanel
-    // Absences count is a placeholder - need to implement proper absence detection
-    return { all: allCount, subs: allCount, permanent: permanentCount, coverageIssues: coverageIssuesCount, absences: absencesCount }
+    // Debug: Log counts
+    console.log('[WeeklyScheduleGridNew] Assignment counts:', {
+      all: allCount,
+      subs: subsCount,
+      permanent: permanentCount,
+      coverageIssues: coverageIssuesCount,
+      absences: absencesCount
+    })
+
+    return { all: allCount, subs: subsCount, permanent: permanentCount, coverageIssues: coverageIssuesCount, absences: absencesCount }
   }, [data])
 
   // Extract unique days and time slots from data, filtered by selectedDayIds

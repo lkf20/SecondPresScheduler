@@ -348,7 +348,20 @@ export function useSubFinderData({
   useEffect(() => {
     if (!requestedAbsenceId) return
     if (hasAppliedAbsenceRef.current) return
-    if (absences.length === 0) return
+    
+    // Ensure absences are loaded
+    if (isLoadingAbsences) {
+      // Wait for absences to load
+      return
+    }
+    
+    // If absences haven't loaded yet and we have a requested absence, fetch them
+    if (absences.length === 0 && !isLoadingAbsences) {
+      refetchAbsences()
+      return
+    }
+    
+    // Once absences are loaded, find and select the requested absence
     const match = absences.find((absence) => absence.id === requestedAbsenceId)
     if (match) {
       handleFindSubs(match).catch((error) => {
@@ -356,7 +369,7 @@ export function useSubFinderData({
       })
       hasAppliedAbsenceRef.current = true
     }
-  }, [requestedAbsenceId, absences, handleFindSubs])
+  }, [requestedAbsenceId, absences, isLoadingAbsences, handleFindSubs, refetchAbsences])
   
   // Expose setAbsences for state restoration (sessionStorage)
   const setAbsences = useCallback((newAbsences: Absence[]) => {

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -41,8 +41,10 @@ export default function TimeOffListClient({
   view: string
 }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const editParam = searchParams.get('edit')
   const [view, setView] = useState(initialView ?? 'active')
-  const [editingRequestId, setEditingRequestId] = useState<string | null>(null)
+  const [editingRequestId, setEditingRequestId] = useState<string | null>(editParam || null)
   // Default to all coverage filters selected
   const [coverageFilters, setCoverageFilters] = useState<Set<string>>(
     new Set(['covered', 'needs_coverage', 'partially_covered'])
@@ -139,6 +141,14 @@ export default function TimeOffListClient({
   useEffect(() => {
     setView(initialView ?? 'active')
   }, [initialView])
+
+  // Handle edit query parameter
+  useEffect(() => {
+    const editParam = searchParams.get('edit')
+    if (editParam && editParam !== editingRequestId) {
+      setEditingRequestId(editParam)
+    }
+  }, [searchParams, editingRequestId])
   
   // Show loading state
   if (isLoading) {
