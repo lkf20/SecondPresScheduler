@@ -21,8 +21,8 @@ export interface WeeklyScheduleData {
     id: string
     teacher_id: string
     teacher_name: string
-    class_id: string
-    class_name: string
+    class_id?: string // Optional: teachers are assigned to classrooms, not specific class groups
+    class_name?: string // Optional: teachers are assigned to classrooms, not specific class groups
     classroom_id: string
     classroom_name: string
     is_floater?: boolean

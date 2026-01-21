@@ -102,7 +102,8 @@ export default function AssignmentModal({
 
     // First, add existing assignments
     data.assignments.forEach((assignment) => {
-      const key = `${assignment.class_id}-${assignment.classroom_id}`
+      // Use classroom_id as the key since teachers are now assigned to classrooms, not class groups
+      const key = `${assignment.class_id || 'no-class'}-${assignment.classroom_id}`
       
       if (assignment.teacher_id) {
         // Teacher assignment
@@ -110,7 +111,7 @@ export default function AssignmentModal({
           const classInfo = data.assignments.find(
             (a) => !a.teacher_id && a.class_id === assignment.class_id && a.classroom_id === assignment.classroom_id
           )
-          if (classInfo) {
+          if (classInfo && classInfo.class_id && classInfo.class_name) {
             groups.set(key, {
               class_id: classInfo.class_id,
               class_name: classInfo.class_name,
@@ -132,8 +133,9 @@ export default function AssignmentModal({
           })
         }
       } else {
-        // Class info
-        if (!groups.has(key)) {
+        // Class info (for class group placeholders)
+        // Only create group if we have class_id and class_name
+        if (!groups.has(key) && assignment.class_id && assignment.class_name) {
           groups.set(key, {
             class_id: assignment.class_id,
             class_name: assignment.class_name,

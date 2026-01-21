@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSubs, createSub } from '@/lib/api/subs'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const subs = await getSubs()
