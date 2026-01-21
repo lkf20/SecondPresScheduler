@@ -30,7 +30,7 @@ export async function getTeacherSchedules(teacherId: string, schoolId?: string):
   const supabase = await createClient()
   let query = supabase
     .from('teacher_schedules')
-    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), class:class_groups(*), classroom:classrooms(*)')
+    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), classroom:classrooms(*)')
     .eq('teacher_id', teacherId)
 
   const effectiveSchoolId = schoolId || await getUserSchoolId()
@@ -100,7 +100,7 @@ export async function getTeacherScheduleById(id: string, schoolId?: string): Pro
   const supabase = await createClient()
   let query = supabase
     .from('teacher_schedules')
-    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), class:class_groups(*), classroom:classrooms(*), teacher:staff(*)')
+    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), classroom:classrooms(*), teacher:staff(*)')
     .eq('id', id)
 
   const effectiveSchoolId = schoolId || await getUserSchoolId()
@@ -139,7 +139,7 @@ export async function getAllTeacherSchedules(
   const supabase = await createClient()
   let query = supabase
     .from('teacher_schedules')
-    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), class:class_groups(*), classroom:classrooms(*), teacher:staff(*)')
+    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), classroom:classrooms(*), teacher:staff(*)')
     .order('teacher_id', { ascending: true })
     .order('day_of_week_id', { ascending: true })
     .order('time_slot_id', { ascending: true })
@@ -218,7 +218,7 @@ export async function getScheduleByDayAndSlot(
   
   let query = supabase
     .from('teacher_schedules')
-    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), class:class_groups(*), classroom:classrooms(*)')
+    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), classroom:classrooms(*)')
     .eq('teacher_id', teacherId)
     .eq('day_of_week_id', dayOfWeekId)
     .eq('time_slot_id', timeSlotId)

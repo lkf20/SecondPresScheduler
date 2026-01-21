@@ -6,7 +6,7 @@ type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
 type TimeSlot = Database['public']['Tables']['time_slots']['Row']
 type SubAssignment = Database['public']['Tables']['sub_assignments']['Row']
 
-type TimeOffShiftWithDetails = TimeOffShift & {
+export type TimeOffShiftWithDetails = TimeOffShift & {
   time_slot: TimeSlot | null
   day_of_week: DayOfWeek | null
 }

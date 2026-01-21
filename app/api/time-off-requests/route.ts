@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getTimeOffRequests } from '@/lib/api/time-off'
-import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
+import { getTimeOffShifts, type TimeOffShiftWithDetails } from '@/lib/api/time-off-shifts'
 import { transformTimeOffCardData, type TimeOffCardData } from '@/lib/utils/time-off-card-data'
 import { createErrorResponse } from '@/lib/utils/errors'
 
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
     if (includeClassrooms && teacherIds.length > 0) {
       const { data: teacherSchedules } = await supabase
         .from('teacher_schedules')
-        .select('teacher_id, day_of_week_id, time_slot_id, classroom:classrooms(id, name, color), class:class_groups(name)')
+        .select('teacher_id, day_of_week_id, time_slot_id, classroom:classrooms(id, name, color)')
         .in('teacher_id', teacherIds)
       
       ;(teacherSchedules || []).forEach((schedule: any) => {
@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
     const results = await Promise.all(
       filteredRequests.map(async (request) => {
         // Get shifts
-        let shifts
+        let shifts: TimeOffShiftWithDetails[] = []
         try {
           shifts = await getTimeOffShifts(request.id)
         } catch (error) {

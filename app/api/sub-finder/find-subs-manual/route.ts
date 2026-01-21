@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
 
     const { data: teacherSchedules, error: scheduleError } = await supabase
       .from('teacher_schedules')
-      .select('day_of_week_id, time_slot_id, classroom:classrooms(name), class:class_groups(name)')
+      .select('day_of_week_id, time_slot_id, classroom:classrooms(name)')
       .eq('teacher_id', teacher_id)
 
     if (scheduleError) {
@@ -78,7 +78,8 @@ export async function POST(request: NextRequest) {
       const key = `${schedule.day_of_week_id}|${schedule.time_slot_id}`
       const entry = scheduleLookup.get(key) || { classrooms: new Set<string>(), classes: new Set<string>() }
       if (schedule.classroom?.name) entry.classrooms.add(schedule.classroom.name)
-      if (schedule.class?.name) entry.classes.add(schedule.class.name)
+      // Note: class groups are no longer directly on teacher_schedules
+      // They can be retrieved from class_classroom_mappings if needed
       scheduleLookup.set(key, entry)
     })
 

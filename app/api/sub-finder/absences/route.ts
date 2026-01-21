@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     if (teacherIds.length > 0) {
       const { data: teacherSchedules } = await supabase
         .from('teacher_schedules')
-        .select('teacher_id, day_of_week_id, time_slot_id, classroom:classrooms(id, name, color), class:class_groups(name)')
+        .select('teacher_id, day_of_week_id, time_slot_id, classroom:classrooms(id, name, color)')
         .in('teacher_id', teacherIds)
       
       ;(teacherSchedules || []).forEach((schedule: any) => {
@@ -80,7 +80,8 @@ export async function GET(request: NextRequest) {
             color: schedule.classroom.color || null,
           })
         }
-        if (schedule.class?.name) entry.classes.add(schedule.class.name)
+        // Note: class groups are no longer directly on teacher_schedules
+        // They can be retrieved from class_classroom_mappings if needed
         scheduleLookup.set(key, entry)
       })
     }
