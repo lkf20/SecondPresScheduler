@@ -757,7 +757,7 @@ export default function WeeklyScheduleGridNew({
                                   )
                                 : undefined}
                               >
-                                <ScheduleCell data={classroom.cellData} />
+                                <ScheduleCell data={classroom.cellData} displayMode={displayMode} />
                               </div>
                             </div>
                           )
@@ -1084,7 +1084,7 @@ export default function WeeklyScheduleGridNew({
                               )
                             : undefined}
                           >
-                            <ScheduleCell data={cellData} />
+                            <ScheduleCell data={cellData} displayMode={displayMode} />
                           </div>
                         </div>
                       )

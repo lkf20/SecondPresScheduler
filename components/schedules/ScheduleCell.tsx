@@ -35,9 +35,10 @@ interface ScheduleCellProps {
     }>
   }
   onClick?: () => void
+  displayMode?: 'permanent-only' | 'permanent-flexible' | 'substitutes-only' | 'all-scheduled-staff' | 'coverage-issues' | 'absences'
 }
 
-export default function ScheduleCell({ data, onClick }: ScheduleCellProps) {
+export default function ScheduleCell({ data, onClick, displayMode = 'all-scheduled-staff' }: ScheduleCellProps) {
   const scheduleCell = data?.schedule_cell
   const isInactive = scheduleCell && !scheduleCell.is_active
   const isActive = scheduleCell?.is_active ?? false
@@ -214,12 +215,18 @@ export default function ScheduleCell({ data, onClick }: ScheduleCellProps) {
               })
             }
             
+            // Determine what to show based on displayMode
+            const showAbsences = displayMode !== 'permanent-only'
+            const showSubstitutes = displayMode !== 'permanent-only'
+            const showRegularTeachers = displayMode !== 'substitutes-only' && displayMode !== 'absences'
+            const showFloaters = displayMode !== 'substitutes-only' && displayMode !== 'absences'
+            
             // Get absent teachers from absences array (not from assignments)
-            const absences = data?.absences || []
+            const absences = showAbsences ? (data?.absences || []) : []
             const absentTeacherIds = new Set(absences.map(a => a.teacher_id))
             
             // Get substitutes and map them to their absent teachers
-            const substitutes = filteredAssignments.filter(a => a.is_substitute === true)
+            const substitutes = showSubstitutes ? filteredAssignments.filter(a => a.is_substitute === true) : []
             const substitutesByAbsentTeacher = new Map<string, typeof substitutes>()
             substitutes.forEach(sub => {
               if (sub.absent_teacher_id) {
@@ -230,10 +237,13 @@ export default function ScheduleCell({ data, onClick }: ScheduleCellProps) {
               }
             })
             
-            // Get non-substitute assignments (regular teachers and floaters)
-            const regularAssignments = filteredAssignments.filter(a => !a.is_substitute)
-            const regularTeachers = regularAssignments.filter(a => !a.is_floater)
-            const floaters = regularAssignments.filter(a => a.is_floater)
+            // Get non-substitute assignments (regular teachers and floaters) - only if showing them
+            // IMPORTANT: Exclude teachers who are absent (they're already shown as absent)
+            const regularAssignments = (showRegularTeachers || showFloaters) 
+              ? filteredAssignments.filter(a => !a.is_substitute && !absentTeacherIds.has(a.teacher_id))
+              : []
+            const regularTeachers = showRegularTeachers ? regularAssignments.filter(a => !a.is_floater) : []
+            const floaters = showFloaters ? regularAssignments.filter(a => a.is_floater) : []
             
             // Sort absences alphabetically by teacher name
             const sortedAbsences = [...absences].sort((a, b) =>
@@ -267,23 +277,27 @@ export default function ScheduleCell({ data, onClick }: ScheduleCellProps) {
               })
             })
             
-            // Add regular teachers (with empty substitutes array)
-            sortedRegular.forEach(teacher => {
-              displayGroups.push({
-                type: 'regular',
-                assignment: teacher,
-                substitutes: []
+            // Add regular teachers (with empty substitutes array) - only if showing regular teachers
+            if (showRegularTeachers) {
+              sortedRegular.forEach(teacher => {
+                displayGroups.push({
+                  type: 'regular',
+                  assignment: teacher,
+                  substitutes: []
+                })
               })
-            })
+            }
             
-            // Add floaters (with empty substitutes array)
-            sortedFloaters.forEach(floater => {
-              displayGroups.push({
-                type: 'floater',
-                assignment: floater,
-                substitutes: []
+            // Add floaters (with empty substitutes array) - only if showing floaters
+            if (showFloaters) {
+              sortedFloaters.forEach(floater => {
+                displayGroups.push({
+                  type: 'floater',
+                  assignment: floater,
+                  substitutes: []
+                })
               })
-            })
+            }
             
             return displayGroups.flatMap((group, groupIndex) => {
               const substitutes = group.substitutes
