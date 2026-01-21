@@ -2,6 +2,46 @@ import { createClient } from '@/lib/supabase/server'
 import { parseLocalDate } from '@/lib/utils/date'
 
 /**
+ * Get school_id for a teacher
+ * Tries profile first, then teacher_schedules, then defaults to the default school
+ */
+async function getSchoolIdForTeacher(teacherId: string): Promise<string> {
+  const supabase = await createClient()
+  
+  // Try to get from profile first (most reliable)
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('school_id')
+    .eq('user_id', teacherId)
+    .single()
+  
+  if (profile?.school_id) {
+    return profile.school_id
+  }
+  
+  // Fall back to teacher_schedules (most common school)
+  const { data: schedules } = await supabase
+    .from('teacher_schedules')
+    .select('school_id')
+    .eq('teacher_id', teacherId)
+    .limit(1)
+    .single()
+  
+  if (schedules?.school_id) {
+    return schedules.school_id
+  }
+  
+  // Default to the default school
+  const { data: defaultSchool } = await supabase
+    .from('schools')
+    .select('id')
+    .eq('id', '00000000-0000-0000-0000-000000000001')
+    .single()
+  
+  return defaultSchool?.id || '00000000-0000-0000-0000-000000000001'
+}
+
+/**
  * Get active coverage requests (status IN ('open', 'filled'))
  */
 export async function getActiveCoverageRequests(filters?: {
@@ -142,6 +182,7 @@ export async function ensureCoverageRequestForQuickAssign(
   if (!schedule || schedule.length === 0) {
     // If no scheduled shifts, still create a coverage request but with no shifts
     if (!coverageRequestId) {
+      const schoolId = await getSchoolIdForTeacher(teacherId)
       const { data: newRequest, error: createError } = await supabase
         .from('coverage_requests')
         .insert({
@@ -152,6 +193,7 @@ export async function ensureCoverageRequestForQuickAssign(
           status: 'open',
           total_shifts: 0,
           covered_shifts: 0,
+          school_id: schoolId,
         })
         .select()
         .single()
@@ -350,6 +392,15 @@ export async function ensureCoverageRequestForQuickAssign(
       (existingShifts || []).map((s) => `${s.date}|${s.day_of_week_id}|${s.time_slot_id}`)
     )
 
+    // Get school_id from the existing coverage request
+    const { data: existingRequest } = await supabase
+      .from('coverage_requests')
+      .select('school_id')
+      .eq('id', coverageRequestId)
+      .single()
+    
+    const requestSchoolId = existingRequest?.school_id || await getSchoolIdForTeacher(teacherId)
+
     // Find shifts that need to be added
     const shiftsToAdd: Array<{
       coverage_request_id: string
@@ -357,6 +408,7 @@ export async function ensureCoverageRequestForQuickAssign(
       day_of_week_id: string
       time_slot_id: string
       classroom_id: string | null
+      school_id: string
     }> = []
 
     for (const [date, shifts] of shiftsByDate.entries()) {
@@ -369,6 +421,7 @@ export async function ensureCoverageRequestForQuickAssign(
             day_of_week_id: shift.day_of_week_id,
             time_slot_id: shift.time_slot_id,
             classroom_id: shift.classroom_id,
+            school_id: requestSchoolId,
           })
         }
       }
@@ -442,6 +495,8 @@ export async function ensureCoverageRequestForQuickAssign(
     }
   }
 
+  // Get school_id for the teacher
+  const schoolId = await getSchoolIdForTeacher(teacherId)
 
   const { data: newRequest, error: createError } = await supabase
     .from('coverage_requests')
@@ -453,6 +508,7 @@ export async function ensureCoverageRequestForQuickAssign(
       status: 'open',
       total_shifts: shiftsToCreate.length,
       covered_shifts: 0,
+      school_id: schoolId,
     })
     .select()
     .single()
@@ -471,6 +527,7 @@ export async function ensureCoverageRequestForQuickAssign(
     day_of_week_id: shift.day_of_week_id,
     time_slot_id: shift.time_slot_id,
     classroom_id: shift.classroom_id,
+    school_id: schoolId,
   }))
 
   const { data: createdShifts, error: shiftsError } = await supabase

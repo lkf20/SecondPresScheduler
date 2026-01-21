@@ -53,17 +53,54 @@ export async function GET(
         return assignmentKeys.has(key) ? count + 1 : count
       }, 0)
 
+      // Get school_id for the teacher
+      const teacherId = (timeOffRequest as any).teacher_id
+      let schoolId: string
+      
+      // Try to get from profile first
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('school_id')
+        .eq('user_id', teacherId)
+        .single()
+      
+      if (profile?.school_id) {
+        schoolId = profile.school_id
+      } else {
+        // Fall back to teacher_schedules
+        const { data: schedule } = await supabase
+          .from('teacher_schedules')
+          .select('school_id')
+          .eq('teacher_id', teacherId)
+          .limit(1)
+          .single()
+        
+        if (schedule?.school_id) {
+          schoolId = schedule.school_id
+        } else {
+          // Default to the default school
+          const { data: defaultSchool } = await supabase
+            .from('schools')
+            .select('id')
+            .eq('id', '00000000-0000-0000-0000-000000000001')
+            .single()
+          
+          schoolId = defaultSchool?.id || '00000000-0000-0000-0000-000000000001'
+        }
+      }
+
       const { data: newCoverageRequest, error: coverageError } = await supabase
         .from('coverage_requests')
         .insert({
           request_type: 'time_off',
           source_request_id: (timeOffRequest as any).id,
-          teacher_id: (timeOffRequest as any).teacher_id,
+          teacher_id: teacherId,
           start_date: startDate,
           end_date: endDate,
           status: totalShifts > 0 && coveredShifts >= totalShifts ? 'filled' : 'open',
           total_shifts: totalShifts,
           covered_shifts: coveredShifts,
+          school_id: schoolId,
         })
         .select('id')
         .single()
@@ -123,6 +160,15 @@ export async function GET(
           return createErrorResponse('No classroom available for coverage shifts', 500)
         }
 
+        // Get school_id from the coverage request
+        const { data: coverageRequestData } = await supabase
+          .from('coverage_requests')
+          .select('school_id')
+          .eq('id', coverageRequestId)
+          .single()
+        
+        const requestSchoolId = coverageRequestData?.school_id || schoolId
+
         const coverageShiftRows = shifts.map((shift: any) => {
           const key = `${shift.day_of_week_id}|${shift.time_slot_id}`
           const scheduleEntry = scheduleMap.get(key)
@@ -136,6 +182,7 @@ export async function GET(
             is_partial: shift.is_partial ?? false,
             start_time: shift.start_time || null,
             end_time: shift.end_time || null,
+            school_id: requestSchoolId,
           }
         })
 

@@ -1,0 +1,346 @@
+0000000000000000000000000000000000000000 0fd85c2500098170cbdc26b274ad028e87a376f3 Lisa Bohn <lisafbohn@gmail.com> 1766536161 -0500	commit (initial): Initial commit from Create Next App
+0fd85c2500098170cbdc26b274ad028e87a376f3 fdd2d5bab2008007511a9693ebbb2dbc5407352a Lisa Bohn <lisafbohn@gmail.com> 1766613485 -0500	commit: Initial commit: Next.js scheduler app with Supabase integration
+0000000000000000000000000000000000000000 0000000000000000000000000000000000000000 Lisa Bohn <lisafbohn@gmail.com> 1766613663 -0500	Branch: renamed refs/heads/main to refs/heads/main
+fdd2d5bab2008007511a9693ebbb2dbc5407352a fdd2d5bab2008007511a9693ebbb2dbc5407352a Lisa Bohn <lisafbohn@gmail.com> 1766613663 -0500	Branch: renamed refs/heads/main to refs/heads/main
+fdd2d5bab2008007511a9693ebbb2dbc5407352a fdd2d5bab2008007511a9693ebbb2dbc5407352a Lisa Bohn <lisafbohn@gmail.com> 1766613727 -0500	checkout: moving from main to develop
+fdd2d5bab2008007511a9693ebbb2dbc5407352a 04d0a3011ddc97461266bd38357f5c3abc0dcb21 Lisa Bohn <lisafbohn@gmail.com> 1766852971 -0500	commit: Major feature updates: drag-and-drop sorting, weekly schedule restructure, and UI improvements
+04d0a3011ddc97461266bd38357f5c3abc0dcb21 ecda643fe914bc7b9909c3294365f6928a0aebd1 Lisa Bohn <lisafbohn@gmail.com> 1767639576 -0500	commit: Improve weekly schedule grid: add spacer rows between days, freeze time column, and add visual separation
+ecda643fe914bc7b9909c3294365f6928a0aebd1 9228bf4baff08b04902abfecfa92220ecaa4ee7a Lisa Bohn <lisafbohn@gmail.com> 1767732578 -0500	commit: Fix class groups display and real-time updates in schedule side panel
+9228bf4baff08b04902abfecfa92220ecaa4ee7a 1bb05747fb1ec040fd1944d6f2fe12d4820b00c3 Lisa Bohn <lisafbohn@gmail.com> 1767733726 -0500	commit: chore: set up pre-commit hooks and fix TypeScript errors
+1bb05747fb1ec040fd1944d6f2fe12d4820b00c3 93b77ea963bcbd13ada33d88d8d740243625f0e8 Lisa Bohn <lisafbohn@gmail.com> 1767733747 -0500	commit: fix: update TypeScript fixes for class groups and schedules
+93b77ea963bcbd13ada33d88d8d740243625f0e8 93b77ea963bcbd13ada33d88d8d740243625f0e8 Lisa Bohn <lisafbohn@gmail.com> 1767733886 -0500	checkout: moving from develop to feature/setup-prettier-and-improvements
+93b77ea963bcbd13ada33d88d8d740243625f0e8 5048d2006a626d7b7f0e2afbb3cc262900b47c30 Lisa Bohn <lisafbohn@gmail.com> 1767734086 -0500	commit: feat: set up Prettier, improve error handling, and add testing framework
+5048d2006a626d7b7f0e2afbb3cc262900b47c30 93b77ea963bcbd13ada33d88d8d740243625f0e8 Lisa Bohn <lisafbohn@gmail.com> 1767734090 -0500	checkout: moving from feature/setup-prettier-and-improvements to develop
+93b77ea963bcbd13ada33d88d8d740243625f0e8 5048d2006a626d7b7f0e2afbb3cc262900b47c30 Lisa Bohn <lisafbohn@gmail.com> 1767734094 -0500	merge feature/setup-prettier-and-improvements: Fast-forward
+5048d2006a626d7b7f0e2afbb3cc262900b47c30 5048d2006a626d7b7f0e2afbb3cc262900b47c30 Lisa Bohn <lisafbohn@gmail.com> 1767734168 -0500	checkout: moving from develop to chore/format-codebase
+5048d2006a626d7b7f0e2afbb3cc262900b47c30 5622618295ac1a5c3947fc8e0e2cacdfaab02c94 Lisa Bohn <lisafbohn@gmail.com> 1767734228 -0500	commit: style: format codebase with Prettier
+5622618295ac1a5c3947fc8e0e2cacdfaab02c94 5048d2006a626d7b7f0e2afbb3cc262900b47c30 Lisa Bohn <lisafbohn@gmail.com> 1767734233 -0500	checkout: moving from chore/format-codebase to develop
+5048d2006a626d7b7f0e2afbb3cc262900b47c30 5622618295ac1a5c3947fc8e0e2cacdfaab02c94 Lisa Bohn <lisafbohn@gmail.com> 1767734236 -0500	merge chore/format-codebase: Fast-forward
+5622618295ac1a5c3947fc8e0e2cacdfaab02c94 5622618295ac1a5c3947fc8e0e2cacdfaab02c94 Lisa Bohn <lisafbohn@gmail.com> 1767734346 -0500	checkout: moving from develop to test/add-critical-tests
+5622618295ac1a5c3947fc8e0e2cacdfaab02c94 ed928fb041ab9a355597d144f2db820c13a8d990 Lisa Bohn <lisafbohn@gmail.com> 1767734520 -0500	commit: test: add tests for critical utilities and components
+ed928fb041ab9a355597d144f2db820c13a8d990 5622618295ac1a5c3947fc8e0e2cacdfaab02c94 Lisa Bohn <lisafbohn@gmail.com> 1767734524 -0500	checkout: moving from test/add-critical-tests to develop
+5622618295ac1a5c3947fc8e0e2cacdfaab02c94 ed928fb041ab9a355597d144f2db820c13a8d990 Lisa Bohn <lisafbohn@gmail.com> 1767734526 -0500	merge test/add-critical-tests: Fast-forward
+ed928fb041ab9a355597d144f2db820c13a8d990 ed928fb041ab9a355597d144f2db820c13a8d990 Lisa Bohn <lisafbohn@gmail.com> 1767738455 -0500	checkout: moving from develop to test/add-datatable-tests
+ed928fb041ab9a355597d144f2db820c13a8d990 541961b8e117a863ba6b0eea26fe2073b7526043 Lisa Bohn <lisafbohn@gmail.com> 1767738664 -0500	commit: test: add comprehensive tests for DataTable component
+541961b8e117a863ba6b0eea26fe2073b7526043 ed928fb041ab9a355597d144f2db820c13a8d990 Lisa Bohn <lisafbohn@gmail.com> 1767738669 -0500	checkout: moving from test/add-datatable-tests to develop
+ed928fb041ab9a355597d144f2db820c13a8d990 541961b8e117a863ba6b0eea26fe2073b7526043 Lisa Bohn <lisafbohn@gmail.com> 1767738670 -0500	merge test/add-datatable-tests: Fast-forward
+541961b8e117a863ba6b0eea26fe2073b7526043 541961b8e117a863ba6b0eea26fe2073b7526043 Lisa Bohn <lisafbohn@gmail.com> 1767738908 -0500	checkout: moving from develop to feat/improve-teacher-chip-styling
+541961b8e117a863ba6b0eea26fe2073b7526043 f8deb596b69b379fcdf6d69e5880b934bcb6a580 Lisa Bohn <lisafbohn@gmail.com> 1767738961 -0500	commit: feat: improve teacher chip styling in schedule side panel
+f8deb596b69b379fcdf6d69e5880b934bcb6a580 541961b8e117a863ba6b0eea26fe2073b7526043 Lisa Bohn <lisafbohn@gmail.com> 1767738967 -0500	checkout: moving from feat/improve-teacher-chip-styling to develop
+541961b8e117a863ba6b0eea26fe2073b7526043 f8deb596b69b379fcdf6d69e5880b934bcb6a580 Lisa Bohn <lisafbohn@gmail.com> 1767738967 -0500	merge feat/improve-teacher-chip-styling: Fast-forward
+f8deb596b69b379fcdf6d69e5880b934bcb6a580 f8deb596b69b379fcdf6d69e5880b934bcb6a580 Lisa Bohn <lisafbohn@gmail.com> 1767739158 -0500	checkout: moving from develop to fix/class-group-teacher-alignment
+f8deb596b69b379fcdf6d69e5880b934bcb6a580 3b3bc5cf00100f083feb683fff3742cabc8d8e65 Lisa Bohn <lisafbohn@gmail.com> 1767739280 -0500	commit: fix: align Add Class Groups button and preserve teachers when class groups removed
+3b3bc5cf00100f083feb683fff3742cabc8d8e65 984785be2f38ec8670e2cfde3f373d968f362117 Lisa Bohn <lisafbohn@gmail.com> 1767739295 -0500	commit (amend): fix: align Add Class Groups button and preserve teachers when class groups removed
+984785be2f38ec8670e2cfde3f373d968f362117 f8deb596b69b379fcdf6d69e5880b934bcb6a580 Lisa Bohn <lisafbohn@gmail.com> 1767739297 -0500	checkout: moving from fix/class-group-teacher-alignment to develop
+f8deb596b69b379fcdf6d69e5880b934bcb6a580 984785be2f38ec8670e2cfde3f373d968f362117 Lisa Bohn <lisafbohn@gmail.com> 1767739297 -0500	merge fix/class-group-teacher-alignment: Fast-forward
+984785be2f38ec8670e2cfde3f373d968f362117 984785be2f38ec8670e2cfde3f373d968f362117 Lisa Bohn <lisafbohn@gmail.com> 1767739400 -0500	checkout: moving from develop to fix/preserve-teachers-on-class-group-removal
+984785be2f38ec8670e2cfde3f373d968f362117 984785be2f38ec8670e2cfde3f373d968f362117 Lisa Bohn <lisafbohn@gmail.com> 1767740251 -0500	checkout: moving from fix/preserve-teachers-on-class-group-removal to feat/allow-teachers-without-class-groups
+984785be2f38ec8670e2cfde3f373d968f362117 5c4cf0f100c91c10d2bf66ac03a3411973cf62fa Lisa Bohn <lisafbohn@gmail.com> 1767740309 -0500	commit: feat: allow teachers to be assigned without class groups
+5c4cf0f100c91c10d2bf66ac03a3411973cf62fa 984785be2f38ec8670e2cfde3f373d968f362117 Lisa Bohn <lisafbohn@gmail.com> 1767740312 -0500	checkout: moving from feat/allow-teachers-without-class-groups to develop
+984785be2f38ec8670e2cfde3f373d968f362117 5c4cf0f100c91c10d2bf66ac03a3411973cf62fa Lisa Bohn <lisafbohn@gmail.com> 1767740312 -0500	merge feat/allow-teachers-without-class-groups: Fast-forward
+5c4cf0f100c91c10d2bf66ac03a3411973cf62fa 5c4cf0f100c91c10d2bf66ac03a3411973cf62fa Lisa Bohn <lisafbohn@gmail.com> 1767740402 -0500	checkout: moving from develop to fix/change-teacher-info-message-color
+5c4cf0f100c91c10d2bf66ac03a3411973cf62fa 83597014050bf0d332dfc3aa0c97d63b6a72fec0 Lisa Bohn <lisafbohn@gmail.com> 1767740410 -0500	commit: fix: change teacher info message to yellow warning color
+83597014050bf0d332dfc3aa0c97d63b6a72fec0 5c4cf0f100c91c10d2bf66ac03a3411973cf62fa Lisa Bohn <lisafbohn@gmail.com> 1767740412 -0500	checkout: moving from fix/change-teacher-info-message-color to develop
+5c4cf0f100c91c10d2bf66ac03a3411973cf62fa 83597014050bf0d332dfc3aa0c97d63b6a72fec0 Lisa Bohn <lisafbohn@gmail.com> 1767740412 -0500	merge fix/change-teacher-info-message-color: Fast-forward
+83597014050bf0d332dfc3aa0c97d63b6a72fec0 83597014050bf0d332dfc3aa0c97d63b6a72fec0 Lisa Bohn <lisafbohn@gmail.com> 1767740518 -0500	checkout: moving from develop to fix/preserve-teachers-when-adding-class-groups
+83597014050bf0d332dfc3aa0c97d63b6a72fec0 dfbee4c45cff7ea5e0a9e9f79b01a83735f6c636 Lisa Bohn <lisafbohn@gmail.com> 1767740572 -0500	commit: fix: preserve teachers when class groups are added or removed
+dfbee4c45cff7ea5e0a9e9f79b01a83735f6c636 83597014050bf0d332dfc3aa0c97d63b6a72fec0 Lisa Bohn <lisafbohn@gmail.com> 1767740574 -0500	checkout: moving from fix/preserve-teachers-when-adding-class-groups to develop
+83597014050bf0d332dfc3aa0c97d63b6a72fec0 dfbee4c45cff7ea5e0a9e9f79b01a83735f6c636 Lisa Bohn <lisafbohn@gmail.com> 1767740574 -0500	merge fix/preserve-teachers-when-adding-class-groups: Fast-forward
+dfbee4c45cff7ea5e0a9e9f79b01a83735f6c636 f5225de1c239ad64b65cd616cb9e50e51ec2771d Lisa Bohn <lisafbohn@gmail.com> 1767749265 -0500	commit: fix: improve teacher assignment UX when class groups change
+f5225de1c239ad64b65cd616cb9e50e51ec2771d fab5a9f33e64292ac5ddd0cc39f75660ed341a01 Lisa Bohn <lisafbohn@gmail.com> 1767749566 -0500	commit: docs: add future features and testing items to TODO tracker
+fab5a9f33e64292ac5ddd0cc39f75660ed341a01 fab5a9f33e64292ac5ddd0cc39f75660ed341a01 Lisa Bohn <lisafbohn@gmail.com> 1767749988 -0500	checkout: moving from develop to test/deletion-deactivation-handling
+fab5a9f33e64292ac5ddd0cc39f75660ed341a01 db49f77e244f3ff43bb7d2fa3fc410d3832c9a98 Lisa Bohn <lisafbohn@gmail.com> 1767750086 -0500	commit: test: add comprehensive tests for deletion and deactivation
+db49f77e244f3ff43bb7d2fa3fc410d3832c9a98 fab5a9f33e64292ac5ddd0cc39f75660ed341a01 Lisa Bohn <lisafbohn@gmail.com> 1767750095 -0500	checkout: moving from test/deletion-deactivation-handling to develop
+fab5a9f33e64292ac5ddd0cc39f75660ed341a01 e4a1c334a3e503404fbd2d9f5d8cd5743cb8e3d4 Lisa Bohn <lisafbohn@gmail.com> 1767750097 -0500	merge test/deletion-deactivation-handling: Merge made by the 'ort' strategy.
+e4a1c334a3e503404fbd2d9f5d8cd5743cb8e3d4 e4a1c334a3e503404fbd2d9f5d8cd5743cb8e3d4 Lisa Bohn <lisafbohn@gmail.com> 1767750421 -0500	checkout: moving from develop to fix/sub-finder-api-endpoint
+e4a1c334a3e503404fbd2d9f5d8cd5743cb8e3d4 33b0d7bff695989474ae49a6155f638e0d9f8604 Lisa Bohn <lisafbohn@gmail.com> 1767750428 -0500	commit: fix: add missing /api/sub-finder/find-subs endpoint
+33b0d7bff695989474ae49a6155f638e0d9f8604 e4a1c334a3e503404fbd2d9f5d8cd5743cb8e3d4 Lisa Bohn <lisafbohn@gmail.com> 1767750431 -0500	checkout: moving from fix/sub-finder-api-endpoint to develop
+e4a1c334a3e503404fbd2d9f5d8cd5743cb8e3d4 db40bbee133f7469d850e76019f6e3d725ded3ae Lisa Bohn <lisafbohn@gmail.com> 1767750431 -0500	merge fix/sub-finder-api-endpoint: Merge made by the 'ort' strategy.
+db40bbee133f7469d850e76019f6e3d725ded3ae db40bbee133f7469d850e76019f6e3d725ded3ae Lisa Bohn <lisafbohn@gmail.com> 1767750665 -0500	checkout: moving from develop to fix/sub-finder-data-structure
+db40bbee133f7469d850e76019f6e3d725ded3ae 5afb4259458b4dcf1e89962a919ce827ecfd854b Lisa Bohn <lisafbohn@gmail.com> 1767750669 -0500	commit: fix: align sub finder API response with component expectations
+5afb4259458b4dcf1e89962a919ce827ecfd854b db40bbee133f7469d850e76019f6e3d725ded3ae Lisa Bohn <lisafbohn@gmail.com> 1767750671 -0500	checkout: moving from fix/sub-finder-data-structure to develop
+db40bbee133f7469d850e76019f6e3d725ded3ae b71986918b63ceedf81899f1bc0b71a51182327d Lisa Bohn <lisafbohn@gmail.com> 1767750671 -0500	merge fix/sub-finder-data-structure: Merge made by the 'ort' strategy.
+b71986918b63ceedf81899f1bc0b71a51182327d b71986918b63ceedf81899f1bc0b71a51182327d Lisa Bohn <lisafbohn@gmail.com> 1767750998 -0500	checkout: moving from develop to feature/sub-finder-filters-popover
+b71986918b63ceedf81899f1bc0b71a51182327d 7185acea5bf2f443321e286e4193cddc18fa7868 Lisa Bohn <lisafbohn@gmail.com> 1767751009 -0500	commit: feat: add filters popover menu to sub finder toolbar
+7185acea5bf2f443321e286e4193cddc18fa7868 b71986918b63ceedf81899f1bc0b71a51182327d Lisa Bohn <lisafbohn@gmail.com> 1767751012 -0500	checkout: moving from feature/sub-finder-filters-popover to develop
+b71986918b63ceedf81899f1bc0b71a51182327d 5e09076e5655d30e8d741d506964e9db096ecfcc Lisa Bohn <lisafbohn@gmail.com> 1767751012 -0500	merge feature/sub-finder-filters-popover: Merge made by the 'ort' strategy.
+5e09076e5655d30e8d741d506964e9db096ecfcc ca72cf29b80bc9d2b46f259e19876198bdd0df50 Lisa Bohn <lisafbohn@gmail.com> 1767751030 -0500	commit: fix: update useEffect dependencies for filter changes
+ca72cf29b80bc9d2b46f259e19876198bdd0df50 ca72cf29b80bc9d2b46f259e19876198bdd0df50 Lisa Bohn <lisafbohn@gmail.com> 1767751239 -0500	checkout: moving from develop to feature/prominent-dates-in-header
+ca72cf29b80bc9d2b46f259e19876198bdd0df50 92a1b598cddf629e46b44d114ab39ae5619b94c2 Lisa Bohn <lisafbohn@gmail.com> 1767751245 -0500	commit: feat: add prominent date range to sub finder header
+92a1b598cddf629e46b44d114ab39ae5619b94c2 ca72cf29b80bc9d2b46f259e19876198bdd0df50 Lisa Bohn <lisafbohn@gmail.com> 1767751252 -0500	checkout: moving from feature/prominent-dates-in-header to develop
+ca72cf29b80bc9d2b46f259e19876198bdd0df50 b2d8ee30331ab9f9b68aa31d5fc6b78a43f4bc8c Lisa Bohn <lisafbohn@gmail.com> 1767751252 -0500	merge feature/prominent-dates-in-header: Merge made by the 'ort' strategy.
+b2d8ee30331ab9f9b68aa31d5fc6b78a43f4bc8c b2d8ee30331ab9f9b68aa31d5fc6b78a43f4bc8c Lisa Bohn <lisafbohn@gmail.com> 1767751549 -0500	checkout: moving from develop to fix/remove-toolbar-dates-add-vertical-separator
+b2d8ee30331ab9f9b68aa31d5fc6b78a43f4bc8c b2d8ee30331ab9f9b68aa31d5fc6b78a43f4bc8c Lisa Bohn <lisafbohn@gmail.com> 1767751552 -0500	checkout: moving from fix/remove-toolbar-dates-add-vertical-separator to develop
+b2d8ee30331ab9f9b68aa31d5fc6b78a43f4bc8c 714425877dcdb66f60313cbe85e04ef416d846dc Lisa Bohn <lisafbohn@gmail.com> 1767751563 -0500	commit: refactor: remove duplicate dates from toolbar and add vertical separator
+714425877dcdb66f60313cbe85e04ef416d846dc 714425877dcdb66f60313cbe85e04ef416d846dc Lisa Bohn <lisafbohn@gmail.com> 1767753136 -0500	checkout: moving from develop to feature/coverage-requests-abstraction
+714425877dcdb66f60313cbe85e04ef416d846dc 4cc77ee21a836bf75c22736f4230a0fc773e829a Lisa Bohn <lisafbohn@gmail.com> 1767753139 -0500	commit: feat: add coverage_requests abstraction and substitute contact tracking
+4cc77ee21a836bf75c22736f4230a0fc773e829a e18bedc7183160b76aef6f6dae3c114c620e1490 Lisa Bohn <lisafbohn@gmail.com> 1767753574 -0500	commit: fix: make coverage_requests migration idempotent
+e18bedc7183160b76aef6f6dae3c114c620e1490 5e9125054e2969cf447833a44f4e80923c42111b Lisa Bohn <lisafbohn@gmail.com> 1767753639 -0500	commit: fix: remove placeholder UUID from test queries
+5e9125054e2969cf447833a44f4e80923c42111b 503adf2f7b4ff77cc8c488a68f3b866d3db5db3b Lisa Bohn <lisafbohn@gmail.com> 1767753804 -0500	commit: feat: auto-create coverage_requests from time_off_requests
+503adf2f7b4ff77cc8c488a68f3b866d3db5db3b 38095f4ef85ca05487baa593d8e8dfda5c28ed3d Lisa Bohn <lisafbohn@gmail.com> 1767785274 -0500	commit: docs: add duplicate display name issue and display name options feature to TODO
+38095f4ef85ca05487baa593d8e8dfda5c28ed3d 5ecc1fe92008c0110867dd0658471cbfc1d9de29 Lisa Bohn <lisafbohn@gmail.com> 1767785374 -0500	commit: test: add quick test script for verifying new time off requests
+5ecc1fe92008c0110867dd0658471cbfc1d9de29 3c0c81f249c2329cbd885e8b90789d64296e91a2 Lisa Bohn <lisafbohn@gmail.com> 1767785788 -0500	commit: feat: add Contact Sub panel to sub finder
+3c0c81f249c2329cbd885e8b90789d64296e91a2 81f3b583ad7d7dd960fafa2740ce376ca7e29c32 Lisa Bohn <lisafbohn@gmail.com> 1767785867 -0500	commit: fix: resolve hydration error in ContactSubPanel
+81f3b583ad7d7dd960fafa2740ce376ca7e29c32 e4e0c2713a65b9a8fac3c0a20982d79f52118d86 Lisa Bohn <lisafbohn@gmail.com> 1767786122 -0500	commit: feat: implement API endpoints for Contact Sub panel
+e4e0c2713a65b9a8fac3c0a20982d79f52118d86 1d7bfb34b0267db0a0e65bf51b39ed6aef8920b7 Lisa Bohn <lisafbohn@gmail.com> 1767786157 -0500	commit: fix: improve shift override deletion logic in upsertShiftOverrides
+1d7bfb34b0267db0a0e65bf51b39ed6aef8920b7 ec958f51135da4d1c9f28d5f80648a36b00d406c Lisa Bohn <lisafbohn@gmail.com> 1767786287 -0500	commit: fix: ensure SheetTitle is properly nested for accessibility
+ec958f51135da4d1c9f28d5f80648a36b00d406c 32fbbc599790f4044224b004b9a7f76fda3d64de Lisa Bohn <lisafbohn@gmail.com> 1767786326 -0500	commit: fix: simplify SheetHeader structure for accessibility
+32fbbc599790f4044224b004b9a7f76fda3d64de ef5b7f4c12c3e7acef8b6633ba1bcd3d85dd008d Lisa Bohn <lisafbohn@gmail.com> 1767786713 -0500	commit: feat: improve Sub Finder layout with fixed header and better space usage
+ef5b7f4c12c3e7acef8b6633ba1bcd3d85dd008d a5a31f9b5432eecbae7e7eaf673c921193bdfde9 Lisa Bohn <lisafbohn@gmail.com> 1767786883 -0500	commit: fix: separate header and toolbar into different rows
+a5a31f9b5432eecbae7e7eaf673c921193bdfde9 0a97bc01cb41ea6cb4ad4dccd7d957d18983cd56 Lisa Bohn <lisafbohn@gmail.com> 1767786964 -0500	commit: fix: add SheetTitle to loading state for accessibility
+0a97bc01cb41ea6cb4ad4dccd7d957d18983cd56 b801ca273353d42a19a08f7a1d348bb4297eb5fb Lisa Bohn <lisafbohn@gmail.com> 1767786987 -0500	commit: fix: ensure SheetTitle always present when panel is open
+b801ca273353d42a19a08f7a1d348bb4297eb5fb cf3274090299855b7f885a1b0da484fc524d3e2f Lisa Bohn <lisafbohn@gmail.com> 1767800724 -0500	commit: feat: enhance find-subs API with class group requirements
+cf3274090299855b7f885a1b0da484fc524d3e2f 80e052ca002ef2fa822816e768feab669cbc6001 Lisa Bohn <lisafbohn@gmail.com> 1767800830 -0500	commit: feat: add API endpoint for assigning shifts to subs
+80e052ca002ef2fa822816e768feab669cbc6001 1539319600f2e30deb30f9cf99b3514b3dc5388d Lisa Bohn <lisafbohn@gmail.com> 1767800832 -0500	commit: feat: add contextual warnings and reorganize ContactSubPanel buttons
+1539319600f2e30deb30f9cf99b3514b3dc5388d d77233da0d9bb99c2cc5ffecb2e459c3e6f8a532 Lisa Bohn <lisafbohn@gmail.com> 1767800940 -0500	commit: feat: improve coverage display in RecommendedSubsList
+d77233da0d9bb99c2cc5ffecb2e459c3e6f8a532 39852bc9b4498026bdbf2d76c3f0473b3a4f56dc Lisa Bohn <lisafbohn@gmail.com> 1767802648 -0500	commit: feat: add database migration for new contact status fields
+39852bc9b4498026bdbf2d76c3f0473b3a4f56dc 63e190e4aaa2aa7b78ad1ac7ef98e2d74360f885 Lisa Bohn <lisafbohn@gmail.com> 1767802653 -0500	commit: feat: update API to support new contact status fields
+63e190e4aaa2aa7b78ad1ac7ef98e2d74360f885 9dcf0d1062a9e947184fb8523c02a1035b5de4d7 Lisa Bohn <lisafbohn@gmail.com> 1767802659 -0500	commit: feat: redesign ContactSubPanel with new status structure
+9dcf0d1062a9e947184fb8523c02a1035b5de4d7 dfa2643a6d0f1313d0cdbd7f7a943a75426f7d3d Lisa Bohn <lisafbohn@gmail.com> 1767802752 -0500	commit: fix: remove duplicate catch/finally block in handleAssignShifts
+dfa2643a6d0f1313d0cdbd7f7a943a75426f7d3d f242257c5ef043e49f62bd509e8c657633638f4e Lisa Bohn <lisafbohn@gmail.com> 1767802788 -0500	commit: docs: add TODO for preserving app state across navigation
+f242257c5ef043e49f62bd509e8c657633638f4e 0f3624bdc3f518d2d1496f00b8b55671a04d8c76 Lisa Bohn <lisafbohn@gmail.com> 1767802904 -0500	commit: fix: update ContactSubPanel header to match coverage summary
+0f3624bdc3f518d2d1496f00b8b55671a04d8c76 83eba48c04dbd76cb72374fda74afc41ebdce472 Lisa Bohn <lisafbohn@gmail.com> 1767802986 -0500	commit: feat: add Contact Summary header to ContactSubPanel
+83eba48c04dbd76cb72374fda74afc41ebdce472 a0f4e5ab29dc05f19b1da1a15d3ba34f28e6fe53 Lisa Bohn <lisafbohn@gmail.com> 1767803060 -0500	commit: feat: update shift label and show timestamp immediately when contacted
+a0f4e5ab29dc05f19b1da1a15d3ba34f28e6fe53 1904375d635b48e2702b91b41b498c7512cec21d Lisa Bohn <lisafbohn@gmail.com> 1767803140 -0500	commit: fix: hide contact timestamp when Contacted checkbox is unchecked
+1904375d635b48e2702b91b41b498c7512cec21d 60e3fdcb70195d8ef15b69a0a1e979d19685ccd4 Lisa Bohn <lisafbohn@gmail.com> 1767804567 -0500	commit: feat: add director override for unavailable shifts and audit logging
+60e3fdcb70195d8ef15b69a0a1e979d19685ccd4 7fd431facd9ba4d65a44d259ba3680963fc65daa Lisa Bohn <lisafbohn@gmail.com> 1767804715 -0500	commit: docs: add TODOs for user onboarding and school management
+7fd431facd9ba4d65a44d259ba3680963fc65daa 6655e6be459ff4b5a47c9505d090d0b3e6a5243f Lisa Bohn <lisafbohn@gmail.com> 1767808143 -0500	commit: feat: add profile setup API and UI
+6655e6be459ff4b5a47c9505d090d0b3e6a5243f 42dd737563075b6df2b1605c6140c06bc433cb3f Lisa Bohn <lisafbohn@gmail.com> 1767808157 -0500	commit: docs: mark profile setup as complete
+42dd737563075b6df2b1605c6140c06bc433cb3f 4c3939dd4224b75618f1863816b0a61db5959b52 Lisa Bohn <lisafbohn@gmail.com> 1767808335 -0500	commit: refactor: improve profile setup error handling and UX
+4c3939dd4224b75618f1863816b0a61db5959b52 61c559f5247302e37487b6d82866a17363ae0237 Lisa Bohn <lisafbohn@gmail.com> 1767808399 -0500	commit: fix: don't show errors during initial profile check
+61c559f5247302e37487b6d82866a17363ae0237 be1d0d88c345fe3dfca63f7c6c6a11203c5cbd87 Lisa Bohn <lisafbohn@gmail.com> 1767808539 -0500	commit: fix: resolve infinite recursion in profiles RLS policies
+be1d0d88c345fe3dfca63f7c6c6a11203c5cbd87 6fbf3eea45cead828f92f8b72462668b095698f6 Lisa Bohn <lisafbohn@gmail.com> 1767808723 -0500	commit: fix: improve profile creation messaging and school name display
+6fbf3eea45cead828f92f8b72462668b095698f6 b0d6dde5583313102d8d564f746edac2d8c3f3f4 Lisa Bohn <lisafbohn@gmail.com> 1767808975 -0500	commit: docs: add TODO for enhanced profile creation UI
+b0d6dde5583313102d8d564f746edac2d8c3f3f4 cb8592a851b12fab83f645268c05dfd80fdbd2c4 Lisa Bohn <lisafbohn@gmail.com> 1767809459 -0500	commit: feat: add 'Confirmed (some or all)' response option and rename 'Declined' to 'Declined all'
+cb8592a851b12fab83f645268c05dfd80fdbd2c4 081e4d6189a3988920af6d3de5f2046d51ddc2d3 Lisa Bohn <lisafbohn@gmail.com> 1767809733 -0500	commit: feat: add date range to ContactSubPanel header
+081e4d6189a3988920af6d3de5f2046d51ddc2d3 7e0c8395a0b8daf0402f71c85b136f7c4291c212 Lisa Bohn <lisafbohn@gmail.com> 1767809887 -0500	commit: feat: update shift chips to show date format 'Mon Jan 6 AM' instead of 'Monday AM'
+7e0c8395a0b8daf0402f71c85b136f7c4291c212 8871ac8c52c982a1a14eb697c0154c0e48914f7e Lisa Bohn <lisafbohn@gmail.com> 1767810049 -0500	commit: refactor: combine View Details and Contact buttons into single button
+8871ac8c52c982a1a14eb697c0154c0e48914f7e f21f9cc6c2e304c4385a6e608983422ed03be6e0 Lisa Bohn <lisafbohn@gmail.com> 1767810176 -0500	commit: feat: update shift chip format to 'Mon AM • Feb 9'
+f21f9cc6c2e304c4385a6e608983422ed03be6e0 bc9edc6b3549a898899fcfe3aea82586741c78c2 Lisa Bohn <lisafbohn@gmail.com> 1767810523 -0500	commit: fix: resolve timezone issue causing dates to shift by one day
+bc9edc6b3549a898899fcfe3aea82586741c78c2 c0062f6b3c602a7412ec8d3d0b36eaf865c0737b Lisa Bohn <lisafbohn@gmail.com> 1767810830 -0500	commit: fix: resolve timezone issue in AbsenceList date display
+c0062f6b3c602a7412ec8d3d0b36eaf865c0737b 87526f345e604c0344a9484a569b2414ca2b1976 Lisa Bohn <lisafbohn@gmail.com> 1767811266 -0500	commit: refactor: improve RecommendedSubsList UI styling and layout
+87526f345e604c0344a9484a569b2414ca2b1976 717a22ceda0dc09d932d8e473b3c209d99cc48ea Lisa Bohn <lisafbohn@gmail.com> 1767811589 -0500	commit: refactor: remove check and X icons from shift chips
+717a22ceda0dc09d932d8e473b3c209d99cc48ea 57558f15a7e4bf3c6f2a1fc0e85a38405064a6ad Lisa Bohn <lisafbohn@gmail.com> 1767811777 -0500	commit: feat: add progress bar above shift count in RecommendedSubsList
+57558f15a7e4bf3c6f2a1fc0e85a38405064a6ad 934f3b1d9a735656841daabf66778ee48eb632c2 Lisa Bohn <lisafbohn@gmail.com> 1767812083 -0500	commit: fix: align bottom borders of left and main panel headers
+934f3b1d9a735656841daabf66778ee48eb632c2 f4a28b0add47860eadc98fb543b0df8c758a8a02 Lisa Bohn <lisafbohn@gmail.com> 1767812207 -0500	commit: feat: increase header height and add spacing between mode toggle and search
+f4a28b0add47860eadc98fb543b0df8c758a8a02 40d7af93a037494bc19528c71284266341b9182f Lisa Bohn <lisafbohn@gmail.com> 1767812424 -0500	commit: style: change available shifts color to less saturated emerald
+40d7af93a037494bc19528c71284266341b9182f acdfd97f67bcea5fe0ecca4d02b5e3bbf328ef2e Lisa Bohn <lisafbohn@gmail.com> 1767812592 -0500	commit: refactor: clean up header structure with natural spacing
+acdfd97f67bcea5fe0ecca4d02b5e3bbf328ef2e 2ef29191e807b894b6baf488c1c4de3d825da0df Lisa Bohn <lisafbohn@gmail.com> 1767812866 -0500	commit: refactor: change button text from 'View & Contact' to 'Contact & Assign'
+2ef29191e807b894b6baf488c1c4de3d825da0df bf7e5d75862a98e2763a2fad355f71418cda92d2 Lisa Bohn <lisafbohn@gmail.com> 1767812996 -0500	commit: feat: make left panel header fixed and scroll only absences list
+bf7e5d75862a98e2763a2fad355f71418cda92d2 bb9002dde9651a150e589f4b907b6acc8f64e936 Lisa Bohn <lisafbohn@gmail.com> 1767819093 -0500	commit: refactor: create shared ShiftChips component to eliminate duplication
+bb9002dde9651a150e589f4b907b6acc8f64e936 bcd53ea99c9d2d2c4d0d4eab3ba7577f4751a60a Lisa Bohn <lisafbohn@gmail.com> 1767819129 -0500	commit: refactor: remove unused formatShiftLabel import from ContactSubPanel
+bcd53ea99c9d2d2c4d0d4eab3ba7577f4751a60a 5781929371fc6eabf9812d7772166c04ee3311ed Lisa Bohn <lisafbohn@gmail.com> 1767819213 -0500	commit: feat: improve ContactSubPanel button spacing and shift format
+5781929371fc6eabf9812d7772166c04ee3311ed f679998c5f84e5fb24447428b601ed785a1a8f4e Lisa Bohn <lisafbohn@gmail.com> 1767819370 -0500	commit: feat: add assigned shift highlighting and move status to Coverage Summary
+f679998c5f84e5fb24447428b601ed785a1a8f4e b4c09da115d28b641b0e5fd31719fba974962684 Lisa Bohn <lisafbohn@gmail.com> 1767819535 -0500	commit: style: add bottom padding to color legend for better spacing
+b4c09da115d28b641b0e5fd31719fba974962684 a7f42fba02c449b2741acabfb4b020565cc71932 Lisa Bohn <lisafbohn@gmail.com> 1767819960 -0500	commit: feat: add toast notification after assigning shifts to sub
+a7f42fba02c449b2741acabfb4b020565cc71932 d1b730ec2b36c1f50f785a2b629bb2733d81c9c6 Lisa Bohn <lisafbohn@gmail.com> 1767820045 -0500	commit: fix: improve error handling and validation for shift assignment
+d1b730ec2b36c1f50f785a2b629bb2733d81c9c6 c3efdb823870e600344630f82f97c4c7e44fac2d Lisa Bohn <lisafbohn@gmail.com> 1767820135 -0500	commit: fix: correct createErrorResponse usage in substitute-contacts API
+c3efdb823870e600344630f82f97c4c7e44fac2d 8e452ceaba6a8c59a128e698f4ebaf582bb6b6fa Lisa Bohn <lisafbohn@gmail.com> 1767820209 -0500	commit: fix: improve error handling to capture actual error details
+8e452ceaba6a8c59a128e698f4ebaf582bb6b6fa 19d57fc4c73b0d168ff762a481a6f2686c1e13af Lisa Bohn <lisafbohn@gmail.com> 1767820367 -0500	commit: fix: add detailed error logging for shift override upsert
+19d57fc4c73b0d168ff762a481a6f2686c1e13af 598489ea7bd08e62b08f674a1823d6fa6cbcdc62 Lisa Bohn <lisafbohn@gmail.com> 1767820403 -0500	commit: fix: add created_at field to shift override upsert
+598489ea7bd08e62b08f674a1823d6fa6cbcdc62 e53ab6f532302b68e2e8f2959b1de0a0811fcd78 Lisa Bohn <lisafbohn@gmail.com> 1767906288 -0500	commit: fix: improve error message extraction and remove created_at from upsert
+e53ab6f532302b68e2e8f2959b1de0a0811fcd78 3a49ccb72072a725253dd90835f4e3b10ce4cb70 Lisa Bohn <lisafbohn@gmail.com> 1767911687 -0500	commit: fix: add migration to ensure is_contacted column exists
+3a49ccb72072a725253dd90835f4e3b10ce4cb70 a66331973936e60b271bfbbe43544cb66d2b330c Lisa Bohn <lisafbohn@gmail.com> 1767912124 -0500	commit: fix: add migration to ensure response_status column exists
+a66331973936e60b271bfbbe43544cb66d2b330c c162dd971ca7dd3f238829159f737cbb5b0a807c Lisa Bohn <lisafbohn@gmail.com> 1767925620 -0500	commit: fix: split coverage request query to fix foreign key relationship
+c162dd971ca7dd3f238829159f737cbb5b0a807c c1239d603790d1dcce66b54bf51818a0f7842f4f Lisa Bohn <lisafbohn@gmail.com> 1767926034 -0500	commit: fix: add detailed error logging for assign shifts
+c1239d603790d1dcce66b54bf51818a0f7842f4f e67ec97fd3415ec817f432d264e7a5e50d0b22d0 Lisa Bohn <lisafbohn@gmail.com> 1767926215 -0500	commit: fix: use teacher_id directly from coverage_requests table
+e67ec97fd3415ec817f432d264e7a5e50d0b22d0 f695eceeb8a4c7f50ba67d7ee276bf5c9a62b488 Lisa Bohn <lisafbohn@gmail.com> 1767926592 -0500	commit: feat: refresh UI after sub assignment and show assigned shifts in blue
+f695eceeb8a4c7f50ba67d7ee276bf5c9a62b488 09ba4ac66bd72c5188f2a15b90b4f7200a40a3f9 Lisa Bohn <lisafbohn@gmail.com> 1767926705 -0500	commit: feat: add color key to main Sub Finder page
+09ba4ac66bd72c5188f2a15b90b4f7200a40a3f9 59ba4570ed906b80fe070871ba599b503c3704ba Lisa Bohn <lisafbohn@gmail.com> 1767926745 -0500	commit: refactor: move color key to toolbar row
+59ba4570ed906b80fe070871ba599b503c3704ba 74b1589e432a4425309765c7e01b1d1858e5a1c7 Lisa Bohn <lisafbohn@gmail.com> 1767926795 -0500	commit: refactor: align color key left and buttons right in toolbar
+74b1589e432a4425309765c7e01b1d1858e5a1c7 a6277aaeac070d6ebfa4bcc97f7675ce708f923b Lisa Bohn <lisafbohn@gmail.com> 1767926819 -0500	commit: fix: properly wrap buttons in toolbar row
+a6277aaeac070d6ebfa4bcc97f7675ce708f923b 692e4a84c3285443901746f3ee51d5965fcb448b Lisa Bohn <lisafbohn@gmail.com> 1767926853 -0500	commit: refactor: align color key to bottom of toolbar row
+692e4a84c3285443901746f3ee51d5965fcb448b 6f87600867ff15c84b3e4171b1de1ed5773430b9 Lisa Bohn <lisafbohn@gmail.com> 1767927093 -0500	commit: feat: add assigned shifts section and update chip colors
+6f87600867ff15c84b3e4171b1de1ed5773430b9 4a2d1271d8399ae49f0c3ecaed6a5e3d749d2023 Lisa Bohn <lisafbohn@gmail.com> 1767927106 -0500	commit: fix: make all assignable shifts green chips
+4a2d1271d8399ae49f0c3ecaed6a5e3d749d2023 d3a3e21b75e51022c981f325042bc0e92279a39f Lisa Bohn <lisafbohn@gmail.com> 1767927196 -0500	commit: fix: use assigned_shifts from sub object in Coverage Summary
+d3a3e21b75e51022c981f325042bc0e92279a39f bb6c80e80a4b21be5a5fc38a6dac1c180234d75a Lisa Bohn <lisafbohn@gmail.com> 1767927208 -0500	commit: refine: prioritize sub.assigned_shifts when panel opens
+bb6c80e80a4b21be5a5fc38a6dac1c180234d75a 9be335c34a123da5b3db74fb2b6d5d73a4e98c3c Lisa Bohn <lisafbohn@gmail.com> 1767927266 -0500	commit: refactor: change 'Shifts to assign to sub' to 'Available & not assigned'
+9be335c34a123da5b3db74fb2b6d5d73a4e98c3c d04ea9695b34cd7cffd4ba6fc45315eefd07bdf9 Lisa Bohn <lisafbohn@gmail.com> 1767927370 -0500	commit: refactor: combine shift sections into single 'Shift Assignments' section
+d04ea9695b34cd7cffd4ba6fc45315eefd07bdf9 2b17ea02c7c489c604a4a1bbd4c0462c7832ea09 Lisa Bohn <lisafbohn@gmail.com> 1767933042 -0500	commit: Improve Sub Finder UI: compact cards, remaining shifts calculation, and recommended combination
+2b17ea02c7c489c604a4a1bbd4c0462c7832ea09 bcc3646287638202327c3c9f174af0249b1c0b2f Lisa Bohn <lisafbohn@gmail.com> 1767955442 -0500	commit: Add declined subs feature with collapsible section
+bcc3646287638202327c3c9f174af0249b1c0b2f 6f4cd511e7121b48ed7b10c4e0e10fcc405ac564 Lisa Bohn <lisafbohn@gmail.com> 1767955682 -0500	commit: fix(sub-finder): Add isDeclined parameter to ShiftChips function
+6f4cd511e7121b48ed7b10c4e0e10fcc405ac564 9c0b016a1d01186f7495eeb70cffb1b76522f8a1 Lisa Bohn <lisafbohn@gmail.com> 1767955917 -0500	commit: feat(sub-finder): Auto-uncheck shifts when Declined All is selected
+9c0b016a1d01186f7495eeb70cffb1b76522f8a1 b7d1e6f0bb4b172cb05191ac424434d297f759f3 Lisa Bohn <lisafbohn@gmail.com> 1767956378 -0500	commit: feat(sub-finder): Update button and warning for Declined All status
+b7d1e6f0bb4b172cb05191ac424434d297f759f3 fbf0052fca33cf6024705140a78d04e101910811 Lisa Bohn <lisafbohn@gmail.com> 1767956490 -0500	commit: feat(sub-finder): Disable Save as Pending button when declined
+fbf0052fca33cf6024705140a78d04e101910811 40a976d78313ab73e4cd0671c7edecfb14844242 Lisa Bohn <lisafbohn@gmail.com> 1767976460 -0500	commit: feat(sub-finder): Update declined subs UI
+40a976d78313ab73e4cd0671c7edecfb14844242 c6bca8dc2b2006a3551be54c2676097ff7749f2f Lisa Bohn <lisafbohn@gmail.com> 1768004010 -0500	commit: feat: update sub finder workflows and date pickers
+c6bca8dc2b2006a3551be54c2676097ff7749f2f 4c4db4077c409c981869c9b7cbf5c9c217aaf0e7 Lisa Bohn <lisafbohn@gmail.com> 1768004066 -0500	commit: chore: ignore devserver log
+4c4db4077c409c981869c9b7cbf5c9c217aaf0e7 c500ed776c5c2bca520a984a28ae26d77439e96c Lisa Bohn <lisafbohn@gmail.com> 1768004460 -0500	commit: feat: simplify navigation and remove unused pages
+c500ed776c5c2bca520a984a28ae26d77439e96c c500ed776c5c2bca520a984a28ae26d77439e96c Lisa Bohn <lisafbohn@gmail.com> 1768004764 -0500	checkout: moving from feature/coverage-requests-abstraction to feature/dashboard-pressing-needs
+c500ed776c5c2bca520a984a28ae26d77439e96c 789db35ef0b05fd6d8a7bfb25c908beaa25045ff Lisa Bohn <lisafbohn@gmail.com> 1768005589 -0500	commit: feat: add dashboard coverage summary
+789db35ef0b05fd6d8a7bfb25c908beaa25045ff 6ebf0dd08eab5072f820f79f5a69165ea397e39f Lisa Bohn <lisafbohn@gmail.com> 1768068616 -0500	commit: Add time off conflict validation and styling
+6ebf0dd08eab5072f820f79f5a69165ea397e39f 33bca246840009bea8cf0ede9f2322d9b777a798 Lisa Bohn <lisafbohn@gmail.com> 1768082680 -0500	commit: Revamp time off requests UX and draft handling
+33bca246840009bea8cf0ede9f2322d9b777a798 8e1f2c0ed830d6c17dc3811b7c8444bf21344df6 Lisa Bohn <lisafbohn@gmail.com> 1768092414 -0500	commit: Optimize time off list cards and view switching
+8e1f2c0ed830d6c17dc3811b7c8444bf21344df6 5ca3e48cd8218ecdaf069edb022b658987467494 Lisa Bohn <lisafbohn@gmail.com> 1768098216 -0500	commit: Refine sub finder coverage and cards
+5ca3e48cd8218ecdaf069edb022b658987467494 425b6b9e1c17790c912cf2ec2d01a15e91455637 Lisa Bohn <lisafbohn@gmail.com> 1768104450 -0500	commit: Improve sub finder UI and manual flow
+425b6b9e1c17790c912cf2ec2d01a15e91455637 0de5b4e503a661907c04901bfac19e7d01a83b33 Lisa Bohn <lisafbohn@gmail.com> 1768108259 -0500	commit: Refine typing and lint cleanup
+0de5b4e503a661907c04901bfac19e7d01a83b33 4008a4a5e19a2d0f5e006f7727d29a03b5d04e39 Lisa Bohn <lisafbohn@gmail.com> 1768129529 -0500	commit: Clean up lint warnings and hook deps
+4008a4a5e19a2d0f5e006f7727d29a03b5d04e39 a1f96be5fe01f1f473ef433ced42cfb9dde154f9 Lisa Bohn <lisafbohn@gmail.com> 1768130004 -0500	commit: Remove unused audit log type
+a1f96be5fe01f1f473ef433ced42cfb9dde154f9 8c858bdc264b346e77f4c4c8430984d879641f08 Lisa Bohn <lisafbohn@gmail.com> 1768130738 -0500	commit: Adjust schedule side panel and card clicks
+8c858bdc264b346e77f4c4c8430984d879641f08 ca01eaf379fb65082503876298c89f8df14c174d Lisa Bohn <lisafbohn@gmail.com> 1768243517 -0500	commit: feat: refine dashboard coverage and profiles
+ca01eaf379fb65082503876298c89f8df14c174d 33f8fbc6947850355110fb7e35b3092184578615 Lisa Bohn <lisafbohn@gmail.com> 1768244736 -0500	commit: style: align dashboard layout with app panels
+33f8fbc6947850355110fb7e35b3092184578615 088f3581dfd47cfa65f4a00a71353b3b792b0bcd Lisa Bohn <lisafbohn@gmail.com> 1768275049 -0500	commit: style: refresh dashboard layout and summary cards
+088f3581dfd47cfa65f4a00a71353b3b792b0bcd 5c2bac53457f72aed6a0e0e0468af945067109a6 Lisa Bohn <lisafbohn@gmail.com> 1768336453 -0500	commit: feat: refine dashboard layout and header actions
+5c2bac53457f72aed6a0e0e0468af945067109a6 5c2bac53457f72aed6a0e0e0468af945067109a6 Lisa Bohn <lisafbohn@gmail.com> 1768358093 -0500	checkout: moving from feature/dashboard-pressing-needs to feature/two-theme-system
+5c2bac53457f72aed6a0e0e0468af945067109a6 19cc0a1b3962dc2e21c012bd3a13549f22c9f65f Lisa Bohn <lisafbohn@gmail.com> 1768358656 -0500	commit: feat(theme): Add two-theme system with dark navy sidebar and teal buttons
+19cc0a1b3962dc2e21c012bd3a13549f22c9f65f 29b3d07dbdfca55eefeac7c952f879a5d8d81753 Lisa Bohn <lisafbohn@gmail.com> 1768359262 -0500	commit: Refactor sub-finder coverage logic and add recommendation carousel
+29b3d07dbdfca55eefeac7c952f879a5d8d81753 dbc991f1d3f581ea46431fd06cc860429e30380a Lisa Bohn <lisafbohn@gmail.com> 1768359473 -0500	commit: Fix lint warnings in dashboard and assign shifts
+dbc991f1d3f581ea46431fd06cc860429e30380a 714425877dcdb66f60313cbe85e04ef416d846dc Lisa Bohn <lisafbohn@gmail.com> 1768359859 -0500	checkout: moving from feature/two-theme-system to develop
+714425877dcdb66f60313cbe85e04ef416d846dc dbc991f1d3f581ea46431fd06cc860429e30380a Lisa Bohn <lisafbohn@gmail.com> 1768359868 -0500	merge feature/two-theme-system: Fast-forward
+dbc991f1d3f581ea46431fd06cc860429e30380a dbc991f1d3f581ea46431fd06cc860429e30380a Lisa Bohn <lisafbohn@gmail.com> 1768359958 -0500	checkout: moving from develop to develop
+dbc991f1d3f581ea46431fd06cc860429e30380a dbc991f1d3f581ea46431fd06cc860429e30380a Lisa Bohn <lisafbohn@gmail.com> 1768360231 -0500	checkout: moving from develop to feature/ui-nav-spacing
+dbc991f1d3f581ea46431fd06cc860429e30380a 14839f46b9c20fe807f2392e32ff7028e852b00c Lisa Bohn <lisafbohn@gmail.com> 1768360716 -0500	commit: Add left gutter spacing in main layout
+14839f46b9c20fe807f2392e32ff7028e852b00c dbc991f1d3f581ea46431fd06cc860429e30380a Lisa Bohn <lisafbohn@gmail.com> 1768360877 -0500	checkout: moving from feature/ui-nav-spacing to develop
+dbc991f1d3f581ea46431fd06cc860429e30380a 14839f46b9c20fe807f2392e32ff7028e852b00c Lisa Bohn <lisafbohn@gmail.com> 1768360888 -0500	merge feature/ui-nav-spacing: Fast-forward
+14839f46b9c20fe807f2392e32ff7028e852b00c 14839f46b9c20fe807f2392e32ff7028e852b00c Lisa Bohn <lisafbohn@gmail.com> 1768360964 -0500	checkout: moving from develop to feature/instant-theme-load
+14839f46b9c20fe807f2392e32ff7028e852b00c 6f93e301e540807cf80f0d8f2323f2f8dc82beea Lisa Bohn <lisafbohn@gmail.com> 1768361367 -0500	commit: Load user theme before paint
+6f93e301e540807cf80f0d8f2323f2f8dc82beea 14839f46b9c20fe807f2392e32ff7028e852b00c Lisa Bohn <lisafbohn@gmail.com> 1768361395 -0500	checkout: moving from feature/instant-theme-load to develop
+14839f46b9c20fe807f2392e32ff7028e852b00c 6f93e301e540807cf80f0d8f2323f2f8dc82beea Lisa Bohn <lisafbohn@gmail.com> 1768361446 -0500	merge feature/instant-theme-load: Fast-forward
+6f93e301e540807cf80f0d8f2323f2f8dc82beea 6f93e301e540807cf80f0d8f2323f2f8dc82beea Lisa Bohn <lisafbohn@gmail.com> 1768403086 -0500	checkout: moving from develop to feature/dashboard-ui-improvements
+6f93e301e540807cf80f0d8f2323f2f8dc82beea a060204686b34c68c5fd207f1e91ee471c82aa60 Lisa Bohn <lisafbohn@gmail.com> 1768404223 -0500	commit: fix(dashboard): align summary card tones with icon colors
+a060204686b34c68c5fd207f1e91ee471c82aa60 ba832fc33499fdca07094572bcb01b3c206819de Lisa Bohn <lisafbohn@gmail.com> 1768409449 -0500	commit: style(dashboard): Improve summary cards styling and layout
+ba832fc33499fdca07094572bcb01b3c206819de fdd2d5bab2008007511a9693ebbb2dbc5407352a Lisa Bohn <lisafbohn@gmail.com> 1768413110 -0500	checkout: moving from feature/dashboard-ui-improvements to main
+fdd2d5bab2008007511a9693ebbb2dbc5407352a 6f93e301e540807cf80f0d8f2323f2f8dc82beea Lisa Bohn <lisafbohn@gmail.com> 1768413150 -0500	checkout: moving from main to develop
+6f93e301e540807cf80f0d8f2323f2f8dc82beea ba832fc33499fdca07094572bcb01b3c206819de Lisa Bohn <lisafbohn@gmail.com> 1768413160 -0500	merge feature/dashboard-ui-improvements: Fast-forward
+ba832fc33499fdca07094572bcb01b3c206819de ba832fc33499fdca07094572bcb01b3c206819de Lisa Bohn <lisafbohn@gmail.com> 1768413174 -0500	checkout: moving from develop to bugfix/typescript-errors-and-test-failures
+ba832fc33499fdca07094572bcb01b3c206819de 23c7097d120ed64be0f5ba7387049874a0671c6f Lisa Bohn <lisafbohn@gmail.com> 1768413525 -0500	commit: fix: resolve TypeScript errors and test failures
+23c7097d120ed64be0f5ba7387049874a0671c6f ba832fc33499fdca07094572bcb01b3c206819de Lisa Bohn <lisafbohn@gmail.com> 1768413567 -0500	checkout: moving from bugfix/typescript-errors-and-test-failures to develop
+ba832fc33499fdca07094572bcb01b3c206819de 23c7097d120ed64be0f5ba7387049874a0671c6f Lisa Bohn <lisafbohn@gmail.com> 1768413635 -0500	merge bugfix/typescript-errors-and-test-failures: Fast-forward
+23c7097d120ed64be0f5ba7387049874a0671c6f 23c7097d120ed64be0f5ba7387049874a0671c6f Lisa Bohn <lisafbohn@gmail.com> 1768413754 -0500	checkout: moving from develop to fix/summary-cards-width
+23c7097d120ed64be0f5ba7387049874a0671c6f 40cf0fe2070a75a849d9513f2b767f8b355a548f Lisa Bohn <lisafbohn@gmail.com> 1768413807 -0500	commit: fix(dashboard): ensure summary cards have consistent width
+40cf0fe2070a75a849d9513f2b767f8b355a548f 23c7097d120ed64be0f5ba7387049874a0671c6f Lisa Bohn <lisafbohn@gmail.com> 1768413809 -0500	checkout: moving from fix/summary-cards-width to develop
+23c7097d120ed64be0f5ba7387049874a0671c6f 40cf0fe2070a75a849d9513f2b767f8b355a548f Lisa Bohn <lisafbohn@gmail.com> 1768413812 -0500	merge fix/summary-cards-width: Fast-forward
+40cf0fe2070a75a849d9513f2b767f8b355a548f 40cf0fe2070a75a849d9513f2b767f8b355a548f Lisa Bohn <lisafbohn@gmail.com> 1768413905 -0500	checkout: moving from develop to refactor/shared-time-off-card-component
+40cf0fe2070a75a849d9513f2b767f8b355a548f 67ff6174714989c1a6c6aee3ecbdbdc01d61ee25 Lisa Bohn <lisafbohn@gmail.com> 1768419081 -0500	commit: feat(api): Create unified time-off-requests endpoint and refactor existing APIs
+67ff6174714989c1a6c6aee3ecbdbdc01d61ee25 1c8e2bcbbd4c088f976dde7aa527457847498c49 Lisa Bohn <lisafbohn@gmail.com> 1768487281 -0500	commit: refactor(components): Create shared TimeOffCard component
+1c8e2bcbbd4c088f976dde7aa527457847498c49 5f558181b4440a51d75c1b5b9fd80600b210e331 Lisa Bohn <lisafbohn@gmail.com> 1768487832 -0500	commit: style(time-off-card): Update button styling and notes tooltip behavior
+5f558181b4440a51d75c1b5b9fd80600b210e331 db3090ab3b6e0c7423eb162f7df90486a511ac7a Lisa Bohn <lisafbohn@gmail.com> 1768492264 -0500	commit: style(time-off-card): Update uncovered chips to use yellow-orange color
+db3090ab3b6e0c7423eb162f7df90486a511ac7a eec95d4bc4871c44d237d50bf984e19b8223e77f Lisa Bohn <lisafbohn@gmail.com> 1768493047 -0500	commit: refactor(components): Create shared CoverageBadge component and standardize coverage colors
+eec95d4bc4871c44d237d50bf984e19b8223e77f 6969a4410d46277bc477d1b3f9d2c045857d61ef Lisa Bohn <lisafbohn@gmail.com> 1768503713 -0500	commit: style(time-off): Add max-width constraint to Time Off page
+6969a4410d46277bc477d1b3f9d2c045857d61ef baa016f05937aec2b7de2a66715d06cb3fb0ea1b Lisa Bohn <lisafbohn@gmail.com> 1768504789 -0500	commit: feat(time-off): Add coverage status filter with popover
+baa016f05937aec2b7de2a66715d06cb3fb0ea1b 40cf0fe2070a75a849d9513f2b767f8b355a548f Lisa Bohn <lisafbohn@gmail.com> 1768504807 -0500	checkout: moving from refactor/shared-time-off-card-component to develop
+40cf0fe2070a75a849d9513f2b767f8b355a548f baa016f05937aec2b7de2a66715d06cb3fb0ea1b Lisa Bohn <lisafbohn@gmail.com> 1768504810 -0500	merge refactor/shared-time-off-card-component: Fast-forward
+baa016f05937aec2b7de2a66715d06cb3fb0ea1b baa016f05937aec2b7de2a66715d06cb3fb0ea1b Lisa Bohn <lisafbohn@gmail.com> 1768504849 -0500	checkout: moving from develop to refactor/standardize-ui-colors-components
+baa016f05937aec2b7de2a66715d06cb3fb0ea1b f420a827f6dabdc3871ab99ab05d3552bd05c7de Lisa Bohn <lisafbohn@gmail.com> 1768506025 -0500	commit: feat(ui): Implement standardized color system
+f420a827f6dabdc3871ab99ab05d3552bd05c7de bfa7f00d1ee3d45b30444f83f45501f9081de3ba Lisa Bohn <lisafbohn@gmail.com> 1768508514 -0500	commit: refactor(ui): Fix CoverageBadge styling and standardize headers
+bfa7f00d1ee3d45b30444f83f45501f9081de3ba dd2e7d557a713319fe11505650c3cb4e240a15e5 Lisa Bohn <lisafbohn@gmail.com> 1768509013 -0500	commit: fix(dashboard): Add inline styles for summary card colors
+dd2e7d557a713319fe11505650c3cb4e240a15e5 9cc42703c53e1beb17f63da195dd7548b91bc721 Lisa Bohn <lisafbohn@gmail.com> 1768509083 -0500	commit: fix(colors): Change partial coverage text color from yellow-700 to yellow-600
+9cc42703c53e1beb17f63da195dd7548b91bc721 3693ceabe3cd658162fbcca49606df1df50b0cce Lisa Bohn <lisafbohn@gmail.com> 1768509321 -0500	commit: style(buttons): Standardize sub-related action buttons with teal styling
+3693ceabe3cd658162fbcca49606df1df50b0cce 9a3084e55cd8eb1b777dd46059ddd6e7ad8e572e Lisa Bohn <lisafbohn@gmail.com> 1768509785 -0500	commit: fix(dashboard): Correct 'Below Preferred' badge text
+9a3084e55cd8eb1b777dd46059ddd6e7ad8e572e 4b3e5faba21ff9788cfb4462846b9709e3561d92 Lisa Bohn <lisafbohn@gmail.com> 1768510127 -0500	commit: style(dashboard): Improve staffing target layout and notes icon
+4b3e5faba21ff9788cfb4462846b9709e3561d92 b14fdde8664fe015a19f49a7e7f60e512051d011 Lisa Bohn <lisafbohn@gmail.com> 1768511226 -0500	commit: style(colors): Standardize color system across dashboard and components
+b14fdde8664fe015a19f49a7e7f60e512051d011 9b03837d7fa7cde7d1c4bc8d6d52a14b54cf2803 Lisa Bohn <lisafbohn@gmail.com> 1768511978 -0500	commit: style(dashboard): Fix staffing badges and improve layout
+9b03837d7fa7cde7d1c4bc8d6d52a14b54cf2803 2b2aaa079dd7154c81780a28383d397492dd4c48 Lisa Bohn <lisafbohn@gmail.com> 1768513141 -0500	commit: feat(dashboard): Add coverage outlook time range selector
+2b2aaa079dd7154c81780a28383d397492dd4c48 27b418eb251ae300dfda586693166eff534d4868 Lisa Bohn <lisafbohn@gmail.com> 1768514313 -0500	commit: docs(todo): Add dashboard and UI improvement TODOs
+27b418eb251ae300dfda586693166eff534d4868 baa016f05937aec2b7de2a66715d06cb3fb0ea1b Lisa Bohn <lisafbohn@gmail.com> 1768514344 -0500	checkout: moving from refactor/standardize-ui-colors-components to develop
+baa016f05937aec2b7de2a66715d06cb3fb0ea1b 27b418eb251ae300dfda586693166eff534d4868 Lisa Bohn <lisafbohn@gmail.com> 1768514347 -0500	merge refactor/standardize-ui-colors-components: Fast-forward
+27b418eb251ae300dfda586693166eff534d4868 27b418eb251ae300dfda586693166eff534d4868 Lisa Bohn <lisafbohn@gmail.com> 1768565986 -0500	checkout: moving from develop to feature/quick-actions
+27b418eb251ae300dfda586693166eff534d4868 48dd20805c609c5e8c013975a1c8882815461851 Lisa Bohn <lisafbohn@gmail.com> 1768567482 -0500	commit: feat(quick-actions): Add Time Off sheet with panel management
+48dd20805c609c5e8c013975a1c8882815461851 4604c5e0a9cf579c8084f2deca2958e85e11a9af Lisa Bohn <lisafbohn@gmail.com> 1768578023 -0500	commit: fix(time-off): Fix scheduled shifts not appearing in Add Time Off form
+4604c5e0a9cf579c8084f2deca2958e85e11a9af 2c2f0f397b77502812209344fede00fc4d3702cf Lisa Bohn <lisafbohn@gmail.com> 1768578537 -0500	commit: feat(time-off): Add unsaved changes warning and improve date format
+2c2f0f397b77502812209344fede00fc4d3702cf b9e9a1331ce04e5d7242cf27d080ff6bbe94c036 Lisa Bohn <lisafbohn@gmail.com> 1768578740 -0500	commit: feat(time-off): Use right-side sheet for Add Time Off on Time Off page
+b9e9a1331ce04e5d7242cf27d080ff6bbe94c036 0b0f494ded48421e3ddc93aa3ae483fe0265629e Lisa Bohn <lisafbohn@gmail.com> 1768579945 -0500	commit: fix(time-off): Improve unsaved changes detection and UI
+0b0f494ded48421e3ddc93aa3ae483fe0265629e 24075309484a38047a21fd6d5d9ec428745f2f80 Lisa Bohn <lisafbohn@gmail.com> 1768580142 -0500	commit: feat(ui): Standardize panel background colors across right-side overlays
+24075309484a38047a21fd6d5d9ec428745f2f80 3d2689647e04e0c5002897c6404e02fd8290eec6 Lisa Bohn <lisafbohn@gmail.com> 1768580621 -0500	commit: feat(ui): Improve Time Off panel UX and Sheet component flexibility
+3d2689647e04e0c5002897c6404e02fd8290eec6 16d5e6fb863dc4743ee1cca2f0c9c43cc46d026e Lisa Bohn <lisafbohn@gmail.com> 1768582511 -0500	commit: feat(sub-finder): Add Find Sub quick action with teacher selection popover
+16d5e6fb863dc4743ee1cca2f0c9c43cc46d026e 2ba270af79fcf99604dd450ba2fa6eb7694984fa Lisa Bohn <lisafbohn@gmail.com> 1768589246 -0500	commit: fix(sub-finder): Fix shift chip styling to match coverage badges
+2ba270af79fcf99604dd450ba2fa6eb7694984fa 9bf097514e4e133743886018fe43231752f15f58 Lisa Bohn <lisafbohn@gmail.com> 1768594455 -0500	commit: style(sub-finder): Update shift chip and UI colors
+9bf097514e4e133743886018fe43231752f15f58 ee2e54e6010af64f85dc0708eb85fa10a93913d2 Lisa Bohn <lisafbohn@gmail.com> 1768678633 -0500	commit: feat(sub-finder): Add multiple teacher selection with pills
+ee2e54e6010af64f85dc0708eb85fa10a93913d2 75a0ace9a447fb4a806d7f829cba3b3fd19241ba Lisa Bohn <lisafbohn@gmail.com> 1768679358 -0500	commit: feat(sub-finder): Auto-rerun Finder on filter change and remove pagination
+75a0ace9a447fb4a806d7f829cba3b3fd19241ba 4154cd33c21b7fa057c878453751812c6e0a3811 Lisa Bohn <lisafbohn@gmail.com> 1768684877 -0500	commit: feat(assign-sub): Implement Assign Sub quick action with full panel
+4154cd33c21b7fa057c878453751812c6e0a3811 2a6e0e92f6514548a481ed7e9c25052255e26105 Lisa Bohn <lisafbohn@gmail.com> 1768686178 -0500	commit: chore(assign-sub): Remove debug console.logs and fix lint errors
+2a6e0e92f6514548a481ed7e9c25052255e26105 27b418eb251ae300dfda586693166eff534d4868 Lisa Bohn <lisafbohn@gmail.com> 1768686215 -0500	checkout: moving from feature/quick-actions to develop
+27b418eb251ae300dfda586693166eff534d4868 e748b40893416eb84855722f97e4b6a18489f447 Lisa Bohn <lisafbohn@gmail.com> 1768686227 -0500	merge feature/quick-actions: Merge made by the 'ort' strategy.
+e748b40893416eb84855722f97e4b6a18489f447 e748b40893416eb84855722f97e4b6a18489f447 Lisa Bohn <lisafbohn@gmail.com> 1768686288 -0500	checkout: moving from develop to feature/ui-improvements
+e748b40893416eb84855722f97e4b6a18489f447 c94cd5c79c4c85236ee6c3310874684a05feb05d Lisa Bohn <lisafbohn@gmail.com> 1768701713 -0500	commit: feat(time-off): Add cancellation support with sub-assignment handling
+c94cd5c79c4c85236ee6c3310874684a05feb05d 40e218c887ab9dd5da23150774f42a7185b4c189 Lisa Bohn <lisafbohn@gmail.com> 1768704212 -0500	commit: feat(sub-finder): Redesign recommended combination card layout
+40e218c887ab9dd5da23150774f42a7185b4c189 afce603fe567bfa736957754dcfe04028fe48544 Lisa Bohn <lisafbohn@gmail.com> 1768705897 -0500	commit: fix(ui): Convert border/background styles to inline for Safari compatibility
+afce603fe567bfa736957754dcfe04028fe48544 f595f18a289d3dcb7cb43b046dd1abbb83a93935 Lisa Bohn <lisafbohn@gmail.com> 1768706552 -0500	commit: feat(sub-finder): Add classroom colors to shift chips and update styling
+f595f18a289d3dcb7cb43b046dd1abbb83a93935 32645a3e06eda323e3b1f171acf50b82ab189988 Lisa Bohn <lisafbohn@gmail.com> 1768707589 -0500	commit: fix(ui): Multiple UI improvements and fixes
+32645a3e06eda323e3b1f171acf50b82ab189988 d50c5d6dbe4612c666f2042d8fa8c9c19e64269c Lisa Bohn <lisafbohn@gmail.com> 1768708327 -0500	commit: feat(sub-finder): Add Sub Finder refresh and covered badge tooltips
+d50c5d6dbe4612c666f2042d8fa8c9c19e64269c aa35a36cba2031bd59ec971fcb8473113670524b Lisa Bohn <lisafbohn@gmail.com> 1768709101 -0500	commit: feat(sub-finder): Add state preservation across navigation
+aa35a36cba2031bd59ec971fcb8473113670524b cf06799b8cb7736e5bce7930655ace9817cbd2e1 Lisa Bohn <lisafbohn@gmail.com> 1768710092 -0500	commit: perf: Improve navigation performance and fix Reports error
+cf06799b8cb7736e5bce7930655ace9817cbd2e1 d7ad787963f6e8239768c3294e7c521954c93a62 Lisa Bohn <lisafbohn@gmail.com> 1768821813 -0500	commit: fix: Remove unused getHeaderClasses import in time-off page
+d7ad787963f6e8239768c3294e7c521954c93a62 e748b40893416eb84855722f97e4b6a18489f447 Lisa Bohn <lisafbohn@gmail.com> 1768821823 -0500	checkout: moving from feature/ui-improvements to develop
+e748b40893416eb84855722f97e4b6a18489f447 0edf474998020959b21b2206d8b8076ce9d3829b Lisa Bohn <lisafbohn@gmail.com> 1768821827 -0500	merge feature/ui-improvements: Merge made by the 'ort' strategy.
+0edf474998020959b21b2206d8b8076ce9d3829b 0edf474998020959b21b2206d8b8076ce9d3829b Lisa Bohn <lisafbohn@gmail.com> 1768821926 -0500	checkout: moving from develop to feature/react-query
+0edf474998020959b21b2206d8b8076ce9d3829b 0edf474998020959b21b2206d8b8076ce9d3829b Lisa Bohn <lisafbohn@gmail.com> 1768827683 -0500	reset: moving to HEAD
+0edf474998020959b21b2206d8b8076ce9d3829b 27b418eb251ae300dfda586693166eff534d4868 Lisa Bohn <lisafbohn@gmail.com> 1768827686 -0500	checkout: moving from feature/react-query to HEAD~2
+27b418eb251ae300dfda586693166eff534d4868 9b03837d7fa7cde7d1c4bc8d6d52a14b54cf2803 Lisa Bohn <lisafbohn@gmail.com> 1768827848 -0500	checkout: moving from 27b418eb251ae300dfda586693166eff534d4868 to HEAD~2
+9b03837d7fa7cde7d1c4bc8d6d52a14b54cf2803 0edf474998020959b21b2206d8b8076ce9d3829b Lisa Bohn <lisafbohn@gmail.com> 1768828970 -0500	checkout: moving from 9b03837d7fa7cde7d1c4bc8d6d52a14b54cf2803 to feature/react-query
+0edf474998020959b21b2206d8b8076ce9d3829b de601ccbc88815431334ea74be2255be4207a23f Lisa Bohn <lisafbohn@gmail.com> 1768832530 -0500	commit: fix(dashboard): Fix column overlap by using inline styles for responsive min-width
+de601ccbc88815431334ea74be2255be4207a23f aaed761a141b37c0b65236e21544b2d3340a3709 Lisa Bohn <lisafbohn@gmail.com> 1768844886 -0500	commit: feat(react-query): Convert Time Off and Sub Finder to use React Query
+aaed761a141b37c0b65236e21544b2d3340a3709 aaed761a141b37c0b65236e21544b2d3340a3709 Lisa Bohn <lisafbohn@gmail.com> 1768845087 -0500	checkout: moving from feature/react-query to feature/add-school-id-to-weekly-schedule-tables
+aaed761a141b37c0b65236e21544b2d3340a3709 a21b210e3984e087498de48ad324274d801cb72d Lisa Bohn <lisafbohn@gmail.com> 1768847630 -0500	commit: feat(multi-tenancy): Add school_id to Weekly Schedule tables
+a21b210e3984e087498de48ad324274d801cb72d aaed761a141b37c0b65236e21544b2d3340a3709 Lisa Bohn <lisafbohn@gmail.com> 1768847742 -0500	checkout: moving from feature/add-school-id-to-weekly-schedule-tables to feature/react-query
+aaed761a141b37c0b65236e21544b2d3340a3709 06d12104d0c945b5119607009336cec82bd4fb02 Lisa Bohn <lisafbohn@gmail.com> 1768848003 -0500	commit: fix(time-off): Fix hooks order violation in TimeOffListClient
+06d12104d0c945b5119607009336cec82bd4fb02 9e546e4458de1d55997450e5d9902b560a325ec2 Lisa Bohn <lisafbohn@gmail.com> 1768851428 -0500	commit: feat(react-query): Disable auto-refetch globally and add manual refresh
+9e546e4458de1d55997450e5d9902b560a325ec2 64f86d3ddd36c90b8a860443ab502fa43d5d9e9e Lisa Bohn <lisafbohn@gmail.com> 1768851562 -0500	commit: style(time-off): Move refresh button next to header text
+64f86d3ddd36c90b8a860443ab502fa43d5d9e9e ae39d55c9e3a42756acb5078cd4cf31b18ee94ac Lisa Bohn <lisafbohn@gmail.com> 1768851946 -0500	commit: fix(build): Fix build errors for React Query merge
+ae39d55c9e3a42756acb5078cd4cf31b18ee94ac ae39d55c9e3a42756acb5078cd4cf31b18ee94ac Lisa Bohn <lisafbohn@gmail.com> 1768852045 -0500	reset: moving to HEAD
+ae39d55c9e3a42756acb5078cd4cf31b18ee94ac 0edf474998020959b21b2206d8b8076ce9d3829b Lisa Bohn <lisafbohn@gmail.com> 1768852047 -0500	checkout: moving from feature/react-query to develop
+0edf474998020959b21b2206d8b8076ce9d3829b fc36f4ed15f5b0ddaf4e2abdba6237fa14f068dd Lisa Bohn <lisafbohn@gmail.com> 1768852051 -0500	merge feature/react-query: Merge made by the 'ort' strategy.
+fc36f4ed15f5b0ddaf4e2abdba6237fa14f068dd 72c62398a6f6c95579950b751cd87692f5d4701f Lisa Bohn <lisafbohn@gmail.com> 1768852376 -0500	commit: fix(build): Restore missing route files after merge
+72c62398a6f6c95579950b751cd87692f5d4701f 72c62398a6f6c95579950b751cd87692f5d4701f Lisa Bohn <lisafbohn@gmail.com> 1768852428 -0500	checkout: moving from develop to fix/class-form-typescript-error
+72c62398a6f6c95579950b751cd87692f5d4701f 2e120af69e1142e8616033303e21638f8c8655f6 Lisa Bohn <lisafbohn@gmail.com> 1768853507 -0500	commit: fix(typescript): Fix form type errors in class and classroom forms
+2e120af69e1142e8616033303e21638f8c8655f6 f84264bcf15fb1324334f4a0053670055af9e902 Lisa Bohn <lisafbohn@gmail.com> 1768853644 -0500	commit: fix(typescript): Simplify timeslot schema and fix display_order handling
+f84264bcf15fb1324334f4a0053670055af9e902 14abf4c38971ea46e85b21f1887e73dd8524133f Lisa Bohn <lisafbohn@gmail.com> 1768853794 -0500	commit: fix(typescript): Add type assertion for timeslot form defaultValues
+14abf4c38971ea46e85b21f1887e73dd8524133f 9a4a97ca98408487f8e9088392b78187e8d5047c Lisa Bohn <lisafbohn@gmail.com> 1768854334 -0500	commit: fix(typescript): Add TODO for TimeSlotFormClient type issue
+9a4a97ca98408487f8e9088392b78187e8d5047c 72c62398a6f6c95579950b751cd87692f5d4701f Lisa Bohn <lisafbohn@gmail.com> 1768854370 -0500	checkout: moving from fix/class-form-typescript-error to develop
+72c62398a6f6c95579950b751cd87692f5d4701f 37046b289e45254d947c37fd1c14bfc7c69d6f2d Lisa Bohn <lisafbohn@gmail.com> 1768854373 -0500	merge fix/class-form-typescript-error: Merge made by the 'ort' strategy.
+37046b289e45254d947c37fd1c14bfc7c69d6f2d 37046b289e45254d947c37fd1c14bfc7c69d6f2d Lisa Bohn <lisafbohn@gmail.com> 1768854379 -0500	checkout: moving from develop to feature/weekly-schedule-improvements
+37046b289e45254d947c37fd1c14bfc7c69d6f2d 5b5396d343c07c3ee2764dfa8e1e67e759c295cf Lisa Bohn <lisafbohn@gmail.com> 1768854617 -0500	commit: fix(auth): Handle null schoolId in SchoolProvider to prevent Internal Server Error
+5b5396d343c07c3ee2764dfa8e1e67e759c295cf 5b5396d343c07c3ee2764dfa8e1e67e759c295cf Lisa Bohn <lisafbohn@gmail.com> 1768913177 -0500	reset: moving to HEAD
+5b5396d343c07c3ee2764dfa8e1e67e759c295cf 5b5396d343c07c3ee2764dfa8e1e67e759c295cf Lisa Bohn <lisafbohn@gmail.com> 1768913181 -0500	checkout: moving from feature/weekly-schedule-improvements to fix/typescript-build-errors
+5b5396d343c07c3ee2764dfa8e1e67e759c295cf 3a3f34d311280065a4509de62a00b47d49cd0d1b Lisa Bohn <lisafbohn@gmail.com> 1768913187 -0500	commit: fix(typescript): Resolve all TypeScript build errors and add required error components
+3a3f34d311280065a4509de62a00b47d49cd0d1b 37046b289e45254d947c37fd1c14bfc7c69d6f2d Lisa Bohn <lisafbohn@gmail.com> 1768915761 -0500	checkout: moving from fix/typescript-build-errors to develop
+37046b289e45254d947c37fd1c14bfc7c69d6f2d 3a3f34d311280065a4509de62a00b47d49cd0d1b Lisa Bohn <lisafbohn@gmail.com> 1768915954 -0500	merge fix/typescript-build-errors: Fast-forward
+3a3f34d311280065a4509de62a00b47d49cd0d1b 5b5396d343c07c3ee2764dfa8e1e67e759c295cf Lisa Bohn <lisafbohn@gmail.com> 1768917940 -0500	checkout: moving from develop to feature/weekly-schedule-improvements
+5b5396d343c07c3ee2764dfa8e1e67e759c295cf 3a3f34d311280065a4509de62a00b47d49cd0d1b Lisa Bohn <lisafbohn@gmail.com> 1768918212 -0500	merge develop: Fast-forward
+3a3f34d311280065a4509de62a00b47d49cd0d1b b6bb52aecec1690c548117854bba8092ce0a67be Lisa Bohn <lisafbohn@gmail.com> 1768920435 -0500	commit: feat(weekly-schedule): Improve layout persistence and set Days × Classrooms as default
+b6bb52aecec1690c548117854bba8092ce0a67be 5410247c71e942e12c73db5f7900f895d1da327f Lisa Bohn <lisafbohn@gmail.com> 1768939255 -0500	commit: feat(schedules): Improve Weekly Schedule Classrooms x Days layout
+5410247c71e942e12c73db5f7900f895d1da327f d2e97bfff16bb3e989d3378753ec9782630b3cf9 Lisa Bohn <lisafbohn@gmail.com> 1768941091 -0500	commit: feat(schedules): Fix sticky positioning for Weekly Schedule headers
+d2e97bfff16bb3e989d3378753ec9782630b3cf9 a1e1ac604674494972696457a2a9a55f284e49f3 Lisa Bohn <lisafbohn@gmail.com> 1768943495 -0500	commit: fix(schedules): Constrain grid container width to prevent page-level horizontal scroll
+a1e1ac604674494972696457a2a9a55f284e49f3 8ae9d004b4c36b00c7106ff139fdb55bf22c210b Lisa Bohn <lisafbohn@gmail.com> 1768944614 -0500	commit: feat(schedules): Standardize row heights and card dimensions across layouts
+8ae9d004b4c36b00c7106ff139fdb55bf22c210b d344e11df05e47c9ec2fcb841f1aae5f9ed44758 Lisa Bohn <lisafbohn@gmail.com> 1768947584 -0500	commit: feat(weekly-schedule): Add week picker for navigating between weeks
+d344e11df05e47c9ec2fcb841f1aae5f9ed44758 d344e11df05e47c9ec2fcb841f1aae5f9ed44758 Lisa Bohn <lisafbohn@gmail.com> 1768947589 -0500	checkout: moving from feature/weekly-schedule-improvements to feature/add-baseline-schedule
+d344e11df05e47c9ec2fcb841f1aae5f9ed44758 76aaa02df9662bdaa07bdf36fc9283196e3e8958 Lisa Bohn <lisafbohn@gmail.com> 1768947599 -0500	commit: feat(settings): Add Baseline Schedule page
+76aaa02df9662bdaa07bdf36fc9283196e3e8958 6a27465961904bf51790a9a249b7ddf20a4f64b3 Lisa Bohn <lisafbohn@gmail.com> 1768948340 -0500	commit: feat(baseline-schedule): Hide staff section and fix slot count display
+6a27465961904bf51790a9a249b7ddf20a4f64b3 3a3f34d311280065a4509de62a00b47d49cd0d1b Lisa Bohn <lisafbohn@gmail.com> 1768948405 -0500	checkout: moving from feature/add-baseline-schedule to develop
+3a3f34d311280065a4509de62a00b47d49cd0d1b 6b34fcc5babc9cd5938f44465bb5a73df57a7a7e Lisa Bohn <lisafbohn@gmail.com> 1768948420 -0500	merge feature/add-baseline-schedule: Merge made by the 'ort' strategy.
+6b34fcc5babc9cd5938f44465bb5a73df57a7a7e 01493b43a8c6c44556eb157e496a38e6a59c6a58 Lisa Bohn <lisafbohn@gmail.com> 1768948541 -0500	commit: fix(baseline-schedule): Move useCallback to top level to fix hooks error
+01493b43a8c6c44556eb157e496a38e6a59c6a58 d344e11df05e47c9ec2fcb841f1aae5f9ed44758 Lisa Bohn <lisafbohn@gmail.com> 1768948582 -0500	checkout: moving from develop to feature/weekly-schedule-improvements
+d344e11df05e47c9ec2fcb841f1aae5f9ed44758 b76c3296bb7ba1362f3f8db7243b059f1fa6dd43 Lisa Bohn <lisafbohn@gmail.com> 1768948663 -0500	merge develop: Merge made by the 'ort' strategy.
+b76c3296bb7ba1362f3f8db7243b059f1fa6dd43 bac44edce8f83d25be9664caa6a3dad0a9ce83df Lisa Bohn <lisafbohn@gmail.com> 1768949476 -0500	commit: feat(weekly-schedule): Disable card clicking for Weekly Schedule view
+bac44edce8f83d25be9664caa6a3dad0a9ce83df 3857203ad3b11f2efa61464b1984508d80c89c8c Lisa Bohn <lisafbohn@gmail.com> 1768949860 -0500	commit: feat(weekly-schedule): Improve week picker styling and layout
+3857203ad3b11f2efa61464b1984508d80c89c8c dbab127493cfaa5d558237400ebe09be7707d731 Lisa Bohn <lisafbohn@gmail.com> 1768950249 -0500	commit: feat(weekly-schedule): Add Substitute and Absent key items to legend
+dbab127493cfaa5d558237400ebe09be7707d731 ccf59913ddb48bd34d43d4eb8be26a63f20d20fe Lisa Bohn <lisafbohn@gmail.com> 1768954758 -0500	commit: feat(weekly-schedule): Add filter chips for display mode selection
+ccf59913ddb48bd34d43d4eb8be26a63f20d20fe 2b432ae9c852bb2adf151fad1d44ee03c30535fe Lisa Bohn <lisafbohn@gmail.com> 1768961313 -0500	commit: feat(schedules): Add Absences filter and update filter labels
+2b432ae9c852bb2adf151fad1d44ee03c30535fe 8d9f51566c640b31b4febcec8fdf5869463034e8 Lisa Bohn <lisafbohn@gmail.com> 1768962527 -0500	commit: fix(schedules): Fix absences filter and improve week-specific filtering
+8d9f51566c640b31b4febcec8fdf5869463034e8 f160d2b860f43b58f52f4cbda3a72d6726ed6969 Lisa Bohn <lisafbohn@gmail.com> 1768964753 -0500	commit: feat(schedules): improve absence UX and sub linking
+f160d2b860f43b58f52f4cbda3a72d6726ed6969 0b86383ec67422634805b6a731303db74086d3ce Lisa Bohn <lisafbohn@gmail.com> 1768965868 -0500	commit: fix(schedules): Fix filter counts and improve filtering logic
+0b86383ec67422634805b6a731303db74086d3ce eec77a6a9cc102c8ad52ce15220ef4904c43be2b Lisa Bohn <lisafbohn@gmail.com> 1768966388 -0500	commit: feat(schedules): Filter display by mode and prevent duplicate teachers
+eec77a6a9cc102c8ad52ce15220ef4904c43be2b 3dad3b8cbe4b6432e489d28e808885dfd338a24b Lisa Bohn <lisafbohn@gmail.com> 1768966883 -0500	commit: fix(schedules): Fix TypeScript errors in build
+3dad3b8cbe4b6432e489d28e808885dfd338a24b 01493b43a8c6c44556eb157e496a38e6a59c6a58 Lisa Bohn <lisafbohn@gmail.com> 1768966888 -0500	checkout: moving from feature/weekly-schedule-improvements to develop
+01493b43a8c6c44556eb157e496a38e6a59c6a58 0e378a676783fb2c44c0e19aac7618475e204677 Lisa Bohn <lisafbohn@gmail.com> 1768966894 -0500	merge feature/weekly-schedule-improvements: Merge made by the 'ort' strategy.
+0e378a676783fb2c44c0e19aac7618475e204677 a21b210e3984e087498de48ad324274d801cb72d Lisa Bohn <lisafbohn@gmail.com> 1768993273 -0500	checkout: moving from develop to feature/add-school-id-to-weekly-schedule-tables
+a21b210e3984e087498de48ad324274d801cb72d a21b210e3984e087498de48ad324274d801cb72d Lisa Bohn <lisafbohn@gmail.com> 1768993395 -0500	reset: moving to HEAD
+a21b210e3984e087498de48ad324274d801cb72d 0e378a676783fb2c44c0e19aac7618475e204677 Lisa Bohn <lisafbohn@gmail.com> 1768993439 -0500	checkout: moving from feature/add-school-id-to-weekly-schedule-tables to develop
+0e378a676783fb2c44c0e19aac7618475e204677 a21b210e3984e087498de48ad324274d801cb72d Lisa Bohn <lisafbohn@gmail.com> 1768993545 -0500	checkout: moving from develop to feature/add-school-id-to-weekly-schedule-tables
+a21b210e3984e087498de48ad324274d801cb72d c2f3c1a0646a2adb6d44f9f8a379d3b4860419a1 Lisa Bohn <lisafbohn@gmail.com> 1768994056 -0500	commit (merge): Merge develop into feature/add-school-id-to-weekly-schedule-tables
+c2f3c1a0646a2adb6d44f9f8a379d3b4860419a1 fef48e08d37f0e0bc3b8da32d19aafa41d78527d Lisa Bohn <lisafbohn@gmail.com> 1768994303 -0500	commit (amend): Merge develop into feature/add-school-id-to-weekly-schedule-tables
+fef48e08d37f0e0bc3b8da32d19aafa41d78527d 6a1aa6a3cbe7158b0ee22fc8dbe46610558586e2 Lisa Bohn <lisafbohn@gmail.com> 1768994599 -0500	commit: fix(schedules): Remove duplicate query definition in getScheduleByDayAndSlot
+6a1aa6a3cbe7158b0ee22fc8dbe46610558586e2 ae31a5d0c5cb6d685a479a90f27f167c70e4f451 Lisa Bohn <lisafbohn@gmail.com> 1768998456 -0500	commit: fix(dashboard): Add school_id filtering to dashboard API route
+ae31a5d0c5cb6d685a479a90f27f167c70e4f451 0e378a676783fb2c44c0e19aac7618475e204677 Lisa Bohn <lisafbohn@gmail.com> 1768998883 -0500	checkout: moving from feature/add-school-id-to-weekly-schedule-tables to develop
+0e378a676783fb2c44c0e19aac7618475e204677 0e378a676783fb2c44c0e19aac7618475e204677 Lisa Bohn <lisafbohn@gmail.com> 1768999029 -0500	merge feature/add-school-id-to-weekly-schedule-tables: updating HEAD
+0e378a676783fb2c44c0e19aac7618475e204677 bcda0691d65838dda08c4c9a88892e74f9fdb671 Lisa Bohn <lisafbohn@gmail.com> 1768999310 -0500	merge feature/add-school-id-to-weekly-schedule-tables: Merge made by the 'ort' strategy.
+bcda0691d65838dda08c4c9a88892e74f9fdb671 fdd2d5bab2008007511a9693ebbb2dbc5407352a Lisa Bohn <lisafbohn@gmail.com> 1768999367 -0500	checkout: moving from develop to main
+fdd2d5bab2008007511a9693ebbb2dbc5407352a ed5285ce18445016b0ba1535b97d721c9c745d1d Lisa Bohn <lisafbohn@gmail.com> 1768999395 -0500	merge develop: Merge made by the 'ort' strategy.
+ed5285ce18445016b0ba1535b97d721c9c745d1d ed5285ce18445016b0ba1535b97d721c9c745d1d Lisa Bohn <lisafbohn@gmail.com> 1768999519 -0500	checkout: moving from main to feature/dashboard-ui-improvements
+ed5285ce18445016b0ba1535b97d721c9c745d1d 20b2498c299155a43e92744b99149d43339935a2 Lisa Bohn <lisafbohn@gmail.com> 1768999774 -0500	commit: fix(dashboard): Ensure consistent spacing with Time Off page
+20b2498c299155a43e92744b99149d43339935a2 69afc4ba72cf272c1e5af415c78136453e4ad41a Lisa Bohn <lisafbohn@gmail.com> 1768999784 -0500	commit: docs: Add TODO for Weekly Schedule layout consistency
+69afc4ba72cf272c1e5af415c78136453e4ad41a 69afc4ba72cf272c1e5af415c78136453e4ad41a Lisa Bohn <lisafbohn@gmail.com> 1769015681 -0500	checkout: moving from feature/dashboard-ui-improvements to feature/rename-supabase-env-variable
+69afc4ba72cf272c1e5af415c78136453e4ad41a 69afc4ba72cf272c1e5af415c78136453e4ad41a Lisa Bohn <lisafbohn@gmail.com> 1769015699 -0500	checkout: moving from feature/rename-supabase-env-variable to feature/dashboard-ui-improvements
+69afc4ba72cf272c1e5af415c78136453e4ad41a 3e0f94d7ccab08e389c3bbcc4d5c074f7f8eb307 Lisa Bohn <lisafbohn@gmail.com> 1769015707 -0500	commit: fix(dashboard): Change day/time slot format in Below Staffing Target
+3e0f94d7ccab08e389c3bbcc4d5c074f7f8eb307 69afc4ba72cf272c1e5af415c78136453e4ad41a Lisa Bohn <lisafbohn@gmail.com> 1769015712 -0500	checkout: moving from feature/dashboard-ui-improvements to feature/rename-supabase-env-variable
+69afc4ba72cf272c1e5af415c78136453e4ad41a 824d21de805924873e797a60a2b1d5008dfd3cf6 Lisa Bohn <lisafbohn@gmail.com> 1769016099 -0500	commit: refactor(env): Rename NEXT_PUBLIC_SUPABASE_ANON_KEY to NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
