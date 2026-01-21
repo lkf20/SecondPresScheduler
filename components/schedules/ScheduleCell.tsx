@@ -1,6 +1,7 @@
 'use client'
 
-import { CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
+import React from 'react'
+import { CheckCircle2, AlertTriangle, XCircle, CornerDownRight } from 'lucide-react'
 import {
   Tooltip,
   TooltipContent,
@@ -8,6 +9,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import type { WeeklyScheduleData } from '@/lib/api/weekly-schedule'
+import AbsentTeacherPopover from './AbsentTeacherPopover'
 
 interface ScheduleCellProps {
   data?: WeeklyScheduleData & {
@@ -25,11 +27,20 @@ interface ScheduleCellProps {
         preferred_ratio: number | null
       }>
     } | null
+    absences?: Array<{
+      teacher_id: string
+      teacher_name: string
+      has_sub: boolean
+      is_partial: boolean
+      time_off_request_id?: string
+    }>
+    classroom_name?: string
   }
   onClick?: () => void
+  displayMode?: 'permanent-only' | 'permanent-flexible' | 'substitutes-only' | 'all-scheduled-staff' | 'coverage-issues' | 'absences'
 }
 
-export default function ScheduleCell({ data, onClick }: ScheduleCellProps) {
+export default function ScheduleCell({ data, onClick, displayMode = 'all-scheduled-staff' }: ScheduleCellProps) {
   const scheduleCell = data?.schedule_cell
   const isInactive = scheduleCell && !scheduleCell.is_active
   const isActive = scheduleCell?.is_active ?? false
@@ -158,13 +169,88 @@ export default function ScheduleCell({ data, onClick }: ScheduleCellProps) {
           {(() => {
             // Filter assignments for this slot (teachers are assigned to the slot, not individual class groups)
             const classGroupIds = scheduleCell.class_groups.map(cg => cg.id)
-            const filteredAssignments = data?.assignments.filter(
-              a => a.teacher_id && a.class_id && classGroupIds.includes(a.class_id)
+            const allAssignments = data?.assignments || []
+            
+            // Debug: Log all assignments before filtering
+            if (allAssignments.some(a => a.is_substitute === true)) {
+              console.log('[ScheduleCell] All assignments before filtering:', {
+                totalAssignments: allAssignments.length,
+                substitutes: allAssignments.filter(a => a.is_substitute === true).map(a => ({
+                  teacher_id: a.teacher_id,
+                  teacher_name: a.teacher_name,
+                  class_id: a.class_id,
+                  is_substitute: a.is_substitute
+                })),
+                classGroupIds,
+                classroom: data?.classroom_name || 'Unknown'
+              })
+            }
+            
+            // Filter assignments: regular teachers must match class groups, but substitutes cover the whole slot
+            // So include substitutes even if they don't have a matching class_id
+            const filteredAssignments = allAssignments.filter(
+              a => {
+                if (!a.teacher_id) return false
+                // Include substitutes even if they don't have a matching class_id (they cover the slot)
+                if (a.is_substitute === true) return true
+                // For non-substitutes, they must have a class_id that matches one of the class groups
+                return a.class_id && classGroupIds.includes(a.class_id)
+              }
             ) || []
             
-            // Separate regular teachers and floaters
-            const regularTeachers = filteredAssignments.filter(a => !a.is_floater)
-            const floaters = filteredAssignments.filter(a => a.is_floater)
+            // Debug: Log filtered assignments
+            if (allAssignments.some(a => a.is_substitute === true)) {
+              console.log('[ScheduleCell] Filtered assignments:', {
+                filteredCount: filteredAssignments.length,
+                substitutes: filteredAssignments.filter(a => a.is_substitute === true).map(a => ({
+                  teacher_id: a.teacher_id,
+                  teacher_name: a.teacher_name,
+                  class_id: a.class_id,
+                  is_substitute: a.is_substitute
+                })),
+                allAssignments: allAssignments.map(a => ({
+                  teacher_name: a.teacher_name,
+                  class_id: a.class_id,
+                  is_substitute: a.is_substitute,
+                  is_floater: a.is_floater
+                }))
+              })
+            }
+            
+            // Determine what to show based on displayMode
+            const showAbsences = displayMode !== 'permanent-only'
+            const showSubstitutes = displayMode !== 'permanent-only'
+            const showRegularTeachers = displayMode !== 'substitutes-only' && displayMode !== 'absences'
+            const showFloaters = displayMode !== 'substitutes-only' && displayMode !== 'absences'
+            
+            // Get absent teachers from absences array (not from assignments)
+            const absences = showAbsences ? (data?.absences || []) : []
+            const absentTeacherIds = new Set(absences.map(a => a.teacher_id))
+            
+            // Get substitutes and map them to their absent teachers
+            const substitutes = showSubstitutes ? filteredAssignments.filter(a => a.is_substitute === true) : []
+            const substitutesByAbsentTeacher = new Map<string, typeof substitutes>()
+            substitutes.forEach(sub => {
+              if (sub.absent_teacher_id) {
+                if (!substitutesByAbsentTeacher.has(sub.absent_teacher_id)) {
+                  substitutesByAbsentTeacher.set(sub.absent_teacher_id, [])
+                }
+                substitutesByAbsentTeacher.get(sub.absent_teacher_id)!.push(sub)
+              }
+            })
+            
+            // Get non-substitute assignments (regular teachers and floaters) - only if showing them
+            // IMPORTANT: Exclude teachers who are absent (they're already shown as absent)
+            const regularAssignments = (showRegularTeachers || showFloaters) 
+              ? filteredAssignments.filter(a => !a.is_substitute && !absentTeacherIds.has(a.teacher_id))
+              : []
+            const regularTeachers = showRegularTeachers ? regularAssignments.filter(a => !a.is_floater) : []
+            const floaters = showFloaters ? regularAssignments.filter(a => a.is_floater) : []
+            
+            // Sort absences alphabetically by teacher name
+            const sortedAbsences = [...absences].sort((a, b) =>
+              (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown')
+            )
             
             // Sort each group alphabetically by display name
             const sortedRegular = regularTeachers.sort((a, b) => 
@@ -174,22 +260,139 @@ export default function ScheduleCell({ data, onClick }: ScheduleCellProps) {
               (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown')
             )
             
-            // Combine: regular teachers first, then floaters
-            const sortedAssignments = [...sortedRegular, ...sortedFloaters]
+            // Build display order: absent teachers (with their substitutes) first, then regular, then floaters
+            const displayGroups: Array<{
+              type: 'absent' | 'regular' | 'floater'
+              absence?: typeof absences[0]
+              assignment?: typeof filteredAssignments[0]
+              substitutes: typeof substitutes
+            }> = []
             
-            return sortedAssignments.map((assignment) => (
-              <span
-                key={assignment.id || assignment.teacher_id}
-                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold w-fit ${
-                  assignment.is_floater
-                    ? 'bg-purple-100 text-purple-800 border border-purple-300 border-dashed'
-                    : 'bg-blue-100 text-blue-800'
-                }`}
-                title={assignment.is_floater ? 'Floater assignment' : undefined}
-              >
-                {assignment.teacher_name || 'Unknown'}
-              </span>
-            ))
+            // Add absent teachers with their substitutes (from absences array)
+            sortedAbsences.forEach(absence => {
+              displayGroups.push({
+                type: 'absent',
+                absence,
+                substitutes: (substitutesByAbsentTeacher.get(absence.teacher_id) || []).sort((a, b) =>
+                  (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown')
+                )
+              })
+            })
+            
+            // Add regular teachers (with empty substitutes array) - only if showing regular teachers
+            if (showRegularTeachers) {
+              sortedRegular.forEach(teacher => {
+                displayGroups.push({
+                  type: 'regular',
+                  assignment: teacher,
+                  substitutes: []
+                })
+              })
+            }
+            
+            // Add floaters (with empty substitutes array) - only if showing floaters
+            if (showFloaters) {
+              sortedFloaters.forEach(floater => {
+                displayGroups.push({
+                  type: 'floater',
+                  assignment: floater,
+                  substitutes: []
+                })
+              })
+            }
+            
+            return displayGroups.flatMap((group, groupIndex) => {
+              const substitutes = group.substitutes
+              const result: React.ReactNode[] = []
+              
+              // Handle absent teachers (from absences array)
+              if (group.type === 'absent' && group.absence) {
+                const absence = group.absence
+                const teacherName = absence.teacher_name || 'Unknown'
+                const hasSubForAbsence = substitutes.length > 0 || absence.has_sub === true
+                
+                // Gray styling for absent teachers (matches the key) - make clickable
+                const chip = (
+                  <span
+                    key={`absent-${absence.teacher_id}`}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold w-fit bg-gray-100 text-gray-700 border border-gray-300 cursor-pointer hover:bg-gray-200 transition-colors"
+                    title={hasSubForAbsence ? 'Absent' : 'No sub assigned'}
+                  >
+                    <span>{teacherName}</span>
+                    {!hasSubForAbsence && (
+                      <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0" />
+                    )}
+                  </span>
+                )
+                
+                // Wrap absent teachers in popover for actions
+                const absentChip = (
+                  <AbsentTeacherPopover
+                    key={`absent-popover-${absence.teacher_id}`}
+                    teacherName={teacherName}
+                    teacherId={absence.teacher_id}
+                    timeOffRequestId={absence.time_off_request_id}
+                  >
+                    {chip}
+                  </AbsentTeacherPopover>
+                )
+                
+                // If this absent teacher has substitutes, render them directly under the absent chip with an L-shaped connector
+                if (substitutes.length > 0) {
+                  result.push(
+                    <div
+                      key={`absent-with-subs-${absence.teacher_id}`}
+                      className="flex flex-col gap-0.5"
+                    >
+                      {absentChip}
+                      {substitutes.map((sub) => (
+                        <div
+                          key={`sub-row-${absence.teacher_id}-${sub.id || sub.teacher_id}`}
+                          className="flex items-center gap-1 ml-2 mt-0.5"
+                        >
+                          <CornerDownRight className="h-3 w-3 text-gray-400 shrink-0" />
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold w-fit bg-teal-50 text-teal-600 border border-teal-200"
+                            title="Substitute"
+                          >
+                            {sub.teacher_name || 'Unknown'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                } else {
+                  // No substitutes, just show the absent teacher chip
+                  result.push(absentChip)
+                }
+              } else if (group.assignment) {
+                // Handle regular teachers and floaters (from assignments array)
+                const assignment = group.assignment
+                let className = 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold w-fit '
+                let title: string | undefined = undefined
+                
+                if (assignment.is_floater) {
+                  className += 'bg-purple-100 text-purple-800 border border-purple-300 border-dashed'
+                  title = 'Floater assignment'
+                } else {
+                  className += 'bg-blue-100 text-blue-800'
+                }
+                
+                const chip = (
+                  <span
+                    key={assignment.id || assignment.teacher_id}
+                    className={className}
+                    title={title}
+                  >
+                    {assignment.teacher_name || 'Unknown'}
+                  </span>
+                )
+                
+                result.push(chip)
+              }
+              
+              return result
+            })
           })()}
         </div>
       )}

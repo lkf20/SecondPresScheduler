@@ -19,10 +19,29 @@ interface WeeklyScheduleGridNewProps {
     dayId: string
     timeSlotId: string
   } | null
+  allowCardClick?: boolean // If false, cards are not clickable (default: true)
+  displayMode?: 'permanent-only' | 'permanent-flexible' | 'substitutes-only' | 'all-scheduled-staff' | 'coverage-issues' | 'absences'
+  onDisplayModeChange?: (mode: 'permanent-only' | 'permanent-flexible' | 'substitutes-only' | 'all-scheduled-staff' | 'coverage-issues' | 'absences') => void
+  // Optional: provide counts computed from the unfiltered (base) dataset so chip counts
+  // don't change when a displayMode is selected.
+  displayModeCounts?: {
+    all: number
+    permanent: number
+    coverageIssues: number
+    absences: number
+    subs: number
+  }
+  slotCounts?: { shown: number; total: number } // Slot counts for display
 }
 
 type WeeklyScheduleCellData = WeeklyScheduleData & {
   schedule_cell: WeeklyScheduleDataByClassroom['days'][number]['time_slots'][number]['schedule_cell']
+  absences?: Array<{
+    teacher_id: string
+    teacher_name: string
+    has_sub: boolean
+    is_partial: boolean
+  }>
 }
 
 // Helper function to convert hex color to rgba with opacity
@@ -89,6 +108,11 @@ export default function WeeklyScheduleGridNew({
   onFilterPanelOpenChange,
   filterPanelOpen = false,
   initialSelectedCell = null,
+  allowCardClick = true, // Default to allowing clicks
+  displayMode = 'all-scheduled-staff',
+  onDisplayModeChange,
+  displayModeCounts,
+  slotCounts,
 }: WeeklyScheduleGridNewProps) {
   const [selectedCell, setSelectedCell] = useState<{
     dayId: string
@@ -103,6 +127,77 @@ export default function WeeklyScheduleGridNew({
   } | null>(null)
   const { setActivePanel, previousPanel, restorePreviousPanel, registerPanelCloseHandler } = usePanelManager()
   const savedCellRef = useRef<typeof selectedCell>(null)
+
+  // Calculate assignment counts for filter chips
+  // Note: Since substitutes are merged into assignments with teacher_id, we can't distinguish them directly
+  // For now, count all assignments, and separate permanent teachers from floaters
+  const assignmentCounts = useMemo(() => {
+    let allCount = 0
+    let permanentCount = 0
+    let subsCount = 0 // Count slots with substitutes
+    let coverageIssuesCount = 0
+    let absencesCount = 0
+
+    data.forEach((classroom) => {
+      classroom.days.forEach((day) => {
+        day.time_slots.forEach((slot) => {
+          slot.assignments.forEach((assignment) => {
+            allCount++
+            // Count permanent teachers (non-floaters with teacher_id)
+            if (assignment.teacher_id && !assignment.is_floater) {
+              permanentCount++
+            }
+          })
+
+          // Count slots with substitutes (check if any assignment is marked as substitute)
+          const hasSubstitute = slot.assignments.some(a => a.is_substitute === true)
+          if (hasSubstitute) {
+            subsCount++
+          }
+
+          // Count absences from the absences array (if available)
+          if (slot.absences && slot.absences.length > 0) {
+            absencesCount++
+          }
+
+          // Check if slot has coverage issues
+          const scheduleCell = slot.schedule_cell
+          if (scheduleCell && scheduleCell.is_active && scheduleCell.class_groups && scheduleCell.class_groups.length > 0) {
+            // Find class group with lowest min_age for ratio calculation
+            const classGroupForRatio = scheduleCell.class_groups.reduce((lowest, current) => {
+              const currentMinAge = current.min_age ?? Infinity
+              const lowestMinAge = lowest.min_age ?? Infinity
+              return currentMinAge < lowestMinAge ? current : lowest
+            })
+
+            const requiredTeachers = classGroupForRatio.required_ratio
+              ? Math.ceil(scheduleCell.enrollment_for_staffing! / classGroupForRatio.required_ratio)
+              : undefined
+            const preferredTeachers = classGroupForRatio.preferred_ratio
+              ? Math.ceil(scheduleCell.enrollment_for_staffing! / classGroupForRatio.preferred_ratio)
+              : undefined
+
+            const classGroupIds = scheduleCell.class_groups.map(cg => cg.id)
+            const assignedCount = slot.assignments.filter(
+              a => a.teacher_id && a.class_id && classGroupIds.includes(a.class_id)
+            ).length
+
+            const belowRequired = requiredTeachers !== undefined && assignedCount < requiredTeachers
+            const belowPreferred = preferredTeachers !== undefined && assignedCount < preferredTeachers
+
+            // Count as coverage issue if below required or below preferred
+            if (belowRequired || belowPreferred) {
+              coverageIssuesCount++
+            }
+          }
+        })
+      })
+    })
+
+    return { all: allCount, subs: subsCount, permanent: permanentCount, coverageIssues: coverageIssuesCount, absences: absencesCount }
+  }, [data])
+
+  const countsForChips = displayModeCounts ?? assignmentCounts
 
   // Extract unique days and time slots from data, filtered by selectedDayIds
   const { days, timeSlots } = useMemo(() => {
@@ -296,6 +391,7 @@ export default function WeeklyScheduleGridNew({
           time_slot_display_order: timeSlot.time_slot_display_order,
           assignments: timeSlot.assignments,
           schedule_cell: timeSlot.schedule_cell || null,
+          absences: timeSlot.absences,
         } : undefined
       })()
     : undefined
@@ -348,6 +444,7 @@ export default function WeeklyScheduleGridNew({
                 time_slot_display_order: timeSlot.display_order,
                 assignments: timeSlotData.assignments,
                 schedule_cell: timeSlotData.schedule_cell || null,
+                absences: timeSlotData.absences,
               }
             : undefined
 
@@ -385,7 +482,7 @@ export default function WeeklyScheduleGridNew({
     return (
       <>
         {/* Legend */}
-        <div className="mb-4 p-3 bg-gray-50 rounded-md border border-gray-200">
+        <div className="mb-6 p-3 bg-gray-100 rounded-md border border-gray-200">
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-gray-700">Key:</span>
@@ -401,6 +498,16 @@ export default function WeeklyScheduleGridNew({
               </span>
             </div>
             <div className="flex items-center gap-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200">
+                Substitute
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+                Absent
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <span className="text-gray-600">Meets preferred</span>
             </div>
@@ -413,6 +520,38 @@ export default function WeeklyScheduleGridNew({
               <span className="text-gray-600">Below required</span>
             </div>
           </div>
+        </div>
+        {/* Filter chips - separate row below legend */}
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {[
+            { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
+            { value: 'coverage-issues' as const, label: `Coverage Issues (${countsForChips.coverageIssues})` },
+            { value: 'substitutes-only' as const, label: `Subs (${countsForChips.subs})` },
+            { value: 'absences' as const, label: `Absences (${countsForChips.absences})` },
+            { value: 'permanent-only' as const, label: `Permanent staff (${countsForChips.permanent})` },
+          ].map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onDisplayModeChange?.(option.value)
+              }}
+              className={
+                displayMode === option.value
+                  ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
+                  : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
+              }
+            >
+              {option.label}
+            </button>
+          ))}
+          {slotCounts && (
+            <p className="ml-4 text-sm text-muted-foreground italic">
+              Showing {slotCounts.shown} of {slotCounts.total} slots
+            </p>
+          )}
         </div>
 
         <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)]" style={{ position: 'relative' }}>
@@ -593,7 +732,9 @@ export default function WeeklyScheduleGridNew({
                               }}
                             >
                               <div
-                                className={`rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 min-h-[120px] flex-shrink-0 cursor-pointer ${
+                                className={`rounded-lg border border-gray-200 bg-white shadow-sm transition-all duration-200 min-h-[120px] flex-shrink-0 ${
+                                  allowCardClick ? 'hover:shadow-md cursor-pointer' : 'cursor-default'
+                                } ${
                                   isInactive ? 'opacity-60 bg-gray-50' : ''
                                 }`}
                                 style={{
@@ -605,7 +746,7 @@ export default function WeeklyScheduleGridNew({
                                   marginLeft: '10px',
                                   marginRight: '10px',
                                 }}
-                                onClick={() =>
+                                onClick={allowCardClick ? () =>
                                   handleCellClick(
                                     day.id,
                                     day.name,
@@ -614,9 +755,9 @@ export default function WeeklyScheduleGridNew({
                                     classroom.classroomId,
                                     classroom.classroomName
                                   )
-                                }
+                                : undefined}
                               >
-                                <ScheduleCell data={classroom.cellData} />
+                                <ScheduleCell data={classroom.cellData} displayMode={displayMode} />
                               </div>
                             </div>
                           )
@@ -657,7 +798,7 @@ export default function WeeklyScheduleGridNew({
     return (
       <>
         {/* Legend */}
-        <div className="mb-4 p-3 bg-gray-50 rounded-md border border-gray-200">
+        <div className="mb-6 p-3 bg-gray-100 rounded-md border border-gray-200">
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-gray-700">Key:</span>
@@ -673,6 +814,16 @@ export default function WeeklyScheduleGridNew({
               </span>
             </div>
             <div className="flex items-center gap-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200">
+                Substitute
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+                Absent
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <span className="text-gray-600">Meets preferred</span>
             </div>
@@ -685,6 +836,38 @@ export default function WeeklyScheduleGridNew({
               <span className="text-gray-600">Below required</span>
             </div>
           </div>
+        </div>
+        {/* Filter chips - separate row below legend */}
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {[
+            { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
+            { value: 'coverage-issues' as const, label: `Coverage Issues (${countsForChips.coverageIssues})` },
+            { value: 'substitutes-only' as const, label: `Subs (${countsForChips.subs})` },
+            { value: 'absences' as const, label: `Absences (${countsForChips.absences})` },
+            { value: 'permanent-only' as const, label: `Permanent staff (${countsForChips.permanent})` },
+          ].map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onDisplayModeChange?.(option.value)
+              }}
+              className={
+                displayMode === option.value
+                  ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
+                  : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
+              }
+            >
+              {option.label}
+            </button>
+          ))}
+          {slotCounts && (
+            <p className="ml-4 text-sm text-muted-foreground italic">
+              Showing {slotCounts.shown} of {slotCounts.total} slots
+            </p>
+          )}
         </div>
 
         <div>
@@ -847,6 +1030,7 @@ export default function WeeklyScheduleGridNew({
                             time_slot_display_order: slot.display_order,
                             assignments: timeSlotData.assignments,
                             schedule_cell: timeSlotData.schedule_cell || null,
+                            absences: timeSlotData.absences,
                           }
                         : undefined
 
@@ -871,7 +1055,9 @@ export default function WeeklyScheduleGridNew({
                           }}
                         >
                           <div
-                            className={`rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer ${
+                            className={`rounded-lg border border-gray-200 bg-white shadow-sm transition-all duration-200 ${
+                              allowCardClick ? 'hover:shadow-md cursor-pointer' : 'cursor-default'
+                            } ${
                               isInactive ? 'opacity-60 bg-gray-50' : ''
                             }`}
                             style={{
@@ -887,7 +1073,7 @@ export default function WeeklyScheduleGridNew({
                               marginLeft: '10px',
                               marginRight: '10px',
                             }}
-                            onClick={() =>
+                            onClick={allowCardClick ? () =>
                               handleCellClick(
                                 day.id,
                                 day.name,
@@ -896,9 +1082,9 @@ export default function WeeklyScheduleGridNew({
                                 classroom.classroom_id,
                                 classroom.classroom_name
                               )
-                            }
+                            : undefined}
                           >
-                            <ScheduleCell data={cellData} />
+                            <ScheduleCell data={cellData} displayMode={displayMode} />
                           </div>
                         </div>
                       )

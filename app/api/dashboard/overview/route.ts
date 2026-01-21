@@ -614,27 +614,27 @@ export async function GET(request: NextRequest) {
         const timeSlot = Array.isArray(assignment.time_slot) ? assignment.time_slot[0] : assignment.time_slot
         const classroom = Array.isArray(assignment.classroom) ? assignment.classroom[0] : assignment.classroom
         return {
-          id: assignment.id,
-          date: assignment.date,
-          day_name:
-            dayIdByNumber.get(
-              new Date(`${assignment.date}T00:00:00`).getDay() === 0
-                ? 7
-                : new Date(`${assignment.date}T00:00:00`).getDay()
-            )?.name || '',
+        id: assignment.id,
+        date: assignment.date,
+        day_name:
+          dayIdByNumber.get(
+            new Date(`${assignment.date}T00:00:00`).getDay() === 0
+              ? 7
+              : new Date(`${assignment.date}T00:00:00`).getDay()
+          )?.name || '',
           time_slot_code: timeSlot?.code || '—',
           time_slot_order: timeSlot?.display_order ?? 999,
           classroom_name: classroom?.name || 'Classroom unavailable',
           classroom_color: classroom?.color ?? null,
-          notes: assignment.notes || null,
-          sub_name:
-            assignment.sub?.display_name ||
-            `${assignment.sub?.first_name || ''} ${assignment.sub?.last_name || ''}`.trim() ||
-            'Sub',
-          teacher_name:
-            assignment.teacher?.display_name ||
-            `${assignment.teacher?.first_name || ''} ${assignment.teacher?.last_name || ''}`.trim() ||
-            'Teacher',
+        notes: assignment.notes || null,
+        sub_name:
+          assignment.sub?.display_name ||
+          `${assignment.sub?.first_name || ''} ${assignment.sub?.last_name || ''}`.trim() ||
+          'Sub',
+        teacher_name:
+          assignment.teacher?.display_name ||
+          `${assignment.teacher?.first_name || ''} ${assignment.teacher?.last_name || ''}`.trim() ||
+          'Teacher',
         }
       })
       .sort((a, b) =>
