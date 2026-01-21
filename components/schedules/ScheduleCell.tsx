@@ -186,15 +186,15 @@ export default function ScheduleCell({ data, onClick, displayMode = 'all-schedul
               })
             }
             
-            // Filter assignments: regular teachers must match class groups, but substitutes cover the whole slot
-            // So include substitutes even if they don't have a matching class_id
+            // Filter assignments: Teachers are assigned to classrooms, not specific class groups
+            // All teachers in the assignments array are already filtered by classroom_id in the API
+            // Include all teachers assigned to this classroom/day/time slot
             const filteredAssignments = allAssignments.filter(
               a => {
                 if (!a.teacher_id) return false
-                // Include substitutes even if they don't have a matching class_id (they cover the slot)
-                if (a.is_substitute === true) return true
-                // For non-substitutes, they must have a class_id that matches one of the class groups
-                return a.class_id && classGroupIds.includes(a.class_id)
+                // Include all teachers and substitutes assigned to this classroom
+                // They're already filtered by classroom_id in the API
+                return true
               }
             ) || []
             

@@ -244,10 +244,11 @@ export default function BaselineSchedulePage() {
                     )
                   : undefined
 
-                // Get class group IDs for filtering assignments
-                const classGroupIds = classGroups.map(cg => cg.id)
+                // Count all teachers assigned to this classroom/day/time slot
+                // Teachers are assigned to classrooms, not specific class groups
+                // All teachers in the assignments array are already filtered by classroom_id in the API
                 const assignedCount = slot.assignments.filter(
-                  a => a.teacher_id && a.class_id && classGroupIds.includes(a.class_id)
+                  a => a.teacher_id && !a.is_substitute // Count regular teachers, exclude substitutes (they're counted separately)
                 ).length
 
                 const belowRequired =

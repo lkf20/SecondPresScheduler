@@ -293,13 +293,15 @@ export default function WeeklySchedulePage() {
 
                   const classGroupIds = classGroups.map(cg => cg.id)
 
-                  // Include substitutes for coverage counts even if they don't have class_id,
-                  // since they cover the slot. Exclude floaters.
+                  // Count all teachers assigned to this classroom/day/time slot for coverage
+                  // Teachers are assigned to classrooms, not specific class groups
+                  // All teachers in the assignments array are already filtered by classroom_id in the API
+                  // Exclude floaters from coverage counts
                   const coverageAssignments = (slot.assignments || []).filter(a => {
                     if (!a.teacher_id) return false
                     if (a.is_floater) return false
-                    if (a.is_substitute === true) return true
-                    return !!a.class_id && classGroupIds.includes(a.class_id)
+                    // Include all regular teachers and substitutes assigned to this classroom
+                    return true
                   })
 
                   const assignedCount = coverageAssignments.length
@@ -350,11 +352,11 @@ export default function WeeklySchedulePage() {
                     )
                   : undefined
 
-                // Get class group IDs for filtering assignments
-                const classGroupIds = classGroups.map(cg => cg.id)
-                // Filter assignments for this slot (week-specific data already includes substitutes)
+                // Count all teachers assigned to this classroom/day/time slot
+                // Teachers are assigned to classrooms, not specific class groups
+                // All teachers in the assignments array are already filtered by classroom_id in the API
                 const slotAssignments = slot.assignments.filter(
-                  a => a.teacher_id && a.class_id && classGroupIds.includes(a.class_id)
+                  a => a.teacher_id && !a.is_substitute // Count regular teachers, exclude substitutes (they're counted separately)
                 )
                 const assignedCount = slotAssignments.length
 

@@ -219,6 +219,25 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
     throw new Error(`Failed to fetch teacher schedules: ${schedulesError.message}`)
   }
   
+  // Fetch class_groups separately if class_id exists
+  // This avoids the schema cache issue with nullable foreign keys
+  if (schedules && schedules.length > 0) {
+    const classIds = [...new Set(schedules.map((s: any) => s.class_id).filter(Boolean))]
+    if (classIds.length > 0) {
+      const { data: classGroups } = await supabase
+        .from('class_groups')
+        .select('id, name')
+        .in('id', classIds)
+      
+      const classGroupsMap = new Map((classGroups || []).map((cg: any) => [cg.id, cg]))
+      schedules.forEach((schedule: any) => {
+        if (schedule.class_id) {
+          schedule.class = classGroupsMap.get(schedule.class_id) || null
+        }
+      })
+    }
+  }
+  
   // Get staffing rules
   const { data: staffingRules, error: staffingRulesError } = await supabase
     .from('staffing_rules')
@@ -434,6 +453,8 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
               teacher_name: assignment.teacher?.display_name || 
                             `${assignment.teacher?.first_name || ''} ${assignment.teacher?.last_name || ''}`.trim() ||
                             'Unknown',
+              class_id: assignment.class_id || undefined, // Include class_id for filtering
+              class_name: assignment.class?.name || undefined, // Include class_name for display
               classroom_id: assignment.classroom_id,
               classroom_name: assignment.classroom?.name || 'Unknown',
               is_floater: assignment.is_floater || false,
