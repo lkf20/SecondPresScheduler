@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { createErrorResponse } from '@/lib/utils/errors'
+import { parseLocalDate } from '@/lib/utils/date'
 
 export async function GET(request: NextRequest) {
   try {
@@ -125,6 +126,16 @@ export async function GET(request: NextRequest) {
             id,
             name,
             color
+          ),
+          day_of_week:days_of_week(
+            id,
+            name,
+            day_number
+          ),
+          time_slot:time_slots(
+            id,
+            code,
+            name
           )
         `)
         .in('coverage_request_id', requestIds)
@@ -379,6 +390,42 @@ export async function GET(request: NextRequest) {
       
       const classrooms = Array.from(classroomsMap.values())
 
+      // Format shift details for dropdown
+      const shiftDetails: Array<{ label: string; status: 'covered' | 'partial' | 'uncovered' }> = []
+
+      requestShifts.forEach((shift: any) => {
+        // Check if this shift has coverage
+        const shiftAssignment = assignedSubs.find((sa: any) => 
+          sa.coverage_request_shift_id === shift.id
+        )
+        
+        let status: 'covered' | 'partial' | 'uncovered' = 'uncovered'
+        if (shiftAssignment) {
+          // Check if it's partial coverage
+          if (shiftAssignment.is_partial || shiftAssignment.assignment_type === 'Partial Sub Shift') {
+            status = 'partial'
+          } else {
+            status = 'covered'
+          }
+        }
+        
+        // Format label: "Mon AM • Jan 2"
+        const dayOfWeek = shift.day_of_week as any
+        const timeSlot = shift.time_slot as any
+        const dayName = dayOfWeek?.name 
+          ? (dayOfWeek.name === 'Tuesday' ? 'Tues' : dayOfWeek.name.slice(0, 3))
+          : '—'
+        const timeCode = timeSlot?.code || '—'
+        
+        const date = parseLocalDate(shift.date)
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        const month = monthNames[date.getMonth()]
+        const day = date.getDate()
+        const label = `${dayName} ${timeCode} • ${month} ${day}`
+        
+        shiftDetails.push({ label, status })
+      })
+
       return {
         id: request.id,
         source_request_id: request.source_request_id || null,
@@ -398,6 +445,7 @@ export async function GET(request: NextRequest) {
         partial_shifts: partialShifts,
         remaining_shifts: remainingShifts,
         status,
+        shift_details: shiftDetails.length > 0 ? shiftDetails : undefined,
       }
       })
     )
