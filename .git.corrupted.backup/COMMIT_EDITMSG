@@ -1,9 +1,0 @@
-refactor(env): Rename NEXT_PUBLIC_SUPABASE_ANON_KEY to NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-
-- Update all code references in lib/supabase (client, server, middleware)
-- Update test scripts to use new variable name
-- Update documentation (README.md, SETUP.md)
-- Update .env.local file with new variable name
-
-This aligns with Supabase's current naming convention where the public
-key is called 'Publishable API Key' instead of 'anon key'.

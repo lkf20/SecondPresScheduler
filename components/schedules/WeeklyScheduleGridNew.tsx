@@ -32,6 +32,8 @@ interface WeeklyScheduleGridNewProps {
     subs: number
   }
   slotCounts?: { shown: number; total: number } // Slot counts for display
+  showLegendSubstitutes?: boolean
+  showFilterChips?: boolean
 }
 
 type WeeklyScheduleCellData = WeeklyScheduleData & {
@@ -113,6 +115,8 @@ export default function WeeklyScheduleGridNew({
   onDisplayModeChange,
   displayModeCounts,
   slotCounts,
+  showLegendSubstitutes = true,
+  showFilterChips = true,
 }: WeeklyScheduleGridNewProps) {
   const [selectedCell, setSelectedCell] = useState<{
     dayId: string
@@ -499,16 +503,20 @@ export default function WeeklyScheduleGridNew({
                 Floater
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200">
-                Substitute
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
-                Absent
-              </span>
-            </div>
+            {showLegendSubstitutes && (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200">
+                    Substitute
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+                    Absent
+                  </span>
+                </div>
+              </>
+            )}
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <span className="text-gray-600">Meets preferred</span>
@@ -524,7 +532,8 @@ export default function WeeklyScheduleGridNew({
           </div>
         </div>
         {/* Filter chips - separate row below legend */}
-        <div className="mb-4 flex flex-wrap items-center gap-2">
+        {showFilterChips && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
           {[
             { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
             { value: 'coverage-issues' as const, label: `Coverage Issues (${countsForChips.coverageIssues})` },
@@ -549,12 +558,13 @@ export default function WeeklyScheduleGridNew({
               {option.label}
             </button>
           ))}
-          {slotCounts && (
-            <p className="ml-4 text-sm text-muted-foreground italic">
-              Showing {slotCounts.shown} of {slotCounts.total} slots
-            </p>
-          )}
-        </div>
+            {slotCounts && (
+              <p className="ml-4 text-sm text-muted-foreground italic">
+                Showing {slotCounts.shown} of {slotCounts.total} slots
+              </p>
+        )}
+      </div>
+        )}
 
         <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)]" style={{ position: 'relative' }}>
           <div
@@ -798,7 +808,7 @@ export default function WeeklyScheduleGridNew({
   // Render classrooms-x-days layout
   if (layout === 'classrooms-x-days' && classroomsXDaysGrid) {
     return (
-      <>
+      <div className="space-y-4">
         {/* Legend */}
         <div className="mb-6 p-3 bg-gray-100 rounded-md border border-gray-200">
           <div className="flex flex-wrap items-center gap-4 text-sm">
@@ -815,16 +825,20 @@ export default function WeeklyScheduleGridNew({
                 Floater
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200">
-                Substitute
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
-                Absent
-              </span>
-            </div>
+            {showLegendSubstitutes && (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200">
+                    Substitute
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+                    Absent
+                  </span>
+                </div>
+              </>
+            )}
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <span className="text-gray-600">Meets preferred</span>
@@ -840,7 +854,8 @@ export default function WeeklyScheduleGridNew({
           </div>
         </div>
         {/* Filter chips - separate row below legend */}
-        <div className="mb-4 flex flex-wrap items-center gap-2">
+        {showFilterChips && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
           {[
             { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
             { value: 'coverage-issues' as const, label: `Coverage Issues (${countsForChips.coverageIssues})` },
@@ -871,6 +886,7 @@ export default function WeeklyScheduleGridNew({
             </p>
           )}
         </div>
+        )}
 
         <div>
           <div
@@ -1116,7 +1132,7 @@ export default function WeeklyScheduleGridNew({
             onSave={handleSave}
           />
         )}
-      </>
+      </div>
     )
   }
 
