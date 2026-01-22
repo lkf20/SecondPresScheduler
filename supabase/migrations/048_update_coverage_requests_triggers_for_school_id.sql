@@ -14,10 +14,10 @@ BEGIN
   IF NEW.coverage_request_id IS NULL THEN
     -- Get school_id for the teacher
     -- Try to get from profile first (most reliable)
+    -- teacher_id is staff.id which references auth.users(id), so we can query profiles directly
     SELECT p.school_id INTO v_school_id
     FROM profiles p
-    INNER JOIN auth.users u ON u.id = p.user_id
-    WHERE u.id = NEW.teacher_id
+    WHERE p.user_id = NEW.teacher_id
     LIMIT 1;
     
     -- Fall back to teacher_schedules if no profile

@@ -258,14 +258,14 @@ export type StaffingStatus = 'below_required' | 'below_preferred' | 'adequate'
  */
 export const staffingColors = {
   below_required: {
-    bg: 'bg-amber-100',
-    border: 'border-amber-200',
-    text: 'text-amber-900',
+    bg: 'bg-blue-100',
+    border: 'border-blue-600',
+    text: 'text-blue-600',
   },
   below_preferred: {
-    bg: 'bg-purple-100',
-    border: 'border-purple-200',
-    text: 'text-purple-800',
+    bg: 'bg-blue-100',
+    border: 'border-blue-600',
+    text: 'text-blue-600',
   },
   adequate: {
     bg: neutralColors.bgLight,
@@ -280,14 +280,14 @@ export const staffingColors = {
  */
 export const staffingColorValues = {
   below_required: {
-    bg: 'rgb(254, 243, 199)', // amber-100
-    border: 'rgb(253, 230, 138)', // amber-200
-    text: 'rgb(120, 53, 15)', // amber-900
+    bg: 'rgb(219, 234, 254)', // blue-100
+    border: 'rgb(37, 99, 235)', // blue-600
+    text: 'rgb(37, 99, 235)', // blue-600
   },
   below_preferred: {
-    bg: 'rgb(243, 232, 255)', // purple-100
-    border: 'rgb(192, 132, 252)', // purple-400 (lighter border)
-    text: 'rgb(107, 33, 168)', // purple-800
+    bg: 'rgb(219, 234, 254)', // blue-100
+    border: 'rgb(37, 99, 235)', // blue-600
+    text: 'rgb(37, 99, 235)', // blue-600
   },
   adequate: {
     bg: 'rgb(248, 250, 252)', // slate-50

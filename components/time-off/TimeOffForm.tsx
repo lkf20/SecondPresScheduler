@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import DatePickerInput from '@/components/ui/date-picker-input'
 import {
@@ -23,6 +24,8 @@ import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { Database } from '@/types/database'
+import { useSchool } from '@/lib/contexts/SchoolContext'
+import { invalidateDashboard, invalidateTimeOffRequests, invalidateSubFinderAbsences, invalidateWeeklySchedule } from '@/lib/utils/invalidation'
 import {
   Dialog,
   DialogContent,
@@ -57,6 +60,8 @@ interface TimeOffFormProps {
 const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
   ({ onSuccess, onCancel, showBackLink = true, onHasUnsavedChanges, clearDraftOnMount = false, timeOffRequestId = null }, ref) => {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const schoolId = useSchool()
   const [error, setError] = useState<string | null>(null)
   const [teachers, setTeachers] = useState<Staff[]>([])
   const [selectedShifts, setSelectedShifts] = useState<
@@ -154,7 +159,12 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
 
     setIsLoadingRequest(true)
     fetch(`/api/time-off/${timeOffRequestId}`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) {
+          throw new Error(`Failed to fetch: ${r.status} ${r.statusText}`)
+        }
+        return r.json()
+      })
       .then((requestData) => {
         // Populate form with existing data
         reset({
@@ -556,8 +566,20 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         throw new Error(errorData.error || `Failed to ${action} time off request`)
       }
 
+      const responseData = await response.json()
+
       if (typeof window !== 'undefined') {
         window.sessionStorage.removeItem(draftKey)
+      }
+      
+      // Invalidate React Query caches to refresh all affected pages
+      if (schoolId) {
+        await Promise.all([
+          invalidateDashboard(queryClient, schoolId),
+          invalidateTimeOffRequests(queryClient, schoolId),
+          invalidateSubFinderAbsences(queryClient, schoolId),
+          invalidateWeeklySchedule(queryClient, schoolId),
+        ])
       }
       
       // Get teacher name for toast
@@ -577,6 +599,20 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       const dateRange = startDateFormatted === endDateFormatted 
         ? startDateFormatted 
         : `${startDateFormatted}-${endDateFormatted}`
+      
+      // Show warning if shifts were excluded
+      if (responseData.warning) {
+        // Split the warning message by <br> to show as separate lines
+        const warningParts = responseData.warning.split('<br>')
+        if (warningParts.length === 2) {
+          toast.warning(warningParts[0], {
+            description: warningParts[1],
+          })
+        } else {
+          // Fallback for any other format
+          toast.warning(responseData.warning.replace(/<br>/g, '\n'))
+        }
+      }
       
       if (onSuccess) {
         onSuccess(teacherName, data.start_date, effectiveEndDate)
@@ -711,6 +747,16 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       // Clear any draft data
       if (typeof window !== 'undefined') {
         window.sessionStorage.removeItem(draftKey)
+      }
+
+      // Invalidate React Query caches to refresh all affected pages
+      if (schoolId) {
+        await Promise.all([
+          invalidateDashboard(queryClient, schoolId),
+          invalidateTimeOffRequests(queryClient, schoolId),
+          invalidateSubFinderAbsences(queryClient, schoolId),
+          invalidateWeeklySchedule(queryClient, schoolId),
+        ])
       }
 
       // Show success toast
@@ -865,8 +911,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                   {conflictSummary.conflictCount > 0 && (
                     <p className="text-sm text-yellow-600 flex items-start gap-2">
                       <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
-                      This teacher already has time off recorded for {conflictSummary.conflictCount}{' '}
-                      of these shifts. Existing requests will be shown below.
+                      This teacher already has time off recorded for {conflictSummary.conflictCount} of these shifts. This shift{conflictSummary.conflictCount !== 1 ? 's will' : ' will'} not be included in this time off request.
                     </p>
                   )}
                   {conflictingRequests.length > 0 && (

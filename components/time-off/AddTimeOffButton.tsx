@@ -33,11 +33,12 @@ interface AddTimeOffButtonProps {
 
 export default function AddTimeOffButton({ timeOffRequestId = null, onClose }: AddTimeOffButtonProps = {}) {
   const router = useRouter()
-  const [isTimeOffSheetOpen, setIsTimeOffSheetOpen] = useState(false)
+  // Initialize sheet as open if timeOffRequestId is provided (edit mode)
+  const [isTimeOffSheetOpen, setIsTimeOffSheetOpen] = useState(!!timeOffRequestId)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [pendingClose, setPendingClose] = useState(false)
-  const [clearDraftOnMount, setClearDraftOnMount] = useState(false)
+  const [clearDraftOnMount, setClearDraftOnMount] = useState(!timeOffRequestId)
   const [editingRequestId, setEditingRequestId] = useState<string | null>(timeOffRequestId || null)
   const timeOffFormRef = useRef<{ reset: () => void }>(null)
   const { activePanel, savePreviousPanel, restorePreviousPanel, setActivePanel, requestPanelClose } = usePanelManager()
@@ -51,6 +52,7 @@ export default function AddTimeOffButton({ timeOffRequestId = null, onClose }: A
     } else {
       // Reset to add mode when timeOffRequestId is cleared
       setEditingRequestId(null)
+      setIsTimeOffSheetOpen(false)
     }
   }, [timeOffRequestId])
 
@@ -195,13 +197,14 @@ export default function AddTimeOffButton({ timeOffRequestId = null, onClose }: A
                 </div>
               </SheetHeader>
               <TimeOffForm 
+                key={timeOffRequestId || 'new'}
                 ref={timeOffFormRef}
                 onSuccess={handleTimeOffSuccess}
                 onCancel={() => handleCloseSheet(false)}
                 showBackLink={false}
                 onHasUnsavedChanges={setHasUnsavedChanges}
                 clearDraftOnMount={clearDraftOnMount}
-                timeOffRequestId={editingRequestId}
+                timeOffRequestId={timeOffRequestId}
               />
             </div>
           </SheetContent>
@@ -269,13 +272,14 @@ export default function AddTimeOffButton({ timeOffRequestId = null, onClose }: A
               </div>
             </SheetHeader>
             <TimeOffForm 
+              key={timeOffRequestId || 'new'}
               ref={timeOffFormRef}
               onSuccess={handleTimeOffSuccess}
               onCancel={() => handleCloseSheet(false)}
               showBackLink={false}
               onHasUnsavedChanges={setHasUnsavedChanges}
               clearDraftOnMount={clearDraftOnMount}
-              timeOffRequestId={editingRequestId}
+              timeOffRequestId={timeOffRequestId}
             />
           </div>
         </SheetContent>

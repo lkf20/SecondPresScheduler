@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronUp,
   Settings,
+  RefreshCw,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,6 +21,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { getCoverageColors, getStaffingColorClasses, getStaffingColors, neutralColors, coverageColorValues, getButtonColors, staffingColorValues } from '@/lib/utils/colors'
@@ -27,6 +29,7 @@ import TimeOffCard from '@/components/shared/TimeOffCard'
 import { Loader2 } from 'lucide-react'
 import { useDashboard } from '@/lib/hooks/use-dashboard'
 import { useProfile } from '@/lib/hooks/use-profile'
+import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
 
 type Summary = {
   absences: number
@@ -37,6 +40,8 @@ type Summary = {
 
 type CoverageRequestItem = {
   id: string
+  source_request_id: string | null
+  request_type: string
   teacher_name: string
   start_date: string
   end_date: string
@@ -91,7 +96,7 @@ type DashboardOverview = {
 }
 
 const formatSlotLabel = (dayName: string, timeSlotCode: string) =>
-  `${dayName || '—'} - ${timeSlotCode}`
+  `${dayName || '—'} ${timeSlotCode}`
 
 const formatFullDateLabel = (value: string) => {
   const date = new Date(`${value}T00:00:00`)
@@ -215,13 +220,26 @@ export default function DashboardClient({
   startDate: string
   endDate: string
 }) {
-  const [greetingTime, setGreetingTime] = useState('Good Morning')
   const gridRef = useRef<HTMLDivElement>(null)
   const [isXlScreen, setIsXlScreen] = useState(false)
   
   // Use React Query to cache the profile/name
-  const { data: profile } = useProfile()
+  const { data: profile, isLoading: isLoadingProfile } = useProfile()
   const greetingName = profile?.first_name?.trim() || null
+  
+  // Calculate greeting on client side only to avoid hydration mismatch
+  const [greetingTime, setGreetingTime] = useState<string | null>(null)
+  const [isClient, setIsClient] = useState(false)
+  
+  useEffect(() => {
+    setIsClient(true)
+    const hour = new Date().getHours()
+    const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening'
+    setGreetingTime(greeting)
+  }, [])
+  
+  // Only show greeting when both client-side calculation and profile are ready
+  const isGreetingReady = isClient && greetingTime !== null && !isLoadingProfile
   const [belowRequiredCollapsed, setBelowRequiredCollapsed] = useState(false)
   const [belowPreferredCollapsed, setBelowPreferredCollapsed] = useState(false)
   const [coverageFilter, setCoverageFilter] = useState<'needs' | 'covered' | 'all'>(
@@ -230,6 +248,15 @@ export default function DashboardClient({
   const [coverageSectionCollapsed, setCoverageSectionCollapsed] = useState(false)
   const [scheduledSubsSectionCollapsed, setScheduledSubsSectionCollapsed] = useState(false)
   const [staffingTargetSectionCollapsed, setStaffingTargetSectionCollapsed] = useState(false)
+  const [editingRequestId, setEditingRequestId] = useState<string | null>(null)
+  
+  const handleEdit = (id: string) => {
+    setEditingRequestId(id)
+  }
+
+  const handleEditClose = () => {
+    setEditingRequestId(null)
+  }
   
   // Coverage range state - always start with default to avoid hydration mismatch
   const [coverageRange, setCoverageRange] = useState<CoverageRange>('2 weeks')
@@ -265,7 +292,7 @@ export default function DashboardClient({
   }, [coverageRange, currentStartDate, currentEndDate, initialStartDate, initialEndDate])
   
   // Use React Query for dashboard data
-  const { data: overview = initialOverview, isLoading: isLoadingOverview, isFetching } = useDashboard(
+  const { data: overview = initialOverview, isLoading: isLoadingOverview, isFetching, refetch } = useDashboard(
     {
       preset: coverageRange,
       startDate: currentStartDate,
@@ -274,6 +301,14 @@ export default function DashboardClient({
     shouldUseInitialData ? initialOverview : undefined
   )
   
+  const router = useRouter()
+  
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    await refetch()
+    router.refresh()
+  }
+  
   // Save to localStorage when range changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -281,12 +316,6 @@ export default function DashboardClient({
     }
   }, [coverageRange])
 
-  useEffect(() => {
-    const hour = new Date().getHours()
-    const greeting =
-      hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening'
-    setGreetingTime(greeting)
-  }, [])
 
   // Track xl screen size for responsive min-width
   useEffect(() => {
@@ -356,7 +385,7 @@ export default function DashboardClient({
     const partialColors = getCoverageColors('partial')
     const infoColors = { text: 'text-blue-600', bg: 'bg-blue-100', icon: 'text-blue-600' }
     const tealColors = { text: 'text-teal-700', bg: 'bg-teal-100', icon: 'text-teal-600' }
-    const purpleColors = { text: 'text-purple-800', bg: 'bg-purple-100', icon: 'text-purple-800' }
+    const purpleColors = { text: 'text-purple-800', bg: 'bg-blue-100', icon: 'text-purple-800' }
     
     return [
       {
@@ -467,13 +496,38 @@ export default function DashboardClient({
     <div className="space-y-10">
       <section className="space-y-2">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-            {greetingTime}
-            <span className="inline-block min-w-[120px]">
-              {greetingName ? `, ${greetingName}!` : ''}
-            </span>
-          </h1>
-          <p className="text-xl text-slate-600 mt-1 flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            {isGreetingReady ? (
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+                {greetingTime}
+                {greetingName ? `, ${greetingName}!` : ''}
+              </h1>
+            ) : (
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+                <span className="invisible">{greetingTime}</span>
+              </h1>
+            )}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleRefresh}
+                    disabled={isFetching}
+                    className="h-10 w-10 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Refresh dashboard</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </div>
+        <p className="text-xl text-slate-600 mt-1 flex items-center gap-2">
             Here is your coverage outlook for {getRangeLabel(coverageRange)} (
             {formatFullDateLabel(currentStartDate)} - {formatFullDateLabel(currentEndDate)}).
             {(isLoadingOverview || (isFetching && !isLoadingOverview)) && (
@@ -485,6 +539,7 @@ export default function DashboardClient({
                   type="button"
                   className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none transition-colors"
                   aria-label="Change coverage outlook time range"
+                  suppressHydrationWarning
                 >
                   <Settings className="h-4 w-4" />
                 </button>
@@ -526,7 +581,6 @@ export default function DashboardClient({
               </PopoverContent>
             </Popover>
           </p>
-        </div>
       </section>
 
       <section className="space-y-3 pb-1">
@@ -558,9 +612,9 @@ export default function DashboardClient({
                             : item.key === 'partial'
                             ? { color: coverageColorValues.partial.text } as React.CSSProperties
                             : item.key === 'scheduled'
-                            ? { color: 'rgb(37, 99, 235)' } as React.CSSProperties // blue-600
+                            ? { color: '#0D9488' } as React.CSSProperties // teal-600
                             : item.key === 'absences'
-                            ? { color: 'rgb(13, 148, 136)' } as React.CSSProperties // teal-600 (matches icon)
+                            ? { color: 'rgba(55, 65, 81, 1)' } as React.CSSProperties // gray-700
                             : undefined
                         }
                       >
@@ -580,15 +634,23 @@ export default function DashboardClient({
                                   backgroundColor: coverageColorValues.partial.bg,
                                   color: coverageColorValues.partial.icon,
                                 } as React.CSSProperties
-                              : item.key === 'scheduled'
-                              ? {
-                                  backgroundColor: 'rgb(219, 234, 254)', // blue-100
-                                  color: 'rgb(37, 99, 235)', // blue-600
-                                } as React.CSSProperties
+                            : item.key === 'scheduled'
+                            ? {
+                                backgroundColor: 'rgba(236, 253, 245, 1)', // emerald-50
+                                color: '#0D9488', // teal-600
+                                borderWidth: '0px',
+                                borderStyle: 'none',
+                                borderColor: 'rgba(0, 0, 0, 0)',
+                                borderImage: 'none',
+                              } as React.CSSProperties
                               : item.key === 'absences'
                               ? {
-                                  backgroundColor: 'rgb(204, 251, 241)', // teal-100
-                                  color: 'rgb(13, 148, 136)', // teal-600
+                                  backgroundColor: 'rgba(243, 244, 246, 1)', // gray-100
+                                  color: 'rgba(55, 65, 81, 1)', // gray-700
+                                  borderWidth: '0px',
+                                  borderStyle: 'none',
+                                  borderColor: 'rgba(0, 0, 0, 0)',
+                                  borderImage: 'none',
                                 } as React.CSSProperties
                               : undefined
                           }
@@ -611,13 +673,20 @@ export default function DashboardClient({
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <div className={cn('flex items-center gap-2 text-3xl font-semibold', item.secondaryStyle)}>
-                              <span>{item.secondaryCount}</span>
+                            <div 
+                              className={cn('flex items-center gap-2 text-3xl font-semibold', item.secondaryStyle)}
+                              style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}
+                            >
+                              <span style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}>{item.secondaryCount}</span>
                               <span
                                 className={cn(
                                   'inline-flex h-9 w-9 items-center justify-center rounded-full',
                                   item.secondaryIconStyle
                                 )}
+                                style={{ 
+                                  backgroundColor: 'rgba(219, 234, 254, 1)', // blue-100
+                                  color: 'rgba(37, 99, 235, 1)' // blue-600
+                                } as React.CSSProperties}
                               >
                                 <item.secondaryIcon className="h-5 w-5" />
                               </span>
@@ -633,13 +702,18 @@ export default function DashboardClient({
                           <TooltipTrigger asChild>
                             <div
                               className={cn('flex items-center gap-2 text-3xl font-semibold', item.secondaryRightStyle)}
+                              style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}
                             >
-                              <span>{item.secondaryRightCount}</span>
+                              <span style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}>{item.secondaryRightCount}</span>
                               <span
                                 className={cn(
                                   'inline-flex h-9 w-9 items-center justify-center rounded-full',
                                   item.secondaryRightIconStyle
                                 )}
+                                style={{ 
+                                  backgroundColor: 'rgba(219, 234, 254, 1)', // blue-100
+                                  color: 'rgba(37, 99, 235, 1)' // blue-600
+                                } as React.CSSProperties}
                               >
                                 <item.secondaryRightIcon className="h-5 w-5" />
                               </span>
@@ -694,10 +768,10 @@ export default function DashboardClient({
                   setCoverageFilter('needs')
                 }}
                 className={cn(
-                  'rounded-full border px-3 py-1 transition',
+                  'rounded-full border px-3 py-1 text-xs font-medium transition',
                   coverageFilter === 'needs'
-                    ? 'border-slate-300 bg-white text-slate-900'
-                    : 'border-slate-200 bg-slate-50 hover:bg-white'
+                    ? 'border-button-fill bg-button-fill text-button-fill-foreground'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                 )}
               >
                 Needs a Sub ({coverageCounts.needs})
@@ -709,10 +783,10 @@ export default function DashboardClient({
                   setCoverageFilter('covered')
                 }}
                 className={cn(
-                  'rounded-full border px-3 py-1 transition',
+                  'rounded-full border px-3 py-1 text-xs font-medium transition',
                   coverageFilter === 'covered'
-                    ? 'border-slate-300 bg-white text-slate-900'
-                    : 'border-slate-200 bg-slate-50 hover:bg-white'
+                    ? 'border-button-fill bg-button-fill text-button-fill-foreground'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                 )}
               >
                 Covered ({coverageCounts.covered})
@@ -724,10 +798,10 @@ export default function DashboardClient({
                   setCoverageFilter('all')
                 }}
                 className={cn(
-                  'rounded-full border px-3 py-1 transition',
+                  'rounded-full border px-3 py-1 text-xs font-medium transition',
                   coverageFilter === 'all'
-                    ? 'border-slate-300 bg-white text-slate-900'
-                    : 'border-slate-200 bg-slate-50 hover:bg-white'
+                    ? 'border-button-fill bg-button-fill text-button-fill-foreground'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                 )}
               >
                 All ({coverageCounts.all})
@@ -776,10 +850,16 @@ export default function DashboardClient({
                   uncovered = request.uncovered_shifts
                 }
 
+                // For time_off requests, use source_request_id (time_off_request.id) for sub-finder
+                // For other request types, use the coverage_request.id
+                const absenceId = request.request_type === 'time_off' && request.source_request_id
+                  ? request.source_request_id
+                  : request.id
+
                 return (
                   <TimeOffCard
                     key={request.id}
-                    id={request.id}
+                    id={absenceId}
                     teacherName={request.teacher_name}
                     startDate={request.start_date}
                     endDate={request.end_date}
@@ -792,6 +872,13 @@ export default function DashboardClient({
                     totalShifts={request.total_shifts}
                     shiftDetails={request.shift_details}
                     notes={request.notes}
+                    onEdit={() => {
+                      // Use source_request_id (time_off_request.id) for editing if it's a time_off request
+                      if (request.request_type === 'time_off' && request.source_request_id) {
+                        handleEdit(request.source_request_id)
+                      }
+                      // For non-time_off requests, we can't edit them from here
+                    }}
                   />
                 )
               })}
@@ -1007,16 +1094,12 @@ export default function DashboardClient({
                           </div>
                           <div className="flex items-center justify-end self-center flex-shrink-0">
                             <Button
-                              asChild
                               size="sm"
                               variant="outline"
                               className={getButtonColors('teal').base}
+                              disabled
                             >
-                              <Link
-                                href={`/schedules/weekly?classroom_id=${slot.classroom_id}&day_of_week_id=${slot.day_of_week_id}&time_slot_id=${slot.time_slot_id}`}
-                              >
-                                Assign Coverage
-                              </Link>
+                              Assign Coverage
                             </Button>
                           </div>
                         </div>
@@ -1106,16 +1189,12 @@ export default function DashboardClient({
                           </div>
                           <div className="flex items-center justify-end self-center flex-shrink-0">
                             <Button
-                              asChild
                               size="sm"
                               variant="outline"
                               className={getButtonColors('teal').base}
+                              disabled
                             >
-                              <Link
-                                href={`/schedules/weekly?classroom_id=${slot.classroom_id}&day_of_week_id=${slot.day_of_week_id}&time_slot_id=${slot.time_slot_id}`}
-                              >
-                                Assign Coverage
-                              </Link>
+                              Assign Coverage
                             </Button>
                           </div>
                         </div>
@@ -1129,6 +1208,15 @@ export default function DashboardClient({
           </div>
         </section>
       </div>
+      
+      {/* Edit Time Off Panel */}
+      {editingRequestId && (
+        <AddTimeOffButton 
+          key={editingRequestId} 
+          timeOffRequestId={editingRequestId} 
+          onClose={handleEditClose} 
+        />
+      )}
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { createErrorResponse } from '@/lib/utils/errors'
+import { parseLocalDate } from '@/lib/utils/date'
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,6 +41,7 @@ export async function GET(request: NextRequest) {
         status,
         total_shifts,
         covered_shifts,
+        created_at,
         teacher:staff!coverage_requests_teacher_id_fkey(
           id,
           first_name,
@@ -58,8 +60,34 @@ export async function GET(request: NextRequest) {
       return createErrorResponse(coverageRequestsError, 'Failed to fetch coverage requests', 500)
     }
 
+    // Deduplicate coverage requests FIRST - keep the most recent one for each source_request_id
+    const uniqueCoverageRequests = new Map<string, typeof coverageRequests[0]>()
+    ;(coverageRequests || []).forEach(request => {
+      if (request.request_type === 'time_off' && request.source_request_id) {
+        const existing = uniqueCoverageRequests.get(request.source_request_id)
+        const requestDate = request.created_at ? new Date(request.created_at).getTime() : 0
+        const existingDate = existing?.created_at ? new Date(existing.created_at).getTime() : 0
+        
+        // Keep the most recent one, or if dates are equal, keep the one with more shifts
+        if (!existing || 
+            requestDate > existingDate || 
+            (requestDate === existingDate && (request.total_shifts || 0) > (existing.total_shifts || 0))) {
+          uniqueCoverageRequests.set(request.source_request_id, request)
+        }
+      } else {
+        // For non-time_off requests, use id as key
+        uniqueCoverageRequests.set(request.id, request)
+      }
+    })
+    const deduplicatedRequests = Array.from(uniqueCoverageRequests.values())
+    
+    // Log if we filtered out any duplicates
+    if (deduplicatedRequests.length < (coverageRequests || []).length) {
+      console.log(`Filtered ${(coverageRequests || []).length - deduplicatedRequests.length} duplicate coverage requests`)
+    }
+
     // Get time_off_requests for coverage requests that have source_request_id
-    const sourceRequestIds = (coverageRequests || [])
+    const sourceRequestIds = deduplicatedRequests
       .filter(cr => cr.request_type === 'time_off' && cr.source_request_id)
       .map(cr => cr.source_request_id)
       .filter((id): id is string => id !== null)
@@ -86,7 +114,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get coverage request shifts for these requests with classroom details
-    const requestIds = (coverageRequests || []).map(cr => cr.id)
+    const requestIds = deduplicatedRequests.map(cr => cr.id)
     let coverageRequestShifts: any[] = []
     
     if (requestIds.length > 0) {
@@ -98,6 +126,16 @@ export async function GET(request: NextRequest) {
             id,
             name,
             color
+          ),
+          day_of_week:days_of_week(
+            id,
+            name,
+            day_number
+          ),
+          time_slot:time_slots(
+            id,
+            code,
+            name
           )
         `)
         .in('coverage_request_id', requestIds)
@@ -127,6 +165,8 @@ export async function GET(request: NextRequest) {
         sub_id,
         teacher_id,
         coverage_request_shift_id,
+        is_partial,
+        assignment_type,
         sub:staff!sub_assignments_sub_id_fkey(
           id,
           first_name,
@@ -163,16 +203,22 @@ export async function GET(request: NextRequest) {
       return createErrorResponse(subAssignmentsError, 'Failed to fetch sub assignments', 500)
     }
 
-    // Get staffing rules
-    const { data: staffingRules, error: staffingRulesError } = await supabase
-      .from('staffing_rules')
+    // Get schedule cells with class groups and enrollment data
+    // This is the correct way to calculate staffing - using enrollment and ratios, not fixed staffing_rules
+    const { data: scheduleCellsData, error: scheduleCellsError } = await supabase
+      .from('schedule_cells')
       .select(`
         id,
-        class_id,
+        classroom_id,
         day_of_week_id,
         time_slot_id,
-        required_teachers,
-        preferred_teachers,
+        enrollment_for_staffing,
+        is_active,
+        classroom:classrooms(
+          id,
+          name,
+          color
+        ),
         day_of_week:days_of_week(
           id,
           name,
@@ -184,55 +230,48 @@ export async function GET(request: NextRequest) {
           code,
           display_order
         ),
-        class:class_groups(
-          id,
-          name
+        schedule_cell_class_groups(
+          class_group:class_groups(
+            id,
+            name,
+            min_age,
+            max_age,
+            required_ratio,
+            preferred_ratio
+          )
         )
       `)
       .eq('school_id', schoolId)
+      .eq('is_active', true)
 
-    if (staffingRulesError) {
-      console.error('Error fetching staffing rules:', staffingRulesError)
-      return createErrorResponse(staffingRulesError, 'Failed to fetch staffing rules', 500)
-    }
-
-    // Get class-classroom mappings for the staffing rules
-    const staffingRuleIds = (staffingRules || []).map(r => ({
-      class_id: r.class_id,
-      day_of_week_id: r.day_of_week_id,
-      time_slot_id: r.time_slot_id,
-    }))
-
-    let classClassroomMappings: any[] = []
-    if (staffingRuleIds.length > 0) {
-      // Build a query to get all relevant mappings
-      const classIds = [...new Set(staffingRuleIds.map(r => r.class_id))]
-      const dayIds = [...new Set(staffingRuleIds.map(r => r.day_of_week_id))]
-      const timeSlotIds = [...new Set(staffingRuleIds.map(r => r.time_slot_id))]
-
-      const { data: mappings, error: mappingsError } = await supabase
-        .from('class_classroom_mappings')
-        .select(`
-          class_id,
-          day_of_week_id,
-          time_slot_id,
-          classroom:classrooms(
-            id,
-            name,
-            color
-          )
-        `)
-        .in('class_id', classIds)
-        .in('day_of_week_id', dayIds)
-        .in('time_slot_id', timeSlotIds)
-
-      if (mappingsError) {
-        console.error('Error fetching class-classroom mappings:', mappingsError)
-        // Continue without mappings - we'll handle missing classrooms gracefully
+    if (scheduleCellsError) {
+      console.error('Error fetching schedule cells:', scheduleCellsError)
+      // If table doesn't exist, return empty array instead of failing
+      if (scheduleCellsError.code === '42P01' || scheduleCellsError.message?.includes('does not exist')) {
+        console.warn('schedule_cells table does not exist yet. Staffing targets will be empty.')
       } else {
-        classClassroomMappings = mappings || []
+        return createErrorResponse(scheduleCellsError, 'Failed to fetch schedule cells', 500)
       }
     }
+
+    // Transform schedule cells to flatten class_groups array
+    const scheduleCells = (scheduleCellsData || []).map((cell: any) => {
+      const classGroups = cell.schedule_cell_class_groups
+        ? cell.schedule_cell_class_groups
+            .map((j: any) => j.class_group)
+            .filter((cg: any): cg is any => cg !== null)
+        : []
+      return {
+        ...cell,
+        class_groups: classGroups,
+      }
+    }).filter((cell: any) => 
+      cell.is_active && 
+      cell.class_groups && 
+      cell.class_groups.length > 0 && 
+      cell.enrollment_for_staffing !== null &&
+      cell.enrollment_for_staffing !== undefined
+    )
 
     // Get teacher schedules to count scheduled staff
     const { data: teacherSchedules, error: teacherSchedulesError } = await supabase
@@ -249,8 +288,24 @@ export async function GET(request: NextRequest) {
       return createErrorResponse(teacherSchedulesError, 'Failed to fetch teacher schedules', 500)
     }
 
-    // Process coverage requests
-    const processedCoverageRequests = (coverageRequests || []).map(request => {
+    // Process coverage requests (already deduplicated above)
+    // Use Promise.all since we need to fetch missing classrooms asynchronously
+    const processedCoverageRequests = await Promise.all(
+      deduplicatedRequests.map(async (request) => {
+      // Debug: Log if we see duplicates
+      if (request.request_type === 'time_off' && request.source_request_id) {
+        const duplicates = deduplicatedRequests.filter(
+          r => r.request_type === 'time_off' && 
+               r.source_request_id === request.source_request_id && 
+               r.id !== request.id
+        )
+        if (duplicates.length > 0) {
+          console.warn(`Found duplicate coverage requests for source_request_id ${request.source_request_id}:`, {
+            kept: request.id,
+            duplicates: duplicates.map(d => d.id)
+          })
+        }
+      }
       const teacher = request.teacher as any
       const teacherName = teacher?.display_name || 
         (teacher?.first_name && teacher?.last_name 
@@ -294,23 +349,89 @@ export async function GET(request: NextRequest) {
       }
 
       // Get unique classrooms from shifts
+      // If classroom relationship is missing, fetch it directly
       const classroomsMap = new Map<string, { id: string; name: string; color: string | null }>()
+      const missingClassroomIds = new Set<string>()
+      
       requestShifts.forEach((shift: any) => {
-        if (shift.classroom_id && shift.classroom) {
-          const classroom = shift.classroom as any
-          if (!classroomsMap.has(shift.classroom_id)) {
-            classroomsMap.set(shift.classroom_id, {
-              id: shift.classroom_id,
+        if (shift.classroom_id) {
+          if (shift.classroom) {
+            const classroom = shift.classroom as any
+            if (!classroomsMap.has(shift.classroom_id)) {
+              classroomsMap.set(shift.classroom_id, {
+                id: shift.classroom_id,
+                name: classroom.name || 'Unknown',
+                color: classroom.color || null,
+              })
+            }
+          } else {
+            // Classroom relationship missing, need to fetch it
+            missingClassroomIds.add(shift.classroom_id)
+          }
+        }
+      })
+      
+      // Fetch missing classrooms if any
+      if (missingClassroomIds.size > 0) {
+        const { data: missingClassrooms } = await supabase
+          .from('classrooms')
+          .select('id, name, color')
+          .in('id', Array.from(missingClassroomIds))
+          .eq('school_id', schoolId)
+        
+        ;(missingClassrooms || []).forEach((classroom: any) => {
+          if (!classroomsMap.has(classroom.id)) {
+            classroomsMap.set(classroom.id, {
+              id: classroom.id,
               name: classroom.name || 'Unknown',
               color: classroom.color || null,
             })
           }
-        }
-      })
+        })
+      }
+      
       const classrooms = Array.from(classroomsMap.values())
+
+      // Format shift details for dropdown
+      const shiftDetails: Array<{ label: string; status: 'covered' | 'partial' | 'uncovered' }> = []
+
+      requestShifts.forEach((shift: any) => {
+        // Check if this shift has coverage
+        const shiftAssignment = assignedSubs.find((sa: any) => 
+          sa.coverage_request_shift_id === shift.id
+        )
+        
+        let status: 'covered' | 'partial' | 'uncovered' = 'uncovered'
+        if (shiftAssignment) {
+          // Check if it's partial coverage
+          if (shiftAssignment.is_partial || shiftAssignment.assignment_type === 'Partial Sub Shift') {
+            status = 'partial'
+          } else {
+            status = 'covered'
+          }
+        }
+        
+        // Format label: "Mon AM • Jan 2"
+        const dayOfWeek = shift.day_of_week as any
+        const timeSlot = shift.time_slot as any
+        const dayName = dayOfWeek?.name 
+          ? (dayOfWeek.name === 'Tuesday' ? 'Tues' : dayOfWeek.name.slice(0, 3))
+          : '—'
+        const timeCode = timeSlot?.code || '—'
+        
+        const date = parseLocalDate(shift.date)
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        const month = monthNames[date.getMonth()]
+        const day = date.getDate()
+        const label = `${dayName} ${timeCode} • ${month} ${day}`
+        
+        shiftDetails.push({ label, status })
+      })
 
       return {
         id: request.id,
+        source_request_id: request.source_request_id || null,
+        request_type: request.request_type,
         teacher_name: teacherName,
         start_date: request.start_date,
         end_date: request.end_date,
@@ -326,71 +447,81 @@ export async function GET(request: NextRequest) {
         partial_shifts: partialShifts,
         remaining_shifts: remainingShifts,
         status,
+        shift_details: shiftDetails.length > 0 ? shiftDetails : undefined,
       }
-    })
+      })
+    )
 
-    // Process staffing targets
-    const processedStaffingTargets = (staffingRules || []).map(rule => {
-      const dayOfWeek = rule.day_of_week as any
-      const timeSlot = rule.time_slot as any
-      const classGroup = rule.class as any
+    // Process staffing targets using schedule_cells (same logic as weekly schedule)
+    const processedStaffingTargets = scheduleCells.map((cell: any) => {
+      const dayOfWeek = cell.day_of_week as any
+      const timeSlot = cell.time_slot as any
+      const classroom = cell.classroom as any
+      const classGroups = cell.class_groups || []
 
-      // Find the classroom mapping for this rule
-      const mapping = classClassroomMappings.find(
-        (m: any) =>
-          m.class_id === rule.class_id &&
-          m.day_of_week_id === rule.day_of_week_id &&
-          m.time_slot_id === rule.time_slot_id
-      )
-      const classroom = mapping?.classroom as any
+      // Find class group with lowest min_age for ratio calculation (same as weekly schedule)
+      const classGroupForRatio = classGroups.reduce((lowest: any, current: any) => {
+        const currentMinAge = current.min_age ?? Infinity
+        const lowestMinAge = lowest.min_age ?? Infinity
+        return currentMinAge < lowestMinAge ? current : lowest
+      })
 
-      // Count scheduled staff for this rule
+      // Calculate required and preferred teachers based on enrollment and ratios
+      // Formula: Math.ceil(enrollment / ratio) - same as weekly schedule
+      const requiredStaff = classGroupForRatio.required_ratio && cell.enrollment_for_staffing
+        ? Math.ceil(cell.enrollment_for_staffing / classGroupForRatio.required_ratio)
+        : null
+      const preferredStaff = classGroupForRatio.preferred_ratio && cell.enrollment_for_staffing
+        ? Math.ceil(cell.enrollment_for_staffing / classGroupForRatio.preferred_ratio)
+        : null
+
+      // Count scheduled staff for this slot (regular teachers)
       const scheduledStaff = (teacherSchedules || []).filter(ts =>
-        ts.day_of_week_id === rule.day_of_week_id &&
-        ts.time_slot_id === rule.time_slot_id &&
-        ts.classroom_id === classroom?.id
+        ts.day_of_week_id === cell.day_of_week_id &&
+        ts.time_slot_id === cell.time_slot_id &&
+        ts.classroom_id === cell.classroom_id
       ).length
 
       // Also count sub assignments for this slot
       const subCount = (subAssignments || []).filter((sa: any) =>
-        sa.day_of_week_id === rule.day_of_week_id &&
-        sa.time_slot_id === rule.time_slot_id &&
-        sa.classroom_id === classroom?.id
+        sa.day_of_week_id === cell.day_of_week_id &&
+        sa.time_slot_id === cell.time_slot_id &&
+        sa.classroom_id === cell.classroom_id
       ).length
 
       const totalScheduled = scheduledStaff + subCount
 
-      // Determine status
-      let status: 'below_required' | 'below_preferred'
-      if (rule.required_teachers && totalScheduled < rule.required_teachers) {
+      // Determine status - only include if actually below required or below preferred
+      let status: 'below_required' | 'below_preferred' | null = null
+      if (requiredStaff !== null && totalScheduled < requiredStaff) {
         status = 'below_required'
-      } else if (rule.preferred_teachers && totalScheduled < rule.preferred_teachers) {
+      } else if (preferredStaff !== null && totalScheduled < preferredStaff) {
         status = 'below_preferred'
-      } else {
-        status = 'below_preferred' // Default, but should not show if above preferred
+      }
+
+      // Only return if there's a staffing issue
+      if (status === null) {
+        return null
       }
 
       return {
-        id: rule.id,
-        day_of_week_id: rule.day_of_week_id,
+        id: cell.id,
+        day_of_week_id: cell.day_of_week_id,
         day_name: dayOfWeek?.name || 'Unknown',
         day_number: dayOfWeek?.day_number || 0,
         day_order: dayOfWeek?.display_order || 0,
-        time_slot_id: rule.time_slot_id,
+        time_slot_id: cell.time_slot_id,
         time_slot_code: timeSlot?.code || 'Unknown',
         time_slot_order: timeSlot?.display_order || 0,
-        classroom_id: classroom?.id || '',
-        classroom_name: classroom?.name || classGroup?.name || 'Unknown',
+        classroom_id: cell.classroom_id || '',
+        classroom_name: classroom?.name || 'Unknown',
         classroom_color: classroom?.color || null,
-        required_staff: rule.required_teachers,
-        preferred_staff: rule.preferred_teachers,
+        required_staff: requiredStaff,
+        preferred_staff: preferredStaff,
         scheduled_staff: totalScheduled,
         status,
       }
-    }).filter(target => 
-      target.status === 'below_required' || 
-      (target.status === 'below_preferred' && target.preferred_staff && target.scheduled_staff < target.preferred_staff)
-    )
+    }).filter((target: any): target is NonNullable<typeof target> => target !== null)
 
     // Process scheduled subs
     const processedScheduledSubs = (subAssignments || []).map((sa: any) => {
