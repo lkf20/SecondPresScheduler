@@ -700,7 +700,7 @@ export default function ContactSubPanel({
       const assignPayload = {
         coverage_request_id: coverageRequestId,
         sub_id: sub.id,
-        shift_ids: selectedShiftIds, // Use 'shift_ids' as expected by AssignShiftsData type
+        selected_shift_ids: selectedShiftIds,
       }
 
       // Use the mutation hook which handles cache invalidation automatically
