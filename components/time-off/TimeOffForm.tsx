@@ -556,6 +556,8 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         throw new Error(errorData.error || `Failed to ${action} time off request`)
       }
 
+      const responseData = await response.json()
+
       if (typeof window !== 'undefined') {
         window.sessionStorage.removeItem(draftKey)
       }
@@ -577,6 +579,17 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       const dateRange = startDateFormatted === endDateFormatted 
         ? startDateFormatted 
         : `${startDateFormatted}-${endDateFormatted}`
+      
+      // Show warning if shifts were excluded
+      if (responseData.warning) {
+        // Split the warning message by newline to show as separate lines
+        const warningLines = responseData.warning.split('\n')
+        warningLines.forEach((line: string) => {
+          if (line.trim()) {
+            toast.warning(line)
+          }
+        })
+      }
       
       if (onSuccess) {
         onSuccess(teacherName, data.start_date, effectiveEndDate)
@@ -865,8 +878,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                   {conflictSummary.conflictCount > 0 && (
                     <p className="text-sm text-yellow-600 flex items-start gap-2">
                       <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
-                      This teacher already has time off recorded for {conflictSummary.conflictCount}{' '}
-                      of these shifts. Existing requests will be shown below.
+                      This teacher already has time off recorded for {conflictSummary.conflictCount} of these shifts. This shift{conflictSummary.conflictCount !== 1 ? 's will' : ' will'} not be included in this time off request.
                     </p>
                   )}
                   {conflictingRequests.length > 0 && (

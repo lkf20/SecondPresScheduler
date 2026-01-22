@@ -485,6 +485,7 @@ export default function DashboardClient({
                   type="button"
                   className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none transition-colors"
                   aria-label="Change coverage outlook time range"
+                  suppressHydrationWarning
                 >
                   <Settings className="h-4 w-4" />
                 </button>

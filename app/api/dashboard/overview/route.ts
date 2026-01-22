@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
         status,
         total_shifts,
         covered_shifts,
+        created_at,
         teacher:staff!coverage_requests_teacher_id_fkey(
           id,
           first_name,
@@ -58,8 +59,34 @@ export async function GET(request: NextRequest) {
       return createErrorResponse(coverageRequestsError, 'Failed to fetch coverage requests', 500)
     }
 
+    // Deduplicate coverage requests FIRST - keep the most recent one for each source_request_id
+    const uniqueCoverageRequests = new Map<string, typeof coverageRequests[0]>()
+    ;(coverageRequests || []).forEach(request => {
+      if (request.request_type === 'time_off' && request.source_request_id) {
+        const existing = uniqueCoverageRequests.get(request.source_request_id)
+        const requestDate = request.created_at ? new Date(request.created_at).getTime() : 0
+        const existingDate = existing?.created_at ? new Date(existing.created_at).getTime() : 0
+        
+        // Keep the most recent one, or if dates are equal, keep the one with more shifts
+        if (!existing || 
+            requestDate > existingDate || 
+            (requestDate === existingDate && (request.total_shifts || 0) > (existing.total_shifts || 0))) {
+          uniqueCoverageRequests.set(request.source_request_id, request)
+        }
+      } else {
+        // For non-time_off requests, use id as key
+        uniqueCoverageRequests.set(request.id, request)
+      }
+    })
+    const deduplicatedRequests = Array.from(uniqueCoverageRequests.values())
+    
+    // Log if we filtered out any duplicates
+    if (deduplicatedRequests.length < (coverageRequests || []).length) {
+      console.log(`Filtered ${(coverageRequests || []).length - deduplicatedRequests.length} duplicate coverage requests`)
+    }
+
     // Get time_off_requests for coverage requests that have source_request_id
-    const sourceRequestIds = (coverageRequests || [])
+    const sourceRequestIds = deduplicatedRequests
       .filter(cr => cr.request_type === 'time_off' && cr.source_request_id)
       .map(cr => cr.source_request_id)
       .filter((id): id is string => id !== null)
@@ -86,7 +113,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get coverage request shifts for these requests with classroom details
-    const requestIds = (coverageRequests || []).map(cr => cr.id)
+    const requestIds = deduplicatedRequests.map(cr => cr.id)
     let coverageRequestShifts: any[] = []
     
     if (requestIds.length > 0) {
@@ -248,8 +275,24 @@ export async function GET(request: NextRequest) {
       return createErrorResponse(teacherSchedulesError, 'Failed to fetch teacher schedules', 500)
     }
 
-    // Process coverage requests
-    const processedCoverageRequests = (coverageRequests || []).map(request => {
+    // Process coverage requests (already deduplicated above)
+    // Use Promise.all since we need to fetch missing classrooms asynchronously
+    const processedCoverageRequests = await Promise.all(
+      deduplicatedRequests.map(async (request) => {
+      // Debug: Log if we see duplicates
+      if (request.request_type === 'time_off' && request.source_request_id) {
+        const duplicates = deduplicatedRequests.filter(
+          r => r.request_type === 'time_off' && 
+               r.source_request_id === request.source_request_id && 
+               r.id !== request.id
+        )
+        if (duplicates.length > 0) {
+          console.warn(`Found duplicate coverage requests for source_request_id ${request.source_request_id}:`, {
+            kept: request.id,
+            duplicates: duplicates.map(d => d.id)
+          })
+        }
+      }
       const teacher = request.teacher as any
       const teacherName = teacher?.display_name || 
         (teacher?.first_name && teacher?.last_name 
@@ -293,19 +336,47 @@ export async function GET(request: NextRequest) {
       }
 
       // Get unique classrooms from shifts
+      // If classroom relationship is missing, fetch it directly
       const classroomsMap = new Map<string, { id: string; name: string; color: string | null }>()
+      const missingClassroomIds = new Set<string>()
+      
       requestShifts.forEach((shift: any) => {
-        if (shift.classroom_id && shift.classroom) {
-          const classroom = shift.classroom as any
-          if (!classroomsMap.has(shift.classroom_id)) {
-            classroomsMap.set(shift.classroom_id, {
-              id: shift.classroom_id,
+        if (shift.classroom_id) {
+          if (shift.classroom) {
+            const classroom = shift.classroom as any
+            if (!classroomsMap.has(shift.classroom_id)) {
+              classroomsMap.set(shift.classroom_id, {
+                id: shift.classroom_id,
+                name: classroom.name || 'Unknown',
+                color: classroom.color || null,
+              })
+            }
+          } else {
+            // Classroom relationship missing, need to fetch it
+            missingClassroomIds.add(shift.classroom_id)
+          }
+        }
+      })
+      
+      // Fetch missing classrooms if any
+      if (missingClassroomIds.size > 0) {
+        const { data: missingClassrooms } = await supabase
+          .from('classrooms')
+          .select('id, name, color')
+          .in('id', Array.from(missingClassroomIds))
+          .eq('school_id', schoolId)
+        
+        ;(missingClassrooms || []).forEach((classroom: any) => {
+          if (!classroomsMap.has(classroom.id)) {
+            classroomsMap.set(classroom.id, {
+              id: classroom.id,
               name: classroom.name || 'Unknown',
               color: classroom.color || null,
             })
           }
-        }
-      })
+        })
+      }
+      
       const classrooms = Array.from(classroomsMap.values())
 
       return {
@@ -326,7 +397,8 @@ export async function GET(request: NextRequest) {
         remaining_shifts: remainingShifts,
         status,
       }
-    })
+      })
+    )
 
     // Process staffing targets using schedule_cells (same logic as weekly schedule)
     const processedStaffingTargets = scheduleCells.map((cell: any) => {

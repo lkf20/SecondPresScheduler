@@ -73,6 +73,11 @@ export async function POST(request: NextRequest) {
       }))
     }
 
+    // Filter out conflicting shifts (but still allow the request to be created)
+    let shiftsToCreate: Array<{ date: string; day_of_week_id: string; time_slot_id: string; is_partial?: boolean; start_time?: string | null; end_time?: string | null }> = []
+    let excludedShiftCount = 0
+    let warning: string | null = null
+
     if (requestedShifts.length > 0 && status !== 'draft') {
       const existingShifts = await getTeacherTimeOffShifts(
         requestData.teacher_id,
@@ -82,48 +87,68 @@ export async function POST(request: NextRequest) {
       const existingShiftKeys = new Set(
         existingShifts.map((shift) => `${normalizeDate(shift.date)}::${shift.time_slot_id}`)
       )
-      const conflictCount = requestedShifts.filter((shift) =>
-        existingShiftKeys.has(`${normalizeDate(shift.date)}::${shift.time_slot_id}`)
-      ).length
-
-      if (conflictCount > 0) {
-        return NextResponse.json(
-          {
-            error: `Teacher already has time off recorded for ${conflictCount} selected shift${
-              conflictCount !== 1 ? 's' : ''
-            }.`,
-          },
-          { status: 409 }
+      
+      // Filter out conflicting shifts
+      if (shifts && Array.isArray(shifts) && shifts.length > 0) {
+        shiftsToCreate = shifts.filter((shift) => {
+          const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
+          return !existingShiftKeys.has(shiftKey)
+        })
+        excludedShiftCount = shifts.length - shiftsToCreate.length
+      } else if (requestData.shift_selection_mode === 'all_scheduled') {
+        // If "all_scheduled" mode, fetch all scheduled shifts and filter out conflicts
+        const scheduledShifts = await getTeacherScheduledShifts(
+          requestData.teacher_id,
+          requestData.start_date,
+          effectiveEndDate
         )
+        
+        shiftsToCreate = scheduledShifts
+          .map((shift) => ({
+            date: shift.date,
+            day_of_week_id: shift.day_of_week_id,
+            time_slot_id: shift.time_slot_id,
+            is_partial: false,
+            start_time: null,
+            end_time: null,
+          }))
+          .filter((shift) => {
+            const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
+            return !existingShiftKeys.has(shiftKey)
+          })
+        excludedShiftCount = scheduledShifts.length - shiftsToCreate.length
+      }
+      
+      if (excludedShiftCount > 0) {
+        warning = `This teacher already has time off recorded for ${excludedShiftCount} of these shifts.\nThis shift${excludedShiftCount !== 1 ? 's will' : ' will'} not be included in this time off request.`
+      }
+    } else {
+      // No conflicts to check, use all requested shifts
+      if (shifts && Array.isArray(shifts) && shifts.length > 0) {
+        shiftsToCreate = shifts
+      } else if (requestData.shift_selection_mode === 'all_scheduled') {
+        const scheduledShifts = await getTeacherScheduledShifts(
+          requestData.teacher_id,
+          requestData.start_date,
+          effectiveEndDate
+        )
+        shiftsToCreate = scheduledShifts.map((shift) => ({
+          date: shift.date,
+          day_of_week_id: shift.day_of_week_id,
+          time_slot_id: shift.time_slot_id,
+          is_partial: false,
+          start_time: null,
+          end_time: null,
+        }))
       }
     }
     
     // Create the time off request
     const createdRequest = await createTimeOffRequest({ ...requestData, status })
     
-    // If shifts are provided, create them
-    if (shifts && Array.isArray(shifts) && shifts.length > 0) {
-      await createTimeOffShifts(createdRequest.id, shifts)
-    } else if (requestData.shift_selection_mode === 'all_scheduled') {
-      // If "all_scheduled" mode, fetch all scheduled shifts and create them
-      const scheduledShifts = await getTeacherScheduledShifts(
-        requestData.teacher_id,
-        requestData.start_date,
-        effectiveEndDate
-      )
-      
-      const shiftsToCreate = scheduledShifts.map((shift) => ({
-        date: shift.date,
-        day_of_week_id: shift.day_of_week_id,
-        time_slot_id: shift.time_slot_id,
-        is_partial: false,
-        start_time: null,
-        end_time: null,
-      }))
-      
-      if (shiftsToCreate.length > 0) {
-        await createTimeOffShifts(createdRequest.id, shiftsToCreate)
-      }
+    // Create shifts (only non-conflicting ones)
+    if (shiftsToCreate.length > 0) {
+      await createTimeOffShifts(createdRequest.id, shiftsToCreate)
     }
     
     // Revalidate all pages that might show this data
@@ -133,7 +158,12 @@ export async function POST(request: NextRequest) {
     revalidatePath('/sub-finder')
     revalidatePath('/reports')
     
-    return NextResponse.json(createdRequest, { status: 201 })
+    // Return the created request with optional warning
+    return NextResponse.json({
+      ...createdRequest,
+      warning,
+      excludedShiftCount,
+    }, { status: 201 })
   } catch (error: any) {
     console.error('Error creating time off request:', error)
     return NextResponse.json({ error: error.message || 'Unknown error occurred' }, { status: 500 })
