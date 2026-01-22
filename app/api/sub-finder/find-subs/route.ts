@@ -76,6 +76,11 @@ interface SubMatch {
  * 3. Calculate coverage percentage
  * 4. Return sorted list of best matches
  */
+const parseDateOnly = (dateString: string) => {
+  const [year, month, day] = dateString.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Require schoolId from session
@@ -88,7 +93,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { absence_id, include_flexible_staff = true } = body
+    const {
+      absence_id,
+      include_flexible_staff = true,
+      include_past_shifts = false,
+    } = body
 
     if (!absence_id) {
       return NextResponse.json({ error: 'absence_id is required' }, { status: 400 })
@@ -104,7 +113,21 @@ export async function POST(request: NextRequest) {
 
     // 2. Get all shifts that need coverage
     const shifts = await getTimeOffShifts(absence_id)
-    if (shifts.length === 0) {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const shiftsToUse = include_past_shifts
+      ? shifts
+      : shifts.filter((shift) => {
+          if (!shift?.date) {
+            return false
+          }
+          const shiftDate = parseDateOnly(shift.date)
+          shiftDate.setHours(0, 0, 0, 0)
+          return shiftDate >= today
+        })
+
+    if (shiftsToUse.length === 0) {
       return NextResponse.json([])
     }
 
@@ -182,7 +205,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Normalize shifts for easier processing
-    const shiftsToCover: Shift[] = shifts.map((shift: any) => {
+    const shiftsToCover: Shift[] = shiftsToUse.map((shift: any) => {
       const key = `${shift.date}|${shift.time_slot?.code || ''}`
       const classGroupInfo = classGroupInfoMap.get(key) || {
         diaper_changing_required: false,

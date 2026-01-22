@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 type AssignShiftsData = {
   sub_id: string
   coverage_request_id: string
-  shift_ids: string[]
+  selected_shift_ids: string[]
   notes?: string
 }
 
@@ -60,7 +60,7 @@ export function useAssignSubShifts() {
       ])
 
       const subName = data?.sub_name || 'Sub'
-      const shiftCount = variables.shift_ids.length
+      const shiftCount = variables.selected_shift_ids.length
       toast.success(`Assigned ${subName} to ${shiftCount} shift${shiftCount !== 1 ? 's' : ''}`)
     },
     onError: (error: Error, variables, context) => {

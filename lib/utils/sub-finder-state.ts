@@ -23,13 +23,8 @@ export interface SubFinderState {
   includePartiallyCovered: boolean
   includeFlexibleStaff: boolean
   includeOnlyRecommended: boolean
+  includePastShifts: boolean
   subSearch: string
-  
-  // Results (optional - only save if we have results)
-  absences?: any[]
-  recommendedSubs?: any[]
-  allSubs?: any[]
-  recommendedCombinations?: any[]
 }
 
 const STORAGE_KEY = 'sub-finder-state'

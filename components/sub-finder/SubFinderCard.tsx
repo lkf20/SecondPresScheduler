@@ -42,7 +42,7 @@ interface SubFinderCardProps {
     classroom_name?: string | null
     class_name?: string | null
   }>
-  notes?: string
+  notes?: string | null
   conflicts?: ConflictCounts
   isDeclined?: boolean
   highlighted?: boolean

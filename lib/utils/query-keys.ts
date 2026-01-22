@@ -27,6 +27,7 @@ export interface SubRecommendationsQueryParams {
   includeDeclined?: boolean
   sort?: string
   includeFlexibleStaff?: boolean
+  includePastShifts?: boolean
 }
 
 /**
