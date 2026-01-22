@@ -15,16 +15,18 @@ type Absence = {
   status: 'needs_coverage' | 'partially_covered' | 'covered'
   shifts: {
     total: number
-    covered: number
-    partial: number
     uncovered: number
+    covered?: number
+    partial?: number
+    fully_covered?: number
+    partially_covered?: number
     shift_details: Array<{
       date: string
       day_name: string
       time_slot_code: string
       classroom_name: string
       classroom_color: string | null
-      status: 'covered' | 'partial' | 'uncovered'
+      status: 'covered' | 'partial' | 'fully_covered' | 'partially_covered' | 'uncovered'
       assigned_sub?: {
         name: string
       }

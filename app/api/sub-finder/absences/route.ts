@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { buildCoverageBadges, getCoverageStatus } from '@/lib/server/coverage/absence-status'
 import { sortCoverageShifts, buildCoverageSegments } from '@/lib/server/coverage/coverage-summary'
-import { getTimeOffRequests } from '@/lib/api/time-off'
+import { getTimeOffRequests, getActiveSubAssignmentsForTimeOffRequest } from '@/lib/api/time-off'
 import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
 import { transformTimeOffCardData } from '@/lib/utils/time-off-card-data'
 import { getUserSchoolId } from '@/lib/utils/auth'
@@ -97,22 +97,124 @@ export async function GET(request: NextRequest) {
           console.error(`Error fetching shifts for time off request ${request.id}:`, error)
           shifts = []
         }
+        const timeOffShiftKeys = new Set(
+          shifts.map((shift) => `${shift.date}|${shift.time_slot_id}`)
+        )
+        const debugRequestId = '79e63040-e72d-484e-b8bd-6afb639a6874'
+        const loggedMissingShiftKeys = new Set<string>()
         
         // Get assignments
         let assignments: any[] = []
         if (shifts.length > 0) {
           const requestStartDate = request.start_date
           const requestEndDate = request.end_date || request.start_date
-          
+          const assignmentMap = new Map<string, any>()
+          const loggedMissingCoverageLinkKeys = new Set<string>()
+
+          if (request.coverage_request_id) {
+            try {
+              const activeAssignments = await getActiveSubAssignmentsForTimeOffRequest(request.id)
+              ;(activeAssignments || []).forEach((assignment: any) => {
+                const coverageShift = assignment.coverage_request_shift
+                const shiftDate = coverageShift?.date || assignment.date
+                const shiftTimeSlotId = coverageShift?.time_slot_id || assignment.time_slot_id
+                const shiftKey = `${shiftDate}|${shiftTimeSlotId}`
+                if (
+                  shiftDate &&
+                  shiftTimeSlotId &&
+                  timeOffShiftKeys.size > 0 &&
+                  !timeOffShiftKeys.has(shiftKey) &&
+                  !loggedMissingShiftKeys.has(shiftKey)
+                ) {
+                  loggedMissingShiftKeys.add(shiftKey)
+                  console.warn('[Sub Finder Absences] Coverage assignment missing time_off_shift', {
+                    request_id: request.id,
+                    coverage_request_id: request.coverage_request_id,
+                    assignment_id: assignment.id,
+                    shift_date: shiftDate,
+                    time_slot_id: shiftTimeSlotId,
+                  })
+                }
+                assignmentMap.set(shiftKey, {
+                  date: shiftDate,
+                  time_slot_id: shiftTimeSlotId,
+                  is_partial: assignment.is_partial,
+                  assignment_type: assignment.assignment_type || null,
+                  sub: assignment.sub,
+                  source: 'coverage_request',
+                })
+              })
+            } catch (error) {
+              console.error('[Sub Finder Absences] Failed to load coverage request assignments:', {
+                request_id: request.id,
+                coverage_request_id: request.coverage_request_id,
+                error,
+              })
+            }
+          }
+
           const { data: subAssignments } = await supabase
             .from('sub_assignments')
-            .select('date, time_slot_id, is_partial, assignment_type, sub:staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name)')
+            .select('id, coverage_request_shift_id, date, time_slot_id, is_partial, assignment_type, sub:staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name)')
             .eq('teacher_id', request.teacher_id)
             .eq('status', 'active') // Only active assignments
             .gte('date', requestStartDate)
             .lte('date', requestEndDate)
-          
-          assignments = subAssignments || []
+
+          ;(subAssignments || []).forEach((assignment) => {
+            const shiftDate = assignment.date
+            const shiftTimeSlotId = assignment.time_slot_id
+            const shiftKey = `${shiftDate}|${shiftTimeSlotId}`
+            if (!assignment.coverage_request_shift_id && timeOffShiftKeys.has(shiftKey)) {
+              if (!loggedMissingCoverageLinkKeys.has(shiftKey)) {
+                loggedMissingCoverageLinkKeys.add(shiftKey)
+                console.warn('[Sub Finder Absences] Assignment missing coverage_request_shift_id', {
+                  request_id: request.id,
+                  assignment_id: assignment.id,
+                  shift_date: shiftDate,
+                  time_slot_id: shiftTimeSlotId,
+                })
+              }
+            }
+            if (!assignmentMap.has(shiftKey)) {
+              assignmentMap.set(shiftKey, {
+                date: shiftDate,
+                time_slot_id: shiftTimeSlotId,
+                is_partial: assignment.is_partial,
+                assignment_type: assignment.assignment_type || null,
+                sub: assignment.sub,
+                source: 'teacher_date',
+              })
+            }
+          })
+          assignments = Array.from(assignmentMap.values())
+        }
+
+        if (assignments.length > 0 && timeOffShiftKeys.size > 0) {
+          const assignmentKeys = new Set(
+            assignments
+              .map((assignment) => `${assignment.date}|${assignment.time_slot_id}`)
+              .filter((key) => Boolean(key))
+          )
+          if (request.id === debugRequestId) {
+            console.log('[Sub Finder Absences] Debug assignment/time-off shift keys', {
+              request_id: request.id,
+              coverage_request_id: request.coverage_request_id,
+              time_off_shift_keys: Array.from(timeOffShiftKeys),
+              assignment_keys: Array.from(assignmentKeys),
+              assignments_count: assignments.length,
+              shifts_count: shifts.length,
+            })
+          }
+          const overlapKeys = Array.from(assignmentKeys).filter((key) => timeOffShiftKeys.has(key))
+          if (overlapKeys.length === 0) {
+            console.warn('[Sub Finder Absences] Assignments do not match time_off_shifts', {
+              request_id: request.id,
+              coverage_request_id: request.coverage_request_id,
+              time_off_shift_keys: Array.from(timeOffShiftKeys).slice(0, 10),
+              assignment_keys: Array.from(assignmentKeys).slice(0, 10),
+            })
+          }
         }
         
         // Build classroom list
@@ -137,7 +239,27 @@ export async function GET(request: NextRequest) {
           return name.slice(0, 3)
         }
         
-        return transformTimeOffCardData(
+        if (request.id === debugRequestId) {
+          const assignmentKeyDetails = assignments.map((assignment) => ({
+            date: assignment.date,
+            time_slot_id: assignment.time_slot_id,
+            is_partial: assignment.is_partial,
+            assignment_type: assignment.assignment_type,
+            sub_name: assignment.sub?.display_name || assignment.sub?.first_name || null,
+          }))
+          const shiftKeyDetails = shifts.map((shift) => ({
+            date: shift.date,
+            time_slot_id: shift.time_slot_id,
+            time_slot_code: shift.time_slot?.code || null,
+          }))
+          console.log('[Sub Finder Absences] Debug coverage inputs', {
+            request_id: request.id,
+            assignments: assignmentKeyDetails,
+            shifts: shiftKeyDetails,
+          })
+        }
+
+        const transformed = transformTimeOffCardData(
           {
             id: request.id,
             teacher_id: request.teacher_id,
@@ -193,6 +315,23 @@ export async function GET(request: NextRequest) {
             },
           }
         )
+        const assignmentKeys = new Set(
+          assignments
+            .map((assignment) => `${assignment.date}|${assignment.time_slot_id}`)
+            .filter((key) => Boolean(key))
+        )
+        const hasAssignmentOverlap = Array.from(assignmentKeys).some((key) => timeOffShiftKeys.has(key))
+        if (hasAssignmentOverlap && transformed.covered === 0 && transformed.partial === 0) {
+          console.warn('[Sub Finder Absences] Assignment overlap but no coverage counted', {
+            request_id: request.id,
+            coverage_request_id: request.coverage_request_id,
+            time_off_shift_keys: Array.from(timeOffShiftKeys).slice(0, 10),
+            assignment_keys: Array.from(assignmentKeys).slice(0, 10),
+            assignments_count: assignments.length,
+          })
+        }
+
+        return transformed
       })
     )
 

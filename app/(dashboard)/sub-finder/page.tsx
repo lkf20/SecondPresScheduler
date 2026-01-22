@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -36,10 +36,10 @@ export default function SubFinderPage() {
   const requestedAbsenceId = searchParams.get('absence_id')
   const requestedTeacherId = searchParams.get('teacher_id')
   const [mode, setMode] = useState<Mode>('existing')
+  const [includePastShifts, setIncludePastShifts] = useState(false)
+  const subRecommendationParams = useMemo(() => ({ includePastShifts }), [includePastShifts])
   const {
     absences,
-    setAbsences,
-    clearRestoredAbsences,
     selectedAbsence,
     setSelectedAbsence,
     recommendedSubs,
@@ -63,6 +63,7 @@ export default function SubFinderPage() {
     mode, 
     requestedAbsenceId,
     skipInitialFetch: true, // Skip initial fetch to allow state restoration first
+    subRecommendationParams,
   })
   const [searchQuery, setSearchQuery] = useState('')
   const [teacherSearchInput, setTeacherSearchInput] = useState('') // Separate state for dropdown input
@@ -94,7 +95,10 @@ export default function SubFinderPage() {
   const isFlexibleStaffChangeUserInitiatedRef = useRef(false)
   const isRestoringStateRef = useRef(false) // Track if we're restoring state to avoid saving during restoration
   const hasRestoredStateRef = useRef(false) // Track if we've completed initial state restoration
-  const runManualFinder = async () => {
+  const debugLoggedAbsenceIdsRef = useRef<Set<string>>(new Set())
+  const debugAbsencesLoggedRef = useRef<Set<string>>(new Set())
+  const debugCoverageLoggedRef = useRef<Set<string>>(new Set())
+  const runManualFinder = useCallback(async () => {
     if (!manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0) return
     setHighlightedSubId(null)
     await handleFindManualSubs({
@@ -103,7 +107,7 @@ export default function SubFinderPage() {
       endDate: manualEndDate || manualStartDate,
       shifts: manualSelectedShifts,
     })
-  }
+  }, [manualTeacherId, manualStartDate, manualEndDate, manualSelectedShifts, handleFindManualSubs])
   const selectedClassrooms = useMemo(() => {
     if (!selectedAbsence) return []
     if (Array.isArray((selectedAbsence as { classrooms?: Array<{ id: string; name: string; color: string | null }> }).classrooms)) {
@@ -117,6 +121,62 @@ export default function SubFinderPage() {
       )
     ).map((name) => ({ id: name, name, color: null }))
   }, [selectedAbsence])
+  const { pastShiftCount, upcomingShiftCount } = useMemo(() => {
+    if (!selectedAbsence?.shifts?.shift_details?.length) {
+      return { pastShiftCount: 0, upcomingShiftCount: 0 }
+    }
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    let past = 0
+    let upcoming = 0
+    selectedAbsence.shifts.shift_details.forEach((shift) => {
+      if (!shift?.date) return
+      const shiftDate = parseLocalDate(shift.date)
+      shiftDate.setHours(0, 0, 0, 0)
+      if (shiftDate < today) {
+        past++
+      } else {
+        upcoming++
+      }
+    })
+    return { pastShiftCount: past, upcomingShiftCount: upcoming }
+  }, [selectedAbsence])
+  const filteredShiftSummary = useMemo(() => {
+    if (!selectedAbsence?.shifts?.shift_details?.length) {
+      return null
+    }
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const shiftDetails = selectedAbsence.shifts.shift_details.filter((shift) => {
+      if (!shift?.date) return false
+      if (includePastShifts) return true
+      const shiftDate = parseLocalDate(shift.date)
+      shiftDate.setHours(0, 0, 0, 0)
+      return shiftDate >= today
+    })
+    const totals = shiftDetails.reduce(
+      (acc, shift) => {
+        acc.total++
+        if (shift.status === 'uncovered') {
+          acc.uncovered++
+        } else if (shift.status === 'partially_covered') {
+          acc.partially_covered++
+        } else if (shift.status === 'fully_covered') {
+          acc.fully_covered++
+        }
+        return acc
+      },
+      { total: 0, uncovered: 0, partially_covered: 0, fully_covered: 0 }
+    )
+    return {
+      total: totals.total,
+      uncovered: totals.uncovered,
+      partially_covered: totals.partially_covered,
+      fully_covered: totals.fully_covered,
+      shift_details: shiftDetails,
+    }
+  }, [selectedAbsence, includePastShifts])
+  const showPastShiftsBanner = Boolean(selectedAbsence && pastShiftCount > 0)
   const sortedSubs = useMemo(() => {
     return [...allSubs].sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)))
   }, [allSubs, getDisplayName])
@@ -171,6 +231,79 @@ export default function SubFinderPage() {
     }
     await handleFindSubs(selectedAbsence)
   }
+
+  useEffect(() => {
+    if (!selectedAbsence?.id || mode !== 'existing') return
+    if (debugLoggedAbsenceIdsRef.current.has(selectedAbsence.id)) return
+    debugLoggedAbsenceIdsRef.current.add(selectedAbsence.id)
+
+    fetch(`/api/sub-finder/absences-debug?request_id=${selectedAbsence.id}`)
+      .then((response) => response.json())
+      .then((data) => {
+        console.log('[Sub Finder Debug] Absence coverage keys', data)
+      })
+      .catch((error) => {
+        console.error('[Sub Finder Debug] Failed to load absences debug', error)
+      })
+  }, [mode, selectedAbsence?.id])
+
+  useEffect(() => {
+    if (!selectedAbsence?.id || mode !== 'existing') return
+    if (debugAbsencesLoggedRef.current.has(selectedAbsence.id)) return
+    debugAbsencesLoggedRef.current.add(selectedAbsence.id)
+
+    const searchParams = new URLSearchParams()
+    if (includePartiallyCovered) {
+      searchParams.set('include_partially_covered', 'true')
+    }
+    const url = `/api/sub-finder/absences${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
+
+    fetch(url)
+      .then((response) => response.json())
+      .then((data) => {
+        const match = Array.isArray(data)
+          ? data.find((absence) => absence.id === selectedAbsence.id)
+          : null
+        if (match) {
+          console.log('[Sub Finder Debug] Absence API payload', {
+            id: match.id,
+            teacher: match.teacher_name,
+            shifts: match.shifts,
+            shift_details: match.shifts?.shift_details,
+          })
+        } else {
+          console.warn('[Sub Finder Debug] Absence not found in API response', {
+            selectedAbsenceId: selectedAbsence.id,
+          })
+        }
+      })
+      .catch((error) => {
+        console.error('[Sub Finder Debug] Failed to load absences payload', error)
+      })
+  }, [includePartiallyCovered, mode, selectedAbsence?.id])
+
+  useEffect(() => {
+    if (!selectedAbsence?.id || mode !== 'existing') return
+    if (debugCoverageLoggedRef.current.has(selectedAbsence.id)) return
+    debugCoverageLoggedRef.current.add(selectedAbsence.id)
+
+    console.log('[Sub Finder Debug] Coverage summary inputs', {
+      absence_id: selectedAbsence.id,
+      selectedAbsenceShifts: selectedAbsence.shifts,
+      filteredShiftSummary,
+    })
+  }, [filteredShiftSummary, mode, selectedAbsence?.id])
+
+  const lastIncludePastShiftsRef = useRef(includePastShifts)
+  useEffect(() => {
+    if (lastIncludePastShiftsRef.current === includePastShifts) return
+    lastIncludePastShiftsRef.current = includePastShifts
+    if (mode === 'existing' && selectedAbsence) {
+      handleFindSubs(selectedAbsence).catch((error) => {
+        console.error('Failed to refresh subs after toggling past shifts:', error)
+      })
+    }
+  }, [includePastShifts, mode, selectedAbsence, handleFindSubs])
 
   // Helper to create cache key
   const getCacheKey = (subId: string, absenceId: string) => `${subId}-${absenceId}`
@@ -465,15 +598,11 @@ export default function SubFinderPage() {
     if (typeof savedState.includeOnlyRecommended === 'boolean') {
       setIncludeOnlyRecommended(savedState.includeOnlyRecommended)
     }
+    if (typeof savedState.includePastShifts === 'boolean') {
+      setIncludePastShifts(savedState.includePastShifts)
+    }
     if (savedState.subSearch) {
       setSubSearch(savedState.subSearch)
-    }
-
-    // Restore absences if available (this prevents unnecessary fetch)
-    const hasSavedAbsences = savedState.absences && savedState.absences.length > 0
-    if (hasSavedAbsences && savedState.absences) {
-      console.log('[SubFinder] Restoring saved absences:', savedState.absences.length)
-      setAbsences(savedState.absences)
     }
 
     hasRestoredStateRef.current = true
@@ -481,9 +610,8 @@ export default function SubFinderPage() {
     setTimeout(() => {
       isRestoringStateRef.current = false
       console.log('[SubFinder] State restoration complete, isRestoring flag cleared')
-      // Only fetch absences if we're in existing mode and don't have them in saved state
-      if (mode === 'existing' && !hasSavedAbsences) {
-        console.log('[SubFinder] Fetching absences (no saved absences)')
+      if (mode === 'existing') {
+        console.log('[SubFinder] Fetching absences')
         fetchAbsences()
       }
     }, 500) // Give enough time for all restoration effects to complete
@@ -571,34 +699,13 @@ export default function SubFinderPage() {
       selectedAbsenceIdRef.current = absence.id // Update ref immediately
       setSelectedAbsence(absence)
       
-      // If we have saved results, restore them; otherwise re-run finder
-      if (savedState?.recommendedSubs && savedState.recommendedSubs.length > 0) {
-        console.log('[SubFinder] Restoring saved results')
-        // Restore saved results
-        applySubResults(savedState.allSubs || savedState.recommendedSubs, {
-          useOnlyRecommended: savedState.includeOnlyRecommended ?? true,
+      console.log('[SubFinder] Re-running finder')
+      setTimeout(() => {
+        handleFindSubs(absence).finally(() => {
+          isRestoringStateRef.current = false
+          hasRestoredStateRef.current = true
         })
-        if (savedState.recommendedCombinations && savedState.recommendedCombinations.length > 0) {
-          setRecommendedCombinations(savedState.recommendedCombinations)
-        }
-        isRestoringStateRef.current = false
-        hasRestoredStateRef.current = true
-        // Clear restored absences flag so we can use fresh React Query data going forward
-        setTimeout(() => {
-          clearRestoredAbsences()
-        }, 1000)
-      } else {
-        console.log('[SubFinder] No saved results, re-running finder')
-        // No saved results, re-run finder to get fresh data
-        setTimeout(() => {
-          handleFindSubs(absence).finally(() => {
-            isRestoringStateRef.current = false
-            hasRestoredStateRef.current = true
-            // Clear restored absences flag so we can use fresh React Query data going forward
-            clearRestoredAbsences()
-          })
-        }, 100)
-      }
+      }, 100)
     } else if (selectedAbsence && !absences.find(a => a.id === selectedAbsence.id)) {
       // Selected absence no longer exists in the list - clear it
       console.log('[SubFinder] Selected absence no longer exists, clearing selection')
@@ -607,7 +714,7 @@ export default function SubFinderPage() {
     } else {
       console.log('[SubFinder] Could not restore absence - not found in list and no current selection')
     }
-  }, [absences, requestedAbsenceId, mode, selectedAbsence, setSelectedAbsence, handleFindSubs, applySubResults, setRecommendedCombinations, clearRestoredAbsences])
+  }, [absences, requestedAbsenceId, mode, selectedAbsence, setSelectedAbsence, handleFindSubs, applySubResults, setRecommendedCombinations])
   
   // Update ref whenever selectedAbsence changes (to track it even during restoration)
   useEffect(() => {
@@ -621,52 +728,36 @@ export default function SubFinderPage() {
     }
   }, [selectedAbsence])
 
+  useEffect(() => {
+    if (!selectedAbsence || mode !== 'existing') return
+    if (selectedAbsence.id.startsWith('manual-')) return
+    const match = absences.find((absence) => absence.id === selectedAbsence.id)
+    if (match && match !== selectedAbsence) {
+      setSelectedAbsence(match)
+    }
+    if (match) {
+      console.log('[Sub Finder Debug] Selected absence sync', {
+        selectedAbsenceId: selectedAbsence.id,
+        matchedAbsenceId: match.id,
+        matchedShifts: match.shifts,
+      })
+    } else {
+      console.warn('[Sub Finder Debug] Selected absence missing from absences list', {
+        selectedAbsenceId: selectedAbsence.id,
+        absencesCount: absences.length,
+      })
+    }
+  }, [absences, mode, selectedAbsence, setSelectedAbsence])
+
   // Restore manual mode results after form data is restored
   useEffect(() => {
     if (mode !== 'manual' || !manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0) return
-    if (selectedAbsence) return // Already have an absence, skip
+    if (selectedAbsence) return
 
-    const savedState = loadSubFinderState()
-    if (!savedState) return
-
-    // Check if we have saved results for manual mode
-    const expectedAbsenceId = `manual-${manualTeacherId}`
-    if (savedState.selectedAbsenceId === expectedAbsenceId && savedState.recommendedSubs && savedState.recommendedSubs.length > 0) {
-      isRestoringStateRef.current = true
-      
-      // Create synthetic absence to match saved state
-      const teacher = teachers.find(t => t.id === manualTeacherId)
-      const teacherName = getDisplayName(teacher, 'Manual Coverage')
-      
-      // Restore results
-      applySubResults(savedState.allSubs || savedState.recommendedSubs, {
-        useOnlyRecommended: savedState.includeOnlyRecommended ?? true,
-      })
-      if (savedState.recommendedCombinations && savedState.recommendedCombinations.length > 0) {
-        setRecommendedCombinations(savedState.recommendedCombinations)
-      }
-      
-      // Create synthetic absence (minimal data since we have results)
-      setSelectedAbsence({
-        id: expectedAbsenceId,
-        teacher_id: manualTeacherId,
-        teacher_name: teacherName,
-        start_date: manualStartDate,
-        end_date: manualEndDate || manualStartDate,
-        reason: null,
-        shifts: {
-          total: manualSelectedShifts.length,
-          uncovered: manualSelectedShifts.length,
-          partially_covered: 0,
-          fully_covered: 0,
-          shift_details: [],
-        },
-      })
-      
-      isRestoringStateRef.current = false
-      hasRestoredStateRef.current = true
-    }
-  }, [mode, manualTeacherId, manualStartDate, manualEndDate, manualSelectedShifts, selectedAbsence, teachers, getDisplayName, applySubResults, setRecommendedCombinations, setSelectedAbsence])
+    runManualFinder().catch((error) => {
+      console.error('[SubFinder] Failed to restore manual results:', error)
+    })
+  }, [mode, manualTeacherId, manualStartDate, manualEndDate, manualSelectedShifts, selectedAbsence, runManualFinder])
 
   // Save state whenever it changes (but not during restoration or before initial restoration)
   useEffect(() => {
@@ -694,11 +785,8 @@ export default function SubFinderPage() {
       includePartiallyCovered,
       includeFlexibleStaff,
       includeOnlyRecommended,
+      includePastShifts,
       subSearch,
-      absences: absences.length > 0 ? absences : undefined,
-      recommendedSubs: recommendedSubs.length > 0 ? recommendedSubs : undefined,
-      allSubs: allSubs.length > 0 ? allSubs : undefined,
-      recommendedCombinations: recommendedCombinations.length > 0 ? recommendedCombinations : undefined,
     })
   }, [
     mode,
@@ -711,11 +799,8 @@ export default function SubFinderPage() {
     includePartiallyCovered,
     includeFlexibleStaff,
     includeOnlyRecommended,
+    includePastShifts,
     subSearch,
-    absences,
-    recommendedSubs,
-    allSubs,
-    recommendedCombinations,
   ])
 
   return (
@@ -1059,10 +1144,10 @@ export default function SubFinderPage() {
                   </h2>
                 </div>
 
-                {selectedAbsence.shifts.total > 0 && (
+                {filteredShiftSummary && filteredShiftSummary.total > 0 && (
                   <div className="mt-4 mb-8">
                     <CoverageSummary
-                      shifts={selectedAbsence.shifts}
+                      shifts={filteredShiftSummary}
                       onShiftClick={handleShiftClick}
                     />
                   </div>
@@ -1276,6 +1361,24 @@ export default function SubFinderPage() {
         <div className="flex-1 overflow-y-auto">
           {selectedAbsence ? (
             <div className="p-4">
+              {showPastShiftsBanner && (
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-slate-900">
+                  <p className="max-w-3xl leading-snug">
+                    This absence includes <strong>{pastShiftCount}</strong> past shift{pastShiftCount === 1 ? '' : 's'} and <strong>{upcomingShiftCount}</strong> upcoming shift{upcomingShiftCount === 1 ? '' : 's'}. {includePastShifts ? 'Showing all shifts.' : 'Showing upcoming shifts only.'}
+                  </p>
+                  <label
+                    htmlFor="include-past-shifts"
+                    className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-900"
+                  >
+                    <Switch
+                      id="include-past-shifts"
+                      checked={includePastShifts}
+                      onCheckedChange={setIncludePastShifts}
+                    />
+                    Include past shifts
+                  </label>
+                </div>
+              )}
               {/* Recommended Combination Section */}
               {recommendedCombinations.length > 0 && (
                 <div className="mt-2">
@@ -1300,6 +1403,7 @@ export default function SubFinderPage() {
                 onContactSub={handleContactSub as any}
                 hideHeader
                 highlightedSubId={highlightedSubId}
+                includePastShifts={includePastShifts}
               />
             </div>
           ) : (

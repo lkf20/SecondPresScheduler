@@ -54,6 +54,9 @@ async function fetchSubRecommendations(
   if (params?.includeFlexibleStaff !== undefined) {
     body.include_flexible_staff = params.includeFlexibleStaff
   }
+  if (params?.includePastShifts !== undefined) {
+    body.include_past_shifts = params.includePastShifts
+  }
 
   const response = await fetch('/api/sub-finder/find-subs', {
     method: 'POST',
