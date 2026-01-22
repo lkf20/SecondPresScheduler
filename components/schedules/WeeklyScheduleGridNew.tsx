@@ -32,6 +32,7 @@ interface WeeklyScheduleGridNewProps {
     subs: number
   }
   slotCounts?: { shown: number; total: number } // Slot counts for display
+  showLegendSubstitutes?: boolean
 }
 
 type WeeklyScheduleCellData = WeeklyScheduleData & {
@@ -113,6 +114,7 @@ export default function WeeklyScheduleGridNew({
   onDisplayModeChange,
   displayModeCounts,
   slotCounts,
+  showLegendSubstitutes = true,
 }: WeeklyScheduleGridNewProps) {
   const [selectedCell, setSelectedCell] = useState<{
     dayId: string
@@ -499,16 +501,20 @@ export default function WeeklyScheduleGridNew({
                 Floater
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200">
-                Substitute
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
-                Absent
-              </span>
-            </div>
+            {showLegendSubstitutes && (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200">
+                    Substitute
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+                    Absent
+                  </span>
+                </div>
+              </>
+            )}
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <span className="text-gray-600">Meets preferred</span>
@@ -815,16 +821,20 @@ export default function WeeklyScheduleGridNew({
                 Floater
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200">
-                Substitute
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
-                Absent
-              </span>
-            </div>
+            {showLegendSubstitutes && (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200">
+                    Substitute
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+                    Absent
+                  </span>
+                </div>
+              </>
+            )}
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <span className="text-gray-600">Meets preferred</span>
