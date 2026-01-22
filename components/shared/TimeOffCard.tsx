@@ -127,7 +127,7 @@ export default function TimeOffCard({
           <div className="flex items-start justify-between mb-2">
             <div className="flex-1">
               <div className="flex flex-wrap items-center gap-2 mb-1">
-                <h3 className="font-semibold text-base text-slate-800">{teacherName}</h3>
+                <h3 className="font-semibold text-lg text-slate-800">{teacherName}</h3>
                 {reason && (
                   <span className={cn('rounded-full border px-2 py-0.5 text-[11px] font-medium', getNeutralChipClasses())}>
                     {reason}
@@ -216,7 +216,7 @@ export default function TimeOffCard({
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-3 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="text-base font-semibold text-slate-900">{teacherName}</div>
+            <div className="text-lg font-semibold text-slate-900">{teacherName}</div>
             {reason && (
               <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
                 {reason}
