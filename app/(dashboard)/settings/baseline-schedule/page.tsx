@@ -340,6 +340,7 @@ export default function BaselineSchedulePage() {
                 : null
             }
             showLegendSubstitutes={false}
+            showFilterChips={false}
           />
           <FilterPanel
             isOpen={filterPanelOpen}

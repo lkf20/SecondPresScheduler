@@ -33,6 +33,7 @@ interface WeeklyScheduleGridNewProps {
   }
   slotCounts?: { shown: number; total: number } // Slot counts for display
   showLegendSubstitutes?: boolean
+  showFilterChips?: boolean
 }
 
 type WeeklyScheduleCellData = WeeklyScheduleData & {
@@ -115,6 +116,7 @@ export default function WeeklyScheduleGridNew({
   displayModeCounts,
   slotCounts,
   showLegendSubstitutes = true,
+  showFilterChips = true,
 }: WeeklyScheduleGridNewProps) {
   const [selectedCell, setSelectedCell] = useState<{
     dayId: string
@@ -530,7 +532,8 @@ export default function WeeklyScheduleGridNew({
           </div>
         </div>
         {/* Filter chips - separate row below legend */}
-        <div className="mb-4 flex flex-wrap items-center gap-2">
+        {showFilterChips && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
           {[
             { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
             { value: 'coverage-issues' as const, label: `Coverage Issues (${countsForChips.coverageIssues})` },
@@ -777,7 +780,7 @@ export default function WeeklyScheduleGridNew({
               )
             })}
           </div>
-        </div>
+        )}
 
         {selectedCell && !filterPanelOpen && (
           <ScheduleSidePanel
@@ -850,7 +853,8 @@ export default function WeeklyScheduleGridNew({
           </div>
         </div>
         {/* Filter chips - separate row below legend */}
-        <div className="mb-4 flex flex-wrap items-center gap-2">
+        {showFilterChips && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
           {[
             { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
             { value: 'coverage-issues' as const, label: `Coverage Issues (${countsForChips.coverageIssues})` },
@@ -1106,7 +1110,7 @@ export default function WeeklyScheduleGridNew({
               )
             })}
           </div>
-        </div>
+        )}
 
         {selectedCell && !filterPanelOpen && (
           <ScheduleSidePanel
