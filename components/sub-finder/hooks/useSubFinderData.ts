@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
-import { useSubFinderAbsences } from '@/lib/hooks/use-sub-finder-absences'
+import { useSubFinderAbsences, type SubFinderAbsence } from '@/lib/hooks/use-sub-finder-absences'
 import { useSubRecommendations } from '@/lib/hooks/use-sub-recommendations'
 import type { RecommendedCombination } from '@/lib/utils/sub-combination'
 import type { SubRecommendationsQueryParams } from '@/lib/utils/query-keys'
@@ -101,6 +101,8 @@ export interface SubCandidate {
     classroom_name?: string | null
     class_name?: string | null
   }>
+  notes?: string | null
+  response_status?: string | null
   [key: string]: unknown
 }
 
@@ -112,18 +114,15 @@ interface ManualFindInput {
 }
 
 export function useSubFinderData({
-  mode,
   requestedAbsenceId,
   skipInitialFetch = false,
   subRecommendationParams,
 }: {
-  mode: Mode
   requestedAbsenceId: string | null
   skipInitialFetch?: boolean
   subRecommendationParams?: SubRecommendationsQueryParams
 }) {
   const hasAppliedAbsenceRef = useRef(false)
-  const hasSkippedInitialFetchRef = useRef(skipInitialFetch)
   const [selectedAbsence, setSelectedAbsence] = useState<Absence | null>(null)
   const [recommendedSubs, setRecommendedSubs] = useState<SubCandidate[]>([])
   const [allSubs, setAllSubs] = useState<SubCandidate[]>([])
@@ -143,41 +142,43 @@ export function useSubFinderData({
     { includePartiallyCovered },
     skipInitialFetch ? undefined : [] // Don't provide initial data if skipping fetch
   )
-  
-  // Transform API response to match component's expected Absence format
-  const transformedAbsences: Absence[] = useMemo(() => {
-    return absencesData.map((apiAbsence: any) => ({
-      id: apiAbsence.id,
-      teacher_id: apiAbsence.teacher_id,
-      teacher_name: apiAbsence.teacher_name,
-      start_date: apiAbsence.start_date,
-      end_date: apiAbsence.end_date,
-      reason: apiAbsence.reason,
-      classrooms: apiAbsence.classrooms,
-      shifts: {
-        total: apiAbsence.shifts?.total || 0,
-        uncovered: apiAbsence.shifts?.uncovered || 0,
-        partially_covered: apiAbsence.shifts?.partial ?? apiAbsence.shifts?.partially_covered ?? 0,
-        fully_covered: apiAbsence.shifts?.covered ?? apiAbsence.shifts?.fully_covered ?? 0,
-        shift_details: (apiAbsence.shifts?.shift_details || []).map((detail: any) => ({
-          id: detail.id || '',
-          date: detail.date,
-          day_name: detail.day_name,
-          time_slot_code: detail.time_slot_code,
-          class_name: detail.class_name || null,
-          classroom_name: detail.classroom_name || null,
-          status: detail.status === 'partial' || detail.status === 'partially_covered'
+
+  const mapAbsence = useCallback((apiAbsence: SubFinderAbsence): Absence => ({
+    id: apiAbsence.id,
+    teacher_id: apiAbsence.teacher_id,
+    teacher_name: apiAbsence.teacher_name,
+    start_date: apiAbsence.start_date,
+    end_date: apiAbsence.end_date,
+    reason: apiAbsence.reason,
+    classrooms: apiAbsence.classrooms,
+    shifts: {
+      total: apiAbsence.shifts?.total || 0,
+      uncovered: apiAbsence.shifts?.uncovered || 0,
+      partially_covered: apiAbsence.shifts?.partial ?? apiAbsence.shifts?.partially_covered ?? 0,
+      fully_covered: apiAbsence.shifts?.covered ?? apiAbsence.shifts?.fully_covered ?? 0,
+      shift_details: (apiAbsence.shifts?.shift_details || []).map((detail) => ({
+        id: detail.id || '',
+        date: detail.date,
+        day_name: detail.day_name,
+        time_slot_code: detail.time_slot_code,
+        class_name: detail.class_name || null,
+        classroom_name: detail.classroom_name || null,
+        status:
+          detail.status === 'partial' || detail.status === 'partially_covered'
             ? 'partially_covered'
             : detail.status === 'covered' || detail.status === 'fully_covered'
               ? 'fully_covered'
               : 'uncovered',
-          sub_name: detail.assigned_sub?.name || null,
-          is_partial: detail.status === 'partial' || detail.status === 'partially_covered',
-        })),
-      },
-    }))
-  }, [absencesData])
-  
+        sub_name: detail.assigned_sub?.name || null,
+        is_partial: detail.status === 'partial' || detail.status === 'partially_covered',
+      })),
+    },
+  }), [])
+
+  const transformedAbsences: Absence[] = useMemo(() => {
+    return absencesData.map(mapAbsence)
+  }, [absencesData, mapAbsence])
+
   const absences = useMemo(() => {
     return transformedAbsences
   }, [transformedAbsences])
@@ -281,11 +282,11 @@ export function useSubFinderData({
         const [absencesResult] = await Promise.all([refetchAbsences(), refetchRecommendations()])
         const refreshedAbsence = absencesResult.data?.find((item) => item.id === absenceId)
         if (refreshedAbsence) {
-          setSelectedAbsence(refreshedAbsence)
+          setSelectedAbsence(mapAbsence(refreshedAbsence))
         }
       }
     },
-    [refetchAbsences, refetchRecommendations, selectedAbsence?.id]
+    [refetchAbsences, refetchRecommendations, selectedAbsence?.id, mapAbsence]
   )
 
   const handleFindManualSubs = useCallback(

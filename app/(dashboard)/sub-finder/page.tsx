@@ -60,7 +60,6 @@ export default function SubFinderPage() {
     handleFindManualSubs,
     applySubResults,
   } = useSubFinderData({ 
-    mode, 
     requestedAbsenceId,
     skipInitialFetch: true, // Skip initial fetch to allow state restoration first
     subRecommendationParams,
@@ -78,7 +77,29 @@ export default function SubFinderPage() {
   const savedAbsenceRef = useRef<Absence | null>(null)
   const selectedAbsenceIdRef = useRef<string | null>(null) // Track selected absence ID to prevent loss during restoration
   // Cache contact data: key = `${subId}-${absenceId}`
-  const [contactDataCache, setContactDataCache] = useState<Map<string, Record<string, unknown>>>(new Map())
+  type ContactDataCacheEntry = {
+    id: string
+    is_contacted: boolean
+    contacted_at: string | null
+    response_status: 'none' | 'pending' | 'confirmed' | 'declined_all'
+    notes: string | null
+    shift_overrides?: Array<{
+      coverage_request_shift_id?: string | null
+      selected: boolean
+      override_availability: boolean
+      shift?: {
+        date: string
+        time_slot?: {
+          code?: string | null
+        } | null
+      } | null
+    }>
+    coverage_request_id?: string
+    shift_map?: Record<string, string>
+    selected_shift_keys?: string[]
+    override_shift_keys?: string[]
+  }
+  const [contactDataCache, setContactDataCache] = useState<Map<string, ContactDataCacheEntry>>(new Map())
   const [highlightedSubId, setHighlightedSubId] = useState<string | null>(null)
   const [manualTeacherId, setManualTeacherId] = useState<string>('')
   const [manualStartDate, setManualStartDate] = useState<string>('')
@@ -305,18 +326,6 @@ export default function SubFinderPage() {
     }
   }
 
-  const handleViewDetails = async (sub: SubCandidate) => {
-    setSelectedSub(sub)
-    setIsContactPanelOpen(true)
-    
-    // Prefetch contact data in background if we have an absence
-    if (selectedAbsence) {
-      fetchContactDataForSub(sub, selectedAbsence).catch(error => {
-        console.error('Error prefetching contact data:', error)
-      })
-    }
-  }
-
   const scrollToSubCard = (subId: string) => {
     const element = document.getElementById(`sub-card-${subId}`)
     if (element) {
@@ -472,6 +481,7 @@ export default function SubFinderPage() {
 
   // Load saved state on mount (only if no URL params override)
   useEffect(() => {
+    if (hasRestoredStateRef.current) return
     console.log('[SubFinder] Initial state restoration effect running')
     // Only restore if we don't have URL params that override
     if (requestedAbsenceId || requestedTeacherId) {
@@ -485,7 +495,6 @@ export default function SubFinderPage() {
       hasSavedState: !!savedState,
       savedAbsenceId: savedState?.selectedAbsenceId,
       savedMode: savedState?.mode,
-      savedAbsencesCount: savedState?.absences?.length || 0,
     })
     
     if (!savedState) {
@@ -550,7 +559,15 @@ export default function SubFinderPage() {
         fetchAbsences()
       }
     }, 500) // Give enough time for all restoration effects to complete
-  }, []) // Only run on mount - eslint-disable-line react-hooks/exhaustive-deps
+  }, [
+    fetchAbsences,
+    mode,
+    requestedAbsenceId,
+    requestedTeacherId,
+    setIncludeFlexibleStaff,
+    setIncludeOnlyRecommended,
+    setIncludePartiallyCovered,
+  ])
 
 
   // Restore selected absence after absences are loaded (for existing mode)
@@ -649,7 +666,7 @@ export default function SubFinderPage() {
     } else {
       console.log('[SubFinder] Could not restore absence - not found in list and no current selection')
     }
-  }, [absences, requestedAbsenceId, mode, selectedAbsence, setSelectedAbsence, handleFindSubs, applySubResults, setRecommendedCombinations])
+  }, [absences, absences.length, requestedAbsenceId, mode, selectedAbsence, setSelectedAbsence, handleFindSubs, applySubResults, setRecommendedCombinations])
   
   // Update ref whenever selectedAbsence changes (to track it even during restoration)
   useEffect(() => {
@@ -724,6 +741,7 @@ export default function SubFinderPage() {
     includeOnlyRecommended,
     includePastShifts,
     subSearch,
+    absences.length,
   ])
 
   return (
@@ -1319,11 +1337,11 @@ export default function SubFinderPage() {
               )}
 
               <RecommendedSubsList
-                subs={recommendedSubs as any}
+                subs={recommendedSubs}
                 loading={loading}
                 absence={selectedAbsence}
                 showAllSubs={!includeOnlyRecommended}
-                onContactSub={handleContactSub as any}
+                onContactSub={handleContactSub}
                 hideHeader
                 highlightedSubId={highlightedSubId}
                 includePastShifts={includePastShifts}
@@ -1351,7 +1369,7 @@ export default function SubFinderPage() {
           absence={selectedAbsence}
           initialContactData={
             selectedSub && selectedAbsence
-              ? (contactDataCache.get(getCacheKey(selectedSub.id, selectedAbsence.id)) as any)
+              ? contactDataCache.get(getCacheKey(selectedSub.id, selectedAbsence.id))
               : undefined
           }
           onAssignmentComplete={async () => {

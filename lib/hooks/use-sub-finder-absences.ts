@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 import { subFinderAbsencesKey, type SubFinderAbsencesQueryParams } from '@/lib/utils/query-keys'
 
-type Absence = {
+export type SubFinderAbsence = {
   id: string
   teacher_id: string
   teacher_name: string
@@ -20,17 +20,19 @@ type Absence = {
     partial?: number
     fully_covered?: number
     partially_covered?: number
-    shift_details: Array<{
-      date: string
-      day_name: string
-      time_slot_code: string
-      classroom_name: string
-      classroom_color: string | null
-      status: 'covered' | 'partial' | 'fully_covered' | 'partially_covered' | 'uncovered'
-      assigned_sub?: {
-        name: string
-      }
-    }>
+      shift_details: Array<{
+        class_name?: string | null
+        date: string
+        day_name: string
+        time_slot_code: string
+        classroom_name: string
+        classroom_color: string | null
+        id?: string
+        status: 'covered' | 'partial' | 'fully_covered' | 'partially_covered' | 'uncovered'
+        assigned_sub?: {
+          name: string
+        }
+      }>
   }
   classrooms: Array<{
     id: string
@@ -39,7 +41,7 @@ type Absence = {
   }>
 }
 
-async function fetchSubFinderAbsences(params?: SubFinderAbsencesQueryParams): Promise<Absence[]> {
+async function fetchSubFinderAbsences(params?: SubFinderAbsencesQueryParams): Promise<SubFinderAbsence[]> {
   const searchParams = new URLSearchParams()
   if (params?.includePartiallyCovered) {
     searchParams.set('include_partially_covered', 'true')
@@ -56,7 +58,7 @@ async function fetchSubFinderAbsences(params?: SubFinderAbsencesQueryParams): Pr
   return response.json()
 }
 
-export function useSubFinderAbsences(params?: SubFinderAbsencesQueryParams, initialData?: Absence[]) {
+export function useSubFinderAbsences(params?: SubFinderAbsencesQueryParams, initialData?: SubFinderAbsence[]) {
   const schoolId = useSchool()
 
   return useQuery({

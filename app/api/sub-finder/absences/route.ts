@@ -89,6 +89,7 @@ export async function GET(request: NextRequest) {
     // Transform each request
     const transformedRequests = await Promise.all(
       timeOffRequests.map(async (request) => {
+        const coverageRequestId = (request as { coverage_request_id?: string | null }).coverage_request_id
         // Get shifts
         let shifts: Awaited<ReturnType<typeof getTimeOffShifts>>
         try {
@@ -111,7 +112,8 @@ export async function GET(request: NextRequest) {
           const assignmentMap = new Map<string, any>()
           const loggedMissingCoverageLinkKeys = new Set<string>()
 
-          if (request.coverage_request_id) {
+          const coverageRequestId = (request as { coverage_request_id?: string | null }).coverage_request_id
+          if (coverageRequestId) {
             try {
               const activeAssignments = await getActiveSubAssignmentsForTimeOffRequest(request.id)
               ;(activeAssignments || []).forEach((assignment: any) => {
@@ -129,7 +131,7 @@ export async function GET(request: NextRequest) {
                   loggedMissingShiftKeys.add(shiftKey)
                   console.warn('[Sub Finder Absences] Coverage assignment missing time_off_shift', {
                     request_id: request.id,
-                    coverage_request_id: request.coverage_request_id,
+                    coverage_request_id: coverageRequestId,
                     assignment_id: assignment.id,
                     shift_date: shiftDate,
                     time_slot_id: shiftTimeSlotId,
@@ -147,7 +149,7 @@ export async function GET(request: NextRequest) {
             } catch (error) {
               console.error('[Sub Finder Absences] Failed to load coverage request assignments:', {
                 request_id: request.id,
-                coverage_request_id: request.coverage_request_id,
+                coverage_request_id: coverageRequestId,
                 error,
               })
             }
@@ -199,7 +201,7 @@ export async function GET(request: NextRequest) {
           if (request.id === debugRequestId) {
             console.log('[Sub Finder Absences] Debug assignment/time-off shift keys', {
               request_id: request.id,
-              coverage_request_id: request.coverage_request_id,
+              coverage_request_id: coverageRequestId,
               time_off_shift_keys: Array.from(timeOffShiftKeys),
               assignment_keys: Array.from(assignmentKeys),
               assignments_count: assignments.length,
@@ -210,7 +212,7 @@ export async function GET(request: NextRequest) {
           if (overlapKeys.length === 0) {
             console.warn('[Sub Finder Absences] Assignments do not match time_off_shifts', {
               request_id: request.id,
-              coverage_request_id: request.coverage_request_id,
+              coverage_request_id: coverageRequestId,
               time_off_shift_keys: Array.from(timeOffShiftKeys).slice(0, 10),
               assignment_keys: Array.from(assignmentKeys).slice(0, 10),
             })
@@ -324,7 +326,7 @@ export async function GET(request: NextRequest) {
         if (hasAssignmentOverlap && transformed.covered === 0 && transformed.partial === 0) {
           console.warn('[Sub Finder Absences] Assignment overlap but no coverage counted', {
             request_id: request.id,
-            coverage_request_id: request.coverage_request_id,
+            coverage_request_id: coverageRequestId,
             time_off_shift_keys: Array.from(timeOffShiftKeys).slice(0, 10),
             assignment_keys: Array.from(assignmentKeys).slice(0, 10),
             assignments_count: assignments.length,

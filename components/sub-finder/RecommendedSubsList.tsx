@@ -4,53 +4,14 @@ import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import SubFinderCard from '@/components/sub-finder/SubFinderCard'
+import type { SubCandidate } from '@/components/sub-finder/hooks/useSubFinderData'
 
-export interface RecommendedSub {
-  id: string
-  name: string
-  phone: string | null
-  coverage_percent: number
-  shifts_covered: number
-  total_shifts: number
-  can_cover: Array<{
-    date: string
-    day_name: string
-    time_slot_code: string
-    class_name: string | null
-    classroom_name?: string | null
-  }>
-  cannot_cover: Array<{
-    date: string
-    day_name: string
-    time_slot_code: string
-    reason: string
-    classroom_name?: string | null
-  }>
-  assigned_shifts?: Array<{
-    date: string
-    day_name: string
-    time_slot_code: string
-    classroom_name?: string | null
-  }>
-  shift_chips?: Array<{
-    date: string
-    time_slot_code: string
-    status: 'assigned' | 'available' | 'unavailable'
-    reason?: string
-    classroom_name?: string | null
-    class_name?: string | null
-  }>
-  remaining_shift_keys?: string[]
-  remaining_shift_count?: number
-  has_assigned_shifts?: boolean
-  notes?: string
-  response_status?: string | null
-}
+type RecommendedSub = SubCandidate
 
 interface RecommendedSubsListProps {
-  subs: RecommendedSub[]
+  subs: SubCandidate[]
   loading: boolean
   absence: {
     id: string
@@ -62,11 +23,13 @@ interface RecommendedSubsListProps {
         date?: string
         time_slot_code?: string
         classroom_name?: string | null
+        class_name?: string | null
+        status?: 'uncovered' | 'partially_covered' | 'fully_covered'
       }>
     }
   }
   showAllSubs?: boolean
-  onContactSub?: (sub: RecommendedSub) => void
+  onContactSub?: (sub: SubCandidate) => void
   hideHeader?: boolean
   highlightedSubId?: string | null
   includePastShifts?: boolean
@@ -120,7 +83,7 @@ export default function RecommendedSubsList({
     return lookup
   }, [absence.shifts?.shift_details, loading, subs])
 
-  const isShiftVisible = (dateString?: string) => {
+  const isShiftVisible = useCallback((dateString?: string) => {
     if (!dateString) return false
     if (includePastShifts) return true
     const shiftDate = parseLocalDate(dateString)
@@ -128,12 +91,12 @@ export default function RecommendedSubsList({
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     return shiftDate >= today
-  }
+  }, [includePastShifts])
 
   const visibleAbsenceShifts = useMemo(() => {
     const shifts = absence.shifts?.shift_details || []
     return shifts.filter((shift) => isShiftVisible(shift.date))
-  }, [absence.shifts?.shift_details, includePastShifts])
+  }, [absence.shifts?.shift_details, isShiftVisible])
 
   const visibleShiftKeys = useMemo(() => {
     const keys = new Set<string>()
@@ -143,7 +106,7 @@ export default function RecommendedSubsList({
       keys.add(`${shift.date}|${shift.time_slot_code}`)
     })
     return keys
-  }, [absence.shifts?.shift_details, includePastShifts])
+  }, [absence.shifts?.shift_details, isShiftVisible])
 
   const derived = useMemo(() => {
     if (loading || subs.length === 0) {
@@ -239,13 +202,27 @@ export default function RecommendedSubsList({
     }
   }, [isDeclinedExpanded, loading, showAllSubs, subs])
 
-  const filterVisibleShifts = (shifts?: { date?: string; time_slot_code?: string }[]) =>
-    (shifts || []).filter((shift) => {
-      if (!shift?.date || !shift.time_slot_code) return false
-      const key = `${shift.date}|${shift.time_slot_code}`
-      if (visibleShiftKeys.size > 0 && !visibleShiftKeys.has(key)) return false
-      return isShiftVisible(shift.date)
-    })
+  const filterVisibleShifts = <T extends { date?: string; time_slot_code?: string; classroom_name?: string | null; class_name?: string | null; status?: 'uncovered' | 'partially_covered' | 'fully_covered' }>(
+    shifts?: T[]
+  ) => {
+    const filtered = (shifts || []).filter(
+      (
+        shift
+      ): shift is T & {
+        date: string
+        time_slot_code: string
+        classroom_name?: string | null
+        class_name?: string | null
+        status?: 'uncovered' | 'partially_covered' | 'fully_covered'
+      } => {
+        if (!shift?.date || !shift.time_slot_code) return false
+        const key = `${shift.date}|${shift.time_slot_code}`
+        if (visibleShiftKeys.size > 0 && !visibleShiftKeys.has(key)) return false
+        return isShiftVisible(shift.date)
+      }
+    )
+    return filtered
+  }
 
   const withClassroomName = <T extends { date: string; time_slot_code: string; classroom_name?: string | null }>(
     shifts: T[]
@@ -265,7 +242,7 @@ export default function RecommendedSubsList({
     const visibleAssigned = filterVisibleShifts(sub.assigned_shifts)
     const canCoverWithClassrooms = withClassroomName(visibleCanCover)
     const cannotCoverWithClassrooms = withClassroomName(visibleCannotCover)
-    const assignedWithClassrooms = withClassroomName(visibleAssigned)
+        const assignedWithClassrooms = withClassroomName(visibleAssigned)
     const canCoverMap = new Set(canCoverWithClassrooms.map((shift) => `${shift.date}|${shift.time_slot_code}`))
     const assignedMap = new Set(assignedWithClassrooms.map((shift) => `${shift.date}|${shift.time_slot_code}`))
     const cannotCoverMap = new Map(
