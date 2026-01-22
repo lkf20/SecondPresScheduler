@@ -329,13 +329,31 @@ export async function GET(request: NextRequest) {
       )
 
       const totalShifts = requestShifts.length
-      const assignedShifts = new Set(assignedSubs.map((sa: any) => 
-        `${sa.date}|${sa.day_of_week_id}|${sa.time_slot_id}`
-      )).size
+
+      const assignmentMap = new Map<
+        string,
+        { hasFull: boolean; hasPartial: boolean }
+      >()
+
+      assignedSubs.forEach((assignment: any) => {
+        const key = assignment.coverage_request_shift_id || `${assignment.date}|${assignment.day_of_week_id}|${assignment.time_slot_id}`
+        const existing = assignmentMap.get(key) || { hasFull: false, hasPartial: false }
+        const isPartial = assignment.is_partial || assignment.assignment_type === 'Partial Sub Shift'
+        if (isPartial) {
+          existing.hasPartial = true
+        } else {
+          existing.hasFull = true
+        }
+        assignmentMap.set(key, existing)
+      })
+
+      const assignedShifts = Array.from(assignmentMap.values()).filter(
+        (entry) => entry.hasFull || entry.hasPartial
+      ).length
+      const partialShifts = Array.from(assignmentMap.values()).filter(
+        (entry) => entry.hasPartial && !entry.hasFull
+      ).length
       const uncoveredShifts = totalShifts - assignedShifts
-      
-      // Check for partial coverage (subs assigned but not all shifts covered)
-      const partialShifts = totalShifts > 0 && assignedShifts > 0 && assignedShifts < totalShifts ? 1 : 0
       const remainingShifts = uncoveredShifts
 
       // Determine status
@@ -396,19 +414,13 @@ export async function GET(request: NextRequest) {
       const shiftDetails: Array<{ label: string; status: 'covered' | 'partial' | 'uncovered' }> = []
 
       requestShifts.forEach((shift: any) => {
-        // Check if this shift has coverage
-        const shiftAssignment = assignedSubs.find((sa: any) => 
-          sa.coverage_request_shift_id === shift.id
-        )
-        
+        const assignment = assignmentMap.get(shift.id)
+
         let status: 'covered' | 'partial' | 'uncovered' = 'uncovered'
-        if (shiftAssignment) {
-          // Check if it's partial coverage
-          if (shiftAssignment.is_partial || shiftAssignment.assignment_type === 'Partial Sub Shift') {
-            status = 'partial'
-          } else {
-            status = 'covered'
-          }
+        if (assignment?.hasFull) {
+          status = 'covered'
+        } else if (assignment?.hasPartial) {
+          status = 'partial'
         }
         
         // Format label: "Mon AM • Jan 2"
