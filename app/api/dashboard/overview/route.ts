@@ -165,6 +165,8 @@ export async function GET(request: NextRequest) {
         sub_id,
         teacher_id,
         coverage_request_shift_id,
+        is_partial,
+        assignment_type,
         sub:staff!sub_assignments_sub_id_fkey(
           id,
           first_name,

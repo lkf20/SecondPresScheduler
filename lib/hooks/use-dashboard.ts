@@ -13,6 +13,8 @@ type DashboardOverview = {
   }
   coverage_requests: Array<{
     id: string
+    source_request_id: string | null
+    request_type: string
     teacher_name: string
     start_date: string
     end_date: string
