@@ -15,6 +15,7 @@ import {
   getTeacherTimeOffShifts,
 } from '@/lib/api/time-off-shifts'
 import { parseLocalDate } from '@/lib/utils/date'
+import { createClient } from '@/lib/supabase/server'
 
 // Helper function to format date as "Mon Jan 20"
 function formatExcludedDate(dateStr: string): string {
@@ -93,6 +94,45 @@ export async function PUT(
 
     // Update the time off request
     const updatedRequest = await updateTimeOffRequest(id, { ...requestData, status })
+    
+    // Update the corresponding coverage_request's dates to match the time_off_request
+    const supabase = await createClient()
+    const { data: timeOffRequestWithCoverage } = await supabase
+      .from('time_off_requests')
+      .select('coverage_request_id, start_date, end_date')
+      .eq('id', id)
+      .single()
+    
+    if (timeOffRequestWithCoverage?.coverage_request_id) {
+      // Always update dates to match the time_off_request
+      const effectiveStartDate = timeOffRequestWithCoverage.start_date
+      const effectiveEndDate = timeOffRequestWithCoverage.end_date || timeOffRequestWithCoverage.start_date
+      
+      const coverageUpdate: { start_date: string; end_date: string; updated_at: string } = {
+        start_date: effectiveStartDate,
+        end_date: effectiveEndDate,
+        updated_at: new Date().toISOString(),
+      }
+      
+      console.log(`[TimeOff Update] Updating coverage_request ${timeOffRequestWithCoverage.coverage_request_id} with dates:`, {
+        start_date: effectiveStartDate,
+        end_date: effectiveEndDate,
+      })
+      
+      const { error: coverageUpdateError, data: updatedCoverageRequest } = await supabase
+        .from('coverage_requests')
+        .update(coverageUpdate)
+        .eq('id', timeOffRequestWithCoverage.coverage_request_id)
+        .select('start_date, end_date')
+        .single()
+      
+      if (coverageUpdateError) {
+        console.error('[TimeOff Update] Error updating coverage_request dates:', coverageUpdateError)
+        // Don't fail the request, just log the error
+      } else {
+        console.log('[TimeOff Update] Successfully updated coverage_request dates:', updatedCoverageRequest)
+      }
+    }
     
     // Handle shifts
     if (shifts !== undefined) {
@@ -212,6 +252,32 @@ export async function PUT(
       // Create shifts (only non-conflicting ones)
       if (shiftsToCreate.length > 0) {
         await createTimeOffShifts(id, shiftsToCreate)
+      }
+      
+      // After shifts are created/updated, recalculate coverage_request dates from actual shifts
+      // This ensures the dates match the actual shift dates (MIN and MAX)
+      if (timeOffRequestWithCoverage?.coverage_request_id) {
+        const { data: coverageShifts } = await supabase
+          .from('coverage_request_shifts')
+          .select('date')
+          .eq('coverage_request_id', timeOffRequestWithCoverage.coverage_request_id)
+        
+        if (coverageShifts && coverageShifts.length > 0) {
+          const dates = coverageShifts.map(s => s.date).filter(Boolean).sort()
+          if (dates.length > 0) {
+            const minDate = dates[0]
+            const maxDate = dates[dates.length - 1]
+            
+            await supabase
+              .from('coverage_requests')
+              .update({
+                start_date: minDate,
+                end_date: maxDate,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', timeOffRequestWithCoverage.coverage_request_id)
+          }
+        }
       }
     }
     

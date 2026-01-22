@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import DatePickerInput from '@/components/ui/date-picker-input'
 import {
@@ -23,6 +24,8 @@ import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { Database } from '@/types/database'
+import { useSchool } from '@/lib/contexts/SchoolContext'
+import { invalidateDashboard, invalidateTimeOffRequests, invalidateSubFinderAbsences, invalidateWeeklySchedule } from '@/lib/utils/invalidation'
 import {
   Dialog,
   DialogContent,
@@ -57,6 +60,8 @@ interface TimeOffFormProps {
 const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
   ({ onSuccess, onCancel, showBackLink = true, onHasUnsavedChanges, clearDraftOnMount = false, timeOffRequestId = null }, ref) => {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const schoolId = useSchool()
   const [error, setError] = useState<string | null>(null)
   const [teachers, setTeachers] = useState<Staff[]>([])
   const [selectedShifts, setSelectedShifts] = useState<
@@ -567,6 +572,16 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         window.sessionStorage.removeItem(draftKey)
       }
       
+      // Invalidate React Query caches to refresh all affected pages
+      if (schoolId) {
+        await Promise.all([
+          invalidateDashboard(queryClient, schoolId),
+          invalidateTimeOffRequests(queryClient, schoolId),
+          invalidateSubFinderAbsences(queryClient, schoolId),
+          invalidateWeeklySchedule(queryClient, schoolId),
+        ])
+      }
+      
       // Get teacher name for toast
       const teacher = teachers.find(t => t.id === data.teacher_id)
       const teacherName = teacher 
@@ -732,6 +747,16 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       // Clear any draft data
       if (typeof window !== 'undefined') {
         window.sessionStorage.removeItem(draftKey)
+      }
+
+      // Invalidate React Query caches to refresh all affected pages
+      if (schoolId) {
+        await Promise.all([
+          invalidateDashboard(queryClient, schoolId),
+          invalidateTimeOffRequests(queryClient, schoolId),
+          invalidateSubFinderAbsences(queryClient, schoolId),
+          invalidateWeeklySchedule(queryClient, schoolId),
+        ])
       }
 
       // Show success toast
