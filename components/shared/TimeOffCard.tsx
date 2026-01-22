@@ -289,7 +289,7 @@ export default function TimeOffCard({
                 }}
                 className="text-sm font-semibold text-teal-700 hover:text-teal-800 hover:underline"
               >
-                {isTimeOffVariant ? 'Edit' : 'View'}
+                Edit
               </button>
             ) : (
               <Link

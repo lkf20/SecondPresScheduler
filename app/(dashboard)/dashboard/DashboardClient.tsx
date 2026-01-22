@@ -27,6 +27,7 @@ import TimeOffCard from '@/components/shared/TimeOffCard'
 import { Loader2 } from 'lucide-react'
 import { useDashboard } from '@/lib/hooks/use-dashboard'
 import { useProfile } from '@/lib/hooks/use-profile'
+import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
 
 type Summary = {
   absences: number
@@ -37,6 +38,8 @@ type Summary = {
 
 type CoverageRequestItem = {
   id: string
+  source_request_id: string | null
+  request_type: string
   teacher_name: string
   start_date: string
   end_date: string
@@ -230,6 +233,15 @@ export default function DashboardClient({
   const [coverageSectionCollapsed, setCoverageSectionCollapsed] = useState(false)
   const [scheduledSubsSectionCollapsed, setScheduledSubsSectionCollapsed] = useState(false)
   const [staffingTargetSectionCollapsed, setStaffingTargetSectionCollapsed] = useState(false)
+  const [editingRequestId, setEditingRequestId] = useState<string | null>(null)
+  
+  const handleEdit = (id: string) => {
+    setEditingRequestId(id)
+  }
+
+  const handleEditClose = () => {
+    setEditingRequestId(null)
+  }
   
   // Coverage range state - always start with default to avoid hydration mismatch
   const [coverageRange, setCoverageRange] = useState<CoverageRange>('2 weeks')
@@ -813,6 +825,13 @@ export default function DashboardClient({
                     totalShifts={request.total_shifts}
                     shiftDetails={request.shift_details}
                     notes={request.notes}
+                    onEdit={() => {
+                      // Use source_request_id (time_off_request.id) for editing if it's a time_off request
+                      if (request.request_type === 'time_off' && request.source_request_id) {
+                        handleEdit(request.source_request_id)
+                      }
+                      // For non-time_off requests, we can't edit them from here
+                    }}
                   />
                 )
               })}
@@ -1150,6 +1169,15 @@ export default function DashboardClient({
           </div>
         </section>
       </div>
+      
+      {/* Edit Time Off Panel */}
+      {editingRequestId && (
+        <AddTimeOffButton 
+          key={editingRequestId} 
+          timeOffRequestId={editingRequestId} 
+          onClose={handleEditClose} 
+        />
+      )}
     </div>
   )
 }

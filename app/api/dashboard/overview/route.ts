@@ -381,6 +381,8 @@ export async function GET(request: NextRequest) {
 
       return {
         id: request.id,
+        source_request_id: request.source_request_id || null,
+        request_type: request.request_type,
         teacher_name: teacherName,
         start_date: request.start_date,
         end_date: request.end_date,

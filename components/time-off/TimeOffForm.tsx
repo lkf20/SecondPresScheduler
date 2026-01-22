@@ -154,7 +154,12 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
 
     setIsLoadingRequest(true)
     fetch(`/api/time-off/${timeOffRequestId}`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) {
+          throw new Error(`Failed to fetch: ${r.status} ${r.statusText}`)
+        }
+        return r.json()
+      })
       .then((requestData) => {
         // Populate form with existing data
         reset({
