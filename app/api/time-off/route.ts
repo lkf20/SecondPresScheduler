@@ -7,6 +7,25 @@ import {
   getTeacherTimeOffShifts,
 } from '@/lib/api/time-off-shifts'
 import { getUserSchoolId } from '@/lib/utils/auth'
+import { parseLocalDate } from '@/lib/utils/date'
+
+// Helper function to format date as "Mon Jan 20"
+function formatExcludedDate(dateStr: string): string {
+  if (!dateStr) return ''
+  try {
+    const date = parseLocalDate(dateStr)
+    if (isNaN(date.getTime())) return dateStr // Return original if invalid
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const dayAbbr = dayNames[date.getDay()]
+    const monthAbbr = monthNames[date.getMonth()]
+    const day = date.getDate()
+    return `${dayAbbr} ${monthAbbr} ${day}`
+  } catch (error) {
+    console.error('Error formatting date:', dateStr, error)
+    return dateStr // Return original if formatting fails
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -75,6 +94,7 @@ export async function POST(request: NextRequest) {
 
     // Filter out conflicting shifts (but still allow the request to be created)
     let shiftsToCreate: Array<{ date: string; day_of_week_id: string; time_slot_id: string; is_partial?: boolean; start_time?: string | null; end_time?: string | null }> = []
+    let excludedShifts: Array<{ date: string }> = []
     let excludedShiftCount = 0
     let warning: string | null = null
 
@@ -90,11 +110,20 @@ export async function POST(request: NextRequest) {
       
       // Filter out conflicting shifts
       if (shifts && Array.isArray(shifts) && shifts.length > 0) {
+        const excluded = shifts.filter((shift) => {
+          const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
+          return existingShiftKeys.has(shiftKey)
+        })
+        
+        excludedShifts = excluded.map((shift) => ({
+          date: normalizeDate(shift.date),
+        }))
+        
         shiftsToCreate = shifts.filter((shift) => {
           const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
           return !existingShiftKeys.has(shiftKey)
         })
-        excludedShiftCount = shifts.length - shiftsToCreate.length
+        excludedShiftCount = excludedShifts.length
       } else if (requestData.shift_selection_mode === 'all_scheduled') {
         // If "all_scheduled" mode, fetch all scheduled shifts and filter out conflicts
         const scheduledShifts = await getTeacherScheduledShifts(
@@ -102,6 +131,15 @@ export async function POST(request: NextRequest) {
           requestData.start_date,
           effectiveEndDate
         )
+        
+        const excluded = scheduledShifts.filter((shift) => {
+          const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
+          return existingShiftKeys.has(shiftKey)
+        })
+        
+        excludedShifts = excluded.map((shift) => ({
+          date: shift.date,
+        }))
         
         shiftsToCreate = scheduledShifts
           .map((shift) => ({
@@ -116,11 +154,37 @@ export async function POST(request: NextRequest) {
             const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
             return !existingShiftKeys.has(shiftKey)
           })
-        excludedShiftCount = scheduledShifts.length - shiftsToCreate.length
+        excludedShiftCount = excludedShifts.length
       }
       
-      if (excludedShiftCount > 0) {
-        warning = `This teacher already has time off recorded for ${excludedShiftCount} of these shifts.\nThis shift${excludedShiftCount !== 1 ? 's will' : ' will'} not be included in this time off request.`
+      if (excludedShiftCount > 0 && excludedShifts.length > 0) {
+        try {
+          // Remove duplicates by date (same date can appear multiple times with different time slots)
+          const uniqueExcludedDates = Array.from(
+            new Set(excludedShifts.map(s => s.date).filter(Boolean))
+          )
+            .map(date => {
+              try {
+                return formatExcludedDate(date)
+              } catch (err) {
+                console.error('Error formatting excluded date:', date, err)
+                return null
+              }
+            })
+            .filter((date): date is string => Boolean(date)) // Remove any null/empty values
+        
+          if (uniqueExcludedDates.length > 0) {
+            const formattedDates = uniqueExcludedDates.join(', ')
+            warning = `This teacher already has time off recorded for ${excludedShiftCount} of these shifts.<br>${excludedShiftCount} shift${excludedShiftCount !== 1 ? 's' : ''} will not be recorded: ${formattedDates}`
+          } else {
+            // Fallback if date formatting fails
+            warning = `This teacher already has time off recorded for ${excludedShiftCount} of these shifts.<br>${excludedShiftCount} shift${excludedShiftCount !== 1 ? 's' : ''} will not be recorded.`
+          }
+        } catch (error) {
+          console.error('Error processing excluded shifts:', error)
+          // Fallback warning if processing fails
+          warning = `This teacher already has time off recorded for ${excludedShiftCount} of these shifts.<br>${excludedShiftCount} shift${excludedShiftCount !== 1 ? 's' : ''} will not be recorded.`
+        }
       }
     } else {
       // No conflicts to check, use all requested shifts

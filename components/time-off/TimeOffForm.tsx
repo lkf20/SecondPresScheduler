@@ -582,13 +582,16 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       
       // Show warning if shifts were excluded
       if (responseData.warning) {
-        // Split the warning message by newline to show as separate lines
-        const warningLines = responseData.warning.split('\n')
-        warningLines.forEach((line: string) => {
-          if (line.trim()) {
-            toast.warning(line)
-          }
-        })
+        // Split the warning message by <br> to show as separate lines
+        const warningParts = responseData.warning.split('<br>')
+        if (warningParts.length === 2) {
+          toast.warning(warningParts[0], {
+            description: warningParts[1],
+          })
+        } else {
+          // Fallback for any other format
+          toast.warning(responseData.warning.replace(/<br>/g, '\n'))
+        }
       }
       
       if (onSuccess) {
