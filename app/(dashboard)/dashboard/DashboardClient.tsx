@@ -96,7 +96,7 @@ type DashboardOverview = {
 }
 
 const formatSlotLabel = (dayName: string, timeSlotCode: string) =>
-  `${dayName || '—'} - ${timeSlotCode}`
+  `${dayName || '—'} ${timeSlotCode}`
 
 const formatFullDateLabel = (value: string) => {
   const date = new Date(`${value}T00:00:00`)
@@ -1094,16 +1094,12 @@ export default function DashboardClient({
                           </div>
                           <div className="flex items-center justify-end self-center flex-shrink-0">
                             <Button
-                              asChild
                               size="sm"
                               variant="outline"
                               className={getButtonColors('teal').base}
+                              disabled
                             >
-                              <Link
-                                href={`/schedules/weekly?classroom_id=${slot.classroom_id}&day_of_week_id=${slot.day_of_week_id}&time_slot_id=${slot.time_slot_id}`}
-                              >
-                                Assign Coverage
-                              </Link>
+                              Assign Coverage
                             </Button>
                           </div>
                         </div>
@@ -1193,16 +1189,12 @@ export default function DashboardClient({
                           </div>
                           <div className="flex items-center justify-end self-center flex-shrink-0">
                             <Button
-                              asChild
                               size="sm"
                               variant="outline"
                               className={getButtonColors('teal').base}
+                              disabled
                             >
-                              <Link
-                                href={`/schedules/weekly?classroom_id=${slot.classroom_id}&day_of_week_id=${slot.day_of_week_id}&time_slot_id=${slot.time_slot_id}`}
-                              >
-                                Assign Coverage
-                              </Link>
+                              Assign Coverage
                             </Button>
                           </div>
                         </div>
