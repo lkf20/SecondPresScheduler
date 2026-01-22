@@ -558,12 +558,13 @@ export default function WeeklyScheduleGridNew({
               {option.label}
             </button>
           ))}
-          {slotCounts && (
-            <p className="ml-4 text-sm text-muted-foreground italic">
-              Showing {slotCounts.shown} of {slotCounts.total} slots
-            </p>
-          )}
-        </div>
+            {slotCounts && (
+              <p className="ml-4 text-sm text-muted-foreground italic">
+                Showing {slotCounts.shown} of {slotCounts.total} slots
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)]" style={{ position: 'relative' }}>
           <div
@@ -780,7 +781,7 @@ export default function WeeklyScheduleGridNew({
               )
             })}
           </div>
-        )}
+        </div>
 
         {selectedCell && !filterPanelOpen && (
           <ScheduleSidePanel
