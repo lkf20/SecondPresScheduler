@@ -727,10 +727,10 @@ export default function DashboardClient({
                   setCoverageFilter('needs')
                 }}
                 className={cn(
-                  'rounded-full border px-3 py-1 transition',
+                  'rounded-full border px-3 py-1 text-xs font-medium transition',
                   coverageFilter === 'needs'
-                    ? 'border-slate-300 bg-white text-slate-900'
-                    : 'border-slate-200 bg-slate-50 hover:bg-white'
+                    ? 'border-button-fill bg-button-fill text-button-fill-foreground'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                 )}
               >
                 Needs a Sub ({coverageCounts.needs})
@@ -742,10 +742,10 @@ export default function DashboardClient({
                   setCoverageFilter('covered')
                 }}
                 className={cn(
-                  'rounded-full border px-3 py-1 transition',
+                  'rounded-full border px-3 py-1 text-xs font-medium transition',
                   coverageFilter === 'covered'
-                    ? 'border-slate-300 bg-white text-slate-900'
-                    : 'border-slate-200 bg-slate-50 hover:bg-white'
+                    ? 'border-button-fill bg-button-fill text-button-fill-foreground'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                 )}
               >
                 Covered ({coverageCounts.covered})
@@ -757,10 +757,10 @@ export default function DashboardClient({
                   setCoverageFilter('all')
                 }}
                 className={cn(
-                  'rounded-full border px-3 py-1 transition',
+                  'rounded-full border px-3 py-1 text-xs font-medium transition',
                   coverageFilter === 'all'
-                    ? 'border-slate-300 bg-white text-slate-900'
-                    : 'border-slate-200 bg-slate-50 hover:bg-white'
+                    ? 'border-button-fill bg-button-fill text-button-fill-foreground'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                 )}
               >
                 All ({coverageCounts.all})
