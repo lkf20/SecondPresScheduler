@@ -850,10 +850,16 @@ export default function DashboardClient({
                   uncovered = request.uncovered_shifts
                 }
 
+                // For time_off requests, use source_request_id (time_off_request.id) for sub-finder
+                // For other request types, use the coverage_request.id
+                const absenceId = request.request_type === 'time_off' && request.source_request_id
+                  ? request.source_request_id
+                  : request.id
+
                 return (
                   <TimeOffCard
                     key={request.id}
-                    id={request.id}
+                    id={absenceId}
                     teacherName={request.teacher_name}
                     startDate={request.start_date}
                     endDate={request.end_date}
