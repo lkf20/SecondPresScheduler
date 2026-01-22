@@ -215,8 +215,13 @@ export async function PUT(
       }
     }
     
+    // Revalidate all pages that might show this data
     revalidatePath('/dashboard')
     revalidatePath('/time-off')
+    revalidatePath('/schedules/weekly')
+    revalidatePath('/sub-finder')
+    revalidatePath('/reports')
+    
     return NextResponse.json({
       ...updatedRequest,
       warning,
