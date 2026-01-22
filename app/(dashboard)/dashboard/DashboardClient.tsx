@@ -218,13 +218,26 @@ export default function DashboardClient({
   startDate: string
   endDate: string
 }) {
-  const [greetingTime, setGreetingTime] = useState('Good Morning')
   const gridRef = useRef<HTMLDivElement>(null)
   const [isXlScreen, setIsXlScreen] = useState(false)
   
   // Use React Query to cache the profile/name
-  const { data: profile } = useProfile()
+  const { data: profile, isLoading: isLoadingProfile } = useProfile()
   const greetingName = profile?.first_name?.trim() || null
+  
+  // Calculate greeting on client side only to avoid hydration mismatch
+  const [greetingTime, setGreetingTime] = useState<string | null>(null)
+  const [isClient, setIsClient] = useState(false)
+  
+  useEffect(() => {
+    setIsClient(true)
+    const hour = new Date().getHours()
+    const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening'
+    setGreetingTime(greeting)
+  }, [])
+  
+  // Only show greeting when both client-side calculation and profile are ready
+  const isGreetingReady = isClient && greetingTime !== null && !isLoadingProfile
   const [belowRequiredCollapsed, setBelowRequiredCollapsed] = useState(false)
   const [belowPreferredCollapsed, setBelowPreferredCollapsed] = useState(false)
   const [coverageFilter, setCoverageFilter] = useState<'needs' | 'covered' | 'all'>(
@@ -293,12 +306,6 @@ export default function DashboardClient({
     }
   }, [coverageRange])
 
-  useEffect(() => {
-    const hour = new Date().getHours()
-    const greeting =
-      hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening'
-    setGreetingTime(greeting)
-  }, [])
 
   // Track xl screen size for responsive min-width
   useEffect(() => {
@@ -479,12 +486,18 @@ export default function DashboardClient({
     <div className="space-y-10">
       <section className="space-y-2">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-            {greetingTime}
-            <span className="inline-block min-w-[120px]">
-              {greetingName ? `, ${greetingName}!` : ''}
-            </span>
-          </h1>
+          {isGreetingReady ? (
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+              {greetingTime}
+              <span className="inline-block min-w-[120px]">
+                {greetingName ? `, ${greetingName}!` : ''}
+              </span>
+            </h1>
+          ) : (
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+              <span className="invisible">{greetingTime}</span>
+            </h1>
+          )}
           <p className="text-xl text-slate-600 mt-1 flex items-center gap-2">
             Here is your coverage outlook for {getRangeLabel(coverageRange)} (
             {formatFullDateLabel(currentStartDate)} - {formatFullDateLabel(currentEndDate)}).
