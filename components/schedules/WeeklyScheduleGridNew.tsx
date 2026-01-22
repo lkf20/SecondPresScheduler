@@ -562,8 +562,8 @@ export default function WeeklyScheduleGridNew({
               <p className="ml-4 text-sm text-muted-foreground italic">
                 Showing {slotCounts.shown} of {slotCounts.total} slots
               </p>
-            )}
-          </div>
+        )}
+      </div>
         )}
 
         <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)]" style={{ position: 'relative' }}>
@@ -808,7 +808,7 @@ export default function WeeklyScheduleGridNew({
   // Render classrooms-x-days layout
   if (layout === 'classrooms-x-days' && classroomsXDaysGrid) {
     return (
-      <>
+      <div className="space-y-4">
         {/* Legend */}
         <div className="mb-6 p-3 bg-gray-100 rounded-md border border-gray-200">
           <div className="flex flex-wrap items-center gap-4 text-sm">
@@ -886,6 +886,7 @@ export default function WeeklyScheduleGridNew({
             </p>
           )}
         </div>
+        )}
 
         <div>
           <div
@@ -1111,7 +1112,7 @@ export default function WeeklyScheduleGridNew({
               )
             })}
           </div>
-        )}
+        </div>
 
         {selectedCell && !filterPanelOpen && (
           <ScheduleSidePanel
@@ -1131,7 +1132,7 @@ export default function WeeklyScheduleGridNew({
             onSave={handleSave}
           />
         )}
-      </>
+      </div>
     )
   }
 
