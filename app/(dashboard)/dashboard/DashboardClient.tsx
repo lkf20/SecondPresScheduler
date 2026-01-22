@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronUp,
   Settings,
+  RefreshCw,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,6 +21,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { getCoverageColors, getStaffingColorClasses, getStaffingColors, neutralColors, coverageColorValues, getButtonColors, staffingColorValues } from '@/lib/utils/colors'
@@ -290,7 +292,7 @@ export default function DashboardClient({
   }, [coverageRange, currentStartDate, currentEndDate, initialStartDate, initialEndDate])
   
   // Use React Query for dashboard data
-  const { data: overview = initialOverview, isLoading: isLoadingOverview, isFetching } = useDashboard(
+  const { data: overview = initialOverview, isLoading: isLoadingOverview, isFetching, refetch } = useDashboard(
     {
       preset: coverageRange,
       startDate: currentStartDate,
@@ -298,6 +300,14 @@ export default function DashboardClient({
     },
     shouldUseInitialData ? initialOverview : undefined
   )
+  
+  const router = useRouter()
+  
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    await refetch()
+    router.refresh()
+  }
   
   // Save to localStorage when range changes
   useEffect(() => {
@@ -486,19 +496,38 @@ export default function DashboardClient({
     <div className="space-y-10">
       <section className="space-y-2">
         <div>
-          {isGreetingReady ? (
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-              {greetingTime}
-              <span className="inline-block min-w-[120px]">
+          <div className="flex items-center gap-2">
+            {isGreetingReady ? (
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+                {greetingTime}
                 {greetingName ? `, ${greetingName}!` : ''}
-              </span>
-            </h1>
-          ) : (
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-              <span className="invisible">{greetingTime}</span>
-            </h1>
-          )}
-          <p className="text-xl text-slate-600 mt-1 flex items-center gap-2">
+              </h1>
+            ) : (
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+                <span className="invisible">{greetingTime}</span>
+              </h1>
+            )}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleRefresh}
+                    disabled={isFetching}
+                    className="h-10 w-10 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Refresh dashboard</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </div>
+        <p className="text-xl text-slate-600 mt-1 flex items-center gap-2">
             Here is your coverage outlook for {getRangeLabel(coverageRange)} (
             {formatFullDateLabel(currentStartDate)} - {formatFullDateLabel(currentEndDate)}).
             {(isLoadingOverview || (isFetching && !isLoadingOverview)) && (
@@ -552,7 +581,6 @@ export default function DashboardClient({
               </PopoverContent>
             </Popover>
           </p>
-        </div>
       </section>
 
       <section className="space-y-3 pb-1">
