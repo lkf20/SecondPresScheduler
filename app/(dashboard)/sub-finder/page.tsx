@@ -95,9 +95,6 @@ export default function SubFinderPage() {
   const isFlexibleStaffChangeUserInitiatedRef = useRef(false)
   const isRestoringStateRef = useRef(false) // Track if we're restoring state to avoid saving during restoration
   const hasRestoredStateRef = useRef(false) // Track if we've completed initial state restoration
-  const debugLoggedAbsenceIdsRef = useRef<Set<string>>(new Set())
-  const debugAbsencesLoggedRef = useRef<Set<string>>(new Set())
-  const debugCoverageLoggedRef = useRef<Set<string>>(new Set())
   const runManualFinder = useCallback(async () => {
     if (!manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0) return
     setHighlightedSubId(null)
@@ -231,68 +228,6 @@ export default function SubFinderPage() {
     }
     await handleFindSubs(selectedAbsence)
   }
-
-  useEffect(() => {
-    if (!selectedAbsence?.id || mode !== 'existing') return
-    if (debugLoggedAbsenceIdsRef.current.has(selectedAbsence.id)) return
-    debugLoggedAbsenceIdsRef.current.add(selectedAbsence.id)
-
-    fetch(`/api/sub-finder/absences-debug?request_id=${selectedAbsence.id}`)
-      .then((response) => response.json())
-      .then((data) => {
-        console.log('[Sub Finder Debug] Absence coverage keys', data)
-      })
-      .catch((error) => {
-        console.error('[Sub Finder Debug] Failed to load absences debug', error)
-      })
-  }, [mode, selectedAbsence?.id])
-
-  useEffect(() => {
-    if (!selectedAbsence?.id || mode !== 'existing') return
-    if (debugAbsencesLoggedRef.current.has(selectedAbsence.id)) return
-    debugAbsencesLoggedRef.current.add(selectedAbsence.id)
-
-    const searchParams = new URLSearchParams()
-    if (includePartiallyCovered) {
-      searchParams.set('include_partially_covered', 'true')
-    }
-    const url = `/api/sub-finder/absences${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
-
-    fetch(url)
-      .then((response) => response.json())
-      .then((data) => {
-        const match = Array.isArray(data)
-          ? data.find((absence) => absence.id === selectedAbsence.id)
-          : null
-        if (match) {
-          console.log('[Sub Finder Debug] Absence API payload', {
-            id: match.id,
-            teacher: match.teacher_name,
-            shifts: match.shifts,
-            shift_details: match.shifts?.shift_details,
-          })
-        } else {
-          console.warn('[Sub Finder Debug] Absence not found in API response', {
-            selectedAbsenceId: selectedAbsence.id,
-          })
-        }
-      })
-      .catch((error) => {
-        console.error('[Sub Finder Debug] Failed to load absences payload', error)
-      })
-  }, [includePartiallyCovered, mode, selectedAbsence?.id])
-
-  useEffect(() => {
-    if (!selectedAbsence?.id || mode !== 'existing') return
-    if (debugCoverageLoggedRef.current.has(selectedAbsence.id)) return
-    debugCoverageLoggedRef.current.add(selectedAbsence.id)
-
-    console.log('[Sub Finder Debug] Coverage summary inputs', {
-      absence_id: selectedAbsence.id,
-      selectedAbsenceShifts: selectedAbsence.shifts,
-      filteredShiftSummary,
-    })
-  }, [filteredShiftSummary, mode, selectedAbsence?.id])
 
   const lastIncludePastShiftsRef = useRef(includePastShifts)
   useEffect(() => {
@@ -734,18 +669,6 @@ export default function SubFinderPage() {
     const match = absences.find((absence) => absence.id === selectedAbsence.id)
     if (match && match !== selectedAbsence) {
       setSelectedAbsence(match)
-    }
-    if (match) {
-      console.log('[Sub Finder Debug] Selected absence sync', {
-        selectedAbsenceId: selectedAbsence.id,
-        matchedAbsenceId: match.id,
-        matchedShifts: match.shifts,
-      })
-    } else {
-      console.warn('[Sub Finder Debug] Selected absence missing from absences list', {
-        selectedAbsenceId: selectedAbsence.id,
-        absencesCount: absences.length,
-      })
     }
   }, [absences, mode, selectedAbsence, setSelectedAbsence])
 
