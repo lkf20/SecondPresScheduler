@@ -124,16 +124,20 @@ export default function SubFinderCard({
       return <p className="text-xs text-muted-foreground">Declined all shifts</p>
     }
     const normalizedSegments = coverageSegments?.length
-      ? [
+      ? ([
           ...coverageSegments.slice(0, totalShifts),
           ...Array.from({ length: Math.max(0, totalShifts - coverageSegments.length) }).fill(
-            'unavailable'
+            'unavailable' as const
           ),
-        ]
+        ] as Array<'assigned' | 'available' | 'unavailable'>)
       : null
     const orderedSegments = normalizedSegments
       ? [...normalizedSegments].sort((a, b) => {
-          const order = { assigned: 0, available: 1, unavailable: 2 }
+          const order: Record<'assigned' | 'available' | 'unavailable', number> = {
+            assigned: 0,
+            available: 1,
+            unavailable: 2,
+          }
           return order[a] - order[b]
         })
       : null

@@ -260,7 +260,18 @@ export default function RecommendedSubsList({
       declinedSubs,
       canPaginate: false, // Always show all subs in scrollable list
     }
-  }, [isDeclinedExpanded, loading, showAllSubs, subs, visibleShiftKeys, visibleAbsenceShifts])
+  }, [
+    isDeclinedExpanded,
+    loading,
+    showAllSubs,
+    subs,
+    visibleShiftKeys,
+    visibleAbsenceShifts,
+    absence.id,
+    absence.start_date,
+    absence.end_date,
+    absence.teacher_name,
+  ])
 
   const filterVisibleShifts = <T extends { date?: string; time_slot_code?: string; classroom_name?: string | null; class_name?: string | null; status?: 'uncovered' | 'partially_covered' | 'fully_covered' }>(
     shifts?: T[]

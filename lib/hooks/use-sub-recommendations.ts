@@ -104,9 +104,11 @@ async function fetchSubRecommendations(
   coverageRequestId: string,
   params?: SubRecommendationsQueryParams
 ): Promise<SubRecommendationsResponse> {
-  const body: any = {
-    absence_id: coverageRequestId,
-  }
+  const body: {
+    absence_id: string
+    include_flexible_staff?: boolean
+    include_past_shifts?: boolean
+  } = { absence_id: coverageRequestId }
   if (params?.includeFlexibleStaff !== undefined) {
     body.include_flexible_staff = params.includeFlexibleStaff
   }
@@ -148,7 +150,6 @@ export function useSubRecommendations(
     enabled: !!coverageRequestId,
     initialData,
     staleTime: 10 * 60 * 1000, // 10 minutes
-    keepPreviousData: true,
     // refetchOnWindowFocus: false (inherits from global default)
   })
 }

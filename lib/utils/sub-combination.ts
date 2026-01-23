@@ -20,8 +20,8 @@ interface Sub {
   }>
   can_change_diapers?: boolean
   can_lift_children?: boolean
-  qualification_matches: number
-  qualification_total: number
+  qualification_matches?: number
+  qualification_total?: number
 }
 
 interface Shift {
@@ -74,9 +74,12 @@ function calculateShiftConflicts(
     shift.diaper_changing_required === true && sub.can_change_diapers !== true
   const missingLifting =
     shift.lifting_children_required === true && sub.can_lift_children !== true
+  const qualificationTotal = sub.qualification_total ?? 0
+  const qualificationMatches = sub.qualification_matches ?? 0
   // For qualifications, we use the sub's overall qualification match rate
   // If they have any qualification mismatches, count it as a conflict for this shift
-  const missingQualification = sub.qualification_total > 0 && sub.qualification_matches < sub.qualification_total
+  const missingQualification =
+    qualificationTotal > 0 && qualificationMatches < qualificationTotal
 
   return {
     missingDiaperChanging,
