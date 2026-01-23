@@ -26,7 +26,6 @@ import { cn } from '@/lib/utils'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import {
   getCoverageColors,
-  getStaffingColorClasses,
   neutralColors,
   coverageColorValues,
   getButtonColors,

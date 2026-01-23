@@ -34,6 +34,22 @@ type TimeOffRow = {
   notes?: string | null
 }
 
+type TimeOffApiItem = {
+  id: string
+  teacher_name: string
+  start_date: string
+  end_date?: string | null
+  status?: string
+  total?: number
+  covered?: number
+  partial?: number
+  uncovered?: number
+  shift_details?: TimeOffRow['shift_details']
+  classrooms?: ClassroomBadge[]
+  reason?: string | null
+  notes?: string | null
+}
+
 export default function TimeOffListClient({ view: initialView }: { view: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -63,8 +79,8 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
 
   // Transform API response to match component's expected format
   const allRequests: TimeOffRow[] = useMemo(() => {
-    const apiData = timeOffData?.data || []
-    return apiData.map((item: any) => {
+    const apiData = (timeOffData?.data || []) as TimeOffApiItem[]
+    return apiData.map(item => {
       // Calculate shifts_display from total
       const total = item.total || 0
       const shifts_display = `${total} shift${total !== 1 ? 's' : ''}`
@@ -72,11 +88,6 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
       // Map coverage status - API uses 'covered' | 'partially_covered' | 'needs_coverage'
       // Component expects 'draft' | 'completed' | 'covered' | 'partially_covered' | 'needs_coverage'
       const coverage_status: CoverageStatus = item.status || 'needs_coverage'
-
-      // Check if it's a draft or completed (past) request
-      const requestEndDate = item.end_date || item.start_date
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
 
       // The API should include status, but we need to check for draft/completed
       // For now, assume the API handles this, but we can add logic here if needed

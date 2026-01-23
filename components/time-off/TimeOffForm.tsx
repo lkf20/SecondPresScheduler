@@ -958,7 +958,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                   />
                   {conflictSummary.conflictCount > 0 && (
                     <p className="text-xs text-muted-foreground">
-                      Already recorded shifts are locked and can't be selected.
+                      Already recorded shifts are locked and can&apos;t be selected.
                     </p>
                   )}
                 </div>

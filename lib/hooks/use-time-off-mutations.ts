@@ -141,7 +141,7 @@ export function useCancelTimeOffRequest() {
 
       return response.json()
     },
-    onSuccess: async (data, variables) => {
+    onSuccess: async data => {
       // Invalidate relevant queries
       await Promise.all([
         invalidateTimeOffRequest(queryClient, schoolId, data?.coverage_request_id),
