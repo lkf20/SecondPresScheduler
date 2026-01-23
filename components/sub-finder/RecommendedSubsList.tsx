@@ -120,7 +120,12 @@ export default function RecommendedSubsList({
       }
     }
 
-    const totalShiftsNeedingCoverage = subs[0]?.total_shifts || 0
+    const fallbackShiftKeys = new Set(
+      visibleAbsenceShifts
+        .filter((shift) => shift.date && shift.time_slot_code)
+        .map((shift) => `${shift.date}|${shift.time_slot_code}`)
+    )
+    const totalShiftsNeedingCoverage = subs[0]?.total_shifts || fallbackShiftKeys.size
     const hasRemainingShiftMeta = Array.isArray(subs[0]?.remaining_shift_keys)
     const remainingShiftKeys = hasRemainingShiftMeta
       ? new Set(subs[0]?.remaining_shift_keys)
@@ -160,6 +165,14 @@ export default function RecommendedSubsList({
 
       hasAssignedShifts = allAssignedShifts.size > 0
     }
+    if (remainingShiftKeys.size === 0 && fallbackShiftKeys.size > 0) {
+      fallbackShiftKeys.forEach((key) => remainingShiftKeys.add(key))
+    }
+    if (!hasAssignedShifts) {
+      hasAssignedShifts = visibleAbsenceShifts.some(
+        (shift) => shift.status && shift.status !== 'uncovered'
+      )
+    }
 
     const isDeclined = (sub: RecommendedSub) => sub.response_status === 'declined_all'
 
@@ -175,13 +188,17 @@ export default function RecommendedSubsList({
       return { sub, shiftsCovered, isDeclined: isDeclined(sub) }
     })
 
-    const filteredSubs = processedSubs.filter(({ shiftsCovered, isDeclined }) => {
+    let filteredSubs = processedSubs.filter(({ shiftsCovered, isDeclined }) => {
       if (isDeclined) return true
       if (!showAllSubs) {
         return shiftsCovered > 0
       }
       return true
     })
+
+    if (!showAllSubs && filteredSubs.length === 0 && processedSubs.length > 0) {
+      filteredSubs = processedSubs
+    }
 
     const nonDeclinedSubs = filteredSubs.filter(({ isDeclined }) => !isDeclined)
     let declinedSubs: Array<{ sub: RecommendedSub; shiftsCovered: number; isDeclined: boolean }> = []

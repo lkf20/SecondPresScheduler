@@ -302,18 +302,22 @@ export function findTopCombinations(subs: Sub[], limit = 5): RecommendedCombinat
   const results: RecommendedCombination[] = []
   const seen = new Set<string>()
 
+  const maybeAddCombo = (selected: Sub[], covered: Set<string>) => {
+    if (covered.size === 0) return
+    const combo = buildCombinationFromSubs(selected, uncoveredShifts)
+    if (!combo) return
+    const key = combo.subs.map((assignment) => assignment.subId).sort().join('|')
+    if (!seen.has(key)) {
+      seen.add(key)
+      results.push(combo)
+    }
+  }
+
   const dfs = (startIndex: number, selected: Sub[], covered: Set<string>) => {
     if (results.length >= limit) return
-    if (covered.size === targetCount) {
-      const combo = buildCombinationFromSubs(selected, uncoveredShifts)
-      if (combo && combo.totalShiftsCovered === targetCount) {
-        const key = combo.subs.map((assignment) => assignment.subId).sort().join('|')
-        if (!seen.has(key)) {
-          seen.add(key)
-          results.push(combo)
-        }
-      }
-      return
+    if (selected.length > 0) {
+      maybeAddCombo(selected, covered)
+      if (covered.size === targetCount) return
     }
 
     for (let i = startIndex; i < subsWithCoverage.length; i++) {
@@ -330,6 +334,7 @@ export function findTopCombinations(subs: Sub[], limit = 5): RecommendedCombinat
 
   return results
     .sort((a, b) => {
+      if (b.coveragePercent !== a.coveragePercent) return b.coveragePercent - a.coveragePercent
       if (a.totalConflicts !== b.totalConflicts) return a.totalConflicts - b.totalConflicts
       if (a.subs.length !== b.subs.length) return a.subs.length - b.subs.length
       return b.totalShiftsCovered - a.totalShiftsCovered

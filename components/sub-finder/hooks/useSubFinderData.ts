@@ -244,9 +244,10 @@ export function useSubFinderData({
       if (forceOnlyRecommended) {
         setIncludeOnlyRecommended(true)
       }
-      setRecommendedSubs(
-        effectiveOnlyRecommended ? subs.filter((sub) => sub.coverage_percent > 0) : subs
-      )
+      const filteredSubs = effectiveOnlyRecommended
+        ? subs.filter((sub) => sub.coverage_percent > 0)
+        : subs
+      setRecommendedSubs(filteredSubs.length > 0 ? filteredSubs : subs)
     },
     [includeOnlyRecommended]
   )
@@ -255,9 +256,15 @@ export function useSubFinderData({
   useEffect(() => {
     if (subRecommendationsData && selectedAbsenceId) {
       const subs = (subRecommendationsData.subs || []) as unknown as SubCandidate[]
-      // Note: API combinations structure doesn't match RecommendedCombination, so we skip it
-      // The combinations will be calculated by the sub-combination utility if needed
-      setRecommendedCombinations([])
+      const combinations =
+        (subRecommendationsData as { recommended_combinations?: RecommendedCombination[] }).recommended_combinations ||
+        ((subRecommendationsData as { recommended_combination?: RecommendedCombination | null }).recommended_combination
+          ? [
+              (subRecommendationsData as { recommended_combination: RecommendedCombination })
+                .recommended_combination,
+            ]
+          : [])
+      setRecommendedCombinations(combinations)
       applySubResults(subs)
     }
   }, [subRecommendationsData, selectedAbsenceId, applySubResults])

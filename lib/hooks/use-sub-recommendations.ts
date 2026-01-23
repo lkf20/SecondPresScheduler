@@ -42,6 +42,62 @@ type SubRecommendationsResponse = {
     shifts_covered: number
     total_shifts: number
   }>
+  recommended_combination?: {
+    subs: Array<{
+      subId: string
+      subName: string
+      phone: string | null
+      shifts: Array<{
+        date: string
+        day_name: string
+        time_slot_code: string
+        class_name: string | null
+        diaper_changing_required?: boolean
+        lifting_children_required?: boolean
+      }>
+      shiftsCovered: number
+      totalShifts: number
+      coveragePercent: number
+      conflicts: {
+        missingDiaperChanging: number
+        missingLifting: number
+        missingQualifications: number
+        total: number
+      }
+    }>
+    totalShiftsCovered: number
+    totalShiftsNeeded: number
+    totalConflicts: number
+    coveragePercent: number
+  } | null
+  recommended_combinations?: Array<{
+    subs: Array<{
+      subId: string
+      subName: string
+      phone: string | null
+      shifts: Array<{
+        date: string
+        day_name: string
+        time_slot_code: string
+        class_name: string | null
+        diaper_changing_required?: boolean
+        lifting_children_required?: boolean
+      }>
+      shiftsCovered: number
+      totalShifts: number
+      coveragePercent: number
+      conflicts: {
+        missingDiaperChanging: number
+        missingLifting: number
+        missingQualifications: number
+        total: number
+      }
+    }>
+    totalShiftsCovered: number
+    totalShiftsNeeded: number
+    totalConflicts: number
+    coveragePercent: number
+  }>
 }
 
 async function fetchSubRecommendations(
