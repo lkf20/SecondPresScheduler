@@ -311,8 +311,18 @@ export default function RecommendedSubsList({
         shift.reason,
       ])
     )
-    const shiftChips = visibleAbsenceShifts.map((shift) => {
+    const shiftChips = visibleAbsenceShifts.reduce<Array<{
+      date: string
+      time_slot_code: string
+      status: 'assigned' | 'available' | 'unavailable'
+      reason?: string
+      classroom_name?: string | null
+      class_name?: string | null
+    }>>((acc, shift) => {
       const key = `${shift.date}|${shift.time_slot_code}`
+      if (shift.status !== 'uncovered' && !assignedMap.has(key)) {
+        return acc
+      }
       if (assignedMap.has(key)) {
         if (shift.status === 'uncovered') {
           const logKey = `${absence.id}|${sub.id}|${key}`
@@ -328,33 +338,36 @@ export default function RecommendedSubsList({
             })
           }
         }
-        return {
+        acc.push({
           date: shift.date as string,
           time_slot_code: shift.time_slot_code as string,
           status: 'assigned' as const,
           classroom_name: shift.classroom_name ?? null,
           class_name: shift.class_name ?? null,
-        }
+        })
+        return acc
       }
       if (canCoverMap.has(key)) {
-        return {
+        acc.push({
           date: shift.date as string,
           time_slot_code: shift.time_slot_code as string,
           status: 'available' as const,
           classroom_name: shift.classroom_name ?? null,
           class_name: shift.class_name ?? null,
-        }
+        })
+        return acc
       }
       const reason = cannotCoverMap.get(key)
-      return {
+      acc.push({
         date: shift.date as string,
         time_slot_code: shift.time_slot_code as string,
         status: 'unavailable' as const,
         reason: reason || undefined,
         classroom_name: shift.classroom_name ?? null,
         class_name: shift.class_name ?? null,
-      }
-    })
+      })
+      return acc
+    }, [])
     const coverageSegments = derived.hasAssignedShifts
       ? shiftChips
           .filter((shift) => derived.remainingShiftKeys.has(`${shift.date}|${shift.time_slot_code}`))
@@ -461,8 +474,18 @@ export default function RecommendedSubsList({
                         shift.reason,
                       ])
                     )
-                    const shiftChips = visibleAbsenceShifts.map((shift) => {
+                    const shiftChips = visibleAbsenceShifts.reduce<Array<{
+                      date: string
+                      time_slot_code: string
+                      status: 'assigned' | 'available' | 'unavailable'
+                      reason?: string
+                      classroom_name?: string | null
+                      class_name?: string | null
+                    }>>((acc, shift) => {
                       const key = `${shift.date}|${shift.time_slot_code}`
+                      if (shift.status !== 'uncovered' && !assignedMap.has(key)) {
+                        return acc
+                      }
                       if (assignedMap.has(key)) {
                         if (shift.status === 'uncovered') {
                           const logKey = `${absence.id}|${sub.id}|${key}`
@@ -478,33 +501,36 @@ export default function RecommendedSubsList({
                             })
                           }
                         }
-                        return {
+                        acc.push({
                           date: shift.date as string,
                           time_slot_code: shift.time_slot_code as string,
                           status: 'assigned' as const,
                           classroom_name: shift.classroom_name ?? null,
                           class_name: shift.class_name ?? null,
-                        }
+                        })
+                        return acc
                       }
                       if (canCoverMap.has(key)) {
-                        return {
+                        acc.push({
                           date: shift.date as string,
                           time_slot_code: shift.time_slot_code as string,
                           status: 'available' as const,
                           classroom_name: shift.classroom_name ?? null,
                           class_name: shift.class_name ?? null,
-                        }
+                        })
+                        return acc
                       }
                       const reason = cannotCoverMap.get(key)
-                      return {
+                      acc.push({
                         date: shift.date as string,
                         time_slot_code: shift.time_slot_code as string,
                         status: 'unavailable' as const,
                         reason: reason || undefined,
                         classroom_name: shift.classroom_name ?? null,
                         class_name: shift.class_name ?? null,
-                      }
-                    })
+                      })
+                      return acc
+                    }, [])
                     const coverageSegments = derived.hasAssignedShifts
                       ? shiftChips
                           .filter((shift) => derived.remainingShiftKeys.has(`${shift.date}|${shift.time_slot_code}`))
