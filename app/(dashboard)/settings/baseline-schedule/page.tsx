@@ -326,6 +326,7 @@ export default function BaselineSchedulePage() {
           <WeeklyScheduleGridNew
             data={filteredData}
             selectedDayIds={filters?.selectedDayIds ?? selectedDayIds}
+            displayMode={filters?.displayMode ?? 'permanent-only'}
             layout={filters?.layout ?? 'days-x-classrooms'}
             onRefresh={handleRefresh}
             onFilterPanelOpenChange={setFilterPanelOpen}
