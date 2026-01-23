@@ -32,10 +32,13 @@ interface TestResult {
   name: string
   passed: boolean
   message: string
-  details?: any
+  details?: unknown
 }
 
 const results: TestResult[] = []
+
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error)
 
 async function testColumnExists(table: string, column: string): Promise<boolean> {
   try {
@@ -49,8 +52,9 @@ async function testColumnExists(table: string, column: string): Promise<boolean>
       throw error
     }
     return true
-  } catch (error: any) {
-    if (error.message?.includes('column') && error.message?.includes('does not exist')) {
+  } catch (error: unknown) {
+    const message = getErrorMessage(error)
+    if (message.includes('column') && message.includes('does not exist')) {
       return false
     }
     throw error
@@ -104,11 +108,11 @@ async function runTests() {
         passed: exists,
         message: exists ? `✓ Column exists` : `✗ Column missing`,
       })
-    } catch (error: any) {
+    } catch (error: unknown) {
       results.push({
         name: `${table}.school_id column exists`,
         passed: false,
-        message: `✗ Error: ${error.message}`,
+        message: `✗ Error: ${getErrorMessage(error)}`,
       })
     }
   }
@@ -123,11 +127,11 @@ async function runTests() {
         passed: isNotNull,
         message: isNotNull ? `✓ No NULL values` : `✗ Has NULL values`,
       })
-    } catch (error: any) {
+    } catch (error: unknown) {
       results.push({
         name: `${table}.school_id is NOT NULL`,
         passed: false,
-        message: `✗ Error: ${error.message}`,
+        message: `✗ Error: ${getErrorMessage(error)}`,
       })
     }
   }
@@ -143,11 +147,11 @@ async function runTests() {
         message: count > 0 ? `✓ ${count} rows` : `✗ No data`,
         details: { count },
       })
-    } catch (error: any) {
+    } catch (error: unknown) {
       results.push({
         name: `${table} has data`,
         passed: false,
-        message: `✗ Error: ${error.message}`,
+        message: `✗ Error: ${getErrorMessage(error)}`,
       })
     }
   }
@@ -175,11 +179,11 @@ async function runTests() {
           : `✗ Only ${count}/${totalCount} rows use default school_id`,
         details: { defaultCount: count, totalCount },
       })
-    } catch (error: any) {
+    } catch (error: unknown) {
       results.push({
         name: `${table} uses default school_id`,
         passed: false,
-        message: `✗ Error: ${error.message}`,
+        message: `✗ Error: ${getErrorMessage(error)}`,
       })
     }
   }
@@ -211,7 +215,7 @@ async function runTests() {
       }
 
       const existingRow = existing[0]
-      const duplicateValues: any = {}
+      const duplicateValues: Record<string, unknown> = {}
       test.columns.forEach(col => {
         duplicateValues[col] = existingRow[col]
       })
@@ -230,11 +234,11 @@ async function runTests() {
           ? `✓ Unique constraint exists`
           : `✗ Unique constraint missing or error: ${insertError?.message}`,
       })
-    } catch (error: any) {
+    } catch (error: unknown) {
       results.push({
         name: `${test.table} unique constraint`,
         passed: false,
-        message: `✗ Error: ${error.message}`,
+        message: `✗ Error: ${getErrorMessage(error)}`,
       })
     }
   }
@@ -264,11 +268,11 @@ async function runTests() {
         })
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     results.push({
       name: 'profiles table check',
       passed: false,
-      message: `✗ Error: ${error.message}`,
+      message: `✗ Error: ${getErrorMessage(error)}`,
     })
   }
 

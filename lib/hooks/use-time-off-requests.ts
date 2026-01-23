@@ -25,7 +25,7 @@ type TimeOffRequestsResponse = {
   data: TimeOffCardData[]
   meta: {
     total: number
-    filters: Record<string, any>
+    filters: Record<string, string | number | boolean | null>
   }
 }
 

@@ -62,6 +62,12 @@ interface Qualification {
   } | null
 }
 
+interface ConflictEntry {
+  shift_id: string
+  status: Shift['status']
+  message?: string | null
+}
+
 interface AssignSubPanelProps {
   isOpen: boolean
   onClose: () => void
@@ -330,11 +336,11 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
           return
         }
 
-        const conflictData = await response.json()
+        const conflictData: ConflictEntry[] = await response.json()
         // Update shifts with conflict status
         setShifts(prevShifts =>
           prevShifts.map(shift => {
-            const conflict = conflictData.find((c: any) => c.shift_id === shift.id)
+            const conflict = conflictData.find(c => c.shift_id === shift.id)
             if (!conflict) return shift
             return {
               ...shift,

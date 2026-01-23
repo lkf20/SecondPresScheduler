@@ -1,6 +1,7 @@
 'use client'
 
 import { useForm } from 'react-hook-form'
+import type { Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useState, useEffect } from 'react'
@@ -55,7 +56,7 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
     setValue,
     watch,
   } = useForm<TeacherFormData>({
-    resolver: zodResolver(teacherSchema) as any,
+    resolver: zodResolver(teacherSchema) as Resolver<TeacherFormData>,
     defaultValues: teacher
       ? {
           first_name: teacher.first_name,

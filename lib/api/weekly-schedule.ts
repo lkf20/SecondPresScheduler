@@ -3,6 +3,22 @@ import { Database } from '@/types/database'
 
 type ClassGroupRow = Database['public']['Tables']['class_groups']['Row']
 type ScheduleCellRow = Database['public']['Tables']['schedule_cells']['Row']
+type StaffRow = Database['public']['Tables']['staff']['Row']
+type TimeOffRequestRow = Database['public']['Tables']['time_off_requests']['Row']
+type TimeOffShiftRow = Database['public']['Tables']['time_off_shifts']['Row'] & {
+  time_off_requests?: Pick<TimeOffRequestRow, 'teacher_id' | 'status'> | Array<
+    Pick<TimeOffRequestRow, 'teacher_id' | 'status'>
+  > | null
+}
+type TeacherScheduleRow = Database['public']['Tables']['teacher_schedules']['Row'] & {
+  class_id: string | null
+  class?: { id: string; name: string } | null
+}
+type ClassGroupLite = Pick<ClassGroupRow, 'id' | 'name'>
+type SubAssignmentRow = Database['public']['Tables']['sub_assignments']['Row'] & {
+  sub?: Pick<StaffRow, 'id' | 'first_name' | 'last_name' | 'display_name'> | null
+  teacher?: Pick<StaffRow, 'id' | 'first_name' | 'last_name' | 'display_name'> | null
+}
 
 type ScheduleCellRaw = ScheduleCellRow & {
   schedule_cell_class_groups?: Array<{ class_group: ClassGroupRow | null }>
@@ -132,14 +148,19 @@ export async function getWeeklyScheduleData(
       if (timeOffShiftsError) {
         console.warn('Error fetching time_off_shifts:', timeOffShiftsError.message)
       } else if (timeOffShiftsData) {
-        timeOffShifts = timeOffShiftsData.map((shift: any) => ({
-          id: shift.id,
-          date: shift.date,
-          day_of_week_id: shift.day_of_week_id,
-          time_slot_id: shift.time_slot_id,
-          teacher_id: shift.time_off_requests?.teacher_id || '',
-          time_off_request_id: shift.time_off_request_id,
-        }))
+        timeOffShifts = timeOffShiftsData.map((shift: TimeOffShiftRow) => {
+          const timeOffRequest = Array.isArray(shift.time_off_requests)
+            ? shift.time_off_requests[0] ?? null
+            : shift.time_off_requests ?? null
+          return {
+            id: shift.id,
+            date: shift.date,
+            day_of_week_id: shift.day_of_week_id,
+            time_slot_id: shift.time_slot_id,
+            teacher_id: timeOffRequest?.teacher_id || '',
+            time_off_request_id: shift.time_off_request_id,
+          }
+        })
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err)
@@ -243,15 +264,20 @@ export async function getWeeklyScheduleData(
   // Fetch class_groups separately if class_id exists
   // This avoids the schema cache issue with nullable foreign keys
   if (schedules && schedules.length > 0) {
-    const classIds = [...new Set(schedules.map((s: any) => s.class_id).filter(Boolean))]
+    const scheduleRows = schedules as TeacherScheduleRow[]
+    const classIds = [
+      ...new Set(scheduleRows.map(s => s.class_id).filter(Boolean) as string[]),
+    ]
     if (classIds.length > 0) {
       const { data: classGroups } = await supabase
         .from('class_groups')
         .select('id, name')
         .in('id', classIds)
 
-      const classGroupsMap = new Map((classGroups || []).map((cg: any) => [cg.id, cg]))
-      schedules.forEach((schedule: any) => {
+      const classGroupsMap = new Map(
+        (classGroups || []).map((cg: ClassGroupLite) => [cg.id, cg])
+      )
+      scheduleRows.forEach(schedule => {
         if (schedule.class_id) {
           schedule.class = classGroupsMap.get(schedule.class_id) || null
         }
@@ -372,7 +398,7 @@ export async function getWeeklyScheduleData(
         console.warn('Error fetching sub_assignments:', subAssignmentsError.message)
       } else if (subAssignmentsData) {
         // Map sub_assignments - day_of_week_id is already in the database
-        subAssignments = subAssignmentsData.map((sa: any) => ({
+        subAssignments = subAssignmentsData.map((sa: SubAssignmentRow) => ({
           id: sa.id,
           date: sa.date,
           day_of_week_id: sa.day_of_week_id,
@@ -627,7 +653,7 @@ export async function getWeeklyScheduleData(
                 .in('id', teacherIds)
 
               const teachersMap = new Map(
-                (teachersData || []).map((t: any) => [
+                (teachersData || []).map((t: StaffRow) => [
                   t.id,
                   t.display_name ||
                     `${t.first_name || ''} ${t.last_name || ''}`.trim() ||
