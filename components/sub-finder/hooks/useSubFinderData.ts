@@ -131,6 +131,7 @@ export function useSubFinderData({
   const [includeFlexibleStaff, setIncludeFlexibleStaff] = useState(true)
   const [includeOnlyRecommended, setIncludeOnlyRecommended] = useState(true)
   const [teachers, setTeachers] = useState<Teacher[]>([])
+  const loggedRecommendationDebugRef = useRef(new Set<string>())
   
   // Use React Query for absences
   const { 
@@ -200,6 +201,8 @@ export function useSubFinderData({
     data: subRecommendationsData,
     isLoading: isLoadingRecommendations,
     isFetching: isFetchingRecommendations,
+    isError: isRecommendationsError,
+    error: recommendationsError,
     refetch: refetchRecommendations
   } = useSubRecommendations(
     selectedAbsenceId,
@@ -266,8 +269,37 @@ export function useSubFinderData({
           : [])
       setRecommendedCombinations(combinations)
       applySubResults(subs)
+      if (
+        selectedAbsence &&
+        selectedAbsence.teacher_name === 'Kim B.' &&
+        selectedAbsence.start_date === '2026-01-19' &&
+        selectedAbsence.end_date === '2026-01-23'
+      ) {
+        const logKey = `${selectedAbsence.id}:${subs.length}:${combinations.length}`
+        if (!loggedRecommendationDebugRef.current.has(logKey)) {
+          loggedRecommendationDebugRef.current.add(logKey)
+          console.warn('[Sub Finder Debug] Recommendations response', {
+            absence_id: selectedAbsence.id,
+            subs_count: subs.length,
+            combinations_count: combinations.length,
+            includeFlexibleStaff,
+            subRecommendationParams,
+            isError: isRecommendationsError,
+            error: recommendationsError instanceof Error ? recommendationsError.message : null,
+          })
+        }
+      }
     }
-  }, [subRecommendationsData, selectedAbsenceId, applySubResults])
+  }, [
+    subRecommendationsData,
+    selectedAbsenceId,
+    applySubResults,
+    selectedAbsence,
+    includeFlexibleStaff,
+    subRecommendationParams,
+    isRecommendationsError,
+    recommendationsError,
+  ])
 
   // Fetch absences using React Query - just trigger refetch
   const fetchAbsences = useCallback(async () => {
@@ -286,7 +318,11 @@ export function useSubFinderData({
         setRecommendedCombinations([])
       }
       if (!isManual) {
-        const [absencesResult] = await Promise.all([refetchAbsences(), refetchRecommendations()])
+        const shouldRefetchRecommendations = selectedAbsence?.id === absence.id
+        const absencesResult = await refetchAbsences()
+        if (shouldRefetchRecommendations) {
+          await refetchRecommendations()
+        }
         const refreshedAbsence = absencesResult.data?.find((item) => item.id === absenceId)
         if (refreshedAbsence) {
           setSelectedAbsence(mapAbsence(refreshedAbsence))

@@ -19,6 +19,7 @@ Issues that need to be fixed.
 - [ ] Fix timezone issue causing dates to shift by one day in sub finder (dates stored as DATE type are being parsed as UTC, causing day shift in local timezones)
 - [ ] After assigning selected shifts, getting an assign shifts error sometimes
 - [ ] Add validation to prevent multiple subs from being assigned to the same classroom/slot/teacher combination - need better error controls and logic around how many subs can be assigned to a single shift
+- [ ] Investigate Sub Finder intermittently showing "No recommended subs found" after navigating away and back (repro: Kim B. Jan 19-23)
 
 ---
 
