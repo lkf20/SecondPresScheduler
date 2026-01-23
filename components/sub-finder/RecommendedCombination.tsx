@@ -54,7 +54,10 @@ export default function RecommendedCombination({
   }
 
   const visibleAllShifts = allShifts.filter((shift) => isShiftVisible(shift.date))
-  const visibleTotalShifts = visibleAllShifts.length || totalShifts
+  const visibleRemainingShifts = useRemainingLabel
+    ? visibleAllShifts.filter((shift) => shift.status === 'uncovered')
+    : visibleAllShifts
+  const visibleTotalShifts = visibleRemainingShifts.length || totalShifts
 
   return (
     <Card className="mb-6 border border-amber-100 bg-amber-50/40 border-l-4 border-l-amber-400 shadow-md">
@@ -123,7 +126,13 @@ export default function RecommendedCombination({
           const assignedMap = new Set(
             visibleAssignedAll.map((shift) => `${shift.date}|${shift.time_slot_code}`)
           )
-          const coverageSegments = visibleAllShifts.map((shift) => {
+          const remainingShiftKeys = new Set(
+            visibleRemainingShifts.map((shift) => `${shift.date}|${shift.time_slot_code}`)
+          )
+          const shiftsCovered = visibleCanCoverAll.filter((shift) =>
+            remainingShiftKeys.has(`${shift.date}|${shift.time_slot_code}`)
+          ).length
+          const coverageSegments = visibleRemainingShifts.map((shift) => {
             const key = `${shift.date}|${shift.time_slot_code}`
             if (assignedMap.has(key)) {
               return 'assigned' as const
@@ -140,7 +149,7 @@ export default function RecommendedCombination({
               id={`sub-card-${assignment.subId}`}
               name={assignment.subName}
               phone={assignment.phone}
-              shiftsCovered={visibleCanCoverAll.length}
+              shiftsCovered={shiftsCovered}
               totalShifts={visibleTotalShifts}
               useRemainingLabel={useRemainingLabel}
               canCover={visibleRecommendedShifts}

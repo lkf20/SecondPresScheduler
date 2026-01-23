@@ -205,6 +205,7 @@ export default function SubFinderPage() {
       shift_details: shiftDetails,
     }
   }, [selectedAbsence, includePastShifts])
+  const visibleShiftSummary = filteredShiftSummary ?? selectedAbsence?.shifts ?? null
   const showPastShiftsBanner = Boolean(selectedAbsence && pastShiftCount > 0)
   const sortedSubs = useMemo(() => {
     return [...allSubs].sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)))
@@ -1337,8 +1338,11 @@ export default function SubFinderPage() {
                   <RecommendedCombination
                     combinations={displayRecommendedCombinations}
                     onContactSub={handleCombinationContact}
-                    totalShifts={selectedAbsence.shifts.total}
-                    useRemainingLabel={selectedAbsence.shifts.total > selectedAbsence.shifts.uncovered}
+                    totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
+                    useRemainingLabel={
+                      (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
+                      (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
+                    }
                     allSubs={allSubs}
                     allShifts={selectedAbsence.shifts.shift_details || []}
                     includePastShifts={includePastShifts}
