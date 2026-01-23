@@ -131,6 +131,7 @@ export function useSubFinderData({
   const [includeFlexibleStaff, setIncludeFlexibleStaff] = useState(true)
   const [includeOnlyRecommended, setIncludeOnlyRecommended] = useState(true)
   const [teachers, setTeachers] = useState<Teacher[]>([])
+  const loggedRecommendationDebugRef = useRef(new Set<string>())
   
   // Use React Query for absences
   const { 
@@ -169,7 +170,7 @@ export function useSubFinderData({
             : detail.status === 'covered' || detail.status === 'fully_covered'
               ? 'fully_covered'
               : 'uncovered',
-        sub_name: detail.assigned_sub?.name || null,
+        sub_name: detail.sub_name || detail.assigned_sub?.name || null,
         is_partial: detail.status === 'partial' || detail.status === 'partially_covered',
       })),
     },
@@ -200,6 +201,8 @@ export function useSubFinderData({
     data: subRecommendationsData,
     isLoading: isLoadingRecommendations,
     isFetching: isFetchingRecommendations,
+    isError: isRecommendationsError,
+    error: recommendationsError,
     refetch: refetchRecommendations
   } = useSubRecommendations(
     selectedAbsenceId,
@@ -244,9 +247,10 @@ export function useSubFinderData({
       if (forceOnlyRecommended) {
         setIncludeOnlyRecommended(true)
       }
-      setRecommendedSubs(
-        effectiveOnlyRecommended ? subs.filter((sub) => sub.coverage_percent > 0) : subs
-      )
+      const filteredSubs = effectiveOnlyRecommended
+        ? subs.filter((sub) => sub.coverage_percent > 0)
+        : subs
+      setRecommendedSubs(filteredSubs.length > 0 ? filteredSubs : subs)
     },
     [includeOnlyRecommended]
   )
@@ -255,12 +259,47 @@ export function useSubFinderData({
   useEffect(() => {
     if (subRecommendationsData && selectedAbsenceId) {
       const subs = (subRecommendationsData.subs || []) as unknown as SubCandidate[]
-      // Note: API combinations structure doesn't match RecommendedCombination, so we skip it
-      // The combinations will be calculated by the sub-combination utility if needed
-      setRecommendedCombinations([])
+      const combinations =
+        (subRecommendationsData as { recommended_combinations?: RecommendedCombination[] }).recommended_combinations ||
+        ((subRecommendationsData as { recommended_combination?: RecommendedCombination | null }).recommended_combination
+          ? [
+              (subRecommendationsData as { recommended_combination: RecommendedCombination })
+                .recommended_combination,
+            ]
+          : [])
+      setRecommendedCombinations(combinations)
       applySubResults(subs)
+      if (
+        selectedAbsence &&
+        selectedAbsence.teacher_name === 'Kim B.' &&
+        selectedAbsence.start_date === '2026-01-19' &&
+        selectedAbsence.end_date === '2026-01-23'
+      ) {
+        const logKey = `${selectedAbsence.id}:${subs.length}:${combinations.length}`
+        if (!loggedRecommendationDebugRef.current.has(logKey)) {
+          loggedRecommendationDebugRef.current.add(logKey)
+          console.warn('[Sub Finder Debug] Recommendations response', {
+            absence_id: selectedAbsence.id,
+            subs_count: subs.length,
+            combinations_count: combinations.length,
+            includeFlexibleStaff,
+            subRecommendationParams,
+            isError: isRecommendationsError,
+            error: recommendationsError instanceof Error ? recommendationsError.message : null,
+          })
+        }
+      }
     }
-  }, [subRecommendationsData, selectedAbsenceId, applySubResults])
+  }, [
+    subRecommendationsData,
+    selectedAbsenceId,
+    applySubResults,
+    selectedAbsence,
+    includeFlexibleStaff,
+    subRecommendationParams,
+    isRecommendationsError,
+    recommendationsError,
+  ])
 
   // Fetch absences using React Query - just trigger refetch
   const fetchAbsences = useCallback(async () => {
@@ -279,7 +318,11 @@ export function useSubFinderData({
         setRecommendedCombinations([])
       }
       if (!isManual) {
-        const [absencesResult] = await Promise.all([refetchAbsences(), refetchRecommendations()])
+        const shouldRefetchRecommendations = selectedAbsence?.id === absence.id
+        const absencesResult = await refetchAbsences()
+        if (shouldRefetchRecommendations) {
+          await refetchRecommendations()
+        }
         const refreshedAbsence = absencesResult.data?.find((item) => item.id === absenceId)
         if (refreshedAbsence) {
           setSelectedAbsence(mapAbsence(refreshedAbsence))

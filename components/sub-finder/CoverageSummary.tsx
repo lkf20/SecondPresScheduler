@@ -4,7 +4,7 @@ import React from 'react'
 import { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 import { parseLocalDate } from '@/lib/utils/date'
 import CoverageBadge from '@/components/shared/CoverageBadge'
-import { getCoverageColors, getCoverageColorClasses, coverageColorValues, neutralColors, getHeaderClasses } from '@/lib/utils/colors'
+import { coverageColorValues, neutralColors, getHeaderClasses } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 

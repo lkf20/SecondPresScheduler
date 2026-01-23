@@ -19,9 +19,8 @@ import { Phone, Mail, AlertTriangle, ChevronDown, ChevronUp, X } from 'lucide-re
 import { parseLocalDate } from '@/lib/utils/date'
 import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { getShiftStatusColorClasses, getButtonColors, getPanelBackgroundClasses, getPanelHeaderBackgroundClasses, panelBackgrounds, shiftStatusColorValues } from '@/lib/utils/colors'
+import { getPanelBackgroundClasses, getPanelHeaderBackgroundClasses, panelBackgrounds, shiftStatusColorValues } from '@/lib/utils/colors'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
-import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useAssignSubShifts } from '@/lib/hooks/use-sub-assignment-mutations'
 
@@ -1464,8 +1463,8 @@ export default function ContactSubPanel({
                   )}
                   {!isDeclinedWithShiftsSelected && (
                     <Button
-                      variant="outline"
-                      className={cn('flex-1', getButtonColors('teal').base)}
+                      variant="default"
+                      className="flex-1 !bg-teal-600 !text-white hover:!bg-teal-700"
                       onClick={responseStatus === 'declined_all' && selectedShiftsCount === 0 ? handleMarkAsDeclinedSave : handleAssignShifts}
                       disabled={loading || fetching || !coverageRequestId || (responseStatus !== 'declined_all' && selectedShiftsCount === 0) || isSubInactive}
                     >

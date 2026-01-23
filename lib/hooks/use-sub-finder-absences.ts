@@ -29,6 +29,7 @@ export type SubFinderAbsence = {
         classroom_color: string | null
         id?: string
         status: 'covered' | 'partial' | 'fully_covered' | 'partially_covered' | 'uncovered'
+        sub_name?: string | null
         assigned_sub?: {
           name: string
         }

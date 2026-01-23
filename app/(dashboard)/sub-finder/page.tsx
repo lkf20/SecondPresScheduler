@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 import { saveSubFinderState, loadSubFinderState } from '@/lib/utils/sub-finder-state'
+import { findTopCombinations } from '@/lib/utils/sub-combination'
 
 export default function SubFinderPage() {
   const router = useRouter()
@@ -116,6 +117,16 @@ export default function SubFinderPage() {
   const isFlexibleStaffChangeUserInitiatedRef = useRef(false)
   const isRestoringStateRef = useRef(false) // Track if we're restoring state to avoid saving during restoration
   const hasRestoredStateRef = useRef(false) // Track if we've completed initial state restoration
+  const displayRecommendedCombinations = useMemo(() => {
+    if (recommendedCombinations.length > 0) {
+      return recommendedCombinations
+    }
+    if (recommendedSubs.length > 0) {
+      return findTopCombinations(recommendedSubs, 5)
+    }
+    return []
+  }, [recommendedCombinations, recommendedSubs])
+
   const runManualFinder = useCallback(async () => {
     if (!manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0) return
     setHighlightedSubId(null)
@@ -194,6 +205,7 @@ export default function SubFinderPage() {
       shift_details: shiftDetails,
     }
   }, [selectedAbsence, includePastShifts])
+  const visibleShiftSummary = filteredShiftSummary ?? selectedAbsence?.shifts ?? null
   const showPastShiftsBanner = Boolean(selectedAbsence && pastShiftCount > 0)
   const sortedSubs = useMemo(() => {
     return [...allSubs].sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)))
@@ -1321,15 +1333,19 @@ export default function SubFinderPage() {
                 </div>
               )}
               {/* Recommended Combination Section */}
-              {recommendedCombinations.length > 0 && (
+              {displayRecommendedCombinations.length > 0 && (
                 <div className="mt-2">
                   <RecommendedCombination
-                    combinations={recommendedCombinations}
+                    combinations={displayRecommendedCombinations}
                     onContactSub={handleCombinationContact}
-                    totalShifts={selectedAbsence.shifts.total}
-                    useRemainingLabel={selectedAbsence.shifts.total > selectedAbsence.shifts.uncovered}
+                    totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
+                    useRemainingLabel={
+                      (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
+                      (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
+                    }
                     allSubs={allSubs}
                     allShifts={selectedAbsence.shifts.shift_details || []}
+                    includePastShifts={includePastShifts}
                   />
                   <div className="mt-16 text-sm font-semibold text-slate-700">All Available Subs</div>
                   <div className="mt-2 border-t border-slate-200 pt-6" />

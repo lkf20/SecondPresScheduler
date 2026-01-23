@@ -46,6 +46,7 @@ export default function RecommendedSubsList({
   includePastShifts = false,
 }: RecommendedSubsListProps) {
   const [isDeclinedExpanded, setIsDeclinedExpanded] = useState(false)
+  const loggedCoverageMismatchRef = useRef(new Set<string>())
   const loggedAssignedMismatchRef = useRef<Set<string>>(new Set())
   // Format date as "Mon Jan 11"
   const formatDate = (dateString: string) => {
@@ -112,6 +113,7 @@ export default function RecommendedSubsList({
     if (loading || subs.length === 0) {
       return {
         totalShiftsNeedingCoverage: 0,
+        remainingShiftCount: 0,
         hasAssignedShifts: false,
         remainingShiftKeys: new Set<string>(),
         nonDeclinedSubs: [] as Array<{ sub: RecommendedSub; shiftsCovered: number; isDeclined: boolean }>,
@@ -120,7 +122,12 @@ export default function RecommendedSubsList({
       }
     }
 
-    const totalShiftsNeedingCoverage = subs[0]?.total_shifts || 0
+    const fallbackShiftKeys = new Set(
+      visibleAbsenceShifts
+        .filter((shift) => shift.date && shift.time_slot_code)
+        .map((shift) => `${shift.date}|${shift.time_slot_code}`)
+    )
+    const totalShiftsNeedingCoverage = subs[0]?.total_shifts || fallbackShiftKeys.size
     const hasRemainingShiftMeta = Array.isArray(subs[0]?.remaining_shift_keys)
     const remainingShiftKeys = hasRemainingShiftMeta
       ? new Set(subs[0]?.remaining_shift_keys)
@@ -160,28 +167,80 @@ export default function RecommendedSubsList({
 
       hasAssignedShifts = allAssignedShifts.size > 0
     }
+    if (remainingShiftKeys.size === 0 && fallbackShiftKeys.size > 0) {
+      fallbackShiftKeys.forEach((key) => remainingShiftKeys.add(key))
+    }
+    if (visibleShiftKeys.size > 0) {
+      Array.from(remainingShiftKeys).forEach((key) => {
+        if (!visibleShiftKeys.has(key)) {
+          remainingShiftKeys.delete(key)
+        }
+      })
+    }
+    const uncoveredShiftKeys = new Set(
+      visibleAbsenceShifts
+        .filter((shift) => shift.status === 'uncovered')
+        .map((shift) => `${shift.date}|${shift.time_slot_code}`)
+    )
+    if (uncoveredShiftKeys.size > 0) {
+      Array.from(remainingShiftKeys).forEach((key) => {
+        if (!uncoveredShiftKeys.has(key)) {
+          remainingShiftKeys.delete(key)
+        }
+      })
+    }
+    if (!hasAssignedShifts) {
+      hasAssignedShifts = visibleAbsenceShifts.some(
+        (shift) => shift.status && shift.status !== 'uncovered'
+      )
+    }
 
     const isDeclined = (sub: RecommendedSub) => sub.response_status === 'declined_all'
 
     const processedSubs = subs.map((sub) => {
       let shiftsCovered = 0
+      const countedShiftKeys = new Set<string>()
       sub.can_cover?.forEach((shift) => {
         const shiftKey = `${shift.date}|${shift.time_slot_code}`
-        if (remainingShiftKeys.has(shiftKey)) {
+        if (remainingShiftKeys.has(shiftKey) && !countedShiftKeys.has(shiftKey)) {
           shiftsCovered++
+          countedShiftKeys.add(shiftKey)
         }
       })
+      const isTargetAbsence =
+        absence.teacher_name === 'Kim B.' &&
+        absence.start_date === '2026-01-19' &&
+        absence.end_date === '2026-01-23'
+      const isTargetSub = sub.name?.startsWith('Laura O.')
+      if (isTargetAbsence && isTargetSub) {
+        const logKey = `${absence.id}|${sub.id}`
+        if (!loggedCoverageMismatchRef.current.has(logKey)) {
+          loggedCoverageMismatchRef.current.add(logKey)
+          console.warn('[Sub Finder Debug] Remaining coverage mismatch check', {
+            absence_id: absence.id,
+            sub_id: sub.id,
+            shiftsCovered,
+            remainingShiftCount: remainingShiftKeys.size,
+            remainingShiftKeys: Array.from(remainingShiftKeys),
+            countedShiftKeys: Array.from(countedShiftKeys),
+          })
+        }
+      }
 
       return { sub, shiftsCovered, isDeclined: isDeclined(sub) }
     })
 
-    const filteredSubs = processedSubs.filter(({ shiftsCovered, isDeclined }) => {
+    let filteredSubs = processedSubs.filter(({ shiftsCovered, isDeclined }) => {
       if (isDeclined) return true
       if (!showAllSubs) {
         return shiftsCovered > 0
       }
       return true
     })
+
+    if (!showAllSubs && filteredSubs.length === 0 && processedSubs.length > 0) {
+      filteredSubs = processedSubs
+    }
 
     const nonDeclinedSubs = filteredSubs.filter(({ isDeclined }) => !isDeclined)
     let declinedSubs: Array<{ sub: RecommendedSub; shiftsCovered: number; isDeclined: boolean }> = []
@@ -194,13 +253,25 @@ export default function RecommendedSubsList({
 
     return {
       totalShiftsNeedingCoverage,
+      remainingShiftCount: remainingShiftKeys.size,
       hasAssignedShifts,
       remainingShiftKeys,
       nonDeclinedSubs,
       declinedSubs,
       canPaginate: false, // Always show all subs in scrollable list
     }
-  }, [isDeclinedExpanded, loading, showAllSubs, subs])
+  }, [
+    isDeclinedExpanded,
+    loading,
+    showAllSubs,
+    subs,
+    visibleShiftKeys,
+    visibleAbsenceShifts,
+    absence.id,
+    absence.start_date,
+    absence.end_date,
+    absence.teacher_name,
+  ])
 
   const filterVisibleShifts = <T extends { date?: string; time_slot_code?: string; classroom_name?: string | null; class_name?: string | null; status?: 'uncovered' | 'partially_covered' | 'fully_covered' }>(
     shifts?: T[]
@@ -251,8 +322,18 @@ export default function RecommendedSubsList({
         shift.reason,
       ])
     )
-    const shiftChips = visibleAbsenceShifts.map((shift) => {
+    const shiftChips = visibleAbsenceShifts.reduce<Array<{
+      date: string
+      time_slot_code: string
+      status: 'assigned' | 'available' | 'unavailable'
+      reason?: string
+      classroom_name?: string | null
+      class_name?: string | null
+    }>>((acc, shift) => {
       const key = `${shift.date}|${shift.time_slot_code}`
+      if (shift.status !== 'uncovered' && !assignedMap.has(key)) {
+        return acc
+      }
       if (assignedMap.has(key)) {
         if (shift.status === 'uncovered') {
           const logKey = `${absence.id}|${sub.id}|${key}`
@@ -268,33 +349,41 @@ export default function RecommendedSubsList({
             })
           }
         }
-        return {
+        acc.push({
           date: shift.date as string,
           time_slot_code: shift.time_slot_code as string,
           status: 'assigned' as const,
           classroom_name: shift.classroom_name ?? null,
           class_name: shift.class_name ?? null,
-        }
+        })
+        return acc
       }
       if (canCoverMap.has(key)) {
-        return {
+        acc.push({
           date: shift.date as string,
           time_slot_code: shift.time_slot_code as string,
           status: 'available' as const,
           classroom_name: shift.classroom_name ?? null,
           class_name: shift.class_name ?? null,
-        }
+        })
+        return acc
       }
       const reason = cannotCoverMap.get(key)
-      return {
+      acc.push({
         date: shift.date as string,
         time_slot_code: shift.time_slot_code as string,
         status: 'unavailable' as const,
         reason: reason || undefined,
         classroom_name: shift.classroom_name ?? null,
         class_name: shift.class_name ?? null,
-      }
-    })
+      })
+      return acc
+    }, [])
+    const coverageSegments = derived.hasAssignedShifts
+      ? shiftChips
+          .filter((shift) => derived.remainingShiftKeys.has(`${shift.date}|${shift.time_slot_code}`))
+          .map((shift) => shift.status)
+      : shiftChips.map((shift) => shift.status)
 
     return (
       <SubFinderCard
@@ -303,12 +392,13 @@ export default function RecommendedSubsList({
           name={sub.name}
           phone={sub.phone}
           shiftsCovered={shiftsCovered}
-          totalShifts={derived.totalShiftsNeedingCoverage}
+          totalShifts={derived.hasAssignedShifts ? derived.remainingShiftCount : derived.totalShiftsNeedingCoverage}
           useRemainingLabel={derived.hasAssignedShifts}
         canCover={canCoverWithClassrooms}
         cannotCover={cannotCoverWithClassrooms}
         assigned={assignedWithClassrooms}
         shiftChips={shiftChips}
+        coverageSegments={coverageSegments}
         notes={sub.notes}
           isDeclined={sub.response_status === 'declined_all'}
           highlighted={highlightedSubId === sub.id}
@@ -395,8 +485,18 @@ export default function RecommendedSubsList({
                         shift.reason,
                       ])
                     )
-                    const shiftChips = visibleAbsenceShifts.map((shift) => {
+                    const shiftChips = visibleAbsenceShifts.reduce<Array<{
+                      date: string
+                      time_slot_code: string
+                      status: 'assigned' | 'available' | 'unavailable'
+                      reason?: string
+                      classroom_name?: string | null
+                      class_name?: string | null
+                    }>>((acc, shift) => {
                       const key = `${shift.date}|${shift.time_slot_code}`
+                      if (shift.status !== 'uncovered' && !assignedMap.has(key)) {
+                        return acc
+                      }
                       if (assignedMap.has(key)) {
                         if (shift.status === 'uncovered') {
                           const logKey = `${absence.id}|${sub.id}|${key}`
@@ -412,33 +512,41 @@ export default function RecommendedSubsList({
                             })
                           }
                         }
-                        return {
+                        acc.push({
                           date: shift.date as string,
                           time_slot_code: shift.time_slot_code as string,
                           status: 'assigned' as const,
                           classroom_name: shift.classroom_name ?? null,
                           class_name: shift.class_name ?? null,
-                        }
+                        })
+                        return acc
                       }
                       if (canCoverMap.has(key)) {
-                        return {
+                        acc.push({
                           date: shift.date as string,
                           time_slot_code: shift.time_slot_code as string,
                           status: 'available' as const,
                           classroom_name: shift.classroom_name ?? null,
                           class_name: shift.class_name ?? null,
-                        }
+                        })
+                        return acc
                       }
                       const reason = cannotCoverMap.get(key)
-                      return {
+                      acc.push({
                         date: shift.date as string,
                         time_slot_code: shift.time_slot_code as string,
                         status: 'unavailable' as const,
                         reason: reason || undefined,
                         classroom_name: shift.classroom_name ?? null,
                         class_name: shift.class_name ?? null,
-                      }
-                    })
+                      })
+                      return acc
+                    }, [])
+                    const coverageSegments = derived.hasAssignedShifts
+                      ? shiftChips
+                          .filter((shift) => derived.remainingShiftKeys.has(`${shift.date}|${shift.time_slot_code}`))
+                          .map((shift) => shift.status)
+                      : shiftChips.map((shift) => shift.status)
 
                     return (
                       <SubFinderCard
@@ -447,12 +555,13 @@ export default function RecommendedSubsList({
                         name={sub.name}
                         phone={sub.phone}
                         shiftsCovered={shiftsCovered}
-                        totalShifts={derived.totalShiftsNeedingCoverage}
+                        totalShifts={derived.hasAssignedShifts ? derived.remainingShiftCount : derived.totalShiftsNeedingCoverage}
                         useRemainingLabel={derived.hasAssignedShifts}
                         canCover={canCoverWithClassrooms}
                         cannotCover={cannotCoverWithClassrooms}
                         assigned={assignedWithClassrooms}
                         shiftChips={shiftChips}
+                        coverageSegments={coverageSegments}
                         notes={sub.notes}
                         isDeclined={true}
                         highlighted={highlightedSubId === sub.id}

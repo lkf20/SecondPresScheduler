@@ -1,6 +1,7 @@
 'use client'
 
 import { User, Phone } from 'lucide-react'
+import { shiftStatusColorValues } from '@/lib/utils/colors'
 
 interface SubCardHeaderProps {
   name: string
@@ -47,28 +48,29 @@ export default function SubCardHeader({
           ) : (
             <>
               <div className="mb-1.5">
-                <div className="h-2 min-w-[64px] rounded-full overflow-hidden flex gap-0.5">
+                <div className="h-2 rounded-full overflow-hidden flex gap-0.5">
                   {totalShifts === 0 ? (
                     <div
                       className="h-full w-[14px] rounded border"
                       style={{
-                        backgroundColor: '#d1d5db',
-                        borderColor: '#d1d5db',
+                        backgroundColor: shiftStatusColorValues.unavailable.border,
+                        borderColor: shiftStatusColorValues.unavailable.border,
                       }}
                     />
                   ) : (
                     Array.from({ length: totalShifts }).map((_, index) => {
                       const colors =
                         index < coveredSegments
-                          ? { backgroundColor: '#a7f3d0', borderColor: '#a7f3d0' }
-                          : { backgroundColor: '#d1d5db', borderColor: '#d1d5db' }
+                          ? shiftStatusColorValues.available
+                          : shiftStatusColorValues.unavailable
                       return (
                         <div
                           key={`segment-${index}`}
                           className="h-full rounded border"
                           style={{
                             width: '14px',
-                            ...colors,
+                            backgroundColor: colors.border,
+                            borderColor: colors.border,
                           }}
                         />
                       )
