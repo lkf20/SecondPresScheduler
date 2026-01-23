@@ -9,6 +9,20 @@ type ScheduleCellRaw = ScheduleCellRow & {
   class_groups?: ClassGroupRow[]
 }
 
+type WeeklySubAssignment = {
+  id: string
+  date: string
+  day_of_week_id: string | null
+  time_slot_id: string
+  classroom_id: string
+  sub_id: string
+  teacher_id: string
+  sub_name: string
+  teacher_name: string
+  class_id: string | null
+  class_name: string | null
+}
+
 export interface WeeklyScheduleData {
   day_of_week_id: string
   day_name: string
@@ -300,19 +314,17 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
   }
   
   // Fetch substitute assignments for the selected week (if weekStartISO is provided)
-  let subAssignments: Array<{
-    id: string
-    date: string
-    day_of_week_id: string | null
-    time_slot_id: string
-    classroom_id: string
-    sub_id: string
-    teacher_id: string
-    sub_name: string
-    teacher_name: string
-    class_id: string | null
-    class_name: string | null
-  }> = []
+  type SubAssignmentKey = string
+  let subAssignments: WeeklySubAssignment[] = []
+  const getSubAssignmentKey = (sub: WeeklySubAssignment): SubAssignmentKey =>
+    [
+      sub.date,
+      sub.day_of_week_id ?? 'null',
+      sub.time_slot_id,
+      sub.classroom_id,
+      sub.teacher_id,
+      sub.sub_id,
+    ].join('|')
   
   if (weekStartISO) {
     try {
@@ -482,49 +494,54 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
             })
           }
           
+          const subsForSlot = weekStartISO && day.id
+            ? subAssignments.filter(
+                (sa) => sa.day_of_week_id === day.id &&
+                       sa.time_slot_id === timeSlot.id &&
+                       sa.classroom_id === classroom.id
+              )
+            : []
+          const uniqueSubsForSlot = subsForSlot.length > 0
+            ? Array.from(
+                new Map(subsForSlot.map((sub) => [getSubAssignmentKey(sub), sub])).values()
+              )
+            : []
+
           // Track unique absent teachers from sub_assignments (covered absences)
           const absentTeachers = new Map<string, { teacher_id: string; teacher_name: string; has_sub: boolean; is_partial: boolean; time_off_request_id?: string }>()
           
           // Add substitute assignments for this day/time/classroom (if weekStartISO is provided)
           if (weekStartISO && day.id) {
-            const subsForSlot = subAssignments.filter(
-              (sa) => sa.day_of_week_id === day.id &&
-                     sa.time_slot_id === timeSlot.id &&
-                     sa.classroom_id === classroom.id
-            )
-            
-            for (const sub of subsForSlot) {
-              // sub.teacher_id is the absent teacher, sub.sub_id is the substitute
+            for (const sub of uniqueSubsForSlot) {
               if (sub.teacher_id && !absentTeachers.has(sub.teacher_id)) {
                 absentTeachers.set(sub.teacher_id, {
                   teacher_id: sub.teacher_id,
                   teacher_name: sub.teacher_name,
-                  has_sub: true, // If there's a sub_assignment, there's a sub
-                  is_partial: false, // TODO: Determine if partial based on is_partial field
-                  time_off_request_id: undefined, // sub_assignments doesn't have time_off_request_id, will be set from time_off_shifts if needed
+                  has_sub: true,
+                  is_partial: false,
+                  time_off_request_id: undefined,
                 })
               }
               
-              // Find matching class group if class_id is set
               const matchingClassGroup = sub.class_id && classGroupIds.includes(sub.class_id)
                 ? classGroups.find(cg => cg.id === sub.class_id)
                 : null
               
               assignments.push({
                 id: sub.id,
-                teacher_id: sub.sub_id, // Use sub_id as teacher_id for substitutes
+                teacher_id: sub.sub_id,
                 teacher_name: sub.sub_name,
                 class_id: sub.class_id || (matchingClassGroup ? matchingClassGroup.id : classGroupIds[0]),
                 class_name: sub.class_name || (matchingClassGroup ? matchingClassGroup.name : 'Unknown'),
                 classroom_id: sub.classroom_id,
                 classroom_name: classroom.name,
-                is_floater: false, // Substitutes are not floaters
-                is_substitute: true, // Mark as substitute (week-specific)
-                absent_teacher_id: sub.teacher_id, // Track which teacher this substitute is replacing
+                is_floater: false,
+                is_substitute: true,
+                absent_teacher_id: sub.teacher_id,
                 enrollment: enrollment ?? 0,
                 required_teachers: rule?.required_teachers,
                 preferred_teachers: rule?.preferred_teachers,
-                assigned_count: teachers.length + subsForSlot.length,
+                assigned_count: teachers.length + uniqueSubsForSlot.length,
               })
             }
           }
@@ -548,14 +565,9 @@ export async function getWeeklyScheduleData(schoolId: string, selectedDayIds?: s
             }
             
             // Check sub_assignments - the absent teacher is assigned here
-            const subsForSlot = subAssignments.filter(
-              (sa) => sa.day_of_week_id === day.id &&
-                     sa.time_slot_id === timeSlot.id &&
-                     sa.classroom_id === classroom.id
-            )
-            for (const sub of subsForSlot) {
+            for (const sub of uniqueSubsForSlot) {
               if (sub.teacher_id) {
-                teachersAssignedToThisClassroom.add(sub.teacher_id) // The absent teacher
+                teachersAssignedToThisClassroom.add(sub.teacher_id)
               }
             }
             
