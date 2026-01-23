@@ -131,6 +131,12 @@ export default function SubFinderCard({
           ),
         ]
       : null
+    const orderedSegments = normalizedSegments
+      ? [...normalizedSegments].sort((a, b) => {
+          const order = { assigned: 0, available: 1, unavailable: 2 }
+          return order[a] - order[b]
+        })
+      : null
     return (
       <div className="text-right flex w-full flex-col items-end">
         <div className="mb-1.5 flex w-full justify-end">
@@ -144,10 +150,10 @@ export default function SubFinderCard({
                 }}
               />
             ) : (
-              (normalizedSegments ?? Array.from({ length: totalShifts }).map(() => 'available')).map(
+              (orderedSegments ?? Array.from({ length: totalShifts }).map(() => 'available')).map(
                 (status, index) => {
                   const colors =
-                    normalizedSegments === null
+                    orderedSegments === null
                       ? index < coveredSegments
                         ? shiftStatusColorValues.available
                         : shiftStatusColorValues.unavailable
