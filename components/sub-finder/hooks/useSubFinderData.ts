@@ -169,7 +169,7 @@ export function useSubFinderData({
             : detail.status === 'covered' || detail.status === 'fully_covered'
               ? 'fully_covered'
               : 'uncovered',
-        sub_name: detail.assigned_sub?.name || null,
+        sub_name: detail.sub_name || detail.assigned_sub?.name || null,
         is_partial: detail.status === 'partial' || detail.status === 'partially_covered',
       })),
     },
