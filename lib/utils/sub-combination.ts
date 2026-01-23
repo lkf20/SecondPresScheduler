@@ -72,14 +72,12 @@ function calculateShiftConflicts(
 ): { missingDiaperChanging: boolean; missingLifting: boolean; missingQualification: boolean } {
   const missingDiaperChanging =
     shift.diaper_changing_required === true && sub.can_change_diapers !== true
-  const missingLifting =
-    shift.lifting_children_required === true && sub.can_lift_children !== true
+  const missingLifting = shift.lifting_children_required === true && sub.can_lift_children !== true
   const qualificationTotal = sub.qualification_total ?? 0
   const qualificationMatches = sub.qualification_matches ?? 0
   // For qualifications, we use the sub's overall qualification match rate
   // If they have any qualification mismatches, count it as a conflict for this shift
-  const missingQualification =
-    qualificationTotal > 0 && qualificationMatches < qualificationTotal
+  const missingQualification = qualificationTotal > 0 && qualificationMatches < qualificationTotal
 
   return {
     missingDiaperChanging,
@@ -96,16 +94,16 @@ function getUncoveredShifts(subs: Sub[]): Set<string> {
   const assignedShifts = new Set<string>()
 
   // Collect all shifts from can_cover
-  subs.forEach((sub) => {
-    sub.can_cover?.forEach((shift) => {
+  subs.forEach(sub => {
+    sub.can_cover?.forEach(shift => {
       const shiftKey = `${shift.date}|${shift.time_slot_code}`
       allShifts.add(shiftKey)
     })
   })
 
   // Collect all assigned shifts
-  subs.forEach((sub) => {
-    sub.assigned_shifts?.forEach((shift) => {
+  subs.forEach(sub => {
+    sub.assigned_shifts?.forEach(shift => {
       const shiftKey = `${shift.date}|${shift.time_slot_code}`
       assignedShifts.add(shiftKey)
     })
@@ -113,7 +111,7 @@ function getUncoveredShifts(subs: Sub[]): Set<string> {
 
   // Return only uncovered shifts
   const uncovered = new Set<string>()
-  allShifts.forEach((shiftKey) => {
+  allShifts.forEach(shiftKey => {
     if (!assignedShifts.has(shiftKey)) {
       uncovered.add(shiftKey)
     }
@@ -138,8 +136,8 @@ function buildCombinationFromSubs(
   if (selectedSubs.length === 0 || uncoveredShifts.size === 0) return null
 
   const selectedShiftMap = new Map<string, Shift>()
-  selectedSubs.forEach((sub) => {
-    sub.can_cover?.forEach((shift) => {
+  selectedSubs.forEach(sub => {
+    sub.can_cover?.forEach(shift => {
       const shiftKey = `${shift.date}|${shift.time_slot_code}`
       if (uncoveredShifts.has(shiftKey) && !selectedShiftMap.has(shiftKey)) {
         selectedShiftMap.set(shiftKey, shift)
@@ -148,11 +146,11 @@ function buildCombinationFromSubs(
   })
 
   const subCoverage = new Map<string, SubShiftCoverage>()
-  selectedSubs.forEach((sub) => {
+  selectedSubs.forEach(sub => {
     const availableShifts = new Map<string, Shift>()
     const conflicts = new Map<string, number>()
 
-    sub.can_cover?.forEach((shift) => {
+    sub.can_cover?.forEach(shift => {
       const shiftKey = `${shift.date}|${shift.time_slot_code}`
       if (uncoveredShifts.has(shiftKey)) {
         availableShifts.set(shiftKey, shift)
@@ -183,8 +181,7 @@ function buildCombinationFromSubs(
       const conflictCount = data.conflicts.get(shiftKey) ?? 0
       if (
         conflictCount < bestConflicts ||
-        (conflictCount === bestConflicts &&
-          (data.sub.coverage_percent ?? 0) > bestCoveragePercent)
+        (conflictCount === bestConflicts && (data.sub.coverage_percent ?? 0) > bestCoveragePercent)
       ) {
         bestSub = data
         bestConflicts = conflictCount
@@ -212,7 +209,7 @@ function buildCombinationFromSubs(
   const assignments: SubAssignment[] = []
   let totalConflicts = 0
 
-  selectedSubs.forEach((sub) => {
+  selectedSubs.forEach(sub => {
     const shifts = assignmentsBySub.get(sub.id) || []
     if (shifts.length === 0) return
 
@@ -220,7 +217,7 @@ function buildCombinationFromSubs(
     let missingLifting = 0
     let missingQualifications = 0
 
-    shifts.forEach((shift) => {
+    shifts.forEach(shift => {
       const shiftConflicts = calculateShiftConflicts(shift, sub)
       if (shiftConflicts.missingDiaperChanging) missingDiaperChanging++
       if (shiftConflicts.missingLifting) missingLifting++
@@ -228,7 +225,7 @@ function buildCombinationFromSubs(
     })
 
     let remainingShifts = 0
-    sub.can_cover?.forEach((shift) => {
+    sub.can_cover?.forEach(shift => {
       const shiftKey = `${shift.date}|${shift.time_slot_code}`
       if (uncoveredShifts.has(shiftKey)) {
         remainingShifts++
@@ -271,7 +268,7 @@ function buildCombinationFromSubs(
 
 export function findTopCombinations(subs: Sub[], limit = 5): RecommendedCombination[] {
   // Filter to only subs with coverage_percent > 0
-  const eligibleSubs = subs.filter((sub) => sub.coverage_percent > 0)
+  const eligibleSubs = subs.filter(sub => sub.coverage_percent > 0)
 
   if (eligibleSubs.length === 0) {
     return []
@@ -285,9 +282,9 @@ export function findTopCombinations(subs: Sub[], limit = 5): RecommendedCombinat
   }
 
   const subsWithCoverage = eligibleSubs
-    .map((sub) => {
+    .map(sub => {
       const coverage = new Set<string>()
-      sub.can_cover?.forEach((shift) => {
+      sub.can_cover?.forEach(shift => {
         const key = `${shift.date}|${shift.time_slot_code}`
         if (uncoveredShifts.has(key)) {
           coverage.add(key)
@@ -295,7 +292,7 @@ export function findTopCombinations(subs: Sub[], limit = 5): RecommendedCombinat
       })
       return { sub, coverage }
     })
-    .filter((entry) => entry.coverage.size > 0)
+    .filter(entry => entry.coverage.size > 0)
     .sort((a, b) => {
       if (b.coverage.size !== a.coverage.size) return b.coverage.size - a.coverage.size
       return (b.sub.coverage_percent ?? 0) - (a.sub.coverage_percent ?? 0)
@@ -309,7 +306,10 @@ export function findTopCombinations(subs: Sub[], limit = 5): RecommendedCombinat
     if (covered.size === 0) return
     const combo = buildCombinationFromSubs(selected, uncoveredShifts)
     if (!combo) return
-    const key = combo.subs.map((assignment) => assignment.subId).sort().join('|')
+    const key = combo.subs
+      .map(assignment => assignment.subId)
+      .sort()
+      .join('|')
     if (!seen.has(key)) {
       seen.add(key)
       results.push(combo)
@@ -327,7 +327,7 @@ export function findTopCombinations(subs: Sub[], limit = 5): RecommendedCombinat
       if (results.length >= limit) return
       const entry = subsWithCoverage[i]
       const nextCovered = new Set(covered)
-      entry.coverage.forEach((shiftKey) => nextCovered.add(shiftKey))
+      entry.coverage.forEach(shiftKey => nextCovered.add(shiftKey))
       if (nextCovered.size === covered.size) continue
       dfs(i + 1, [...selected, entry.sub], nextCovered)
     }

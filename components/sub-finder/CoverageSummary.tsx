@@ -33,12 +33,12 @@ interface CoverageSummaryProps {
 
 export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummaryProps) {
   const { uncovered, fully_covered, shift_details } = shifts
-  
+
   // Don't show if no shifts
   if (shifts.total === 0) {
     return null
   }
-  
+
   // Sort shifts by date, then time slot
   const sortedShifts = shifts.shift_details_sorted?.length
     ? shifts.shift_details_sorted
@@ -78,27 +78,33 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
     }
   }
 
-
   const totalShifts = shifts.total
-  const coveredShiftsWithSubs = shift_details.filter((shift) => Boolean(shift.sub_name))
+  const coveredShiftsWithSubs = shift_details.filter(shift => Boolean(shift.sub_name))
   const coveredCount = coveredShiftsWithSubs.length
   const coveredSubNames = Array.from(
-    new Set(coveredShiftsWithSubs.map((shift) => shift.sub_name).filter(Boolean))
+    new Set(coveredShiftsWithSubs.map(shift => shift.sub_name).filter(Boolean))
   ) as string[]
   return (
-    <div className={cn('rounded-lg border px-4 pt-3 pb-2 shadow-sm', neutralColors.border, neutralColors.bgLight)}>
+    <div
+      className={cn(
+        'rounded-lg border px-4 pt-3 pb-2 shadow-sm',
+        neutralColors.border,
+        neutralColors.bgLight
+      )}
+    >
       {/* Header */}
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <div className={getHeaderClasses('lg')}>
           {uncovered} of {totalShifts} Shifts Require Subs
         </div>
         <div className="h-2 rounded-full overflow-hidden flex gap-0.5">
-          {(shifts.coverage_segments ||
-            sortedShifts.map((shift) => ({
+          {(
+            shifts.coverage_segments ||
+            sortedShifts.map(shift => ({
               id: shift.id,
               status: shift.status,
             }))
-          ).map((segment) => {
+          ).map(segment => {
             const getSegmentColor = () => {
               switch (segment.status) {
                 case 'fully_covered':
@@ -122,10 +128,11 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
           })}
         </div>
       </div>
-      
+
       {coveredCount > 0 && (
         <div className="mb-3 -mt-2 text-sm text-muted-foreground">
-          {coveredCount} Shift{coveredCount === 1 ? '' : 's'} covered by {coveredSubNames.join(', ')}
+          {coveredCount} Shift{coveredCount === 1 ? '' : 's'} covered by{' '}
+          {coveredSubNames.join(', ')}
         </div>
       )}
 
@@ -139,12 +146,13 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
       {/* Shift Chips */}
       <TooltipProvider>
         <div className="mt-3 flex flex-wrap gap-1.5 pb-2">
-          {sortedShifts.map((shift) => {
-            const isClickable = shift.status === 'fully_covered' || shift.status === 'partially_covered'
+          {sortedShifts.map(shift => {
+            const isClickable =
+              shift.status === 'fully_covered' || shift.status === 'partially_covered'
             const baseLabel = formatShiftLabel(shift.date, shift.time_slot_code)
             const badgeStyles = getBadgeStyles(shift)
             const isFullyCovered = shift.status === 'fully_covered' && shift.sub_name
-            
+
             const badgeContent = (
               <span
                 className={cn(
@@ -176,9 +184,7 @@ export default function CoverageSummary({ shifts, onShiftClick }: CoverageSummar
             if (isFullyCovered) {
               return (
                 <Tooltip key={shift.id}>
-                  <TooltipTrigger asChild>
-                    {badgeContent}
-                  </TooltipTrigger>
+                  <TooltipTrigger asChild>{badgeContent}</TooltipTrigger>
                   <TooltipContent>
                     <p>Assigned to {shift.sub_name}</p>
                   </TooltipContent>

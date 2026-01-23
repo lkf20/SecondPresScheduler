@@ -6,19 +6,19 @@
 export interface SubFinderState {
   // Mode
   mode: 'existing' | 'manual'
-  
+
   // Selected teachers (for existing absences mode)
   selectedTeacherIds: string[]
-  
+
   // Selected absence (for existing absences mode)
   selectedAbsenceId: string | null
-  
+
   // Manual coverage state
   manualTeacherId: string
   manualStartDate: string
   manualEndDate: string
   manualSelectedShifts: Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
-  
+
   // Filter options
   includePartiallyCovered: boolean
   includeFlexibleStaff: boolean

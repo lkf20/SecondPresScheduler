@@ -6,11 +6,7 @@ interface RatioIndicatorProps {
   assigned: number
 }
 
-export default function RatioIndicator({
-  required,
-  preferred,
-  assigned,
-}: RatioIndicatorProps) {
+export default function RatioIndicator({ required, preferred, assigned }: RatioIndicatorProps) {
   if (!required && !preferred) {
     return null
   }
@@ -34,9 +30,7 @@ export default function RatioIndicator({
 
   return (
     <div className="flex items-center gap-2 text-xs">
-      <span className={`px-1.5 py-0.5 rounded ${statusColor}`}>
-        {statusText}
-      </span>
+      <span className={`px-1.5 py-0.5 rounded ${statusColor}`}>{statusText}</span>
       <span className="text-muted-foreground">
         {assigned}/{preferred || required || '?'} teachers
       </span>

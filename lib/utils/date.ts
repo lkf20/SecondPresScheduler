@@ -2,7 +2,7 @@
  * Parse a date string as a local date (not UTC)
  * This prevents timezone issues where dates stored as DATE type
  * (without time) get shifted by one day when parsed as UTC
- * 
+ *
  * @param dateString - Date string in format "YYYY-MM-DD" or ISO format
  * @returns Date object in local timezone
  */
@@ -13,10 +13,10 @@ export function parseLocalDate(dateString: string): Date {
     // month is 0-indexed in Date constructor
     return new Date(year, month - 1, day)
   }
-  
+
   // For other formats, try parsing and then adjust to local
   const date = new Date(dateString)
-  
+
   // If it's a date-only string that was parsed as UTC, convert to local
   // Check if the date string looks like a date-only format
   if (dateString.includes('T') === false && dateString.includes(' ') === false) {
@@ -26,8 +26,6 @@ export function parseLocalDate(dateString: string): Date {
       return new Date(year, month - 1, day)
     }
   }
-  
+
   return date
 }
-
-

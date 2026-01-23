@@ -35,7 +35,9 @@ export default function EnrollmentInput({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between mb-6">
-        <Label htmlFor="enrollment" className="text-base font-medium">Enrollment (for staffing)</Label>
+        <Label htmlFor="enrollment" className="text-base font-medium">
+          Enrollment (for staffing)
+        </Label>
         {showUseDefault && onUseDefault && (
           <Button
             type="button"
@@ -69,4 +71,3 @@ export default function EnrollmentInput({
     </div>
   )
 }
-

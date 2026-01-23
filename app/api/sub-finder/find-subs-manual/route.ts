@@ -37,17 +37,24 @@ export async function POST(request: NextRequest) {
     }
 
     if (!teacher_id || !start_date || !end_date || !Array.isArray(shifts)) {
-      return NextResponse.json({ error: 'teacher_id, start_date, end_date, and shifts are required' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'teacher_id, start_date, end_date, and shifts are required' },
+        { status: 400 }
+      )
     }
 
     const supabase = await createClient()
 
     if (shifts.length === 0) {
-      return NextResponse.json({ subs: [], shift_details: [], totals: { total: 0, uncovered: 0, partially_covered: 0, fully_covered: 0 } })
+      return NextResponse.json({
+        subs: [],
+        shift_details: [],
+        totals: { total: 0, uncovered: 0, partially_covered: 0, fully_covered: 0 },
+      })
     }
 
-    const uniqueDayIds = Array.from(new Set(shifts.map((shift) => shift.day_of_week_id)))
-    const uniqueSlotIds = Array.from(new Set(shifts.map((shift) => shift.time_slot_id)))
+    const uniqueDayIds = Array.from(new Set(shifts.map(shift => shift.day_of_week_id)))
+    const uniqueSlotIds = Array.from(new Set(shifts.map(shift => shift.time_slot_id)))
 
     const [{ data: days }, { data: slots }] = await Promise.all([
       supabase.from('days_of_week').select('id, name').in('id', uniqueDayIds),
@@ -76,7 +83,10 @@ export async function POST(request: NextRequest) {
     const scheduleLookup = new Map<string, { classrooms: Set<string>; classes: Set<string> }>()
     ;(teacherSchedules || []).forEach((schedule: any) => {
       const key = `${schedule.day_of_week_id}|${schedule.time_slot_id}`
-      const entry = scheduleLookup.get(key) || { classrooms: new Set<string>(), classes: new Set<string>() }
+      const entry = scheduleLookup.get(key) || {
+        classrooms: new Set<string>(),
+        classes: new Set<string>(),
+      }
       if (schedule.classroom?.name) entry.classrooms.add(schedule.classroom.name)
       // Note: class groups are no longer directly on teacher_schedules
       // They can be retrieved from class_classroom_mappings if needed
@@ -85,13 +95,15 @@ export async function POST(request: NextRequest) {
 
     const { data: subAssignments, error: subError } = await supabase
       .from('sub_assignments')
-      .select(`
+      .select(
+        `
         date,
         time_slot_id,
         is_partial,
         assignment_type,
         sub:staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name)
-      `)
+      `
+      )
       .eq('teacher_id', teacher_id)
       .gte('date', start_date)
       .lte('date', end_date)
@@ -103,11 +115,10 @@ export async function POST(request: NextRequest) {
     const coverageMap = new Map<string, 'uncovered' | 'partially_covered' | 'fully_covered'>()
     const assignmentMap = new Map<string, { sub_name: string; is_partial: boolean }>()
 
-    shifts.forEach((shift) => {
+    shifts.forEach(shift => {
       const key = `${shift.date}|${shift.time_slot_id}`
       coverageMap.set(key, 'uncovered')
     })
-
     ;(subAssignments || []).forEach((assignment: any) => {
       const key = `${assignment.date}|${assignment.time_slot_id}`
       if (!coverageMap.has(key)) return
@@ -126,7 +137,7 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    const shiftDetails: ShiftDetail[] = shifts.map((shift) => {
+    const shiftDetails: ShiftDetail[] = shifts.map(shift => {
       const key = `${shift.date}|${shift.time_slot_id}`
       const status = coverageMap.get(key) || 'uncovered'
       const assignment = assignmentMap.get(key)
@@ -152,13 +163,13 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    const uncovered = shiftDetails.filter((s) => s.status === 'uncovered').length
-    const partially_covered = shiftDetails.filter((s) => s.status === 'partially_covered').length
-    const fully_covered = shiftDetails.filter((s) => s.status === 'fully_covered').length
+    const uncovered = shiftDetails.filter(s => s.status === 'uncovered').length
+    const partially_covered = shiftDetails.filter(s => s.status === 'partially_covered').length
+    const fully_covered = shiftDetails.filter(s => s.status === 'fully_covered').length
     const total = shiftDetails.length
 
     const allSubs = await getSubs()
-    const activeSubs = allSubs.filter((sub) => sub.active !== false)
+    const activeSubs = allSubs.filter(sub => sub.active !== false)
 
     const conflictingTimeOffRequests = await getTimeOffRequests({
       start_date,
@@ -174,7 +185,7 @@ export async function POST(request: NextRequest) {
     })
 
     const subMatches = await Promise.all(
-      activeSubs.map(async (sub) => {
+      activeSubs.map(async sub => {
         const availability = await getSubAvailability(sub.id)
         const availabilityExceptions = await getSubAvailabilityExceptions(sub.id, {
           start_date,
@@ -196,7 +207,7 @@ export async function POST(request: NextRequest) {
 
         const subScheduledShifts = await getTeacherScheduledShifts(sub.id, start_date, end_date)
         const scheduleConflicts = new Set<string>()
-        subScheduledShifts.forEach((scheduledShift) => {
+        subScheduledShifts.forEach(scheduledShift => {
           const key = `${scheduledShift.date}|${scheduledShift.time_slot_id}`
           scheduleConflicts.add(key)
         })
@@ -236,7 +247,7 @@ export async function POST(request: NextRequest) {
         let qualificationMatches = 0
         let qualificationTotal = 0
 
-        shifts.forEach((shift) => {
+        shifts.forEach(shift => {
           const availabilityKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
           const conflictKey = `${shift.date}|${shift.time_slot_id}`
           const isAvailable = availabilityMap.has(availabilityKey)
@@ -327,7 +338,7 @@ export async function POST(request: NextRequest) {
 
     const allShiftKeys = new Set<string>()
     const assignedShiftKeys = new Set<string>()
-    filteredMatches.forEach((match) => {
+    filteredMatches.forEach(match => {
       match.can_cover?.forEach((shift: { date: string; time_slot_code: string }) => {
         allShiftKeys.add(`${shift.date}|${shift.time_slot_code}`)
       })
@@ -341,12 +352,12 @@ export async function POST(request: NextRequest) {
       })
     })
 
-    const remainingShiftKeys = Array.from(allShiftKeys).filter((key) => !assignedShiftKeys.has(key))
+    const remainingShiftKeys = Array.from(allShiftKeys).filter(key => !assignedShiftKeys.has(key))
     const totalShifts = filteredMatches[0]?.total_shifts || 0
     const remainingShiftCount = Math.max(0, totalShifts - assignedShiftKeys.size)
     const hasAssignedShifts = assignedShiftKeys.size > 0
 
-    const enrichedMatches = filteredMatches.map((match) => {
+    const enrichedMatches = filteredMatches.map(match => {
       const shiftChips = buildShiftChips({
         assigned: [],
         canCover: match.can_cover || [],
@@ -374,6 +385,11 @@ export async function POST(request: NextRequest) {
       recommended_combinations: recommendedCombinations,
     })
   } catch (error) {
-    return createErrorResponse(error, 'Failed to find subs (manual)', 500, 'POST /api/sub-finder/find-subs-manual')
+    return createErrorResponse(
+      error,
+      'Failed to find subs (manual)',
+      500,
+      'POST /api/sub-finder/find-subs-manual'
+    )
   }
 }

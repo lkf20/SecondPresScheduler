@@ -2,7 +2,14 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 
 interface ScheduledShift {
@@ -42,7 +49,12 @@ interface ShiftSelectionTableProps {
   onShiftsChange: (shifts: SelectedShift[]) => void
   onConflictSummaryChange?: (summary: { conflictCount: number; totalScheduled: number }) => void
   onConflictRequestsChange?: (
-    requests: Array<{ id: string; start_date: string; end_date: string | null; reason: string | null }>
+    requests: Array<{
+      id: string
+      start_date: string
+      end_date: string | null
+      reason: string | null
+    }>
   ) => void
   excludeRequestId?: string
   validateConflicts?: boolean
@@ -71,22 +83,22 @@ export default function ShiftSelectionTable({
     Array<{ id: string; start_date: string; end_date: string | null; reason: string | null }>
   >([])
   const [loading, setLoading] = useState(true)
-  const [timeSlots, setTimeSlots] = useState<Array<{ id: string; code: string; name: string | null }>>([])
+  const [timeSlots, setTimeSlots] = useState<
+    Array<{ id: string; code: string; name: string | null }>
+  >([])
 
   // Fetch time slots
   useEffect(() => {
     fetch('/api/timeslots')
-      .then((r) => r.json())
-      .then((data) => {
+      .then(r => r.json())
+      .then(data => {
         const typedData = data as Array<{
           id: string
           code: string
           name: string | null
           display_order?: number | null
         }>
-        setTimeSlots(
-          typedData.sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
-        )
+        setTimeSlots(typedData.sort((a, b) => (a.display_order || 0) - (b.display_order || 0)))
       })
       .catch(console.error)
   }, [])
@@ -131,18 +143,24 @@ export default function ShiftSelectionTable({
     const effectiveEndDate = endDate || startDate
 
     setLoading(true)
-    console.log('[ShiftSelectionTable] Fetching shifts:', { teacherId, startDate, effectiveEndDate })
-    fetch(`/api/teachers/${teacherId}/scheduled-shifts?start_date=${startDate}&end_date=${effectiveEndDate}`)
-      .then((r) => {
+    console.log('[ShiftSelectionTable] Fetching shifts:', {
+      teacherId,
+      startDate,
+      effectiveEndDate,
+    })
+    fetch(
+      `/api/teachers/${teacherId}/scheduled-shifts?start_date=${startDate}&end_date=${effectiveEndDate}`
+    )
+      .then(r => {
         console.log('[ShiftSelectionTable] Response status:', r.status)
         return r.json()
       })
-      .then((data) => {
+      .then(data => {
         const shifts = data || []
         console.log('[ShiftSelectionTable] Received shifts:', shifts.length, shifts)
         setScheduledShifts(shifts)
       })
-      .catch((error) => {
+      .catch(error => {
         console.error('[ShiftSelectionTable] Error fetching scheduled shifts:', error)
         setScheduledShifts([])
       })
@@ -177,8 +195,8 @@ export default function ShiftSelectionTable({
     }
 
     fetch(`/api/time-off/existing-shifts?${params.toString()}`)
-      .then((r) => r.json())
-      .then((data) => {
+      .then(r => r.json())
+      .then(data => {
         const shifts = Array.isArray(data.shifts) ? data.shifts : []
         setExistingTimeOffShifts(shifts)
         const requestMap = new Map<
@@ -201,7 +219,7 @@ export default function ShiftSelectionTable({
         )
         setConflictingRequests(requests)
       })
-      .catch((error) => {
+      .catch(error => {
         console.error('Error fetching existing time off shifts:', error)
         setExistingTimeOffShifts([])
         setConflictingRequests([])
@@ -213,7 +231,7 @@ export default function ShiftSelectionTable({
       return new Set<string>()
     }
     return new Set(
-      existingTimeOffShifts.map((shift) => buildShiftKey(shift.date, shift.time_slot_id))
+      existingTimeOffShifts.map(shift => buildShiftKey(shift.date, shift.time_slot_id))
     )
   }, [buildShiftKey, existingTimeOffShifts, validateConflicts])
 
@@ -226,7 +244,7 @@ export default function ShiftSelectionTable({
           day_of_week_id: shift.day_of_week_id,
           time_slot_id: shift.time_slot_id,
         }))
-        .filter((shift) => !conflictShiftKeys.has(buildShiftKey(shift.date, shift.time_slot_id)))
+        .filter(shift => !conflictShiftKeys.has(buildShiftKey(shift.date, shift.time_slot_id)))
       onShiftsChange(allShifts)
     }
     // Note: When switching to "select_shifts" mode (disabled=false), we keep the current selectedShifts
@@ -241,7 +259,7 @@ export default function ShiftSelectionTable({
     normalizeDate,
   ])
 
-  const conflictCount = scheduledShifts.filter((shift) =>
+  const conflictCount = scheduledShifts.filter(shift =>
     conflictShiftKeys.has(buildShiftKey(shift.date, shift.time_slot_id))
   ).length
 
@@ -260,7 +278,7 @@ export default function ShiftSelectionTable({
   useEffect(() => {
     if (selectedShifts.length === 0 || conflictShiftKeys.size === 0) return
     const filtered = selectedShifts.filter(
-      (shift) => !conflictShiftKeys.has(buildShiftKey(shift.date, shift.time_slot_id))
+      shift => !conflictShiftKeys.has(buildShiftKey(shift.date, shift.time_slot_id))
     )
     if (filtered.length !== selectedShifts.length) {
       onShiftsChange(filtered)
@@ -268,17 +286,20 @@ export default function ShiftSelectionTable({
   }, [selectedShifts, conflictShiftKeys, onShiftsChange, buildShiftKey])
 
   // Group shifts by date
-  const shiftsByDate = scheduledShifts.reduce((acc, shift) => {
-    if (!acc[shift.date]) {
-      acc[shift.date] = {
-        date: shift.date,
-        day_name: shift.day_name,
-        shifts: [],
+  const shiftsByDate = scheduledShifts.reduce(
+    (acc, shift) => {
+      if (!acc[shift.date]) {
+        acc[shift.date] = {
+          date: shift.date,
+          day_name: shift.day_name,
+          shifts: [],
+        }
       }
-    }
-    acc[shift.date].shifts.push(shift)
-    return acc
-  }, {} as Record<string, { date: string; day_name: string; shifts: ScheduledShift[] }>)
+      acc[shift.date].shifts.push(shift)
+      return acc
+    },
+    {} as Record<string, { date: string; day_name: string; shifts: ScheduledShift[] }>
+  )
 
   const formatDate = (dateStr: string, dayName?: string) => {
     // Parse date string directly to avoid timezone issues
@@ -307,10 +328,10 @@ export default function ShiftSelectionTable({
         return d
       }
     }
-    
+
     const normalizedDate = normalizeDate(date)
     return selectedShifts.some(
-      (s) => normalizeDate(s.date) === normalizedDate && s.time_slot_id === timeSlotId
+      s => normalizeDate(s.date) === normalizedDate && s.time_slot_id === timeSlotId
     )
   }
 
@@ -326,10 +347,10 @@ export default function ShiftSelectionTable({
         return d
       }
     }
-    
+
     const normalizedDate = normalizeDate(date)
     return scheduledShifts.some(
-      (s) => normalizeDate(s.date) === normalizedDate && s.time_slot_id === timeSlotId
+      s => normalizeDate(s.date) === normalizedDate && s.time_slot_id === timeSlotId
     )
   }
 
@@ -340,9 +361,7 @@ export default function ShiftSelectionTable({
     let newShifts: SelectedShift[]
 
     if (isSelected) {
-      newShifts = selectedShifts.filter(
-        (s) => !(s.date === date && s.time_slot_id === timeSlotId)
-      )
+      newShifts = selectedShifts.filter(s => !(s.date === date && s.time_slot_id === timeSlotId))
     } else {
       newShifts = [
         ...selectedShifts,
@@ -363,21 +382,26 @@ export default function ShiftSelectionTable({
     } else {
       message = 'Select a start date to preview scheduled shifts.'
     }
-    
+
     return (
       <div className="rounded-md border">
         <Table className={tableClassName}>
           <TableHeader>
             <TableRow>
               <TableHead>Day</TableHead>
-            {timeSlots.map((slot) => (
-                <TableHead key={slot.id} className="text-center px-2">{slot.code}</TableHead>
+              {timeSlots.map(slot => (
+                <TableHead key={slot.id} className="text-center px-2">
+                  {slot.code}
+                </TableHead>
               ))}
             </TableRow>
           </TableHeader>
           <TableBody>
             <TableRow>
-              <TableCell colSpan={timeSlots.length + 1} className="text-center py-8 text-muted-foreground">
+              <TableCell
+                colSpan={timeSlots.length + 1}
+                className="text-center py-8 text-muted-foreground"
+              >
                 {message}
               </TableCell>
             </TableRow>
@@ -394,14 +418,19 @@ export default function ShiftSelectionTable({
           <TableHeader>
             <TableRow>
               <TableHead>Day</TableHead>
-            {timeSlots.map((slot) => (
-                <TableHead key={slot.id} className="text-center px-2">{slot.code}</TableHead>
+              {timeSlots.map(slot => (
+                <TableHead key={slot.id} className="text-center px-2">
+                  {slot.code}
+                </TableHead>
               ))}
             </TableRow>
           </TableHeader>
           <TableBody>
             <TableRow>
-              <TableCell colSpan={timeSlots.length + 1} className="text-center py-8 text-muted-foreground">
+              <TableCell
+                colSpan={timeSlots.length + 1}
+                className="text-center py-8 text-muted-foreground"
+              >
                 Loading shifts...
               </TableCell>
             </TableRow>
@@ -418,14 +447,19 @@ export default function ShiftSelectionTable({
           <TableHeader>
             <TableRow>
               <TableHead>Day</TableHead>
-            {timeSlots.map((slot) => (
-                <TableHead key={slot.id} className="text-center px-2">{slot.code}</TableHead>
+              {timeSlots.map(slot => (
+                <TableHead key={slot.id} className="text-center px-2">
+                  {slot.code}
+                </TableHead>
               ))}
             </TableRow>
           </TableHeader>
           <TableBody>
             <TableRow>
-              <TableCell colSpan={timeSlots.length + 1} className="text-center py-8 text-muted-foreground">
+              <TableCell
+                colSpan={timeSlots.length + 1}
+                className="text-center py-8 text-muted-foreground"
+              >
                 <div>No scheduled shifts found for this teacher in the selected date range.</div>
                 <div className="text-xs text-muted-foreground mt-2">
                   Try expanding the date range or check the teacher’s schedule settings.
@@ -444,24 +478,26 @@ export default function ShiftSelectionTable({
         <TableHeader>
           <TableRow>
             <TableHead>Day</TableHead>
-            {timeSlots.map((slot) => (
-              <TableHead key={slot.id} className="text-center px-2">{slot.code}</TableHead>
+            {timeSlots.map(slot => (
+              <TableHead key={slot.id} className="text-center px-2">
+                {slot.code}
+              </TableHead>
             ))}
           </TableRow>
         </TableHeader>
         <TableBody>
           {Object.values(shiftsByDate)
             .sort((a, b) => a.date.localeCompare(b.date))
-            .map((dayGroup) => (
+            .map(dayGroup => (
               <TableRow key={dayGroup.date}>
                 <TableCell className="font-medium">
                   {formatDate(dayGroup.date, dayGroup.day_name)}
                 </TableCell>
-                {timeSlots.map((slot) => {
+                {timeSlots.map(slot => {
                   const isScheduled = isShiftScheduled(dayGroup.date, slot.id)
                   const isRecorded = conflictShiftKeys.has(buildShiftKey(dayGroup.date, slot.id))
                   const isSelected = isRecorded ? false : isShiftSelected(dayGroup.date, slot.id)
-                  const shift = dayGroup.shifts.find((s) => s.time_slot_id === slot.id)
+                  const shift = dayGroup.shifts.find(s => s.time_slot_id === slot.id)
                   const dayOfWeekId = shift?.day_of_week_id || ''
 
                   return (
@@ -501,12 +537,7 @@ export default function ShiftSelectionTable({
                         </div>
                       ) : (
                         <div className="flex items-center justify-center">
-                          <Checkbox
-                            checked={false}
-                            disabled
-                            className="opacity-30"
-                            tabIndex={-1}
-                          />
+                          <Checkbox checked={false} disabled className="opacity-30" tabIndex={-1} />
                         </div>
                       )}
                     </TableCell>

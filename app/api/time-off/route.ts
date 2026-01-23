@@ -16,7 +16,20 @@ function formatExcludedDate(dateStr: string): string {
     const date = parseLocalDate(dateStr)
     if (isNaN(date.getTime())) return dateStr // Return original if invalid
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const monthNames = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ]
     const dayAbbr = dayNames[date.getDay()]
     const monthAbbr = monthNames[date.getMonth()]
     const day = date.getDate()
@@ -33,7 +46,10 @@ export async function GET(request: NextRequest) {
     const schoolId = await getUserSchoolId()
     if (!schoolId) {
       return NextResponse.json(
-        { error: 'User profile not found or missing school_id. Please ensure your profile is set up.' },
+        {
+          error:
+            'User profile not found or missing school_id. Please ensure your profile is set up.',
+        },
         { status: 403 }
       )
     }
@@ -43,7 +59,7 @@ export async function GET(request: NextRequest) {
     if (searchParams.get('teacher_id')) filters.teacher_id = searchParams.get('teacher_id')
     if (searchParams.get('start_date')) filters.start_date = searchParams.get('start_date')
     if (searchParams.get('end_date')) filters.end_date = searchParams.get('end_date')
-    
+
     const requests = await getTimeOffRequests(filters)
     return NextResponse.json(requests)
   } catch (error: any) {
@@ -57,7 +73,10 @@ export async function POST(request: NextRequest) {
     const schoolId = await getUserSchoolId()
     if (!schoolId) {
       return NextResponse.json(
-        { error: 'User profile not found or missing school_id. Please ensure your profile is set up.' },
+        {
+          error:
+            'User profile not found or missing school_id. Please ensure your profile is set up.',
+        },
         { status: 403 }
       )
     }
@@ -86,14 +105,21 @@ export async function POST(request: NextRequest) {
         requestData.start_date,
         effectiveEndDate
       )
-      requestedShifts = scheduledShifts.map((shift) => ({
+      requestedShifts = scheduledShifts.map(shift => ({
         date: shift.date,
         time_slot_id: shift.time_slot_id,
       }))
     }
 
     // Filter out conflicting shifts (but still allow the request to be created)
-    let shiftsToCreate: Array<{ date: string; day_of_week_id: string; time_slot_id: string; is_partial?: boolean; start_time?: string | null; end_time?: string | null }> = []
+    let shiftsToCreate: Array<{
+      date: string
+      day_of_week_id: string
+      time_slot_id: string
+      is_partial?: boolean
+      start_time?: string | null
+      end_time?: string | null
+    }> = []
     let excludedShifts: Array<{ date: string }> = []
     let excludedShiftCount = 0
     let warning: string | null = null
@@ -105,21 +131,21 @@ export async function POST(request: NextRequest) {
         effectiveEndDate
       )
       const existingShiftKeys = new Set(
-        existingShifts.map((shift) => `${normalizeDate(shift.date)}::${shift.time_slot_id}`)
+        existingShifts.map(shift => `${normalizeDate(shift.date)}::${shift.time_slot_id}`)
       )
-      
+
       // Filter out conflicting shifts
       if (shifts && Array.isArray(shifts) && shifts.length > 0) {
-        const excluded = shifts.filter((shift) => {
+        const excluded = shifts.filter(shift => {
           const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
           return existingShiftKeys.has(shiftKey)
         })
-        
-        excludedShifts = excluded.map((shift) => ({
+
+        excludedShifts = excluded.map(shift => ({
           date: normalizeDate(shift.date),
         }))
-        
-        shiftsToCreate = shifts.filter((shift) => {
+
+        shiftsToCreate = shifts.filter(shift => {
           const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
           return !existingShiftKeys.has(shiftKey)
         })
@@ -131,18 +157,18 @@ export async function POST(request: NextRequest) {
           requestData.start_date,
           effectiveEndDate
         )
-        
-        const excluded = scheduledShifts.filter((shift) => {
+
+        const excluded = scheduledShifts.filter(shift => {
           const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
           return existingShiftKeys.has(shiftKey)
         })
-        
-        excludedShifts = excluded.map((shift) => ({
+
+        excludedShifts = excluded.map(shift => ({
           date: shift.date,
         }))
-        
+
         shiftsToCreate = scheduledShifts
-          .map((shift) => ({
+          .map(shift => ({
             date: shift.date,
             day_of_week_id: shift.day_of_week_id,
             time_slot_id: shift.time_slot_id,
@@ -150,13 +176,13 @@ export async function POST(request: NextRequest) {
             start_time: null,
             end_time: null,
           }))
-          .filter((shift) => {
+          .filter(shift => {
             const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
             return !existingShiftKeys.has(shiftKey)
           })
         excludedShiftCount = excludedShifts.length
       }
-      
+
       if (excludedShiftCount > 0 && excludedShifts.length > 0) {
         try {
           // Remove duplicates by date (same date can appear multiple times with different time slots)
@@ -172,7 +198,7 @@ export async function POST(request: NextRequest) {
               }
             })
             .filter((date): date is string => Boolean(date)) // Remove any null/empty values
-        
+
           if (uniqueExcludedDates.length > 0) {
             const formattedDates = uniqueExcludedDates.join(', ')
             warning = `This teacher already has time off recorded for ${excludedShiftCount} of these shifts.<br>${excludedShiftCount} shift${excludedShiftCount !== 1 ? 's' : ''} will not be recorded: ${formattedDates}`
@@ -196,7 +222,7 @@ export async function POST(request: NextRequest) {
           requestData.start_date,
           effectiveEndDate
         )
-        shiftsToCreate = scheduledShifts.map((shift) => ({
+        shiftsToCreate = scheduledShifts.map(shift => ({
           date: shift.date,
           day_of_week_id: shift.day_of_week_id,
           time_slot_id: shift.time_slot_id,
@@ -206,28 +232,31 @@ export async function POST(request: NextRequest) {
         }))
       }
     }
-    
+
     // Create the time off request
     const createdRequest = await createTimeOffRequest({ ...requestData, status })
-    
+
     // Create shifts (only non-conflicting ones)
     if (shiftsToCreate.length > 0) {
       await createTimeOffShifts(createdRequest.id, shiftsToCreate)
     }
-    
+
     // Revalidate all pages that might show this data
     revalidatePath('/dashboard')
     revalidatePath('/time-off')
     revalidatePath('/schedules/weekly')
     revalidatePath('/sub-finder')
     revalidatePath('/reports')
-    
+
     // Return the created request with optional warning
-    return NextResponse.json({
-      ...createdRequest,
-      warning,
-      excludedShiftCount,
-    }, { status: 201 })
+    return NextResponse.json(
+      {
+        ...createdRequest,
+        warning,
+        excludedShiftCount,
+      },
+      { status: 201 }
+    )
   } catch (error: any) {
     console.error('Error creating time off request:', error)
     return NextResponse.json({ error: error.message || 'Unknown error occurred' }, { status: 500 })

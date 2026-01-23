@@ -41,7 +41,7 @@ export default function WeeklySchedulePage() {
   const focusDayId = searchParams.get('day_of_week_id')
   const focusTimeSlotId = searchParams.get('time_slot_id')
   const hasAppliedFocusRef = useRef(false)
-  
+
   // Week state - initialize from localStorage or use current week
   const [weekStartISO, setWeekStartISO] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -52,27 +52,36 @@ export default function WeeklySchedulePage() {
     }
     return getWeekStartISO()
   })
-  
+
   // Save week to localStorage when it changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('weekly-schedule-week', weekStartISO)
     }
   }, [weekStartISO])
-  
+
   // React Query hooks
-  const { data: scheduleData = [], isLoading: isLoadingSchedule, isFetching: isFetchingSchedule, error: scheduleError } = useWeeklySchedule(weekStartISO)
+  const {
+    data: scheduleData = [],
+    isLoading: isLoadingSchedule,
+    isFetching: isFetchingSchedule,
+    error: scheduleError,
+  } = useWeeklySchedule(weekStartISO)
   const { data: scheduleSettings, isLoading: isLoadingSettings } = useScheduleSettings()
   const { data: filterOptions, isLoading: isLoadingFilters } = useFilterOptions()
-  
+
   const selectedDayIds = scheduleSettings?.selected_day_ids || []
   const availableDays = filterOptions?.days || []
   const availableTimeSlots = filterOptions?.timeSlots || []
   const availableClassrooms = filterOptions?.classrooms || []
-  
+
   const loading = isLoadingSchedule || isLoadingSettings || isLoadingFilters
-  const error = scheduleError ? (scheduleError instanceof Error ? scheduleError.message : 'Failed to load weekly schedule') : null
-  
+  const error = scheduleError
+    ? scheduleError instanceof Error
+      ? scheduleError.message
+      : 'Failed to load weekly schedule'
+    : null
+
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
   const [filters, setFilters] = useState<FilterState | null>(() => {
     // Load filters from localStorage on mount
@@ -100,7 +109,12 @@ export default function WeeklySchedulePage() {
   const hasInitializedFilters = useRef(false)
   useEffect(() => {
     if (hasInitializedFilters.current) return
-    if (filters === null && availableDays.length > 0 && availableTimeSlots.length > 0 && availableClassrooms.length > 0) {
+    if (
+      filters === null &&
+      availableDays.length > 0 &&
+      availableTimeSlots.length > 0 &&
+      availableClassrooms.length > 0
+    ) {
       hasInitializedFilters.current = true
       // Load from localStorage again in case it was set between renders
       if (typeof window !== 'undefined') {
@@ -134,7 +148,13 @@ export default function WeeklySchedulePage() {
         layout: 'days-x-classrooms', // Default layout
       })
     }
-  }, [filters, availableDays.length, availableTimeSlots.length, availableClassrooms.length, selectedDayIds])
+  }, [
+    filters,
+    availableDays.length,
+    availableTimeSlots.length,
+    availableClassrooms.length,
+    selectedDayIds,
+  ])
 
   useEffect(() => {
     if (!focusClassroomId || !focusDayId || !focusTimeSlotId) return
@@ -147,7 +167,7 @@ export default function WeeklySchedulePage() {
       return
     }
 
-    setFilters((prev) => ({
+    setFilters(prev => ({
       selectedDayIds: [focusDayId],
       selectedTimeSlotIds: [focusTimeSlotId],
       selectedClassroomIds: [focusClassroomId],
@@ -180,7 +200,7 @@ export default function WeeklySchedulePage() {
       }
     }
   }, [filters])
-  
+
   // Handle refresh - invalidate React Query cache
   const handleRefresh = () => {
     if (schoolId) {
@@ -236,8 +256,8 @@ export default function WeeklySchedulePage() {
                       absences: slot.absences?.map(a => ({
                         teacher_id: a.teacher_id,
                         teacher_name: a.teacher_name,
-                        has_sub: a.has_sub
-                      }))
+                        has_sub: a.has_sub,
+                      })),
                     })
                   }
 
@@ -383,9 +403,12 @@ export default function WeeklySchedulePage() {
     // Debug: Log filtered results for substitutes mode
     if (filters.displayMode === 'substitutes-only') {
       const totalFilteredSlots = result.reduce((sum, classroom) => {
-        return sum + classroom.days.reduce((daySum, day) => {
-          return daySum + day.time_slots.length
-        }, 0)
+        return (
+          sum +
+          classroom.days.reduce((daySum, day) => {
+            return daySum + day.time_slots.length
+          }, 0)
+        )
       }, 0)
       console.log('[WeeklySchedulePage] Filtered results for substitutes-only:', {
         totalFilteredClassrooms: result.length,
@@ -397,10 +420,12 @@ export default function WeeklySchedulePage() {
             timeSlots: d.time_slots.map(ts => ({
               code: ts.time_slot_code,
               hasSubstitute: ts.assignments?.some(a => a.is_substitute === true) || false,
-              substituteNames: ts.assignments?.filter(a => a.is_substitute === true).map(a => a.teacher_name) || []
-            }))
-          }))
-        }))
+              substituteNames:
+                ts.assignments?.filter(a => a.is_substitute === true).map(a => a.teacher_name) ||
+                [],
+            })),
+          })),
+        })),
       })
     }
 
@@ -475,14 +500,10 @@ export default function WeeklySchedulePage() {
             })
 
             const requiredTeachers = classGroupForRatio.required_ratio
-              ? Math.ceil(
-                  scheduleCell.enrollment_for_staffing / classGroupForRatio.required_ratio
-                )
+              ? Math.ceil(scheduleCell.enrollment_for_staffing / classGroupForRatio.required_ratio)
               : undefined
             const preferredTeachers = classGroupForRatio.preferred_ratio
-              ? Math.ceil(
-                  scheduleCell.enrollment_for_staffing / classGroupForRatio.preferred_ratio
-                )
+              ? Math.ceil(scheduleCell.enrollment_for_staffing / classGroupForRatio.preferred_ratio)
               : undefined
 
             const classGroupIds = scheduleCell.class_groups.map(cg => cg.id)
@@ -494,8 +515,7 @@ export default function WeeklySchedulePage() {
             })
 
             const assignedCount = coverageAssignments.length
-            const belowRequired =
-              requiredTeachers !== undefined && assignedCount < requiredTeachers
+            const belowRequired = requiredTeachers !== undefined && assignedCount < requiredTeachers
             const belowPreferred =
               preferredTeachers !== undefined && assignedCount < preferredTeachers
 
@@ -534,8 +554,8 @@ export default function WeeklySchedulePage() {
             .reduce((daySum, day) => {
               return (
                 daySum +
-                day.time_slots.filter(slot =>
-                  filters?.selectedTimeSlotIds?.includes(slot.time_slot_id) ?? true
+                day.time_slots.filter(
+                  slot => filters?.selectedTimeSlotIds?.includes(slot.time_slot_id) ?? true
                 ).length
               )
             }, 0)
@@ -569,7 +589,9 @@ export default function WeeklySchedulePage() {
                       disabled={isFetchingSchedule}
                       className="h-10 w-10 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-60"
                     >
-                      <RefreshCw className={`h-4 w-4 ${isFetchingSchedule ? 'animate-spin' : ''}`} />
+                      <RefreshCw
+                        className={`h-4 w-4 ${isFetchingSchedule ? 'animate-spin' : ''}`}
+                      />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -593,9 +615,7 @@ export default function WeeklySchedulePage() {
             Views & Filters
           </Button>
         </div>
-        <p className="text-muted-foreground">
-          View staffing by classroom, day, and time slot
-        </p>
+        <p className="text-muted-foreground">View staffing by classroom, day, and time slot</p>
       </div>
 
       {error && <ErrorMessage message={error} className="mb-6" />}
@@ -614,14 +634,15 @@ export default function WeeklySchedulePage() {
             allowCardClick={false}
             displayModeCounts={displayModeCounts}
             displayMode={filters?.displayMode ?? 'all-scheduled-staff'}
-            onDisplayModeChange={(mode) => {
+            onDisplayModeChange={mode => {
               setFilters(prev => {
                 if (prev) {
                   return { ...prev, displayMode: mode }
                 }
                 // If filters is null, initialize with defaults
                 return {
-                  selectedDayIds: selectedDayIds.length > 0 ? selectedDayIds : availableDays.map(d => d.id),
+                  selectedDayIds:
+                    selectedDayIds.length > 0 ? selectedDayIds : availableDays.map(d => d.id),
                   selectedTimeSlotIds: availableTimeSlots.map(ts => ts.id),
                   selectedClassroomIds: availableClassrooms.map(c => c.id),
                   displayFilters: {
@@ -658,17 +679,21 @@ export default function WeeklySchedulePage() {
             availableTimeSlots={availableTimeSlots}
             availableClassrooms={availableClassrooms}
             selectedDayIdsFromSettings={selectedDayIds}
-            initialFilters={filters ? {
-              selectedDayIds: filters.selectedDayIds,
-              selectedTimeSlotIds: filters.selectedTimeSlotIds,
-              selectedClassroomIds: filters.selectedClassroomIds,
-              displayFilters: filters.displayFilters,
-              displayMode: filters.displayMode,
-              layout: filters.layout,
-            } : {
-              selectedDayIds: selectedDayIds,
-              layout: 'days-x-classrooms',
-            }}
+            initialFilters={
+              filters
+                ? {
+                    selectedDayIds: filters.selectedDayIds,
+                    selectedTimeSlotIds: filters.selectedTimeSlotIds,
+                    selectedClassroomIds: filters.selectedClassroomIds,
+                    displayFilters: filters.displayFilters,
+                    displayMode: filters.displayMode,
+                    layout: filters.layout,
+                  }
+                : {
+                    selectedDayIds: selectedDayIds,
+                    layout: 'days-x-classrooms',
+                  }
+            }
           />
         </>
       )}

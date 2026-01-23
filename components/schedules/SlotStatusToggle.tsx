@@ -20,7 +20,9 @@ export default function SlotStatusToggle({
         Slot Status
       </Label>
       <div className="flex items-center justify-between">
-        <span className={`text-sm ${isActive ? 'text-blue-600 font-medium' : 'text-muted-foreground'}`}>
+        <span
+          className={`text-sm ${isActive ? 'text-blue-600 font-medium' : 'text-muted-foreground'}`}
+        >
           {isActive ? 'Active' : 'Inactive'}
         </span>
         <Switch
@@ -34,4 +36,3 @@ export default function SlotStatusToggle({
     </div>
   )
 }
-

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getTeacherSchedules, bulkCreateTeacherSchedules, deleteTeacherSchedulesByTeacher } from '@/lib/api/schedules'
+import {
+  getTeacherSchedules,
+  bulkCreateTeacherSchedules,
+  deleteTeacherSchedulesByTeacher,
+} from '@/lib/api/schedules'
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const schedules = await getTeacherSchedules(id)
@@ -14,19 +15,16 @@ export async function GET(
   }
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await request.json()
     const { schedules } = body
-    
+
     if (!Array.isArray(schedules)) {
       return NextResponse.json({ error: 'schedules must be an array' }, { status: 400 })
     }
-    
+
     const createdSchedules = await bulkCreateTeacherSchedules(id, schedules)
     return NextResponse.json(createdSchedules, { status: 201 })
   } catch (error: any) {
@@ -46,4 +44,3 @@ export async function DELETE(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
-

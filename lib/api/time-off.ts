@@ -63,11 +63,7 @@ export async function createTimeOffRequest(request: {
   status?: string
 }) {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('time_off_requests')
-    .insert(request)
-    .select()
-    .single()
+  const { data, error } = await supabase.from('time_off_requests').insert(request).select().single()
 
   if (error) throw error
   return data as TimeOffRequest
@@ -100,11 +96,9 @@ export async function deleteTimeOffRequest(id: string) {
  * Get active sub assignments for a time off request
  * Finds all active sub assignments linked via coverage_request_shifts
  */
-export async function getActiveSubAssignmentsForTimeOffRequest(
-  timeOffRequestId: string
-) {
+export async function getActiveSubAssignmentsForTimeOffRequest(timeOffRequestId: string) {
   const supabase = await createClient()
-  
+
   // Get the time off request to find its coverage_request_id
   const { data: timeOffRequest, error: requestError } = await supabase
     .from('time_off_requests')
@@ -155,7 +149,7 @@ export async function cancelTimeOffRequest(
 
   // Get active sub assignments for this coverage request
   const activeAssignments = await getActiveSubAssignmentsForTimeOffRequest(timeOffRequestId)
-  
+
   if (activeAssignments.length === 0) {
     // No assignments, just cancel everything
     await supabase
@@ -173,10 +167,10 @@ export async function cancelTimeOffRequest(
   }
 
   // Determine which assignments to keep
-  const assignmentsToKeep = options.assignmentIdsToKeep 
+  const assignmentsToKeep = options.assignmentIdsToKeep
     ? activeAssignments.filter(a => options.assignmentIdsToKeep!.includes(a.id))
-    : options.keepAssignmentsAsExtraCoverage 
-      ? activeAssignments 
+    : options.keepAssignmentsAsExtraCoverage
+      ? activeAssignments
       : []
 
   const assignmentsToCancel = activeAssignments.filter(
@@ -207,7 +201,9 @@ export async function cancelTimeOffRequest(
     }
 
     // Get the shifts for the assignments we're keeping
-    const shiftIds = assignmentsToKeep.map(a => a.coverage_request_shift_id).filter(Boolean) as string[]
+    const shiftIds = assignmentsToKeep
+      .map(a => a.coverage_request_shift_id)
+      .filter(Boolean) as string[]
     const { data: shiftsToKeep, error: shiftsError } = await supabase
       .from('coverage_request_shifts')
       .select('*')

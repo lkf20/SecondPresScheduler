@@ -32,10 +32,7 @@ export async function PUT(request: NextRequest) {
     const { selected_day_ids } = body
 
     if (!Array.isArray(selected_day_ids)) {
-      return NextResponse.json(
-        { error: 'selected_day_ids must be an array' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'selected_day_ids must be an array' }, { status: 400 })
     }
 
     const settings = await updateScheduleSettings(schoolId, selected_day_ids)
@@ -44,4 +41,3 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
-

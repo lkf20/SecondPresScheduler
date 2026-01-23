@@ -87,11 +87,16 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
 
   // Get display name helper
   const getDisplayName = (
-    person: { display_name?: string | null; first_name?: string | null; last_name?: string | null } | null | undefined,
+    person:
+      | { display_name?: string | null; first_name?: string | null; last_name?: string | null }
+      | null
+      | undefined,
     fallback = 'Unknown'
   ) => {
     if (!person) return fallback
-    const name = (person.display_name || `${person.first_name ?? ''} ${person.last_name ?? ''}`).trim()
+    const name = (
+      person.display_name || `${person.first_name ?? ''} ${person.last_name ?? ''}`
+    ).trim()
     return name || fallback
   }
 
@@ -103,7 +108,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
         if (!response.ok) throw new Error('Failed to fetch teachers')
         const data = await response.json()
         const sorted = (data as Teacher[])
-          .filter((t) => (t as Teacher & { active?: boolean }).active !== false)
+          .filter(t => (t as Teacher & { active?: boolean }).active !== false)
           .sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)))
         setTeachers(sorted)
       } catch (error) {
@@ -122,7 +127,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
         if (!response.ok) throw new Error('Failed to fetch subs')
         const data = await response.json()
         const sorted = (data as Sub[])
-          .filter((s) => (s as Sub & { active?: boolean }).active !== false)
+          .filter(s => (s as Sub & { active?: boolean }).active !== false)
           .sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)))
         setSubs(sorted)
       } catch (error) {
@@ -161,14 +166,16 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
 
         const data = await response.json()
         setCoverageRequestId(data.coverage_request_id)
-        
+
         // Fetch timeslots once for lookup
         const timeslotsResponse = await fetch('/api/timeslots').catch(() => null)
 
         const timeslots = timeslotsResponse?.ok ? await timeslotsResponse.json() : []
 
-        const timeslotsMap = new Map(timeslots.map((t: { id: string; code: string }) => [t.id, t.code]))
-        
+        const timeslotsMap = new Map(
+          timeslots.map((t: { id: string; code: string }) => [t.id, t.code])
+        )
+
         // Create a map of time slot code to display_order for sorting
         const timeSlotOrderMap = new Map<string, number>()
         timeslots.forEach((slot: { code?: string; display_order?: number }) => {
@@ -179,36 +186,48 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
 
         // Fetch shift details with day/time slot names
         const shiftDetails = await Promise.all(
-          data.coverage_request_shifts.map(async (shift: {
-            id: string
-            date: string
-            day_of_week_id: string
-            time_slot_id: string
-            classroom_id?: string | null
-            time_off_request_id?: string | null
-          }) => {
-            // Fetch classroom name if available
-            let classroomName = null
-            if (shift.classroom_id) {
-              const classroomResponse = await fetch(`/api/classrooms/${shift.classroom_id}`).catch(() => null)
-              if (classroomResponse?.ok) {
-                const classroomData = await classroomResponse.json()
-                classroomName = classroomData.name || null
+          data.coverage_request_shifts.map(
+            async (shift: {
+              id: string
+              date: string
+              day_of_week_id: string
+              time_slot_id: string
+              classroom_id?: string | null
+              time_off_request_id?: string | null
+            }) => {
+              // Fetch classroom name if available
+              let classroomName = null
+              if (shift.classroom_id) {
+                const classroomResponse = await fetch(
+                  `/api/classrooms/${shift.classroom_id}`
+                ).catch(() => null)
+                if (classroomResponse?.ok) {
+                  const classroomData = await classroomResponse.json()
+                  classroomName = classroomData.name || null
+                }
+              }
+
+              // Get day name from date
+              const date = parseLocalDate(shift.date)
+              const dayNames = [
+                'Sunday',
+                'Monday',
+                'Tuesday',
+                'Wednesday',
+                'Thursday',
+                'Friday',
+                'Saturday',
+              ]
+              const dayName = dayNames[date.getDay()]
+
+              return {
+                ...shift,
+                day_name: dayName,
+                time_slot_code: timeslotsMap.get(shift.time_slot_id) || '',
+                classroom_name: classroomName,
               }
             }
-
-            // Get day name from date
-            const date = parseLocalDate(shift.date)
-            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-            const dayName = dayNames[date.getDay()]
-
-            return {
-              ...shift,
-              day_name: dayName,
-              time_slot_code: timeslotsMap.get(shift.time_slot_id) || '',
-              classroom_name: classroomName,
-            }
-          })
+          )
         )
 
         // Sort shifts: earliest date first, then by time slot display_order from settings
@@ -216,7 +235,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
           // First, sort by date (earliest first)
           const dateCompare = a.date.localeCompare(b.date)
           if (dateCompare !== 0) return dateCompare
-          
+
           // Then, sort by time slot display_order
           const aOrder = timeSlotOrderMap.get(a.time_slot_code) ?? 999
           const bOrder = timeSlotOrderMap.get(b.time_slot_code) ?? 999
@@ -268,7 +287,9 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
 
     const fetchTeacherClasses = async () => {
       try {
-        const response = await fetch(`/api/teachers/${teacherId}/scheduled-shifts?start_date=${startDate || '2025-01-01'}&end_date=${endDate || '2025-12-31'}`)
+        const response = await fetch(
+          `/api/teachers/${teacherId}/scheduled-shifts?start_date=${startDate || '2025-01-01'}&end_date=${endDate || '2025-12-31'}`
+        )
         if (!response.ok) throw new Error('Failed to fetch teacher classes')
         const data = await response.json()
         // Extract unique class names from shifts
@@ -300,7 +321,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
           body: JSON.stringify({
             sub_id: subId,
             coverage_request_id: coverageRequestId,
-            shift_ids: shifts.map((s) => s.id),
+            shift_ids: shifts.map(s => s.id),
           }),
         })
 
@@ -311,8 +332,8 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
 
         const conflictData = await response.json()
         // Update shifts with conflict status
-        setShifts((prevShifts) =>
-          prevShifts.map((shift) => {
+        setShifts(prevShifts =>
+          prevShifts.map(shift => {
             const conflict = conflictData.find((c: any) => c.shift_id === shift.id)
             if (!conflict) return shift
             return {
@@ -334,7 +355,20 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
   const formatDate = (dateString: string) => {
     const date = parseLocalDate(dateString)
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const monthNames = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ]
     const dayName = dayNames[date.getDay()]
     const month = monthNames[date.getMonth()]
     const day = date.getDate()
@@ -351,7 +385,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
 
   // Teacher options for SearchableSelect
   const teacherOptions: SearchableSelectOption[] = useMemo(() => {
-    return teachers.map((teacher) => ({
+    return teachers.map(teacher => ({
       id: teacher.id,
       label: getDisplayName(teacher),
     }))
@@ -359,7 +393,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
 
   // Sub options for SearchableSelect
   const subOptions: SearchableSelectOption[] = useMemo(() => {
-    return subs.map((sub) => ({
+    return subs.map(sub => ({
       id: sub.id,
       label: getDisplayName(sub),
     }))
@@ -368,14 +402,14 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
   // Filter qualifications by teacher's classes
   const relevantQualifications = useMemo(() => {
     if (teacherClasses.length === 0 || subQualifications.length === 0) return subQualifications
-    
+
     // Filter qualifications to only show those relevant to the teacher's classes
     // This is a simplified check - in a real system, you'd match qualification names to class names
-    return subQualifications.filter((qual) => {
+    return subQualifications.filter(qual => {
       const qualName = qual.qualification?.name || ''
       const qualNameLower = qualName.toLowerCase()
       // Check if qualification name matches any of the teacher's classes
-      return teacherClasses.some((className) => {
+      return teacherClasses.some(className => {
         const classNameLower = className.toLowerCase()
         // Match if qualification name contains class name or vice versa
         return qualNameLower.includes(classNameLower) || classNameLower.includes(qualNameLower)
@@ -393,7 +427,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
     // For now, default to selecting shifts with time off
     // TODO: Add availability check
     const defaultSelected = new Set<string>()
-    shifts.forEach((shift) => {
+    shifts.forEach(shift => {
       if (shift.has_time_off) {
         defaultSelected.add(shift.id)
       }
@@ -403,10 +437,13 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
 
   // Calculate summary stats
   const summaryStats = useMemo(() => {
-    const selectedShifts = shifts.filter((s) => selectedShiftIds.has(s.id))
-    const noTimeOffCount = selectedShifts.filter((s) => !s.has_time_off).length
-    const conflictCount = selectedShifts.filter((s) => 
-      s.status === 'unavailable' || s.status === 'conflict_teaching' || s.status === 'conflict_sub'
+    const selectedShifts = shifts.filter(s => selectedShiftIds.has(s.id))
+    const noTimeOffCount = selectedShifts.filter(s => !s.has_time_off).length
+    const conflictCount = selectedShifts.filter(
+      s =>
+        s.status === 'unavailable' ||
+        s.status === 'conflict_teaching' ||
+        s.status === 'conflict_sub'
     ).length
     return {
       totalSelected: selectedShifts.length,
@@ -417,7 +454,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
 
   // Handle shift toggle
   const handleShiftToggle = (shiftId: string) => {
-    setSelectedShiftIds((prev) => {
+    setSelectedShiftIds(prev => {
       const next = new Set(prev)
       if (next.has(shiftId)) {
         next.delete(shiftId)
@@ -438,12 +475,12 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
     setSubmitting(true)
     try {
       // First, create time off requests for shifts without time off if checkbox is checked
-      const selectedShifts = shifts.filter((s) => selectedShiftIds.has(s.id))
-      const shiftsWithoutTimeOff = selectedShifts.filter((s) => !s.has_time_off)
+      const selectedShifts = shifts.filter(s => selectedShiftIds.has(s.id))
+      const shiftsWithoutTimeOff = selectedShifts.filter(s => !s.has_time_off)
 
       if (createTimeOffForMissing && shiftsWithoutTimeOff.length > 0 && teacherId) {
         // Create time off request
-        
+
         const timeOffResponse = await fetch('/api/time-off', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -453,7 +490,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
             end_date: shiftsWithoutTimeOff[shiftsWithoutTimeOff.length - 1].date,
             shift_selection_mode: 'select_shifts',
             reason: 'Other', // Generic reason for quick assign
-            shifts: shiftsWithoutTimeOff.map((s) => ({
+            shifts: shiftsWithoutTimeOff.map(s => ({
               date: s.date,
               day_of_week_id: s.day_of_week_id,
               time_slot_id: s.time_slot_id,
@@ -477,7 +514,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
           }
           throw new Error(errorMessage)
         }
-        
+
         await timeOffResponse.json()
       }
 
@@ -497,8 +534,8 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
         throw new Error(errorData.error || 'Failed to assign shifts')
       }
 
-      const sub = subs.find((s) => s.id === subId)
-      const teacher = teachers.find((t) => t.id === teacherId)
+      const sub = subs.find(s => s.id === subId)
+      const teacher = teachers.find(t => t.id === teacherId)
       const subName = getDisplayName(sub)
       const teacherName = getDisplayName(teacher)
       const shiftCount = selectedShiftIds.size
@@ -527,7 +564,9 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
   const handleViewInSubFinder = () => {
     if (!teacherId || !startDate) return
     const effectiveEndDate = endDate || startDate
-    router.push(`/sub-finder?teacher_id=${teacherId}&start_date=${startDate}&end_date=${effectiveEndDate}&mode=manual`)
+    router.push(
+      `/sub-finder?teacher_id=${teacherId}&start_date=${startDate}&end_date=${effectiveEndDate}&mode=manual`
+    )
     onClose()
   }
 
@@ -546,14 +585,17 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
     }
   }, [isOpen])
 
-  const selectedSub = subs.find((s) => s.id === subId)
+  const selectedSub = subs.find(s => s.id === subId)
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent
         side="right"
         showCloseButton={false}
-        className={cn('w-full sm:max-w-2xl h-screen flex flex-col p-0', getPanelBackgroundClasses())}
+        className={cn(
+          'w-full sm:max-w-2xl h-screen flex flex-col p-0',
+          getPanelBackgroundClasses()
+        )}
       >
         <div className={cn('flex-1 overflow-y-auto px-6 py-6', getPanelBackgroundClasses())}>
           <SheetHeader className="mb-6 pt-4">
@@ -602,7 +644,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
                 {/* Qualifications Badges */}
                 {selectedSub && relevantQualifications.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {relevantQualifications.map((qual) => {
+                    {relevantQualifications.map(qual => {
                       const qualName = qual.qualification?.name || 'Unknown'
                       return (
                         <Badge
@@ -616,31 +658,36 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
                     })}
                   </div>
                 )}
-                {selectedSub && relevantQualifications.length === 0 && subQualifications.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {subQualifications
-                      .filter((qual) => {
-                        const qualName = qual.qualification?.name || ''
-                        return !teacherClasses.some((className) => {
-                          const classNameLower = className.toLowerCase()
-                          const qualNameLower = qualName.toLowerCase()
-                          return qualNameLower.includes(classNameLower) || classNameLower.includes(qualNameLower)
+                {selectedSub &&
+                  relevantQualifications.length === 0 &&
+                  subQualifications.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {subQualifications
+                        .filter(qual => {
+                          const qualName = qual.qualification?.name || ''
+                          return !teacherClasses.some(className => {
+                            const classNameLower = className.toLowerCase()
+                            const qualNameLower = qualName.toLowerCase()
+                            return (
+                              qualNameLower.includes(classNameLower) ||
+                              classNameLower.includes(qualNameLower)
+                            )
+                          })
                         })
-                      })
-                      .map((qual) => {
-                        const qualName = qual.qualification?.name || 'Unknown'
-                        return (
-                          <Badge
-                            key={qual.id}
-                            variant="outline"
-                            className="text-xs bg-amber-50 text-amber-700 border-amber-200"
-                          >
-                            Not marked qualified for {qualName}
-                          </Badge>
-                        )
-                      })}
-                  </div>
-                )}
+                        .map(qual => {
+                          const qualName = qual.qualification?.name || 'Unknown'
+                          return (
+                            <Badge
+                              key={qual.id}
+                              variant="outline"
+                              className="text-xs bg-amber-50 text-amber-700 border-amber-200"
+                            >
+                              Not marked qualified for {qualName}
+                            </Badge>
+                          )
+                        })}
+                    </div>
+                  )}
               </div>
             </div>
 
@@ -681,10 +728,13 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
               <div className="space-y-2">
                 <Label>Shifts</Label>
                 <div className="space-y-2 border rounded-lg p-4 bg-white">
-                  {shifts.map((shift) => {
+                  {shifts.map(shift => {
                     const isSelected = selectedShiftIds.has(shift.id)
                     return (
-                      <div key={shift.id} className="flex items-start gap-3 py-2 border-b last:border-b-0">
+                      <div
+                        key={shift.id}
+                        className="flex items-start gap-3 py-2 border-b last:border-b-0"
+                      >
                         <Checkbox
                           id={`shift-${shift.id}`}
                           checked={isSelected}
@@ -701,63 +751,71 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
                           {/* Status badges */}
                           <div className="flex flex-wrap gap-2">
                             {!shift.has_time_off && (
-                              <span 
+                              <span
                                 className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
-                                style={{
-                                  backgroundColor: 'rgb(248, 250, 252)', // slate-50
-                                  borderWidth: '1px',
-                                  borderStyle: 'solid',
-                                  borderColor: 'rgb(226, 232, 240)', // slate-200
-                                  color: 'rgb(71, 85, 105)', // slate-600
-                                } as React.CSSProperties}
+                                style={
+                                  {
+                                    backgroundColor: 'rgb(248, 250, 252)', // slate-50
+                                    borderWidth: '1px',
+                                    borderStyle: 'solid',
+                                    borderColor: 'rgb(226, 232, 240)', // slate-200
+                                    color: 'rgb(71, 85, 105)', // slate-600
+                                  } as React.CSSProperties
+                                }
                               >
                                 <Info className="h-3 w-3" />
                                 No absence recorded - this will be extra coverage
                               </span>
                             )}
                             {shift.status === 'unavailable' && (
-                              <Badge 
-                                variant="outline" 
+                              <Badge
+                                variant="outline"
                                 className="text-xs"
-                                style={{
-                                  backgroundColor: 'rgb(255, 251, 235)', // amber-50
-                                  borderWidth: '1px',
-                                  borderStyle: 'solid',
-                                  borderColor: 'rgb(252, 211, 77)', // amber-300
-                                  color: 'rgb(146, 64, 14)', // amber-800
-                                } as React.CSSProperties}
+                                style={
+                                  {
+                                    backgroundColor: 'rgb(255, 251, 235)', // amber-50
+                                    borderWidth: '1px',
+                                    borderStyle: 'solid',
+                                    borderColor: 'rgb(252, 211, 77)', // amber-300
+                                    color: 'rgb(146, 64, 14)', // amber-800
+                                  } as React.CSSProperties
+                                }
                               >
                                 <AlertTriangle className="h-3 w-3 mr-1" />
                                 Marked unavailable
                               </Badge>
                             )}
                             {shift.status === 'conflict_teaching' && (
-                              <Badge 
-                                variant="outline" 
+                              <Badge
+                                variant="outline"
                                 className="text-xs"
-                                style={{
-                                  backgroundColor: 'rgb(254, 242, 242)', // red-50
-                                  borderWidth: '1px',
-                                  borderStyle: 'solid',
-                                  borderColor: 'rgb(252, 165, 165)', // red-300
-                                  color: 'rgb(153, 27, 27)', // red-800
-                                } as React.CSSProperties}
+                                style={
+                                  {
+                                    backgroundColor: 'rgb(254, 242, 242)', // red-50
+                                    borderWidth: '1px',
+                                    borderStyle: 'solid',
+                                    borderColor: 'rgb(252, 165, 165)', // red-300
+                                    color: 'rgb(153, 27, 27)', // red-800
+                                  } as React.CSSProperties
+                                }
                               >
                                 <AlertTriangle className="h-3 w-3 mr-1" />
                                 Conflict: Assigned to {shift.classroom_name || 'classroom'}
                               </Badge>
                             )}
                             {shift.status === 'conflict_sub' && (
-                              <Badge 
-                                variant="outline" 
+                              <Badge
+                                variant="outline"
                                 className="text-xs"
-                                style={{
-                                  backgroundColor: 'rgb(254, 242, 242)', // red-50
-                                  borderWidth: '1px',
-                                  borderStyle: 'solid',
-                                  borderColor: 'rgb(252, 165, 165)', // red-300
-                                  color: 'rgb(153, 27, 27)', // red-800
-                                } as React.CSSProperties}
+                                style={
+                                  {
+                                    backgroundColor: 'rgb(254, 242, 242)', // red-50
+                                    borderWidth: '1px',
+                                    borderStyle: 'solid',
+                                    borderColor: 'rgb(252, 165, 165)', // red-300
+                                    color: 'rgb(153, 27, 27)', // red-800
+                                  } as React.CSSProperties
+                                }
                               >
                                 <AlertTriangle className="h-3 w-3 mr-1" />
                                 Conflict: {shift.conflict_message || 'Assigned to sub'}
@@ -796,13 +854,15 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
                     <Info className="h-4 w-4 text-amber-600 mt-0.5" />
                     <div className="flex-1">
                       <p className="text-sm text-amber-800">
-                        {summaryStats.noTimeOffCount} of {summaryStats.totalSelected} selected shifts {summaryStats.noTimeOffCount === 1 ? 'does' : 'do'} not have a time off request for this teacher.
+                        {summaryStats.noTimeOffCount} of {summaryStats.totalSelected} selected
+                        shifts {summaryStats.noTimeOffCount === 1 ? 'does' : 'do'} not have a time
+                        off request for this teacher.
                       </p>
                       <div className="mt-2 flex items-center gap-2">
                         <Checkbox
                           id="create-time-off"
                           checked={createTimeOffForMissing}
-                          onCheckedChange={(checked) => setCreateTimeOffForMissing(checked === true)}
+                          onCheckedChange={checked => setCreateTimeOffForMissing(checked === true)}
                         />
                         <Label
                           htmlFor="create-time-off"
@@ -820,8 +880,10 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
                     <p className="text-sm text-amber-800">
-                      {summaryStats.conflictCount} selected shift{summaryStats.conflictCount !== 1 ? 's' : ''} override
-                      {summaryStats.conflictCount === 1 ? 's' : ''} the sub&apos;s availability or existing assignment.
+                      {summaryStats.conflictCount} selected shift
+                      {summaryStats.conflictCount !== 1 ? 's' : ''} override
+                      {summaryStats.conflictCount === 1 ? 's' : ''} the sub&apos;s availability or
+                      existing assignment.
                     </p>
                   </div>
                 )}
@@ -848,7 +910,9 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
                 onClick={handleAssign}
                 disabled={submitting || selectedShiftIds.size === 0 || !coverageRequestId || !subId}
               >
-                {submitting ? 'Assigning...' : `Assign ${selectedShiftIds.size} shift${selectedShiftIds.size !== 1 ? 's' : ''}`}
+                {submitting
+                  ? 'Assigning...'
+                  : `Assign ${selectedShiftIds.size} shift${selectedShiftIds.size !== 1 ? 's' : ''}`}
               </Button>
             </div>
           </div>

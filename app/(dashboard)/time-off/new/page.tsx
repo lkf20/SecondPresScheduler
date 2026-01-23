@@ -17,13 +17,14 @@ export default function NewTimeOffPage() {
     }
     const startDateFormatted = formatDateForToast(startDate)
     const endDateFormatted = formatDateForToast(endDate)
-    const dateRange = startDateFormatted === endDateFormatted 
-      ? startDateFormatted 
-      : `${startDateFormatted}-${endDateFormatted}`
-    
+    const dateRange =
+      startDateFormatted === endDateFormatted
+        ? startDateFormatted
+        : `${startDateFormatted}-${endDateFormatted}`
+
     // Show toast
     toast.success(`Time off added for ${teacherName} (${dateRange})`)
-    
+
     // Navigate and refresh
     router.push('/time-off')
     router.refresh()
@@ -32,7 +33,10 @@ export default function NewTimeOffPage() {
   return (
     <div>
       <div className="mb-4">
-        <Link href="/time-off" className="inline-flex items-center text-sm text-muted-foreground hover:text-slate-900">
+        <Link
+          href="/time-off"
+          className="inline-flex items-center text-sm text-muted-foreground hover:text-slate-900"
+        >
           ← Back to Time Off
         </Link>
       </div>
@@ -43,10 +47,7 @@ export default function NewTimeOffPage() {
 
       <div className="max-w-2xl">
         <div className="rounded-lg bg-gray-50 border border-gray-200 p-6">
-          <TimeOffForm 
-            onSuccess={handleSuccess}
-            showBackLink={false}
-          />
+          <TimeOffForm onSuccess={handleSuccess} showBackLink={false} />
         </div>
       </div>
     </div>

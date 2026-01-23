@@ -28,4 +28,3 @@ describe('cn utility', () => {
     expect(cn({ foo: true, bar: false, baz: true })).toBe('foo baz')
   })
 })
-

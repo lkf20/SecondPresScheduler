@@ -12,10 +12,12 @@ export async function getTeachers() {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('staff')
-    .select(`
+    .select(
+      `
       *,
       staff_role_types (*)
-    `)
+    `
+    )
     .eq('is_teacher', true)
     .order('last_name', { ascending: true })
 
@@ -49,12 +51,12 @@ export async function createTeacher(teacher: {
   active?: boolean
 }) {
   const supabase = await createClient()
-  
+
   // Exclude id from the insert if it's undefined or empty
   const { id, ...teacherData } = teacher
   // Generate UUID if not provided
   const teacherId = id && id.trim() !== '' ? id : crypto.randomUUID()
-  
+
   const insertData: Partial<Staff> & { id: string } = {
     ...teacherData,
     id: teacherId,
@@ -63,12 +65,8 @@ export async function createTeacher(teacher: {
     is_sub: teacher.is_sub ?? false, // Preserve is_sub flag
     role_type_id: teacher.role_type_id, // Include role_type_id
   }
-  
-  const { data, error } = await supabase
-    .from('staff')
-    .insert(insertData)
-    .select()
-    .single()
+
+  const { data, error } = await supabase.from('staff').insert(insertData).select().single()
 
   if (error) throw error
   return data as Staff

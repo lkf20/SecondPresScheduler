@@ -31,7 +31,10 @@ interface AddTimeOffButtonProps {
   onClose?: () => void
 }
 
-export default function AddTimeOffButton({ timeOffRequestId = null, onClose }: AddTimeOffButtonProps = {}) {
+export default function AddTimeOffButton({
+  timeOffRequestId = null,
+  onClose,
+}: AddTimeOffButtonProps = {}) {
   const router = useRouter()
   // Initialize sheet as open if timeOffRequestId is provided (edit mode)
   const [isTimeOffSheetOpen, setIsTimeOffSheetOpen] = useState(!!timeOffRequestId)
@@ -41,7 +44,13 @@ export default function AddTimeOffButton({ timeOffRequestId = null, onClose }: A
   const [clearDraftOnMount, setClearDraftOnMount] = useState(!timeOffRequestId)
   const [editingRequestId, setEditingRequestId] = useState<string | null>(timeOffRequestId || null)
   const timeOffFormRef = useRef<{ reset: () => void }>(null)
-  const { activePanel, savePreviousPanel, restorePreviousPanel, setActivePanel, requestPanelClose } = usePanelManager()
+  const {
+    activePanel,
+    savePreviousPanel,
+    restorePreviousPanel,
+    setActivePanel,
+    requestPanelClose,
+  } = usePanelManager()
 
   // Update editingRequestId when prop changes (only for edit mode)
   useEffect(() => {
@@ -65,26 +74,27 @@ export default function AddTimeOffButton({ timeOffRequestId = null, onClose }: A
     }
     const startDateFormatted = formatDateForToast(startDate)
     const endDateFormatted = formatDateForToast(endDate)
-    const dateRange = startDateFormatted === endDateFormatted 
-      ? startDateFormatted 
-      : `${startDateFormatted}-${endDateFormatted}`
-    
+    const dateRange =
+      startDateFormatted === endDateFormatted
+        ? startDateFormatted
+        : `${startDateFormatted}-${endDateFormatted}`
+
     // Reset unsaved changes flag
     setHasUnsavedChanges(false)
-    
+
     // Reset editing state
     setEditingRequestId(null)
-    
+
     // Close the sheet
     setIsTimeOffSheetOpen(false)
-    
+
     // Show toast
     const action = editingRequestId ? 'updated' : 'added'
     toast.success(`Time off ${action} for ${teacherName} (${dateRange})`)
-    
+
     // Refresh the current page to update data
     router.refresh()
-    
+
     // Call onClose callback if provided
     if (onClose) {
       onClose()
@@ -165,12 +175,9 @@ export default function AddTimeOffButton({ timeOffRequestId = null, onClose }: A
     // This instance is for editing - render only the sheet, no button
     return (
       <>
-        <Sheet 
-          open={isTimeOffSheetOpen} 
-          onOpenChange={handleCloseSheet}
-        >
-          <SheetContent 
-            side="right" 
+        <Sheet open={isTimeOffSheetOpen} onOpenChange={handleCloseSheet}>
+          <SheetContent
+            side="right"
             showCloseButton={false}
             className={`w-full sm:max-w-2xl h-screen flex flex-col p-0 ${getPanelBackgroundClasses()}`}
           >
@@ -181,9 +188,7 @@ export default function AddTimeOffButton({ timeOffRequestId = null, onClose }: A
                     <SheetTitle className="text-3xl font-bold tracking-tight text-slate-900">
                       Edit Time Off Request
                     </SheetTitle>
-                    <SheetDescription>
-                      Update the time off request
-                    </SheetDescription>
+                    <SheetDescription>Update the time off request</SheetDescription>
                   </div>
                   <SheetClose asChild>
                     <button
@@ -196,7 +201,7 @@ export default function AddTimeOffButton({ timeOffRequestId = null, onClose }: A
                   </SheetClose>
                 </div>
               </SheetHeader>
-              <TimeOffForm 
+              <TimeOffForm
                 key={timeOffRequestId || 'new'}
                 ref={timeOffFormRef}
                 onSuccess={handleTimeOffSuccess}
@@ -240,12 +245,9 @@ export default function AddTimeOffButton({ timeOffRequestId = null, onClose }: A
         Add Time Off
       </Button>
 
-      <Sheet 
-        open={isTimeOffSheetOpen} 
-        onOpenChange={handleCloseSheet}
-      >
-        <SheetContent 
-          side="right" 
+      <Sheet open={isTimeOffSheetOpen} onOpenChange={handleCloseSheet}>
+        <SheetContent
+          side="right"
           showCloseButton={false}
           className={`w-full sm:max-w-2xl h-screen flex flex-col p-0 ${getPanelBackgroundClasses()}`}
         >
@@ -257,7 +259,9 @@ export default function AddTimeOffButton({ timeOffRequestId = null, onClose }: A
                     {editingRequestId ? 'Edit Time Off Request' : 'Add Time Off Request'}
                   </SheetTitle>
                   <SheetDescription>
-                    {editingRequestId ? 'Update the time off request' : 'Create a new time off request'}
+                    {editingRequestId
+                      ? 'Update the time off request'
+                      : 'Create a new time off request'}
                   </SheetDescription>
                 </div>
                 <SheetClose asChild>
@@ -271,7 +275,7 @@ export default function AddTimeOffButton({ timeOffRequestId = null, onClose }: A
                 </SheetClose>
               </div>
             </SheetHeader>
-            <TimeOffForm 
+            <TimeOffForm
               key={timeOffRequestId || 'new'}
               ref={timeOffFormRef}
               onSuccess={handleTimeOffSuccess}

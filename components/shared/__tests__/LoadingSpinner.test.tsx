@@ -38,6 +38,3 @@ describe('LoadingSpinner', () => {
     expect(spinner).toHaveClass('animate-spin')
   })
 })
-
-
-

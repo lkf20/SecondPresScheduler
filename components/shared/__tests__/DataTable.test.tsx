@@ -70,9 +70,7 @@ describe('DataTable', () => {
     })
 
     it('should render custom empty message', () => {
-      render(
-        <DataTable data={[]} columns={basicColumns} emptyMessage="No records found" />
-      )
+      render(<DataTable data={[]} columns={basicColumns} emptyMessage="No records found" />)
 
       expect(screen.getByText('No records found')).toBeInTheDocument()
     })
@@ -144,13 +142,11 @@ describe('DataTable', () => {
         active: true,
       }))
 
-      const { container } = render(
-        <DataTable data={largeData} columns={basicColumns} searchable />
-      )
+      const { container } = render(<DataTable data={largeData} columns={basicColumns} searchable />)
 
       // Navigate to page 2
       const buttons = container.querySelectorAll('button')
-      const nextButton = Array.from(buttons).find((btn) => !btn.disabled && btn !== buttons[0])
+      const nextButton = Array.from(buttons).find(btn => !btn.disabled && btn !== buttons[0])
       if (nextButton) {
         await user.click(nextButton)
         await waitFor(() => {
@@ -220,10 +216,9 @@ describe('DataTable', () => {
       await user.click(nameHeader)
 
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith(
-          expect.stringContaining('sort=name'),
-          { scroll: false }
-        )
+        expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('sort=name'), {
+          scroll: false,
+        })
       })
     })
   })
@@ -261,7 +256,7 @@ describe('DataTable', () => {
 
       // Find the next button (not disabled)
       const buttons = container.querySelectorAll('button')
-      const nextButton = Array.from(buttons).find((btn) => !btn.disabled && btn !== buttons[0])
+      const nextButton = Array.from(buttons).find(btn => !btn.disabled && btn !== buttons[0])
       if (nextButton) {
         await user.click(nextButton)
         await waitFor(() => {
@@ -283,7 +278,7 @@ describe('DataTable', () => {
 
       // Go to page 2 first
       const buttons = container.querySelectorAll('button')
-      const nextButton = Array.from(buttons).find((btn) => !btn.disabled && btn !== buttons[0])
+      const nextButton = Array.from(buttons).find(btn => !btn.disabled && btn !== buttons[0])
       if (nextButton) {
         await user.click(nextButton)
         await waitFor(() => {
@@ -313,7 +308,7 @@ describe('DataTable', () => {
 
       // Find the previous button by its disabled state and position
       const buttons = container.querySelectorAll('button')
-      const prevButton = Array.from(buttons).find((btn) => btn.disabled)
+      const prevButton = Array.from(buttons).find(btn => btn.disabled)
       expect(prevButton).toBeInTheDocument()
       expect(prevButton).toBeDisabled()
     })
@@ -331,14 +326,14 @@ describe('DataTable', () => {
 
       // Go to last page
       const buttons = container.querySelectorAll('button')
-      const nextButton = Array.from(buttons).find((btn) => !btn.disabled && btn !== buttons[0])
+      const nextButton = Array.from(buttons).find(btn => !btn.disabled && btn !== buttons[0])
       if (nextButton) {
         await user.click(nextButton)
 
         await waitFor(() => {
           const buttonsAfter = container.querySelectorAll('button')
           const nextButtonAfter = Array.from(buttonsAfter).find(
-            (btn) => !btn.disabled && btn !== buttonsAfter[0]
+            btn => !btn.disabled && btn !== buttonsAfter[0]
           )
           // On last page, next button should be disabled
           expect(nextButtonAfter).toBeUndefined()
@@ -365,9 +360,7 @@ describe('DataTable', () => {
       const user = userEvent.setup()
       const handleRowClick = jest.fn()
 
-      render(
-        <DataTable data={mockData} columns={basicColumns} onRowClick={handleRowClick} />
-      )
+      render(<DataTable data={mockData} columns={basicColumns} onRowClick={handleRowClick} />)
 
       const firstRow = screen.getByText('Alice').closest('tr')
       if (firstRow) {
@@ -394,9 +387,7 @@ describe('DataTable', () => {
     it('should apply cursor-pointer class when onRowClick is provided', () => {
       const handleRowClick = jest.fn()
 
-      render(
-        <DataTable data={mockData} columns={basicColumns} onRowClick={handleRowClick} />
-      )
+      render(<DataTable data={mockData} columns={basicColumns} onRowClick={handleRowClick} />)
 
       const firstRow = screen.getByText('Alice').closest('tr')
       expect(firstRow).toHaveClass('cursor-pointer')
@@ -409,7 +400,7 @@ describe('DataTable', () => {
         {
           key: 'name',
           header: 'Name',
-          cell: (row) => <strong>{row.name.toUpperCase()}</strong>,
+          cell: row => <strong>{row.name.toUpperCase()}</strong>,
         },
         { key: 'age', header: 'Age' },
       ]
@@ -480,9 +471,7 @@ describe('DataTable', () => {
     })
 
     it('should display "—" for undefined values', () => {
-      const dataWithUndefined: TestData[] = [
-        { id: '1', name: 'Test', age: 25, active: true },
-      ]
+      const dataWithUndefined: TestData[] = [{ id: '1', name: 'Test', age: 25, active: true }]
 
       render(<DataTable data={dataWithUndefined} columns={basicColumns} />)
 
@@ -490,9 +479,7 @@ describe('DataTable', () => {
     })
 
     it('should display "—" for empty strings', () => {
-      const dataWithEmpty: TestData[] = [
-        { id: '1', name: '', age: 25, active: true },
-      ]
+      const dataWithEmpty: TestData[] = [{ id: '1', name: '', age: 25, active: true }]
 
       render(<DataTable data={dataWithEmpty} columns={basicColumns} />)
 

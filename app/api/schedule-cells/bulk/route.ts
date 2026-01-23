@@ -7,7 +7,7 @@ import { validateRequest } from '@/lib/utils/validation'
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    
+
     // Validate request body
     const validation = validateRequest(bulkUpdateScheduleCellsSchema, body)
     if (!validation.success) {
@@ -17,10 +17,11 @@ export async function PUT(request: NextRequest) {
     const cells = await bulkUpdateScheduleCells(validation.data.updates)
     return NextResponse.json(cells)
   } catch (error) {
-    return createErrorResponse(error, 'Failed to bulk update schedule cells', 500, 'PUT /api/schedule-cells/bulk')
+    return createErrorResponse(
+      error,
+      'Failed to bulk update schedule cells',
+      500,
+      'PUT /api/schedule-cells/bulk'
+    )
   }
 }
-
-
-
-

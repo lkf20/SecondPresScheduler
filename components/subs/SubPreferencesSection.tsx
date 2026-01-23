@@ -89,13 +89,15 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
     }
   }
 
-  const handleQualificationsChange = async (qualifications: Array<{
-    qualification_id: string
-    level?: string | null
-    expires_on?: string | null
-    verified?: boolean | null
-    notes?: string | null
-  }>) => {
+  const handleQualificationsChange = async (
+    qualifications: Array<{
+      qualification_id: string
+      level?: string | null
+      expires_on?: string | null
+      verified?: boolean | null
+      notes?: string | null
+    }>
+  ) => {
     try {
       const response = await fetch(`/api/subs/${subId}/qualifications`, {
         method: 'PUT',
@@ -140,7 +142,7 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
     )
   }
 
-  const selectedClassIds = classPreferences.map((p) => p.class_id)
+  const selectedClassIds = classPreferences.map(p => p.class_id)
 
   return (
     <div className="space-y-8">

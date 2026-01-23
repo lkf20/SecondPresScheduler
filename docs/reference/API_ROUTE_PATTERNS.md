@@ -136,5 +136,3 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 - ✅ Time Slots routes - Updated
 - ✅ Days of Week routes - Updated
 - ⏳ Other routes - To be updated as needed
-
-

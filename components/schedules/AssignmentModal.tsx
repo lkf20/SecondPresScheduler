@@ -88,9 +88,11 @@ export default function AssignmentModal({
 
   // Fetch class-classroom mappings for this day/time
   useEffect(() => {
-    fetch(`/api/class-classroom-mappings?day_of_week_id=${data.day_of_week_id}&time_slot_id=${data.time_slot_id}`)
-      .then((r) => r.json())
-      .then((data) => setMappings(data as ClassClassroomMapping[]))
+    fetch(
+      `/api/class-classroom-mappings?day_of_week_id=${data.day_of_week_id}&time_slot_id=${data.time_slot_id}`
+    )
+      .then(r => r.json())
+      .then(data => setMappings(data as ClassClassroomMapping[]))
       .catch(console.error)
   }, [data.day_of_week_id, data.time_slot_id])
 
@@ -101,15 +103,18 @@ export default function AssignmentModal({
     const groups = new Map<string, ClassGroup>()
 
     // First, add existing assignments
-    data.assignments.forEach((assignment) => {
+    data.assignments.forEach(assignment => {
       // Use classroom_id as the key since teachers are now assigned to classrooms, not class groups
       const key = `${assignment.class_id || 'no-class'}-${assignment.classroom_id}`
-      
+
       if (assignment.teacher_id) {
         // Teacher assignment
         if (!groups.has(key)) {
           const classInfo = data.assignments.find(
-            (a) => !a.teacher_id && a.class_id === assignment.class_id && a.classroom_id === assignment.classroom_id
+            a =>
+              !a.teacher_id &&
+              a.class_id === assignment.class_id &&
+              a.classroom_id === assignment.classroom_id
           )
           if (classInfo && classInfo.class_id && classInfo.class_name) {
             groups.set(key, {
@@ -151,21 +156,23 @@ export default function AssignmentModal({
     })
 
     // Then, add configured mappings that don't have assignments yet
-    mappings.forEach((mapping) => {
+    mappings.forEach(mapping => {
       const key = `${mapping.class_id}-${mapping.classroom_id}`
       if (!groups.has(key)) {
         // Get enrollment for this class/day/time
         const enrollment = enrollments.find(
-          (e) => e.class_id === mapping.class_id && 
-                 e.day_of_week_id === data.day_of_week_id && 
-                 e.time_slot_id === data.time_slot_id
+          e =>
+            e.class_id === mapping.class_id &&
+            e.day_of_week_id === data.day_of_week_id &&
+            e.time_slot_id === data.time_slot_id
         )
-        
+
         // Get staffing rule for this class/day/time
         const rule = staffingRules.find(
-          (r) => r.class_id === mapping.class_id && 
-                 r.day_of_week_id === data.day_of_week_id && 
-                 r.time_slot_id === data.time_slot_id
+          r =>
+            r.class_id === mapping.class_id &&
+            r.day_of_week_id === data.day_of_week_id &&
+            r.time_slot_id === data.time_slot_id
         )
 
         groups.set(key, {
@@ -204,9 +211,7 @@ export default function AssignmentModal({
           ) : Array.from(classGroups.values()).length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <p className="mb-2">No classes or classrooms found.</p>
-              <p className="text-sm">
-                Please add classes and classrooms in Settings first.
-              </p>
+              <p className="text-sm">Please add classes and classrooms in Settings first.</p>
             </div>
           ) : (
             Array.from(classGroups.values())
@@ -216,8 +221,11 @@ export default function AssignmentModal({
                 if (classroomCompare !== 0) return classroomCompare
                 return a.class_name.localeCompare(b.class_name)
               })
-              .map((group) => (
-                <div key={`${group.class_id}-${group.classroom_id}`} className="border rounded-lg p-4 space-y-3">
+              .map(group => (
+                <div
+                  key={`${group.class_id}-${group.classroom_id}`}
+                  className="border rounded-lg p-4 space-y-3"
+                >
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="text-sm font-semibold text-muted-foreground">
@@ -245,7 +253,7 @@ export default function AssignmentModal({
                       classId={group.class_id}
                       classroomId={group.classroom_id}
                       selectedTeachers={group.assigned_teachers}
-                      onTeachersChange={(teachers) => {
+                      onTeachersChange={teachers => {
                         // TODO: Handle teacher assignment updates
                         console.log('Teachers changed:', teachers)
                       }}

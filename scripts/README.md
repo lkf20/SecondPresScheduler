@@ -3,6 +3,7 @@
 ## test-school-id-migration.sh
 
 Tests the school_id migration to verify:
+
 - All required tables have `school_id` columns
 - `school_id` columns are NOT NULL
 - Tables have data
@@ -72,6 +73,7 @@ bash scripts/test-school-id-migration.sh
 ### Troubleshooting
 
 If tests fail:
+
 1. Ensure migrations 045 and 046 have been applied: `supabase db push`
 2. Check that you're connected to the correct project: `supabase status`
 3. Verify your database connection: `supabase db execute "SELECT 1"`

@@ -13,10 +13,10 @@ interface AuditLogEntry {
  */
 export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
   const supabase = await createClient()
-  
+
   const schoolId = await getUserSchoolId()
   const userId = await getCurrentUserId()
-  
+
   if (!schoolId || !userId) {
     console.error('Cannot create audit log: missing school_id or user_id')
     return

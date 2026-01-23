@@ -5,20 +5,17 @@ type Staff = Database['public']['Tables']['staff']['Row']
 
 export async function getSubs() {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('staff')
-    .select('*')
-    .eq('is_sub', true)
+  const { data, error } = await supabase.from('staff').select('*').eq('is_sub', true)
 
   if (error) throw error
-  
+
   // Sort by display_name, falling back to first_name + last_name if display_name is null
   const sorted = (data as Staff[]).sort((a, b) => {
     const nameA = a.display_name || `${a.first_name} ${a.last_name}` || ''
     const nameB = b.display_name || `${b.first_name} ${b.last_name}` || ''
     return nameA.localeCompare(nameB)
   })
-  
+
   return sorted
 }
 
@@ -47,7 +44,7 @@ export async function createSub(sub: {
   active?: boolean
 }) {
   const supabase = await createClient()
-  
+
   // Exclude id from the insert if it's undefined or empty
   const { id, ...subData } = sub
   const insertData: Partial<Staff> & { id: string } = {
@@ -60,7 +57,7 @@ export async function createSub(sub: {
     is_teacher: sub.is_teacher ?? false, // Preserve is_teacher flag
     active: subData.active ?? true,
   } as Partial<Staff> & { id: string }
-  
+
   // Generate UUID if not provided
   if (id && id.trim() !== '') {
     insertData.id = id
@@ -68,12 +65,8 @@ export async function createSub(sub: {
     // Generate UUID - using crypto.randomUUID() which is available in Node.js
     insertData.id = crypto.randomUUID()
   }
-  
-  const { data, error } = await supabase
-    .from('staff')
-    .insert(insertData)
-    .select()
-    .single()
+
+  const { data, error } = await supabase.from('staff').insert(insertData).select().single()
 
   if (error) throw error
   return data as Staff

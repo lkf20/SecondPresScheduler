@@ -30,24 +30,27 @@ export default function ClassSelector({
 
   useEffect(() => {
     fetch('/api/class-groups')
-      .then((r) => r.json())
-      .then((data) => {
+      .then(r => r.json())
+      .then(data => {
         setClasses(data as ClassGroup[])
       })
       .catch(console.error)
   }, [])
 
   // Filter class groups based on allowed IDs
-  const availableClasses = allowedClassIds && allowedClassIds.length > 0
-    ? classes.filter((cls) => allowedClassIds.includes(cls.id))
-    : classes
+  const availableClasses =
+    allowedClassIds && allowedClassIds.length > 0
+      ? classes.filter(cls => allowedClassIds.includes(cls.id))
+      : classes
 
   return (
     <div className="space-y-2">
-      <Label htmlFor="class-select" className="text-base font-medium mb-6 block">Class Group</Label>
+      <Label htmlFor="class-select" className="text-base font-medium mb-6 block">
+        Class Group
+      </Label>
       <Select
         value={value || 'none'}
-        onValueChange={(val) => onChange(val === 'none' ? null : val)}
+        onValueChange={val => onChange(val === 'none' ? null : val)}
         disabled={disabled}
       >
         <SelectTrigger id="class-select">
@@ -55,7 +58,7 @@ export default function ClassSelector({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="none">None</SelectItem>
-          {availableClasses.map((cls) => (
+          {availableClasses.map(cls => (
             <SelectItem key={cls.id} value={cls.id}>
               {cls.name}
             </SelectItem>

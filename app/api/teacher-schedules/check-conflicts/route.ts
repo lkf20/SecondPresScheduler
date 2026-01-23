@@ -7,7 +7,7 @@ import { validateRequest } from '@/lib/utils/validation'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    
+
     // Validate request body
     const validation = validateRequest(checkConflictsSchema, body)
     if (!validation.success) {
@@ -35,14 +35,16 @@ export async function POST(request: NextRequest) {
     for (const check of checks) {
       const { data: conflictingSchedules, error } = await supabase
         .from('teacher_schedules')
-        .select(`
+        .select(
+          `
           id,
           classroom_id,
           classroom:classrooms(name),
           day_of_week:days_of_week(name),
           time_slot:time_slots(code),
           teacher:staff(first_name, last_name, display_name)
-        `)
+        `
+        )
         .eq('teacher_id', check.teacher_id)
         .eq('day_of_week_id', check.day_of_week_id)
         .eq('time_slot_id', check.time_slot_id)
@@ -57,11 +59,12 @@ export async function POST(request: NextRequest) {
       if (conflictingSchedules && conflictingSchedules.length > 0) {
         for (const schedule of conflictingSchedules) {
           const teacher = schedule.teacher as any
-          const teacherName = teacher?.display_name || 
-                            (teacher?.first_name && teacher?.last_name 
-                              ? `${teacher.first_name} ${teacher.last_name}` 
-                              : 'Unknown')
-          
+          const teacherName =
+            teacher?.display_name ||
+            (teacher?.first_name && teacher?.last_name
+              ? `${teacher.first_name} ${teacher.last_name}`
+              : 'Unknown')
+
           const classroom = schedule.classroom as any
           const dayOfWeek = schedule.day_of_week as any
           const timeSlot = schedule.time_slot as any
@@ -84,9 +87,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ conflicts })
   } catch (error) {
-    return createErrorResponse(error, 'Failed to check conflicts', 500, 'POST /api/teacher-schedules/check-conflicts')
+    return createErrorResponse(
+      error,
+      'Failed to check conflicts',
+      500,
+      'POST /api/teacher-schedules/check-conflicts'
+    )
   }
 }
-
-
-

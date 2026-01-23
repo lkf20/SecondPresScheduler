@@ -1,6 +1,6 @@
 /**
  * Tests for handling deletion and deactivation of entities
- * 
+ *
  * This test suite covers:
  * - Class groups (soft delete via is_active)
  * - Classrooms (soft delete via is_active)
@@ -9,23 +9,10 @@
  * - Error handling for entities with dependencies
  */
 
-import { 
-  deleteClassGroup, 
-  updateClassGroup,
-  getClassGroupById
-} from '../class-groups'
-import { 
-  deleteClassroom, 
-  updateClassroom 
-} from '../classrooms'
-import { 
-  deleteTeacher, 
-  updateTeacher 
-} from '../teachers'
-import { 
-  deleteSub, 
-  updateSub 
-} from '../subs'
+import { deleteClassGroup, updateClassGroup, getClassGroupById } from '../class-groups'
+import { deleteClassroom, updateClassroom } from '../classrooms'
+import { deleteTeacher, updateTeacher } from '../teachers'
+import { deleteSub, updateSub } from '../subs'
 import { createClient } from '@/lib/supabase/server'
 
 // Mock Supabase client

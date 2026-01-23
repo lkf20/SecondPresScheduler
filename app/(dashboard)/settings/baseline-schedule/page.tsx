@@ -39,23 +39,31 @@ export default function BaselineSchedulePage() {
   const focusDayId = searchParams.get('day_of_week_id')
   const focusTimeSlotId = searchParams.get('time_slot_id')
   const hasAppliedFocusRef = useRef(false)
-  
+
   // Always use current week for baseline schedule (no week picker)
   const weekStartISO = getWeekStartISO()
-  
+
   // React Query hooks
-  const { data: scheduleData = [], isLoading: isLoadingSchedule, error: scheduleError } = useWeeklySchedule(weekStartISO)
+  const {
+    data: scheduleData = [],
+    isLoading: isLoadingSchedule,
+    error: scheduleError,
+  } = useWeeklySchedule(weekStartISO)
   const { data: scheduleSettings, isLoading: isLoadingSettings } = useScheduleSettings()
   const { data: filterOptions, isLoading: isLoadingFilters } = useFilterOptions()
-  
+
   const selectedDayIds = scheduleSettings?.selected_day_ids || []
   const availableDays = filterOptions?.days || []
   const availableTimeSlots = filterOptions?.timeSlots || []
   const availableClassrooms = filterOptions?.classrooms || []
-  
+
   const loading = isLoadingSchedule || isLoadingSettings || isLoadingFilters
-  const error = scheduleError ? (scheduleError instanceof Error ? scheduleError.message : 'Failed to load baseline schedule') : null
-  
+  const error = scheduleError
+    ? scheduleError instanceof Error
+      ? scheduleError.message
+      : 'Failed to load baseline schedule'
+    : null
+
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
   const [filters, setFilters] = useState<FilterState | null>(() => {
     // Load filters from localStorage on mount (using separate key for baseline schedule)
@@ -83,7 +91,12 @@ export default function BaselineSchedulePage() {
   const hasInitializedFilters = useRef(false)
   useEffect(() => {
     if (hasInitializedFilters.current) return
-    if (filters === null && availableDays.length > 0 && availableTimeSlots.length > 0 && availableClassrooms.length > 0) {
+    if (
+      filters === null &&
+      availableDays.length > 0 &&
+      availableTimeSlots.length > 0 &&
+      availableClassrooms.length > 0
+    ) {
       hasInitializedFilters.current = true
       // Load from localStorage again in case it was set between renders
       if (typeof window !== 'undefined') {
@@ -117,7 +130,13 @@ export default function BaselineSchedulePage() {
         layout: 'days-x-classrooms', // Default layout
       })
     }
-  }, [filters, availableDays.length, availableTimeSlots.length, availableClassrooms.length, selectedDayIds])
+  }, [
+    filters,
+    availableDays.length,
+    availableTimeSlots.length,
+    availableClassrooms.length,
+    selectedDayIds,
+  ])
 
   useEffect(() => {
     if (!focusClassroomId || !focusDayId || !focusTimeSlotId) return
@@ -130,7 +149,7 @@ export default function BaselineSchedulePage() {
       return
     }
 
-    setFilters((prev) => ({
+    setFilters(prev => ({
       selectedDayIds: [focusDayId],
       selectedTimeSlotIds: [focusTimeSlotId],
       selectedClassroomIds: [focusClassroomId],
@@ -163,7 +182,7 @@ export default function BaselineSchedulePage() {
       }
     }
   }, [filters])
-  
+
   // Handle refresh - invalidate React Query cache
   const handleRefresh = () => {
     if (schoolId) {
@@ -355,18 +374,22 @@ export default function BaselineSchedulePage() {
             selectedDayIdsFromSettings={selectedDayIds}
             hideStaffSection={true}
             slotCounts={slotCounts}
-            initialFilters={filters ? {
-              selectedDayIds: filters.selectedDayIds,
-              selectedTimeSlotIds: filters.selectedTimeSlotIds,
-              selectedClassroomIds: filters.selectedClassroomIds,
-              displayFilters: filters.displayFilters,
-              displayMode: filters.displayMode,
-              layout: filters.layout,
-            } : {
-              selectedDayIds: selectedDayIds,
-              displayMode: 'permanent-only',
-              layout: 'days-x-classrooms',
-            }}
+            initialFilters={
+              filters
+                ? {
+                    selectedDayIds: filters.selectedDayIds,
+                    selectedTimeSlotIds: filters.selectedTimeSlotIds,
+                    selectedClassroomIds: filters.selectedClassroomIds,
+                    displayFilters: filters.displayFilters,
+                    displayMode: filters.displayMode,
+                    layout: filters.layout,
+                  }
+                : {
+                    selectedDayIds: selectedDayIds,
+                    displayMode: 'permanent-only',
+                    layout: 'days-x-classrooms',
+                  }
+            }
           />
         </>
       )}

@@ -33,7 +33,9 @@ export default function ConflictBanner({
   onApply,
   onCancel,
 }: ConflictBannerProps) {
-  const [selectedResolutions, setSelectedResolutions] = useState<Map<string, ConflictResolution>>(new Map())
+  const [selectedResolutions, setSelectedResolutions] = useState<Map<string, ConflictResolution>>(
+    new Map()
+  )
 
   const handleResolutionChange = (conflictId: string, resolution: ConflictResolution) => {
     const newResolutions = new Map(selectedResolutions)
@@ -49,7 +51,9 @@ export default function ConflictBanner({
     onApply()
   }
 
-  const allResolved = conflicts.every((conflict) => selectedResolutions.has(conflict.conflicting_schedule_id))
+  const allResolved = conflicts.every(conflict =>
+    selectedResolutions.has(conflict.conflicting_schedule_id)
+  )
 
   return (
     <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-4">
@@ -65,7 +69,7 @@ export default function ConflictBanner({
             </p>
           </div>
 
-          {conflicts.map((conflict) => {
+          {conflicts.map(conflict => {
             const conflictId = conflict.conflicting_schedule_id
             const selectedResolution = selectedResolutions.get(conflictId)
 
@@ -78,15 +82,12 @@ export default function ConflictBanner({
                   <span className="font-medium text-gray-900">
                     {conflict.teacher_name || 'Unknown teacher'}
                   </span>
-                  <span className="text-gray-600">
-                    {' '}is already scheduled{' '}
-                  </span>
+                  <span className="text-gray-600"> is already scheduled </span>
                   <span className="font-medium text-gray-900">
-                    {conflict.day_of_week_name || 'Unknown day'} {conflict.time_slot_code || 'Unknown time'}
+                    {conflict.day_of_week_name || 'Unknown day'}{' '}
+                    {conflict.time_slot_code || 'Unknown time'}
                   </span>
-                  <span className="text-gray-600">
-                    {' '}in{' '}
-                  </span>
+                  <span className="text-gray-600"> in </span>
                   <span className="font-medium text-gray-900">
                     {conflict.conflicting_classroom_name || 'Unknown classroom'}
                   </span>
@@ -145,11 +146,7 @@ export default function ConflictBanner({
             >
               Apply selection
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onCancel}
-            >
+            <Button type="button" variant="outline" onClick={onCancel}>
               Cancel
             </Button>
           </div>
@@ -158,7 +155,3 @@ export default function ConflictBanner({
     </div>
   )
 }
-
-
-
-

@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const supabase = await createClient()
@@ -50,10 +47,7 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await request.json()
@@ -66,10 +60,7 @@ export async function PUT(
     const supabase = await createClient()
 
     // Delete existing weekly availability for this sub
-    const { error: deleteError } = await supabase
-      .from('sub_availability')
-      .delete()
-      .eq('sub_id', id)
+    const { error: deleteError } = await supabase.from('sub_availability').delete().eq('sub_id', id)
 
     if (deleteError) throw deleteError
 
@@ -95,6 +86,3 @@ export async function PUT(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
-
-
-

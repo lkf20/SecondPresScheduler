@@ -3,14 +3,18 @@ import { createClient } from '@/lib/supabase/server'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { resolveConflictSchema } from '@/lib/validations/teacher-schedules'
 import { validateRequest } from '@/lib/utils/validation'
-import { createTeacherSchedule, deleteTeacherSchedule, updateTeacherSchedule } from '@/lib/api/schedules'
+import {
+  createTeacherSchedule,
+  deleteTeacherSchedule,
+  updateTeacherSchedule,
+} from '@/lib/api/schedules'
 import { createTeacherScheduleAuditLog } from '@/lib/api/audit-logs'
 import type { TeacherSchedule } from '@/types/api'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    
+
     // Validate request body
     const validation = validateRequest(resolveConflictSchema, body)
     if (!validation.success) {
@@ -31,7 +35,9 @@ export async function POST(request: NextRequest) {
     // Fetch the conflicting schedule(s) to get full details for audit log
     const { data: conflictingSchedules, error: fetchError } = await supabase
       .from('teacher_schedules')
-      .select('*, classroom:classrooms(name), day_of_week:days_of_week(name), time_slot:time_slots(code)')
+      .select(
+        '*, classroom:classrooms(name), day_of_week:days_of_week(name), time_slot:time_slots(code)'
+      )
       .eq('teacher_id', teacher_id)
       .eq('day_of_week_id', day_of_week_id)
       .eq('time_slot_id', time_slot_id)
@@ -43,10 +49,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!conflictingSchedules || conflictingSchedules.length === 0) {
-      return NextResponse.json(
-        { error: 'No conflicting schedules found' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'No conflicting schedules found' }, { status: 400 })
     }
 
     const results: {
@@ -59,7 +62,7 @@ export async function POST(request: NextRequest) {
       case 'remove_other': {
         // Delete all conflicting schedules, create new one
         const deletedIds: string[] = []
-        
+
         for (const conflictingSchedule of conflictingSchedules) {
           await deleteTeacherSchedule(conflictingSchedule.id)
           deletedIds.push(conflictingSchedule.id)
@@ -201,9 +204,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(results, { status: 200 })
   } catch (error) {
-    return createErrorResponse(error, 'Failed to resolve conflict', 500, 'POST /api/teacher-schedules/resolve-conflict')
+    return createErrorResponse(
+      error,
+      'Failed to resolve conflict',
+      500,
+      'POST /api/teacher-schedules/resolve-conflict'
+    )
   }
 }
-
-
-

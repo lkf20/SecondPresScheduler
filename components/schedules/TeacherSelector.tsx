@@ -31,19 +31,19 @@ export default function TeacherSelector({
   const [teachers, setTeachers] = useState<Staff[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
-    new Set(selectedTeachers.map((t) => t.teacher_id || t.id))
+    new Set(selectedTeachers.map(t => t.teacher_id || t.id))
   )
 
   useEffect(() => {
     fetch('/api/teachers')
-      .then((r) => r.json())
-      .then((data) => {
-        setTeachers((data as Staff[]).filter((t) => t.is_teacher && t.active))
+      .then(r => r.json())
+      .then(data => {
+        setTeachers((data as Staff[]).filter(t => t.is_teacher && t.active))
       })
       .catch(console.error)
   }, [])
 
-  const filteredTeachers = teachers.filter((teacher) => {
+  const filteredTeachers = teachers.filter(teacher => {
     const name = teacher.display_name || `${teacher.first_name} ${teacher.last_name}`
     return name.toLowerCase().includes(searchQuery.toLowerCase())
   })
@@ -58,8 +58,8 @@ export default function TeacherSelector({
     setSelectedIds(newSelected)
 
     const selected = filteredTeachers
-      .filter((t) => newSelected.has(t.id))
-      .map((t) => ({
+      .filter(t => newSelected.has(t.id))
+      .map(t => ({
         id: '', // Will be set when saved
         name: t.display_name || `${t.first_name} ${t.last_name}`,
         teacher_id: t.id,
@@ -71,21 +71,19 @@ export default function TeacherSelector({
     handleToggle(teacherId, false)
   }
 
-  const selectedTeachersList = teachers.filter((t) => selectedIds.has(t.id))
+  const selectedTeachersList = teachers.filter(t => selectedIds.has(t.id))
 
   return (
     <div className="space-y-3">
       {/* Selected teachers chips */}
       {selectedTeachersList.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {selectedTeachersList.map((teacher) => (
+          {selectedTeachersList.map(teacher => (
             <div
               key={teacher.id}
               className="flex items-center gap-1 bg-primary/10 text-primary rounded px-2 py-1 text-sm"
             >
-              <span>
-                {teacher.display_name || `${teacher.first_name} ${teacher.last_name}`}
-              </span>
+              <span>{teacher.display_name || `${teacher.first_name} ${teacher.last_name}`}</span>
               <button
                 onClick={() => handleRemove(teacher.id)}
                 className="hover:bg-primary/20 rounded"
@@ -101,19 +99,17 @@ export default function TeacherSelector({
       <Input
         placeholder="Search teachers..."
         value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
+        onChange={e => setSearchQuery(e.target.value)}
         className="w-full"
       />
 
       {/* Teacher list */}
       <div className="border rounded-md max-h-48 overflow-y-auto">
         {filteredTeachers.length === 0 ? (
-          <div className="p-4 text-sm text-muted-foreground text-center">
-            No teachers found
-          </div>
+          <div className="p-4 text-sm text-muted-foreground text-center">No teachers found</div>
         ) : (
           <div className="p-2 space-y-1">
-            {filteredTeachers.map((teacher) => {
+            {filteredTeachers.map(teacher => {
               const isSelected = selectedIds.has(teacher.id)
               const name = teacher.display_name || `${teacher.first_name} ${teacher.last_name}`
               return (
@@ -124,7 +120,7 @@ export default function TeacherSelector({
                 >
                   <Checkbox
                     checked={isSelected}
-                    onCheckedChange={(checked) => handleToggle(teacher.id, checked === true)}
+                    onCheckedChange={checked => handleToggle(teacher.id, checked === true)}
                   />
                   <Label className="cursor-pointer flex-1">{name}</Label>
                 </div>

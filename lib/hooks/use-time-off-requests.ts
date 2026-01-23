@@ -29,7 +29,9 @@ type TimeOffRequestsResponse = {
   }
 }
 
-async function fetchTimeOffRequests(params?: TimeOffRequestsQueryParams): Promise<TimeOffRequestsResponse> {
+async function fetchTimeOffRequests(
+  params?: TimeOffRequestsQueryParams
+): Promise<TimeOffRequestsResponse> {
   const searchParams = new URLSearchParams()
   if (params?.statuses) {
     searchParams.set('status', params.statuses.join(','))
@@ -46,16 +48,21 @@ async function fetchTimeOffRequests(params?: TimeOffRequestsQueryParams): Promis
 
   const url = `/api/time-off-requests${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
   const response = await fetch(url)
-  
+
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Failed to fetch time off requests' }))
+    const error = await response
+      .json()
+      .catch(() => ({ error: 'Failed to fetch time off requests' }))
     throw new Error(error.error || 'Failed to fetch time off requests')
   }
-  
+
   return response.json()
 }
 
-export function useTimeOffRequests(params?: TimeOffRequestsQueryParams, initialData?: TimeOffRequestsResponse) {
+export function useTimeOffRequests(
+  params?: TimeOffRequestsQueryParams,
+  initialData?: TimeOffRequestsResponse
+) {
   const schoolId = useSchool()
 
   return useQuery({

@@ -26,9 +26,7 @@ export default function AppearancePage() {
             <Palette className="h-5 w-5 text-muted-foreground" />
             <CardTitle>Theme</CardTitle>
           </div>
-          <CardDescription>
-            Choose a color theme for the application
-          </CardDescription>
+          <CardDescription>Choose a color theme for the application</CardDescription>
         </CardHeader>
         <CardContent>
           <RadioGroup
@@ -55,7 +53,8 @@ export default function AppearancePage() {
                   Accented
                 </Label>
                 <p className="text-sm text-muted-foreground">
-                  Dark navy navigation panel with teal/turquoise primary action buttons. Modern and distinctive.
+                  Dark navy navigation panel with teal/turquoise primary action buttons. Modern and
+                  distinctive.
                 </p>
               </div>
             </div>

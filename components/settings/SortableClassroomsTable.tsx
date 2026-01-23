@@ -50,14 +50,9 @@ interface SortableClassroomsTableProps {
 }
 
 function SortableRow({ classroom }: { classroom: Classroom }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: classroom.id })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: classroom.id,
+  })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -66,11 +61,7 @@ function SortableRow({ classroom }: { classroom: Classroom }) {
   }
 
   return (
-    <TableRow
-      ref={setNodeRef}
-      style={style}
-      className={cn(isDragging && 'bg-muted')}
-    >
+    <TableRow ref={setNodeRef} style={style} className={cn(isDragging && 'bg-muted')}>
       <TableCell className="w-10">
         <button
           {...attributes}
@@ -84,34 +75,31 @@ function SortableRow({ classroom }: { classroom: Classroom }) {
       <TableCell>
         <div className="flex items-center gap-2">
           {!classroom.is_active && (
-            <Badge variant="secondary" className="text-xs">Inactive</Badge>
+            <Badge variant="secondary" className="text-xs">
+              Inactive
+            </Badge>
           )}
           <Link
             href={`/settings/classrooms/${classroom.id}`}
-            className={cn(
-              "hover:underline",
-              !classroom.is_active && "text-muted-foreground"
-            )}
+            className={cn('hover:underline', !classroom.is_active && 'text-muted-foreground')}
           >
             {classroom.name}
           </Link>
         </div>
       </TableCell>
-                    <TableCell>{classroom.capacity || '—'}</TableCell>
-                    <TableCell className="max-w-md">
-                      {classroom.allowed_classes_display || 'None'}
-                    </TableCell>
-                    <TableCell>
-                      {classroom.color ? (
-                        <div
-                          className="w-8 h-8 rounded"
-                          style={{ backgroundColor: classroom.color }}
-                          title={classroom.color}
-                        />
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
+      <TableCell>{classroom.capacity || '—'}</TableCell>
+      <TableCell className="max-w-md">{classroom.allowed_classes_display || 'None'}</TableCell>
+      <TableCell>
+        {classroom.color ? (
+          <div
+            className="w-8 h-8 rounded"
+            style={{ backgroundColor: classroom.color }}
+            title={classroom.color}
+          />
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </TableCell>
     </TableRow>
   )
 }
@@ -146,8 +134,8 @@ export default function SortableClassroomsTable({
     const { active, over } = event
 
     if (over && active.id !== over.id) {
-      const oldIndex = classrooms.findIndex((c) => c.id === active.id)
-      const newIndex = classrooms.findIndex((c) => c.id === over.id)
+      const oldIndex = classrooms.findIndex(c => c.id === active.id)
+      const newIndex = classrooms.findIndex(c => c.id === over.id)
 
       const newClassrooms = arrayMove(classrooms, oldIndex, newIndex)
 
@@ -163,14 +151,14 @@ export default function SortableClassroomsTable({
       setIsSaving(true)
       try {
         // Only update classrooms whose order actually changed
-        const orderChanged = updatedClassrooms.filter((classroom) => {
-          const original = initialClassrooms.find((c) => c.id === classroom.id)
+        const orderChanged = updatedClassrooms.filter(classroom => {
+          const original = initialClassrooms.find(c => c.id === classroom.id)
           return original?.order !== classroom.order
         })
 
         if (orderChanged.length > 0) {
           await Promise.all(
-            orderChanged.map((classroom) =>
+            orderChanged.map(classroom =>
               fetch(`/api/classrooms/${classroom.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -191,7 +179,7 @@ export default function SortableClassroomsTable({
   }
 
   // Filter classrooms by search and active status
-  const filteredClassrooms = classrooms.filter((c) => {
+  const filteredClassrooms = classrooms.filter(c => {
     const matchesSearch = !search || c.name.toLowerCase().includes(search.toLowerCase())
     const matchesActiveFilter = showInactive || c.is_active !== false
     return matchesSearch && matchesActiveFilter
@@ -205,41 +193,31 @@ export default function SortableClassroomsTable({
           <Input
             placeholder="Search classrooms..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={e => setSearch(e.target.value)}
             className="pl-8"
           />
         </div>
         <div className="flex items-center gap-2">
-          <Switch
-            id="show-inactive"
-            checked={showInactive}
-            onCheckedChange={setShowInactive}
-          />
+          <Switch id="show-inactive" checked={showInactive} onCheckedChange={setShowInactive} />
           <Label htmlFor="show-inactive" className="text-sm cursor-pointer">
             Show inactive
           </Label>
         </div>
-        {isSaving && (
-          <span className="text-sm text-muted-foreground">Saving...</span>
-        )}
+        {isSaving && <span className="text-sm text-muted-foreground">Saving...</span>}
       </div>
 
       {isMounted ? (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <div className="rounded-md border">
             <Table>
               <TableHeader>
-              <TableRow>
-                <TableHead className="w-10"></TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Capacity</TableHead>
-                <TableHead>Allowed Class Groups</TableHead>
-                <TableHead>Color</TableHead>
-              </TableRow>
+                <TableRow>
+                  <TableHead className="w-10"></TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Capacity</TableHead>
+                  <TableHead>Allowed Class Groups</TableHead>
+                  <TableHead>Color</TableHead>
+                </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredClassrooms.length === 0 ? (
@@ -250,10 +228,10 @@ export default function SortableClassroomsTable({
                   </TableRow>
                 ) : (
                   <SortableContext
-                    items={filteredClassrooms.map((c) => c.id)}
+                    items={filteredClassrooms.map(c => c.id)}
                     strategy={verticalListSortingStrategy}
                   >
-                    {filteredClassrooms.map((classroom) => (
+                    {filteredClassrooms.map(classroom => (
                       <SortableRow key={classroom.id} classroom={classroom} />
                     ))}
                   </SortableContext>
@@ -282,7 +260,7 @@ export default function SortableClassroomsTable({
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredClassrooms.map((classroom) => (
+                filteredClassrooms.map(classroom => (
                   <TableRow key={classroom.id}>
                     <TableCell className="w-10">
                       <div className="p-1">
@@ -292,13 +270,15 @@ export default function SortableClassroomsTable({
                     <TableCell>
                       <div className="flex items-center gap-2">
                         {!classroom.is_active && (
-                          <Badge variant="secondary" className="text-xs">Inactive</Badge>
+                          <Badge variant="secondary" className="text-xs">
+                            Inactive
+                          </Badge>
                         )}
                         <Link
                           href={`/settings/classrooms/${classroom.id}`}
                           className={cn(
-                            "hover:underline",
-                            !classroom.is_active && "text-muted-foreground"
+                            'hover:underline',
+                            !classroom.is_active && 'text-muted-foreground'
                           )}
                         >
                           {classroom.name}

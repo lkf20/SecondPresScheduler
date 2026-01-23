@@ -64,7 +64,8 @@ export async function POST(request: NextRequest) {
       }
 
       // Track by name
-      const nameKey = `${(teacher.first_name || '').toLowerCase().trim()} ${(teacher.last_name || '').toLowerCase().trim()}`.trim()
+      const nameKey =
+        `${(teacher.first_name || '').toLowerCase().trim()} ${(teacher.last_name || '').toLowerCase().trim()}`.trim()
       if (nameKey) {
         if (!csvNameMap.has(nameKey)) {
           csvNameMap.set(nameKey, [])
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
       // Check email match
       if (teacher.email && teacher.email.trim()) {
         const emailKey = teacher.email.toLowerCase().trim()
-        
+
         // Check within CSV
         const csvEmailMatches = csvEmailMap.get(emailKey) || []
         if (csvEmailMatches.length > 1) {
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
 
         // Check against database
         const dbMatch = existingTeachers?.find(
-          (et) => et.email && et.email.toLowerCase().trim() === emailKey
+          et => et.email && et.email.toLowerCase().trim() === emailKey
         )
         if (dbMatch) {
           matchType = 'email'
@@ -104,8 +105,9 @@ export async function POST(request: NextRequest) {
 
       // Check name match (if no email match or email not provided)
       if (!existingTeacher) {
-        const nameKey = `${(teacher.first_name || '').toLowerCase().trim()} ${(teacher.last_name || '').toLowerCase().trim()}`.trim()
-        
+        const nameKey =
+          `${(teacher.first_name || '').toLowerCase().trim()} ${(teacher.last_name || '').toLowerCase().trim()}`.trim()
+
         if (nameKey) {
           // Check within CSV
           const csvNameMatches = csvNameMap.get(nameKey) || []
@@ -117,12 +119,11 @@ export async function POST(request: NextRequest) {
           }
 
           // Check against database
-          const dbMatch = existingTeachers?.find(
-            (et) => {
-              const etNameKey = `${(et.first_name || '').toLowerCase().trim()} ${(et.last_name || '').toLowerCase().trim()}`.trim()
-              return etNameKey === nameKey
-            }
-          )
+          const dbMatch = existingTeachers?.find(et => {
+            const etNameKey =
+              `${(et.first_name || '').toLowerCase().trim()} ${(et.last_name || '').toLowerCase().trim()}`.trim()
+            return etNameKey === nameKey
+          })
           if (dbMatch) {
             matchType = matchType === 'email' ? 'both' : 'name'
             existingTeacher = dbMatch
@@ -133,17 +134,17 @@ export async function POST(request: NextRequest) {
       // If we have both email and name matches, check if they're the same teacher
       if (teacher.email && teacher.email.trim()) {
         const emailKey = teacher.email.toLowerCase().trim()
-        const nameKey = `${(teacher.first_name || '').toLowerCase().trim()} ${(teacher.last_name || '').toLowerCase().trim()}`.trim()
-        
+        const nameKey =
+          `${(teacher.first_name || '').toLowerCase().trim()} ${(teacher.last_name || '').toLowerCase().trim()}`.trim()
+
         const emailMatch = existingTeachers?.find(
-          (et) => et.email && et.email.toLowerCase().trim() === emailKey
+          et => et.email && et.email.toLowerCase().trim() === emailKey
         )
-        const nameMatch = existingTeachers?.find(
-          (et) => {
-            const etNameKey = `${(et.first_name || '').toLowerCase().trim()} ${(et.last_name || '').toLowerCase().trim()}`.trim()
-            return etNameKey === nameKey
-          }
-        )
+        const nameMatch = existingTeachers?.find(et => {
+          const etNameKey =
+            `${(et.first_name || '').toLowerCase().trim()} ${(et.last_name || '').toLowerCase().trim()}`.trim()
+          return etNameKey === nameKey
+        })
 
         if (emailMatch && nameMatch && emailMatch.id === nameMatch.id) {
           matchType = 'both'
@@ -157,13 +158,13 @@ export async function POST(request: NextRequest) {
         }
       } else {
         // No email, check name only
-        const nameKey = `${(teacher.first_name || '').toLowerCase().trim()} ${(teacher.last_name || '').toLowerCase().trim()}`.trim()
-        const nameMatch = existingTeachers?.find(
-          (et) => {
-            const etNameKey = `${(et.first_name || '').toLowerCase().trim()} ${(et.last_name || '').toLowerCase().trim()}`.trim()
-            return etNameKey === nameKey
-          }
-        )
+        const nameKey =
+          `${(teacher.first_name || '').toLowerCase().trim()} ${(teacher.last_name || '').toLowerCase().trim()}`.trim()
+        const nameMatch = existingTeachers?.find(et => {
+          const etNameKey =
+            `${(et.first_name || '').toLowerCase().trim()} ${(et.last_name || '').toLowerCase().trim()}`.trim()
+          return etNameKey === nameKey
+        })
         if (nameMatch) {
           matchType = 'name'
           existingTeacher = nameMatch
@@ -176,7 +177,8 @@ export async function POST(request: NextRequest) {
         const emailMatches = csvEmailMap.get(teacher.email.toLowerCase().trim()) || []
         withinCsv.push(...emailMatches.filter(i => i !== csvIndex))
       }
-      const nameKey = `${(teacher.first_name || '').toLowerCase().trim()} ${(teacher.last_name || '').toLowerCase().trim()}`.trim()
+      const nameKey =
+        `${(teacher.first_name || '').toLowerCase().trim()} ${(teacher.last_name || '').toLowerCase().trim()}`.trim()
       if (nameKey) {
         const nameMatches = csvNameMap.get(nameKey) || []
         const nameDups = nameMatches.filter(i => i !== csvIndex && !withinCsv.includes(i))

@@ -42,9 +42,7 @@ export default function SubCardHeader({
       {showCoverage && (
         <div className="text-right flex flex-col items-end">
           {isDeclined ? (
-            <p className="text-xs text-muted-foreground">
-              Declined all shifts
-            </p>
+            <p className="text-xs text-muted-foreground">Declined all shifts</p>
           ) : (
             <>
               <div className="mb-1.5">

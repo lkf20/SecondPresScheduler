@@ -62,14 +62,14 @@ export default function DuplicateResolutionDialog({
   onCancel,
 }: DuplicateResolutionDialogProps) {
   const [resolutions, setResolutions] = useState<Map<number, 'keep' | 'skip' | 'replace'>>(
-    new Map(duplicates.map((d) => [d.csvIndex, d.existingTeacher ? 'replace' : 'keep']))
+    new Map(duplicates.map(d => [d.csvIndex, d.existingTeacher ? 'replace' : 'keep']))
   )
   const [bulkAction, setBulkAction] = useState<'keep' | 'skip' | 'replace' | null>(null)
 
   const handleBulkAction = (action: 'keep' | 'skip' | 'replace') => {
     setBulkAction(action)
     const newResolutions = new Map<number, 'keep' | 'skip' | 'replace'>()
-    duplicates.forEach((dup) => {
+    duplicates.forEach(dup => {
       newResolutions.set(dup.csvIndex, action)
     })
     setResolutions(newResolutions)
@@ -92,7 +92,8 @@ export default function DuplicateResolutionDialog({
         <DialogHeader>
           <DialogTitle>Duplicate Teachers Detected</DialogTitle>
           <DialogDescription>
-            {duplicates.length} duplicate{duplicates.length !== 1 ? 's' : ''} found. Choose how to handle each one.
+            {duplicates.length} duplicate{duplicates.length !== 1 ? 's' : ''} found. Choose how to
+            handle each one.
           </DialogDescription>
         </DialogHeader>
 
@@ -141,12 +142,13 @@ export default function DuplicateResolutionDialog({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {duplicates.map((dup) => {
+                {duplicates.map(dup => {
                   const csvName = `${dup.csvTeacher.first_name} ${dup.csvTeacher.last_name}`.trim()
-                  const existingName = dup.existingTeacher 
+                  const existingName = dup.existingTeacher
                     ? `${dup.existingTeacher.first_name} ${dup.existingTeacher.last_name}`.trim()
                     : 'N/A'
-                  const resolution = resolutions.get(dup.csvIndex) || (dup.existingTeacher ? 'replace' : 'keep')
+                  const resolution =
+                    resolutions.get(dup.csvIndex) || (dup.existingTeacher ? 'replace' : 'keep')
 
                   return (
                     <TableRow key={dup.csvIndex}>
@@ -180,39 +182,56 @@ export default function DuplicateResolutionDialog({
                       <TableCell>
                         <div className="flex items-center gap-1 text-xs">
                           <AlertCircle className="h-3 w-3" />
-                          {dup.matchType === 'both' ? 'Email & Name' : dup.matchType === 'email' ? 'Email' : 'Name'}
+                          {dup.matchType === 'both'
+                            ? 'Email & Name'
+                            : dup.matchType === 'email'
+                              ? 'Email'
+                              : 'Name'}
                         </div>
                         {dup.withinCsv && dup.withinCsv.length > 0 && (
                           <div className="text-xs text-yellow-600 mt-1">
-                            Also matches CSV row{dup.withinCsv.length !== 1 ? 's' : ''}: {dup.withinCsv.map(i => i + 2).join(', ')}
+                            Also matches CSV row{dup.withinCsv.length !== 1 ? 's' : ''}:{' '}
+                            {dup.withinCsv.map(i => i + 2).join(', ')}
                           </div>
                         )}
                       </TableCell>
                       <TableCell>
                         <RadioGroup
                           value={resolution}
-                          onValueChange={(value) =>
-                            handleIndividualChange(dup.csvIndex, value as 'keep' | 'skip' | 'replace')
+                          onValueChange={value =>
+                            handleIndividualChange(
+                              dup.csvIndex,
+                              value as 'keep' | 'skip' | 'replace'
+                            )
                           }
                         >
                           <div className="space-y-2">
                             {dup.existingTeacher && (
                               <div className="flex items-center space-x-2">
                                 <RadioGroupItem value="replace" id={`replace-${dup.csvIndex}`} />
-                                <Label htmlFor={`replace-${dup.csvIndex}`} className="text-sm font-normal cursor-pointer">
+                                <Label
+                                  htmlFor={`replace-${dup.csvIndex}`}
+                                  className="text-sm font-normal cursor-pointer"
+                                >
                                   Replace Existing
                                 </Label>
                               </div>
                             )}
                             <div className="flex items-center space-x-2">
                               <RadioGroupItem value="keep" id={`keep-${dup.csvIndex}`} />
-                              <Label htmlFor={`keep-${dup.csvIndex}`} className="text-sm font-normal cursor-pointer">
+                              <Label
+                                htmlFor={`keep-${dup.csvIndex}`}
+                                className="text-sm font-normal cursor-pointer"
+                              >
                                 {dup.existingTeacher ? 'Keep Both' : 'Keep All'}
                               </Label>
                             </div>
                             <div className="flex items-center space-x-2">
                               <RadioGroupItem value="skip" id={`skip-${dup.csvIndex}`} />
-                              <Label htmlFor={`skip-${dup.csvIndex}`} className="text-sm font-normal cursor-pointer">
+                              <Label
+                                htmlFor={`skip-${dup.csvIndex}`}
+                                className="text-sm font-normal cursor-pointer"
+                              >
                                 Skip This
                               </Label>
                             </div>

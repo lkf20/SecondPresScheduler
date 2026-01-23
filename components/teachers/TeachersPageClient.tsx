@@ -48,7 +48,7 @@ export default function TeachersPageClient({ teachers, error }: TeachersPageClie
       key: 'is_sub',
       header: 'Is Sub?',
       sortable: true,
-      cell: (row) => {
+      cell: row => {
         return row.is_sub ? 'Yes' : 'No'
       },
     },
@@ -101,4 +101,3 @@ export default function TeachersPageClient({ teachers, error }: TeachersPageClie
     </div>
   )
 }
-

@@ -63,10 +63,10 @@ export default function MappingConfigurationModal({
 
         // Build all combinations
         const combos: ClassClassroomCombo[] = []
-        ;(classesData as ClassGroup[]).forEach((cls) => {
-          ;(classroomsData as Classroom[]).forEach((classroom) => {
+        ;(classesData as ClassGroup[]).forEach(cls => {
+          ;(classroomsData as Classroom[]).forEach(classroom => {
             const existing = existingMappings.find(
-              (m) => m.class_id === cls.id && m.classroom_id === classroom.id
+              m => m.class_id === cls.id && m.classroom_id === classroom.id
             )
             combos.push({
               class_id: cls.id,
@@ -79,11 +79,13 @@ export default function MappingConfigurationModal({
           })
         })
 
-        setCombinations(combos.sort((a, b) => {
-          const classroomCompare = a.classroom_name.localeCompare(b.classroom_name)
-          if (classroomCompare !== 0) return classroomCompare
-          return a.class_name.localeCompare(b.class_name)
-        }))
+        setCombinations(
+          combos.sort((a, b) => {
+            const classroomCompare = a.classroom_name.localeCompare(b.classroom_name)
+            if (classroomCompare !== 0) return classroomCompare
+            return a.class_name.localeCompare(b.class_name)
+          })
+        )
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Failed to load data')
       } finally {
@@ -106,8 +108,8 @@ export default function MappingConfigurationModal({
       setError(null)
 
       // Find what needs to be created and deleted
-      const toCreate = combinations.filter((c) => c.isEnabled && !c.mappingId)
-      const toDelete = combinations.filter((c) => !c.isEnabled && c.mappingId)
+      const toCreate = combinations.filter(c => c.isEnabled && !c.mappingId)
+      const toDelete = combinations.filter(c => !c.isEnabled && c.mappingId)
 
       // Delete mappings that were unchecked
       for (const combo of toDelete) {
@@ -120,7 +122,7 @@ export default function MappingConfigurationModal({
 
       // Create new mappings
       if (toCreate.length > 0) {
-        const newMappings = toCreate.map((c) => ({
+        const newMappings = toCreate.map(c => ({
           class_id: c.class_id,
           classroom_id: c.classroom_id,
           day_of_week_id: dayOfWeekId,
@@ -148,7 +150,7 @@ export default function MappingConfigurationModal({
       setError(null)
 
       // Get enabled combinations
-      const enabledCombos = combinations.filter((c) => c.isEnabled)
+      const enabledCombos = combinations.filter(c => c.isEnabled)
 
       if (enabledCombos.length === 0) {
         setError('No mappings selected to copy')
@@ -185,9 +187,11 @@ export default function MappingConfigurationModal({
   const handleCopyToAllWeekdays = async () => {
     // Get all weekday IDs (Monday-Friday, day_number 1-5)
     const weekdays = await fetch('/api/days-of-week')
-      .then((r) => r.json())
-      .then((days) => (days as DayOfWeek[]).filter((d) => d.day_number >= 1 && d.day_number <= 5).map((d) => d.id))
-    
+      .then(r => r.json())
+      .then(days =>
+        (days as DayOfWeek[]).filter(d => d.day_number >= 1 && d.day_number <= 5).map(d => d.id)
+      )
+
     const targetDays = weekdays.filter((id: string) => id !== dayOfWeekId)
     await handleCopyToOtherDays(targetDays)
   }
@@ -219,10 +223,7 @@ export default function MappingConfigurationModal({
                   className="flex items-center space-x-2 p-2 hover:bg-accent rounded cursor-pointer"
                   onClick={() => handleToggle(idx)}
                 >
-                  <Checkbox
-                    checked={combo.isEnabled}
-                    onCheckedChange={() => handleToggle(idx)}
-                  />
+                  <Checkbox checked={combo.isEnabled} onCheckedChange={() => handleToggle(idx)} />
                   <Label className="cursor-pointer flex-1">
                     <span className="font-semibold text-muted-foreground">
                       {combo.classroom_name}
@@ -236,11 +237,7 @@ export default function MappingConfigurationModal({
 
             <div className="flex flex-col gap-2 mt-6">
               <div className="flex justify-between items-center">
-                <Button
-                  variant="outline"
-                  onClick={handleCopyToAllWeekdays}
-                  disabled={saving}
-                >
+                <Button variant="outline" onClick={handleCopyToAllWeekdays} disabled={saving}>
                   Copy to All Weekdays
                 </Button>
                 <div className="flex gap-2">

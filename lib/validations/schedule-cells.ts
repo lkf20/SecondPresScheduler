@@ -8,7 +8,10 @@ export const scheduleCellFiltersSchema = z.object({
   classroom_id: z.string().uuid().optional(),
   day_of_week_id: z.string().uuid().optional(),
   time_slot_id: z.string().uuid().optional(),
-  is_active: z.union([z.literal('true'), z.literal('false')]).optional().transform((val) => val === 'true'),
+  is_active: z
+    .union([z.literal('true'), z.literal('false')])
+    .optional()
+    .transform(val => val === 'true'),
 })
 
 export const createScheduleCellSchema = z.object({
@@ -31,5 +34,3 @@ export const updateScheduleCellSchema = z.object({
 export const bulkUpdateScheduleCellsSchema = z.object({
   updates: z.array(createScheduleCellSchema).min(1, { message: 'At least one update is required' }),
 })
-
-

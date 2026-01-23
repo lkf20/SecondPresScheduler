@@ -77,7 +77,7 @@ export default function SubCapabilities({
             <Checkbox
               id="can_change_diapers"
               checked={localCapabilities.can_change_diapers}
-              onCheckedChange={(checked) =>
+              onCheckedChange={checked =>
                 handleCheckboxChange('can_change_diapers', checked === true)
               }
             />
@@ -90,7 +90,7 @@ export default function SubCapabilities({
             <Checkbox
               id="can_lift_children"
               checked={localCapabilities.can_lift_children}
-              onCheckedChange={(checked) =>
+              onCheckedChange={checked =>
                 handleCheckboxChange('can_lift_children', checked === true)
               }
             />
@@ -103,7 +103,7 @@ export default function SubCapabilities({
             <Checkbox
               id="can_assist_with_toileting"
               checked={localCapabilities.can_assist_with_toileting}
-              onCheckedChange={(checked) =>
+              onCheckedChange={checked =>
                 handleCheckboxChange('can_assist_with_toileting', checked === true)
               }
             />
@@ -120,7 +120,7 @@ export default function SubCapabilities({
           <Textarea
             id="capabilities_notes"
             value={localCapabilities.capabilities_notes}
-            onChange={(e) => handleNotesChange(e.target.value)}
+            onChange={e => handleNotesChange(e.target.value)}
             className="mt-2 min-h-[80px]"
             placeholder="Add any additional notes about capabilities..."
           />
@@ -129,5 +129,3 @@ export default function SubCapabilities({
     </Card>
   )
 }
-
-

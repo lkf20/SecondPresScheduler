@@ -13,12 +13,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required parameters.' }, { status: 400 })
     }
 
-    const shifts = await getTeacherTimeOffShifts(
-      teacherId,
-      startDate,
-      endDate,
-      excludeRequestId
-    )
+    const shifts = await getTeacherTimeOffShifts(teacherId, startDate, endDate, excludeRequestId)
 
     return NextResponse.json({ shifts })
   } catch (error: any) {

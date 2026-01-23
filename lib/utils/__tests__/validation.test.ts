@@ -126,4 +126,3 @@ describe('validateQueryParams', () => {
     expect(result.success).toBe(false)
   })
 })
-

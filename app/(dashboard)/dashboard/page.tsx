@@ -14,7 +14,6 @@ const addDays = (date: Date, days: number) => {
   return next
 }
 
-
 const getBaseUrl = async () => {
   const headerList = await headers()
   const host = headerList.get('x-forwarded-host') || headerList.get('host')
@@ -58,11 +57,7 @@ export default async function DashboardPage() {
   return (
     <div className="w-full">
       {overview && !('error' in overview) ? (
-        <DashboardClient
-          overview={overview}
-          startDate={startDate}
-          endDate={endDate}
-        />
+        <DashboardClient overview={overview} startDate={startDate} endDate={endDate} />
       ) : (
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
           {overview && 'error' in overview

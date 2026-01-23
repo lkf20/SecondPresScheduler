@@ -22,7 +22,7 @@ interface Resolution {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { teachers, resolutions = [] } = body as { 
+    const { teachers, resolutions = [] } = body as {
       teachers: TeacherImport[]
       resolutions?: Resolution[]
     }
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
     // Create a map of resolutions by CSV index
     const resolutionMap = new Map<number, 'keep' | 'skip' | 'replace'>()
-    resolutions.forEach((r) => {
+    resolutions.forEach(r => {
       resolutionMap.set(r.csvIndex, r.action)
     })
 
@@ -196,4 +196,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const supabase = await createClient()
@@ -24,10 +21,7 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await request.json()
@@ -51,7 +45,7 @@ export async function PUT(
     const incomingIds = new Set(qualifications.map((q: any) => q.qualification_id))
 
     // Delete qualifications that are no longer selected
-    const toDelete = Array.from(existingIds).filter((qid) => !incomingIds.has(qid))
+    const toDelete = Array.from(existingIds).filter(qid => !incomingIds.has(qid))
     if (toDelete.length > 0) {
       const { error: deleteError } = await supabase
         .from('staff_qualifications')
@@ -66,21 +60,19 @@ export async function PUT(
     for (const qual of qualifications) {
       const { qualification_id, level, expires_on, verified, notes } = qual
 
-      const { error: upsertError } = await supabase
-        .from('staff_qualifications')
-        .upsert(
-          {
-            staff_id: id,
-            qualification_id,
-            level: level || null,
-            expires_on: expires_on || null,
-            verified: verified ?? null,
-            notes: notes || null,
-          },
-          {
-            onConflict: 'staff_id,qualification_id',
-          }
-        )
+      const { error: upsertError } = await supabase.from('staff_qualifications').upsert(
+        {
+          staff_id: id,
+          qualification_id,
+          level: level || null,
+          expires_on: expires_on || null,
+          verified: verified ?? null,
+          notes: notes || null,
+        },
+        {
+          onConflict: 'staff_id,qualification_id',
+        }
+      )
 
       if (upsertError) throw upsertError
     }
@@ -91,6 +83,3 @@ export async function PUT(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
-
-
-

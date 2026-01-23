@@ -5,11 +5,7 @@ import Sidebar from './Sidebar'
 import { Toaster } from 'sonner'
 import { PanelManagerProvider } from '@/lib/contexts/PanelManagerContext'
 
-export default async function AppLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
   const {
     data: { user },
@@ -31,9 +27,7 @@ export default async function AppLayout({
         <Header userEmail={user.email || undefined} />
         <Sidebar />
         <main className="md:pl-64 pt-16">
-          <div className="container mx-auto px-4 py-4 md:pl-8">
-            {children}
-          </div>
+          <div className="container mx-auto px-4 py-4 md:pl-8">{children}</div>
         </main>
         <Toaster position="top-right" />
       </div>

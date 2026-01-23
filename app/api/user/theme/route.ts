@@ -49,10 +49,7 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Invalid theme value' }, { status: 400 })
     }
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({ theme })
-      .eq('user_id', user.id)
+    const { error } = await supabase.from('profiles').update({ theme }).eq('user_id', user.id)
 
     if (error) {
       console.error('Error updating theme:', error)

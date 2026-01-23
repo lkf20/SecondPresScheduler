@@ -47,9 +47,7 @@ export async function getActiveSubAssignments(filters?: {
  * Get active sub assignments by coverage request shifts
  * Finds all active sub assignments linked to active shifts in a coverage request
  */
-export async function getActiveSubAssignmentsByCoverageRequest(
-  coverageRequestId: string
-) {
+export async function getActiveSubAssignmentsByCoverageRequest(coverageRequestId: string) {
   const supabase = await createClient()
 
   // First get active shifts for this coverage request
@@ -62,12 +60,13 @@ export async function getActiveSubAssignmentsByCoverageRequest(
   if (shiftsError) throw shiftsError
   if (!shifts || shifts.length === 0) return []
 
-  const shiftIds = shifts.map((s) => s.id)
+  const shiftIds = shifts.map(s => s.id)
 
   // Get active sub assignments for these shifts
   const { data, error } = await supabase
     .from('sub_assignments')
-    .select(`
+    .select(
+      `
       *,
       sub:staff!sub_assignments_sub_id_fkey(id, first_name, last_name, display_name),
       coverage_request_shift:coverage_request_shifts!sub_assignments_coverage_request_shift_id_fkey(
@@ -80,7 +79,8 @@ export async function getActiveSubAssignmentsByCoverageRequest(
         time_slots(code, name),
         classrooms(name)
       )
-    `)
+    `
+    )
     .eq('status', 'active')
     .in('coverage_request_shift_id', shiftIds)
     .order('date', { ascending: true })

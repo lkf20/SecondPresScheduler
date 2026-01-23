@@ -24,7 +24,15 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
-import { getCoverageColors, getStaffingColorClasses, getStaffingColors, neutralColors, coverageColorValues, getButtonColors, staffingColorValues } from '@/lib/utils/colors'
+import {
+  getCoverageColors,
+  getStaffingColorClasses,
+  getStaffingColors,
+  neutralColors,
+  coverageColorValues,
+  getButtonColors,
+  staffingColorValues,
+} from '@/lib/utils/colors'
 import TimeOffCard from '@/components/shared/TimeOffCard'
 import { Loader2 } from 'lucide-react'
 import { useDashboard } from '@/lib/hooks/use-dashboard'
@@ -101,7 +109,9 @@ const formatSlotLabel = (dayName: string, timeSlotCode: string) =>
 const formatFullDateLabel = (value: string) => {
   const date = new Date(`${value}T00:00:00`)
   const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date)
-  const dateLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
+  const dateLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
+    date
+  )
   return `${weekday} ${dateLabel}`
 }
 
@@ -111,7 +121,7 @@ const formatShortfallLabel = (shortfall: number) =>
 const formatShortfallValue = (required: number, scheduled: number) =>
   Math.max(0, required - scheduled)
 
-  const staffingBadge = (status: StaffingTargetItem['status']) => {
+const staffingBadge = (status: StaffingTargetItem['status']) => {
   switch (status) {
     case 'below_required':
       return getStaffingColorClasses('below_required')
@@ -132,7 +142,7 @@ const groupStaffingTargets = (slots: StaffingTargetItem[]) => {
     }
   >()
 
-  slots.forEach((slot) => {
+  slots.forEach(slot => {
     const entry = classroomMap.get(slot.classroom_id) || {
       classroom_name: slot.classroom_name,
       classroom_color: slot.classroom_color ?? null,
@@ -146,7 +156,7 @@ const groupStaffingTargets = (slots: StaffingTargetItem[]) => {
     a.classroom_name.localeCompare(b.classroom_name)
   )
 
-  return classrooms.map((classroom) => ({
+  return classrooms.map(classroom => ({
     ...classroom,
     slots: classroom.slots.sort((a, b) => {
       if (a.day_order !== b.day_order) {
@@ -222,34 +232,32 @@ export default function DashboardClient({
 }) {
   const gridRef = useRef<HTMLDivElement>(null)
   const [isXlScreen, setIsXlScreen] = useState(false)
-  
+
   // Use React Query to cache the profile/name
   const { data: profile, isLoading: isLoadingProfile } = useProfile()
   const greetingName = profile?.first_name?.trim() || null
-  
+
   // Calculate greeting on client side only to avoid hydration mismatch
   const [greetingTime, setGreetingTime] = useState<string | null>(null)
   const [isClient, setIsClient] = useState(false)
-  
+
   useEffect(() => {
     setIsClient(true)
     const hour = new Date().getHours()
     const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening'
     setGreetingTime(greeting)
   }, [])
-  
+
   // Only show greeting when both client-side calculation and profile are ready
   const isGreetingReady = isClient && greetingTime !== null && !isLoadingProfile
   const [belowRequiredCollapsed, setBelowRequiredCollapsed] = useState(false)
   const [belowPreferredCollapsed, setBelowPreferredCollapsed] = useState(false)
-  const [coverageFilter, setCoverageFilter] = useState<'needs' | 'covered' | 'all'>(
-    'needs'
-  )
+  const [coverageFilter, setCoverageFilter] = useState<'needs' | 'covered' | 'all'>('needs')
   const [coverageSectionCollapsed, setCoverageSectionCollapsed] = useState(false)
   const [scheduledSubsSectionCollapsed, setScheduledSubsSectionCollapsed] = useState(false)
   const [staffingTargetSectionCollapsed, setStaffingTargetSectionCollapsed] = useState(false)
   const [editingRequestId, setEditingRequestId] = useState<string | null>(null)
-  
+
   const handleEdit = (id: string) => {
     setEditingRequestId(id)
   }
@@ -257,11 +265,11 @@ export default function DashboardClient({
   const handleEditClose = () => {
     setEditingRequestId(null)
   }
-  
+
   // Coverage range state - always start with default to avoid hydration mismatch
   const [coverageRange, setCoverageRange] = useState<CoverageRange>('2 weeks')
   const [hasHydratedRange, setHasHydratedRange] = useState(false)
-  
+
   // Hydrate from localStorage after mount (client-side only)
   useEffect(() => {
     if (typeof window !== 'undefined' && !hasHydratedRange) {
@@ -272,7 +280,7 @@ export default function DashboardClient({
       setHasHydratedRange(true)
     }
   }, [hasHydratedRange])
-  
+
   // Calculate dates based on selected range
   const calculateDates = (range: CoverageRange) => {
     const today = new Date()
@@ -280,19 +288,28 @@ export default function DashboardClient({
     const end = toDateString(addDays(today, getDaysFromRange(range)))
     return { start, end }
   }
-  
+
   const { start: currentStartDate, end: currentEndDate } = useMemo(
     () => calculateDates(coverageRange),
     [coverageRange]
   )
-  
+
   // Determine if we should use initial data (only if it matches the current range)
   const shouldUseInitialData = useMemo(() => {
-    return coverageRange === '2 weeks' && currentStartDate === initialStartDate && currentEndDate === initialEndDate
+    return (
+      coverageRange === '2 weeks' &&
+      currentStartDate === initialStartDate &&
+      currentEndDate === initialEndDate
+    )
   }, [coverageRange, currentStartDate, currentEndDate, initialStartDate, initialEndDate])
-  
+
   // Use React Query for dashboard data
-  const { data: overview = initialOverview, isLoading: isLoadingOverview, isFetching, refetch } = useDashboard(
+  const {
+    data: overview = initialOverview,
+    isLoading: isLoadingOverview,
+    isFetching,
+    refetch,
+  } = useDashboard(
     {
       preset: coverageRange,
       startDate: currentStartDate,
@@ -300,22 +317,21 @@ export default function DashboardClient({
     },
     shouldUseInitialData ? initialOverview : undefined
   )
-  
+
   const router = useRouter()
-  
+
   // Manual refresh handler
   const handleRefresh = async () => {
     await refetch()
     router.refresh()
   }
-  
+
   // Save to localStorage when range changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('dashboard_coverage_range', coverageRange)
     }
   }, [coverageRange])
-
 
   // Track xl screen size for responsive min-width
   useEffect(() => {
@@ -330,17 +346,17 @@ export default function DashboardClient({
   // Debug grid layout on xl screens
   useEffect(() => {
     if (typeof window === 'undefined' || !gridRef.current) return
-    
+
     const checkLayout = () => {
       const el = gridRef.current
       if (!el) return
-      
+
       const isXl = window.innerWidth >= 1280
       if (!isXl) return
-      
+
       const styles = window.getComputedStyle(el)
       const sections = el.querySelectorAll('section')
-      
+
       console.log('[Dashboard Grid Debug]', {
         windowWidth: window.innerWidth,
         gridWidth: el.offsetWidth,
@@ -357,7 +373,7 @@ export default function DashboardClient({
         })),
       })
     }
-    
+
     // Check on mount and resize
     checkLayout()
     window.addEventListener('resize', checkLayout)
@@ -367,16 +383,16 @@ export default function DashboardClient({
   const belowRequiredClassrooms = useMemo(() => {
     const classrooms = new Set<string>()
     overview.staffing_targets
-      .filter((slot) => slot.status === 'below_required')
-      .forEach((slot) => classrooms.add(slot.classroom_id))
+      .filter(slot => slot.status === 'below_required')
+      .forEach(slot => classrooms.add(slot.classroom_id))
     return classrooms.size
   }, [overview.staffing_targets])
 
   const belowPreferredClassrooms = useMemo(() => {
     const classrooms = new Set<string>()
     overview.staffing_targets
-      .filter((slot) => slot.status === 'below_preferred')
-      .forEach((slot) => classrooms.add(slot.classroom_id))
+      .filter(slot => slot.status === 'below_preferred')
+      .forEach(slot => classrooms.add(slot.classroom_id))
     return classrooms.size
   }, [overview.staffing_targets])
 
@@ -386,7 +402,7 @@ export default function DashboardClient({
     const infoColors = { text: 'text-blue-600', bg: 'bg-blue-100', icon: 'text-blue-600' }
     const tealColors = { text: 'text-teal-700', bg: 'bg-teal-100', icon: 'text-teal-600' }
     const purpleColors = { text: 'text-purple-800', bg: 'bg-blue-100', icon: 'text-purple-800' }
-    
+
     return [
       {
         key: 'uncovered' as const,
@@ -442,10 +458,10 @@ export default function DashboardClient({
 
   const coverageCounts = useMemo(() => {
     const needs = overview.coverage_requests.filter(
-      (request) => request.status === 'needs_coverage'
+      request => request.status === 'needs_coverage'
     ).length
     const covered = overview.coverage_requests.filter(
-      (request) => request.status === 'covered'
+      request => request.status === 'covered'
     ).length
     return {
       needs,
@@ -456,14 +472,10 @@ export default function DashboardClient({
 
   const filteredCoverageRequests = useMemo(() => {
     if (coverageFilter === 'needs') {
-      return overview.coverage_requests.filter(
-        (request) => request.status === 'needs_coverage'
-      )
+      return overview.coverage_requests.filter(request => request.status === 'needs_coverage')
     }
     if (coverageFilter === 'covered') {
-      return overview.coverage_requests.filter(
-        (request) => request.status === 'covered'
-      )
+      return overview.coverage_requests.filter(request => request.status === 'covered')
     }
     return overview.coverage_requests
   }, [coverageFilter, overview.coverage_requests])
@@ -471,7 +483,7 @@ export default function DashboardClient({
   const belowRequiredGroups = useMemo(
     () =>
       groupStaffingTargets(
-        overview.staffing_targets.filter((slot) => slot.status === 'below_required')
+        overview.staffing_targets.filter(slot => slot.status === 'below_required')
       ),
     [overview.staffing_targets]
   )
@@ -479,7 +491,7 @@ export default function DashboardClient({
   const belowPreferredGroups = useMemo(
     () =>
       groupStaffingTargets(
-        overview.staffing_targets.filter((slot) => slot.status === 'below_preferred')
+        overview.staffing_targets.filter(slot => slot.status === 'below_preferred')
       ),
     [overview.staffing_targets]
   )
@@ -528,94 +540,126 @@ export default function DashboardClient({
           </div>
         </div>
         <p className="text-xl text-slate-600 mt-1 flex items-center gap-2">
-            Here is your coverage outlook for {getRangeLabel(coverageRange)} (
-            {formatFullDateLabel(currentStartDate)} - {formatFullDateLabel(currentEndDate)}).
-            {(isLoadingOverview || (isFetching && !isLoadingOverview)) && (
-              <Loader2 className="h-4 w-4 animate-spin text-slate-500 ml-1" />
-            )}
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none transition-colors"
-                  aria-label="Change coverage outlook time range"
-                  suppressHydrationWarning
+          Here is your coverage outlook for {getRangeLabel(coverageRange)} (
+          {formatFullDateLabel(currentStartDate)} - {formatFullDateLabel(currentEndDate)}).
+          {(isLoadingOverview || (isFetching && !isLoadingOverview)) && (
+            <Loader2 className="h-4 w-4 animate-spin text-slate-500 ml-1" />
+          )}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none transition-colors"
+                aria-label="Change coverage outlook time range"
+                suppressHydrationWarning
+              >
+                <Settings className="h-4 w-4" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-64 shadow-lg border-slate-200"
+              align="start"
+              sideOffset={8}
+            >
+              <div className="space-y-3">
+                <Label className="text-base font-semibold text-slate-900">Time Range</Label>
+                <RadioGroup
+                  value={coverageRange}
+                  onValueChange={value => setCoverageRange(value as CoverageRange)}
+                  className="space-y-2.5"
                 >
-                  <Settings className="h-4 w-4" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-64 shadow-lg border-slate-200" align="start" sideOffset={8}>
-                <div className="space-y-3">
-                  <Label className="text-base font-semibold text-slate-900">Time Range</Label>
-                  <RadioGroup
-                    value={coverageRange}
-                    onValueChange={(value) => setCoverageRange(value as CoverageRange)}
-                    className="space-y-2.5"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <RadioGroupItem value="1 week" id="range-1week" className="focus:outline-none focus-visible:ring-0" />
-                      <Label htmlFor="range-1week" className="text-base font-normal cursor-pointer text-slate-700">
-                        1 week
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <RadioGroupItem value="2 weeks" id="range-2weeks" className="focus:outline-none focus-visible:ring-0" />
-                      <Label htmlFor="range-2weeks" className="text-base font-normal cursor-pointer text-slate-700">
-                        2 weeks
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <RadioGroupItem value="1 month" id="range-1month" className="focus:outline-none focus-visible:ring-0" />
-                      <Label htmlFor="range-1month" className="text-base font-normal cursor-pointer text-slate-700">
-                        1 month
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <RadioGroupItem value="2 months" id="range-2months" className="focus:outline-none focus-visible:ring-0" />
-                      <Label htmlFor="range-2months" className="text-base font-normal cursor-pointer text-slate-700">
-                        2 months
-                      </Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </p>
+                  <div className="flex items-center space-x-3">
+                    <RadioGroupItem
+                      value="1 week"
+                      id="range-1week"
+                      className="focus:outline-none focus-visible:ring-0"
+                    />
+                    <Label
+                      htmlFor="range-1week"
+                      className="text-base font-normal cursor-pointer text-slate-700"
+                    >
+                      1 week
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <RadioGroupItem
+                      value="2 weeks"
+                      id="range-2weeks"
+                      className="focus:outline-none focus-visible:ring-0"
+                    />
+                    <Label
+                      htmlFor="range-2weeks"
+                      className="text-base font-normal cursor-pointer text-slate-700"
+                    >
+                      2 weeks
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <RadioGroupItem
+                      value="1 month"
+                      id="range-1month"
+                      className="focus:outline-none focus-visible:ring-0"
+                    />
+                    <Label
+                      htmlFor="range-1month"
+                      className="text-base font-normal cursor-pointer text-slate-700"
+                    >
+                      1 month
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <RadioGroupItem
+                      value="2 months"
+                      id="range-2months"
+                      className="focus:outline-none focus-visible:ring-0"
+                    />
+                    <Label
+                      htmlFor="range-2months"
+                      className="text-base font-normal cursor-pointer text-slate-700"
+                    >
+                      2 months
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </p>
       </section>
 
       <section className="space-y-3 pb-1">
         <div className="grid gap-x-4 gap-y-6 justify-items-start grid-cols-[repeat(auto-fill,minmax(250px,250px))]">
-          {summaryItems.map((item) => (
+          {summaryItems.map(item => (
             <div key={item.key} className="text-left min-w-[250px] max-w-[250px]">
               <Card
-                className={cn(
-                  'w-full border-2 shadow-sm',
-                  'sm:justify-self-start',
-                  item.cardStyle
-                )}
+                className={cn('w-full border-2 shadow-sm', 'sm:justify-self-start', item.cardStyle)}
               >
                 <CardContent className="p-4">
                   <div
                     className="text-base font-normal"
-                    style={item.key === 'partial' ? { backgroundClip: 'unset', WebkitBackgroundClip: 'unset' } : undefined}
+                    style={
+                      item.key === 'partial'
+                        ? { backgroundClip: 'unset', WebkitBackgroundClip: 'unset' }
+                        : undefined
+                    }
                   >
                     {item.label}
                   </div>
                   <div className="mt-3 h-px w-full bg-black/10" />
                   {'count' in item ? (
                     <div className="mt-3 flex items-center justify-between">
-                      <div 
+                      <div
                         className="text-3xl font-semibold"
                         style={
-                          item.key === 'uncovered' 
-                            ? { color: coverageColorValues.uncovered.icon } as React.CSSProperties
+                          item.key === 'uncovered'
+                            ? ({ color: coverageColorValues.uncovered.icon } as React.CSSProperties)
                             : item.key === 'partial'
-                            ? { color: coverageColorValues.partial.text } as React.CSSProperties
-                            : item.key === 'scheduled'
-                            ? { color: '#0D9488' } as React.CSSProperties // teal-600
-                            : item.key === 'absences'
-                            ? { color: 'rgba(55, 65, 81, 1)' } as React.CSSProperties // gray-700
-                            : undefined
+                              ? ({ color: coverageColorValues.partial.text } as React.CSSProperties)
+                              : item.key === 'scheduled'
+                                ? ({ color: '#0D9488' } as React.CSSProperties) // teal-600
+                                : item.key === 'absences'
+                                  ? ({ color: 'rgba(55, 65, 81, 1)' } as React.CSSProperties) // gray-700
+                                  : undefined
                         }
                       >
                         {item.count}
@@ -625,34 +669,34 @@ export default function DashboardClient({
                           className="inline-flex h-9 w-9 items-center justify-center rounded-full"
                           style={
                             item.key === 'uncovered'
-                              ? {
+                              ? ({
                                   backgroundColor: coverageColorValues.uncovered.bg,
                                   color: coverageColorValues.uncovered.icon,
-                                } as React.CSSProperties
+                                } as React.CSSProperties)
                               : item.key === 'partial'
-                              ? {
-                                  backgroundColor: coverageColorValues.partial.bg,
-                                  color: coverageColorValues.partial.icon,
-                                } as React.CSSProperties
-                            : item.key === 'scheduled'
-                            ? {
-                                backgroundColor: 'rgba(236, 253, 245, 1)', // emerald-50
-                                color: '#0D9488', // teal-600
-                                borderWidth: '0px',
-                                borderStyle: 'none',
-                                borderColor: 'rgba(0, 0, 0, 0)',
-                                borderImage: 'none',
-                              } as React.CSSProperties
-                              : item.key === 'absences'
-                              ? {
-                                  backgroundColor: 'rgba(243, 244, 246, 1)', // gray-100
-                                  color: 'rgba(55, 65, 81, 1)', // gray-700
-                                  borderWidth: '0px',
-                                  borderStyle: 'none',
-                                  borderColor: 'rgba(0, 0, 0, 0)',
-                                  borderImage: 'none',
-                                } as React.CSSProperties
-                              : undefined
+                                ? ({
+                                    backgroundColor: coverageColorValues.partial.bg,
+                                    color: coverageColorValues.partial.icon,
+                                  } as React.CSSProperties)
+                                : item.key === 'scheduled'
+                                  ? ({
+                                      backgroundColor: 'rgba(236, 253, 245, 1)', // emerald-50
+                                      color: '#0D9488', // teal-600
+                                      borderWidth: '0px',
+                                      borderStyle: 'none',
+                                      borderColor: 'rgba(0, 0, 0, 0)',
+                                      borderImage: 'none',
+                                    } as React.CSSProperties)
+                                  : item.key === 'absences'
+                                    ? ({
+                                        backgroundColor: 'rgba(243, 244, 246, 1)', // gray-100
+                                        color: 'rgba(55, 65, 81, 1)', // gray-700
+                                        borderWidth: '0px',
+                                        borderStyle: 'none',
+                                        borderColor: 'rgba(0, 0, 0, 0)',
+                                        borderImage: 'none',
+                                      } as React.CSSProperties)
+                                    : undefined
                           }
                         >
                           <item.icon className="h-5 w-5" />
@@ -673,27 +717,38 @@ export default function DashboardClient({
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <div 
-                              className={cn('flex items-center gap-2 text-3xl font-semibold', item.secondaryStyle)}
+                            <div
+                              className={cn(
+                                'flex items-center gap-2 text-3xl font-semibold',
+                                item.secondaryStyle
+                              )}
                               style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}
                             >
-                              <span style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}>{item.secondaryCount}</span>
+                              <span
+                                style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}
+                              >
+                                {item.secondaryCount}
+                              </span>
                               <span
                                 className={cn(
                                   'inline-flex h-9 w-9 items-center justify-center rounded-full',
                                   item.secondaryIconStyle
                                 )}
-                                style={{ 
-                                  backgroundColor: 'rgba(219, 234, 254, 1)', // blue-100
-                                  color: 'rgba(37, 99, 235, 1)' // blue-600
-                                } as React.CSSProperties}
+                                style={
+                                  {
+                                    backgroundColor: 'rgba(219, 234, 254, 1)', // blue-100
+                                    color: 'rgba(37, 99, 235, 1)', // blue-600
+                                  } as React.CSSProperties
+                                }
                               >
                                 <item.secondaryIcon className="h-5 w-5" />
                               </span>
                             </div>
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p>Classrooms below <em>preferred</em> staffing ratio</p>
+                            <p>
+                              Classrooms below <em>preferred</em> staffing ratio
+                            </p>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -701,26 +756,37 @@ export default function DashboardClient({
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div
-                              className={cn('flex items-center gap-2 text-3xl font-semibold', item.secondaryRightStyle)}
+                              className={cn(
+                                'flex items-center gap-2 text-3xl font-semibold',
+                                item.secondaryRightStyle
+                              )}
                               style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}
                             >
-                              <span style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}>{item.secondaryRightCount}</span>
+                              <span
+                                style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}
+                              >
+                                {item.secondaryRightCount}
+                              </span>
                               <span
                                 className={cn(
                                   'inline-flex h-9 w-9 items-center justify-center rounded-full',
                                   item.secondaryRightIconStyle
                                 )}
-                                style={{ 
-                                  backgroundColor: 'rgba(219, 234, 254, 1)', // blue-100
-                                  color: 'rgba(37, 99, 235, 1)' // blue-600
-                                } as React.CSSProperties}
+                                style={
+                                  {
+                                    backgroundColor: 'rgba(219, 234, 254, 1)', // blue-100
+                                    color: 'rgba(37, 99, 235, 1)', // blue-600
+                                  } as React.CSSProperties
+                                }
                               >
                                 <item.secondaryRightIcon className="h-5 w-5" />
                               </span>
                             </div>
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p>Classrooms below <em>required</em> staffing ratio</p>
+                            <p>
+                              Classrooms below <em>required</em> staffing ratio
+                            </p>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -733,11 +799,11 @@ export default function DashboardClient({
         </div>
       </section>
 
-      <div 
+      <div
         ref={gridRef}
         className="grid grid-cols-1 gap-6 pt-1 w-full xl:grid-cols-[minmax(550px,1.4fr)_minmax(400px,0.9fr)_minmax(400px,0.9fr)]"
       >
-        <section 
+        <section
           className="xl:w-full xl:max-w-full overflow-hidden space-y-4 rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm xl:col-span-1"
           style={{ minWidth: isXlScreen ? '0' : '550px' }}
         >
@@ -745,7 +811,7 @@ export default function DashboardClient({
             role="button"
             tabIndex={0}
             onClick={() => setCoverageSectionCollapsed(!coverageSectionCollapsed)}
-            onKeyDown={(e) => {
+            onKeyDown={e => {
               if (e?.key === 'Enter' || e?.key === ' ') {
                 e?.preventDefault?.()
                 setCoverageSectionCollapsed(!coverageSectionCollapsed)
@@ -760,53 +826,53 @@ export default function DashboardClient({
                   Upcoming Time Off & Coverage
                 </h2>
               </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e?.stopPropagation?.()
-                  setCoverageFilter('needs')
-                }}
-                className={cn(
-                  'rounded-full border px-3 py-1 text-xs font-medium transition',
-                  coverageFilter === 'needs'
-                    ? 'border-button-fill bg-button-fill text-button-fill-foreground'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                )}
-              >
-                Needs a Sub ({coverageCounts.needs})
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e?.stopPropagation?.()
-                  setCoverageFilter('covered')
-                }}
-                className={cn(
-                  'rounded-full border px-3 py-1 text-xs font-medium transition',
-                  coverageFilter === 'covered'
-                    ? 'border-button-fill bg-button-fill text-button-fill-foreground'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                )}
-              >
-                Covered ({coverageCounts.covered})
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e?.stopPropagation?.()
-                  setCoverageFilter('all')
-                }}
-                className={cn(
-                  'rounded-full border px-3 py-1 text-xs font-medium transition',
-                  coverageFilter === 'all'
-                    ? 'border-button-fill bg-button-fill text-button-fill-foreground'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                )}
-              >
-                All ({coverageCounts.all})
-              </button>
-            </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
+                <button
+                  type="button"
+                  onClick={e => {
+                    e?.stopPropagation?.()
+                    setCoverageFilter('needs')
+                  }}
+                  className={cn(
+                    'rounded-full border px-3 py-1 text-xs font-medium transition',
+                    coverageFilter === 'needs'
+                      ? 'border-button-fill bg-button-fill text-button-fill-foreground'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                  )}
+                >
+                  Needs a Sub ({coverageCounts.needs})
+                </button>
+                <button
+                  type="button"
+                  onClick={e => {
+                    e?.stopPropagation?.()
+                    setCoverageFilter('covered')
+                  }}
+                  className={cn(
+                    'rounded-full border px-3 py-1 text-xs font-medium transition',
+                    coverageFilter === 'covered'
+                      ? 'border-button-fill bg-button-fill text-button-fill-foreground'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                  )}
+                >
+                  Covered ({coverageCounts.covered})
+                </button>
+                <button
+                  type="button"
+                  onClick={e => {
+                    e?.stopPropagation?.()
+                    setCoverageFilter('all')
+                  }}
+                  className={cn(
+                    'rounded-full border px-3 py-1 text-xs font-medium transition',
+                    coverageFilter === 'all'
+                      ? 'border-button-fill bg-button-fill text-button-fill-foreground'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                  )}
+                >
+                  All ({coverageCounts.all})
+                </button>
+              </div>
             </div>
             <div className="xl:hidden">
               {coverageSectionCollapsed ? (
@@ -818,77 +884,77 @@ export default function DashboardClient({
           </div>
 
           <div className={cn('space-y-4', coverageSectionCollapsed && 'hidden xl:block')}>
-              {filteredCoverageRequests.length === 0 ? (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-              No upcoming time off in the next {getRangeDaysText(coverageRange)}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {filteredCoverageRequests.map((request) => {
-                // Calculate coverage counts from API data
-                // assigned_shifts includes both full and partial coverage
-                // partial_shifts = shifts with only partial coverage
-                // covered = assigned_shifts - partial_shifts (fully covered shifts)
-                let covered = 0
-                let uncovered = request.uncovered_shifts
-                let partial = request.partial_shifts || 0
-                
-                if (request.status === 'covered') {
-                  covered = request.total_shifts
-                  uncovered = 0
-                  partial = 0
-                } else if (request.status === 'needs_coverage') {
-                  covered = 0
-                  uncovered = request.uncovered_shifts
-                  partial = 0
-                } else if (request.status === 'partially_covered') {
-                  // assigned_shifts includes both full and partial
+            {filteredCoverageRequests.length === 0 ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                No upcoming time off in the next {getRangeDaysText(coverageRange)}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredCoverageRequests.map(request => {
+                  // Calculate coverage counts from API data
+                  // assigned_shifts includes both full and partial coverage
                   // partial_shifts = shifts with only partial coverage
-                  // covered = assigned_shifts - partial_shifts
-                  partial = request.partial_shifts || 0
-                  covered = request.assigned_shifts - partial
-                  uncovered = request.uncovered_shifts
-                }
+                  // covered = assigned_shifts - partial_shifts (fully covered shifts)
+                  let covered = 0
+                  let uncovered = request.uncovered_shifts
+                  let partial = request.partial_shifts || 0
 
-                // For time_off requests, use source_request_id (time_off_request.id) for sub-finder
-                // For other request types, use the coverage_request.id
-                const absenceId = request.request_type === 'time_off' && request.source_request_id
-                  ? request.source_request_id
-                  : request.id
+                  if (request.status === 'covered') {
+                    covered = request.total_shifts
+                    uncovered = 0
+                    partial = 0
+                  } else if (request.status === 'needs_coverage') {
+                    covered = 0
+                    uncovered = request.uncovered_shifts
+                    partial = 0
+                  } else if (request.status === 'partially_covered') {
+                    // assigned_shifts includes both full and partial
+                    // partial_shifts = shifts with only partial coverage
+                    // covered = assigned_shifts - partial_shifts
+                    partial = request.partial_shifts || 0
+                    covered = request.assigned_shifts - partial
+                    uncovered = request.uncovered_shifts
+                  }
 
-                return (
-                  <TimeOffCard
-                    key={request.id}
-                    id={absenceId}
-                    teacherName={request.teacher_name}
-                    startDate={request.start_date}
-                    endDate={request.end_date}
-                    reason={request.reason}
-                    classrooms={request.classrooms}
-                    variant="dashboard"
-                    covered={covered}
-                    uncovered={uncovered}
-                    partial={partial}
-                    totalShifts={request.total_shifts}
-                    shiftDetails={request.shift_details}
-                    notes={request.notes}
-                    onEdit={() => {
-                      // Use source_request_id (time_off_request.id) for editing if it's a time_off request
-                      if (request.request_type === 'time_off' && request.source_request_id) {
-                        handleEdit(request.source_request_id)
-                      }
-                      // For non-time_off requests, we can't edit them from here
-                    }}
-                  />
-                )
-              })}
-            </div>
-          )}
+                  // For time_off requests, use source_request_id (time_off_request.id) for sub-finder
+                  // For other request types, use the coverage_request.id
+                  const absenceId =
+                    request.request_type === 'time_off' && request.source_request_id
+                      ? request.source_request_id
+                      : request.id
+
+                  return (
+                    <TimeOffCard
+                      key={request.id}
+                      id={absenceId}
+                      teacherName={request.teacher_name}
+                      startDate={request.start_date}
+                      endDate={request.end_date}
+                      reason={request.reason}
+                      classrooms={request.classrooms}
+                      variant="dashboard"
+                      covered={covered}
+                      uncovered={uncovered}
+                      partial={partial}
+                      totalShifts={request.total_shifts}
+                      shiftDetails={request.shift_details}
+                      notes={request.notes}
+                      onEdit={() => {
+                        // Use source_request_id (time_off_request.id) for editing if it's a time_off request
+                        if (request.request_type === 'time_off' && request.source_request_id) {
+                          handleEdit(request.source_request_id)
+                        }
+                        // For non-time_off requests, we can't edit them from here
+                      }}
+                    />
+                  )
+                })}
+              </div>
+            )}
           </div>
-
         </section>
 
-        <section 
+        <section
           className="xl:w-full xl:max-w-full overflow-hidden space-y-4 rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm xl:col-span-1"
           style={{ minWidth: isXlScreen ? '0' : '450px' }}
         >
@@ -896,7 +962,7 @@ export default function DashboardClient({
             role="button"
             tabIndex={0}
             onClick={() => setScheduledSubsSectionCollapsed(!scheduledSubsSectionCollapsed)}
-            onKeyDown={(e) => {
+            onKeyDown={e => {
               if (e?.key === 'Enter' || e?.key === ' ') {
                 e?.preventDefault?.()
                 setScheduledSubsSectionCollapsed(!scheduledSubsSectionCollapsed)
@@ -919,12 +985,12 @@ export default function DashboardClient({
 
           <div className={cn('space-y-4', scheduledSubsSectionCollapsed && 'hidden xl:block')}>
             {overview.scheduled_subs.length === 0 ? (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-              No subs scheduled in the next {getRangeDaysText(coverageRange)}
-            </div>
-          ) : (
-            <div className="space-y-3">
-                  {overview.scheduled_subs.map((assignment) => (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                No subs scheduled in the next {getRangeDaysText(coverageRange)}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {overview.scheduled_subs.map(assignment => (
                   <div
                     key={assignment.id}
                     className="group relative flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3"
@@ -962,8 +1028,8 @@ export default function DashboardClient({
                           {assignment.classroom_name}
                         </span>
                       </div>
-                      </div>
-                      <div className="flex w-full justify-end sm:w-auto">
+                    </div>
+                    <div className="flex w-full justify-end sm:w-auto">
                       <Button
                         asChild
                         size="sm"
@@ -976,13 +1042,13 @@ export default function DashboardClient({
                       </Button>
                     </div>
                   </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
-        <section 
+        <section
           className="xl:w-full xl:max-w-full overflow-hidden space-y-4 rounded-xl border-2 border-slate-200 bg-white p-5 shadow-sm xl:col-span-1"
           style={{ minWidth: isXlScreen ? '0' : '450px' }}
         >
@@ -990,7 +1056,7 @@ export default function DashboardClient({
             role="button"
             tabIndex={0}
             onClick={() => setStaffingTargetSectionCollapsed(!staffingTargetSectionCollapsed)}
-            onKeyDown={(e) => {
+            onKeyDown={e => {
               if (e?.key === 'Enter' || e?.key === ' ') {
                 e?.preventDefault?.()
                 setStaffingTargetSectionCollapsed(!staffingTargetSectionCollapsed)
@@ -1012,209 +1078,226 @@ export default function DashboardClient({
           </div>
 
           <div className={cn('space-y-4', staffingTargetSectionCollapsed && 'hidden xl:block')}>
-
-          {overview.staffing_targets.length === 0 ? (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-              ✅ All classrooms meet staffing targets.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="space-y-3">
-                <button
-                  type="button"
-                  onClick={() => setBelowRequiredCollapsed((prev) => !prev)}
-                  className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500"
-                >
-                  <span>
-                    Below Required ({belowRequiredGroups.reduce((total, group) => total + group.slots.length, 0)})
-                  </span>
-                  {belowRequiredCollapsed ? (
-                    <ChevronDown className="h-4 w-4" />
-                  ) : (
-                    <ChevronUp className="h-4 w-4" />
-                  )}
-                </button>
-                {!belowRequiredCollapsed &&
-                  (belowRequiredGroups.length === 0 ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                      <span>All slots meet required staffing ratios.</span>
-                    </div>
-                  ) : (
-                    belowRequiredGroups.map((classroom) => (
-                      <div key={classroom.classroom_name} className="space-y-2">
-                        <div>
-                          <span
-                            className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
-                            style={getClassroomPillStyle(classroom.classroom_color)}
-                          >
-                            {classroom.classroom_name} ({classroom.slots.length})
-                          </span>
-                        </div>
-                        {classroom.slots.map((slot) => (
-                        <div
-                          key={slot.id}
-                          className="grid gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 md:grid-cols-[1fr_auto]"
-                        >
-                          <div className="flex flex-wrap items-center gap-4 min-w-0">
-                            <div className="min-w-[160px] space-y-3 flex-shrink-0">
-                              <div className="text-sm font-semibold text-slate-900">
-                                {formatSlotLabel(slot.day_name, slot.time_slot_code)}
-                              </div>
-                              <div className="flex flex-col items-start gap-2">
-                                <span
-                                  className="inline-flex items-center rounded-full px-3.5 py-1 text-xs font-medium"
-                                  style={
-                                    slot.status === 'below_required'
-                                      ? {
-                                          backgroundColor: staffingColorValues.below_required.bg,
-                                          borderStyle: 'solid',
-                                          borderWidth: '1px',
-                                          borderColor: staffingColorValues.below_required.border,
-                                          color: staffingColorValues.below_required.text,
-                                        } as React.CSSProperties
-                                      : slot.status === 'below_preferred'
-                                      ? {
-                                          backgroundColor: staffingColorValues.below_preferred.bg,
-                                          borderStyle: 'solid',
-                                          borderWidth: '1px',
-                                          borderColor: staffingColorValues.below_preferred.border,
-                                          color: staffingColorValues.below_preferred.text,
-                                        } as React.CSSProperties
-                                      : undefined
-                                  }
-                                >
-                                  Below Required {formatShortfallLabel(formatShortfallValue(slot.required_staff, slot.scheduled_staff))}
-                                </span>
-                                <div className="text-xs text-slate-600 whitespace-nowrap">
-                                  Required: {slot.required_staff} · Scheduled: {slot.scheduled_staff}
+            {overview.staffing_targets.length === 0 ? (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                ✅ All classrooms meet staffing targets.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => setBelowRequiredCollapsed(prev => !prev)}
+                    className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500"
+                  >
+                    <span>
+                      Below Required (
+                      {belowRequiredGroups.reduce((total, group) => total + group.slots.length, 0)})
+                    </span>
+                    {belowRequiredCollapsed ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronUp className="h-4 w-4" />
+                    )}
+                  </button>
+                  {!belowRequiredCollapsed &&
+                    (belowRequiredGroups.length === 0 ? (
+                      <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        <span>All slots meet required staffing ratios.</span>
+                      </div>
+                    ) : (
+                      belowRequiredGroups.map(classroom => (
+                        <div key={classroom.classroom_name} className="space-y-2">
+                          <div>
+                            <span
+                              className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                              style={getClassroomPillStyle(classroom.classroom_color)}
+                            >
+                              {classroom.classroom_name} ({classroom.slots.length})
+                            </span>
+                          </div>
+                          {classroom.slots.map(slot => (
+                            <div
+                              key={slot.id}
+                              className="grid gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 md:grid-cols-[1fr_auto]"
+                            >
+                              <div className="flex flex-wrap items-center gap-4 min-w-0">
+                                <div className="min-w-[160px] space-y-3 flex-shrink-0">
+                                  <div className="text-sm font-semibold text-slate-900">
+                                    {formatSlotLabel(slot.day_name, slot.time_slot_code)}
+                                  </div>
+                                  <div className="flex flex-col items-start gap-2">
+                                    <span
+                                      className="inline-flex items-center rounded-full px-3.5 py-1 text-xs font-medium"
+                                      style={
+                                        slot.status === 'below_required'
+                                          ? ({
+                                              backgroundColor:
+                                                staffingColorValues.below_required.bg,
+                                              borderStyle: 'solid',
+                                              borderWidth: '1px',
+                                              borderColor:
+                                                staffingColorValues.below_required.border,
+                                              color: staffingColorValues.below_required.text,
+                                            } as React.CSSProperties)
+                                          : slot.status === 'below_preferred'
+                                            ? ({
+                                                backgroundColor:
+                                                  staffingColorValues.below_preferred.bg,
+                                                borderStyle: 'solid',
+                                                borderWidth: '1px',
+                                                borderColor:
+                                                  staffingColorValues.below_preferred.border,
+                                                color: staffingColorValues.below_preferred.text,
+                                              } as React.CSSProperties)
+                                            : undefined
+                                      }
+                                    >
+                                      Below Required{' '}
+                                      {formatShortfallLabel(
+                                        formatShortfallValue(
+                                          slot.required_staff,
+                                          slot.scheduled_staff
+                                        )
+                                      )}
+                                    </span>
+                                    <div className="text-xs text-slate-600 whitespace-nowrap">
+                                      Required: {slot.required_staff} · Scheduled:{' '}
+                                      {slot.scheduled_staff}
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-end self-center flex-shrink-0">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className={getButtonColors('teal').base}
-                              disabled
-                            >
-                              Assign Coverage
-                            </Button>
-                          </div>
-                        </div>
-                        ))}
-                      </div>
-                    ))
-                  ))}
-              </div>
-
-              <div className="space-y-3">
-                <button
-                  type="button"
-                  onClick={() => setBelowPreferredCollapsed((prev) => !prev)}
-                  className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500"
-                >
-                  <span>
-                    Below Preferred ({belowPreferredGroups.reduce((total, group) => total + group.slots.length, 0)})
-                  </span>
-                  {belowPreferredCollapsed ? (
-                    <ChevronDown className="h-4 w-4" />
-                  ) : (
-                    <ChevronUp className="h-4 w-4" />
-                  )}
-                </button>
-                {!belowPreferredCollapsed &&
-                  (belowPreferredGroups.length === 0 ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                      <span>All slots meet preferred staffing ratios.</span>
-                    </div>
-                  ) : (
-                    belowPreferredGroups.map((classroom) => (
-                      <div key={classroom.classroom_name} className="space-y-2">
-                        <div>
-                          <span
-                            className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
-                            style={getClassroomPillStyle(classroom.classroom_color)}
-                          >
-                            {classroom.classroom_name} ({classroom.slots.length})
-                          </span>
-                        </div>
-                        {classroom.slots.map((slot) => (
-                        <div
-                          key={slot.id}
-                          className="grid gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 md:grid-cols-[1fr_auto]"
-                        >
-                          <div className="flex flex-wrap items-center gap-4 min-w-0">
-                            <div className="min-w-[160px] space-y-3 flex-shrink-0">
-                              <div className="text-sm font-semibold text-slate-900">
-                                {formatSlotLabel(slot.day_name, slot.time_slot_code)}
-                              </div>
-                              <div className="flex flex-col items-start gap-2">
-                                <span
-                                  className="inline-flex items-center rounded-full px-3.5 py-1 text-xs font-medium"
-                                  style={
-                                    slot.status === 'below_preferred'
-                                      ? {
-                                          backgroundColor: staffingColorValues.below_preferred.bg,
-                                          borderStyle: 'solid',
-                                          borderWidth: '1px',
-                                          borderColor: staffingColorValues.below_preferred.border,
-                                          color: staffingColorValues.below_preferred.text,
-                                        } as React.CSSProperties
-                                      : slot.status === 'below_required'
-                                      ? {
-                                          backgroundColor: staffingColorValues.below_required.bg,
-                                          borderStyle: 'solid',
-                                          borderWidth: '1px',
-                                          borderColor: staffingColorValues.below_required.border,
-                                          color: staffingColorValues.below_required.text,
-                                        } as React.CSSProperties
-                                      : undefined
-                                  }
+                              <div className="flex items-center justify-end self-center flex-shrink-0">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className={getButtonColors('teal').base}
+                                  disabled
                                 >
-                                  Below Preferred by{' '}
-                                  {formatShortfallValue(
-                                    slot.preferred_staff ?? slot.required_staff,
-                                    slot.scheduled_staff
-                                  )}
-                                </span>
-                                <div className="text-xs text-slate-600 whitespace-nowrap">
-                                  Preferred: {slot.preferred_staff ?? slot.required_staff} · Scheduled:{' '}
-                                  {slot.scheduled_staff}
+                                  Assign Coverage
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ))
+                    ))}
+                </div>
+
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => setBelowPreferredCollapsed(prev => !prev)}
+                    className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500"
+                  >
+                    <span>
+                      Below Preferred (
+                      {belowPreferredGroups.reduce((total, group) => total + group.slots.length, 0)}
+                      )
+                    </span>
+                    {belowPreferredCollapsed ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronUp className="h-4 w-4" />
+                    )}
+                  </button>
+                  {!belowPreferredCollapsed &&
+                    (belowPreferredGroups.length === 0 ? (
+                      <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        <span>All slots meet preferred staffing ratios.</span>
+                      </div>
+                    ) : (
+                      belowPreferredGroups.map(classroom => (
+                        <div key={classroom.classroom_name} className="space-y-2">
+                          <div>
+                            <span
+                              className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                              style={getClassroomPillStyle(classroom.classroom_color)}
+                            >
+                              {classroom.classroom_name} ({classroom.slots.length})
+                            </span>
+                          </div>
+                          {classroom.slots.map(slot => (
+                            <div
+                              key={slot.id}
+                              className="grid gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 md:grid-cols-[1fr_auto]"
+                            >
+                              <div className="flex flex-wrap items-center gap-4 min-w-0">
+                                <div className="min-w-[160px] space-y-3 flex-shrink-0">
+                                  <div className="text-sm font-semibold text-slate-900">
+                                    {formatSlotLabel(slot.day_name, slot.time_slot_code)}
+                                  </div>
+                                  <div className="flex flex-col items-start gap-2">
+                                    <span
+                                      className="inline-flex items-center rounded-full px-3.5 py-1 text-xs font-medium"
+                                      style={
+                                        slot.status === 'below_preferred'
+                                          ? ({
+                                              backgroundColor:
+                                                staffingColorValues.below_preferred.bg,
+                                              borderStyle: 'solid',
+                                              borderWidth: '1px',
+                                              borderColor:
+                                                staffingColorValues.below_preferred.border,
+                                              color: staffingColorValues.below_preferred.text,
+                                            } as React.CSSProperties)
+                                          : slot.status === 'below_required'
+                                            ? ({
+                                                backgroundColor:
+                                                  staffingColorValues.below_required.bg,
+                                                borderStyle: 'solid',
+                                                borderWidth: '1px',
+                                                borderColor:
+                                                  staffingColorValues.below_required.border,
+                                                color: staffingColorValues.below_required.text,
+                                              } as React.CSSProperties)
+                                            : undefined
+                                      }
+                                    >
+                                      Below Preferred by{' '}
+                                      {formatShortfallValue(
+                                        slot.preferred_staff ?? slot.required_staff,
+                                        slot.scheduled_staff
+                                      )}
+                                    </span>
+                                    <div className="text-xs text-slate-600 whitespace-nowrap">
+                                      Preferred: {slot.preferred_staff ?? slot.required_staff} ·
+                                      Scheduled: {slot.scheduled_staff}
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
+                              <div className="flex items-center justify-end self-center flex-shrink-0">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className={getButtonColors('teal').base}
+                                  disabled
+                                >
+                                  Assign Coverage
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex items-center justify-end self-center flex-shrink-0">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className={getButtonColors('teal').base}
-                              disabled
-                            >
-                              Assign Coverage
-                            </Button>
-                          </div>
+                          ))}
                         </div>
-                        ))}
-                      </div>
-                    ))
-                  ))}
+                      ))
+                    ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
           </div>
         </section>
       </div>
-      
+
       {/* Edit Time Off Panel */}
       {editingRequestId && (
-        <AddTimeOffButton 
-          key={editingRequestId} 
-          timeOffRequestId={editingRequestId} 
-          onClose={handleEditClose} 
+        <AddTimeOffButton
+          key={editingRequestId}
+          timeOffRequestId={editingRequestId}
+          onClose={handleEditClose}
         />
       )}
     </div>

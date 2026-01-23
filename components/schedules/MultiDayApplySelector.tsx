@@ -23,7 +23,11 @@ interface MultiDayApplySelectorProps {
   currentClassroomName: string
   selectedDayIds: string[] // Days that are in the weekly schedule
   timeSlots: TimeSlot[] // All available time slots
-  onApplyScopeChange: (scope: 'single' | 'timeSlot' | 'day', dayIds: string[], timeSlotIds?: string[]) => void
+  onApplyScopeChange: (
+    scope: 'single' | 'timeSlot' | 'day',
+    dayIds: string[],
+    timeSlotIds?: string[]
+  ) => void
 }
 
 export default function MultiDayApplySelector({
@@ -39,12 +43,14 @@ export default function MultiDayApplySelector({
   const [days, setDays] = useState<DayOfWeek[]>([])
   const [scope, setScope] = useState<'single' | 'timeSlot' | 'day'>('single')
   const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set())
-  const [selectedTimeSlots, setSelectedTimeSlots] = useState<Set<string>>(new Set([currentTimeSlotId]))
+  const [selectedTimeSlots, setSelectedTimeSlots] = useState<Set<string>>(
+    new Set([currentTimeSlotId])
+  )
 
   useEffect(() => {
     fetch('/api/days-of-week')
-      .then((r) => r.json())
-      .then((data) => {
+      .then(r => r.json())
+      .then(data => {
         // Sort by day_number
         const sorted = (data as DayOfWeek[]).sort((a, b) => {
           const aNum = a.day_number === 0 ? 7 : a.day_number
@@ -53,7 +59,9 @@ export default function MultiDayApplySelector({
         })
         setDays(sorted)
         // Initialize with all available days selected (filtered by selectedDayIds)
-        const availableDayIds = sorted.filter((day) => selectedDayIds.includes(day.id)).map((day) => day.id)
+        const availableDayIds = sorted
+          .filter(day => selectedDayIds.includes(day.id))
+          .map(day => day.id)
         setSelectedDays(new Set(availableDayIds))
       })
       .catch(console.error)
@@ -68,7 +76,7 @@ export default function MultiDayApplySelector({
   }, [timeSlots])
 
   // Filter days to only show those in the weekly schedule
-  const availableDays = days.filter((day) => selectedDayIds.includes(day.id))
+  const availableDays = days.filter(day => selectedDayIds.includes(day.id))
 
   // Sort time slots by display_order
   const sortedTimeSlots = [...timeSlots].sort((a, b) => {
@@ -133,10 +141,12 @@ export default function MultiDayApplySelector({
 
   return (
     <div className="space-y-4">
-      <Label className="text-base font-medium text-foreground block mb-6">Apply changes to...</Label>
-      <RadioGroup 
-        value={scope} 
-        onValueChange={(val) => {
+      <Label className="text-base font-medium text-foreground block mb-6">
+        Apply changes to...
+      </Label>
+      <RadioGroup
+        value={scope}
+        onValueChange={val => {
           handleScopeChange(val as 'single' | 'timeSlot' | 'day')
         }}
         className="space-y-3"
@@ -147,7 +157,7 @@ export default function MultiDayApplySelector({
             {option1Label}
           </Label>
         </div>
-        
+
         <div className="space-y-2">
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="timeSlot" id="scope-timeSlot" />
@@ -163,7 +173,7 @@ export default function MultiDayApplySelector({
               </p>
             ) : (
               <div className="flex flex-wrap gap-x-4 gap-y-2">
-                {availableDays.map((day) => {
+                {availableDays.map(day => {
                   const isChecked = selectedDays.has(day.id)
                   const isCurrentDay = day.id === currentDayId
                   return (
@@ -171,7 +181,7 @@ export default function MultiDayApplySelector({
                       <Checkbox
                         id={`day-${day.id}`}
                         checked={isChecked}
-                        onCheckedChange={(checked) => handleDayToggle(day.id, checked === true)}
+                        onCheckedChange={checked => handleDayToggle(day.id, checked === true)}
                         disabled={isCurrentDay || scope !== 'timeSlot'}
                       />
                       <Label
@@ -188,7 +198,7 @@ export default function MultiDayApplySelector({
             )}
           </div>
         </div>
-        
+
         <div className="space-y-2">
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="day" id="scope-day" />
@@ -199,12 +209,10 @@ export default function MultiDayApplySelector({
           {/* Checkboxes always visible below third option */}
           <div className="ml-6 mt-2 space-y-2">
             {sortedTimeSlots.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic">
-                No time slots available
-              </p>
+              <p className="text-sm text-muted-foreground italic">No time slots available</p>
             ) : (
               <div className="flex flex-wrap gap-x-4 gap-y-2">
-                {sortedTimeSlots.map((timeSlot) => {
+                {sortedTimeSlots.map(timeSlot => {
                   const isChecked = selectedTimeSlots.has(timeSlot.id)
                   const isCurrentTimeSlot = timeSlot.id === currentTimeSlotId
                   return (
@@ -212,7 +220,9 @@ export default function MultiDayApplySelector({
                       <Checkbox
                         id={`timeslot-${timeSlot.id}`}
                         checked={isChecked}
-                        onCheckedChange={(checked) => handleTimeSlotToggle(timeSlot.id, checked === true)}
+                        onCheckedChange={checked =>
+                          handleTimeSlotToggle(timeSlot.id, checked === true)
+                        }
                         disabled={scope !== 'day'}
                       />
                       <Label

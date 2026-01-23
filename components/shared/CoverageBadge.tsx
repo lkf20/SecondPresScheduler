@@ -1,6 +1,11 @@
 import { AlertTriangle, Check, PieChart } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getCoverageColors, getCoverageColorClasses, coverageColorValues, type CoverageType } from '@/lib/utils/colors'
+import {
+  getCoverageColors,
+  getCoverageColorClasses,
+  coverageColorValues,
+  type CoverageType,
+} from '@/lib/utils/colors'
 
 export type CoverageBadgeType = CoverageType
 
@@ -22,7 +27,8 @@ export default function CoverageBadge({
   showLabel = true,
   className,
 }: CoverageBadgeProps) {
-  const baseClasses = 'inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 font-medium'
+  const baseClasses =
+    'inline-flex items-center gap-1.5 text-xs rounded-full px-3.5 py-1 font-medium'
   const colors = getCoverageColors(type)
 
   switch (type) {
@@ -31,19 +37,17 @@ export default function CoverageBadge({
       const colorValues = coverageColorValues.covered
       return (
         <span
-          className={cn(
-            baseClasses,
-            colorClasses,
-            className
-          )}
-          style={{
-            // Inline styles ensure colors override conflicting CSS (twMerge, specificity issues)
-            backgroundColor: colorValues.bg,
-            color: colorValues.text,
-            borderStyle: 'solid',
-            borderWidth: '1px',
-            borderColor: colorValues.border,
-          } as React.CSSProperties}
+          className={cn(baseClasses, colorClasses, className)}
+          style={
+            {
+              // Inline styles ensure colors override conflicting CSS (twMerge, specificity issues)
+              backgroundColor: colorValues.bg,
+              color: colorValues.text,
+              borderStyle: 'solid',
+              borderWidth: '1px',
+              borderColor: colorValues.border,
+            } as React.CSSProperties
+          }
         >
           <Check className={cn('h-3 w-3', colors.icon)} />
           {showLabel && 'Covered: '}
@@ -57,18 +61,16 @@ export default function CoverageBadge({
       const colorValues = coverageColorValues.partial
       return (
         <span
-          className={cn(
-            baseClasses,
-            colorClasses,
-            className
-          )}
-          style={{
-            backgroundColor: colorValues.bg,
-            color: colorValues.text,
-            borderStyle: 'solid',
-            borderWidth: '1px',
-            borderColor: colorValues.border,
-          } as React.CSSProperties}
+          className={cn(baseClasses, colorClasses, className)}
+          style={
+            {
+              backgroundColor: colorValues.bg,
+              color: colorValues.text,
+              borderStyle: 'solid',
+              borderWidth: '1px',
+              borderColor: colorValues.border,
+            } as React.CSSProperties
+          }
         >
           <PieChart className={cn('h-3 w-3', colors.icon)} />
           {showLabel && 'Partial: '}
@@ -82,18 +84,16 @@ export default function CoverageBadge({
       const colorValues = coverageColorValues.uncovered
       return (
         <span
-          className={cn(
-            baseClasses,
-            colorClasses,
-            className
-          )}
-          style={{
-            backgroundColor: colorValues.bg,
-            color: colorValues.text,
-            borderStyle: 'solid',
-            borderWidth: '1px',
-            borderColor: colorValues.border,
-          } as React.CSSProperties}
+          className={cn(baseClasses, colorClasses, className)}
+          style={
+            {
+              backgroundColor: colorValues.bg,
+              color: colorValues.text,
+              borderStyle: 'solid',
+              borderWidth: '1px',
+              borderColor: colorValues.border,
+            } as React.CSSProperties
+          }
         >
           <AlertTriangle className={cn('h-3 w-3', colors.icon)} />
           {showLabel && 'Uncovered: '}

@@ -11,12 +11,12 @@ async function fetchWeeklySchedule(weekStartISO: string): Promise<WeeklySchedule
     url.searchParams.set('weekStartISO', weekStartISO)
   }
   const response = await fetch(url.toString())
-  
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Failed to fetch weekly schedule' }))
     throw new Error(error.error || 'Failed to fetch weekly schedule')
   }
-  
+
   return response.json()
 }
 
@@ -25,7 +25,10 @@ async function fetchWeeklySchedule(weekStartISO: string): Promise<WeeklySchedule
  * The API fetches recurring teacher schedules and date-specific substitute assignments for the selected week
  * weekStartISO should be the Monday of the week in ISO format (YYYY-MM-DD)
  */
-export function useWeeklySchedule(weekStartISO: string, initialData?: WeeklyScheduleDataByClassroom[]) {
+export function useWeeklySchedule(
+  weekStartISO: string,
+  initialData?: WeeklyScheduleDataByClassroom[]
+) {
   const schoolId = useSchool()
 
   return useQuery({

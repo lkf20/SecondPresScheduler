@@ -9,12 +9,14 @@ interface ScheduleSettings {
 
 async function fetchScheduleSettings(): Promise<ScheduleSettings> {
   const response = await fetch('/api/schedule-settings')
-  
+
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Failed to fetch schedule settings' }))
+    const error = await response
+      .json()
+      .catch(() => ({ error: 'Failed to fetch schedule settings' }))
     throw new Error(error.error || 'Failed to fetch schedule settings')
   }
-  
+
   const data = await response.json()
   return {
     selected_day_ids: data.selected_day_ids || [],

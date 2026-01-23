@@ -60,7 +60,7 @@ export default function SubFinderPage() {
     handleFindSubs,
     handleFindManualSubs,
     applySubResults,
-  } = useSubFinderData({ 
+  } = useSubFinderData({
     requestedAbsenceId,
     skipInitialFetch: true, // Skip initial fetch to allow state restoration first
     subRecommendationParams,
@@ -73,7 +73,8 @@ export default function SubFinderPage() {
   const [selectedSub, setSelectedSub] = useState<SubCandidate | null>(null)
   const [isContactPanelOpen, setIsContactPanelOpen] = useState(false)
   const [isTeacherSearchOpen, setIsTeacherSearchOpen] = useState(false)
-  const { setActivePanel, previousPanel, restorePreviousPanel, registerPanelCloseHandler } = usePanelManager()
+  const { setActivePanel, previousPanel, restorePreviousPanel, registerPanelCloseHandler } =
+    usePanelManager()
   const savedSubRef = useRef<SubCandidate | null>(null)
   const savedAbsenceRef = useRef<Absence | null>(null)
   const selectedAbsenceIdRef = useRef<string | null>(null) // Track selected absence ID to prevent loss during restoration
@@ -100,7 +101,9 @@ export default function SubFinderPage() {
     selected_shift_keys?: string[]
     override_shift_keys?: string[]
   }
-  const [contactDataCache, setContactDataCache] = useState<Map<string, ContactDataCacheEntry>>(new Map())
+  const [contactDataCache, setContactDataCache] = useState<Map<string, ContactDataCacheEntry>>(
+    new Map()
+  )
   const [highlightedSubId, setHighlightedSubId] = useState<string | null>(null)
   const [manualTeacherId, setManualTeacherId] = useState<string>('')
   const [manualStartDate, setManualStartDate] = useState<string>('')
@@ -139,16 +142,26 @@ export default function SubFinderPage() {
   }, [manualTeacherId, manualStartDate, manualEndDate, manualSelectedShifts, handleFindManualSubs])
   const selectedClassrooms = useMemo(() => {
     if (!selectedAbsence) return []
-    if (Array.isArray((selectedAbsence as { classrooms?: Array<{ id: string; name: string; color: string | null }> }).classrooms)) {
-      return (selectedAbsence as { classrooms: Array<{ id: string; name: string; color: string | null }> }).classrooms
+    if (
+      Array.isArray(
+        (
+          selectedAbsence as {
+            classrooms?: Array<{ id: string; name: string; color: string | null }>
+          }
+        ).classrooms
+      )
+    ) {
+      return (
+        selectedAbsence as { classrooms: Array<{ id: string; name: string; color: string | null }> }
+      ).classrooms
     }
     return Array.from(
       new Set(
         selectedAbsence.shifts.shift_details
-          .map((shift) => shift.classroom_name)
+          .map(shift => shift.classroom_name)
           .filter((name): name is string => Boolean(name))
       )
-    ).map((name) => ({ id: name, name, color: null }))
+    ).map(name => ({ id: name, name, color: null }))
   }, [selectedAbsence])
   const { pastShiftCount, upcomingShiftCount } = useMemo(() => {
     if (!selectedAbsence?.shifts?.shift_details?.length) {
@@ -158,7 +171,7 @@ export default function SubFinderPage() {
     today.setHours(0, 0, 0, 0)
     let past = 0
     let upcoming = 0
-    selectedAbsence.shifts.shift_details.forEach((shift) => {
+    selectedAbsence.shifts.shift_details.forEach(shift => {
       if (!shift?.date) return
       const shiftDate = parseLocalDate(shift.date)
       shiftDate.setHours(0, 0, 0, 0)
@@ -176,7 +189,7 @@ export default function SubFinderPage() {
     }
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    const shiftDetails = selectedAbsence.shifts.shift_details.filter((shift) => {
+    const shiftDetails = selectedAbsence.shifts.shift_details.filter(shift => {
       if (!shift?.date) return false
       if (includePastShifts) return true
       const shiftDate = parseLocalDate(shift.date)
@@ -213,14 +226,14 @@ export default function SubFinderPage() {
   const filteredSubsForSearch = useMemo(() => {
     const query = subSearch.trim().toLowerCase()
     if (!query) return sortedSubs
-    return sortedSubs.filter((sub) => {
+    return sortedSubs.filter(sub => {
       return getDisplayName(sub, '').toLowerCase().includes(query)
     })
   }, [sortedSubs, subSearch, getDisplayName])
   const filteredManualTeachers = useMemo(() => {
     const query = manualTeacherSearch.trim().toLowerCase()
     if (!query) return teachers
-    return teachers.filter((teacher) => {
+    return teachers.filter(teacher => {
       return getDisplayName(teacher, '').toLowerCase().includes(query)
     })
   }, [teachers, manualTeacherSearch, getDisplayName])
@@ -267,7 +280,7 @@ export default function SubFinderPage() {
     if (lastIncludePastShiftsRef.current === includePastShifts) return
     lastIncludePastShiftsRef.current = includePastShifts
     if (mode === 'existing' && selectedAbsence) {
-      handleFindSubs(selectedAbsence).catch((error) => {
+      handleFindSubs(selectedAbsence).catch(error => {
         console.error('Failed to refresh subs after toggling past shifts:', error)
       })
     }
@@ -282,7 +295,7 @@ export default function SubFinderPage() {
       return null
     }
     const cacheKey = getCacheKey(sub.id, absence.id)
-    
+
     // Check cache first
     if (contactDataCache.has(cacheKey)) {
       return contactDataCache.get(cacheKey)
@@ -298,14 +311,14 @@ export default function SubFinderPage() {
         )
         return null
       }
-      
+
       const coverageData = await coverageResponse.json()
-      
+
       // Get contact data
       const contactResponse = await fetch(
         `/api/sub-finder/substitute-contacts?coverage_request_id=${coverageData.coverage_request_id}&sub_id=${sub.id}`
       )
-      
+
       if (contactResponse.ok) {
         const contactData = await contactResponse.json()
         const data = {
@@ -313,7 +326,7 @@ export default function SubFinderPage() {
           coverage_request_id: coverageData.coverage_request_id,
           shift_map: coverageData.shift_map || {},
         }
-        
+
         // Cache it
         setContactDataCache(prev => new Map(prev).set(cacheKey, data))
         return data
@@ -321,7 +334,7 @@ export default function SubFinderPage() {
     } catch (error) {
       console.error('Error fetching contact data:', error)
     }
-    
+
     return null
   }
 
@@ -329,7 +342,7 @@ export default function SubFinderPage() {
   const handleContactSub = async (sub: SubCandidate) => {
     setSelectedSub(sub)
     setIsContactPanelOpen(true)
-    
+
     // Prefetch contact data in background if we have an absence
     if (selectedAbsence) {
       fetchContactDataForSub(sub, selectedAbsence).catch(error => {
@@ -357,7 +370,12 @@ export default function SubFinderPage() {
 
   // Handle panel restoration when Add Time Off closes
   useEffect(() => {
-    if (previousPanel?.type === 'contact-sub' && !isContactPanelOpen && savedSubRef.current && savedAbsenceRef.current) {
+    if (
+      previousPanel?.type === 'contact-sub' &&
+      !isContactPanelOpen &&
+      savedSubRef.current &&
+      savedAbsenceRef.current
+    ) {
       // Restore the panel
       setSelectedSub(savedSubRef.current)
       setSelectedAbsence(savedAbsenceRef.current)
@@ -378,7 +396,7 @@ export default function SubFinderPage() {
         setSelectedAbsence(selectedAbsence)
         setIsContactPanelOpen(true)
       })
-      
+
       // Register close request handler
       const unregister = registerPanelCloseHandler('contact-sub', () => {
         // Save state before closing
@@ -386,12 +404,19 @@ export default function SubFinderPage() {
         savedAbsenceRef.current = selectedAbsence
         setIsContactPanelOpen(false)
       })
-      
+
       return unregister
     } else if (!isContactPanelOpen) {
       setActivePanel(null)
     }
-  }, [isContactPanelOpen, selectedSub, selectedAbsence, setActivePanel, registerPanelCloseHandler, setSelectedAbsence])
+  }, [
+    isContactPanelOpen,
+    selectedSub,
+    selectedAbsence,
+    setActivePanel,
+    registerPanelCloseHandler,
+    setSelectedAbsence,
+  ])
 
   // Wrapper for setIncludeFlexibleStaff that marks change as user-initiated
   const handleFlexibleStaffChange = (checked: boolean) => {
@@ -412,30 +437,38 @@ export default function SubFinderPage() {
 
   // Handler for combination contact button
   const handleCombinationContact = (subId: string) => {
-    const sub = allSubs.find((s) => s.id === subId)
+    const sub = allSubs.find(s => s.id === subId)
     if (sub) {
       handleContactSub(sub)
     }
   }
 
   // Handle shift click to scroll to sub card
-  const handleShiftClick = (shift: { id: string; date: string; day_name: string; time_slot_code: string; status: 'uncovered' | 'partially_covered' | 'fully_covered'; sub_name?: string | null; is_partial?: boolean }) => {
+  const handleShiftClick = (shift: {
+    id: string
+    date: string
+    day_name: string
+    time_slot_code: string
+    status: 'uncovered' | 'partially_covered' | 'fully_covered'
+    sub_name?: string | null
+    is_partial?: boolean
+  }) => {
     if (!shift.sub_name) return
-    
+
     // Find the sub in recommendedSubs by matching assigned shifts
-    const sub = recommendedSubs.find((s) => {
-      return s.assigned_shifts?.some((as) => 
-        as.date === shift.date && as.time_slot_code === shift.time_slot_code
+    const sub = recommendedSubs.find(s => {
+      return s.assigned_shifts?.some(
+        as => as.date === shift.date && as.time_slot_code === shift.time_slot_code
       )
     })
-    
+
     if (sub) {
       // Scroll to sub card
       setTimeout(() => {
         const element = document.getElementById(`sub-card-${sub.id}`)
         if (element) {
           element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          
+
           // Highlight the card
           setHighlightedSubId(sub.id)
           setTimeout(() => {
@@ -460,13 +493,13 @@ export default function SubFinderPage() {
   // Filter absences based on selected teachers
   const filteredAbsences = useMemo(() => {
     let filtered = absences
-    
+
     // If teachers are selected, filter by those teachers
     if (selectedTeacherIds.length > 0) {
-      filtered = filtered.filter((absence) => selectedTeacherIds.includes(absence.teacher_id))
+      filtered = filtered.filter(absence => selectedTeacherIds.includes(absence.teacher_id))
     }
     // Otherwise, show all absences (no filtering)
-    
+
     return filtered
   }, [absences, selectedTeacherIds])
 
@@ -483,7 +516,7 @@ export default function SubFinderPage() {
   const removeTeacherFromSelection = (teacherId: string) => {
     setSelectedTeacherIds(selectedTeacherIds.filter(id => id !== teacherId))
   }
-  
+
   // Auto-select first absence if exactly one absence matches selected teachers
   useEffect(() => {
     if (selectedTeacherIds.length > 0 && filteredAbsences.length === 1 && !selectedAbsence) {
@@ -508,7 +541,7 @@ export default function SubFinderPage() {
       savedAbsenceId: savedState?.selectedAbsenceId,
       savedMode: savedState?.mode,
     })
-    
+
     if (!savedState) {
       console.log('[SubFinder] No saved state found')
       hasRestoredStateRef.current = true // Mark as complete if no saved state
@@ -581,7 +614,6 @@ export default function SubFinderPage() {
     setIncludePartiallyCovered,
   ])
 
-
   // Restore selected absence after absences are loaded (for existing mode)
   useEffect(() => {
     if (requestedAbsenceId || mode !== 'existing') return // URL param takes precedence, or skip if manual mode
@@ -589,8 +621,9 @@ export default function SubFinderPage() {
 
     const savedState = loadSubFinderState()
     // Use ref first (most recent), then saved state, then current selection
-    const targetAbsenceId = selectedAbsenceIdRef.current || savedState?.selectedAbsenceId || selectedAbsence?.id
-    
+    const targetAbsenceId =
+      selectedAbsenceIdRef.current || savedState?.selectedAbsenceId || selectedAbsence?.id
+
     console.log('[SubFinder] Restore absence effect:', {
       hasSavedState: !!savedState,
       savedAbsenceId: savedState?.selectedAbsenceId,
@@ -606,13 +639,15 @@ export default function SubFinderPage() {
       console.log('[SubFinder] No saved absence ID to restore')
       return // No saved absence to restore
     }
-    
+
     // If we already have the correct absence selected, just update the ref and return
     if (selectedAbsence?.id === targetAbsenceId) {
       const absence = absences.find(a => a.id === targetAbsenceId)
       if (absence && absence !== selectedAbsence) {
         // Update to new object reference to keep in sync
-        console.log('[SubFinder] Updating selected absence to new object reference (already selected)')
+        console.log(
+          '[SubFinder] Updating selected absence to new object reference (already selected)'
+        )
         setSelectedAbsence(absence)
       }
       selectedAbsenceIdRef.current = targetAbsenceId
@@ -632,7 +667,7 @@ export default function SubFinderPage() {
       found: !!absence,
       absenceId: absence?.id,
     })
-    
+
     // If we have a selected absence, check if it still exists in the new list
     if (selectedAbsence) {
       const currentAbsenceStillExists = absences.find(a => a.id === selectedAbsence.id)
@@ -662,7 +697,7 @@ export default function SubFinderPage() {
       isRestoringStateRef.current = true
       selectedAbsenceIdRef.current = absence.id // Update ref immediately
       setSelectedAbsence(absence)
-      
+
       console.log('[SubFinder] Re-running finder')
       setTimeout(() => {
         handleFindSubs(absence).finally(() => {
@@ -676,10 +711,22 @@ export default function SubFinderPage() {
       selectedAbsenceIdRef.current = null
       setSelectedAbsence(null)
     } else {
-      console.log('[SubFinder] Could not restore absence - not found in list and no current selection')
+      console.log(
+        '[SubFinder] Could not restore absence - not found in list and no current selection'
+      )
     }
-  }, [absences, absences.length, requestedAbsenceId, mode, selectedAbsence, setSelectedAbsence, handleFindSubs, applySubResults, setRecommendedCombinations])
-  
+  }, [
+    absences,
+    absences.length,
+    requestedAbsenceId,
+    mode,
+    selectedAbsence,
+    setSelectedAbsence,
+    handleFindSubs,
+    applySubResults,
+    setRecommendedCombinations,
+  ])
+
   // Update ref whenever selectedAbsence changes (to track it even during restoration)
   useEffect(() => {
     if (selectedAbsence?.id) {
@@ -695,7 +742,7 @@ export default function SubFinderPage() {
   useEffect(() => {
     if (!selectedAbsence || mode !== 'existing') return
     if (selectedAbsence.id.startsWith('manual-')) return
-    const match = absences.find((absence) => absence.id === selectedAbsence.id)
+    const match = absences.find(absence => absence.id === selectedAbsence.id)
     if (match && match !== selectedAbsence) {
       setSelectedAbsence(match)
     }
@@ -703,18 +750,37 @@ export default function SubFinderPage() {
 
   // Restore manual mode results after form data is restored
   useEffect(() => {
-    if (mode !== 'manual' || !manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0) return
+    if (
+      mode !== 'manual' ||
+      !manualTeacherId ||
+      !manualStartDate ||
+      manualSelectedShifts.length === 0
+    )
+      return
     if (selectedAbsence) return
 
-    runManualFinder().catch((error) => {
+    runManualFinder().catch(error => {
       console.error('[SubFinder] Failed to restore manual results:', error)
     })
-  }, [mode, manualTeacherId, manualStartDate, manualEndDate, manualSelectedShifts, selectedAbsence, runManualFinder])
+  }, [
+    mode,
+    manualTeacherId,
+    manualStartDate,
+    manualEndDate,
+    manualSelectedShifts,
+    selectedAbsence,
+    runManualFinder,
+  ])
 
   // Save state whenever it changes (but not during restoration or before initial restoration)
   useEffect(() => {
     if (isRestoringStateRef.current || !hasRestoredStateRef.current) {
-      console.log('[SubFinder] Skipping save - isRestoring:', isRestoringStateRef.current, 'hasRestored:', hasRestoredStateRef.current)
+      console.log(
+        '[SubFinder] Skipping save - isRestoring:',
+        isRestoringStateRef.current,
+        'hasRestored:',
+        hasRestoredStateRef.current
+      )
       return
     }
     // Use ref if selectedAbsence is null but we have a ref value (during brief restoration moments)
@@ -771,10 +837,10 @@ export default function SubFinderPage() {
                 size="sm"
                 onClick={() => setMode('existing')}
                 className={cn(
-                  "flex-1 rounded-full text-xs font-semibold transition-all",
+                  'flex-1 rounded-full text-xs font-semibold transition-all',
                   mode === 'existing'
-                    ? "!bg-button-fill !text-button-fill-foreground shadow-sm"
-                    : "text-slate-600 hover:bg-white hover:text-slate-900"
+                    ? '!bg-button-fill !text-button-fill-foreground shadow-sm'
+                    : 'text-slate-600 hover:bg-white hover:text-slate-900'
                 )}
               >
                 Existing Absences
@@ -784,10 +850,10 @@ export default function SubFinderPage() {
                 size="sm"
                 onClick={() => setMode('manual')}
                 className={cn(
-                  "flex-1 rounded-full text-xs font-semibold transition-all",
+                  'flex-1 rounded-full text-xs font-semibold transition-all',
                   mode === 'manual'
-                    ? "!bg-button-fill !text-button-fill-foreground shadow-sm"
-                    : "text-slate-600 hover:bg-white hover:text-slate-900"
+                    ? '!bg-button-fill !text-button-fill-foreground shadow-sm'
+                    : 'text-slate-600 hover:bg-white hover:text-slate-900'
                 )}
               >
                 Manual Coverage
@@ -830,22 +896,24 @@ export default function SubFinderPage() {
                     {isTeacherSearchOpen && (
                       <div className="border-t border-slate-100 max-h-40 overflow-y-auto px-2 py-1">
                         {teacherNames
-                          .filter((name) => {
+                          .filter(name => {
                             const query = teacherSearchInput.toLowerCase()
                             // If there's a query in the dropdown input, filter by it. Otherwise show all teachers
                             return !query || name.toLowerCase().includes(query)
                           })
-                          .map((name) => {
+                          .map(name => {
                             const teacher = teachers.find(t => getDisplayName(t) === name)
                             const teacherId = teacher?.id
-                            const isSelected = Boolean(teacherId && selectedTeacherIds.includes(teacherId))
+                            const isSelected = Boolean(
+                              teacherId && selectedTeacherIds.includes(teacherId)
+                            )
                             return (
                               <button
                                 key={name}
                                 type="button"
                                 className={cn(
-                                  "w-full rounded px-1.5 py-1 text-left text-sm text-slate-700 hover:bg-slate-100",
-                                  isSelected && "bg-slate-100 opacity-60"
+                                  'w-full rounded px-1.5 py-1 text-left text-sm text-slate-700 hover:bg-slate-100',
+                                  isSelected && 'bg-slate-100 opacity-60'
                                 )}
                                 onClick={() => {
                                   if (teacherId && !isSelected) {
@@ -858,7 +926,7 @@ export default function SubFinderPage() {
                               </button>
                             )
                           })}
-                        {teacherNames.filter((name) => {
+                        {teacherNames.filter(name => {
                           const query = teacherSearchInput.toLowerCase()
                           return !query || name.toLowerCase().includes(query)
                         }).length === 0 && (
@@ -874,7 +942,7 @@ export default function SubFinderPage() {
               {/* Selected Teachers Pills */}
               {selectedTeacherIds.length > 0 && (
                 <div className="flex flex-wrap gap-2 pt-2">
-                  {selectedTeacherIds.map((teacherId) => {
+                  {selectedTeacherIds.map(teacherId => {
                     const teacher = teachers.find(t => t.id === teacherId)
                     if (!teacher) return null
                     const teacherName = getDisplayName(teacher)
@@ -911,7 +979,7 @@ export default function SubFinderPage() {
                       <Input
                         placeholder="Search teachers..."
                         value={manualTeacherSearch}
-                        onChange={(event) => setManualTeacherSearch(event.target.value)}
+                        onChange={event => setManualTeacherSearch(event.target.value)}
                         onFocus={() => setIsManualTeacherSearchOpen(true)}
                         onBlur={() => {
                           setTimeout(() => setIsManualTeacherSearchOpen(false), 150)
@@ -921,7 +989,7 @@ export default function SubFinderPage() {
                     </div>
                     {isManualTeacherSearchOpen && (
                       <div className="max-h-52 overflow-y-auto p-2">
-                        {filteredManualTeachers.map((teacher) => {
+                        {filteredManualTeachers.map(teacher => {
                           const name = getDisplayName(teacher)
                           return (
                             <button
@@ -939,9 +1007,7 @@ export default function SubFinderPage() {
                           )
                         })}
                         {filteredManualTeachers.length === 0 && (
-                          <div className="px-2 py-1 text-xs text-muted-foreground">
-                            No matches
-                          </div>
+                          <div className="px-2 py-1 text-xs text-muted-foreground">No matches</div>
                         )}
                       </div>
                     )}
@@ -953,7 +1019,7 @@ export default function SubFinderPage() {
                 <div className="mt-1">
                   <DatePickerInput
                     value={manualStartDate}
-                    onChange={(value) => {
+                    onChange={value => {
                       setManualStartDate(value)
                       if (manualEndDate && value && manualEndDate < value) {
                         setManualEndDate(value)
@@ -976,7 +1042,7 @@ export default function SubFinderPage() {
                   <DatePickerInput
                     ref={manualEndDateRef}
                     value={manualEndDate}
-                    onChange={(value) => {
+                    onChange={value => {
                       if (manualStartDate && value && value < manualStartDate) {
                         setManualEndDate(manualStartDate)
                         setCorrectionNotice()
@@ -1002,7 +1068,7 @@ export default function SubFinderPage() {
                   startDate={manualStartDate}
                   endDate={manualEndDate || manualStartDate}
                   selectedShifts={manualSelectedShifts}
-                  onShiftsChange={(shifts) => {
+                  onShiftsChange={shifts => {
                     setManualSelectedShifts(shifts)
                   }}
                   autoSelectScheduled
@@ -1059,13 +1125,29 @@ export default function SubFinderPage() {
                           const date = parseLocalDate(dateString)
                           const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
                           const dayName = dayNames[date.getDay()]
-                          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                          const monthNames = [
+                            'Jan',
+                            'Feb',
+                            'Mar',
+                            'Apr',
+                            'May',
+                            'Jun',
+                            'Jul',
+                            'Aug',
+                            'Sep',
+                            'Oct',
+                            'Nov',
+                            'Dec',
+                          ]
                           const month = monthNames[date.getMonth()]
                           const day = date.getDate()
                           return `${dayName} ${month} ${day}`
                         }
                         const startDate = formatDate(selectedAbsence.start_date)
-                        if (selectedAbsence.end_date && selectedAbsence.end_date !== selectedAbsence.start_date) {
+                        if (
+                          selectedAbsence.end_date &&
+                          selectedAbsence.end_date !== selectedAbsence.start_date
+                        ) {
                           const endDate = formatDate(selectedAbsence.end_date)
                           return (
                             <>
@@ -1081,7 +1163,7 @@ export default function SubFinderPage() {
                     <span className="h-4 w-px bg-slate-500 mx-2" />
                     {selectedClassrooms.length > 0 ? (
                       <span className="flex flex-wrap items-center gap-1.5">
-                        {selectedClassrooms.map((classroom) => (
+                        {selectedClassrooms.map(classroom => (
                           <span
                             key={classroom.id || classroom.name}
                             className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
@@ -1092,7 +1174,9 @@ export default function SubFinderPage() {
                         ))}
                       </span>
                     ) : (
-                      <span className="text-xs font-normal text-muted-foreground">Classroom unavailable</span>
+                      <span className="text-xs font-normal text-muted-foreground">
+                        Classroom unavailable
+                      </span>
                     )}
                   </h2>
                 </div>
@@ -1111,7 +1195,7 @@ export default function SubFinderPage() {
                   {/* Color Key - Left aligned, bottom aligned */}
                   <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1.5">
-                      <div 
+                      <div
                         className="w-3 h-3 rounded bg-blue-50"
                         style={{
                           borderWidth: '1px',
@@ -1122,7 +1206,7 @@ export default function SubFinderPage() {
                       <span>Covered</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <div 
+                      <div
                         className="w-3 h-3 rounded bg-orange-50"
                         style={{
                           borderWidth: '1px',
@@ -1133,7 +1217,7 @@ export default function SubFinderPage() {
                       <span>Uncovered</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <div 
+                      <div
                         className="w-3 h-3 rounded bg-emerald-50"
                         style={{
                           borderWidth: '1px',
@@ -1144,7 +1228,7 @@ export default function SubFinderPage() {
                       <span>Available</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <div 
+                      <div
                         className="w-3 h-3 rounded bg-gray-100"
                         style={{
                           borderWidth: '1px',
@@ -1157,156 +1241,175 @@ export default function SubFinderPage() {
                   </div>
                   {/* Buttons - Right aligned */}
                   <div className="flex items-center gap-3">
-                    <Button onClick={handleRerunFinder} disabled={loading} size="sm" variant="outline">
+                    <Button
+                      onClick={handleRerunFinder}
+                      disabled={loading}
+                      size="sm"
+                      variant="outline"
+                    >
                       <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                       Rerun Finder
                     </Button>
 
                     <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="relative">
-                        <Settings2 className="h-4 w-4 mr-2" />
-                        Search & Filter
-                        {(includePartiallyCovered || !includeOnlyRecommended || !includeFlexibleStaff) && (
-                          <Badge
-                            variant="secondary"
-                            className="ml-2 h-5 min-w-[20px] px-1.5 text-xs"
-                          >
-                            {[
-                              includePartiallyCovered,
-                              !includeOnlyRecommended,
-                              !includeFlexibleStaff,
-                            ].filter(Boolean).length}
-                          </Badge>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      className="w-80"
-                      align="start"
-                      onOpenAutoFocus={(event) => event.preventDefault()}
-                    >
-                      <div className="space-y-4">
-                        <div>
-                          <Label className="text-sm font-medium">Substitute</Label>
-                          <div ref={subSearchRef} className="mt-2 rounded-md border border-slate-200 bg-white">
-                            <div className="border-b border-slate-100 p-2">
-                              <Input
-                                placeholder="Search substitutes..."
-                                value={subSearch}
-                                onChange={(event) => setSubSearch(event.target.value)}
-                                onFocus={() => setIsSubSearchOpen(true)}
-                                className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
-                              />
-                            </div>
-                            {isSubSearchOpen && (
-                              <div className="max-h-60 overflow-y-auto p-2">
-                                {filteredSubsForSearch.length === 0 ? (
-                                  <div className="p-2 text-xs text-muted-foreground">No matches</div>
-                                ) : (
-                                  <div className="space-y-1">
-                                    {filteredSubsForSearch.map((sub) => {
-                                      const name = getDisplayName(sub)
-                                      const canCover = (sub.shifts_covered ?? 0) > 0 || (sub.can_cover?.length ?? 0) > 0
-                                      return (
-                                        <button
-                                          key={sub.id}
-                                          type="button"
-                                          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
-                                          onClick={() => {
-                                            if (!canCover && includeOnlyRecommended) {
-                                              setIncludeOnlyRecommended(false)
-                                              applySubResults(allSubs, { useOnlyRecommended: false })
-                                              toast('Turning off “Include only recommended subs” to show this selection.')
-                                              setTimeout(() => scrollToSubCard(sub.id), 50)
-                                            } else {
-                                              scrollToSubCard(sub.id)
-                                            }
-                                            setIsSubSearchOpen(false)
-                                          }}
-                                        >
-                                          <span
-                                            className={`h-2 w-2 rounded-full ${canCover ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                                          />
-                                          <span>{name.trim()}</span>
-                                        </button>
-                                      )
-                                    })}
-                                  </div>
-                                )}
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="relative">
+                          <Settings2 className="h-4 w-4 mr-2" />
+                          Search & Filter
+                          {(includePartiallyCovered ||
+                            !includeOnlyRecommended ||
+                            !includeFlexibleStaff) && (
+                            <Badge
+                              variant="secondary"
+                              className="ml-2 h-5 min-w-[20px] px-1.5 text-xs"
+                            >
+                              {
+                                [
+                                  includePartiallyCovered,
+                                  !includeOnlyRecommended,
+                                  !includeFlexibleStaff,
+                                ].filter(Boolean).length
+                              }
+                            </Badge>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-80"
+                        align="start"
+                        onOpenAutoFocus={event => event.preventDefault()}
+                      >
+                        <div className="space-y-4">
+                          <div>
+                            <Label className="text-sm font-medium">Substitute</Label>
+                            <div
+                              ref={subSearchRef}
+                              className="mt-2 rounded-md border border-slate-200 bg-white"
+                            >
+                              <div className="border-b border-slate-100 p-2">
+                                <Input
+                                  placeholder="Search substitutes..."
+                                  value={subSearch}
+                                  onChange={event => setSubSearch(event.target.value)}
+                                  onFocus={() => setIsSubSearchOpen(true)}
+                                  className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
+                                />
                               </div>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <h4 className="font-medium text-sm mb-3">Filter Options</h4>
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <Label
-                                  htmlFor="include-only-recommended"
-                                  className="text-sm font-normal cursor-pointer"
-                                >
-                                  Include only recommended subs
-                                </Label>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  Show only subs who can cover at least one shift
-                                </p>
-                              </div>
-                              <Switch
-                                id="include-only-recommended"
-                                checked={includeOnlyRecommended}
-                                onCheckedChange={setIncludeOnlyRecommended}
-                              />
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <Label
-                                  htmlFor="include-partial"
-                                  className="text-sm font-normal cursor-pointer"
-                                >
-                                  Include partially covered shifts
-                                </Label>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  Show absences with partial coverage
-                                </p>
-                              </div>
-                              <Switch
-                                id="include-partial"
-                                checked={includePartiallyCovered}
-                                onCheckedChange={setIncludePartiallyCovered}
-                              />
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <Label
-                                  htmlFor="include-flexible"
-                                  className="text-sm font-normal cursor-pointer"
-                                >
-                                  Include Flexible Staff
-                                </Label>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  Include staff who can sub when not teaching
-                                </p>
-                              </div>
-                              <Switch
-                                id="include-flexible"
-                                checked={includeFlexibleStaff}
-                                onCheckedChange={handleFlexibleStaffChange}
-                              />
+                              {isSubSearchOpen && (
+                                <div className="max-h-60 overflow-y-auto p-2">
+                                  {filteredSubsForSearch.length === 0 ? (
+                                    <div className="p-2 text-xs text-muted-foreground">
+                                      No matches
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-1">
+                                      {filteredSubsForSearch.map(sub => {
+                                        const name = getDisplayName(sub)
+                                        const canCover =
+                                          (sub.shifts_covered ?? 0) > 0 ||
+                                          (sub.can_cover?.length ?? 0) > 0
+                                        return (
+                                          <button
+                                            key={sub.id}
+                                            type="button"
+                                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
+                                            onClick={() => {
+                                              if (!canCover && includeOnlyRecommended) {
+                                                setIncludeOnlyRecommended(false)
+                                                applySubResults(allSubs, {
+                                                  useOnlyRecommended: false,
+                                                })
+                                                toast(
+                                                  'Turning off “Include only recommended subs” to show this selection.'
+                                                )
+                                                setTimeout(() => scrollToSubCard(sub.id), 50)
+                                              } else {
+                                                scrollToSubCard(sub.id)
+                                              }
+                                              setIsSubSearchOpen(false)
+                                            }}
+                                          >
+                                            <span
+                                              className={`h-2 w-2 rounded-full ${canCover ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                            />
+                                            <span>{name.trim()}</span>
+                                          </button>
+                                        )
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
+                          <div>
+                            <h4 className="font-medium text-sm mb-3">Filter Options</h4>
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <Label
+                                    htmlFor="include-only-recommended"
+                                    className="text-sm font-normal cursor-pointer"
+                                  >
+                                    Include only recommended subs
+                                  </Label>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Show only subs who can cover at least one shift
+                                  </p>
+                                </div>
+                                <Switch
+                                  id="include-only-recommended"
+                                  checked={includeOnlyRecommended}
+                                  onCheckedChange={setIncludeOnlyRecommended}
+                                />
+                              </div>
+
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <Label
+                                    htmlFor="include-partial"
+                                    className="text-sm font-normal cursor-pointer"
+                                  >
+                                    Include partially covered shifts
+                                  </Label>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Show absences with partial coverage
+                                  </p>
+                                </div>
+                                <Switch
+                                  id="include-partial"
+                                  checked={includePartiallyCovered}
+                                  onCheckedChange={setIncludePartiallyCovered}
+                                />
+                              </div>
+
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <Label
+                                    htmlFor="include-flexible"
+                                    className="text-sm font-normal cursor-pointer"
+                                  >
+                                    Include Flexible Staff
+                                  </Label>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Include staff who can sub when not teaching
+                                  </p>
+                                </div>
+                                <Switch
+                                  id="include-flexible"
+                                  checked={includeFlexibleStaff}
+                                  onCheckedChange={handleFlexibleStaffChange}
+                                />
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </div>
               </div>
             </div>
-
           </>
         )}
 
@@ -1317,7 +1420,10 @@ export default function SubFinderPage() {
               {showPastShiftsBanner && (
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-slate-900">
                   <p className="max-w-3xl leading-snug">
-                    This absence includes <strong>{pastShiftCount}</strong> past shift{pastShiftCount === 1 ? '' : 's'} and <strong>{upcomingShiftCount}</strong> upcoming shift{upcomingShiftCount === 1 ? '' : 's'}. {includePastShifts ? 'Showing all shifts.' : 'Showing upcoming shifts only.'}
+                    This absence includes <strong>{pastShiftCount}</strong> past shift
+                    {pastShiftCount === 1 ? '' : 's'} and <strong>{upcomingShiftCount}</strong>{' '}
+                    upcoming shift{upcomingShiftCount === 1 ? '' : 's'}.{' '}
+                    {includePastShifts ? 'Showing all shifts.' : 'Showing upcoming shifts only.'}
                   </p>
                   <label
                     htmlFor="include-past-shifts"
@@ -1347,7 +1453,9 @@ export default function SubFinderPage() {
                     allShifts={selectedAbsence.shifts.shift_details || []}
                     includePastShifts={includePastShifts}
                   />
-                  <div className="mt-16 text-sm font-semibold text-slate-700">All Available Subs</div>
+                  <div className="mt-16 text-sm font-semibold text-slate-700">
+                    All Available Subs
+                  </div>
                   <div className="mt-2 border-t border-slate-200 pt-6" />
                 </div>
               )}
@@ -1404,7 +1512,7 @@ export default function SubFinderPage() {
                 return next
               })
             }
-            
+
             // Refresh absences to update coverage status
             await fetchAbsences()
             // Refresh recommended subs if we have a selected absence

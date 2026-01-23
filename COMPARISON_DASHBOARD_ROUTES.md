@@ -9,12 +9,14 @@ The dashboard overview route was deleted in commit `b024de5` (Jan 21, 2026) but 
 ### 1. **Data Source Architecture**
 
 **Deleted Version (708 lines):**
+
 - Used `time_off_requests` and `time_off_shifts` tables (legacy schema)
 - Called `getTimeOffRequests()` and `getTimeOffShifts()` from `lib/api/time-off`
 - Used `transformTimeOffCardData()` utility function
 - More complex transformation logic with multiple helper functions
 
 **New Version (405 lines):**
+
 - Uses `coverage_requests` and `coverage_request_shifts` tables (modern schema)
 - Direct Supabase queries
 - Simpler, more direct data processing
@@ -23,6 +25,7 @@ The dashboard overview route was deleted in commit `b024de5` (Jan 21, 2026) but 
 ### 2. **Data Fetching Approach**
 
 **Deleted Version:**
+
 ```typescript
 // Used library functions with timeout protection
 const { getTimeOffRequests } = await import('@/lib/api/time-off')
@@ -30,13 +33,14 @@ const { getTimeOffShifts } = await import('@/lib/api/time-off-shifts')
 const { transformTimeOffCardData } = await import('@/lib/utils/time-off-card-data')
 
 // Had timeout protection
-const timeoutPromise = new Promise((_, reject) => 
+const timeoutPromise = new Promise((_, reject) =>
   setTimeout(() => reject(new Error('Timeout')), 10000)
 )
 timeOffRequests = await Promise.race([...])
 ```
 
 **New Version:**
+
 ```typescript
 // Direct Supabase queries
 const { data: coverageRequests } = await supabase
@@ -48,11 +52,13 @@ const { data: coverageRequests } = await supabase
 ### 3. **Classroom Resolution**
 
 **Deleted Version:**
+
 - Built complex classroom lookup maps from teacher schedules
 - Used `classroomIdMap` and `classroomMap` with keys like `${teacher_id}|${day_of_week_id}|${time_slot_id}`
 - Had fallback logic for "Classroom unavailable"
 
 **New Version:**
+
 - Gets classrooms directly from `coverage_request_shifts.classroom_id`
 - Simpler, more direct approach
 - No need for complex lookup maps
@@ -60,11 +66,13 @@ const { data: coverageRequests } = await supabase
 ### 4. **Coverage Calculation**
 
 **Deleted Version:**
+
 - Used `transformTimeOffCardData()` utility
 - Built assignment maps with `hasFull` and `hasPartial` flags
 - More complex coverage status calculation
 
 **New Version:**
+
 - Directly matches `sub_assignments` to `coverage_request_shifts` via `coverage_request_shift_id`
 - Simpler coverage counting logic
 - More accurate (uses foreign key relationship)
@@ -72,12 +80,14 @@ const { data: coverageRequests } = await supabase
 ### 5. **Staffing Targets**
 
 **Deleted Version:**
+
 - Used `schedule_cells` with complex enrollment and ratio calculations
 - Built `absenceSlotKeys` to exclude slots with absences
 - Complex date range calculations with `datesByDayId` map
 - Checked `subAssignmentCountByDateSlot` for coverage
 
 **New Version:**
+
 - Uses `staffing_rules` table directly
 - Simpler calculation based on `required_teachers` and `preferred_teachers`
 - Counts scheduled staff from `teacher_schedules` and `sub_assignments`
@@ -86,11 +96,13 @@ const { data: coverageRequests } = await supabase
 ### 6. **Error Handling & Logging**
 
 **Deleted Version:**
+
 - Extensive console logging with `[Dashboard API]` prefix
 - Timeout protection for slow queries
 - More detailed error messages
 
 **New Version:**
+
 - Minimal logging
 - No timeout protection
 - Simpler error handling
@@ -98,10 +110,12 @@ const { data: coverageRequests } = await supabase
 ### 7. **Response Format**
 
 **Deleted Version:**
+
 - Included `range: { start_date, end_date }` in response
 - Used `transformTimeOffCardData()` which may have added extra fields
 
 **New Version:**
+
 - No `range` field (but dates are in query params)
 - Direct mapping to expected format
 - Cleaner response structure

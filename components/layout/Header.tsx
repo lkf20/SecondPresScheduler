@@ -49,7 +49,13 @@ export default function Header({ userEmail }: HeaderProps) {
   const [clearDraftOnMount, setClearDraftOnMount] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
   const timeOffFormRef = useRef<{ reset: () => void }>(null)
-  const { activePanel, savePreviousPanel, restorePreviousPanel, setActivePanel, requestPanelClose } = usePanelManager()
+  const {
+    activePanel,
+    savePreviousPanel,
+    restorePreviousPanel,
+    setActivePanel,
+    requestPanelClose,
+  } = usePanelManager()
   const [isFindSubPopoverOpen, setIsFindSubPopoverOpen] = useState(false)
   const [isAssignSubPanelOpen, setIsAssignSubPanelOpen] = useState(false)
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('')
@@ -73,19 +79,20 @@ export default function Header({ userEmail }: HeaderProps) {
     }
     const startDateFormatted = formatDateForToast(startDate)
     const endDateFormatted = formatDateForToast(endDate)
-    const dateRange = startDateFormatted === endDateFormatted 
-      ? startDateFormatted 
-      : `${startDateFormatted}-${endDateFormatted}`
-    
+    const dateRange =
+      startDateFormatted === endDateFormatted
+        ? startDateFormatted
+        : `${startDateFormatted}-${endDateFormatted}`
+
     // Reset unsaved changes flag
     setHasUnsavedChanges(false)
-    
+
     // Close the sheet
     setIsTimeOffSheetOpen(false)
-    
+
     // Show toast
     toast.success(`Time off added for ${teacherName} (${dateRange})`)
-    
+
     // Refresh the current page to update data
     router.refresh()
   }
@@ -136,7 +143,7 @@ export default function Header({ userEmail }: HeaderProps) {
   useEffect(() => {
     fetch('/api/teachers')
       .then(r => r.json())
-      .then((data) => {
+      .then(data => {
         const sorted = (data as Staff[]).sort((a, b) => {
           const nameA = a.display_name || `${a.first_name} ${a.last_name}`.trim() || ''
           const nameB = b.display_name || `${b.first_name} ${b.last_name}`.trim() || ''
@@ -165,7 +172,7 @@ export default function Header({ userEmail }: HeaderProps) {
   const filteredTeachers = useMemo(() => {
     const query = teacherSearch.trim().toLowerCase()
     if (!query) return teachers
-    return teachers.filter((teacher) => {
+    return teachers.filter(teacher => {
       const name = getTeacherDisplayName(teacher)
       return name.toLowerCase().includes(query)
     })
@@ -210,9 +217,9 @@ export default function Header({ userEmail }: HeaderProps) {
         </div>
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <Button 
-              size="sm" 
-              variant="outline" 
+            <Button
+              size="sm"
+              variant="outline"
               className="border-slate-300 text-slate-700 hover:bg-slate-100"
               onClick={() => {
                 // If another panel is open, save it and close it before opening Add Time Off
@@ -232,7 +239,11 @@ export default function Header({ userEmail }: HeaderProps) {
             {isMounted ? (
               <Popover open={isFindSubPopoverOpen} onOpenChange={setIsFindSubPopoverOpen}>
                 <PopoverTrigger asChild>
-                  <Button size="sm" variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-100">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                  >
                     <UserSearch className="h-4 w-4 mr-2" />
                     Find Sub
                   </Button>
@@ -240,12 +251,17 @@ export default function Header({ userEmail }: HeaderProps) {
                 <PopoverContent className="w-80" align="start">
                   <div className="space-y-4">
                     <h3 className="font-semibold text-sm">Find sub for:</h3>
-                    <div ref={teacherSearchRef} className="rounded-md border border-slate-200 bg-white">
+                    <div
+                      ref={teacherSearchRef}
+                      className="rounded-md border border-slate-200 bg-white"
+                    >
                       <div className="border-b border-slate-100 px-2 py-1">
                         <Input
                           placeholder="Search or select a teacher..."
-                          value={selectedTeacher ? getTeacherDisplayName(selectedTeacher) : teacherSearch}
-                          onChange={(event) => {
+                          value={
+                            selectedTeacher ? getTeacherDisplayName(selectedTeacher) : teacherSearch
+                          }
+                          onChange={event => {
                             const value = event.target.value
                             setTeacherSearch(value)
                             setIsTeacherDropdownOpen(true)
@@ -267,7 +283,7 @@ export default function Header({ userEmail }: HeaderProps) {
                             <div className="p-2 text-xs text-muted-foreground">No matches</div>
                           ) : (
                             <div className="space-y-1">
-                              {filteredTeachers.map((teacher) => {
+                              {filteredTeachers.map(teacher => {
                                 const name = getTeacherDisplayName(teacher)
                                 return (
                                   <button
@@ -300,7 +316,12 @@ export default function Header({ userEmail }: HeaderProps) {
                 </PopoverContent>
               </Popover>
             ) : (
-              <Button size="sm" variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-100" disabled>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                disabled
+              >
                 <UserSearch className="h-4 w-4 mr-2" />
                 Find Sub
               </Button>
@@ -321,9 +342,7 @@ export default function Header({ userEmail }: HeaderProps) {
               Assign Sub
             </Button>
           </div>
-          {userEmail && (
-            <span className="text-sm text-muted-foreground">{userEmail}</span>
-          )}
+          {userEmail && <span className="text-sm text-muted-foreground">{userEmail}</span>}
           <Button variant="ghost" size="sm" onClick={handleLogout}>
             <LogOut className="h-4 w-4 mr-2" />
             Logout
@@ -331,12 +350,9 @@ export default function Header({ userEmail }: HeaderProps) {
         </div>
       </div>
 
-      <Sheet 
-        open={isTimeOffSheetOpen} 
-        onOpenChange={handleCloseSheet}
-      >
-        <SheetContent 
-          side="right" 
+      <Sheet open={isTimeOffSheetOpen} onOpenChange={handleCloseSheet}>
+        <SheetContent
+          side="right"
           showCloseButton={false}
           className={`w-full sm:max-w-2xl h-screen flex flex-col p-0 ${getPanelBackgroundClasses()}`}
         >
@@ -347,9 +363,7 @@ export default function Header({ userEmail }: HeaderProps) {
                   <SheetTitle className="text-3xl font-bold tracking-tight text-slate-900">
                     Add Time Off Request
                   </SheetTitle>
-                  <SheetDescription>
-                    Create a new time off request
-                  </SheetDescription>
+                  <SheetDescription>Create a new time off request</SheetDescription>
                 </div>
                 <SheetClose asChild>
                   <button
@@ -362,7 +376,7 @@ export default function Header({ userEmail }: HeaderProps) {
                 </SheetClose>
               </div>
             </SheetHeader>
-            <TimeOffForm 
+            <TimeOffForm
               ref={timeOffFormRef}
               onSuccess={handleTimeOffSuccess}
               onCancel={() => handleCloseSheet(false)}

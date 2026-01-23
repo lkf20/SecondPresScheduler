@@ -50,13 +50,14 @@ psql "postgresql://postgres:[PASSWORD]@db.dxsyowrtvxplaysemati.supabase.co:5432/
 After applying migrations, verify the tables were created:
 
 ```sql
-SELECT table_name 
-FROM information_schema.tables 
-WHERE table_schema = 'public' 
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
 ORDER BY table_name;
 ```
 
 You should see all 17 tables:
+
 - classrooms
 - classes
 - time_slots
@@ -82,4 +83,3 @@ You should see all 17 tables:
 - Unique constraints prevent duplicate data
 - Triggers automatically update `updated_at` timestamps
 - RLS policies allow authenticated users to read/write all data (can be restricted later)
-

@@ -22,17 +22,13 @@ export async function getClassGroups(includeInactive = false) {
 
 export async function getClassGroupById(id: string) {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('class_groups')
-    .select('*')
-    .eq('id', id)
-    .single()
+  const { data, error } = await supabase.from('class_groups').select('*').eq('id', id).single()
 
   if (error) throw error
   return data as ClassGroup
 }
 
-export async function createClassGroup(classGroupData: { 
+export async function createClassGroup(classGroupData: {
   name: string
   parent_class_id?: string
   order?: number | null
@@ -46,7 +42,7 @@ export async function createClassGroup(classGroupData: {
   is_active?: boolean
 }) {
   const supabase = await createClient()
-  
+
   // If order is not provided, set it to the end (highest order + 1)
   if (classGroupData.order === undefined || classGroupData.order === null) {
     const { data: existingClassGroups } = await supabase
@@ -54,22 +50,18 @@ export async function createClassGroup(classGroupData: {
       .select('order')
       .order('order', { ascending: false, nullsFirst: false })
       .limit(1)
-    
+
     const maxOrder = existingClassGroups?.[0]?.order ?? 0
     classGroupData.order = maxOrder + 1
   }
-  
+
   // Default is_active to true if not provided
   const insertData = {
     ...classGroupData,
     is_active: classGroupData.is_active ?? true,
   }
-  
-  const { data, error } = await supabase
-    .from('class_groups')
-    .insert(insertData)
-    .select()
-    .single()
+
+  const { data, error } = await supabase.from('class_groups').insert(insertData).select().single()
 
   if (error) throw error
   return data as ClassGroup
@@ -104,4 +96,3 @@ export async function deleteClassGroup(id: string) {
   if (error) throw error
   return data as ClassGroup
 }
-

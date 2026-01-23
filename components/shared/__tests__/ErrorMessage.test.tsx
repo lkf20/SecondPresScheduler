@@ -8,9 +8,7 @@ describe('ErrorMessage', () => {
   })
 
   it('should apply custom className', () => {
-    const { container } = render(
-      <ErrorMessage message="Test error" className="custom-class" />
-    )
+    const { container } = render(<ErrorMessage message="Test error" className="custom-class" />)
     expect(container.firstChild).toHaveClass('custom-class')
   })
 
@@ -21,6 +19,3 @@ describe('ErrorMessage', () => {
     expect(icon).toBeInTheDocument()
   })
 })
-
-
-

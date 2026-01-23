@@ -19,13 +19,15 @@ export async function getClassClassroomMappings(filters?: {
   const supabase = await createClient()
   let query = supabase
     .from('class_classroom_mappings')
-    .select(`
+    .select(
+      `
       *,
       class:class_groups(id, name),
       classroom:classrooms(id, name),
       day_of_week:days_of_week(id, name, day_number),
       time_slot:time_slots(id, code, name)
-    `)
+    `
+    )
     .order('day_of_week_id', { ascending: true })
     .order('time_slot_id', { ascending: true })
 
@@ -74,10 +76,7 @@ export async function bulkCreateClassClassroomMappings(
   }>
 ) {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('class_classroom_mappings')
-    .insert(mappings)
-    .select()
+  const { data, error } = await supabase.from('class_classroom_mappings').insert(mappings).select()
 
   if (error) throw error
   return data as ClassClassroomMapping[]
@@ -85,18 +84,12 @@ export async function bulkCreateClassClassroomMappings(
 
 export async function deleteClassClassroomMapping(id: string) {
   const supabase = await createClient()
-  const { error } = await supabase
-    .from('class_classroom_mappings')
-    .delete()
-    .eq('id', id)
+  const { error } = await supabase.from('class_classroom_mappings').delete().eq('id', id)
 
   if (error) throw error
 }
 
-export async function deleteClassClassroomMappingsByDayTime(
-  dayId: string,
-  timeSlotId: string
-) {
+export async function deleteClassClassroomMappingsByDayTime(dayId: string, timeSlotId: string) {
   const supabase = await createClient()
   const { error } = await supabase
     .from('class_classroom_mappings')
@@ -143,4 +136,3 @@ export async function copyMappingsToOtherDays(
 
   return []
 }
-

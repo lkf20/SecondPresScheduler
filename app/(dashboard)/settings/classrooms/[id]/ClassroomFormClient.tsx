@@ -130,10 +130,7 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
             <Input type="number" {...register('capacity')} placeholder="Optional" />
           </FormField>
 
-          <FormField
-            label="Color (Optional)"
-            error={errors.color?.message}
-          >
+          <FormField label="Color (Optional)" error={errors.color?.message}>
             <ClassroomColorPicker value={selectedColor} onChange={setSelectedColor} />
           </FormField>
 

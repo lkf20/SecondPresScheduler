@@ -120,7 +120,8 @@ export async function getSubstituteContact(
   // First, get the contact with basic details
   const { data: contactData, error: contactError } = await supabase
     .from('substitute_contacts')
-    .select(`
+    .select(
+      `
       *,
       sub:staff!substitute_contacts_sub_id_fkey(
         id,
@@ -149,7 +150,8 @@ export async function getSubstituteContact(
           class_group_id
         )
       )
-    `)
+    `
+    )
     .eq('coverage_request_id', coverageRequestId)
     .eq('sub_id', subId)
     .single()
@@ -169,7 +171,8 @@ export async function getSubstituteContact(
     .eq('id', coverageRequestId)
     .single()
 
-  const teacherId = (coverageRequest as CoverageRequestWithTeacher | null)?.time_off_requests?.teacher_id
+  const teacherId = (coverageRequest as CoverageRequestWithTeacher | null)?.time_off_requests
+    ?.teacher_id
 
   // Get assigned shifts by matching sub_assignments with coverage_request_shifts
   let assignedShifts: AssignedShift[] = []
@@ -185,13 +188,15 @@ export async function getSubstituteContact(
       // Get all coverage_request_shifts for this request
       const { data: coverageShifts } = await supabase
         .from('coverage_request_shifts')
-        .select(`
+        .select(
+          `
           id,
           date,
           time_slot_id,
           time_slots:time_slots(code),
           days_of_week:day_of_week_id(name)
-        `)
+        `
+        )
         .eq('coverage_request_id', coverageRequestId)
 
       if (coverageShifts) {
@@ -204,24 +209,26 @@ export async function getSubstituteContact(
             id: shift.id,
             date: shift.date,
             time_slot_id: shift.time_slot_id,
-            time_slots: Array.isArray(shift.time_slots) && shift.time_slots.length > 0
-              ? { code: shift.time_slots[0]?.code ?? null }
-              : null,
-            days_of_week: Array.isArray(shift.days_of_week) && shift.days_of_week.length > 0
-              ? { name: shift.days_of_week[0]?.name ?? null }
-              : null,
+            time_slots:
+              Array.isArray(shift.time_slots) && shift.time_slots.length > 0
+                ? { code: shift.time_slots[0]?.code ?? null }
+                : null,
+            days_of_week:
+              Array.isArray(shift.days_of_week) && shift.days_of_week.length > 0
+                ? { name: shift.days_of_week[0]?.name ?? null }
+                : null,
           }
           shiftMap.set(key, transformedShift)
         })
 
         // Match sub_assignments with coverage_request_shifts
         assignedShifts = subAssignments
-          .map((assignment) => {
+          .map(assignment => {
             const key = `${assignment.date}|${assignment.time_slot_id}`
             return shiftMap.get(key)
           })
           .filter((shift): shift is CoverageShift => Boolean(shift))
-          .map((shift) => ({
+          .map(shift => ({
             coverage_request_shift_id: shift.id,
             date: shift.date,
             day_name: shift.days_of_week?.name || '',
@@ -234,7 +241,7 @@ export async function getSubstituteContact(
   const selectedShiftKeys = new Set<string>()
   const overrideShiftKeys = new Set<string>()
   const overrides = (contactData as SubstituteContactWithDetails).shift_overrides || []
-  overrides.forEach((override) => {
+  overrides.forEach(override => {
     const shift = override.shift
     const timeSlotCode = shift?.time_slots?.code || ''
     if (!shift?.date || !timeSlotCode) return
@@ -276,7 +283,10 @@ export async function updateSubstituteContact(
     .eq('id', id)
     .single()
 
-  const updateData: Partial<SubstituteContact> & { updated_at: string; contacted_at?: string | null } = {
+  const updateData: Partial<SubstituteContact> & {
+    updated_at: string
+    contacted_at?: string | null
+  } = {
     ...updates,
     updated_at: new Date().toISOString(),
   }
@@ -325,12 +335,12 @@ export async function upsertShiftOverrides(
     .eq('substitute_contact_id', substituteContactId)
 
   if (existingOverrides) {
-    const existingShiftIds = new Set(existingOverrides.map((eo) => eo.coverage_request_shift_id))
-    const newShiftIds = new Set(shiftOverrides.map((so) => so.coverage_request_shift_id))
-    
+    const existingShiftIds = new Set(existingOverrides.map(eo => eo.coverage_request_shift_id))
+    const newShiftIds = new Set(shiftOverrides.map(so => so.coverage_request_shift_id))
+
     // Find shift IDs to delete (exist in DB but not in new list)
-    const toDelete = Array.from(existingShiftIds).filter((id) => !newShiftIds.has(id))
-    
+    const toDelete = Array.from(existingShiftIds).filter(id => !newShiftIds.has(id))
+
     if (toDelete.length > 0) {
       await supabase
         .from('sub_contact_shift_overrides')
@@ -342,7 +352,7 @@ export async function upsertShiftOverrides(
 
   // Upsert the new overrides
   // Note: Don't include created_at - let the database DEFAULT handle it for new records
-  const overridesToUpsert = shiftOverrides.map((override) => ({
+  const overridesToUpsert = shiftOverrides.map(override => ({
     substitute_contact_id: substituteContactId,
     coverage_request_shift_id: override.coverage_request_shift_id,
     selected: override.selected,
@@ -355,11 +365,9 @@ export async function upsertShiftOverrides(
   }))
 
   if (overridesToUpsert.length > 0) {
-    const { error } = await supabase
-      .from('sub_contact_shift_overrides')
-      .upsert(overridesToUpsert, {
-        onConflict: 'substitute_contact_id,coverage_request_shift_id',
-      })
+    const { error } = await supabase.from('sub_contact_shift_overrides').upsert(overridesToUpsert, {
+      onConflict: 'substitute_contact_id,coverage_request_shift_id',
+    })
 
     if (error) {
       console.error('Error upserting shift overrides:', {
@@ -383,7 +391,8 @@ export async function getSubstituteContactsForRequest(
 
   const { data, error } = await supabase
     .from('substitute_contacts')
-    .select(`
+    .select(
+      `
       *,
       sub:staff!substitute_contacts_sub_id_fkey(
         id,
@@ -403,7 +412,8 @@ export async function getSubstituteContactsForRequest(
         notes,
         override_availability
       )
-    `)
+    `
+    )
     .eq('coverage_request_id', coverageRequestId)
     .order('created_at', { ascending: false })
 

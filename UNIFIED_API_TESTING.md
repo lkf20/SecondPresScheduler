@@ -1,19 +1,22 @@
 # Unified Time Off Requests API - Testing Guide
 
 ## Endpoint
+
 `GET /api/time-off-requests`
 
 ## Query Parameters
 
 ### Filters
+
 - `start_date` (ISO format): Filter requests that overlap with this date
-- `end_date` (ISO format): Filter requests that overlap with this date  
+- `end_date` (ISO format): Filter requests that overlap with this date
 - `status` (comma-separated): Filter by status (`active`, `draft`, `deleted`)
 - `teacher_id`: Filter by specific teacher ID
 - `classroom_id`: Filter by classroom (checks if any shift is in this classroom)
 - `coverage_status` (comma-separated): Filter by coverage status (`needs_coverage`, `partially_covered`, `covered`)
 
 ### Options
+
 - `include_detailed_shifts` (boolean, default: `false`): Include detailed shift information
 - `include_classrooms` (boolean, default: `true`): Include classroom information
 - `include_assignments` (boolean, default: `true`): Include assignment/sub information
@@ -68,6 +71,7 @@
 ## Testing Examples
 
 ### 1. Get all active requests
+
 ```javascript
 fetch('/api/time-off-requests?status=active')
   .then(r => r.json())
@@ -75,6 +79,7 @@ fetch('/api/time-off-requests?status=active')
 ```
 
 ### 2. Get requests in date range
+
 ```javascript
 const today = new Date().toISOString().slice(0, 10)
 const twoWeeksLater = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
@@ -84,6 +89,7 @@ fetch(`/api/time-off-requests?status=active&start_date=${today}&end_date=${twoWe
 ```
 
 ### 3. Get requests needing coverage
+
 ```javascript
 fetch('/api/time-off-requests?status=active&coverage_status=needs_coverage')
   .then(r => r.json())
@@ -91,6 +97,7 @@ fetch('/api/time-off-requests?status=active&coverage_status=needs_coverage')
 ```
 
 ### 4. Get requests with detailed shifts (for Sub Finder)
+
 ```javascript
 fetch('/api/time-off-requests?status=active&include_detailed_shifts=true')
   .then(r => r.json())
@@ -98,8 +105,11 @@ fetch('/api/time-off-requests?status=active&include_detailed_shifts=true')
 ```
 
 ### 5. Combined filters
+
 ```javascript
-fetch('/api/time-off-requests?status=active&start_date=2026-01-14&coverage_status=needs_coverage,partially_covered&include_detailed_shifts=false')
+fetch(
+  '/api/time-off-requests?status=active&start_date=2026-01-14&coverage_status=needs_coverage,partially_covered&include_detailed_shifts=false'
+)
   .then(r => r.json())
   .then(console.log)
 ```
@@ -107,16 +117,19 @@ fetch('/api/time-off-requests?status=active&start_date=2026-01-14&coverage_statu
 ## Integration Status
 
 ✅ **Dashboard API** (`/api/dashboard/overview`)
+
 - Refactored to use unified endpoint transformation logic
 - Maintains backward compatibility
 - Uses direct function calls (no HTTP overhead)
 
 ✅ **Sub Finder API** (`/api/sub-finder/absences`)
+
 - Refactored to call unified endpoint via HTTP
 - Uses `include_detailed_shifts=true` for detailed shift information
 - Maintains existing response format
 
 ✅ **Time Off Page** (`/app/(dashboard)/time-off/page.tsx`)
+
 - Already uses `transformTimeOffCardData` utility
 - Consistent with unified approach
 - No changes needed

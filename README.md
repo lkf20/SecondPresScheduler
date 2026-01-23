@@ -21,6 +21,7 @@ A modern web application for managing substitute teacher scheduling, built with 
 ### Setup Instructions
 
 1. **Clone and install dependencies:**
+
    ```bash
    npm install
    ```
@@ -32,11 +33,13 @@ A modern web application for managing substitute teacher scheduling, built with 
    - Copy your Project URL and Publishable API Key (formerly called "anon key")
 
 3. **Configure environment variables:**
+
    ```bash
    cp .env.local.example .env.local
    ```
-   
+
    Then edit `.env.local` and add your Supabase credentials:
+
    ```
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
@@ -53,6 +56,7 @@ A modern web application for managing substitute teacher scheduling, built with 
    - Set a password for the user
 
 6. **Run the development server:**
+
    ```bash
    npm run dev
    ```

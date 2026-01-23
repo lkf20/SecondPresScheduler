@@ -2,7 +2,11 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSchool } from '@/lib/contexts/SchoolContext'
-import { invalidateSubAssignment, invalidateDashboard, invalidateWeeklySchedule } from '@/lib/utils/invalidation'
+import {
+  invalidateSubAssignment,
+  invalidateDashboard,
+  invalidateWeeklySchedule,
+} from '@/lib/utils/invalidation'
 import { toast } from 'sonner'
 
 type AssignShiftsData = {
@@ -35,7 +39,7 @@ export function useAssignSubShifts() {
 
       return response.json()
     },
-    onMutate: async (variables) => {
+    onMutate: async variables => {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: ['subRecommendations', schoolId] })
       await queryClient.cancelQueries({ queryKey: ['dashboard', schoolId] })
@@ -97,7 +101,7 @@ export function useUnassignSubShift() {
 
       return response.json()
     },
-    onMutate: async (variables) => {
+    onMutate: async variables => {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: ['dashboard', schoolId] })
       await queryClient.cancelQueries({ queryKey: ['weeklySchedule', schoolId] })

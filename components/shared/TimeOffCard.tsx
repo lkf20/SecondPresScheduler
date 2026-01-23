@@ -3,14 +3,26 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { CalendarDays, ChevronDown, ChevronUp, AlertTriangle, PieChart, CheckCircle2 } from 'lucide-react'
+import {
+  CalendarDays,
+  ChevronDown,
+  ChevronUp,
+  AlertTriangle,
+  PieChart,
+  CheckCircle2,
+} from 'lucide-react'
 import CoverageBadge from './CoverageBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { parseLocalDate } from '@/lib/utils/date'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
-import { getButtonColors, getCoverageColorClasses, getNeutralChipClasses, coverageColorValues } from '@/lib/utils/colors'
+import {
+  getButtonColors,
+  getCoverageColorClasses,
+  getNeutralChipClasses,
+  coverageColorValues,
+} from '@/lib/utils/colors'
 
 export type TimeOffCardVariant = 'sub-finder' | 'dashboard' | 'time-off'
 
@@ -48,7 +60,9 @@ export interface TimeOffCardProps {
 const formatFullDateLabel = (value: string) => {
   const date = parseLocalDate(value)
   const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date)
-  const dateLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
+  const dateLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
+    date
+  )
   return `${weekday} ${dateLabel}`
 }
 
@@ -75,7 +89,8 @@ export default function TimeOffCard({
 }: TimeOffCardProps) {
   const router = useRouter()
   const [isExpanded, setIsExpanded] = useState(false)
-  const hasShiftsDropdown = variant !== 'sub-finder' && totalShifts !== undefined && shiftDetails.length > 0
+  const hasShiftsDropdown =
+    variant !== 'sub-finder' && totalShifts !== undefined && shiftDetails.length > 0
 
   const startDateLabel = formatFullDateLabel(startDate)
   const endDateLabel = endDate && endDate !== startDate ? formatFullDateLabel(endDate) : null
@@ -129,7 +144,12 @@ export default function TimeOffCard({
               <div className="flex flex-wrap items-center gap-2 mb-1">
                 <h3 className="font-semibold text-lg text-slate-800">{teacherName}</h3>
                 {reason && (
-                  <span className={cn('rounded-full border px-2 py-0.5 text-[11px] font-medium', getNeutralChipClasses())}>
+                  <span
+                    className={cn(
+                      'rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                      getNeutralChipClasses()
+                    )}
+                  >
                     {reason}
                   </span>
                 )}
@@ -139,7 +159,7 @@ export default function TimeOffCard({
                 <span className="text-sm font-medium text-slate-800">{dateRange}</span>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                {classrooms.map((classroom) => (
+                {classrooms.map(classroom => (
                   <span
                     key={classroom.id || classroom.name}
                     className="rounded-full px-2.5 py-1 text-[11px] font-medium"
@@ -232,11 +252,15 @@ export default function TimeOffCard({
               <>
                 <button
                   type="button"
-                  onClick={(e) => {
+                  onClick={e => {
                     e.stopPropagation()
                     setIsExpanded(!isExpanded)
                   }}
-                  className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium', getNeutralChipClasses(), 'hover:bg-slate-100')}
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium',
+                    getNeutralChipClasses(),
+                    'hover:bg-slate-100'
+                  )}
                   aria-expanded={isExpanded}
                   aria-label={isExpanded ? 'Hide shift details' : 'Show shift details'}
                 >
@@ -256,7 +280,7 @@ export default function TimeOffCard({
             )}
             {classrooms.length > 0 ? (
               <>
-                {classrooms.map((classroom) => (
+                {classrooms.map(classroom => (
                   <span
                     key={classroom.id}
                     className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
@@ -270,7 +294,9 @@ export default function TimeOffCard({
                 )}
               </>
             ) : (
-              !hasShiftsDropdown && <div className="text-xs text-slate-500">No classrooms specified</div>
+              !hasShiftsDropdown && (
+                <div className="text-xs text-slate-500">No classrooms specified</div>
+              )
             )}
           </div>
         </div>
@@ -283,7 +309,7 @@ export default function TimeOffCard({
           <div className="flex items-center justify-end gap-3 mt-auto">
             {onEdit ? (
               <button
-                onClick={(e) => {
+                onClick={e => {
                   e.stopPropagation()
                   onEdit()
                 }}
@@ -294,14 +320,14 @@ export default function TimeOffCard({
             ) : (
               <Link
                 href={`/time-off/${id}`}
-                onClick={(e) => e.stopPropagation()}
+                onClick={e => e.stopPropagation()}
                 className="text-sm font-semibold text-teal-700 hover:text-teal-800 hover:underline"
               >
                 {isTimeOffVariant ? 'Edit' : 'View'}
               </Link>
             )}
             {uncovered > 0 && (
-              <div onClick={(e) => e.stopPropagation()}>
+              <div onClick={e => e.stopPropagation()}>
                 <Button
                   asChild
                   size="sm"
@@ -323,7 +349,7 @@ export default function TimeOffCard({
             {shiftDetails.map((shift, index) => {
               const label = typeof shift === 'string' ? shift : shift.label
               const status = typeof shift === 'object' ? shift.status : undefined
-              
+
               // Get color values for inline styles (Safari compatibility)
               let colorValues
               if (status === 'covered') {
@@ -340,18 +366,20 @@ export default function TimeOffCard({
                   text: 'rgb(71, 85, 105)', // slate-600
                 }
               }
-              
+
               return (
                 <span
                   key={index}
                   className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-normal transition-colors"
-                  style={{
-                    backgroundColor: colorValues.bg,
-                    borderWidth: '1px',
-                    borderStyle: 'solid',
-                    borderColor: colorValues.border,
-                    color: colorValues.text,
-                  } as React.CSSProperties}
+                  style={
+                    {
+                      backgroundColor: colorValues.bg,
+                      borderWidth: '1px',
+                      borderStyle: 'solid',
+                      borderColor: colorValues.border,
+                      color: colorValues.text,
+                    } as React.CSSProperties
+                  }
                 >
                   {label}
                 </span>

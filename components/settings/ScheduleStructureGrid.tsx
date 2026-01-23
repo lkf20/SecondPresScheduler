@@ -33,10 +33,10 @@ export default function ScheduleStructureGrid({
 
   useEffect(() => {
     fetch('/api/days-of-week')
-      .then((r) => r.json())
-      .then((data) => {
+      .then(r => r.json())
+      .then(data => {
         // Filter to only show selected days
-        const filtered = (data as DayOfWeek[]).filter((d) => selectedDayIds.includes(d.id))
+        const filtered = (data as DayOfWeek[]).filter(d => selectedDayIds.includes(d.id))
         // Handle both old (0) and new (7) Sunday values for sorting
         const sorted = filtered.sort((a, b) => {
           const aNum = a.day_number === 0 ? 7 : a.day_number
@@ -48,8 +48,8 @@ export default function ScheduleStructureGrid({
       .catch(console.error)
 
     fetch('/api/timeslots')
-      .then((r) => r.json())
-      .then((data) => {
+      .then(r => r.json())
+      .then(data => {
         setTimeSlots(
           (data as TimeSlot[]).sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
         )
@@ -60,7 +60,7 @@ export default function ScheduleStructureGrid({
   // Count mappings per day/time slot
   const mappingCounts = useMemo(() => {
     const counts = new Map<string, number>()
-    mappings.forEach((mapping) => {
+    mappings.forEach(mapping => {
       const key = `${mapping.day_of_week_id}-${mapping.time_slot_id}`
       counts.set(key, (counts.get(key) || 0) + 1)
     })
@@ -73,7 +73,12 @@ export default function ScheduleStructureGrid({
     timeSlotId: string,
     timeSlotCode: string
   ) => {
-    setSelectedCell({ day_of_week_id: dayId, day_name: dayName, time_slot_id: timeSlotId, time_slot_code: timeSlotCode })
+    setSelectedCell({
+      day_of_week_id: dayId,
+      day_name: dayName,
+      time_slot_id: timeSlotId,
+      time_slot_code: timeSlotCode,
+    })
   }
 
   const handleCloseModal = () => {
@@ -84,7 +89,7 @@ export default function ScheduleStructureGrid({
   // Get mappings for selected cell
   const selectedCellMappings = selectedCell
     ? mappings.filter(
-        (m) =>
+        m =>
           m.day_of_week_id === selectedCell.day_of_week_id &&
           m.time_slot_id === selectedCell.time_slot_id
       )
@@ -100,21 +105,24 @@ export default function ScheduleStructureGrid({
                 <th className="border p-2 bg-muted font-medium text-left sticky left-0 z-10">
                   Time Slot
                 </th>
-                {daysOfWeek.map((day) => (
-                  <th key={day.id} className="border p-2 bg-muted font-medium text-center min-w-[150px]">
+                {daysOfWeek.map(day => (
+                  <th
+                    key={day.id}
+                    className="border p-2 bg-muted font-medium text-center min-w-[150px]"
+                  >
                     {day.name}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {timeSlots.map((slot) => (
+              {timeSlots.map(slot => (
                 <tr key={slot.id}>
                   <td className="border p-2 bg-muted font-medium sticky left-0 z-10">
                     {slot.code}
                     {slot.name && <div className="text-xs text-muted-foreground">{slot.name}</div>}
                   </td>
-                  {daysOfWeek.map((day) => {
+                  {daysOfWeek.map(day => {
                     const key = `${day.id}-${slot.id}`
                     const count = mappingCounts.get(key) || 0
                     return (
@@ -127,9 +135,7 @@ export default function ScheduleStructureGrid({
                             variant="outline"
                             size="sm"
                             className="w-full"
-                            onClick={() =>
-                              handleCellClick(day.id, day.name, slot.id, slot.code)
-                            }
+                            onClick={() => handleCellClick(day.id, day.name, slot.id, slot.code)}
                           >
                             Configure
                           </Button>

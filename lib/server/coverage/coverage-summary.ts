@@ -19,7 +19,7 @@ export const sortCoverageShifts = (shiftDetails: CoverageShiftDetail[]) =>
   })
 
 export const buildCoverageSegments = (shiftDetails: CoverageShiftDetail[]) =>
-  shiftDetails.map((shift) => ({
+  shiftDetails.map(shift => ({
     id: shift.id,
     status: shift.status,
   }))

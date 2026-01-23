@@ -19,6 +19,3 @@ export default function LoadingSpinner({ className, size = 'md' }: LoadingSpinne
     </div>
   )
 }
-
-
-

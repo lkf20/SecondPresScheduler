@@ -20,20 +20,20 @@ export type SubFinderAbsence = {
     partial?: number
     fully_covered?: number
     partially_covered?: number
-      shift_details: Array<{
-        class_name?: string | null
-        date: string
-        day_name: string
-        time_slot_code: string
-        classroom_name: string
-        classroom_color: string | null
-        id?: string
-        status: 'covered' | 'partial' | 'fully_covered' | 'partially_covered' | 'uncovered'
-        sub_name?: string | null
-        assigned_sub?: {
-          name: string
-        }
-      }>
+    shift_details: Array<{
+      class_name?: string | null
+      date: string
+      day_name: string
+      time_slot_code: string
+      classroom_name: string
+      classroom_color: string | null
+      id?: string
+      status: 'covered' | 'partial' | 'fully_covered' | 'partially_covered' | 'uncovered'
+      sub_name?: string | null
+      assigned_sub?: {
+        name: string
+      }
+    }>
   }
   classrooms: Array<{
     id: string
@@ -42,7 +42,9 @@ export type SubFinderAbsence = {
   }>
 }
 
-async function fetchSubFinderAbsences(params?: SubFinderAbsencesQueryParams): Promise<SubFinderAbsence[]> {
+async function fetchSubFinderAbsences(
+  params?: SubFinderAbsencesQueryParams
+): Promise<SubFinderAbsence[]> {
   const searchParams = new URLSearchParams()
   if (params?.includePartiallyCovered) {
     searchParams.set('include_partially_covered', 'true')
@@ -50,16 +52,19 @@ async function fetchSubFinderAbsences(params?: SubFinderAbsencesQueryParams): Pr
 
   const url = `/api/sub-finder/absences${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
   const response = await fetch(url)
-  
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Failed to fetch absences' }))
     throw new Error(error.error || 'Failed to fetch absences')
   }
-  
+
   return response.json()
 }
 
-export function useSubFinderAbsences(params?: SubFinderAbsencesQueryParams, initialData?: SubFinderAbsence[]) {
+export function useSubFinderAbsences(
+  params?: SubFinderAbsencesQueryParams,
+  initialData?: SubFinderAbsence[]
+) {
   const schoolId = useSchool()
 
   return useQuery({
