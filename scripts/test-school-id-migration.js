@@ -62,7 +62,7 @@ const results = []
 
 async function testColumnExists(table, column) {
   try {
-    const { data, error } = await supabase.from(table).select(column).limit(1)
+    const { error } = await supabase.from(table).select(column).limit(1)
 
     if (error) {
       if (error.message.includes('column') && error.message.includes('does not exist')) {

@@ -226,16 +226,6 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        const { data: classPreferences } = await supabase
-          .from('sub_class_preferences')
-          .select('class_id, can_teach')
-          .eq('sub_id', sub.id)
-          .eq('can_teach', true)
-
-        const qualifiedClassIds = new Set(
-          (classPreferences || []).map((pref: any) => pref.class_id)
-        )
-
         const subCapabilities = {
           can_change_diapers: sub.can_change_diapers ?? false,
           can_lift_children: sub.can_lift_children ?? false,
@@ -244,8 +234,6 @@ export async function POST(request: NextRequest) {
         let availableShifts = 0
         const canCover: Array<any> = []
         const cannotCover: Array<any> = []
-        let qualificationMatches = 0
-        let qualificationTotal = 0
 
         shifts.forEach(shift => {
           const availabilityKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
@@ -256,8 +244,6 @@ export async function POST(request: NextRequest) {
           const hasScheduleConflict = scheduleConflicts.has(conflictKey)
           const hasTimeOffConflict = timeOffConflicts.has(conflictKey)
 
-          let isQualified = true
-          let qualificationReason = ''
           // Note: class_id is not part of ManualShiftInput, class information is derived from schedule lookup
 
           const timeSlotCode = slotCodeMap.get(shift.time_slot_id) || ''
@@ -270,7 +256,7 @@ export async function POST(request: NextRequest) {
             ? Array.from(scheduleEntry.classes).join(', ')
             : null
 
-          if (isAvailable && !hasScheduleConflict && !hasTimeOffConflict && isQualified) {
+          if (isAvailable && !hasScheduleConflict && !hasTimeOffConflict) {
             availableShifts++
             canCover.push({
               date: shift.date,
@@ -289,8 +275,6 @@ export async function POST(request: NextRequest) {
               reason = 'Scheduled to teach'
             } else if (hasTimeOffConflict) {
               reason = 'Has time off'
-            } else if (!isQualified) {
-              reason = qualificationReason
             } else {
               reason = 'Not available'
             }

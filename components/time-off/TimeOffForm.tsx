@@ -56,7 +56,6 @@ type TimeOffFormData = z.infer<typeof timeOffSchema>
 interface TimeOffFormProps {
   onSuccess?: (teacherName: string, startDate: string, endDate: string) => void
   onCancel?: () => void
-  showBackLink?: boolean
   onHasUnsavedChanges?: (hasChanges: boolean) => void
   clearDraftOnMount?: boolean // Force clear draft when component mounts
   timeOffRequestId?: string | null // ID of time off request to edit
@@ -67,7 +66,6 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     {
       onSuccess,
       onCancel,
-      showBackLink = true,
       onHasUnsavedChanges,
       clearDraftOnMount = false,
       timeOffRequestId = null,
@@ -154,7 +152,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     const {
       register,
       handleSubmit,
-      formState: { errors, isSubmitting, isDirty, touchedFields },
+      formState: { errors, isSubmitting },
       setValue,
       setError: setFormError,
       clearErrors,
@@ -607,19 +605,6 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         const teacherName = teacher
           ? teacher.display_name || `${teacher.first_name} ${teacher.last_name}`.trim()
           : 'Teacher'
-
-        // Format date range
-        const formatDateForToast = (dateStr: string) => {
-          const [year, month, day] = dateStr.split('-').map(Number)
-          const date = new Date(year, month - 1, day)
-          return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-        }
-        const startDateFormatted = formatDateForToast(data.start_date)
-        const endDateFormatted = formatDateForToast(effectiveEndDate)
-        const dateRange =
-          startDateFormatted === endDateFormatted
-            ? startDateFormatted
-            : `${startDateFormatted}-${endDateFormatted}`
 
         // Show warning if shifts were excluded
         if (responseData.warning) {

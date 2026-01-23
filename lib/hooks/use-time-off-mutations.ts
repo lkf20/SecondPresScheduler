@@ -58,7 +58,7 @@ export function useCreateTimeOffRequest() {
 
       return response.json()
     },
-    onSuccess: async (data, variables) => {
+    onSuccess: async data => {
       // Invalidate relevant queries
       await Promise.all([
         invalidateTimeOffRequest(queryClient, schoolId, data?.coverage_request_id),
@@ -96,7 +96,7 @@ export function useUpdateTimeOffRequest() {
 
       return response.json()
     },
-    onSuccess: async (data, variables) => {
+    onSuccess: async data => {
       // Invalidate relevant queries
       await Promise.all([
         invalidateTimeOffRequest(queryClient, schoolId, data?.coverage_request_id),

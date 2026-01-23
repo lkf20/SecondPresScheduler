@@ -319,7 +319,7 @@ export default function ScheduleCell({
               })
             }
 
-            return displayGroups.flatMap((group, groupIndex) => {
+            return displayGroups.flatMap(group => {
               const substitutes = group.substitutes
               const result: React.ReactNode[] = []
 

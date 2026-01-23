@@ -83,7 +83,6 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch shifts for all requests
-    const requestIds = filteredRequests.map(r => r.id)
     const teacherIds = Array.from(new Set(filteredRequests.map(r => r.teacher_id).filter(Boolean)))
 
     // Build schedule lookup for classrooms (if needed)

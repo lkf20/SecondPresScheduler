@@ -666,7 +666,7 @@ export async function getWeeklyScheduleData(
           }
 
           // Convert absent teachers map to array
-          for (const [_, absence] of absentTeachers) {
+          for (const absence of absentTeachers.values()) {
             absences.push(absence)
           }
         }

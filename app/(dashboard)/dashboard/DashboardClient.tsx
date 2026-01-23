@@ -27,7 +27,6 @@ import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import {
   getCoverageColors,
   getStaffingColorClasses,
-  getStaffingColors,
   neutralColors,
   coverageColorValues,
   getButtonColors,
@@ -120,17 +119,6 @@ const formatShortfallLabel = (shortfall: number) =>
 
 const formatShortfallValue = (required: number, scheduled: number) =>
   Math.max(0, required - scheduled)
-
-const staffingBadge = (status: StaffingTargetItem['status']) => {
-  switch (status) {
-    case 'below_required':
-      return getStaffingColorClasses('below_required')
-    case 'below_preferred':
-      return getStaffingColorClasses('below_preferred')
-    default:
-      return getStaffingColorClasses('adequate')
-  }
-}
 
 const groupStaffingTargets = (slots: StaffingTargetItem[]) => {
   const classroomMap = new Map<

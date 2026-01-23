@@ -4,12 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Check } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
-import {
-  getShiftStatusColorClasses,
-  getShiftStatusColors,
-  shiftStatusColorValues,
-} from '@/lib/utils/colors'
-import { cn } from '@/lib/utils'
+import { shiftStatusColorValues } from '@/lib/utils/colors'
 
 interface Shift {
   date: string
@@ -169,15 +164,6 @@ export default function ShiftChips({
   const recommendedShiftKeys = new Set(
     recommendedShifts.map(shift => `${shift.date}|${shift.time_slot_code}`)
   )
-
-  const getBadgeClassName = (status: 'assigned' | 'available' | 'unavailable') => {
-    // If declined, make all chips gray
-    if (isDeclined) {
-      return getShiftStatusColorClasses('declined')
-    }
-
-    return getShiftStatusColorClasses(status)
-  }
 
   return (
     <TooltipProvider>

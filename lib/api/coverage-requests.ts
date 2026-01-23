@@ -307,9 +307,7 @@ export async function ensureCoverageRequestForQuickAssign(
   >()
 
   let currentDateStr = startDate
-  let dateCount = 0
   while (compareDates(currentDateStr, endDate) <= 0) {
-    dateCount++
     const dayNumber = getDayOfWeek(currentDateStr)
     const shiftsForDay = scheduleByDayNumber.get(dayNumber)
 

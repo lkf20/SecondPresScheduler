@@ -39,7 +39,7 @@ const results: TestResult[] = []
 
 async function testColumnExists(table: string, column: string): Promise<boolean> {
   try {
-    const { data, error } = await supabase.from(table).select(column).limit(1)
+    const { error } = await supabase.from(table).select(column).limit(1)
 
     if (error) {
       // If column doesn't exist, we'll get a specific error
@@ -77,28 +77,6 @@ async function testTableHasData(table: string): Promise<number> {
     return count || 0
   } catch (error) {
     throw error
-  }
-}
-
-async function testRLSPolicy(table: string): Promise<boolean> {
-  try {
-    // Try to query without school_id filter (should be blocked by RLS if policy exists)
-    const { data, error } = await supabase.from(table).select('*').limit(1)
-
-    // If we get data, RLS might not be working or policy doesn't exist
-    // If we get a permission error, RLS is working
-    if (error) {
-      if (error.message.includes('permission') || error.message.includes('policy')) {
-        return true // RLS is blocking, which is good
-      }
-      throw error
-    }
-
-    // If we get data, RLS might not be active (this is expected with service role key)
-    // For a proper test, we'd need to use a user token, but this at least confirms the table is accessible
-    return true
-  } catch (error) {
-    return false
   }
 }
 

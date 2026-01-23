@@ -10,13 +10,6 @@ interface WeekPickerProps {
 }
 
 /**
- * Formats a date as "Mon DD" (e.g., "Feb 18")
- */
-function formatDateShort(date: Date): string {
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
-/**
  * Formats week range as "Week of Feb 18 - 24"
  */
 function formatWeekRange(weekStartISO: string): string {

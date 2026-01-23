@@ -47,7 +47,6 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
     existingTeacher: { first_name: string; last_name: string; email: string | null }
   } | null>(null)
   const [proceedWithDuplicate, setProceedWithDuplicate] = useState(false)
-  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false)
 
   const {
     register,
@@ -92,7 +91,6 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
 
       // Debounce the check
       const timeoutId = setTimeout(async () => {
-        setIsCheckingDuplicate(true)
         try {
           const checkData = {
             first_name: firstName?.trim() || '',
@@ -124,8 +122,6 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
           }
         } catch (error) {
           console.error('Error checking duplicates:', error)
-        } finally {
-          setIsCheckingDuplicate(false)
         }
       }, 500) // 500ms debounce
 
