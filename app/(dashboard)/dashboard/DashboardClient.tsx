@@ -442,7 +442,7 @@ export default function DashboardClient({
 
   const coverageCounts = useMemo(() => {
     const needs = overview.coverage_requests.filter(
-      (request) => request.status !== 'covered'
+      (request) => request.status === 'needs_coverage'
     ).length
     const covered = overview.coverage_requests.filter(
       (request) => request.status === 'covered'
@@ -457,7 +457,7 @@ export default function DashboardClient({
   const filteredCoverageRequests = useMemo(() => {
     if (coverageFilter === 'needs') {
       return overview.coverage_requests.filter(
-        (request) => request.status !== 'covered'
+        (request) => request.status === 'needs_coverage'
       )
     }
     if (coverageFilter === 'covered') {
@@ -751,7 +751,7 @@ export default function DashboardClient({
                 setCoverageSectionCollapsed(!coverageSectionCollapsed)
               }
             }}
-            className="flex w-full items-center justify-between gap-3 xl:pointer-events-none xl:cursor-default"
+            className="flex w-full items-center justify-between gap-3"
           >
             <div className="flex flex-wrap items-center justify-between gap-3 xl:flex-1">
               <div className="flex items-center gap-2">
