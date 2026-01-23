@@ -52,7 +52,11 @@ export default function SubAvailabilityExceptions({
   })
 
   const handleAddException = async () => {
-    if (!newException.start_date || !newException.end_date || newException.time_slot_ids.length === 0) {
+    if (
+      !newException.start_date ||
+      !newException.end_date ||
+      newException.time_slot_ids.length === 0
+    ) {
       alert('Please fill in all fields and select at least one time slot')
       return
     }
@@ -74,7 +78,7 @@ export default function SubAvailabilityExceptions({
   const handleTimeSlotToggle = (timeSlotId: string, checked: boolean) => {
     const updated = checked
       ? [...newException.time_slot_ids, timeSlotId]
-      : newException.time_slot_ids.filter((id) => id !== timeSlotId)
+      : newException.time_slot_ids.filter(id => id !== timeSlotId)
     setNewException({ ...newException, time_slot_ids: updated })
   }
 
@@ -102,12 +106,7 @@ export default function SubAvailabilityExceptions({
           )}
         </Button>
         {isExpanded && (
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => setIsAdding(true)}
-            disabled={isAdding}
-          >
+          <Button type="button" size="sm" onClick={() => setIsAdding(true)} disabled={isAdding}>
             <Plus className="h-4 w-4 mr-2" />
             Add Exception
           </Button>
@@ -128,9 +127,7 @@ export default function SubAvailabilityExceptions({
                     <DatePickerInput
                       id="start_date"
                       value={newException.start_date}
-                      onChange={(value) =>
-                        setNewException({ ...newException, start_date: value })
-                      }
+                      onChange={value => setNewException({ ...newException, start_date: value })}
                       placeholder="Select start date"
                       className="mt-1"
                     />
@@ -140,9 +137,7 @@ export default function SubAvailabilityExceptions({
                     <DatePickerInput
                       id="end_date"
                       value={newException.end_date}
-                      onChange={(value) =>
-                        setNewException({ ...newException, end_date: value })
-                      }
+                      onChange={value => setNewException({ ...newException, end_date: value })}
                       placeholder="Select end date"
                       allowClear
                       closeOnSelect
@@ -155,7 +150,7 @@ export default function SubAvailabilityExceptions({
                   <Label>Type</Label>
                   <RadioGroup
                     value={newException.available ? 'available' : 'unavailable'}
-                    onValueChange={(value) =>
+                    onValueChange={value =>
                       setNewException({ ...newException, available: value === 'available' })
                     }
                     className="mt-2"
@@ -178,12 +173,12 @@ export default function SubAvailabilityExceptions({
                 <div>
                   <Label>Affected Shifts</Label>
                   <div className="flex gap-4 mt-2">
-                    {timeSlots.map((slot) => (
+                    {timeSlots.map(slot => (
                       <div key={slot.id} className="flex items-center space-x-2">
                         <Checkbox
                           id={`slot-${slot.id}`}
                           checked={newException.time_slot_ids.includes(slot.id)}
-                          onCheckedChange={(checked) =>
+                          onCheckedChange={checked =>
                             handleTimeSlotToggle(slot.id, checked === true)
                           }
                         />
@@ -223,7 +218,7 @@ export default function SubAvailabilityExceptions({
             </Card>
           )}
 
-          {exceptionHeaders.map((header) => (
+          {exceptionHeaders.map(header => (
             <Card key={header.id}>
               <CardContent className="pt-6">
                 <div className="flex items-start justify-between">
@@ -244,13 +239,10 @@ export default function SubAvailabilityExceptions({
                     </div>
                     {header.time_slot_ids && header.time_slot_ids.length > 0 && (
                       <div className="flex gap-1 flex-wrap">
-                        {header.time_slot_ids.map((slotId) => {
-                          const slot = timeSlots.find((s) => s.id === slotId)
+                        {header.time_slot_ids.map(slotId => {
+                          const slot = timeSlots.find(s => s.id === slotId)
                           return (
-                            <span
-                              key={slotId}
-                              className="text-xs bg-muted px-2 py-0.5 rounded"
-                            >
+                            <span key={slotId} className="text-xs bg-muted px-2 py-0.5 rounded">
                               {slot?.code || slotId}
                             </span>
                           )

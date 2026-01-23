@@ -9,10 +9,7 @@ interface WeekendToggleProps {
   onToggle: (value: boolean) => void
 }
 
-export default function WeekendToggle({
-  includeWeekends,
-  onToggle,
-}: WeekendToggleProps) {
+export default function WeekendToggle({ includeWeekends, onToggle }: WeekendToggleProps) {
   // Load preference from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem('schedule_include_weekends')
@@ -28,15 +25,10 @@ export default function WeekendToggle({
 
   return (
     <div className="flex items-center space-x-2">
-      <Switch
-        id="include-weekends"
-        checked={includeWeekends}
-        onCheckedChange={handleToggle}
-      />
+      <Switch id="include-weekends" checked={includeWeekends} onCheckedChange={handleToggle} />
       <Label htmlFor="include-weekends" className="cursor-pointer">
         Include weekends (Saturday & Sunday) in schedule
       </Label>
     </div>
   )
 }
-

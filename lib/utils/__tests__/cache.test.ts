@@ -166,5 +166,3 @@ describe('invalidateCache', () => {
     expect(cache.get('api/posts/1')).toEqual({ data: 'post1' })
   })
 })
-
-

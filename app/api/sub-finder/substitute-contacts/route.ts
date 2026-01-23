@@ -28,7 +28,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(contactWithDetails || contact)
   } catch (error) {
     console.error('Error fetching substitute contact:', error)
-    return createErrorResponse(error, 'Failed to fetch substitute contact', 500, 'GET /api/sub-finder/substitute-contacts')
+    return createErrorResponse(
+      error,
+      'Failed to fetch substitute contact',
+      500,
+      'GET /api/sub-finder/substitute-contacts'
+    )
   }
 }
 
@@ -55,7 +60,11 @@ export async function PUT(request: NextRequest) {
     const updatedContact = await updateSubstituteContact(id, updates)
 
     // If decline_all and selected_shift_keys provided, enforce no selected shifts
-    if (response_status === 'declined_all' && Array.isArray(selected_shift_keys) && selected_shift_keys.length > 0) {
+    if (
+      response_status === 'declined_all' &&
+      Array.isArray(selected_shift_keys) &&
+      selected_shift_keys.length > 0
+    ) {
       return createErrorResponse('Cannot decline all while shifts are selected', 400)
     }
 
@@ -90,6 +99,11 @@ export async function PUT(request: NextRequest) {
       stack: error instanceof Error ? error.stack : undefined,
       error,
     })
-    return createErrorResponse(error, 'Failed to update substitute contact', 500, 'PUT /api/sub-finder/substitute-contacts')
+    return createErrorResponse(
+      error,
+      'Failed to update substitute contact',
+      500,
+      'PUT /api/sub-finder/substitute-contacts'
+    )
   }
 }

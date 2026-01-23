@@ -14,7 +14,8 @@ The following routes were deleted in the commit that renamed the Supabase enviro
 ### 1. `/api/dashboard/overview` ✅ RESTORED
 
 **Status:** Already recreated with new implementation
-**References:** 
+**References:**
+
 - `app/(dashboard)/dashboard/page.tsx` - Uses this endpoint
 - `lib/hooks/use-dashboard.ts` - Uses this endpoint
 
@@ -35,10 +36,12 @@ The following routes were deleted in the commit that renamed the Supabase enviro
 
 **Status:** **CRITICAL** - Actively used by multiple components
 **References:**
+
 - `app/(dashboard)/setup/profile/page.tsx` - Line 29, 65 (GET and POST requests)
 - `lib/hooks/use-profile.ts` - Line 17 (GET request)
 
-**Impact:** 
+**Impact:**
+
 - Profile setup page will fail without this route
 - Profile checking functionality will break
 
@@ -50,11 +53,13 @@ The following routes were deleted in the commit that renamed the Supabase enviro
 
 **Status:** **CRITICAL** - Actively used by React Query hook
 **References:**
+
 - `lib/hooks/use-time-off-requests.ts` - Line 47 (GET request)
 - `UNIFIED_API_TESTING.md` - Documentation references this endpoint
 - `TODO_TRACKER.md` - Mentions this endpoint
 
 **Impact:**
+
 - Time off requests functionality will fail
 - Any component using `useTimeOffRequests()` hook will break
 

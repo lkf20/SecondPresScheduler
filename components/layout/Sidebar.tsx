@@ -2,14 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import {
-  LayoutDashboard,
-  Search,
-  Calendar,
-  FileText,
-  Settings,
-  CalendarOff,
-} from 'lucide-react'
+import { LayoutDashboard, Search, Calendar, FileText, Settings, CalendarOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/lib/contexts/ThemeContext'
 
@@ -32,14 +25,12 @@ export default function Sidebar() {
       <div
         className={cn(
           'flex-1 flex flex-col min-h-0 border-r transition-colors',
-          isAccented
-            ? 'bg-sidebar-bg border-sidebar-hover'
-            : 'bg-background border-border'
+          isAccented ? 'bg-sidebar-bg border-sidebar-hover' : 'bg-background border-border'
         )}
       >
         <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
           <nav className="flex-1 px-2 space-y-1">
-            {navigation.map((item) => {
+            {navigation.map(item => {
               const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
               return (
                 <Link
@@ -53,8 +44,8 @@ export default function Sidebar() {
                         ? 'bg-sidebar-active text-sidebar-active-foreground'
                         : 'text-sidebar-foreground hover:bg-sidebar-hover'
                       : isActive
-                      ? 'bg-accent text-accent-foreground'
-                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                        ? 'bg-accent text-accent-foreground'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                   )}
                 >
                   <item.icon
@@ -65,8 +56,8 @@ export default function Sidebar() {
                           ? 'text-sidebar-active-foreground'
                           : 'text-sidebar-foreground'
                         : isActive
-                        ? 'text-accent-foreground'
-                        : 'text-muted-foreground'
+                          ? 'text-accent-foreground'
+                          : 'text-muted-foreground'
                     )}
                   />
                   {item.name}

@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getTimeSlotById, updateTimeSlot, deleteTimeSlot } from '@/lib/api/timeslots'
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const timeslot = await getTimeSlotById(id)
@@ -14,10 +11,7 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await request.json()
@@ -40,6 +34,3 @@ export async function DELETE(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
-
-
-

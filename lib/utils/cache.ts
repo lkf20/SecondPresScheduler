@@ -17,18 +17,18 @@ class SimpleCache {
    */
   get<T>(key: string): T | null {
     const entry = this.cache.get(key) as CacheEntry<T> | undefined
-    
+
     if (!entry) {
       return null
     }
-    
+
     const now = Date.now()
     if (now - entry.timestamp > entry.ttl) {
       // Entry has expired
       this.cache.delete(key)
       return null
     }
-    
+
     return entry.data
   }
 
@@ -93,8 +93,8 @@ export async function cachedFetch<T>(
   if (!response.ok) {
     throw new Error(`Failed to fetch ${url}: ${response.statusText}`)
   }
-  
-  const data = await response.json() as T
+
+  const data = (await response.json()) as T
   cache.set(url, data, ttl)
   return data
 }
@@ -114,7 +114,3 @@ export function invalidateCache(pattern: string | RegExp): void {
     }
   }
 }
-
-
-
-

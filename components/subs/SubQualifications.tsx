@@ -5,7 +5,13 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import DatePickerInput from '@/components/ui/date-picker-input'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 interface QualificationDefinition {
@@ -36,13 +42,15 @@ type QualificationDetail = {
 interface SubQualificationsProps {
   subId: string
   qualifications: StaffQualification[]
-  onQualificationsChange: (qualifications: Array<{
-    qualification_id: string
-    level?: string | null
-    expires_on?: string | null
-    verified?: boolean | null
-    notes?: string | null
-  }>) => void
+  onQualificationsChange: (
+    qualifications: Array<{
+      qualification_id: string
+      level?: string | null
+      expires_on?: string | null
+      verified?: boolean | null
+      notes?: string | null
+    }>
+  ) => void
 }
 
 export default function SubQualifications({
@@ -56,8 +64,8 @@ export default function SubQualifications({
   // Fetch qualification definitions
   useEffect(() => {
     fetch('/api/qualifications?active_only=true')
-      .then((r) => r.json())
-      .then((data) => {
+      .then(r => r.json())
+      .then(data => {
         setDefinitions(data)
       })
       .catch(console.error)
@@ -68,7 +76,7 @@ export default function SubQualifications({
     const selected = new Set<string>()
     const details = new Map<string, QualificationDetail>()
 
-    qualifications.forEach((q) => {
+    qualifications.forEach(q => {
       selected.add(q.qualification_id)
       details.set(q.qualification_id, {
         level: q.level,
@@ -88,12 +96,14 @@ export default function SubQualifications({
       newSelected.add(qualId)
       // Initialize details if not present
       if (!qualDetails.has(qualId)) {
-        setQualDetails(new Map(qualDetails).set(qualId, {
-          level: null,
-          expires_on: null,
-          verified: null,
-          notes: null,
-        }))
+        setQualDetails(
+          new Map(qualDetails).set(qualId, {
+            level: null,
+            expires_on: null,
+            verified: null,
+            notes: null,
+          })
+        )
       }
     } else {
       newSelected.delete(qualId)
@@ -122,11 +132,8 @@ export default function SubQualifications({
     notifyChange(selectedQualIds, updated)
   }
 
-  const notifyChange = (
-    selected: Set<string>,
-    details: Map<string, QualificationDetail>
-  ) => {
-    const quals = Array.from(selected).map((qualId) => {
+  const notifyChange = (selected: Set<string>, details: Map<string, QualificationDetail>) => {
+    const quals = Array.from(selected).map(qualId => {
       const detail = details.get(qualId) || {
         level: null,
         expires_on: null,
@@ -142,32 +149,35 @@ export default function SubQualifications({
   }
 
   // Group qualifications by category
-  const groupedByCategory = definitions.reduce((acc, def) => {
-    const category = def.category || 'Other'
-    if (!acc[category]) {
-      acc[category] = []
-    }
-    acc[category].push(def)
-    return acc
-  }, {} as Record<string, QualificationDefinition[]>)
+  const groupedByCategory = definitions.reduce(
+    (acc, def) => {
+      const category = def.category || 'Other'
+      if (!acc[category]) {
+        acc[category] = []
+      }
+      acc[category].push(def)
+      return acc
+    },
+    {} as Record<string, QualificationDefinition[]>
+  )
 
   const categories = Object.keys(groupedByCategory).sort()
 
   return (
     <div className="space-y-4">
       <Label>Qualifications</Label>
-      
+
       {categories.length === 0 ? (
         <p className="text-sm text-muted-foreground">No qualifications defined</p>
       ) : (
         <div className="space-y-4">
-          {categories.map((category) => (
+          {categories.map(category => (
             <Card key={category}>
               <CardHeader>
                 <CardTitle className="text-sm">{category}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {groupedByCategory[category].map((def) => {
+                {groupedByCategory[category].map(def => {
                   const isSelected = selectedQualIds.has(def.id)
                   const details = qualDetails.get(def.id) || {
                     level: null,
@@ -182,11 +192,14 @@ export default function SubQualifications({
                         <Checkbox
                           id={`qual-${def.id}`}
                           checked={isSelected}
-                          onCheckedChange={(checked) =>
+                          onCheckedChange={checked =>
                             handleQualificationToggle(def.id, checked === true)
                           }
                         />
-                        <Label htmlFor={`qual-${def.id}`} className="font-normal cursor-pointer flex-1">
+                        <Label
+                          htmlFor={`qual-${def.id}`}
+                          className="font-normal cursor-pointer flex-1"
+                        >
                           {def.name}
                         </Label>
                       </div>
@@ -200,8 +213,12 @@ export default function SubQualifications({
                               </Label>
                               <Select
                                 value={details.level || undefined}
-                                onValueChange={(value) =>
-                                  handleDetailChange(def.id, 'level', value === 'none' ? null : value)
+                                onValueChange={value =>
+                                  handleDetailChange(
+                                    def.id,
+                                    'level',
+                                    value === 'none' ? null : value
+                                  )
                                 }
                               >
                                 <SelectTrigger id={`level-${def.id}`} className="h-8 text-sm">
@@ -223,7 +240,7 @@ export default function SubQualifications({
                               <DatePickerInput
                                 id={`expires-${def.id}`}
                                 value={details.expires_on || ''}
-                                onChange={(value) =>
+                                onChange={value =>
                                   handleDetailChange(def.id, 'expires_on', value || null)
                                 }
                                 placeholder="Select date"
@@ -237,11 +254,14 @@ export default function SubQualifications({
                             <Checkbox
                               id={`verified-${def.id}`}
                               checked={details.verified ?? false}
-                              onCheckedChange={(checked) =>
+                              onCheckedChange={checked =>
                                 handleDetailChange(def.id, 'verified', checked === true)
                               }
                             />
-                            <Label htmlFor={`verified-${def.id}`} className="text-xs font-normal cursor-pointer">
+                            <Label
+                              htmlFor={`verified-${def.id}`}
+                              className="text-xs font-normal cursor-pointer"
+                            >
                               Verified
                             </Label>
                           </div>
@@ -253,7 +273,7 @@ export default function SubQualifications({
                             <Textarea
                               id={`notes-${def.id}`}
                               value={details.notes || ''}
-                              onChange={(e) =>
+                              onChange={e =>
                                 handleDetailChange(def.id, 'notes', e.target.value || null)
                               }
                               className="text-sm min-h-[60px]"

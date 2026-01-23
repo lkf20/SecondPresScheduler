@@ -14,16 +14,19 @@
 ## 🔄 Components Still Needing Updates
 
 ### High Priority (Coverage/Status Related)
+
 - [ ] **RecommendedCombination** - Has amber colors for warnings
 - [ ] **RecommendedSubsList** - May have status indicator colors
 - [ ] **SubFinderCard** - May have status colors
 
 ### Medium Priority (UI Consistency)
+
 - [ ] Components with mixed `slate`/`gray` usage
 - [ ] Components with hardcoded teal button colors
 - [ ] Components with hardcoded neutral colors
 
 ### Low Priority (Less Critical)
+
 - [ ] Layout components (Header, AppLayout)
 - [ ] Form components
 - [ ] Schedule-related components (may have specific color needs)
@@ -31,7 +34,9 @@
 ## New Color System Additions
 
 ### Shift Status Colors
+
 Added to `lib/utils/colors.ts`:
+
 - `assigned` - Blue (matches covered)
 - `available` - Emerald/Green
 - `unavailable` - Gray

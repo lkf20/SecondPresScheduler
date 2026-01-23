@@ -74,6 +74,3 @@ describe('FormField', () => {
     expect(container.firstChild).toHaveClass('custom-class')
   })
 })
-
-
-

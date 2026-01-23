@@ -43,7 +43,7 @@ export async function createTimeOffShifts(
   }>
 ) {
   const supabase = await createClient()
-  const shiftData = shifts.map((shift) => ({
+  const shiftData = shifts.map(shift => ({
     time_off_request_id: requestId,
     date: shift.date,
     day_of_week_id: shift.day_of_week_id,
@@ -53,10 +53,7 @@ export async function createTimeOffShifts(
     end_time: shift.end_time || null,
   }))
 
-  const { data, error } = await supabase
-    .from('time_off_shifts')
-    .insert(shiftData)
-    .select()
+  const { data, error } = await supabase.from('time_off_shifts').insert(shiftData).select()
 
   if (error) throw error
   return data as TimeOffShift[]
@@ -78,19 +75,21 @@ export async function getTeacherScheduledShifts(
   endDate: string
 ) {
   const supabase = await createClient()
-  
+
   console.log('[getTeacherScheduledShifts] Input:', { teacherId, startDate, endDate })
-  
+
   // Get teacher's schedule (day_of_week + time_slot combinations)
   // Try without !inner first to see if that's the issue
   const { data: schedule, error: scheduleError } = await supabase
     .from('teacher_schedules')
-    .select(`
+    .select(
+      `
       day_of_week_id, 
       time_slot_id, 
       days_of_week(name, day_number), 
       time_slots(code, name)
-    `)
+    `
+    )
     .eq('teacher_id', teacherId)
     .not('day_of_week_id', 'is', null)
     .not('time_slot_id', 'is', null)
@@ -99,10 +98,10 @@ export async function getTeacherScheduledShifts(
     console.error('[getTeacherScheduledShifts] Schedule fetch error:', scheduleError)
     throw scheduleError
   }
-  
+
   console.log('[getTeacherScheduledShifts] Raw schedule data:', schedule)
   console.log('[getTeacherScheduledShifts] Schedule count:', schedule?.length || 0)
-  
+
   if (!schedule || schedule.length === 0) {
     console.log('[getTeacherScheduledShifts] No schedule found for teacher')
     return []
@@ -126,7 +125,7 @@ export async function getTeacherScheduledShifts(
         }
       }
     }
-    
+
     // Handle time_slots - could be array or object
     let timeSlots = null
     if (entry.time_slots) {
@@ -142,7 +141,7 @@ export async function getTeacherScheduledShifts(
         }
       }
     }
-    
+
     return {
       day_of_week_id: entry.day_of_week_id,
       time_slot_id: entry.time_slot_id,
@@ -150,13 +149,16 @@ export async function getTeacherScheduledShifts(
       time_slots: timeSlots,
     }
   })
-  
-  console.log('[getTeacherScheduledShifts] Transformed schedule entries:', transformedSchedule.length)
+
+  console.log(
+    '[getTeacherScheduledShifts] Transformed schedule entries:',
+    transformedSchedule.length
+  )
   console.log('[getTeacherScheduledShifts] Sample transformed entry:', transformedSchedule[0])
 
   // Create a map of day_number to schedule entries for quick lookup
   const scheduleByDayNumber = new Map<number, TeacherScheduleEntry[]>()
-  transformedSchedule.forEach((entry) => {
+  transformedSchedule.forEach(entry => {
     const dayNumber = entry.days_of_week?.day_number
     if (typeof dayNumber === 'number') {
       if (!scheduleByDayNumber.has(dayNumber)) {
@@ -165,9 +167,12 @@ export async function getTeacherScheduledShifts(
       scheduleByDayNumber.get(dayNumber)!.push(entry)
     }
   })
-  
+
   console.log('[getTeacherScheduledShifts] Transformed schedule:', transformedSchedule)
-  console.log('[getTeacherScheduledShifts] Schedule by day number:', Array.from(scheduleByDayNumber.entries()))
+  console.log(
+    '[getTeacherScheduledShifts] Schedule by day number:',
+    Array.from(scheduleByDayNumber.entries())
+  )
 
   // Generate all dates in the range (inclusive of both start and end dates)
   // Work directly with date strings to avoid timezone issues
@@ -180,13 +185,13 @@ export async function getTeacherScheduledShifts(
     time_slot_code: string
     time_slot_name: string | null
   }> = []
-  
+
   // Parse date string to get components
   const parseDateStr = (dateStr: string) => {
     const [year, month, day] = dateStr.split('-').map(Number)
     return { year, month, day }
   }
-  
+
   // Get day of week from a date string
   // JavaScript getDay(): 0=Sunday, 1=Monday, ..., 6=Saturday
   // Database day_number: 1=Monday, 2=Tuesday, ..., 6=Saturday, 7=Sunday
@@ -199,30 +204,32 @@ export async function getTeacherScheduledShifts(
     // Convert to database format: Sunday (0) -> 7, Monday (1) -> 1, etc.
     return jsDay === 0 ? 7 : jsDay
   }
-  
+
   // Compare date strings (YYYY-MM-DD format allows string comparison)
   const compareDates = (date1: string, date2: string) => {
     if (date1 < date2) return -1
     if (date1 > date2) return 1
     return 0
   }
-  
+
   // Iterate through all dates from start to end (inclusive)
   let currentDateStr = startDate
   let dateCount = 0
-  
+
   console.log('[getTeacherScheduledShifts] Starting date iteration from', startDate, 'to', endDate)
-  
+
   while (compareDates(currentDateStr, endDate) <= 0) {
     dateCount++
     const dayNumber = getDayOfWeek(currentDateStr)
     const shiftsForDay = scheduleByDayNumber.get(dayNumber)
-    
-    console.log(`[getTeacherScheduledShifts] Date ${dateCount}: ${currentDateStr}, JS day: ${new Date(parseDateStr(currentDateStr).year, parseDateStr(currentDateStr).month - 1, parseDateStr(currentDateStr).day).getDay()}, DB day_number: ${dayNumber}, Found shifts: ${shiftsForDay?.length || 0}`)
-    
+
+    console.log(
+      `[getTeacherScheduledShifts] Date ${dateCount}: ${currentDateStr}, JS day: ${new Date(parseDateStr(currentDateStr).year, parseDateStr(currentDateStr).month - 1, parseDateStr(currentDateStr).day).getDay()}, DB day_number: ${dayNumber}, Found shifts: ${shiftsForDay?.length || 0}`
+    )
+
     // Only include dates where teacher has scheduled shifts
     if (shiftsForDay && shiftsForDay.length > 0) {
-      shiftsForDay.forEach((shift) => {
+      shiftsForDay.forEach(shift => {
         result.push({
           date: currentDateStr,
           day_of_week_id: shift.day_of_week_id,
@@ -234,7 +241,7 @@ export async function getTeacherScheduledShifts(
         })
       })
     }
-    
+
     // Move to next day by incrementing the date string
     const { year, month, day } = parseDateStr(currentDateStr)
     const nextDate = new Date(year, month - 1, day + 1)
@@ -246,7 +253,7 @@ export async function getTeacherScheduledShifts(
 
   console.log('[getTeacherScheduledShifts] Final result count:', result.length)
   console.log('[getTeacherScheduledShifts] Final result:', result)
-  
+
   return result
 }
 
@@ -278,21 +285,24 @@ export async function getTeacherTimeOffShifts(
 
   // Transform the data to match the expected return type
   return data.map((item: any) => {
-    const timeOffRequest = Array.isArray(item.time_off_requests) && item.time_off_requests.length > 0
-      ? item.time_off_requests[0]
-      : null
+    const timeOffRequest =
+      Array.isArray(item.time_off_requests) && item.time_off_requests.length > 0
+        ? item.time_off_requests[0]
+        : null
 
     return {
       date: item.date,
       time_slot_id: item.time_slot_id,
       time_off_request_id: item.time_off_request_id,
-      time_off_requests: timeOffRequest ? {
-        id: timeOffRequest.id,
-        start_date: timeOffRequest.start_date,
-        end_date: timeOffRequest.end_date ?? null,
-        reason: timeOffRequest.reason ?? null,
-        teacher_id: timeOffRequest.teacher_id,
-      } : null,
+      time_off_requests: timeOffRequest
+        ? {
+            id: timeOffRequest.id,
+            start_date: timeOffRequest.start_date,
+            end_date: timeOffRequest.end_date ?? null,
+            reason: timeOffRequest.reason ?? null,
+            teacher_id: timeOffRequest.teacher_id,
+          }
+        : null,
     }
   }) as Array<{
     date: string
@@ -320,7 +330,7 @@ export async function getTimeOffCoverageSummary(request: {
     return { total, covered: 0, partial: 0, uncovered: 0 }
   }
 
-  const dates = shifts.map((shift) => shift.date).sort()
+  const dates = shifts.map(shift => shift.date).sort()
   const startDate = dates[0]
   const endDate = dates[dates.length - 1]
 
@@ -334,15 +344,11 @@ export async function getTimeOffCoverageSummary(request: {
 
   if (error) throw error
 
-  const assignmentMap = new Map<
-    string,
-    { full: boolean; partial: boolean }
-  >()
-  ;(assignments as SubAssignment[] | null || []).forEach((assignment) => {
+  const assignmentMap = new Map<string, { full: boolean; partial: boolean }>()
+  ;((assignments as SubAssignment[] | null) || []).forEach(assignment => {
     const key = `${assignment.date}::${assignment.time_slot_id}`
     const entry = assignmentMap.get(key) || { full: false, partial: false }
-    const isPartial =
-      assignment.is_partial || assignment.assignment_type === 'Partial Sub Shift'
+    const isPartial = assignment.is_partial || assignment.assignment_type === 'Partial Sub Shift'
     if (isPartial) {
       entry.partial = true
     } else {
@@ -355,7 +361,7 @@ export async function getTimeOffCoverageSummary(request: {
   let partial = 0
   let uncovered = 0
 
-  shifts.forEach((shift) => {
+  shifts.forEach(shift => {
     const key = `${shift.date}::${shift.time_slot_id}`
     const coverage = assignmentMap.get(key)
     if (coverage?.full) {

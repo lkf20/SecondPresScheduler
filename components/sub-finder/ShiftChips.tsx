@@ -4,7 +4,11 @@ import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Check } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
-import { getShiftStatusColorClasses, getShiftStatusColors, shiftStatusColorValues } from '@/lib/utils/colors'
+import {
+  getShiftStatusColorClasses,
+  getShiftStatusColors,
+  shiftStatusColorValues,
+} from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
 
 interface Shift {
@@ -37,7 +41,20 @@ interface ShiftChipsProps {
 export function formatShiftLabel(dateString: string, timeSlotCode: string): string {
   const date = parseLocalDate(dateString)
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const monthNames = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ]
   const dayName = dayNames[date.getDay()]
   const month = monthNames[date.getMonth()]
   const day = date.getDate()
@@ -47,7 +64,20 @@ export function formatShiftLabel(dateString: string, timeSlotCode: string): stri
 const formatShiftTooltipLabel = (dateString: string, timeSlotCode: string): string => {
   const date = parseLocalDate(dateString)
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const monthNames = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ]
   const dayName = dayNames[date.getDay()]
   const month = monthNames[date.getMonth()]
   const day = date.getDate()
@@ -63,7 +93,12 @@ export default function ShiftChips({
   isDeclined = false,
   recommendedShifts = [],
 }: ShiftChipsProps) {
-  if (canCover.length === 0 && cannotCover.length === 0 && assigned.length === 0 && (!shifts || shifts.length === 0)) {
+  if (
+    canCover.length === 0 &&
+    cannotCover.length === 0 &&
+    assigned.length === 0 &&
+    (!shifts || shifts.length === 0)
+  ) {
     return null
   }
 
@@ -79,7 +114,7 @@ export default function ShiftChips({
   const allShiftsMap = new Map<string, ShiftItem>()
 
   // Add assigned shifts first (highest priority)
-  assigned.forEach((shift) => {
+  assigned.forEach(shift => {
     const key = `${shift.date}|${shift.time_slot_code}`
     allShiftsMap.set(key, {
       date: shift.date,
@@ -91,7 +126,7 @@ export default function ShiftChips({
   })
 
   // Add can_cover shifts (only if not already assigned)
-  canCover.forEach((shift) => {
+  canCover.forEach(shift => {
     const key = `${shift.date}|${shift.time_slot_code}`
     if (!allShiftsMap.has(key)) {
       allShiftsMap.set(key, {
@@ -105,7 +140,7 @@ export default function ShiftChips({
   })
 
   // Add cannot_cover shifts (only if not already assigned)
-  cannotCover.forEach((shift) => {
+  cannotCover.forEach(shift => {
     const key = `${shift.date}|${shift.time_slot_code}`
     if (!allShiftsMap.has(key)) {
       allShiftsMap.set(key, {
@@ -132,7 +167,7 @@ export default function ShiftChips({
 
   // Create a Set of recommended shift keys for quick lookup
   const recommendedShiftKeys = new Set(
-    recommendedShifts.map((shift) => `${shift.date}|${shift.time_slot_code}`)
+    recommendedShifts.map(shift => `${shift.date}|${shift.time_slot_code}`)
   )
 
   const getBadgeClassName = (status: 'assigned' | 'available' | 'unavailable') => {
@@ -140,7 +175,7 @@ export default function ShiftChips({
     if (isDeclined) {
       return getShiftStatusColorClasses('declined')
     }
-    
+
     return getShiftStatusColorClasses(status)
   }
 
@@ -167,13 +202,15 @@ export default function ShiftChips({
                 key={`shift-${shift.date}-${shift.time_slot_code}-${idx}`}
                 variant="outline"
                 className="text-xs"
-                style={{
-                  backgroundColor: colorValues.bg,
-                  borderWidth: '1px',
-                  borderStyle: 'solid',
-                  borderColor: colorValues.border,
-                  color: colorValues.text,
-                } as React.CSSProperties}
+                style={
+                  {
+                    backgroundColor: colorValues.bg,
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    borderColor: colorValues.border,
+                    color: colorValues.text,
+                  } as React.CSSProperties
+                }
               >
                 <span className="inline-flex items-center gap-1.5">
                   {isRecommended && (
@@ -186,13 +223,13 @@ export default function ShiftChips({
 
             return (
               <Tooltip key={`shift-${shift.date}-${shift.time_slot_code}-${idx}`}>
-                <TooltipTrigger asChild>
-                  {badge}
-                </TooltipTrigger>
+                <TooltipTrigger asChild>{badge}</TooltipTrigger>
                 <TooltipContent side="top">
                   <div className="text-base">
                     <div>{tooltipLabel}</div>
-                    <div className={classroomName ? 'font-semibold' : undefined}>{classroomLabel}</div>
+                    <div className={classroomName ? 'font-semibold' : undefined}>
+                      {classroomLabel}
+                    </div>
                     {shift.status === 'unavailable' && shift.reason && (
                       <div className="text-muted-foreground">{shift.reason}</div>
                     )}
@@ -205,7 +242,7 @@ export default function ShiftChips({
         {showLegend && (
           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1 pb-4">
             <div className="flex items-center gap-1.5">
-              <div 
+              <div
                 className="w-3 h-3 rounded"
                 style={{
                   backgroundColor: shiftStatusColorValues.assigned.bg,
@@ -217,7 +254,7 @@ export default function ShiftChips({
               <span>Assigned</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div 
+              <div
                 className="w-3 h-3 rounded"
                 style={{
                   backgroundColor: shiftStatusColorValues.available.bg,
@@ -229,7 +266,7 @@ export default function ShiftChips({
               <span>Available</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div 
+              <div
                 className="w-3 h-3 rounded"
                 style={{
                   backgroundColor: shiftStatusColorValues.unavailable.bg,

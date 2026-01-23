@@ -118,7 +118,7 @@ export function transformTimeOffCardData(
 ): TimeOffCardData {
   const {
     includeDetailedShifts = false,
-    formatDay = (name) => {
+    formatDay = name => {
       if (!name) return '—'
       if (name === 'Tuesday') return 'Tues'
       return name.slice(0, 3)
@@ -133,7 +133,7 @@ export function transformTimeOffCardData(
     { hasFull: boolean; hasPartial: boolean; subName: string | null }
   >()
 
-  assignments.forEach((assignment) => {
+  assignments.forEach(assignment => {
     const key = `${assignment.date}|${assignment.time_slot_id}`
     const existing = assignmentMap.get(key) || {
       hasFull: false,
@@ -141,8 +141,7 @@ export function transformTimeOffCardData(
       subName: null,
     }
 
-    const isPartial =
-      assignment.is_partial || assignment.assignment_type === 'Partial Sub Shift'
+    const isPartial = assignment.is_partial || assignment.assignment_type === 'Partial Sub Shift'
 
     if (isPartial) {
       existing.hasPartial = true
@@ -170,7 +169,7 @@ export function transformTimeOffCardData(
   // Build shift details
   const shiftDetails: TimeOffCardData['shift_details'] = []
 
-  shifts.forEach((shift) => {
+  shifts.forEach(shift => {
     const key = `${shift.date}|${shift.time_slot_id}`
     const assignment = assignmentMap.get(key)
 
@@ -189,7 +188,20 @@ export function transformTimeOffCardData(
     const dayName = formatDay(shift.day_of_week?.name)
     const timeCode = shift.time_slot?.code || '—'
     const date = parseLocalDate(shift.date)
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const monthNames = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ]
     const month = monthNames[date.getMonth()]
     const day = date.getDate()
     const label = `${dayName} ${timeCode} • ${month} ${day}`

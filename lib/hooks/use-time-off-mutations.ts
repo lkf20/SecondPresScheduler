@@ -2,7 +2,11 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSchool } from '@/lib/contexts/SchoolContext'
-import { invalidateTimeOffRequest, invalidateDashboard, invalidateSubFinderAbsences } from '@/lib/utils/invalidation'
+import {
+  invalidateTimeOffRequest,
+  invalidateDashboard,
+  invalidateSubFinderAbsences,
+} from '@/lib/utils/invalidation'
 import { toast } from 'sonner'
 
 type CreateTimeOffRequestData = {
@@ -46,7 +50,9 @@ export function useCreateTimeOffRequest() {
       })
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Failed to create time off request' }))
+        const error = await response
+          .json()
+          .catch(() => ({ error: 'Failed to create time off request' }))
         throw new Error(error.error || 'Failed to create time off request')
       }
 
@@ -82,7 +88,9 @@ export function useUpdateTimeOffRequest() {
       })
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Failed to update time off request' }))
+        const error = await response
+          .json()
+          .catch(() => ({ error: 'Failed to update time off request' }))
         throw new Error(error.error || 'Failed to update time off request')
       }
 
@@ -125,7 +133,9 @@ export function useCancelTimeOffRequest() {
       })
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Failed to cancel time off request' }))
+        const error = await response
+          .json()
+          .catch(() => ({ error: 'Failed to cancel time off request' }))
         throw new Error(error.error || 'Failed to cancel time off request')
       }
 

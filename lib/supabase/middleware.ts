@@ -8,7 +8,10 @@ export async function updateSession(request: NextRequest) {
     })
 
     // Check if environment variables are set
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+    if (
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    ) {
       console.error('Missing Supabase environment variables')
       return supabaseResponse
     }
@@ -46,7 +49,10 @@ export async function updateSession(request: NextRequest) {
     if (error) {
       console.error('Supabase auth error:', error.message)
       // If it's a network error, allow access to login page
-      if (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/auth')) {
+      if (
+        request.nextUrl.pathname.startsWith('/login') ||
+        request.nextUrl.pathname.startsWith('/auth')
+      ) {
         return supabaseResponse
       }
     }
@@ -79,7 +85,10 @@ export async function updateSession(request: NextRequest) {
   } catch (error: unknown) {
     console.error('Middleware error:', error)
     // On error, allow access to login page, otherwise return error response
-    if (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/auth')) {
+    if (
+      request.nextUrl.pathname.startsWith('/login') ||
+      request.nextUrl.pathname.startsWith('/auth')
+    ) {
       return NextResponse.next({ request })
     }
     // For other pages, redirect to login on error

@@ -6,8 +6,21 @@ type ScheduleCell = Database['public']['Tables']['schedule_cells']['Row']
 export interface ScheduleCellWithDetails extends ScheduleCell {
   classroom?: { id: string; name: string }
   day_of_week?: { id: string; name: string; day_number: number }
-  time_slot?: { id: string; code: string; name: string | null; default_start_time: string | null; default_end_time: string | null }
-  class_groups?: Array<{ id: string; name: string; min_age: number | null; max_age: number | null; required_ratio: number; preferred_ratio: number | null }>
+  time_slot?: {
+    id: string
+    code: string
+    name: string | null
+    default_start_time: string | null
+    default_end_time: string | null
+  }
+  class_groups?: Array<{
+    id: string
+    name: string
+    min_age: number | null
+    max_age: number | null
+    required_ratio: number
+    preferred_ratio: number | null
+  }>
 }
 
 type ScheduleCellClassGroupJoin = {
@@ -37,7 +50,8 @@ export async function getScheduleCell(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('schedule_cells')
-    .select(`
+    .select(
+      `
       *,
       classroom:classrooms(id, name),
       day_of_week:days_of_week(id, name, day_number),
@@ -45,7 +59,8 @@ export async function getScheduleCell(
       schedule_cell_class_groups(
         class_group:class_groups(id, name, min_age, max_age, required_ratio, preferred_ratio, is_active, order)
       )
-    `)
+    `
+    )
     .eq('classroom_id', classroomId)
     .eq('day_of_week_id', dayOfWeekId)
     .eq('time_slot_id', timeSlotId)
@@ -65,7 +80,7 @@ export async function getScheduleCell(
     ...cell,
     class_groups: cell.schedule_cell_class_groups
       ? cell.schedule_cell_class_groups
-          .map((j) => j.class_group)
+          .map(j => j.class_group)
           .filter((cg): cg is NonNullable<typeof cg> => cg !== null)
       : [],
   }
@@ -82,7 +97,8 @@ export async function getScheduleCells(
   const supabase = await createClient()
   let query = supabase
     .from('schedule_cells')
-    .select(`
+    .select(
+      `
       *,
       classroom:classrooms(id, name),
       day_of_week:days_of_week(id, name, day_number),
@@ -90,7 +106,8 @@ export async function getScheduleCells(
       schedule_cell_class_groups(
         class_group:class_groups(id, name, min_age, max_age, required_ratio, preferred_ratio, is_active, order)
       )
-    `)
+    `
+    )
     .order('classroom_id', { ascending: true })
     .order('day_of_week_id', { ascending: true })
     .order('time_slot_id', { ascending: true })
@@ -113,13 +130,13 @@ export async function getScheduleCells(
   if (error) throw error
 
   // Transform the nested structure to flatten class_groups array
-  return (data || []).map((cell) => {
+  return (data || []).map(cell => {
     const raw = cell as ScheduleCellRaw
     const flattened: ScheduleCellWithDetails = {
       ...raw,
       class_groups: raw.schedule_cell_class_groups
         ? raw.schedule_cell_class_groups
-            .map((j) => j.class_group)
+            .map(j => j.class_group)
             .filter((cg): cg is NonNullable<typeof cg> => cg !== null)
         : [],
     }
@@ -165,9 +182,7 @@ export async function createScheduleCell(cell: {
     }))
 
     const supabase2 = await createClient()
-    const { error: joinError } = await supabase2
-      .from('schedule_cell_class_groups')
-      .insert(joinRows)
+    const { error: joinError } = await supabase2.from('schedule_cell_class_groups').insert(joinRows)
 
     if (joinError) throw joinError
   }
@@ -180,10 +195,12 @@ export async function createScheduleCell(cell: {
  */
 export async function updateScheduleCell(
   id: string,
-  updates: Partial<Omit<ScheduleCell, 'id' | 'created_at' | 'updated_at'>> & { class_group_ids?: string[] }
+  updates: Partial<Omit<ScheduleCell, 'id' | 'created_at' | 'updated_at'>> & {
+    class_group_ids?: string[]
+  }
 ): Promise<ScheduleCell> {
   const supabase = await createClient()
-  
+
   // Extract class_group_ids if present
   const { class_group_ids, ...cellUpdates } = updates
 
@@ -238,11 +255,7 @@ export async function upsertScheduleCell(cell: {
   notes?: string | null
 }): Promise<ScheduleCell> {
   // First try to find existing cell
-  const existing = await getScheduleCell(
-    cell.classroom_id,
-    cell.day_of_week_id,
-    cell.time_slot_id
-  )
+  const existing = await getScheduleCell(cell.classroom_id, cell.day_of_week_id, cell.time_slot_id)
 
   if (existing) {
     const existingClassGroupIds = existing.class_groups?.map(cg => cg.id) || []
@@ -262,10 +275,7 @@ export async function upsertScheduleCell(cell: {
  */
 export async function deleteScheduleCell(id: string): Promise<void> {
   const supabase = await createClient()
-  const { error } = await supabase
-    .from('schedule_cells')
-    .update({ is_active: false })
-    .eq('id', id)
+  const { error } = await supabase.from('schedule_cells').update({ is_active: false }).eq('id', id)
 
   if (error) throw error
 }
@@ -317,7 +327,8 @@ export async function bulkUpdateScheduleCells(
       day_of_week_id: update.day_of_week_id,
       time_slot_id: update.time_slot_id,
       is_active: update.is_active !== undefined ? update.is_active : true,
-      enrollment_for_staffing: update.enrollment_for_staffing !== undefined ? update.enrollment_for_staffing : null,
+      enrollment_for_staffing:
+        update.enrollment_for_staffing !== undefined ? update.enrollment_for_staffing : null,
       notes: update.notes !== undefined ? update.notes : null,
     }
   })
@@ -339,17 +350,15 @@ export async function bulkUpdateScheduleCells(
   for (let i = 0; i < updates.length; i++) {
     const update = updates[i]
     const cell = upsertedCells.find(
-      c => c.classroom_id === update.classroom_id &&
-           c.day_of_week_id === update.day_of_week_id &&
-           c.time_slot_id === update.time_slot_id
+      c =>
+        c.classroom_id === update.classroom_id &&
+        c.day_of_week_id === update.day_of_week_id &&
+        c.time_slot_id === update.time_slot_id
     )
 
     if (cell && update.class_group_ids !== undefined) {
       // Delete existing associations
-      await supabase
-        .from('schedule_cell_class_groups')
-        .delete()
-        .eq('schedule_cell_id', cell.id)
+      await supabase.from('schedule_cell_class_groups').delete().eq('schedule_cell_id', cell.id)
 
       // Insert new associations
       if (update.class_group_ids.length > 0) {
@@ -358,9 +367,7 @@ export async function bulkUpdateScheduleCells(
           class_group_id,
         }))
 
-        await supabase
-          .from('schedule_cell_class_groups')
-          .insert(joinRows)
+        await supabase.from('schedule_cell_class_groups').insert(joinRows)
       }
     }
   }

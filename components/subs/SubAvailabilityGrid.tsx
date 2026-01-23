@@ -2,7 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 
 interface Day {
@@ -45,7 +52,9 @@ interface SubAvailabilityGridProps {
   subId: string
   weeklyAvailability: AvailabilityItem[]
   exceptionRows: ExceptionRow[]
-  onAvailabilityChange: (availability: Array<{ day_of_week_id: string; time_slot_id: string; available: boolean }>) => void
+  onAvailabilityChange: (
+    availability: Array<{ day_of_week_id: string; time_slot_id: string; available: boolean }>
+  ) => void
 }
 
 export default function SubAvailabilityGrid({
@@ -61,28 +70,30 @@ export default function SubAvailabilityGrid({
   // Fetch days and time slots
   useEffect(() => {
     Promise.all([
-      fetch('/api/days-of-week').then((r) => r.json()),
-      fetch('/api/timeslots').then((r) => r.json()),
+      fetch('/api/days-of-week').then(r => r.json()),
+      fetch('/api/timeslots').then(r => r.json()),
     ]).then(([daysData, slotsData]) => {
       // Filter to weekdays only (Monday-Friday, day_number 1-5)
       const weekdays = daysData.filter((d: Day) => d.day_number >= 1 && d.day_number <= 5)
       setDays(weekdays.sort((a: Day, b: Day) => a.day_number - b.day_number))
       // Sort time slots by display_order (from settings), then by code as fallback
-      setTimeSlots(slotsData.sort((a: TimeSlot, b: TimeSlot) => {
-        const orderA = a.display_order ?? 999
-        const orderB = b.display_order ?? 999
-        if (orderA !== orderB) {
-          return orderA - orderB
-        }
-        return (a.code || '').localeCompare(b.code || '')
-      }))
+      setTimeSlots(
+        slotsData.sort((a: TimeSlot, b: TimeSlot) => {
+          const orderA = a.display_order ?? 999
+          const orderB = b.display_order ?? 999
+          if (orderA !== orderB) {
+            return orderA - orderB
+          }
+          return (a.code || '').localeCompare(b.code || '')
+        })
+      )
     })
   }, [])
 
   // Initialize availability map from props
   useEffect(() => {
     const map = new Map<string, boolean>()
-    weeklyAvailability.forEach((item) => {
+    weeklyAvailability.forEach(item => {
       const key = `${item.day_of_week_id}|${item.time_slot_id}`
       map.set(key, item.available)
     })
@@ -92,7 +103,7 @@ export default function SubAvailabilityGrid({
   // Build exception map: day_of_week_id|time_slot_id -> exception row
   useEffect(() => {
     const map = new Map<string, ExceptionRow>()
-    exceptionRows.forEach((row) => {
+    exceptionRows.forEach(row => {
       // Convert date to day_of_week_id
       // JavaScript Date.getDay(): 0=Sunday, 1=Monday, ..., 6=Saturday
       // Our day_number: 1=Monday, 2=Tuesday, ..., 5=Friday, 7=Sunday
@@ -105,7 +116,7 @@ export default function SubAvailabilityGrid({
         dayNumber = jsDay // Monday=1, Tuesday=2, etc.
       }
       // Find matching day by day_number
-      const day = days.find((d) => d.day_number === dayNumber)
+      const day = days.find(d => d.day_number === dayNumber)
       if (day) {
         const key = `${day.id}|${row.time_slot_id}`
         map.set(key, row)
@@ -160,7 +171,7 @@ export default function SubAvailabilityGrid({
         <TableHeader>
           <TableRow>
             <TableHead>Day</TableHead>
-            {timeSlots.map((slot) => (
+            {timeSlots.map(slot => (
               <TableHead key={slot.id} className="text-center">
                 {slot.code}
               </TableHead>
@@ -168,10 +179,10 @@ export default function SubAvailabilityGrid({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {days.map((day) => (
+          {days.map(day => (
             <TableRow key={day.id}>
               <TableCell className="font-medium">{day.name}</TableCell>
-              {timeSlots.map((slot) => {
+              {timeSlots.map(slot => {
                 const available = isAvailable(day.id, slot.id)
                 const exception = getException(day.id, slot.id)
                 const hasExcept = hasException(day.id, slot.id)

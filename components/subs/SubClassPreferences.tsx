@@ -28,8 +28,8 @@ export default function SubClassPreferences({
 
   useEffect(() => {
     fetch('/api/class-groups')
-      .then((r) => r.json())
-      .then((data) => {
+      .then(r => r.json())
+      .then(data => {
         setClasses(data)
       })
       .catch(console.error)
@@ -40,7 +40,7 @@ export default function SubClassPreferences({
     setSelectedIds(new Set(selectedClassIds))
   }, [selectedClassIds])
 
-  const filteredClasses = classes.filter((cls) => {
+  const filteredClasses = classes.filter(cls => {
     return cls.name.toLowerCase().includes(searchQuery.toLowerCase())
   })
 
@@ -56,14 +56,14 @@ export default function SubClassPreferences({
   }
 
   const handleSelectAll = () => {
-    const allIds = new Set(filteredClasses.map((cls) => cls.id))
+    const allIds = new Set(filteredClasses.map(cls => cls.id))
     setSelectedIds(allIds)
     onSelectionChange(Array.from(allIds))
   }
 
   const handleClearAll = () => {
     const newSelected = new Set(selectedIds)
-    filteredClasses.forEach((cls) => {
+    filteredClasses.forEach(cls => {
       newSelected.delete(cls.id)
     })
     setSelectedIds(newSelected)
@@ -100,17 +100,19 @@ export default function SubClassPreferences({
       <Input
         placeholder="Search class groups..."
         value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
+        onChange={e => setSearchQuery(e.target.value)}
       />
 
       {/* All classes as clickable chips */}
       <div className="flex flex-wrap gap-2">
         {filteredClasses.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4">
-            {searchQuery ? 'No class groups found matching your search' : 'No class groups available'}
+            {searchQuery
+              ? 'No class groups found matching your search'
+              : 'No class groups available'}
           </p>
         ) : (
-          filteredClasses.map((cls) => {
+          filteredClasses.map(cls => {
             const isSelected = selectedIds.has(cls.id)
             return (
               <Badge

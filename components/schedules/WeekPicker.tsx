@@ -23,12 +23,12 @@ function formatWeekRange(weekStartISO: string): string {
   const weekStart = new Date(weekStartISO + 'T00:00:00')
   const weekEnd = new Date(weekStart)
   weekEnd.setDate(weekEnd.getDate() + 6) // Add 6 days to get Sunday
-  
+
   const startMonth = weekStart.toLocaleDateString('en-US', { month: 'short' })
   const startDay = weekStart.getDate()
   const endMonth = weekEnd.toLocaleDateString('en-US', { month: 'short' })
   const endDay = weekEnd.getDate()
-  
+
   // If same month, show "Feb 18 - 24"
   // If different months, show "Feb 28 - Mar 3"
   if (startMonth === endMonth) {
@@ -62,11 +62,11 @@ export default function WeekPicker({ weekStartISO, onWeekChange, onTodayClick }:
       >
         <ChevronLeft className="h-4 w-4" />
       </Button>
-      
+
       <div className="min-w-[200px] text-center font-medium text-gray-900">
         {formatWeekRange(weekStartISO)}
       </div>
-      
+
       <Button
         variant="ghost"
         size="icon"
@@ -76,7 +76,7 @@ export default function WeekPicker({ weekStartISO, onWeekChange, onTodayClick }:
       >
         <ChevronRight className="h-4 w-4" />
       </Button>
-      
+
       <Button
         variant="ghost"
         onClick={onTodayClick}

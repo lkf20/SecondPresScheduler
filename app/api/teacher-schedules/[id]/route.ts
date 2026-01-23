@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getTeacherScheduleById, updateTeacherSchedule, deleteTeacherSchedule } from '@/lib/api/schedules'
+import {
+  getTeacherScheduleById,
+  updateTeacherSchedule,
+  deleteTeacherSchedule,
+} from '@/lib/api/schedules'
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const schedule = await getTeacherScheduleById(id)
@@ -14,10 +15,7 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await request.json()
@@ -40,4 +38,3 @@ export async function DELETE(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
-

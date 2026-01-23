@@ -17,7 +17,12 @@ export async function POST(request: NextRequest) {
       selected_shift_ids, // Array of coverage_request_shift_ids
     } = body
 
-    if (!coverage_request_id || !sub_id || !selected_shift_ids || !Array.isArray(selected_shift_ids)) {
+    if (
+      !coverage_request_id ||
+      !sub_id ||
+      !selected_shift_ids ||
+      !Array.isArray(selected_shift_ids)
+    ) {
       return createErrorResponse(
         'Missing required fields: coverage_request_id, sub_id, selected_shift_ids',
         400
@@ -84,9 +89,7 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('No valid shifts found for assignment', 404)
     }
 
-    const shiftsNeedingClassroom = coverageRequestShifts.filter(
-      (shift: any) => !shift.classroom_id
-    )
+    const shiftsNeedingClassroom = coverageRequestShifts.filter((shift: any) => !shift.classroom_id)
     const fallbackClassroomMap = new Map<string, string>()
     if (shiftsNeedingClassroom.length > 0) {
       const { data: schedules, error: scheduleError } = await supabase
@@ -199,16 +202,18 @@ export async function POST(request: NextRequest) {
       const shiftIds = coverageRequestShifts.map((s: any) => s.id)
       const { data: shiftDetails } = await supabase
         .from('coverage_request_shifts')
-        .select(`
+        .select(
+          `
           id,
           date,
           time_slot_id,
           time_slots:time_slots(code),
           days_of_week:day_of_week_id(name)
-        `)
+        `
+        )
         .in('id', shiftIds)
 
-    if (shiftDetails) {
+      if (shiftDetails) {
         assignedShiftDetails.push(
           ...shiftDetails.map((shift: any) => ({
             coverage_request_shift_id: shift.id,

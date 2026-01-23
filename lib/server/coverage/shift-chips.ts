@@ -38,7 +38,7 @@ export const buildShiftChips = ({
     return allowed.has(`${date}|${timeSlotCode}`)
   }
 
-  assigned.forEach((shift) => {
+  assigned.forEach(shift => {
     if (!shouldInclude(shift.date, shift.time_slot_code)) return
     const key = `${shift.date}|${shift.time_slot_code}`
     allShiftsMap.set(key, {
@@ -50,7 +50,7 @@ export const buildShiftChips = ({
     })
   })
 
-  canCover.forEach((shift) => {
+  canCover.forEach(shift => {
     if (!shouldInclude(shift.date, shift.time_slot_code)) return
     const key = `${shift.date}|${shift.time_slot_code}`
     if (!allShiftsMap.has(key)) {
@@ -64,7 +64,7 @@ export const buildShiftChips = ({
     }
   })
 
-  cannotCover.forEach((shift) => {
+  cannotCover.forEach(shift => {
     if (!shouldInclude(shift.date, shift.time_slot_code)) return
     const key = `${shift.date}|${shift.time_slot_code}`
     if (!allShiftsMap.has(key)) {

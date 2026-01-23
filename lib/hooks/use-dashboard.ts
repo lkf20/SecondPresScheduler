@@ -63,12 +63,12 @@ type DashboardOverview = {
 async function fetchDashboard(params: DashboardQueryParams): Promise<DashboardOverview> {
   const url = `/api/dashboard/overview?start_date=${params.startDate}&end_date=${params.endDate}`
   const response = await fetch(url)
-  
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Failed to fetch dashboard' }))
     throw new Error(error.error || 'Failed to fetch dashboard')
   }
-  
+
   return response.json()
 }
 

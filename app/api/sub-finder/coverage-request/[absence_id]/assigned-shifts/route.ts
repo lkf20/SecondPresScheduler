@@ -74,12 +74,14 @@ export async function GET(
     // Get all sub_assignments for this teacher that match the coverage request shifts
     const { data: subAssignments, error: assignmentsError } = await supabase
       .from('sub_assignments')
-      .select(`
+      .select(
+        `
         date,
         time_slot_id,
         time_slots:time_slots(code),
         days_of_week:day_of_week_id(name)
-      `)
+      `
+      )
       .eq('teacher_id', coverageRequest.teacher_id)
       .eq('assignment_type', 'Substitute Shift')
 
@@ -102,10 +104,12 @@ export async function GET(
       day_name: assignment.days_of_week?.name || '',
     }))
     const assignedShiftKeys = new Set<string>()
-    assignedShifts.forEach((shift) => {
+    assignedShifts.forEach(shift => {
       assignedShiftKeys.add(`${shift.date}|${shift.time_slot_code}`)
     })
-    const remainingShiftKeys = Array.from(coverageShiftKeys).filter((key) => !assignedShiftKeys.has(key))
+    const remainingShiftKeys = Array.from(coverageShiftKeys).filter(
+      key => !assignedShiftKeys.has(key)
+    )
 
     return NextResponse.json({
       assigned_shifts: assignedShifts,

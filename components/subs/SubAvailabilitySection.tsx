@@ -82,14 +82,16 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
       if (!response.ok) throw new Error('Failed to fetch time slots')
       const data = await response.json()
       // Sort time slots by display_order (from settings), then by code as fallback
-      setTimeSlots((data as TimeSlot[]).sort((a, b) => {
-        const orderA = a.display_order ?? 999
-        const orderB = b.display_order ?? 999
-        if (orderA !== orderB) {
-          return orderA - orderB
-        }
-        return (a.code || '').localeCompare(b.code || '')
-      }))
+      setTimeSlots(
+        (data as TimeSlot[]).sort((a, b) => {
+          const orderA = a.display_order ?? 999
+          const orderB = b.display_order ?? 999
+          if (orderA !== orderB) {
+            return orderA - orderB
+          }
+          return (a.code || '').localeCompare(b.code || '')
+        })
+      )
     } catch (error) {
       console.error('Error fetching time slots:', error)
     }
@@ -109,7 +111,7 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
     if (availabilityData) {
       setAvailabilityData({
         ...availabilityData,
-        weekly: availability.map((item) => ({
+        weekly: availability.map(item => ({
           id: '',
           day_of_week_id: item.day_of_week_id,
           time_slot_id: item.time_slot_id,
@@ -128,17 +130,17 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
 
     try {
       // Check for conflicts with teaching schedule
-      const availableSlots = availabilityData.weekly.filter((item) => item.available)
-      
+      const availableSlots = availabilityData.weekly.filter(item => item.available)
+
       if (availableSlots.length > 0) {
         // Fetch teacher's schedule
         const scheduleResponse = await fetch(`/api/teachers/${subId}/schedules`)
         if (scheduleResponse.ok) {
           const schedules = await scheduleResponse.json()
-          
+
           // Build a set of teaching schedule keys (day_of_week_id|time_slot_id)
           const teachingSlots = new Set<string>()
-          ;(schedules as TeacherSchedule[]).forEach((schedule) => {
+          ;(schedules as TeacherSchedule[]).forEach(schedule => {
             if (schedule.day_of_week_id && schedule.time_slot_id) {
               const key = `${schedule.day_of_week_id}|${schedule.time_slot_id}`
               teachingSlots.add(key)
@@ -147,7 +149,7 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
 
           // Find conflicts
           const conflictList: Array<{ day: string; timeSlot: string }> = []
-          availableSlots.forEach((item) => {
+          availableSlots.forEach(item => {
             const key = `${item.day_of_week_id}|${item.time_slot_id}`
             if (teachingSlots.has(key)) {
               // Get day and time slot names from the item's nested data (already fetched by API)
@@ -169,7 +171,7 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          weekly: availabilityData.weekly.map((item) => ({
+          weekly: availabilityData.weekly.map(item => ({
             day_of_week_id: item.day_of_week_id,
             time_slot_id: item.time_slot_id,
             available: item.available,
@@ -233,15 +235,17 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
   }
 
   if (!availabilityData) {
-    return <div className="text-center text-muted-foreground py-8">Failed to load availability data</div>
+    return (
+      <div className="text-center text-muted-foreground py-8">Failed to load availability data</div>
+    )
   }
 
   // Enhance exception headers with time slot IDs from exception rows
-  const enhancedHeaders = availabilityData.exception_headers.map((header) => {
+  const enhancedHeaders = availabilityData.exception_headers.map(header => {
     const relatedRows = availabilityData.exception_rows.filter(
-      (row) => row.exception_header?.id === header.id
+      row => row.exception_header?.id === header.id
     )
-    const timeSlotIds = [...new Set(relatedRows.map((row) => row.time_slot_id))]
+    const timeSlotIds = [...new Set(relatedRows.map(row => row.time_slot_id))]
     return { ...header, time_slot_ids: timeSlotIds }
   })
 
@@ -250,7 +254,8 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
       <div>
         <h3 className="text-lg font-semibold mb-2">Weekly Availability</h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Check the boxes for time slots when this sub is regularly available. Unchecked = unavailable.
+          Check the boxes for time slots when this sub is regularly available. Unchecked =
+          unavailable.
         </p>
         <SubAvailabilityGrid
           subId={subId}

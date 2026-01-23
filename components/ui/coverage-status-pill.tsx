@@ -75,10 +75,6 @@ export default function CoverageStatusPill({
       )
     }
     default:
-      return (
-        <span className={cn(baseClass, getNeutralChipClasses(), className)}>
-          —
-        </span>
-      )
+      return <span className={cn(baseClass, getNeutralChipClasses(), className)}>—</span>
   }
 }

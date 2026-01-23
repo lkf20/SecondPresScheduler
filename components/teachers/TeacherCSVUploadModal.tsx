@@ -80,16 +80,18 @@ export default function TeacherCSVUploadModal({
   useEffect(() => {
     if (isOpen) {
       fetch('/api/staff-role-types')
-        .then((r) => r.json())
-        .then((data) => {
-          const items = Array.isArray(data) ? (data as Array<{ id?: unknown; label?: unknown }>) : []
-          const normalized = items.flatMap((item) => {
+        .then(r => r.json())
+        .then(data => {
+          const items = Array.isArray(data)
+            ? (data as Array<{ id?: unknown; label?: unknown }>)
+            : []
+          const normalized = items.flatMap(item => {
             if (!item?.id || !item?.label) return []
             return [{ id: String(item.id), label: String(item.label) }]
           })
           setRoleTypes(normalized)
         })
-        .catch((err) => {
+        .catch(err => {
           console.error('Failed to fetch role types:', err)
         })
     }
@@ -139,9 +141,7 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
   const findRoleTypeId = (label: string | undefined): string | null => {
     if (!label || !label.trim()) return null
     const normalized = label.trim().toLowerCase()
-    const roleType = roleTypes.find(
-      (rt) => rt.label.toLowerCase() === normalized
-    )
+    const roleType = roleTypes.find(rt => rt.label.toLowerCase() === normalized)
     return roleType?.id || null
   }
 
@@ -185,19 +185,24 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
   }
 
   const parseCSV = (text: string): ParsedTeacher[] => {
-    const lines = text.split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('#'))
+    const lines = text
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('#'))
     if (lines.length < 2) {
       throw new Error('CSV must have at least a header row and one data row')
     }
 
-    const headers = parseCSVLine(lines[0]).map((h) => h.trim())
-    const nameIndex = headers.findIndex((h) => h.toLowerCase() === 'name')
-    const displayNameIndex = headers.findIndex((h) => h.toLowerCase() === 'display name')
-    const emailIndex = headers.findIndex((h) => h.toLowerCase() === 'email')
-    const phoneIndex = headers.findIndex((h) => h.toLowerCase() === 'phone')
-    const staffRoleIndex = headers.findIndex((h) => h.toLowerCase() === 'staff role')
-    const statusIndex = headers.findIndex((h) => h.toLowerCase() === 'status')
-    const isSubIndex = headers.findIndex((h) => h.toLowerCase() === 'is also a sub' || h.toLowerCase() === 'is sub')
+    const headers = parseCSVLine(lines[0]).map(h => h.trim())
+    const nameIndex = headers.findIndex(h => h.toLowerCase() === 'name')
+    const displayNameIndex = headers.findIndex(h => h.toLowerCase() === 'display name')
+    const emailIndex = headers.findIndex(h => h.toLowerCase() === 'email')
+    const phoneIndex = headers.findIndex(h => h.toLowerCase() === 'phone')
+    const staffRoleIndex = headers.findIndex(h => h.toLowerCase() === 'staff role')
+    const statusIndex = headers.findIndex(h => h.toLowerCase() === 'status')
+    const isSubIndex = headers.findIndex(
+      h => h.toLowerCase() === 'is also a sub' || h.toLowerCase() === 'is sub'
+    )
 
     if (nameIndex === -1) {
       throw new Error('CSV must have "Name" column')
@@ -212,7 +217,7 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
       const warnings: string[] = []
 
       const name = values[nameIndex] || ''
-      const email = emailIndex !== -1 ? (values[emailIndex] || '') : ''
+      const email = emailIndex !== -1 ? values[emailIndex] || '' : ''
       const displayName = displayNameIndex !== -1 ? values[displayNameIndex] : undefined
       const phone = phoneIndex !== -1 ? values[phoneIndex] : undefined
       const staffRole = staffRoleIndex !== -1 ? values[staffRoleIndex] : undefined
@@ -232,14 +237,31 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
       if (staffRole && staffRole.trim()) {
         const roleTypeId = findRoleTypeId(staffRole)
         if (!roleTypeId) {
-          warnings.push(`Staff Role "${staffRole}" not found. Available: ${roleTypes.map(rt => rt.label).join(', ')}`)
+          warnings.push(
+            `Staff Role "${staffRole}" not found. Available: ${roleTypes.map(rt => rt.label).join(', ')}`
+          )
         }
       }
 
       // Validate status
       if (status && status.trim()) {
         const normalized = status.trim().toLowerCase()
-        if (!['active', 'inactive', 'a', 'i', 'yes', 'no', 'y', 'n', 'true', 'false', '1', '0'].includes(normalized)) {
+        if (
+          ![
+            'active',
+            'inactive',
+            'a',
+            'i',
+            'yes',
+            'no',
+            'y',
+            'n',
+            'true',
+            'false',
+            '1',
+            '0',
+          ].includes(normalized)
+        ) {
           warnings.push(`Invalid Status value "${status}". Use "Active" or "Inactive"`)
         }
       }
@@ -311,7 +333,7 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
   }
 
   const handleImport = async () => {
-    const validRows = parsedData.filter((row) => row.errors.length === 0)
+    const validRows = parsedData.filter(row => row.errors.length === 0)
     if (validRows.length === 0) {
       setError('No valid rows to import. Please fix errors and try again.')
       return
@@ -321,10 +343,10 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
     setError(null)
 
     try {
-      const teachersToImport: TeacherImport[] = validRows.map((row) => {
+      const teachersToImport: TeacherImport[] = validRows.map(row => {
         const { first_name, last_name } = parseName(row.name)
         const roleTypeId = findRoleTypeId(row.staff_role)
-        
+
         return {
           first_name,
           last_name,
@@ -370,7 +392,7 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
       const response = await fetch('/api/teachers/bulk-import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           teachers: teachersToImport,
           resolutions: Array.from(resolutions.entries()).map(([index, action]) => ({
             csvIndex: index,
@@ -386,7 +408,7 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
 
       const result = await response.json()
       setImportResults(result)
-      
+
       if (result.errors === 0) {
         setTimeout(() => {
           onImportComplete()
@@ -426,8 +448,8 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
     onClose()
   }
 
-  const validRows = parsedData.filter((row) => row.errors.length === 0)
-  const invalidRows = parsedData.filter((row) => row.errors.length > 0)
+  const validRows = parsedData.filter(row => row.errors.length === 0)
+  const invalidRows = parsedData.filter(row => row.errors.length > 0)
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -435,7 +457,8 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
         <DialogHeader>
           <DialogTitle>Upload Teachers CSV</DialogTitle>
           <DialogDescription>
-            Import multiple teachers from a CSV file. Download the template to see the required format.
+            Import multiple teachers from a CSV file. Download the template to see the required
+            format.
           </DialogDescription>
         </DialogHeader>
 
@@ -457,13 +480,16 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
                 <strong>Phone</strong> (optional): Phone number
               </li>
               <li>
-                <strong>Staff Role</strong> (optional): &quot;Permanent&quot; or &quot;Flexible&quot;
+                <strong>Staff Role</strong> (optional): &quot;Permanent&quot; or
+                &quot;Flexible&quot;
               </li>
               <li>
-                <strong>Status</strong> (optional): &quot;Active&quot; or &quot;Inactive&quot; (defaults to Active)
+                <strong>Status</strong> (optional): &quot;Active&quot; or &quot;Inactive&quot;
+                (defaults to Active)
               </li>
               <li>
-                <strong>Is also a sub</strong> (optional): &quot;Yes&quot; or &quot;No&quot; (defaults to No)
+                <strong>Is also a sub</strong> (optional): &quot;Yes&quot; or &quot;No&quot;
+                (defaults to No)
               </li>
             </ul>
           </div>
@@ -501,9 +527,7 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="text-sm">
-                  <span className="font-medium text-green-600">
-                    {validRows.length} valid
-                  </span>
+                  <span className="font-medium text-green-600">{validRows.length} valid</span>
                   {invalidRows.length > 0 && (
                     <>
                       {' • '}
@@ -514,10 +538,7 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
                   )}
                 </div>
                 {validRows.length > 0 && (
-                  <Button
-                    onClick={handleImport}
-                    disabled={isImporting}
-                  >
+                  <Button onClick={handleImport} disabled={isImporting}>
                     {isImporting ? 'Importing...' : `Import ${validRows.length} Teachers`}
                   </Button>
                 )}
@@ -539,10 +560,16 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {parsedData.map((row) => (
+                    {parsedData.map(row => (
                       <TableRow
                         key={row.rowNumber}
-                        className={row.errors.length > 0 ? 'bg-red-50' : row.warnings.length > 0 ? 'bg-yellow-50' : ''}
+                        className={
+                          row.errors.length > 0
+                            ? 'bg-red-50'
+                            : row.warnings.length > 0
+                              ? 'bg-yellow-50'
+                              : ''
+                        }
                       >
                         <TableCell className="font-medium">{row.rowNumber}</TableCell>
                         <TableCell>{row.name}</TableCell>
@@ -556,13 +583,19 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
                         <TableCell>
                           <div className="space-y-1">
                             {row.errors.map((err, idx) => (
-                              <div key={idx} className="text-xs text-red-600 flex items-center gap-1">
+                              <div
+                                key={idx}
+                                className="text-xs text-red-600 flex items-center gap-1"
+                              >
                                 <AlertCircle className="h-3 w-3" />
                                 {err}
                               </div>
                             ))}
                             {row.warnings.map((warn, idx) => (
-                              <div key={idx} className="text-xs text-yellow-600 flex items-center gap-1">
+                              <div
+                                key={idx}
+                                className="text-xs text-yellow-600 flex items-center gap-1"
+                              >
                                 <AlertCircle className="h-3 w-3" />
                                 {warn}
                               </div>
@@ -597,14 +630,10 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
                   </div>
                 )}
                 {importResults.skipped > 0 && (
-                  <div className="text-yellow-600">
-                    ⚠ Skipped: {importResults.skipped} teachers
-                  </div>
+                  <div className="text-yellow-600">⚠ Skipped: {importResults.skipped} teachers</div>
                 )}
                 {importResults.errors > 0 && (
-                  <div className="text-red-600">
-                    ✗ Errors: {importResults.errors} teachers
-                  </div>
+                  <div className="text-red-600">✗ Errors: {importResults.errors} teachers</div>
                 )}
               </div>
               {importResults.errorDetails && importResults.errorDetails.length > 0 && (

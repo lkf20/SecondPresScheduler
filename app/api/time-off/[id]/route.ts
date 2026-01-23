@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
-import { 
-  getTimeOffRequestById, 
-  updateTimeOffRequest, 
+import {
+  getTimeOffRequestById,
+  updateTimeOffRequest,
   deleteTimeOffRequest,
   getActiveSubAssignmentsForTimeOffRequest,
   cancelTimeOffRequest,
@@ -24,7 +24,20 @@ function formatExcludedDate(dateStr: string): string {
     const date = parseLocalDate(dateStr)
     if (isNaN(date.getTime())) return dateStr // Return original if invalid
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const monthNames = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ]
     const dayAbbr = dayNames[date.getDay()]
     const monthAbbr = monthNames[date.getMonth()]
     const day = date.getDate()
@@ -35,10 +48,7 @@ function formatExcludedDate(dateStr: string): string {
   }
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const requestData = await getTimeOffRequestById(id)
@@ -49,10 +59,7 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await request.json()
@@ -80,21 +87,28 @@ export async function PUT(
         requestData.start_date,
         effectiveEndDate
       )
-      requestedShifts = scheduledShifts.map((shift) => ({
+      requestedShifts = scheduledShifts.map(shift => ({
         date: shift.date,
         time_slot_id: shift.time_slot_id,
       }))
     }
 
     // Filter out conflicting shifts (but still allow the request to be updated)
-    let shiftsToCreate: Array<{ date: string; day_of_week_id: string; time_slot_id: string; is_partial?: boolean; start_time?: string | null; end_time?: string | null }> = []
+    let shiftsToCreate: Array<{
+      date: string
+      day_of_week_id: string
+      time_slot_id: string
+      is_partial?: boolean
+      start_time?: string | null
+      end_time?: string | null
+    }> = []
     let excludedShifts: Array<{ date: string }> = []
     let excludedShiftCount = 0
     let warning: string | null = null
 
     // Update the time off request
     const updatedRequest = await updateTimeOffRequest(id, { ...requestData, status })
-    
+
     // Update the corresponding coverage_request's dates to match the time_off_request
     const supabase = await createClient()
     const { data: timeOffRequestWithCoverage } = await supabase
@@ -102,43 +116,53 @@ export async function PUT(
       .select('coverage_request_id, start_date, end_date')
       .eq('id', id)
       .single()
-    
+
     if (timeOffRequestWithCoverage?.coverage_request_id) {
       // Always update dates to match the time_off_request
       const effectiveStartDate = timeOffRequestWithCoverage.start_date
-      const effectiveEndDate = timeOffRequestWithCoverage.end_date || timeOffRequestWithCoverage.start_date
-      
+      const effectiveEndDate =
+        timeOffRequestWithCoverage.end_date || timeOffRequestWithCoverage.start_date
+
       const coverageUpdate: { start_date: string; end_date: string; updated_at: string } = {
         start_date: effectiveStartDate,
         end_date: effectiveEndDate,
         updated_at: new Date().toISOString(),
       }
-      
-      console.log(`[TimeOff Update] Updating coverage_request ${timeOffRequestWithCoverage.coverage_request_id} with dates:`, {
-        start_date: effectiveStartDate,
-        end_date: effectiveEndDate,
-      })
-      
+
+      console.log(
+        `[TimeOff Update] Updating coverage_request ${timeOffRequestWithCoverage.coverage_request_id} with dates:`,
+        {
+          start_date: effectiveStartDate,
+          end_date: effectiveEndDate,
+        }
+      )
+
       const { error: coverageUpdateError, data: updatedCoverageRequest } = await supabase
         .from('coverage_requests')
         .update(coverageUpdate)
         .eq('id', timeOffRequestWithCoverage.coverage_request_id)
         .select('start_date, end_date')
         .single()
-      
+
       if (coverageUpdateError) {
-        console.error('[TimeOff Update] Error updating coverage_request dates:', coverageUpdateError)
+        console.error(
+          '[TimeOff Update] Error updating coverage_request dates:',
+          coverageUpdateError
+        )
         // Don't fail the request, just log the error
       } else {
-        console.log('[TimeOff Update] Successfully updated coverage_request dates:', updatedCoverageRequest)
+        console.log(
+          '[TimeOff Update] Successfully updated coverage_request dates:',
+          updatedCoverageRequest
+        )
       }
     }
-    
+
     // Handle shifts
     if (shifts !== undefined) {
       // Delete existing shifts
       await deleteTimeOffShifts(id)
-      
+
       if (requestedShifts.length > 0 && status !== 'draft') {
         const existingShifts = await getTeacherTimeOffShifts(
           requestData.teacher_id,
@@ -147,21 +171,21 @@ export async function PUT(
           id // Exclude current request
         )
         const existingShiftKeys = new Set(
-          existingShifts.map((shift) => `${normalizeDate(shift.date)}::${shift.time_slot_id}`)
+          existingShifts.map(shift => `${normalizeDate(shift.date)}::${shift.time_slot_id}`)
         )
-        
+
         // Filter out conflicting shifts
         if (Array.isArray(shifts) && shifts.length > 0) {
-          const excluded = shifts.filter((shift) => {
+          const excluded = shifts.filter(shift => {
             const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
             return existingShiftKeys.has(shiftKey)
           })
-          
-          excludedShifts = excluded.map((shift) => ({
+
+          excludedShifts = excluded.map(shift => ({
             date: normalizeDate(shift.date),
           }))
-          
-          shiftsToCreate = shifts.filter((shift) => {
+
+          shiftsToCreate = shifts.filter(shift => {
             const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
             return !existingShiftKeys.has(shiftKey)
           })
@@ -173,18 +197,18 @@ export async function PUT(
             updatedRequest.start_date,
             effectiveEndDate
           )
-          
-          const excluded = scheduledShifts.filter((shift) => {
+
+          const excluded = scheduledShifts.filter(shift => {
             const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
             return existingShiftKeys.has(shiftKey)
           })
-          
-          excludedShifts = excluded.map((shift) => ({
+
+          excludedShifts = excluded.map(shift => ({
             date: shift.date,
           }))
-          
+
           shiftsToCreate = scheduledShifts
-            .map((shift) => ({
+            .map(shift => ({
               date: shift.date,
               day_of_week_id: shift.day_of_week_id,
               time_slot_id: shift.time_slot_id,
@@ -192,13 +216,13 @@ export async function PUT(
               start_time: null,
               end_time: null,
             }))
-            .filter((shift) => {
+            .filter(shift => {
               const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
               return !existingShiftKeys.has(shiftKey)
             })
           excludedShiftCount = excludedShifts.length
         }
-        
+
         if (excludedShiftCount > 0 && excludedShifts.length > 0) {
           try {
             // Remove duplicates by date (same date can appear multiple times with different time slots)
@@ -214,7 +238,7 @@ export async function PUT(
                 }
               })
               .filter((date): date is string => Boolean(date)) // Remove any null/empty values
-            
+
             if (uniqueExcludedDates.length > 0) {
               const formattedDates = uniqueExcludedDates.join(', ')
               warning = `This teacher already has time off recorded for ${excludedShiftCount} of these shifts.<br>${excludedShiftCount} shift${excludedShiftCount !== 1 ? 's' : ''} will not be recorded: ${formattedDates}`
@@ -238,7 +262,7 @@ export async function PUT(
             updatedRequest.start_date,
             effectiveEndDate
           )
-          shiftsToCreate = scheduledShifts.map((shift) => ({
+          shiftsToCreate = scheduledShifts.map(shift => ({
             date: shift.date,
             day_of_week_id: shift.day_of_week_id,
             time_slot_id: shift.time_slot_id,
@@ -248,12 +272,12 @@ export async function PUT(
           }))
         }
       }
-      
+
       // Create shifts (only non-conflicting ones)
       if (shiftsToCreate.length > 0) {
         await createTimeOffShifts(id, shiftsToCreate)
       }
-      
+
       // After shifts are created/updated, recalculate coverage_request dates from actual shifts
       // This ensures the dates match the actual shift dates (MIN and MAX)
       if (timeOffRequestWithCoverage?.coverage_request_id) {
@@ -261,13 +285,16 @@ export async function PUT(
           .from('coverage_request_shifts')
           .select('date')
           .eq('coverage_request_id', timeOffRequestWithCoverage.coverage_request_id)
-        
+
         if (coverageShifts && coverageShifts.length > 0) {
-          const dates = coverageShifts.map(s => s.date).filter(Boolean).sort()
+          const dates = coverageShifts
+            .map(s => s.date)
+            .filter(Boolean)
+            .sort()
           if (dates.length > 0) {
             const minDate = dates[0]
             const maxDate = dates[dates.length - 1]
-            
+
             await supabase
               .from('coverage_requests')
               .update({
@@ -280,14 +307,14 @@ export async function PUT(
         }
       }
     }
-    
+
     // Revalidate all pages that might show this data
     revalidatePath('/dashboard')
     revalidatePath('/time-off')
     revalidatePath('/schedules/weekly')
     revalidatePath('/sub-finder')
     revalidatePath('/reports')
-    
+
     return NextResponse.json({
       ...updatedRequest,
       warning,
@@ -305,10 +332,7 @@ export async function DELETE(
   try {
     const { id } = await params
     const body = await request.json().catch(() => ({}))
-    const { 
-      keepAssignmentsAsExtraCoverage = false,
-      assignmentIdsToKeep = undefined,
-    } = body
+    const { keepAssignmentsAsExtraCoverage = false, assignmentIdsToKeep = undefined } = body
 
     // First, get active sub assignments to return summary
     const activeAssignments = await getActiveSubAssignmentsForTimeOffRequest(id)
@@ -326,7 +350,10 @@ export async function DELETE(
         const dayName = shift?.days_of_week?.name || ''
         const timeSlot = shift?.time_slots?.code || ''
         const classroom = shift?.classrooms?.name || ''
-        const subName = sub?.display_name || `${sub?.first_name || ''} ${sub?.last_name || ''}`.trim() || 'Unknown'
+        const subName =
+          sub?.display_name ||
+          `${sub?.first_name || ''} ${sub?.last_name || ''}`.trim() ||
+          'Unknown'
 
         // Format date: "Mon Feb 10" format
         const date = new Date(shift?.date || '')
@@ -350,7 +377,9 @@ export async function DELETE(
         hasAssignments: true,
         assignmentCount: activeAssignments.length,
         assignments: formattedAssignments,
-        teacherName: teacher?.display_name || `${teacher?.first_name || ''} ${teacher?.last_name || ''}`.trim(),
+        teacherName:
+          teacher?.display_name ||
+          `${teacher?.first_name || ''} ${teacher?.last_name || ''}`.trim(),
       })
     }
 

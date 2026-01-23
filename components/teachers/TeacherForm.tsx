@@ -25,7 +25,7 @@ const teacherSchema = z.object({
   email: z
     .union([z.string().email('Invalid email address'), z.literal('')])
     .optional()
-    .transform((val) => (val === '' ? undefined : val)),
+    .transform(val => (val === '' ? undefined : val)),
   role_type_id: z.string().min(1, 'Staff role is required'),
   active: z.boolean().default(true),
   is_sub: z.boolean().default(false),
@@ -84,7 +84,7 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
 
     const checkDuplicate = async () => {
       // Only check if we have enough info (name or email)
-      if ((!firstName?.trim() && !lastName?.trim()) && !email?.trim()) {
+      if (!firstName?.trim() && !lastName?.trim() && !email?.trim()) {
         setDuplicateWarning(null)
         setProceedWithDuplicate(false)
         return
@@ -191,7 +191,7 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
           <Checkbox
             id="active"
             checked={active}
-            onCheckedChange={(checked) => setValue('active', checked === true)}
+            onCheckedChange={checked => setValue('active', checked === true)}
           />
           <Label htmlFor="active" className="font-normal cursor-pointer">
             Active
@@ -202,7 +202,7 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
           <Checkbox
             id="is_sub"
             checked={isSub}
-            onCheckedChange={(checked) => setValue('is_sub', checked === true)}
+            onCheckedChange={checked => setValue('is_sub', checked === true)}
           />
           <Label htmlFor="is_sub" className="font-normal cursor-pointer">
             Is also a sub
@@ -217,16 +217,13 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
           ) : (
             <RadioGroup
               value={roleTypeId || ''}
-              onValueChange={(value) => setValue('role_type_id', value)}
+              onValueChange={value => setValue('role_type_id', value)}
             >
               <div className="flex items-center space-x-6">
-                {roleTypes.map((roleType) => (
+                {roleTypes.map(roleType => (
                   <div key={roleType.id} className="flex items-center space-x-2">
                     <RadioGroupItem value={roleType.id} id={`role-${roleType.id}`} />
-                    <Label
-                      htmlFor={`role-${roleType.id}`}
-                      className="font-normal cursor-pointer"
-                    >
+                    <Label htmlFor={`role-${roleType.id}`} className="font-normal cursor-pointer">
                       {roleType.label}
                     </Label>
                   </div>
@@ -245,7 +242,11 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
             <div>
               {duplicateWarning.message}
               <div className="mt-1 text-sm">
-                Existing teacher: <strong>{duplicateWarning.existingTeacher.first_name} {duplicateWarning.existingTeacher.last_name}</strong>
+                Existing teacher:{' '}
+                <strong>
+                  {duplicateWarning.existingTeacher.first_name}{' '}
+                  {duplicateWarning.existingTeacher.last_name}
+                </strong>
                 {duplicateWarning.existingTeacher.email && (
                   <> ({duplicateWarning.existingTeacher.email})</>
                 )}
@@ -255,7 +256,7 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
               <Checkbox
                 id="proceed-duplicate"
                 checked={proceedWithDuplicate}
-                onCheckedChange={(checked) => setProceedWithDuplicate(checked === true)}
+                onCheckedChange={checked => setProceedWithDuplicate(checked === true)}
               />
               <Label htmlFor="proceed-duplicate" className="text-sm font-normal cursor-pointer">
                 I understand this is a duplicate and want to create anyway
@@ -271,8 +272,8 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
             Cancel
           </Button>
         )}
-        <Button 
-          type="submit" 
+        <Button
+          type="submit"
           disabled={isSubmitting || (duplicateWarning ? !proceedWithDuplicate : false)}
         >
           {isSubmitting ? 'Saving...' : teacher ? 'Update' : 'Create'}

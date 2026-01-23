@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await request.json()
     const { start_date, end_date, available, time_slot_ids } = body
 
-    if (!start_date || !end_date || typeof available !== 'boolean' || !Array.isArray(time_slot_ids)) {
+    if (
+      !start_date ||
+      !end_date ||
+      typeof available !== 'boolean' ||
+      !Array.isArray(time_slot_ids)
+    ) {
       return NextResponse.json(
         { error: 'Missing required fields: start_date, end_date, available, time_slot_ids' },
         { status: 400 }
@@ -74,6 +76,3 @@ export async function POST(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
-
-
-

@@ -26,7 +26,7 @@ export default function SearchableSelect({
   value,
   onValueChange,
   placeholder = 'Search...',
-  getDisplayName = (option) => option.label,
+  getDisplayName = option => option.label,
   disabled = false,
   className,
   emptyMessage = 'No matches',
@@ -36,13 +36,13 @@ export default function SearchableSelect({
   const containerRef = useRef<HTMLDivElement>(null)
 
   const selectedOption = useMemo(() => {
-    return options.find((opt) => opt.id === value) || null
+    return options.find(opt => opt.id === value) || null
   }, [options, value])
 
   const filteredOptions = useMemo(() => {
     if (!searchInput.trim()) return options
     const query = searchInput.toLowerCase()
-    return options.filter((option) => {
+    return options.filter(option => {
       const label = getDisplayName(option).toLowerCase()
       return label.includes(query)
     })
@@ -112,7 +112,7 @@ export default function SearchableSelect({
               <div className="p-2 text-xs text-muted-foreground">{emptyMessage}</div>
             ) : (
               <div className="space-y-1">
-                {filteredOptions.map((option) => {
+                {filteredOptions.map(option => {
                   const label = getDisplayName(option)
                   return (
                     <button

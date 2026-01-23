@@ -10,21 +10,26 @@ type ClassroomWithAllowedClasses = Classroom & {
   allowed_classes_count: number
 }
 
-export async function getClassrooms(includeInactive = false, schoolId?: string): Promise<ClassroomWithAllowedClasses[]> {
+export async function getClassrooms(
+  includeInactive = false,
+  schoolId?: string
+): Promise<ClassroomWithAllowedClasses[]> {
   const supabase = await createClient()
   let query = supabase
     .from('classrooms')
-    .select(`
+    .select(
+      `
       *,
       allowed_classes:classroom_allowed_classes(
         class:class_groups(id, name)
       )
-    `)
+    `
+    )
     .order('order', { ascending: true, nullsFirst: false })
     .order('name', { ascending: true })
 
   // Filter by school_id
-  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  const effectiveSchoolId = schoolId || (await getUserSchoolId())
   if (effectiveSchoolId) {
     query = query.eq('school_id', effectiveSchoolId)
   }
@@ -35,13 +40,13 @@ export async function getClassrooms(includeInactive = false, schoolId?: string):
 
   const { data, error } = await query
   if (error) throw error
-  
+
   // Transform the data to include allowed classes names
-  return (data as ClassroomRaw[]).map((classroom) => ({
+  return (data as ClassroomRaw[]).map(classroom => ({
     ...classroom,
     allowed_classes_names:
       classroom.allowed_classes
-        ?.map((ac) => ac.class?.name)
+        ?.map(ac => ac.class?.name)
         .filter((name): name is string => Boolean(name))
         .join(', ') || 'None',
     allowed_classes_count: classroom.allowed_classes?.length || 0,
@@ -50,12 +55,9 @@ export async function getClassrooms(includeInactive = false, schoolId?: string):
 
 export async function getClassroomById(id: string, schoolId?: string) {
   const supabase = await createClient()
-  let query = supabase
-    .from('classrooms')
-    .select('*')
-    .eq('id', id)
+  let query = supabase.from('classrooms').select('*').eq('id', id)
 
-  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  const effectiveSchoolId = schoolId || (await getUserSchoolId())
   if (effectiveSchoolId) {
     query = query.eq('school_id', effectiveSchoolId)
   }
@@ -74,13 +76,13 @@ export async function createClassroom(classroom: {
   school_id?: string
 }) {
   const supabase = await createClient()
-  
+
   // Get school_id if not provided
-  const schoolId = classroom.school_id || await getUserSchoolId()
+  const schoolId = classroom.school_id || (await getUserSchoolId())
   if (!schoolId) {
     throw new Error('school_id is required to create a classroom')
   }
-  
+
   // If order is not provided, set it to the end (highest order + 1) for this school
   if (classroom.order === undefined || classroom.order === null) {
     const { data: existingClassrooms } = await supabase
@@ -89,23 +91,19 @@ export async function createClassroom(classroom: {
       .eq('school_id', schoolId)
       .order('order', { ascending: false, nullsFirst: false })
       .limit(1)
-    
+
     const maxOrder = existingClassrooms?.[0]?.order ?? 0
     classroom.order = maxOrder + 1
   }
-  
+
   // Default is_active to true if not provided
   const insertData = {
     ...classroom,
     school_id: schoolId,
     is_active: classroom.is_active ?? true,
   }
-  
-  const { data, error } = await supabase
-    .from('classrooms')
-    .insert(insertData)
-    .select()
-    .single()
+
+  const { data, error } = await supabase.from('classrooms').insert(insertData).select().single()
 
   if (error) throw error
   return data as Classroom
@@ -113,12 +111,9 @@ export async function createClassroom(classroom: {
 
 export async function updateClassroom(id: string, updates: Partial<Classroom>, schoolId?: string) {
   const supabase = await createClient()
-  let query = supabase
-    .from('classrooms')
-    .update(updates)
-    .eq('id', id)
+  let query = supabase.from('classrooms').update(updates).eq('id', id)
 
-  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  const effectiveSchoolId = schoolId || (await getUserSchoolId())
   if (effectiveSchoolId) {
     query = query.eq('school_id', effectiveSchoolId)
   }
@@ -134,12 +129,9 @@ export async function updateClassroom(id: string, updates: Partial<Classroom>, s
 // Use updateClassroom to set is_active = false instead
 export async function deleteClassroom(id: string, schoolId?: string) {
   const supabase = await createClient()
-  let query = supabase
-    .from('classrooms')
-    .update({ is_active: false })
-    .eq('id', id)
+  let query = supabase.from('classrooms').update({ is_active: false }).eq('id', id)
 
-  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  const effectiveSchoolId = schoolId || (await getUserSchoolId())
   if (effectiveSchoolId) {
     query = query.eq('school_id', effectiveSchoolId)
   }
@@ -158,13 +150,10 @@ export async function getClassroomAllowedClasses(classroomId: string): Promise<s
     .eq('classroom_id', classroomId)
 
   if (error) throw error
-  return data.map((item) => item.class_id)
+  return data.map(item => item.class_id)
 }
 
-export async function setClassroomAllowedClasses(
-  classroomId: string,
-  classIds: string[]
-) {
+export async function setClassroomAllowedClasses(classroomId: string, classIds: string[]) {
   const supabase = await createClient()
 
   // Delete existing allowed classes
@@ -177,7 +166,7 @@ export async function setClassroomAllowedClasses(
 
   // Insert new allowed classes
   if (classIds.length > 0) {
-    const insertData = classIds.map((classId) => ({
+    const insertData = classIds.map(classId => ({
       classroom_id: classroomId,
       class_id: classId,
     }))
@@ -189,5 +178,3 @@ export async function setClassroomAllowedClasses(
     if (insertError) throw insertError
   }
 }
-
-

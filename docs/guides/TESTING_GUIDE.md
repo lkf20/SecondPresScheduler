@@ -81,12 +81,10 @@ describe('myFunction', () => {
 ## Example Tests
 
 See the existing tests for examples:
+
 - `lib/utils/__tests__/errors.test.ts` - Utility function tests
 - `components/shared/__tests__/ErrorMessage.test.tsx` - Component tests
 
 ---
 
-*Last updated: January 2025*
-
-
-
+_Last updated: January 2025_

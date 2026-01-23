@@ -6,12 +6,12 @@ import { createClient } from '@/lib/supabase/server'
  */
 export async function getUserSchoolId(): Promise<string | null> {
   const supabase = await createClient()
-  
+
   const {
     data: { user },
     error: userError,
   } = await supabase.auth.getUser()
-  
+
   if (userError || !user) {
     console.error('Error getting user:', userError)
     return null
@@ -37,12 +37,12 @@ export async function getUserSchoolId(): Promise<string | null> {
  */
 export async function getCurrentUserId(): Promise<string | null> {
   const supabase = await createClient()
-  
+
   const {
     data: { user },
     error: userError,
   } = await supabase.auth.getUser()
-  
+
   if (userError || !user) {
     console.error('Error getting user:', userError)
     return null
@@ -50,5 +50,3 @@ export async function getCurrentUserId(): Promise<string | null> {
 
   return user.id
 }
-
-

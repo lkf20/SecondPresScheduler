@@ -41,16 +41,14 @@ export default function ClassGroupMultiSelect({
   const [activeClassGroups, setActiveClassGroups] = useState<ClassGroup[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(
-    new Set(selectedClassGroupIds)
-  )
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(selectedClassGroupIds))
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch active class groups for the dropdown
   useEffect(() => {
     fetch('/api/class-groups')
-      .then((r) => r.json())
-      .then((data) => {
+      .then(r => r.json())
+      .then(data => {
         setActiveClassGroups(data)
       })
       .catch(console.error)
@@ -60,17 +58,17 @@ export default function ClassGroupMultiSelect({
   // This ensures we have all class groups that are selected, even if inactive
   const allClassGroups = useMemo(() => {
     const existingMap = new Map<string, ClassGroup>()
-    
+
     // Add existing class groups first (these may include inactive ones)
     existingClassGroups.forEach(cg => {
       existingMap.set(cg.id, cg)
     })
-    
+
     // Add active class groups from API (will overwrite if duplicate, but that's fine)
     activeClassGroups.forEach(cg => {
       existingMap.set(cg.id, cg)
     })
-    
+
     // Convert to array and sort by order, then name
     return Array.from(existingMap.values()).sort((a, b) => {
       const orderA = a.order ?? Infinity
@@ -86,16 +84,15 @@ export default function ClassGroupMultiSelect({
   }, [selectedClassGroupIds])
 
   // Filter class groups for dropdown (only show active ones, preserve order)
-  const filteredClassGroups = activeClassGroups
-    .filter((cg) => {
-      // Filter by allowed IDs if provided
-      if (allowedClassGroupIds && allowedClassGroupIds.length > 0) {
-        if (!allowedClassGroupIds.includes(cg.id)) return false
-      }
-      // Filter by search query
-      return cg.name.toLowerCase().includes(searchQuery.toLowerCase())
-    })
-    // Keep the order from API (already sorted by order field, then name)
+  const filteredClassGroups = activeClassGroups.filter(cg => {
+    // Filter by allowed IDs if provided
+    if (allowedClassGroupIds && allowedClassGroupIds.length > 0) {
+      if (!allowedClassGroupIds.includes(cg.id)) return false
+    }
+    // Filter by search query
+    return cg.name.toLowerCase().includes(searchQuery.toLowerCase())
+  })
+  // Keep the order from API (already sorted by order field, then name)
 
   const handleToggle = (classGroupId: string, checked: boolean) => {
     const newSelected = new Set(selectedIds)
@@ -122,32 +119,29 @@ export default function ClassGroupMultiSelect({
 
   // Get selected class groups (may include inactive ones from existingClassGroups)
   // Preserve order from allClassGroups which is sorted by order field, then name
-  const selectedClassGroupsList = allClassGroups
-    .filter((cg) => selectedIds.has(cg.id))
+  const selectedClassGroupsList = allClassGroups.filter(cg => selectedIds.has(cg.id))
 
   return (
     <div className="space-y-2">
       <Label htmlFor="class-group-select" className="text-base font-medium mb-6 block">
         Class Groups
       </Label>
-      
+
       {/* Selected class groups as chips */}
       <div className="flex flex-wrap items-center gap-2 min-h-[2.5rem]">
-        {selectedClassGroupsList.map((cg) => {
+        {selectedClassGroupsList.map(cg => {
           const isInactive = cg.is_active === false
           return (
             <Badge
-              key={cg.id} 
-              variant={isInactive ? "outline" : "secondary"} 
+              key={cg.id}
+              variant={isInactive ? 'outline' : 'secondary'}
               className={cn(
-                "flex items-center gap-1 px-3 py-1 text-sm",
-                isInactive && "border-destructive/50 text-muted-foreground"
+                'flex items-center gap-1 px-3 py-1 text-sm',
+                isInactive && 'border-destructive/50 text-muted-foreground'
               )}
             >
               {cg.name}
-              {isInactive && (
-                <span className="ml-1 text-xs text-destructive">(Inactive)</span>
-              )}
+              {isInactive && <span className="ml-1 text-xs text-destructive">(Inactive)</span>}
               {!disabled && (
                 <button
                   type="button"
@@ -190,7 +184,7 @@ export default function ClassGroupMultiSelect({
               ref={searchInputRef}
               placeholder="Search class groups..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={e => setSearchQuery(e.target.value)}
               className="mb-3"
             />
 
@@ -202,7 +196,7 @@ export default function ClassGroupMultiSelect({
                 size="sm"
                 onClick={() => {
                   const newSelected = new Set(selectedIds)
-                  filteredClassGroups.forEach((cg) => {
+                  filteredClassGroups.forEach(cg => {
                     newSelected.add(cg.id)
                   })
                   setSelectedIds(newSelected)
@@ -217,7 +211,7 @@ export default function ClassGroupMultiSelect({
                 size="sm"
                 onClick={() => {
                   const newSelected = new Set(selectedIds)
-                  filteredClassGroups.forEach((cg) => {
+                  filteredClassGroups.forEach(cg => {
                     newSelected.delete(cg.id)
                   })
                   setSelectedIds(newSelected)
@@ -236,7 +230,7 @@ export default function ClassGroupMultiSelect({
                 </div>
               ) : (
                 <div className="p-2 space-y-1">
-                  {filteredClassGroups.map((cg) => {
+                  {filteredClassGroups.map(cg => {
                     const isSelected = selectedIds.has(cg.id)
                     return (
                       <div
@@ -246,13 +240,9 @@ export default function ClassGroupMultiSelect({
                       >
                         <Checkbox
                           checked={isSelected}
-                          onCheckedChange={(checked) =>
-                            handleToggle(cg.id, checked === true)
-                          }
+                          onCheckedChange={checked => handleToggle(cg.id, checked === true)}
                         />
-                        <Label className="cursor-pointer flex-1">
-                          {cg.name}
-                        </Label>
+                        <Label className="cursor-pointer flex-1">{cg.name}</Label>
                       </div>
                     )
                   })}

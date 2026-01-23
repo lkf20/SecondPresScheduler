@@ -22,10 +22,7 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser()
 
     if (userError || !user) {
-      return NextResponse.json(
-        { error: 'User not authenticated' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'User not authenticated' }, { status: 401 })
     }
 
     // Check if profile already exists
@@ -91,10 +88,7 @@ export async function POST(request: Request) {
       } else if (profileError.message) {
         errorMessage = profileError.message
       }
-      return NextResponse.json(
-        { error: errorMessage },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: errorMessage }, { status: 500 })
     }
 
     // Fetch school name for the new profile
@@ -138,10 +132,7 @@ export async function GET() {
     } = await supabase.auth.getUser()
 
     if (userError || !user) {
-      return NextResponse.json(
-        { error: 'User not authenticated' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'User not authenticated' }, { status: 401 })
     }
 
     // Check if profile exists

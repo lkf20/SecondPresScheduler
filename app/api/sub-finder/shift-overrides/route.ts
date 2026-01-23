@@ -19,10 +19,18 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Missing coverage_request_id', 400)
     }
 
-    const selectedShiftKeys = new Set(Array.isArray(body.selected_shift_keys) ? body.selected_shift_keys : [])
-    const overrideShiftKeys = new Set(Array.isArray(body.override_shift_keys) ? body.override_shift_keys : [])
-    const availableShiftKeys = new Set(Array.isArray(body.available_shift_keys) ? body.available_shift_keys : [])
-    const unavailableShiftKeys = new Set(Array.isArray(body.unavailable_shift_keys) ? body.unavailable_shift_keys : [])
+    const selectedShiftKeys = new Set(
+      Array.isArray(body.selected_shift_keys) ? body.selected_shift_keys : []
+    )
+    const overrideShiftKeys = new Set(
+      Array.isArray(body.override_shift_keys) ? body.override_shift_keys : []
+    )
+    const availableShiftKeys = new Set(
+      Array.isArray(body.available_shift_keys) ? body.available_shift_keys : []
+    )
+    const unavailableShiftKeys = new Set(
+      Array.isArray(body.unavailable_shift_keys) ? body.unavailable_shift_keys : []
+    )
 
     const supabase = await createClient()
     const { data: shifts, error } = await supabase
@@ -49,7 +57,7 @@ export async function POST(request: NextRequest) {
     }> = []
     const selectedShiftIds: string[] = []
 
-    availableShiftKeys.forEach((key) => {
+    availableShiftKeys.forEach(key => {
       const shiftId = shiftIdMap.get(key)
       if (!shiftId) return
       const selected = selectedShiftKeys.has(key)
@@ -63,7 +71,7 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    unavailableShiftKeys.forEach((key) => {
+    unavailableShiftKeys.forEach(key => {
       const shiftId = shiftIdMap.get(key)
       if (!shiftId) return
       const override = overrideShiftKeys.has(key)
@@ -83,6 +91,11 @@ export async function POST(request: NextRequest) {
       selected_shift_ids: selectedShiftIds,
     })
   } catch (error) {
-    return createErrorResponse(error, 'Failed to resolve shift overrides', 500, 'POST /api/sub-finder/shift-overrides')
+    return createErrorResponse(
+      error,
+      'Failed to resolve shift overrides',
+      500,
+      'POST /api/sub-finder/shift-overrides'
+    )
   }
 }

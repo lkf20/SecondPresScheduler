@@ -15,11 +15,11 @@ type Profile = {
 
 async function fetchProfile(): Promise<Profile | null> {
   const response = await fetch('/api/setup/profile')
-  
+
   if (!response.ok) {
     return null
   }
-  
+
   const data = await response.json()
   return data?.profile || null
 }

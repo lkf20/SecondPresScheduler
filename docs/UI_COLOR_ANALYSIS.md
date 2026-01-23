@@ -26,7 +26,7 @@
 2. **Inconsistent Color Usage**
 
    **Coverage Status Colors:**
-   - `CoverageBadge`: 
+   - `CoverageBadge`:
      - Covered: `bg-blue-50 border-blue-400 text-blue-700`
      - Partial: `bg-yellow-50 border-yellow-300 text-yellow-700`
      - Uncovered: `bg-orange-50 border-orange-400 text-orange-700`
@@ -65,11 +65,13 @@
 ## Current Color Patterns Found
 
 ### Coverage Colors
+
 - **Covered**: Blue (`blue-50/400/700`) OR Green (`green-50/200/700`) - inconsistent!
 - **Partial**: Yellow (`yellow-50/200-300/700`) - mostly consistent
 - **Uncovered**: Orange (`orange-50-100/200-400/700-900`) - shades vary
 
 ### Button Colors
+
 - **Primary**: Theme variable `primary` (teal in accented theme)
 - **Secondary**: Theme variable `secondary`
 - **Outline**: Theme variable `input` border
@@ -77,11 +79,13 @@
 - **Dark**: `slate-900` for selected states
 
 ### Neutral Colors
+
 - **Light backgrounds**: `slate-50`, `gray-50`, `gray-100` (inconsistent)
 - **Borders**: `slate-200`, `slate-300` (mostly consistent)
 - **Text**: `slate-600`, `slate-700`, `slate-800`, `slate-900`
 
 ### Status Colors
+
 - **Draft**: Yellow (`yellow-50/200/700`)
 - **Completed**: Green (`green-50/200/700`)
 - **Below Required**: Amber (`amber-100/200/900`)

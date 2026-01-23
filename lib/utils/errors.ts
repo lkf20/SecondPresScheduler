@@ -18,7 +18,7 @@ export function getErrorMessage(error: unknown): string {
     typeof error === 'object' && error !== null
       ? (error as { code?: string; message?: string; details?: string; hint?: string })
       : null
-  
+
   // Log the error structure for debugging
   if (process.env.NODE_ENV === 'development') {
     console.error('getErrorMessage received:', {
@@ -32,7 +32,7 @@ export function getErrorMessage(error: unknown): string {
       hint: errorObj?.hint,
     })
   }
-  
+
   if (errorObj?.code) {
     // PostgreSQL error codes
     if (errorObj.code === '23505') {
@@ -67,26 +67,30 @@ export function getErrorMessage(error: unknown): string {
     }
     return error.message
   }
-  
+
   // Try to extract message from error object
   if (errorObj?.message) {
     return String(errorObj.message)
   }
-  
+
   if (errorObj?.details) {
     return String(errorObj.details)
   }
-  
+
   return `An unexpected error occurred: ${String(error)}`
 }
 
 /**
  * Logs error with context for debugging
  */
-export function logError(context: string, error: unknown, additionalInfo?: Record<string, unknown>) {
+export function logError(
+  context: string,
+  error: unknown,
+  additionalInfo?: Record<string, unknown>
+) {
   const errorMessage = error instanceof Error ? error.message : String(error)
   const errorStack = error instanceof Error ? error.stack : undefined
-  
+
   console.error(`[${context}] Error:`, {
     message: errorMessage,
     stack: errorStack,
@@ -100,10 +104,7 @@ export function logError(context: string, error: unknown, additionalInfo?: Recor
  * 1. createErrorResponse(message: string, statusCode: number)
  * 2. createErrorResponse(error: unknown, defaultMessage?: string, statusCode?: number, context?: string)
  */
-export function createErrorResponse(
-  message: string,
-  statusCode: number
-): Response
+export function createErrorResponse(message: string, statusCode: number): Response
 export function createErrorResponse(
   error: unknown,
   defaultMessage?: string,
@@ -120,36 +121,37 @@ export function createErrorResponse(
   if (typeof errorOrMessage === 'string') {
     // Pattern 1: createErrorResponse(message: string, statusCode: number)
     const message = errorOrMessage
-    const status = typeof defaultMessageOrStatusCode === 'number' 
-      ? defaultMessageOrStatusCode 
-      : 500
-    
+    const status = typeof defaultMessageOrStatusCode === 'number' ? defaultMessageOrStatusCode : 500
+
     return Response.json({ error: message }, { status })
   }
-  
+
   // Pattern 2: createErrorResponse(error: unknown, defaultMessage?: string, statusCode?: number, context?: string)
   const error = errorOrMessage
-  const defaultMessage = typeof defaultMessageOrStatusCode === 'string' 
-    ? defaultMessageOrStatusCode 
-    : 'An error occurred'
-  const status = statusCode ?? (typeof defaultMessageOrStatusCode === 'number' ? defaultMessageOrStatusCode : 500)
-  
+  const defaultMessage =
+    typeof defaultMessageOrStatusCode === 'string'
+      ? defaultMessageOrStatusCode
+      : 'An error occurred'
+  const status =
+    statusCode ??
+    (typeof defaultMessageOrStatusCode === 'number' ? defaultMessageOrStatusCode : 500)
+
   const message = getErrorMessage(error) || defaultMessage
-  
+
   if (context) {
     logError(context, error)
   }
-  
+
   const errorResponse: Record<string, unknown> = {
     error: message,
   }
-  
+
   if (process.env.NODE_ENV === 'development' && error instanceof Error) {
     errorResponse.details = {
       message: error.message,
       stack: error.stack,
     }
   }
-  
+
   return Response.json(errorResponse, { status })
 }

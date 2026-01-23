@@ -1,6 +1,6 @@
 /**
  * Standardized Color System
- * 
+ *
  * This file provides a centralized system for UI colors across the application.
  * All color usage should reference these constants and utilities to ensure consistency.
  */
@@ -220,17 +220,17 @@ export const neutralColors = {
   // Light backgrounds
   bgLight: 'bg-slate-50',
   bgLightHover: 'bg-slate-100',
-  
+
   // Borders
   border: 'border-slate-200',
   borderMedium: 'border-slate-300',
-  
+
   // Text
   text: 'text-slate-600',
   textMedium: 'text-slate-700',
   textDark: 'text-slate-800',
   textDarker: 'text-slate-900',
-  
+
   // For light chips/badges
   chip: {
     bg: 'bg-slate-50',

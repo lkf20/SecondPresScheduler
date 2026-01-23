@@ -53,9 +53,9 @@ export default function RecommendedCombination({
     return shiftDate >= today
   }
 
-  const visibleAllShifts = allShifts.filter((shift) => isShiftVisible(shift.date))
+  const visibleAllShifts = allShifts.filter(shift => isShiftVisible(shift.date))
   const visibleRemainingShifts = useRemainingLabel
-    ? visibleAllShifts.filter((shift) => shift.status === 'uncovered')
+    ? visibleAllShifts.filter(shift => shift.status === 'uncovered')
     : visibleAllShifts
   const visibleTotalShifts = visibleRemainingShifts.length || totalShifts
 
@@ -70,12 +70,13 @@ export default function RecommendedCombination({
             </CardTitle>
           </div>
           <div className="flex items-center gap-3 text-sm">
-          <div className="flex items-center gap-1.5">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-            <span className="text-muted-foreground">
-                {currentCombination.totalShiftsCovered} of {currentCombination.totalShiftsNeeded} shifts covered
-            </span>
-          </div>
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              <span className="text-muted-foreground">
+                {currentCombination.totalShiftsCovered} of {currentCombination.totalShiftsNeeded}{' '}
+                shifts covered
+              </span>
+            </div>
             {currentCombination.totalConflicts > 0 && (
               <div className="flex items-center gap-1.5">
                 <AlertTriangle className="h-4 w-4 text-amber-600" />
@@ -94,9 +95,9 @@ export default function RecommendedCombination({
         </p>
       </CardHeader>
       <div className="space-y-4 px-6 pb-6">
-        {currentCombination.subs.map((assignment) => {
+        {currentCombination.subs.map(assignment => {
           // Find the sub in allSubs to get can_cover and cannot_cover
-          const subData = allSubs.find((s) => s.id === assignment.subId)
+          const subData = allSubs.find(s => s.id === assignment.subId)
           const canCoverAll = (subData?.can_cover || []) as Array<{
             date: string
             time_slot_code: string
@@ -116,23 +117,25 @@ export default function RecommendedCombination({
             classroom_name?: string | null
             class_name?: string | null
           }>
-          const visibleCanCoverAll = canCoverAll.filter((shift) => isShiftVisible(shift.date))
-          const visibleCannotCoverAll = cannotCoverAll.filter((shift) => isShiftVisible(shift.date))
-          const visibleRecommendedShifts = assignment.shifts.filter((shift) => isShiftVisible(shift.date))
-          const visibleAssignedAll = assignedAll.filter((shift) => isShiftVisible(shift.date))
+          const visibleCanCoverAll = canCoverAll.filter(shift => isShiftVisible(shift.date))
+          const visibleCannotCoverAll = cannotCoverAll.filter(shift => isShiftVisible(shift.date))
+          const visibleRecommendedShifts = assignment.shifts.filter(shift =>
+            isShiftVisible(shift.date)
+          )
+          const visibleAssignedAll = assignedAll.filter(shift => isShiftVisible(shift.date))
           const canCoverMap = new Set(
-            visibleCanCoverAll.map((shift) => `${shift.date}|${shift.time_slot_code}`)
+            visibleCanCoverAll.map(shift => `${shift.date}|${shift.time_slot_code}`)
           )
           const assignedMap = new Set(
-            visibleAssignedAll.map((shift) => `${shift.date}|${shift.time_slot_code}`)
+            visibleAssignedAll.map(shift => `${shift.date}|${shift.time_slot_code}`)
           )
           const remainingShiftKeys = new Set(
-            visibleRemainingShifts.map((shift) => `${shift.date}|${shift.time_slot_code}`)
+            visibleRemainingShifts.map(shift => `${shift.date}|${shift.time_slot_code}`)
           )
-          const shiftsCovered = visibleCanCoverAll.filter((shift) =>
+          const shiftsCovered = visibleCanCoverAll.filter(shift =>
             remainingShiftKeys.has(`${shift.date}|${shift.time_slot_code}`)
           ).length
-          const coverageSegments = visibleRemainingShifts.map((shift) => {
+          const coverageSegments = visibleRemainingShifts.map(shift => {
             const key = `${shift.date}|${shift.time_slot_code}`
             if (assignedMap.has(key)) {
               return 'assigned' as const
@@ -172,7 +175,7 @@ export default function RecommendedCombination({
           <button
             type="button"
             className="h-8 w-8 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
-            onClick={() => setCurrentIndex((prev) => Math.max(prev - 1, 0))}
+            onClick={() => setCurrentIndex(prev => Math.max(prev - 1, 0))}
             disabled={currentIndex === 0}
             aria-label="Previous recommended combination"
           >
@@ -194,7 +197,7 @@ export default function RecommendedCombination({
           <button
             type="button"
             className="h-8 w-8 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
-            onClick={() => setCurrentIndex((prev) => Math.min(prev + 1, totalCombinations - 1))}
+            onClick={() => setCurrentIndex(prev => Math.min(prev + 1, totalCombinations - 1))}
             disabled={currentIndex === totalCombinations - 1}
             aria-label="Next recommended combination"
           >

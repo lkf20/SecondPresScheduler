@@ -123,7 +123,9 @@ async function fetchSubRecommendations(
   })
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Failed to fetch sub recommendations' }))
+    const error = await response
+      .json()
+      .catch(() => ({ error: 'Failed to fetch sub recommendations' }))
     throw new Error(error.error || 'Failed to fetch sub recommendations')
   }
 

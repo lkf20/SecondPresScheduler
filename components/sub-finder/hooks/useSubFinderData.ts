@@ -20,36 +20,36 @@ export interface Absence {
     color: string | null
   }>
   shifts: {
-      total: number
-      uncovered: number
-      partially_covered: number
-      fully_covered: number
-      shift_details: Array<{
-        id: string
-        date: string
-        day_name: string
-        time_slot_code: string
-        class_name: string | null
-        classroom_name: string | null
-        status: 'uncovered' | 'partially_covered' | 'fully_covered'
-        sub_name?: string | null
-        is_partial?: boolean
-      }>
-      shift_details_sorted?: Array<{
-        id: string
-        date: string
-        day_name: string
-        time_slot_code: string
-        status: 'uncovered' | 'partially_covered' | 'fully_covered'
-        sub_name?: string | null
-        is_partial?: boolean
-      }>
-      coverage_segments?: Array<{
-        id: string
-        status: 'uncovered' | 'partially_covered' | 'fully_covered'
-      }>
-    }
+    total: number
+    uncovered: number
+    partially_covered: number
+    fully_covered: number
+    shift_details: Array<{
+      id: string
+      date: string
+      day_name: string
+      time_slot_code: string
+      class_name: string | null
+      classroom_name: string | null
+      status: 'uncovered' | 'partially_covered' | 'fully_covered'
+      sub_name?: string | null
+      is_partial?: boolean
+    }>
+    shift_details_sorted?: Array<{
+      id: string
+      date: string
+      day_name: string
+      time_slot_code: string
+      status: 'uncovered' | 'partially_covered' | 'fully_covered'
+      sub_name?: string | null
+      is_partial?: boolean
+    }>
+    coverage_segments?: Array<{
+      id: string
+      status: 'uncovered' | 'partially_covered' | 'fully_covered'
+    }>
   }
+}
 
 export interface Teacher {
   id: string
@@ -126,55 +126,60 @@ export function useSubFinderData({
   const [selectedAbsence, setSelectedAbsence] = useState<Absence | null>(null)
   const [recommendedSubs, setRecommendedSubs] = useState<SubCandidate[]>([])
   const [allSubs, setAllSubs] = useState<SubCandidate[]>([])
-  const [recommendedCombinations, setRecommendedCombinations] = useState<RecommendedCombination[]>([])
+  const [recommendedCombinations, setRecommendedCombinations] = useState<RecommendedCombination[]>(
+    []
+  )
   const [includePartiallyCovered, setIncludePartiallyCovered] = useState(false)
   const [includeFlexibleStaff, setIncludeFlexibleStaff] = useState(true)
   const [includeOnlyRecommended, setIncludeOnlyRecommended] = useState(true)
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const loggedRecommendationDebugRef = useRef(new Set<string>())
-  
+
   // Use React Query for absences
-  const { 
-    data: absencesData = [], 
+  const {
+    data: absencesData = [],
     isLoading: isLoadingAbsences,
     isFetching: isFetchingAbsences,
-    refetch: refetchAbsences 
+    refetch: refetchAbsences,
   } = useSubFinderAbsences(
     { includePartiallyCovered },
     skipInitialFetch ? undefined : [] // Don't provide initial data if skipping fetch
   )
 
-  const mapAbsence = useCallback((apiAbsence: SubFinderAbsence): Absence => ({
-    id: apiAbsence.id,
-    teacher_id: apiAbsence.teacher_id,
-    teacher_name: apiAbsence.teacher_name,
-    start_date: apiAbsence.start_date,
-    end_date: apiAbsence.end_date,
-    reason: apiAbsence.reason,
-    classrooms: apiAbsence.classrooms,
-    shifts: {
-      total: apiAbsence.shifts?.total || 0,
-      uncovered: apiAbsence.shifts?.uncovered || 0,
-      partially_covered: apiAbsence.shifts?.partial ?? apiAbsence.shifts?.partially_covered ?? 0,
-      fully_covered: apiAbsence.shifts?.covered ?? apiAbsence.shifts?.fully_covered ?? 0,
-      shift_details: (apiAbsence.shifts?.shift_details || []).map((detail) => ({
-        id: detail.id || '',
-        date: detail.date,
-        day_name: detail.day_name,
-        time_slot_code: detail.time_slot_code,
-        class_name: detail.class_name || null,
-        classroom_name: detail.classroom_name || null,
-        status:
-          detail.status === 'partial' || detail.status === 'partially_covered'
-            ? 'partially_covered'
-            : detail.status === 'covered' || detail.status === 'fully_covered'
-              ? 'fully_covered'
-              : 'uncovered',
-        sub_name: detail.sub_name || detail.assigned_sub?.name || null,
-        is_partial: detail.status === 'partial' || detail.status === 'partially_covered',
-      })),
-    },
-  }), [])
+  const mapAbsence = useCallback(
+    (apiAbsence: SubFinderAbsence): Absence => ({
+      id: apiAbsence.id,
+      teacher_id: apiAbsence.teacher_id,
+      teacher_name: apiAbsence.teacher_name,
+      start_date: apiAbsence.start_date,
+      end_date: apiAbsence.end_date,
+      reason: apiAbsence.reason,
+      classrooms: apiAbsence.classrooms,
+      shifts: {
+        total: apiAbsence.shifts?.total || 0,
+        uncovered: apiAbsence.shifts?.uncovered || 0,
+        partially_covered: apiAbsence.shifts?.partial ?? apiAbsence.shifts?.partially_covered ?? 0,
+        fully_covered: apiAbsence.shifts?.covered ?? apiAbsence.shifts?.fully_covered ?? 0,
+        shift_details: (apiAbsence.shifts?.shift_details || []).map(detail => ({
+          id: detail.id || '',
+          date: detail.date,
+          day_name: detail.day_name,
+          time_slot_code: detail.time_slot_code,
+          class_name: detail.class_name || null,
+          classroom_name: detail.classroom_name || null,
+          status:
+            detail.status === 'partial' || detail.status === 'partially_covered'
+              ? 'partially_covered'
+              : detail.status === 'covered' || detail.status === 'fully_covered'
+                ? 'fully_covered'
+                : 'uncovered',
+          sub_name: detail.sub_name || detail.assigned_sub?.name || null,
+          is_partial: detail.status === 'partial' || detail.status === 'partially_covered',
+        })),
+      },
+    }),
+    []
+  )
 
   const transformedAbsences: Absence[] = useMemo(() => {
     return absencesData.map(mapAbsence)
@@ -183,12 +188,13 @@ export function useSubFinderData({
   const absences = useMemo(() => {
     return transformedAbsences
   }, [transformedAbsences])
-  
+
   // Use React Query for sub recommendations when an absence is selected
-  const selectedAbsenceId = selectedAbsence?.id && selectedAbsence.id.startsWith('manual-') 
-    ? null // Manual coverage doesn't use the recommendations API
-    : selectedAbsence?.id || null
-  
+  const selectedAbsenceId =
+    selectedAbsence?.id && selectedAbsence.id.startsWith('manual-')
+      ? null // Manual coverage doesn't use the recommendations API
+      : selectedAbsence?.id || null
+
   const recommendationParams = useMemo(
     () => ({
       ...(subRecommendationParams || {}),
@@ -197,35 +203,36 @@ export function useSubFinderData({
     [includeFlexibleStaff, subRecommendationParams]
   )
 
-  const { 
+  const {
     data: subRecommendationsData,
     isLoading: isLoadingRecommendations,
     isFetching: isFetchingRecommendations,
     isError: isRecommendationsError,
     error: recommendationsError,
-    refetch: refetchRecommendations
-  } = useSubRecommendations(
-    selectedAbsenceId,
-    recommendationParams
-  )
-  
+    refetch: refetchRecommendations,
+  } = useSubRecommendations(selectedAbsenceId, recommendationParams)
+
   const loading =
-    isLoadingAbsences ||
-    isLoadingRecommendations ||
-    isFetchingAbsences ||
-    isFetchingRecommendations
+    isLoadingAbsences || isLoadingRecommendations || isFetchingAbsences || isFetchingRecommendations
 
   const getDisplayName = useCallback(
     (
-      person: {
-        display_name?: string | null
-        name?: string | null
-        first_name?: string | null
-        last_name?: string | null
-      } | null | undefined,
+      person:
+        | {
+            display_name?: string | null
+            name?: string | null
+            first_name?: string | null
+            last_name?: string | null
+          }
+        | null
+        | undefined,
       fallback = 'Unknown'
     ) => {
-      const name = (person?.display_name || person?.name || `${person?.first_name ?? ''} ${person?.last_name ?? ''}`).trim()
+      const name = (
+        person?.display_name ||
+        person?.name ||
+        `${person?.first_name ?? ''} ${person?.last_name ?? ''}`
+      ).trim()
       return name || fallback
     },
     []
@@ -248,20 +255,22 @@ export function useSubFinderData({
         setIncludeOnlyRecommended(true)
       }
       const filteredSubs = effectiveOnlyRecommended
-        ? subs.filter((sub) => sub.coverage_percent > 0)
+        ? subs.filter(sub => sub.coverage_percent > 0)
         : subs
       setRecommendedSubs(filteredSubs.length > 0 ? filteredSubs : subs)
     },
     [includeOnlyRecommended]
   )
-  
+
   // Update recommended subs and combinations when recommendations data changes
   useEffect(() => {
     if (subRecommendationsData && selectedAbsenceId) {
       const subs = (subRecommendationsData.subs || []) as unknown as SubCandidate[]
       const combinations =
-        (subRecommendationsData as { recommended_combinations?: RecommendedCombination[] }).recommended_combinations ||
-        ((subRecommendationsData as { recommended_combination?: RecommendedCombination | null }).recommended_combination
+        (subRecommendationsData as { recommended_combinations?: RecommendedCombination[] })
+          .recommended_combinations ||
+        ((subRecommendationsData as { recommended_combination?: RecommendedCombination | null })
+          .recommended_combination
           ? [
               (subRecommendationsData as { recommended_combination: RecommendedCombination })
                 .recommended_combination,
@@ -323,7 +332,7 @@ export function useSubFinderData({
         if (shouldRefetchRecommendations) {
           await refetchRecommendations()
         }
-        const refreshedAbsence = absencesResult.data?.find((item) => item.id === absenceId)
+        const refreshedAbsence = absencesResult.data?.find(item => item.id === absenceId)
         if (refreshedAbsence) {
           setSelectedAbsence(mapAbsence(refreshedAbsence))
         }
@@ -336,7 +345,7 @@ export function useSubFinderData({
     async ({ teacherId, startDate, endDate, shifts }: ManualFindInput) => {
       if (!teacherId || !startDate) return
       // Manual coverage doesn't use React Query - it's a one-off search
-      const teacher = teachers.find((t) => t.id === teacherId)
+      const teacher = teachers.find(t => t.id === teacherId)
       const teacherName = getDisplayName(teacher, 'Manual Coverage')
       setSelectedAbsence({
         id: `manual-${teacherId}`,
@@ -394,7 +403,9 @@ export function useSubFinderData({
         })
 
         const subs = (data.subs || []) as SubCandidate[]
-        const combinations = data.recommended_combinations || (data.recommended_combination ? [data.recommended_combination] : [])
+        const combinations =
+          data.recommended_combinations ||
+          (data.recommended_combination ? [data.recommended_combination] : [])
         setRecommendedCombinations(combinations)
         applySubResults(subs, { forceOnlyRecommended: true })
       } catch (error) {
@@ -410,29 +421,29 @@ export function useSubFinderData({
   useEffect(() => {
     if (!requestedAbsenceId) return
     if (hasAppliedAbsenceRef.current) return
-    
+
     // Ensure absences are loaded
     if (isLoadingAbsences) {
       // Wait for absences to load
       return
     }
-    
+
     // If absences haven't loaded yet and we have a requested absence, fetch them
     if (absences.length === 0 && !isLoadingAbsences) {
       refetchAbsences()
       return
     }
-    
+
     // Once absences are loaded, find and select the requested absence
-    const match = absences.find((absence) => absence.id === requestedAbsenceId)
+    const match = absences.find(absence => absence.id === requestedAbsenceId)
     if (match) {
-      handleFindSubs(match).catch((error) => {
+      handleFindSubs(match).catch(error => {
         console.error('Failed to load requested absence:', error)
       })
       hasAppliedAbsenceRef.current = true
     }
   }, [requestedAbsenceId, absences, isLoadingAbsences, handleFindSubs, refetchAbsences])
-  
+
   useEffect(() => {
     if (allSubs.length > 0 && selectedAbsence) {
       applySubResults(allSubs)
@@ -448,7 +459,7 @@ export function useSubFinderData({
         if (!response.ok) throw new Error('Failed to fetch teachers')
         const data = await response.json()
         const sortedTeachers = (data as Teacher[])
-          .filter((teacher) => teacher.active !== false)
+          .filter(teacher => teacher.active !== false)
           .sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)))
         setTeachers(sortedTeachers)
       } catch (error) {

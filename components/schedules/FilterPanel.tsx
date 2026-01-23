@@ -12,11 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Button } from '@/components/ui/button'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
 import { Search, X } from 'lucide-react'
 
@@ -48,7 +44,13 @@ export interface FilterState {
     fullyStaffed: boolean
     inactive: boolean
   }
-  displayMode: 'permanent-only' | 'permanent-flexible' | 'substitutes-only' | 'all-scheduled-staff' | 'coverage-issues' | 'absences'
+  displayMode:
+    | 'permanent-only'
+    | 'permanent-flexible'
+    | 'substitutes-only'
+    | 'all-scheduled-staff'
+    | 'coverage-issues'
+    | 'absences'
   layout: 'classrooms-x-days' | 'days-x-classrooms'
 }
 
@@ -79,18 +81,21 @@ export default function FilterPanel({
 }: FilterPanelProps) {
   // Initialize filters with defaults - only include days from settings
   const [filters, setFilters] = useState<FilterState>(() => {
-    const daysToShow = selectedDayIdsFromSettings.length > 0
-      ? availableDays.filter(d => selectedDayIdsFromSettings.includes(d.id))
-      : availableDays
+    const daysToShow =
+      selectedDayIdsFromSettings.length > 0
+        ? availableDays.filter(d => selectedDayIdsFromSettings.includes(d.id))
+        : availableDays
     // If hideStaffSection is true, always use 'permanent-only' regardless of initialFilters
-    const displayMode = hideStaffSection 
-      ? 'permanent-only' 
+    const displayMode = hideStaffSection
+      ? 'permanent-only'
       : (initialFilters?.displayMode ?? 'all-scheduled-staff')
-    
+
     return {
       selectedDayIds: initialFilters?.selectedDayIds ?? daysToShow.map(d => d.id),
-      selectedTimeSlotIds: initialFilters?.selectedTimeSlotIds ?? availableTimeSlots.map(ts => ts.id),
-      selectedClassroomIds: initialFilters?.selectedClassroomIds ?? availableClassrooms.map(c => c.id),
+      selectedTimeSlotIds:
+        initialFilters?.selectedTimeSlotIds ?? availableTimeSlots.map(ts => ts.id),
+      selectedClassroomIds:
+        initialFilters?.selectedClassroomIds ?? availableClassrooms.map(c => c.id),
       displayFilters: {
         belowRequired: initialFilters?.displayFilters?.belowRequired ?? true,
         belowPreferred: initialFilters?.displayFilters?.belowPreferred ?? true,
@@ -107,9 +112,10 @@ export default function FilterPanel({
 
   // Filter and sort days - only show days selected in Settings > Days and Time Slots
   const sortedDays = useMemo(() => {
-    const filtered = selectedDayIdsFromSettings.length > 0
-      ? availableDays.filter(day => selectedDayIdsFromSettings.includes(day.id))
-      : availableDays
+    const filtered =
+      selectedDayIdsFromSettings.length > 0
+        ? availableDays.filter(day => selectedDayIdsFromSettings.includes(day.id))
+        : availableDays
     return filtered.sort((a, b) => {
       const aNum = a.day_number === 0 ? 7 : a.day_number
       const bNum = b.day_number === 0 ? 7 : b.day_number
@@ -130,9 +136,7 @@ export default function FilterPanel({
   const filteredClassrooms = useMemo(() => {
     if (!classroomSearch) return availableClassrooms
     const searchLower = classroomSearch.toLowerCase()
-    return availableClassrooms.filter(c => 
-      c.name.toLowerCase().includes(searchLower)
-    )
+    return availableClassrooms.filter(c => c.name.toLowerCase().includes(searchLower))
   }, [availableClassrooms, classroomSearch])
 
   // Track whether a change originated from internal state or external props
@@ -147,13 +151,18 @@ export default function FilterPanel({
     if (initialFilters && initialFilters.displayMode !== undefined) {
       const prevInitialFilters = prevInitialFiltersRef.current
       prevInitialFiltersRef.current = initialFilters
-      
+
       // Only sync if displayMode actually changed from external source
-      if (prevInitialFilters?.displayMode !== initialFilters.displayMode && filters.displayMode !== initialFilters.displayMode) {
+      if (
+        prevInitialFilters?.displayMode !== initialFilters.displayMode &&
+        filters.displayMode !== initialFilters.displayMode
+      ) {
         changeSourceRef.current = 'external'
         setFilters(prev => ({
           ...prev,
-          displayMode: hideStaffSection ? 'permanent-only' : (initialFilters.displayMode ?? prev.displayMode),
+          displayMode: hideStaffSection
+            ? 'permanent-only'
+            : (initialFilters.displayMode ?? prev.displayMode),
         }))
       }
     }
@@ -180,7 +189,7 @@ export default function FilterPanel({
       changeSourceRef.current = 'internal'
       return
     }
-    
+
     // Only update parent if change came from internal state (user interaction)
     if (changeSourceRef.current === 'internal') {
       onFiltersChange(filters)
@@ -195,7 +204,7 @@ export default function FilterPanel({
       ...prev,
       selectedDayIds: prev.selectedDayIds.includes(dayId)
         ? prev.selectedDayIds.filter(id => id !== dayId)
-        : [...prev.selectedDayIds, dayId]
+        : [...prev.selectedDayIds, dayId],
     }))
   }
 
@@ -204,7 +213,7 @@ export default function FilterPanel({
       ...prev,
       selectedTimeSlotIds: prev.selectedTimeSlotIds.includes(timeSlotId)
         ? prev.selectedTimeSlotIds.filter(id => id !== timeSlotId)
-        : [...prev.selectedTimeSlotIds, timeSlotId]
+        : [...prev.selectedTimeSlotIds, timeSlotId],
     }))
   }
 
@@ -213,21 +222,21 @@ export default function FilterPanel({
       ...prev,
       selectedClassroomIds: prev.selectedClassroomIds.includes(classroomId)
         ? prev.selectedClassroomIds.filter(id => id !== classroomId)
-        : [...prev.selectedClassroomIds, classroomId]
+        : [...prev.selectedClassroomIds, classroomId],
     }))
   }
 
   const selectAllClassrooms = () => {
     setFilters(prev => ({
       ...prev,
-      selectedClassroomIds: availableClassrooms.map(c => c.id)
+      selectedClassroomIds: availableClassrooms.map(c => c.id),
     }))
   }
 
   const clearAllClassrooms = () => {
     setFilters(prev => ({
       ...prev,
-      selectedClassroomIds: []
+      selectedClassroomIds: [],
     }))
   }
 
@@ -236,37 +245,33 @@ export default function FilterPanel({
       ...prev,
       displayFilters: {
         ...prev.displayFilters,
-        [key]: !prev.displayFilters[key]
-      }
+        [key]: !prev.displayFilters[key],
+      },
     }))
   }
 
   const selectedClassroomsCount = filters.selectedClassroomIds.length
   const allClassroomsSelected = selectedClassroomsCount === availableClassrooms.length
-  const someClassroomsSelected = selectedClassroomsCount > 0 && selectedClassroomsCount < availableClassrooms.length
+  const someClassroomsSelected =
+    selectedClassroomsCount > 0 && selectedClassroomsCount < availableClassrooms.length
 
   // Use provided slot counts if available, otherwise calculate from filters
   // The provided counts are more accurate as they reflect actual data after display filters
-  const totalPossibleSlots = slotCounts?.shown ?? (
-    filters.selectedDayIds.length * 
-    filters.selectedTimeSlotIds.length * 
-    filters.selectedClassroomIds.length
-  )
-  
-  const totalSlotsIfAllSelected = slotCounts?.total ?? (
-    sortedDays.length * 
-    availableTimeSlots.length * 
-    availableClassrooms.length
-  )
+  const totalPossibleSlots =
+    slotCounts?.shown ??
+    filters.selectedDayIds.length *
+      filters.selectedTimeSlotIds.length *
+      filters.selectedClassroomIds.length
+
+  const totalSlotsIfAllSelected =
+    slotCounts?.total ?? sortedDays.length * availableTimeSlots.length * availableClassrooms.length
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent className="w-full sm:max-w-md overflow-y-auto bg-gray-50">
         <SheetHeader>
           <SheetTitle>Filters</SheetTitle>
-          <SheetDescription>
-            Filter the weekly schedule view
-          </SheetDescription>
+          <SheetDescription>Filter the weekly schedule view</SheetDescription>
         </SheetHeader>
 
         <div className="mt-6 mb-4">
@@ -280,7 +285,7 @@ export default function FilterPanel({
           <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
             <Label className="text-base font-medium">Show Days</Label>
             <div className="flex flex-wrap gap-2">
-              {sortedDays.map((day) => {
+              {sortedDays.map(day => {
                 const isSelected = filters.selectedDayIds.includes(day.id)
                 return (
                   <button
@@ -304,7 +309,7 @@ export default function FilterPanel({
           <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
             <Label className="text-base font-medium">Show Time Slots</Label>
             <div className="flex flex-wrap gap-2">
-              {sortedTimeSlots.map((timeSlot) => {
+              {sortedTimeSlots.map(timeSlot => {
                 const isSelected = filters.selectedTimeSlotIds.includes(timeSlot.id)
                 return (
                   <button
@@ -329,16 +334,12 @@ export default function FilterPanel({
             <Label className="text-base font-medium">Show Classrooms</Label>
             <Popover open={classroomPopoverOpen} onOpenChange={setClassroomPopoverOpen}>
               <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  className="w-full justify-between"
-                >
+                <Button variant="outline" role="combobox" className="w-full justify-between">
                   {allClassroomsSelected
                     ? 'All Classrooms'
                     : someClassroomsSelected
-                    ? `${selectedClassroomsCount} selected`
-                    : 'Select Classrooms'}
+                      ? `${selectedClassroomsCount} selected`
+                      : 'Select Classrooms'}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[300px] p-0" align="start">
@@ -349,7 +350,7 @@ export default function FilterPanel({
                     <Input
                       placeholder="Search classrooms..."
                       value={classroomSearch}
-                      onChange={(e) => setClassroomSearch(e.target.value)}
+                      onChange={e => setClassroomSearch(e.target.value)}
                       className="pl-8"
                     />
                   </div>
@@ -381,7 +382,7 @@ export default function FilterPanel({
                         No classrooms found
                       </div>
                     ) : (
-                      filteredClassrooms.map((classroom) => {
+                      filteredClassrooms.map(classroom => {
                         const isSelected = filters.selectedClassroomIds.includes(classroom.id)
                         return (
                           <div
@@ -407,11 +408,11 @@ export default function FilterPanel({
                 </div>
               </PopoverContent>
             </Popover>
-            
+
             {/* Show selected classrooms as pills when not all are selected */}
             {!allClassroomsSelected && filters.selectedClassroomIds.length > 0 && (
               <div className="flex flex-wrap gap-2 pt-2">
-                {filters.selectedClassroomIds.map((classroomId) => {
+                {filters.selectedClassroomIds.map(classroomId => {
                   const classroom = availableClassrooms.find(c => c.id === classroomId)
                   if (!classroom) return null
                   return (
@@ -493,21 +494,20 @@ export default function FilterPanel({
                 </label>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Unchecked items will be hidden
-            </p>
+            <p className="text-xs text-muted-foreground">Unchecked items will be hidden</p>
           </div>
-
 
           {/* Layout */}
           <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
             <Label className="text-base font-medium">Layout</Label>
             <RadioGroup
               value={filters.layout}
-              onValueChange={(value) => setFilters(prev => ({
-                ...prev,
-                layout: value as FilterState['layout']
-              }))}
+              onValueChange={value =>
+                setFilters(prev => ({
+                  ...prev,
+                  layout: value as FilterState['layout'],
+                }))
+              }
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="days-x-classrooms" id="days-x-classrooms" />
@@ -534,4 +534,3 @@ export default function FilterPanel({
     </Sheet>
   )
 }
-

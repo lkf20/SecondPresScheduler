@@ -35,11 +35,7 @@ type TimeOffRow = {
   notes?: string | null
 }
 
-export default function TimeOffListClient({
-  view: initialView,
-}: {
-  view: string
-}) {
+export default function TimeOffListClient({ view: initialView }: { view: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const editParam = searchParams.get('edit')
@@ -50,17 +46,23 @@ export default function TimeOffListClient({
     new Set(['covered', 'needs_coverage', 'partially_covered'])
   )
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
-  
+
   // Use React Query to fetch time off requests
-  const { data: timeOffData, isLoading, error, refetch, isFetching } = useTimeOffRequests({
+  const {
+    data: timeOffData,
+    isLoading,
+    error,
+    refetch,
+    isFetching,
+  } = useTimeOffRequests({
     statuses: ['active', 'draft'],
   })
-  
+
   // Manual refresh handler
   const handleRefresh = async () => {
     await refetch()
   }
-  
+
   // Transform API response to match component's expected format
   const allRequests: TimeOffRow[] = useMemo(() => {
     const apiData = timeOffData?.data || []
@@ -68,20 +70,20 @@ export default function TimeOffListClient({
       // Calculate shifts_display from total
       const total = item.total || 0
       const shifts_display = `${total} shift${total !== 1 ? 's' : ''}`
-      
+
       // Map coverage status - API uses 'covered' | 'partially_covered' | 'needs_coverage'
       // Component expects 'draft' | 'completed' | 'covered' | 'partially_covered' | 'needs_coverage'
       let coverage_status: CoverageStatus = item.status || 'needs_coverage'
-      
+
       // Check if it's a draft or completed (past) request
       const requestEndDate = item.end_date || item.start_date
       const today = new Date()
       today.setHours(0, 0, 0, 0)
       const isPast = parseLocalDate(requestEndDate) < today
-      
+
       // The API should include status, but we need to check for draft/completed
       // For now, assume the API handles this, but we can add logic here if needed
-      
+
       return {
         id: item.id,
         teacher_name: item.teacher_name,
@@ -101,32 +103,32 @@ export default function TimeOffListClient({
       }
     })
   }, [timeOffData])
-  
+
   // Transform and categorize requests
   const { draftRequests, upcomingRequests, pastRequests } = useMemo(() => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const ninetyDaysAgo = new Date(today)
     ninetyDaysAgo.setDate(today.getDate() - 90)
-    
+
     const getStartDate = (request: TimeOffRow) => parseLocalDate(request.start_date)
     const getEndDate = (request: TimeOffRow) =>
       parseLocalDate(request.end_date || request.start_date)
-    
+
     const drafts = allRequests.filter((r: TimeOffRow) => r.status === 'draft')
     const active = allRequests.filter((r: TimeOffRow) => r.status === 'active')
-    
+
     const past = active
       .filter((r: TimeOffRow) => {
         const endDate = getEndDate(r)
         return endDate < today && endDate >= ninetyDaysAgo
       })
       .sort((a, b) => getEndDate(b).getTime() - getEndDate(a).getTime())
-    
+
     const upcoming = active
       .filter((r: TimeOffRow) => getEndDate(r) >= today)
       .sort((a, b) => getStartDate(a).getTime() - getStartDate(b).getTime())
-    
+
     return { draftRequests: drafts, upcomingRequests: upcoming, pastRequests: past }
   }, [allRequests])
 
@@ -149,7 +151,7 @@ export default function TimeOffListClient({
       setEditingRequestId(editParam)
     }
   }, [searchParams, editingRequestId])
-  
+
   // Show loading state
   if (isLoading) {
     return (
@@ -160,7 +162,7 @@ export default function TimeOffListClient({
       </div>
     )
   }
-  
+
   // Show error state
   if (error) {
     return (
@@ -182,7 +184,7 @@ export default function TimeOffListClient({
   }
 
   const toggleCoverageFilter = (filter: string) => {
-    setCoverageFilters((prev) => {
+    setCoverageFilters(prev => {
       const next = new Set(prev)
       if (next.has(filter)) {
         next.delete(filter)
@@ -206,7 +208,7 @@ export default function TimeOffListClient({
     }
 
     // Filter by selected coverage statuses
-    return requests.filter((request) => {
+    return requests.filter(request => {
       return coverageFilters.has(request.coverage_status)
     })
   }
@@ -214,7 +216,7 @@ export default function TimeOffListClient({
   // Calculate coverage filter counts based on current status view
   const getCoverageCounts = () => {
     let requestsToCount: TimeOffRow[] = []
-    
+
     if (view === 'active') {
       requestsToCount = upcomingRequests
     } else if (view === 'drafts') {
@@ -227,7 +229,9 @@ export default function TimeOffListClient({
 
     const covered = requestsToCount.filter(r => r.coverage_status === 'covered').length
     const needsCoverage = requestsToCount.filter(r => r.coverage_status === 'needs_coverage').length
-    const partiallyCovered = requestsToCount.filter(r => r.coverage_status === 'partially_covered').length
+    const partiallyCovered = requestsToCount.filter(
+      r => r.coverage_status === 'partially_covered'
+    ).length
 
     return { covered, needsCoverage, partiallyCovered }
   }
@@ -250,7 +254,7 @@ export default function TimeOffListClient({
   const renderRowCard = (row: TimeOffRow) => {
     // Use provided coverage counts if available, otherwise calculate from status
     let covered = row.coverage_covered || 0
-    let uncovered = row.coverage_uncovered ?? (row.coverage_total - row.coverage_covered)
+    let uncovered = row.coverage_uncovered ?? row.coverage_total - row.coverage_covered
     let partial = row.coverage_partial || 0
 
     // If we have exact counts, use them; otherwise infer from status
@@ -266,7 +270,8 @@ export default function TimeOffListClient({
       // If we have partial count, use it; otherwise estimate
       if (row.coverage_partial !== undefined) {
         partial = row.coverage_partial
-        uncovered = row.coverage_uncovered ?? (row.coverage_total - row.coverage_covered - row.coverage_partial)
+        uncovered =
+          row.coverage_uncovered ?? row.coverage_total - row.coverage_covered - row.coverage_partial
       } else {
         // Estimate: covered is known, rest is split between uncovered and partial
         uncovered = row.coverage_total - row.coverage_covered
@@ -281,7 +286,10 @@ export default function TimeOffListClient({
     // Handle draft status with delete button
     if (row.status === 'draft') {
       return (
-        <div key={row.id} className="rounded-lg border border-slate-200 bg-white px-5 pt-2 pb-4 shadow-sm">
+        <div
+          key={row.id}
+          className="rounded-lg border border-slate-200 bg-white px-5 pt-2 pb-4 shadow-sm"
+        >
           <TimeOffCard
             id={row.id}
             teacherName={row.teacher_name}
@@ -332,7 +340,11 @@ export default function TimeOffListClient({
 
   const renderSection = (rows: TimeOffRow[], emptyMessage: string) => {
     if (rows.length === 0) {
-      return <div className="rounded-lg border border-slate-200 bg-white px-5 py-6 text-sm text-muted-foreground">{emptyMessage}</div>
+      return (
+        <div className="rounded-lg border border-slate-200 bg-white px-5 py-6 text-sm text-muted-foreground">
+          {emptyMessage}
+        </div>
+      )
     }
     return <div className="space-y-3">{rows.map(renderRowCard)}</div>
   }
@@ -371,19 +383,22 @@ export default function TimeOffListClient({
         </div>
         <AddTimeOffButton />
       </div>
-      
+
       {/* Separate instance for editing - hidden, only used to control the panel */}
       {editingRequestId && (
         <AddTimeOffButton timeOffRequestId={editingRequestId} onClose={handleEditClose} />
       )}
-      
+
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {[
           { value: 'active', label: `Active (${upcomingRequests.length})` },
           { value: 'drafts', label: `Drafts (${draftRequests.length})` },
           { value: 'past', label: `Past (${pastRequests.length})` },
-          { value: 'all', label: `All (${draftRequests.length + upcomingRequests.length + pastRequests.length})` },
-        ].map((option) => (
+          {
+            value: 'all',
+            label: `All (${draftRequests.length + upcomingRequests.length + pastRequests.length})`,
+          },
+        ].map(option => (
           <button
             key={option.value}
             type="button"
@@ -404,10 +419,7 @@ export default function TimeOffListClient({
               <Settings2 className="h-4 w-4 mr-2" />
               Filter
               {coverageFilters.size < 3 && (
-                <Badge
-                  variant="secondary"
-                  className="ml-2 h-5 min-w-[20px] px-1.5 text-xs"
-                >
+                <Badge variant="secondary" className="ml-2 h-5 min-w-[20px] px-1.5 text-xs">
                   {3 - coverageFilters.size}
                 </Badge>
               )}
@@ -416,7 +428,7 @@ export default function TimeOffListClient({
           <PopoverContent
             className="w-80"
             align="start"
-            onOpenAutoFocus={(event) => event.preventDefault()}
+            onOpenAutoFocus={event => event.preventDefault()}
           >
             <div className="space-y-4">
               <div>
@@ -457,7 +469,8 @@ export default function TimeOffListClient({
                         Needs Coverage
                       </Label>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {coverageCounts.needsCoverage} request{coverageCounts.needsCoverage !== 1 ? 's' : ''}
+                        {coverageCounts.needsCoverage} request
+                        {coverageCounts.needsCoverage !== 1 ? 's' : ''}
                       </p>
                     </div>
                   </div>
@@ -477,7 +490,8 @@ export default function TimeOffListClient({
                         Partially Covered
                       </Label>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {coverageCounts.partiallyCovered} request{coverageCounts.partiallyCovered !== 1 ? 's' : ''}
+                        {coverageCounts.partiallyCovered} request
+                        {coverageCounts.partiallyCovered !== 1 ? 's' : ''}
                       </p>
                     </div>
                   </div>
@@ -489,13 +503,14 @@ export default function TimeOffListClient({
       </div>
 
       {filteredDraftRequests.length > 0 && (view === 'drafts' || view === 'all') && (
-        <details open={view === 'drafts'} className="mb-6 rounded-lg bg-gray-50 border border-gray-200 p-4">
+        <details
+          open={view === 'drafts'}
+          className="mb-6 rounded-lg bg-gray-50 border border-gray-200 p-4"
+        >
           <summary className="cursor-pointer text-sm font-medium text-slate-700">
             Drafts ({filteredDraftRequests.length})
           </summary>
-          <div className="mt-4">
-            {renderSection(filteredDraftRequests, 'No drafts available.')}
-          </div>
+          <div className="mt-4">{renderSection(filteredDraftRequests, 'No drafts available.')}</div>
         </details>
       )}
 
@@ -505,17 +520,21 @@ export default function TimeOffListClient({
         </div>
       )}
 
-      {filteredPastRequests.length > 0 && (view === 'past' || view === 'active' || view === 'all') && (
-        <details className="mt-6 rounded-lg bg-gray-50 border border-gray-200 p-4">
-          <summary className="cursor-pointer text-sm font-medium text-slate-700 flex items-center justify-between">
-            <span>Past Time Off (last 90 days)</span>
-            <span className="text-muted-foreground">{filteredPastRequests.length}</span>
-          </summary>
-          <div className="mt-4">
-            {renderSection(filteredPastRequests, 'No past time off requests in the last 90 days.')}
-          </div>
-        </details>
-      )}
+      {filteredPastRequests.length > 0 &&
+        (view === 'past' || view === 'active' || view === 'all') && (
+          <details className="mt-6 rounded-lg bg-gray-50 border border-gray-200 p-4">
+            <summary className="cursor-pointer text-sm font-medium text-slate-700 flex items-center justify-between">
+              <span>Past Time Off (last 90 days)</span>
+              <span className="text-muted-foreground">{filteredPastRequests.length}</span>
+            </summary>
+            <div className="mt-4">
+              {renderSection(
+                filteredPastRequests,
+                'No past time off requests in the last 90 days.'
+              )}
+            </div>
+          </details>
+        )}
     </>
   )
 }

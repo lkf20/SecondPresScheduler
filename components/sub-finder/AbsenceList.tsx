@@ -55,7 +55,7 @@ export default function AbsenceList({
   if (loading && absences.length === 0) {
     return (
       <div className="p-4 space-y-3">
-        {[1, 2, 3].map((i) => (
+        {[1, 2, 3].map(i => (
           <Card key={i} className="animate-pulse">
             <CardContent className="p-4">
               <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
@@ -82,20 +82,20 @@ export default function AbsenceList({
 
   return (
     <div className="p-4 space-y-3">
-      {absences.map((absence) => {
+      {absences.map(absence => {
         const { uncovered, partially_covered, fully_covered } = absence.shifts
         const isSelected = selectedAbsence?.id === absence.id
-        
+
         // Map classrooms from absence.classrooms or derive from shift_details
         const classrooms: ClassroomBadge[] =
           absence.classrooms ||
           Array.from(
             new Set(
               absence.shifts.shift_details
-                .map((shift) => shift.classroom_name)
+                .map(shift => shift.classroom_name)
                 .filter((name): name is string => Boolean(name))
             )
-          ).map((name) => ({ id: name, name, color: null }))
+          ).map(name => ({ id: name, name, color: null }))
 
         return (
           <TimeOffCard

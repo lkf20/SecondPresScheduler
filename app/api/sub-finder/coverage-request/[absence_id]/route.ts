@@ -46,7 +46,7 @@ export async function GET(
       }
 
       const assignmentKeys = new Set(
-        (assignments || []).map((assignment) => `${assignment.date}|${assignment.time_slot_id}`)
+        (assignments || []).map(assignment => `${assignment.date}|${assignment.time_slot_id}`)
       )
       const coveredShifts = shifts.reduce((count, shift) => {
         const key = `${shift.date}|${shift.time_slot_id}`
@@ -56,14 +56,14 @@ export async function GET(
       // Get school_id for the teacher
       const teacherId = (timeOffRequest as any).teacher_id
       let schoolId: string
-      
+
       // Try to get from profile first
       const { data: profile } = await supabase
         .from('profiles')
         .select('school_id')
         .eq('user_id', teacherId)
         .single()
-      
+
       if (profile?.school_id) {
         schoolId = profile.school_id
       } else {
@@ -74,7 +74,7 @@ export async function GET(
           .eq('teacher_id', teacherId)
           .limit(1)
           .single()
-        
+
         if (schedule?.school_id) {
           schoolId = schedule.school_id
         } else {
@@ -84,7 +84,7 @@ export async function GET(
             .select('id')
             .eq('id', '00000000-0000-0000-0000-000000000001')
             .single()
-          
+
           schoolId = defaultSchool?.id || '00000000-0000-0000-0000-000000000001'
         }
       }
@@ -130,11 +130,17 @@ export async function GET(
           console.error('Error fetching teacher schedules:', scheduleError)
         }
 
-        const scheduleMap = new Map<string, { classroom_id: string | null; class_group_id: string | null }>()
+        const scheduleMap = new Map<
+          string,
+          { classroom_id: string | null; class_group_id: string | null }
+        >()
         ;(scheduleRows || []).forEach((row: any) => {
           const key = `${row.day_of_week_id}|${row.time_slot_id}`
           if (!scheduleMap.has(key)) {
-            scheduleMap.set(key, { classroom_id: row.classroom_id || null, class_group_id: row.class_group_id || null })
+            scheduleMap.set(key, {
+              classroom_id: row.classroom_id || null,
+              class_group_id: row.class_group_id || null,
+            })
           }
         })
 
@@ -166,7 +172,7 @@ export async function GET(
           .select('school_id')
           .eq('id', coverageRequestId)
           .single()
-        
+
         const requestSchoolId = coverageRequestData?.school_id || schoolId
 
         const coverageShiftRows = shifts.map((shift: any) => {
@@ -221,7 +227,7 @@ export async function GET(
         }
       })
     }
-    
+
     // Return both maps - the detailed one takes precedence
     const combinedMap = Object.fromEntries(shiftMap)
     // Add simple keys for backward compatibility

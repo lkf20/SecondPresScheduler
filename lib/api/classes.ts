@@ -17,23 +17,19 @@ export async function getClasses() {
 
 export async function getClassById(id: string) {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('class_groups')
-    .select('*')
-    .eq('id', id)
-    .single()
+  const { data, error } = await supabase.from('class_groups').select('*').eq('id', id).single()
 
   if (error) throw error
   return data as Class
 }
 
-export async function createClass(classData: { 
+export async function createClass(classData: {
   name: string
   parent_class_id?: string
   order?: number | null
 }) {
   const supabase = await createClient()
-  
+
   // If order is not provided, set it to the end (highest order + 1)
   if (classData.order === undefined || classData.order === null) {
     const { data: existingClasses } = await supabase
@@ -41,16 +37,12 @@ export async function createClass(classData: {
       .select('order')
       .order('order', { ascending: false, nullsFirst: false })
       .limit(1)
-    
+
     const maxOrder = existingClasses?.[0]?.order ?? 0
     classData.order = maxOrder + 1
   }
-  
-  const { data, error } = await supabase
-    .from('class_groups')
-    .insert(classData)
-    .select()
-    .single()
+
+  const { data, error } = await supabase.from('class_groups').insert(classData).select().single()
 
   if (error) throw error
   return data as Class
@@ -75,6 +67,3 @@ export async function deleteClass(id: string) {
 
   if (error) throw error
 }
-
-
-

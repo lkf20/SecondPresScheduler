@@ -35,7 +35,7 @@ interface TimeSlotFormClientProps {
 export default function TimeSlotFormClient({ timeslot }: TimeSlotFormClientProps) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
-  
+
   const form = useForm<TimeSlotFormData>({
     resolver: zodResolver(timeslotSchema),
     defaultValues: {
@@ -68,7 +68,7 @@ export default function TimeSlotFormClient({ timeslot }: TimeSlotFormClientProps
   const onSubmit = async (data: TimeSlotFormData) => {
     try {
       setError(null)
-      
+
       // Handle display_order: NaN from empty input becomes null
       let displayOrder: number | null = null
       if (data.display_order !== null && data.display_order !== undefined) {
@@ -76,7 +76,7 @@ export default function TimeSlotFormClient({ timeslot }: TimeSlotFormClientProps
           displayOrder = data.display_order
         }
       }
-      
+
       const payload: {
         code: string
         name: string | null

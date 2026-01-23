@@ -26,17 +26,12 @@ export default function Error({
         <p className="text-gray-600">
           {error.message || 'An unexpected error occurred. Please try again.'}
         </p>
-        {error.digest && (
-          <p className="text-sm text-gray-500">Error ID: {error.digest}</p>
-        )}
+        {error.digest && <p className="text-sm text-gray-500">Error ID: {error.digest}</p>}
         <div className="flex gap-4">
           <Button onClick={reset} variant="default">
             Try again
           </Button>
-          <Button
-            onClick={() => (window.location.href = '/')}
-            variant="outline"
-          >
+          <Button onClick={() => (window.location.href = '/')} variant="outline">
             Go home
           </Button>
         </div>

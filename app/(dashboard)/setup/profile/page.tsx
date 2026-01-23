@@ -27,7 +27,7 @@ export default function SetupProfilePage() {
     setError(null)
     try {
       const response = await fetch('/api/setup/profile')
-      
+
       // If response is not ok, check if it's an auth issue
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
@@ -124,9 +124,7 @@ export default function SetupProfilePage() {
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2">
                   <div>
                     <span className="text-sm font-medium text-muted-foreground">School:</span>{' '}
-                    <span className="text-sm">
-                      {profile.schools?.name || 'Unknown'}
-                    </span>
+                    <span className="text-sm">{profile.schools?.name || 'Unknown'}</span>
                   </div>
                   <div>
                     <span className="text-sm font-medium text-muted-foreground">Role:</span>{' '}
@@ -165,7 +163,8 @@ export default function SetupProfilePage() {
               <p className="text-sm text-red-800 font-medium">Unable to create profile</p>
               <p className="text-sm text-red-700 mt-1">{error}</p>
               <p className="text-xs text-red-600 mt-2">
-                Please check the browser console for more details or contact support if this issue persists.
+                Please check the browser console for more details or contact support if this issue
+                persists.
               </p>
             </div>
           )}
@@ -173,7 +172,8 @@ export default function SetupProfilePage() {
           {success && justCreated && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
               <p className="text-sm text-green-800">
-                Your profile has been set up. You can now use all features that require school context.
+                Your profile has been set up. You can now use all features that require school
+                context.
               </p>
             </div>
           )}

@@ -9,13 +9,13 @@ export function validateRequest<T>(
   data: unknown
 ): { success: true; data: T } | { success: false; error: NextResponse } {
   const result = schema.safeParse(data)
-  
+
   if (!result.success) {
-    const errors = result.error.issues.map((err) => ({
+    const errors = result.error.issues.map(err => ({
       path: err.path.join('.'),
       message: err.message,
     }))
-    
+
     return {
       success: false,
       error: NextResponse.json(
@@ -27,7 +27,7 @@ export function validateRequest<T>(
       ),
     }
   }
-  
+
   return {
     success: true,
     data: result.data,
@@ -45,7 +45,6 @@ export function validateQueryParams<T>(
   searchParams.forEach((value, key) => {
     params[key] = value
   })
-  
+
   return validateRequest(schema, params)
 }
-

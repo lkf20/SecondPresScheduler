@@ -27,19 +27,15 @@ export default function StaffingRequirementsDisplay({
   }
 
   const requiredTeachers = Math.ceil(enrollment / requiredRatio)
-  const preferredTeachers = preferredRatio
-    ? Math.ceil(enrollment / preferredRatio)
-    : null
+  const preferredTeachers = preferredRatio ? Math.ceil(enrollment / preferredRatio) : null
 
   const meetsRequired = assignedCount >= requiredTeachers
-  const meetsPreferred = preferredTeachers
-    ? assignedCount >= preferredTeachers
-    : meetsRequired
+  const meetsPreferred = preferredTeachers ? assignedCount >= preferredTeachers : meetsRequired
 
   return (
     <div className="space-y-3 rounded-md border p-4">
       <div className="text-sm font-medium">Staffing Status</div>
-      
+
       <div className="space-y-2">
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Required ratio:</span>
@@ -49,7 +45,7 @@ export default function StaffingRequirementsDisplay({
           <span className="text-muted-foreground">Required teachers:</span>
           <span className="font-medium">{requiredTeachers}</span>
         </div>
-        
+
         {preferredRatio && (
           <>
             <div className="flex items-center justify-between text-sm">
@@ -71,8 +67,12 @@ export default function StaffingRequirementsDisplay({
           ) : (
             <XCircle className="h-4 w-4 text-red-600" />
           )}
-          <span className={`text-sm font-medium ${meetsRequired ? 'text-green-600' : 'text-red-600'}`}>
-            {meetsRequired ? 'Meets required' : `Does not meet required (${assignedCount}/${requiredTeachers})`}
+          <span
+            className={`text-sm font-medium ${meetsRequired ? 'text-green-600' : 'text-red-600'}`}
+          >
+            {meetsRequired
+              ? 'Meets required'
+              : `Does not meet required (${assignedCount}/${requiredTeachers})`}
           </span>
         </div>
         {preferredRatio && (
@@ -82,8 +82,12 @@ export default function StaffingRequirementsDisplay({
             ) : (
               <AlertTriangle className="h-4 w-4 text-yellow-600" />
             )}
-            <span className={`text-sm font-medium ${meetsPreferred ? 'text-green-600' : 'text-yellow-600'}`}>
-              {meetsPreferred ? 'Meets preferred' : `Does not meet preferred (${assignedCount}/${preferredTeachers})`}
+            <span
+              className={`text-sm font-medium ${meetsPreferred ? 'text-green-600' : 'text-yellow-600'}`}
+            >
+              {meetsPreferred
+                ? 'Meets preferred'
+                : `Does not meet preferred (${assignedCount}/${preferredTeachers})`}
             </span>
           </div>
         )}
@@ -91,4 +95,3 @@ export default function StaffingRequirementsDisplay({
     </div>
   )
 }
-

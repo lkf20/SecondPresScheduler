@@ -19,20 +19,26 @@ export async function getSubAvailability(subId: string): Promise<SubAvailability
   return (data || []) as SubAvailabilityWithDetails[]
 }
 
-export async function upsertSubAvailability(subId: string, availability: {
-  day_of_week_id: string
-  time_slot_id: string
-  available: boolean
-}) {
+export async function upsertSubAvailability(
+  subId: string,
+  availability: {
+    day_of_week_id: string
+    time_slot_id: string
+    available: boolean
+  }
+) {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('sub_availability')
-    .upsert({
-      sub_id: subId,
-      ...availability,
-    }, {
-      onConflict: 'sub_id,day_of_week_id,time_slot_id',
-    })
+    .upsert(
+      {
+        sub_id: subId,
+        ...availability,
+      },
+      {
+        onConflict: 'sub_id,day_of_week_id,time_slot_id',
+      }
+    )
     .select()
     .single()
 
@@ -87,5 +93,3 @@ export async function deleteSubAvailabilityException(id: string) {
 
   if (error) throw error
 }
-
-

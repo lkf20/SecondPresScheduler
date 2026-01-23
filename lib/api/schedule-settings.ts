@@ -41,7 +41,9 @@ export async function getScheduleSettings(schoolId: string): Promise<ScheduleSet
     }
     // If table doesn't exist yet (migration not run), return null gracefully
     if (error.code === '42P01' || error.message?.includes('does not exist')) {
-      console.warn('schedule_settings table does not exist yet. Please run migration 020_add_schedule_settings.sql')
+      console.warn(
+        'schedule_settings table does not exist yet. Please run migration 020_add_schedule_settings.sql'
+      )
       return null
     }
     throw error
@@ -56,12 +58,15 @@ export async function getScheduleSettings(schoolId: string): Promise<ScheduleSet
   } as ScheduleSettings
 }
 
-export async function updateScheduleSettings(schoolId: string, selectedDayIds: string[]): Promise<ScheduleSettings> {
+export async function updateScheduleSettings(
+  schoolId: string,
+  selectedDayIds: string[]
+): Promise<ScheduleSettings> {
   const supabase = await createClient()
-  
+
   // Check if settings exist
   const existing = await getScheduleSettings(schoolId)
-  
+
   if (existing) {
     // Update existing
     const { data, error } = await supabase

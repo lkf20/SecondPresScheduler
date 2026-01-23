@@ -8,11 +8,11 @@ const getCachedTimeOffData = cache(async () => {
   if (!schoolId) {
     return { data: [], meta: { total: 0, filters: {} } }
   }
-  
+
   // Use internal API call - the API route already does all the transformation
   const { getTimeOffRequests } = await import('@/lib/api/time-off')
   const requests = await getTimeOffRequests({ statuses: ['active', 'draft'] })
-  
+
   // The API route returns transformed data, but we need to call it directly
   // For now, return the raw requests and let the client component use the API route
   // This is a temporary solution - ideally we'd call the API route transformation logic
@@ -28,7 +28,7 @@ export default async function TimeOffPage({
 }) {
   const params = await searchParams
   const view = params?.view ?? 'active'
-  
+
   // For now, don't pass initial data - let React Query fetch it
   // This avoids duplicating the complex transformation logic
   // We can optimize later by sharing the transformation logic

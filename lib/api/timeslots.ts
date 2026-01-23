@@ -6,13 +6,10 @@ type TimeSlot = Database['public']['Tables']['time_slots']['Row']
 
 export async function getTimeSlots(schoolId?: string) {
   const supabase = await createClient()
-  let query = supabase
-    .from('time_slots')
-    .select('*')
-    .order('display_order', { ascending: true })
+  let query = supabase.from('time_slots').select('*').order('display_order', { ascending: true })
 
   // If schoolId is provided, filter by it. Otherwise, get from session.
-  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  const effectiveSchoolId = schoolId || (await getUserSchoolId())
   if (effectiveSchoolId) {
     query = query.eq('school_id', effectiveSchoolId)
   }
@@ -24,12 +21,9 @@ export async function getTimeSlots(schoolId?: string) {
 
 export async function getTimeSlotById(id: string, schoolId?: string) {
   const supabase = await createClient()
-  let query = supabase
-    .from('time_slots')
-    .select('*')
-    .eq('id', id)
+  let query = supabase.from('time_slots').select('*').eq('id', id)
 
-  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  const effectiveSchoolId = schoolId || (await getUserSchoolId())
   if (effectiveSchoolId) {
     query = query.eq('school_id', effectiveSchoolId)
   }
@@ -49,9 +43,9 @@ export async function createTimeSlot(timeslot: {
   school_id?: string
 }) {
   const supabase = await createClient()
-  
+
   // Get school_id if not provided
-  const schoolId = timeslot.school_id || await getUserSchoolId()
+  const schoolId = timeslot.school_id || (await getUserSchoolId())
   if (!schoolId) {
     throw new Error('school_id is required to create a time slot')
   }
@@ -68,12 +62,9 @@ export async function createTimeSlot(timeslot: {
 
 export async function updateTimeSlot(id: string, updates: Partial<TimeSlot>, schoolId?: string) {
   const supabase = await createClient()
-  let query = supabase
-    .from('time_slots')
-    .update(updates)
-    .eq('id', id)
+  let query = supabase.from('time_slots').update(updates).eq('id', id)
 
-  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  const effectiveSchoolId = schoolId || (await getUserSchoolId())
   if (effectiveSchoolId) {
     query = query.eq('school_id', effectiveSchoolId)
   }
@@ -88,7 +79,7 @@ export async function deleteTimeSlot(id: string, schoolId?: string) {
   const supabase = await createClient()
   let query = supabase.from('time_slots').delete().eq('id', id)
 
-  const effectiveSchoolId = schoolId || await getUserSchoolId()
+  const effectiveSchoolId = schoolId || (await getUserSchoolId())
   if (effectiveSchoolId) {
     query = query.eq('school_id', effectiveSchoolId)
   }
@@ -97,6 +88,3 @@ export async function deleteTimeSlot(id: string, schoolId?: string) {
 
   if (error) throw error
 }
-
-
-

@@ -11,21 +11,22 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { teacher_id, start_date, end_date } = body
 
-
     if (!teacher_id || !start_date) {
-      return createErrorResponse(new Error('Missing required fields: teacher_id, start_date'), 'Missing required fields: teacher_id, start_date', 400)
+      return createErrorResponse(
+        new Error('Missing required fields: teacher_id, start_date'),
+        'Missing required fields: teacher_id, start_date',
+        400
+      )
     }
 
     // Default end_date to start_date if not provided
     const effectiveEndDate = end_date || start_date
-
 
     const result = await ensureCoverageRequestForQuickAssign(
       teacher_id,
       start_date,
       effectiveEndDate
     )
-
 
     return NextResponse.json(result)
   } catch (error) {

@@ -43,27 +43,27 @@ export default function TeacherMultiSelect({
   const [searchQuery, setSearchQuery] = useState('')
   const [isOpen, setIsOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
-    new Set(selectedTeachers.map((t) => t.teacher_id || t.id))
+    new Set(selectedTeachers.map(t => t.teacher_id || t.id))
   )
   const dropdownRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetch('/api/teachers')
-      .then((r) => r.json())
-      .then((data) => {
-        setTeachers((data as Staff[]).filter((t) => t.is_teacher && t.active))
+      .then(r => r.json())
+      .then(data => {
+        setTeachers((data as Staff[]).filter(t => t.is_teacher && t.active))
       })
       .catch(console.error)
   }, [])
 
   // Sync selectedIds with prop changes
   useEffect(() => {
-    setSelectedIds(new Set(selectedTeachers.map((t) => t.teacher_id || t.id)))
+    setSelectedIds(new Set(selectedTeachers.map(t => t.teacher_id || t.id)))
   }, [selectedTeachers])
 
   const filteredTeachers = teachers
-    .filter((teacher) => {
+    .filter(teacher => {
       const name = teacher.display_name || `${teacher.first_name} ${teacher.last_name}`
       return name.toLowerCase().includes(searchQuery.toLowerCase())
     })
@@ -84,10 +84,10 @@ export default function TeacherMultiSelect({
     setSelectedIds(newSelected)
 
     const selected = teachers
-      .filter((t) => newSelected.has(t.id))
-      .map((t) => {
+      .filter(t => newSelected.has(t.id))
+      .map(t => {
         // Preserve existing is_floater status if teacher was already selected
-        const existing = selectedTeachers.find((st) => (st.teacher_id || st.id) === t.id)
+        const existing = selectedTeachers.find(st => (st.teacher_id || st.id) === t.id)
         return {
           id: '', // Will be set when saved
           name: t.display_name || `${t.first_name} ${t.last_name}`,
@@ -96,7 +96,7 @@ export default function TeacherMultiSelect({
         }
       })
     onTeachersChange(selected)
-    
+
     // Clear search bar when a checkbox is clicked and focus it
     setSearchQuery('')
     // Focus the search input after state update
@@ -110,7 +110,7 @@ export default function TeacherMultiSelect({
   }
 
   const selectedTeachersList = teachers
-    .filter((t) => selectedIds.has(t.id))
+    .filter(t => selectedIds.has(t.id))
     .sort((a, b) => {
       // Sort by display_name first, then first_name if no display_name
       const nameA = a.display_name || a.first_name || ''
@@ -142,7 +142,10 @@ export default function TeacherMultiSelect({
       return 'Select teachers...'
     }
     if (selectedTeachersList.length === 1) {
-      return selectedTeachersList[0].display_name || `${selectedTeachersList[0].first_name} ${selectedTeachersList[0].last_name}`
+      return (
+        selectedTeachersList[0].display_name ||
+        `${selectedTeachersList[0].first_name} ${selectedTeachersList[0].last_name}`
+      )
     }
     return `${selectedTeachersList.length} teachers selected`
   }
@@ -181,7 +184,9 @@ export default function TeacherMultiSelect({
               {getButtonText()}
             </span>
           </span>
-          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown
+            className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          />
         </Button>
 
         {/* Dropdown menu */}
@@ -193,7 +198,7 @@ export default function TeacherMultiSelect({
                 ref={searchInputRef}
                 placeholder="Search teachers..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={e => setSearchQuery(e.target.value)}
                 className="w-full"
                 autoFocus
               />
@@ -207,9 +212,10 @@ export default function TeacherMultiSelect({
                 </div>
               ) : (
                 <div className="p-2 space-y-1">
-                  {filteredTeachers.map((teacher) => {
+                  {filteredTeachers.map(teacher => {
                     const isSelected = selectedIds.has(teacher.id)
-                    const name = teacher.display_name || `${teacher.first_name} ${teacher.last_name}`
+                    const name =
+                      teacher.display_name || `${teacher.first_name} ${teacher.last_name}`
                     return (
                       <div
                         key={teacher.id}
@@ -218,7 +224,9 @@ export default function TeacherMultiSelect({
                       >
                         <Checkbox
                           checked={isSelected}
-                          onCheckedChange={(checked) => !disabled && handleToggle(teacher.id, checked === true)}
+                          onCheckedChange={checked =>
+                            !disabled && handleToggle(teacher.id, checked === true)
+                          }
                           disabled={disabled}
                         />
                         <Label className="cursor-pointer flex-1">{name}</Label>
@@ -235,11 +243,13 @@ export default function TeacherMultiSelect({
       {/* Selected teachers chips */}
       {selectedTeachersList.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {selectedTeachersList.map((teacher) => {
+          {selectedTeachersList.map(teacher => {
             // Find the corresponding selected teacher to get is_floater status
-            const selectedTeacher = selectedTeachers.find((st) => (st.teacher_id || st.id) === teacher.id)
+            const selectedTeacher = selectedTeachers.find(
+              st => (st.teacher_id || st.id) === teacher.id
+            )
             const isFloater = selectedTeacher?.is_floater ?? false
-            
+
             return (
               <div
                 key={teacher.id}
@@ -249,13 +259,11 @@ export default function TeacherMultiSelect({
                     : 'bg-blue-100 text-blue-800'
                 }`}
               >
-                <span>
-                  {teacher.display_name || `${teacher.first_name} ${teacher.last_name}`}
-                </span>
+                <span>{teacher.display_name || `${teacher.first_name} ${teacher.last_name}`}</span>
                 <Select
                   value={isFloater ? 'floater' : 'teacher'}
-                  onValueChange={(value) => {
-                    const updated = selectedTeachers.map((st) => {
+                  onValueChange={value => {
+                    const updated = selectedTeachers.map(st => {
                       if ((st.teacher_id || st.id) === teacher.id) {
                         return { ...st, is_floater: value === 'floater' }
                       }
@@ -291,9 +299,7 @@ export default function TeacherMultiSelect({
       {requiredCount !== undefined && (
         <div className="flex items-center gap-2">
           {statusIcon}
-          <span className={`text-sm font-medium ${statusColor}`}>
-            {statusText}
-          </span>
+          <span className={`text-sm font-medium ${statusColor}`}>{statusText}</span>
         </div>
       )}
     </div>

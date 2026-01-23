@@ -30,7 +30,9 @@ describe('Error Utilities', () => {
 
     it('should handle PostgreSQL error codes', () => {
       const error = { code: '23505', message: 'Duplicate' } as any
-      expect(getErrorMessage(error)).toBe('This record already exists (duplicate key violation): Duplicate')
+      expect(getErrorMessage(error)).toBe(
+        'This record already exists (duplicate key violation): Duplicate'
+      )
     })
 
     it('should return default message for unknown errors', () => {
@@ -114,4 +116,3 @@ describe('Error Utilities', () => {
     })
   })
 })
-

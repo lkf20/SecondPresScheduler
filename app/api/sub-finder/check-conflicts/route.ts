@@ -16,7 +16,10 @@ export async function POST(request: NextRequest) {
     const { sub_id, coverage_request_id, shift_ids } = body
 
     if (!sub_id || !coverage_request_id || !shift_ids || !Array.isArray(shift_ids)) {
-      return createErrorResponse('Missing required fields: sub_id, coverage_request_id, shift_ids', 400)
+      return createErrorResponse(
+        'Missing required fields: sub_id, coverage_request_id, shift_ids',
+        400
+      )
     }
 
     const supabase = await createClient()
@@ -61,7 +64,7 @@ export async function POST(request: NextRequest) {
     // and date + time_slot_id -> available (for date-based exceptions)
     const dayBasedAvailabilityMap = new Map<string, boolean>()
     const dateBasedAvailabilityMap = new Map<string, boolean>()
-    
+
     // Day-based availability
     availability.forEach((avail: any) => {
       if (avail.available) {
@@ -79,7 +82,7 @@ export async function POST(request: NextRequest) {
     // Get sub's regular teaching schedule
     const subScheduledShifts = await getTeacherScheduledShifts(sub_id, startDate, endDate)
     const scheduleConflicts = new Set<string>()
-    subScheduledShifts.forEach((scheduledShift) => {
+    subScheduledShifts.forEach(scheduledShift => {
       const key = `${scheduledShift.date}|${scheduledShift.time_slot_id}`
       scheduleConflicts.add(key)
     })
@@ -107,18 +110,26 @@ export async function POST(request: NextRequest) {
     // Get existing sub assignments
     const { data: existingAssignments } = await supabase
       .from('sub_assignments')
-      .select('date, time_slot_id, teacher_id, classroom_id, staff:teacher_id(first_name, last_name, display_name)')
+      .select(
+        'date, time_slot_id, teacher_id, classroom_id, staff:teacher_id(first_name, last_name, display_name)'
+      )
       .eq('sub_id', sub_id)
       .gte('date', startDate)
       .lte('date', endDate)
 
-    const assignmentConflicts = new Map<string, { teacher_name: string; classroom_name: string | null }>()
+    const assignmentConflicts = new Map<
+      string,
+      { teacher_name: string; classroom_name: string | null }
+    >()
     if (existingAssignments) {
       for (const assignment of existingAssignments) {
         const key = `${assignment.date}|${assignment.time_slot_id}`
         const teacher = assignment.staff as any
-        const teacherName = teacher?.display_name || `${teacher?.first_name || ''} ${teacher?.last_name || ''}`.trim() || 'Unknown'
-        
+        const teacherName =
+          teacher?.display_name ||
+          `${teacher?.first_name || ''} ${teacher?.last_name || ''}`.trim() ||
+          'Unknown'
+
         // Get classroom name from the assignment if available
         let classroomName = null
         if (assignment.classroom_id) {
@@ -138,7 +149,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check each shift for conflicts
-    const conflicts = coverageRequestShifts.map((shift) => {
+    const conflicts = coverageRequestShifts.map(shift => {
       const dayBasedKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
       const dateBasedKey = `${shift.date}|${shift.time_slot_id}`
       const conflictKey = dateBasedKey
@@ -147,8 +158,8 @@ export async function POST(request: NextRequest) {
       const isAvailable = dateBasedAvailabilityMap.has(dateBasedKey)
         ? dateBasedAvailabilityMap.get(dateBasedKey)!
         : dayBasedAvailabilityMap.has(dayBasedKey)
-        ? dayBasedAvailabilityMap.get(dayBasedKey)!
-        : false
+          ? dayBasedAvailabilityMap.get(dayBasedKey)!
+          : false
 
       const hasScheduleConflict = scheduleConflicts.has(conflictKey)
       const hasTimeOffConflict = timeOffConflicts.has(conflictKey)

@@ -65,7 +65,7 @@ interface SubMatch {
 
 /**
  * Find available substitutes for a given absence/time off request
- * 
+ *
  * Algorithm:
  * 1. Get the absence and all shifts that need coverage
  * 2. For each active sub:
@@ -87,17 +87,16 @@ export async function POST(request: NextRequest) {
     const schoolId = await getUserSchoolId()
     if (!schoolId) {
       return NextResponse.json(
-        { error: 'User profile not found or missing school_id. Please ensure your profile is set up.' },
+        {
+          error:
+            'User profile not found or missing school_id. Please ensure your profile is set up.',
+        },
         { status: 403 }
       )
     }
 
     const body = await request.json()
-    const {
-      absence_id,
-      include_flexible_staff = true,
-      include_past_shifts = false,
-    } = body
+    const { absence_id, include_flexible_staff = true, include_past_shifts = false } = body
 
     if (!absence_id) {
       return NextResponse.json({ error: 'absence_id is required' }, { status: 400 })
@@ -118,7 +117,7 @@ export async function POST(request: NextRequest) {
 
     const shiftsToUse = include_past_shifts
       ? shifts
-      : shifts.filter((shift) => {
+      : shifts.filter(shift => {
           if (!shift?.date) {
             return false
           }
@@ -144,7 +143,10 @@ export async function POST(request: NextRequest) {
     } else {
       ;(teacherSchedules || []).forEach((schedule: any) => {
         const key = `${schedule.day_of_week_id}|${schedule.time_slot_id}`
-        const entry = scheduleLookup.get(key) || { classrooms: new Set<string>(), classes: new Set<string>() }
+        const entry = scheduleLookup.get(key) || {
+          classrooms: new Set<string>(),
+          classes: new Set<string>(),
+        }
         if (schedule.classroom?.name) {
           entry.classrooms.add(schedule.classroom.name)
           // Store color mapping for this classroom name
@@ -162,17 +164,21 @@ export async function POST(request: NextRequest) {
     const coverageRequestId = (timeOffRequest as any).coverage_request_id
 
     // Get coverage_request_shifts with class group info and create shift ID map
-    const classGroupInfoMap = new Map<string, { 
-      diaper_changing_required: boolean
-      lifting_children_required: boolean
-      class_group_name: string | null
-    }>()
+    const classGroupInfoMap = new Map<
+      string,
+      {
+        diaper_changing_required: boolean
+        lifting_children_required: boolean
+        class_group_name: string | null
+      }
+    >()
     const shiftIdMap = new Map<string, string>() // key: date|time_slot_code|classroom_id, value: coverage_request_shift_id
-    
+
     if (coverageRequestId) {
       const { data: coverageRequestShifts } = await supabase
         .from('coverage_request_shifts')
-        .select(`
+        .select(
+          `
           id,
           date,
           time_slot_id,
@@ -184,7 +190,8 @@ export async function POST(request: NextRequest) {
             lifting_children_required
           ),
           time_slots:time_slot_id (code)
-        `)
+        `
+        )
         .eq('coverage_request_id', coverageRequestId)
 
       if (coverageRequestShifts) {
@@ -196,7 +203,7 @@ export async function POST(request: NextRequest) {
             lifting_children_required: classGroup?.lifting_children_required ?? false,
             class_group_name: classGroup?.name || null,
           })
-          
+
           // Create shift ID map: date|time_slot_code|classroom_id -> coverage_request_shift_id
           const shiftIdKey = `${shift.date}|${shift.time_slots?.code || ''}|${shift.classroom_id || ''}`
           shiftIdMap.set(shiftIdKey, shift.id)
@@ -219,13 +226,14 @@ export async function POST(request: NextRequest) {
         : []
       const classroom_name = classroom_names.length > 0 ? classroom_names.join(', ') : null
       // Get color from first classroom (or null if multiple)
-      const classroom_color = classroom_names.length === 1 && classroom_names[0]
-        ? classroomColorMap.get(classroom_names[0]) || null
-        : null
+      const classroom_color =
+        classroom_names.length === 1 && classroom_names[0]
+          ? classroomColorMap.get(classroom_names[0]) || null
+          : null
       const class_name = scheduleEntry?.classes?.size
         ? Array.from(scheduleEntry.classes).join(', ')
         : classGroupInfo.class_group_name
-      
+
       return {
         date: shift.date,
         day_of_week_id: shift.day_of_week_id,
@@ -244,7 +252,7 @@ export async function POST(request: NextRequest) {
 
     // 3. Get all active subs
     const allSubs = await getSubs()
-    const activeSubs = allSubs.filter((sub) => sub.active !== false)
+    const activeSubs = allSubs.filter(sub => sub.active !== false)
 
     // 4. Get date range for checking conflicts
     const startDate = timeOffRequest.start_date
@@ -267,7 +275,7 @@ export async function POST(request: NextRequest) {
 
     // 6. For each sub, calculate match score
     const subMatches: SubMatch[] = await Promise.all(
-      activeSubs.map(async (sub) => {
+      activeSubs.map(async sub => {
         // Get sub's availability
         const availability = await getSubAvailability(sub.id)
         const availabilityExceptions = await getSubAvailabilityExceptions(sub.id, {
@@ -291,15 +299,11 @@ export async function POST(request: NextRequest) {
         })
 
         // Get sub's regular teaching schedule
-        const subScheduledShifts = await getTeacherScheduledShifts(
-          sub.id,
-          startDate,
-          endDate
-        )
+        const subScheduledShifts = await getTeacherScheduledShifts(sub.id, startDate, endDate)
 
         // Create schedule conflict map: date + time_slot_id -> conflict
         const scheduleConflicts = new Set<string>()
-        subScheduledShifts.forEach((scheduledShift) => {
+        subScheduledShifts.forEach(scheduledShift => {
           const key = `${scheduledShift.date}|${scheduledShift.time_slot_id}`
           scheduleConflicts.add(key)
         })
@@ -307,7 +311,7 @@ export async function POST(request: NextRequest) {
         // Get sub's time off requests for conflict checking
         const subTimeOffRequests = timeOffByTeacher.get(sub.id) || []
         const timeOffConflicts = new Set<string>()
-        
+
         // Fetch shifts for each time off request
         for (const req of subTimeOffRequests) {
           try {
@@ -361,7 +365,7 @@ export async function POST(request: NextRequest) {
         let qualificationMatches = 0
         let qualificationTotal = 0
 
-        shiftsToCover.forEach((shift) => {
+        shiftsToCover.forEach(shift => {
           const availabilityKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
           const conflictKey = `${shift.date}|${shift.time_slot_id}`
 
@@ -414,11 +418,11 @@ export async function POST(request: NextRequest) {
             } else {
               reason = 'Not available'
             }
-            
+
             // Get coverage_request_shift_id from map
             const shiftKey = `${shift.date}|${shift.time_slot_code}|${shift.classroom_id || ''}`
             const coverageRequestShiftId = shiftIdMap.get(shiftKey)
-            
+
             cannotCover.push({
               date: shift.date,
               day_name: shift.day_name,
@@ -437,7 +441,7 @@ export async function POST(request: NextRequest) {
           time_slot_code: string
           classroom_name?: string | null
         }> = []
-        
+
         if (coverageRequestId) {
           // Get teacher_id from coverage_request
           const { data: coverageRequest } = await supabase
@@ -445,30 +449,33 @@ export async function POST(request: NextRequest) {
             .select('teacher_id')
             .eq('id', coverageRequestId)
             .single()
-          
+
           if (coverageRequest) {
             // Get existing sub_assignments for this sub, teacher, and date range
             const { data: existingAssignments } = await supabase
               .from('sub_assignments')
-              .select(`
+              .select(
+                `
                 date,
                 time_slot_id,
                 time_slots:time_slots(code),
                 days_of_week:day_of_week_id(name)
-              `)
+              `
+              )
               .eq('sub_id', sub.id)
               .eq('teacher_id', coverageRequest.teacher_id)
               .gte('date', startDate)
               .lte('date', endDate)
               .eq('assignment_type', 'Substitute Shift')
-            
+
             if (existingAssignments) {
               existingAssignments.forEach((assignment: any) => {
                 // Check if this assignment covers one of the shifts we're looking for
                 const matchingShift = shiftsToCover.find(
-                  (s) => s.date === assignment.date && s.time_slot_code === assignment.time_slots?.code
+                  s =>
+                    s.date === assignment.date && s.time_slot_code === assignment.time_slots?.code
                 )
-                
+
                 if (matchingShift) {
                   assignedShifts.push({
                     date: assignment.date,
@@ -483,12 +490,9 @@ export async function POST(request: NextRequest) {
         }
 
         const coveragePercentage =
-          shiftsToCover.length > 0
-            ? Math.round((availableShifts / shiftsToCover.length) * 100)
-            : 0
+          shiftsToCover.length > 0 ? Math.round((availableShifts / shiftsToCover.length) * 100) : 0
 
-        const name =
-          sub.display_name || `${sub.first_name} ${sub.last_name}` || 'Unknown'
+        const name = sub.display_name || `${sub.first_name} ${sub.last_name}` || 'Unknown'
 
         // Get response_status from substitute_contacts if coverage request exists
         let responseStatus: string | null = null
@@ -500,13 +504,15 @@ export async function POST(request: NextRequest) {
               .eq('coverage_request_id', coverageRequestId)
               .eq('sub_id', sub.id)
               .single()
-            
+
             if (contact) {
               responseStatus = contact.response_status
             }
           } catch {
             // Contact doesn't exist yet, which is fine
-            console.debug(`No contact found for sub ${sub.id} and coverage request ${coverageRequestId}`)
+            console.debug(
+              `No contact found for sub ${sub.id} and coverage request ${coverageRequestId}`
+            )
           }
         }
 
@@ -534,7 +540,7 @@ export async function POST(request: NextRequest) {
     // (Flexible staff might be teachers who can sub when not teaching)
     let filteredMatches = subMatches
     if (!include_flexible_staff) {
-      filteredMatches = subMatches.filter((match) => match.coverage_percent > 0)
+      filteredMatches = subMatches.filter(match => match.coverage_percent > 0)
     }
 
     // 8. Sort by coverage percentage (descending), then by name
@@ -547,7 +553,7 @@ export async function POST(request: NextRequest) {
 
     const allShiftKeys = new Set<string>()
     const assignedShiftKeys = new Set<string>()
-    filteredMatches.forEach((match) => {
+    filteredMatches.forEach(match => {
       match.can_cover?.forEach((shift: { date: string; time_slot_code: string }) => {
         allShiftKeys.add(`${shift.date}|${shift.time_slot_code}`)
       })
@@ -561,12 +567,12 @@ export async function POST(request: NextRequest) {
       })
     })
 
-    const remainingShiftKeys = Array.from(allShiftKeys).filter((key) => !assignedShiftKeys.has(key))
+    const remainingShiftKeys = Array.from(allShiftKeys).filter(key => !assignedShiftKeys.has(key))
     const totalShifts = filteredMatches[0]?.total_shifts || 0
     const remainingShiftCount = Math.max(0, totalShifts - assignedShiftKeys.size)
     const hasAssignedShifts = assignedShiftKeys.size > 0
 
-    const enrichedMatches = filteredMatches.map((match) => {
+    const enrichedMatches = filteredMatches.map(match => {
       const shiftChips = buildShiftChips({
         assigned: [],
         canCover: match.can_cover || [],
@@ -592,11 +598,6 @@ export async function POST(request: NextRequest) {
       recommended_combinations: recommendedCombinations,
     })
   } catch (error) {
-    return createErrorResponse(
-      error,
-      'Failed to find subs',
-      500,
-      'POST /api/sub-finder/find-subs'
-    )
+    return createErrorResponse(error, 'Failed to find subs', 500, 'POST /api/sub-finder/find-subs')
   }
 }

@@ -14,5 +14,3 @@ export async function getStaffRoleTypes() {
   if (error) throw error
   return data as StaffRoleType[]
 }
-
-

@@ -26,8 +26,8 @@ export async function GET() {
     return createErrorResponse(
       error,
       'Failed to fetch resource', // User-friendly message
-      500,                        // HTTP status code
-      'GET /api/resource'        // Context for logging
+      500, // HTTP status code
+      'GET /api/resource' // Context for logging
     )
   }
 }
@@ -86,9 +86,7 @@ const handleSubmit = async (data: FormData) => {
     await submitForm(data)
     // Success handling
   } catch (error) {
-    const message = error instanceof Error 
-      ? error.message 
-      : 'An unexpected error occurred'
+    const message = error instanceof Error ? error.message : 'An unexpected error occurred'
     setError(message)
   } finally {
     setLoading(false)
@@ -122,7 +120,7 @@ The error utility automatically translates common database errors:
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    
+
     // Validate input
     if (!body.name) {
       return createErrorResponse(
@@ -136,12 +134,7 @@ export async function POST(request: NextRequest) {
     const result = await createResource(body)
     return NextResponse.json(result, { status: 201 })
   } catch (error) {
-    return createErrorResponse(
-      error,
-      'Failed to create resource',
-      500,
-      'POST /api/resource'
-    )
+    return createErrorResponse(error, 'Failed to create resource', 500, 'POST /api/resource')
   }
 }
 ```
@@ -170,7 +163,4 @@ When updating routes to use standardized error handling:
 
 ---
 
-*Last updated: January 2025*
-
-
-
+_Last updated: January 2025_

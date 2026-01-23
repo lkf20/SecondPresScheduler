@@ -40,11 +40,13 @@ This document tracks the standardization of UI colors across the application. We
 ## Color Standards
 
 ### Coverage Colors
+
 - **Covered**: `bg-blue-50 border-blue-400 text-blue-700`
 - **Partial**: `bg-yellow-50 border-yellow-300 text-yellow-700`
 - **Uncovered**: `bg-orange-50 border-orange-400 text-orange-700`
 
 ### Status Colors
+
 - **Draft**: `bg-yellow-50 border-yellow-200 text-yellow-700`
 - **Completed**: `bg-green-50 border-green-200 text-green-700`
 - **Covered**: Uses coverage colors (blue)
@@ -52,6 +54,7 @@ This document tracks the standardization of UI colors across the application. We
 - **Needs Coverage**: Uses coverage colors (orange)
 
 ### Button Colors
+
 - **Primary**: Uses theme variables (`bg-primary text-primary-foreground`)
 - **Secondary**: Uses theme variables (`bg-secondary text-secondary-foreground`)
 - **Outline**: Uses theme variables (`border border-input`)
@@ -59,6 +62,7 @@ This document tracks the standardization of UI colors across the application. We
 - **Dark**: `bg-slate-900 text-white hover:bg-slate-800`
 
 ### Neutral Colors
+
 - **Light Background**: `bg-slate-50`
 - **Light Background Hover**: `bg-slate-100`
 - **Border**: `border-slate-200`
@@ -69,6 +73,7 @@ This document tracks the standardization of UI colors across the application. We
 - **Text Darker**: `text-slate-900`
 
 ### Staffing Colors
+
 - **Below Required**: `bg-amber-100 border-amber-200 text-amber-900`
 - **Below Preferred**: `bg-amber-50 border-amber-200 text-amber-800`
 - **Adequate**: Uses neutral colors
@@ -76,20 +81,22 @@ This document tracks the standardization of UI colors across the application. We
 ## Usage Guidelines
 
 ### Importing Colors
+
 ```typescript
-import { 
-  getCoverageColors, 
+import {
+  getCoverageColors,
   getCoverageColorClasses,
   getStatusColors,
   getStatusColorClasses,
   getButtonColors,
   getNeutralChipClasses,
   getStaffingColorClasses,
-  neutralColors
+  neutralColors,
 } from '@/lib/utils/colors'
 ```
 
 ### Using Coverage Colors
+
 ```typescript
 // Get individual color classes
 const colors = getCoverageColors('covered')
@@ -101,18 +108,21 @@ const className = getCoverageColorClasses('covered')
 ```
 
 ### Using Status Colors
+
 ```typescript
 const className = getStatusColorClasses('partially_covered')
 // Returns: 'bg-yellow-50 border-yellow-300 text-yellow-700'
 ```
 
 ### Using Button Colors
+
 ```typescript
 const buttonClasses = getButtonColors('teal').base
 // Returns: 'border-teal-700 text-teal-700 hover:bg-teal-700 hover:text-white hover:border-teal-700'
 ```
 
 ### Using Neutral Colors
+
 ```typescript
 // For chips
 const chipClasses = getNeutralChipClasses()

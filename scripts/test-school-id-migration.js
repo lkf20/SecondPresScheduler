@@ -29,13 +29,19 @@ const { createClient } = require('@supabase/supabase-js')
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 // Try service role key first, fall back to publishable key
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+const supabaseKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('❌ Missing required environment variables:')
   console.error('   NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl ? '✓' : '✗')
-  console.error('   SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:', supabaseKey ? '✓' : '✗')
-  console.error('\nNote: Using publishable key may have RLS restrictions. Service role key is preferred for testing.')
+  console.error(
+    '   SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:',
+    supabaseKey ? '✓' : '✗'
+  )
+  console.error(
+    '\nNote: Using publishable key may have RLS restrictions. Service role key is preferred for testing.'
+  )
   if (!supabaseKey) process.exit(1)
 }
 
@@ -47,18 +53,17 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
 })
 
 if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  console.warn('⚠️  Warning: Using publishable key instead of service role key. Some tests may fail due to RLS policies.\n')
+  console.warn(
+    '⚠️  Warning: Using publishable key instead of service role key. Some tests may fail due to RLS policies.\n'
+  )
 }
 
 const results = []
 
 async function testColumnExists(table, column) {
   try {
-    const { data, error } = await supabase
-      .from(table)
-      .select(column)
-      .limit(1)
-    
+    const { data, error } = await supabase.from(table).select(column).limit(1)
+
     if (error) {
       if (error.message.includes('column') && error.message.includes('does not exist')) {
         return false
@@ -76,12 +81,8 @@ async function testColumnExists(table, column) {
 
 async function testColumnNotNull(table, column) {
   try {
-    const { data, error } = await supabase
-      .from(table)
-      .select(column)
-      .is(column, null)
-      .limit(1)
-    
+    const { data, error } = await supabase.from(table).select(column).is(column, null).limit(1)
+
     if (error) throw error
     return !data || data.length === 0
   } catch (error) {
@@ -91,10 +92,8 @@ async function testColumnNotNull(table, column) {
 
 async function testTableHasData(table) {
   try {
-    const { count, error } = await supabase
-      .from(table)
-      .select('*', { count: 'exact', head: true })
-    
+    const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true })
+
     if (error) throw error
     return count || 0
   } catch (error) {
@@ -182,17 +181,17 @@ async function runTests() {
         .from(table)
         .select('*', { count: 'exact', head: true })
         .eq('school_id', defaultSchoolId)
-      
+
       if (error) throw error
-      
+
       const totalCount = await testTableHasData(table)
       const allHaveDefault = totalCount === (count || 0)
-      
+
       results.push({
         name: `${table} uses default school_id`,
         passed: allHaveDefault,
-        message: allHaveDefault 
-          ? `✓ All ${count} rows use default school_id` 
+        message: allHaveDefault
+          ? `✓ All ${count} rows use default school_id`
           : `✗ Only ${count}/${totalCount} rows use default school_id`,
         details: { defaultCount: count, totalCount },
       })
@@ -220,12 +219,13 @@ async function runTests() {
         .from('profiles')
         .select('*', { count: 'exact', head: true })
         .not('school_id', 'is', null)
-      
+
       if (!error && count !== null) {
         results.push({
           name: 'profiles have school_id',
           passed: count > 0,
-          message: count > 0 ? `✓ ${count} profiles have school_id` : `✗ No profiles have school_id`,
+          message:
+            count > 0 ? `✓ ${count} profiles have school_id` : `✗ No profiles have school_id`,
         })
       }
     }

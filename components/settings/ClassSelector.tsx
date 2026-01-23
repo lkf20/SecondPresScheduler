@@ -22,21 +22,16 @@ interface ClassSelectorProps {
   onSelectionChange: (classIds: string[]) => void
 }
 
-export default function ClassSelector({
-  selectedClassIds,
-  onSelectionChange,
-}: ClassSelectorProps) {
+export default function ClassSelector({ selectedClassIds, onSelectionChange }: ClassSelectorProps) {
   const [classes, setClasses] = useState<ClassGroup[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(
-    new Set(selectedClassIds)
-  )
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(selectedClassIds))
 
   useEffect(() => {
     fetch('/api/class-groups')
-      .then((r) => r.json())
-      .then((data) => {
+      .then(r => r.json())
+      .then(data => {
         setClasses(data as ClassGroup[])
       })
       .catch(console.error)
@@ -47,7 +42,7 @@ export default function ClassSelector({
     setSelectedIds(new Set(selectedClassIds))
   }, [selectedClassIds])
 
-  const filteredClasses = classes.filter((cls) => {
+  const filteredClasses = classes.filter(cls => {
     return cls.name.toLowerCase().includes(searchQuery.toLowerCase())
   })
 
@@ -74,13 +69,13 @@ export default function ClassSelector({
     onSelectionChange(Array.from(newSelected))
   }
 
-  const selectedClassesList = classes.filter((cls) => selectedIds.has(cls.id))
+  const selectedClassesList = classes.filter(cls => selectedIds.has(cls.id))
 
   return (
     <div className="space-y-3">
       {/* Selected classes chips */}
       <div className="flex flex-wrap gap-2">
-        {selectedClassesList.map((cls) => (
+        {selectedClassesList.map(cls => (
           <div
             key={cls.id}
             className="flex items-center gap-1 bg-primary/10 text-primary rounded-md px-2 py-1 text-sm"
@@ -122,7 +117,7 @@ export default function ClassSelector({
             <Input
               placeholder="Search class groups..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={e => setSearchQuery(e.target.value)}
               className="mb-3"
             />
 
@@ -134,7 +129,7 @@ export default function ClassSelector({
                 size="sm"
                 onClick={() => {
                   const newSelected = new Set(selectedIds)
-                  filteredClasses.forEach((cls) => {
+                  filteredClasses.forEach(cls => {
                     newSelected.add(cls.id)
                   })
                   setSelectedIds(newSelected)
@@ -149,7 +144,7 @@ export default function ClassSelector({
                 size="sm"
                 onClick={() => {
                   const newSelected = new Set(selectedIds)
-                  filteredClasses.forEach((cls) => {
+                  filteredClasses.forEach(cls => {
                     newSelected.delete(cls.id)
                   })
                   setSelectedIds(newSelected)
@@ -168,7 +163,7 @@ export default function ClassSelector({
                 </div>
               ) : (
                 <div className="p-2 space-y-1">
-                  {filteredClasses.map((cls) => {
+                  {filteredClasses.map(cls => {
                     const isSelected = selectedIds.has(cls.id)
                     return (
                       <div
@@ -178,13 +173,9 @@ export default function ClassSelector({
                       >
                         <Checkbox
                           checked={isSelected}
-                          onCheckedChange={(checked) =>
-                            handleToggle(cls.id, checked === true)
-                          }
+                          onCheckedChange={checked => handleToggle(cls.id, checked === true)}
                         />
-                        <Label className="cursor-pointer flex-1">
-                          {cls.name}
-                        </Label>
+                        <Label className="cursor-pointer flex-1">{cls.name}</Label>
                       </div>
                     )
                   })}

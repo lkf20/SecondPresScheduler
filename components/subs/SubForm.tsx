@@ -22,7 +22,7 @@ const subSchema = z.object({
   email: z
     .union([z.string().email('Invalid email address'), z.literal('')])
     .optional()
-    .transform((val) => (val === '' ? undefined : val)),
+    .transform(val => (val === '' ? undefined : val)),
   active: z.boolean().default(true),
   is_teacher: z.boolean().default(false),
 })
@@ -90,7 +90,7 @@ export default function SubForm({ sub, onSubmit, onCancel }: SubFormProps) {
           <Checkbox
             id="active"
             checked={active}
-            onCheckedChange={(checked) => setValue('active', checked === true)}
+            onCheckedChange={checked => setValue('active', checked === true)}
           />
           <Label htmlFor="active" className="font-normal cursor-pointer">
             Active
@@ -101,7 +101,7 @@ export default function SubForm({ sub, onSubmit, onCancel }: SubFormProps) {
           <Checkbox
             id="is_teacher"
             checked={isTeacher}
-            onCheckedChange={(checked) => setValue('is_teacher', checked === true)}
+            onCheckedChange={checked => setValue('is_teacher', checked === true)}
           />
           <Label htmlFor="is_teacher" className="font-normal cursor-pointer">
             Is also a teacher

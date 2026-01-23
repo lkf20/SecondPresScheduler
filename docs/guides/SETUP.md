@@ -33,6 +33,7 @@
 ### 3. Configure Environment Variables
 
 1. Create `.env.local` file in the project root:
+
    ```bash
    cd /Users/lisafrist/Desktop/Projects/scheduler-app
    cp .env.local.example .env.local
@@ -110,15 +111,18 @@ scheduler-app/
 ## 🐛 Troubleshooting
 
 ### "Invalid API key" error
+
 - Double-check your `.env.local` file has the correct values
 - Make sure you're using the **Publishable API Key** (public key), not the service role key
 - Restart the dev server after changing `.env.local`
 
 ### Redirect loop
+
 - Check that your Supabase redirect URLs are configured correctly
 - Make sure `/auth/callback` is in the allowed redirect URLs
 
 ### Can't log in
+
 - Verify the user exists in Supabase dashboard
 - Check that "Auto Confirm User" was checked when creating the user
 - Try resetting the password in Supabase dashboard
@@ -147,4 +151,3 @@ scheduler-app/
 ## 🎉 You're Ready!
 
 Your Next.js app with Supabase authentication is set up and ready to go. Start building your scheduler features!
-

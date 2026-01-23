@@ -47,14 +47,9 @@ interface SortableClassesTableProps {
 }
 
 function SortableRow({ classItem }: { classItem: Class }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: classItem.id })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: classItem.id,
+  })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -63,11 +58,7 @@ function SortableRow({ classItem }: { classItem: Class }) {
   }
 
   return (
-    <TableRow
-      ref={setNodeRef}
-      style={style}
-      className={cn(isDragging && 'bg-muted')}
-    >
+    <TableRow ref={setNodeRef} style={style} className={cn(isDragging && 'bg-muted')}>
       <TableCell className="w-10">
         <button
           {...attributes}
@@ -81,14 +72,13 @@ function SortableRow({ classItem }: { classItem: Class }) {
       <TableCell>
         <div className="flex items-center gap-2">
           {!classItem.is_active && (
-            <Badge variant="secondary" className="text-xs">Inactive</Badge>
+            <Badge variant="secondary" className="text-xs">
+              Inactive
+            </Badge>
           )}
           <Link
             href={`/settings/classes/${classItem.id}`}
-            className={cn(
-              "hover:underline",
-              !classItem.is_active && "text-muted-foreground"
-            )}
+            className={cn('hover:underline', !classItem.is_active && 'text-muted-foreground')}
           >
             {classItem.name}
           </Link>
@@ -128,8 +118,8 @@ export default function SortableClassesTable({
     const { active, over } = event
 
     if (over && active.id !== over.id) {
-      const oldIndex = classes.findIndex((c) => c.id === active.id)
-      const newIndex = classes.findIndex((c) => c.id === over.id)
+      const oldIndex = classes.findIndex(c => c.id === active.id)
+      const newIndex = classes.findIndex(c => c.id === over.id)
 
       const newClasses = arrayMove(classes, oldIndex, newIndex)
 
@@ -145,14 +135,14 @@ export default function SortableClassesTable({
       setIsSaving(true)
       try {
         // Only update classes whose order actually changed
-        const orderChanged = updatedClasses.filter((classItem) => {
-          const original = initialClasses.find((c) => c.id === classItem.id)
+        const orderChanged = updatedClasses.filter(classItem => {
+          const original = initialClasses.find(c => c.id === classItem.id)
           return original?.order !== classItem.order
         })
 
         if (orderChanged.length > 0) {
           await Promise.all(
-            orderChanged.map((classItem) =>
+            orderChanged.map(classItem =>
               fetch(`/api/class-groups/${classItem.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -173,7 +163,7 @@ export default function SortableClassesTable({
   }
 
   // Filter classes by search and active status
-  const filteredClasses = classes.filter((c) => {
+  const filteredClasses = classes.filter(c => {
     const matchesSearch = !search || c.name.toLowerCase().includes(search.toLowerCase())
     const matchesActiveFilter = showInactive || c.is_active !== false
     return matchesSearch && matchesActiveFilter
@@ -187,31 +177,21 @@ export default function SortableClassesTable({
           <Input
             placeholder="Search class groups..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={e => setSearch(e.target.value)}
             className="pl-8"
           />
         </div>
         <div className="flex items-center gap-2">
-          <Switch
-            id="show-inactive"
-            checked={showInactive}
-            onCheckedChange={setShowInactive}
-          />
+          <Switch id="show-inactive" checked={showInactive} onCheckedChange={setShowInactive} />
           <Label htmlFor="show-inactive" className="text-sm cursor-pointer">
             Show inactive
           </Label>
         </div>
-        {isSaving && (
-          <span className="text-sm text-muted-foreground">Saving...</span>
-        )}
+        {isSaving && <span className="text-sm text-muted-foreground">Saving...</span>}
       </div>
 
       {isMounted ? (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <div className="rounded-md border">
             <Table>
               <TableHeader>
@@ -229,10 +209,10 @@ export default function SortableClassesTable({
                   </TableRow>
                 ) : (
                   <SortableContext
-                    items={filteredClasses.map((c) => c.id)}
+                    items={filteredClasses.map(c => c.id)}
                     strategy={verticalListSortingStrategy}
                   >
-                    {filteredClasses.map((classItem) => (
+                    {filteredClasses.map(classItem => (
                       <SortableRow key={classItem.id} classItem={classItem} />
                     ))}
                   </SortableContext>
@@ -258,7 +238,7 @@ export default function SortableClassesTable({
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredClasses.map((classItem) => (
+                filteredClasses.map(classItem => (
                   <TableRow key={classItem.id}>
                     <TableCell className="w-10">
                       <div className="p-1">
@@ -268,13 +248,15 @@ export default function SortableClassesTable({
                     <TableCell>
                       <div className="flex items-center gap-2">
                         {!classItem.is_active && (
-                          <Badge variant="secondary" className="text-xs">Inactive</Badge>
+                          <Badge variant="secondary" className="text-xs">
+                            Inactive
+                          </Badge>
                         )}
                         <Link
                           href={`/settings/classes/${classItem.id}`}
                           className={cn(
-                            "hover:underline",
-                            !classItem.is_active && "text-muted-foreground"
+                            'hover:underline',
+                            !classItem.is_active && 'text-muted-foreground'
                           )}
                         >
                           {classItem.name}

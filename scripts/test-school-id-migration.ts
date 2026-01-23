@@ -39,11 +39,8 @@ const results: TestResult[] = []
 
 async function testColumnExists(table: string, column: string): Promise<boolean> {
   try {
-    const { data, error } = await supabase
-      .from(table)
-      .select(column)
-      .limit(1)
-    
+    const { data, error } = await supabase.from(table).select(column).limit(1)
+
     if (error) {
       // If column doesn't exist, we'll get a specific error
       if (error.message.includes('column') && error.message.includes('does not exist')) {
@@ -62,12 +59,8 @@ async function testColumnExists(table: string, column: string): Promise<boolean>
 
 async function testColumnNotNull(table: string, column: string): Promise<boolean> {
   try {
-    const { data, error } = await supabase
-      .from(table)
-      .select(column)
-      .is(column, null)
-      .limit(1)
-    
+    const { data, error } = await supabase.from(table).select(column).is(column, null).limit(1)
+
     if (error) throw error
     // If we get results, there are NULL values
     return !data || data.length === 0
@@ -78,10 +71,8 @@ async function testColumnNotNull(table: string, column: string): Promise<boolean
 
 async function testTableHasData(table: string): Promise<number> {
   try {
-    const { count, error } = await supabase
-      .from(table)
-      .select('*', { count: 'exact', head: true })
-    
+    const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true })
+
     if (error) throw error
     return count || 0
   } catch (error) {
@@ -92,11 +83,8 @@ async function testTableHasData(table: string): Promise<number> {
 async function testRLSPolicy(table: string): Promise<boolean> {
   try {
     // Try to query without school_id filter (should be blocked by RLS if policy exists)
-    const { data, error } = await supabase
-      .from(table)
-      .select('*')
-      .limit(1)
-    
+    const { data, error } = await supabase.from(table).select('*').limit(1)
+
     // If we get data, RLS might not be working or policy doesn't exist
     // If we get a permission error, RLS is working
     if (error) {
@@ -105,7 +93,7 @@ async function testRLSPolicy(table: string): Promise<boolean> {
       }
       throw error
     }
-    
+
     // If we get data, RLS might not be active (this is expected with service role key)
     // For a proper test, we'd need to use a user token, but this at least confirms the table is accessible
     return true
@@ -195,17 +183,17 @@ async function runTests() {
         .from(table)
         .select('*', { count: 'exact', head: true })
         .eq('school_id', defaultSchoolId)
-      
+
       if (error) throw error
-      
+
       const totalCount = await testTableHasData(table)
       const allHaveDefault = totalCount === (count || 0)
-      
+
       results.push({
         name: `${table} uses default school_id`,
         passed: allHaveDefault,
-        message: allHaveDefault 
-          ? `✓ All ${count} rows use default school_id` 
+        message: allHaveDefault
+          ? `✓ All ${count} rows use default school_id`
           : `✗ Only ${count}/${totalCount} rows use default school_id`,
         details: { defaultCount: count, totalCount },
       })
@@ -234,7 +222,7 @@ async function runTests() {
         .from(test.table)
         .select(test.columns.join(', '))
         .limit(1)
-      
+
       if (fetchError || !existing || existing.length === 0) {
         results.push({
           name: `${test.table} unique constraint (${test.columns.join(', ')})`,
@@ -251,19 +239,17 @@ async function runTests() {
       })
 
       // Try to insert duplicate (should fail)
-      const { error: insertError } = await supabase
-        .from(test.table)
-        .insert(duplicateValues)
+      const { error: insertError } = await supabase.from(test.table).insert(duplicateValues)
 
       // If insert fails with unique constraint error, constraint exists
-      const constraintExists = insertError?.message?.includes('unique') || 
-                               insertError?.code === '23505'
-      
+      const constraintExists =
+        insertError?.message?.includes('unique') || insertError?.code === '23505'
+
       results.push({
         name: `${test.table} unique constraint (${test.columns.join(', ')})`,
         passed: constraintExists,
-        message: constraintExists 
-          ? `✓ Unique constraint exists` 
+        message: constraintExists
+          ? `✓ Unique constraint exists`
           : `✗ Unique constraint missing or error: ${insertError?.message}`,
       })
     } catch (error: any) {
@@ -290,12 +276,13 @@ async function runTests() {
         .from('profiles')
         .select('*', { count: 'exact', head: true })
         .not('school_id', 'is', null)
-      
+
       if (!error && count !== null) {
         results.push({
           name: 'profiles have school_id',
           passed: count > 0,
-          message: count > 0 ? `✓ ${count} profiles have school_id` : `✗ No profiles have school_id`,
+          message:
+            count > 0 ? `✓ ${count} profiles have school_id` : `✗ No profiles have school_id`,
         })
       }
     }

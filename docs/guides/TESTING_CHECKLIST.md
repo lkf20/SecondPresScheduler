@@ -1,6 +1,7 @@
 # Scheduler App - Testing Checklist
 
 ## Overview
+
 This checklist will help you systematically test all features of the Scheduler web application.
 
 ---
@@ -22,6 +23,7 @@ This checklist will help you systematically test all features of the Scheduler w
 **Start here!** Other features depend on this data.
 
 ### Classes
+
 - [ ] Go to **Settings → Classes**
 - [ ] Click "Add Class"
 - [ ] Create a class (e.g., "Infants", "Toddler A", "Toddler B")
@@ -32,6 +34,7 @@ This checklist will help you systematically test all features of the Scheduler w
 - [ ] Delete a class (with confirmation)
 
 ### Classrooms
+
 - [ ] Go to **Settings → Classrooms**
 - [ ] Click "Add Classroom"
 - [ ] Create a classroom (e.g., "Yellow Room", capacity: 12)
@@ -42,6 +45,7 @@ This checklist will help you systematically test all features of the Scheduler w
 - [ ] Delete a classroom (with confirmation)
 
 ### Time Slots
+
 - [ ] Go to **Settings → Time Slots**
 - [ ] Verify time slots from seed data are visible (EM, AM, LB, AC)
 - [ ] Click on a time slot code to edit
@@ -163,6 +167,7 @@ These show "coming soon" messages but should load without errors:
 ## Expected Behavior
 
 ### ✅ If Everything Works:
+
 - You can create teachers, subs, classes, and classrooms
 - Data persists in Supabase
 - Navigation works smoothly
@@ -172,19 +177,23 @@ These show "coming soon" messages but should load without errors:
 ### ⚠️ If You See Errors:
 
 **"Failed to load..." messages:**
+
 - Database tables may not exist → Run migrations in Supabase
 - RLS policies may be blocking → Check migration 004 was applied
 
 **Empty lists:**
+
 - Normal if no data yet
 - Try adding some test data
 
 **Network errors:**
+
 - Check Supabase connection
 - Verify environment variables are set
 - Check RLS policies allow your operations
 
 **404 errors:**
+
 - Page may not exist → Check if route file exists
 - Navigation link may be incorrect
 
@@ -202,6 +211,7 @@ These show "coming soon" messages but should load without errors:
 ## Next Steps After Testing
 
 Once basic CRUD operations work:
+
 1. Test teacher schedule management (when implemented)
 2. Test sub availability management (when implemented)
 3. Test Sub Finder algorithm (when implemented)
@@ -211,6 +221,3 @@ Once basic CRUD operations work:
 ---
 
 **Last Updated:** After initial app setup and RLS policy fixes
-
-
-

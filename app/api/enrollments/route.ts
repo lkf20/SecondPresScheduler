@@ -4,9 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 export async function GET() {
   try {
     const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('enrollments')
-      .select('*')
+    const { data, error } = await supabase.from('enrollments').select('*')
 
     if (error) throw error
     return NextResponse.json(data || [])
@@ -14,4 +12,3 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
-

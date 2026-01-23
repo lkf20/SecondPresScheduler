@@ -44,8 +44,8 @@ export default function ClassroomColorPicker({ value, onChange }: ClassroomColor
   }
 
   const isPredefinedColor = value && PREDEFINED_COLORS.find(c => c.value === value)
-  const selectedColorName = isPredefinedColor 
-    ? PREDEFINED_COLORS.find(c => c.value === value)?.name 
+  const selectedColorName = isPredefinedColor
+    ? PREDEFINED_COLORS.find(c => c.value === value)?.name
     : null
 
   return (
@@ -53,19 +53,13 @@ export default function ClassroomColorPicker({ value, onChange }: ClassroomColor
       <div className="flex items-center gap-3">
         <Popover open={isOpen} onOpenChange={setIsOpen}>
           <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-[200px] justify-start"
-            >
+            <Button type="button" variant="outline" className="w-[200px] justify-start">
               <div
                 className="w-4 h-4 rounded border border-gray-300 mr-2"
                 style={{ backgroundColor: value || 'transparent' }}
               />
               {value ? (
-                <span className="text-sm">
-                  {selectedColorName || 'No color selected'}
-                </span>
+                <span className="text-sm">{selectedColorName || 'No color selected'}</span>
               ) : (
                 <span className="text-sm text-muted-foreground">No color selected</span>
               )}
@@ -76,7 +70,7 @@ export default function ClassroomColorPicker({ value, onChange }: ClassroomColor
               <div>
                 <Label className="text-sm font-medium mb-2 block">Select Color</Label>
                 <div className="grid grid-cols-4 gap-2">
-                  {PREDEFINED_COLORS.map((color) => (
+                  {PREDEFINED_COLORS.map(color => (
                     <button
                       key={color.value}
                       type="button"
@@ -109,20 +103,17 @@ export default function ClassroomColorPicker({ value, onChange }: ClassroomColor
             </div>
           </PopoverContent>
         </Popover>
-        
+
         {value && selectedColorName && (
           <div className="flex items-center gap-2">
             <div
               className="w-8 h-8 rounded border border-gray-300"
               style={{ backgroundColor: value }}
             />
-            <span className="text-sm text-muted-foreground">
-              {selectedColorName}
-            </span>
+            <span className="text-sm text-muted-foreground">{selectedColorName}</span>
           </div>
         )}
       </div>
     </div>
   )
 }
-

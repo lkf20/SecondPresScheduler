@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import {
-  getClassrooms,
-  createClassroom,
-  setClassroomAllowedClasses,
-} from '@/lib/api/classrooms'
+import { getClassrooms, createClassroom, setClassroomAllowedClasses } from '@/lib/api/classrooms'
 import { createErrorResponse } from '@/lib/utils/errors'
 
 export async function GET() {
@@ -33,6 +29,3 @@ export async function POST(request: NextRequest) {
     return createErrorResponse(error, 'Failed to create classroom', 500, 'POST /api/classrooms')
   }
 }
-
-
-
