@@ -1341,6 +1341,7 @@ export default function SubFinderPage() {
                     useRemainingLabel={selectedAbsence.shifts.total > selectedAbsence.shifts.uncovered}
                     allSubs={allSubs}
                     allShifts={selectedAbsence.shifts.shift_details || []}
+                    includePastShifts={includePastShifts}
                   />
                   <div className="mt-16 text-sm font-semibold text-slate-700">All Available Subs</div>
                   <div className="mt-2 border-t border-slate-200 pt-6" />

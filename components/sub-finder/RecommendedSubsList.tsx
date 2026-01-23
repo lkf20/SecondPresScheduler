@@ -312,6 +312,7 @@ export default function RecommendedSubsList({
         class_name: shift.class_name ?? null,
       }
     })
+    const coverageSegments = shiftChips.map((shift) => shift.status)
 
     return (
       <SubFinderCard
@@ -326,6 +327,7 @@ export default function RecommendedSubsList({
         cannotCover={cannotCoverWithClassrooms}
         assigned={assignedWithClassrooms}
         shiftChips={shiftChips}
+        coverageSegments={coverageSegments}
         notes={sub.notes}
           isDeclined={sub.response_status === 'declined_all'}
           highlighted={highlightedSubId === sub.id}
@@ -456,6 +458,7 @@ export default function RecommendedSubsList({
                         class_name: shift.class_name ?? null,
                       }
                     })
+                    const coverageSegments = shiftChips.map((shift) => shift.status)
 
                     return (
                       <SubFinderCard
@@ -470,6 +473,7 @@ export default function RecommendedSubsList({
                         cannotCover={cannotCoverWithClassrooms}
                         assigned={assignedWithClassrooms}
                         shiftChips={shiftChips}
+                        coverageSegments={coverageSegments}
                         notes={sub.notes}
                         isDeclined={true}
                         highlighted={highlightedSubId === sub.id}

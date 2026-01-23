@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { AlertTriangle, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react'
 import ShiftChips from '@/components/sub-finder/ShiftChips'
 import SubCardHeader from '@/components/sub-finder/SubCardHeader'
+import { shiftStatusColorValues } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
 
 type Shift = {
@@ -42,6 +43,7 @@ interface SubFinderCardProps {
     classroom_name?: string | null
     class_name?: string | null
   }>
+  coverageSegments?: Array<'assigned' | 'available' | 'unavailable'>
   notes?: string | null
   conflicts?: ConflictCounts
   isDeclined?: boolean
@@ -60,6 +62,7 @@ interface SubFinderCardProps {
   }>
   allCanCover?: Shift[] // All shifts this sub can cover
   allCannotCover?: Shift[] // All shifts this sub cannot cover
+  allAssigned?: Shift[] // All shifts this sub is assigned to
 }
 
 export default function SubFinderCard({
@@ -73,6 +76,7 @@ export default function SubFinderCard({
   cannotCover = [],
   assigned = [],
   shiftChips,
+  coverageSegments,
   notes,
   conflicts,
   isDeclined = false,
@@ -84,18 +88,25 @@ export default function SubFinderCard({
   allShifts = [],
   allCanCover = [],
   allCannotCover = [],
+  allAssigned = [],
 }: SubFinderCardProps) {
   const [isAllShiftsExpanded, setIsAllShiftsExpanded] = useState(false)
   const coveredSegments = Math.min(shiftsCovered, totalShifts)
   const outline = (color: string) => (showDebugOutlines ? { outline: `1px solid ${color}` } : undefined)
 
-  // Build map of available/unavailable shifts for "View all shifts" section
-  const allShiftsStatusMap = new Map<string, 'available' | 'unavailable'>()
-  if (allShifts && allShifts.length > 0 && (allCanCover.length > 0 || allCannotCover.length > 0)) {
+  // Build map of assigned/available/unavailable shifts for "View all shifts" section
+  const allShiftsStatusMap = new Map<string, 'assigned' | 'available' | 'unavailable'>()
+  if (allShifts && allShifts.length > 0 && (allCanCover.length > 0 || allCannotCover.length > 0 || allAssigned.length > 0)) {
+    allAssigned.forEach((shift) => {
+      const key = `${shift.date}|${shift.time_slot_code}`
+      allShiftsStatusMap.set(key, 'assigned')
+    })
     // Add can cover shifts
     allCanCover.forEach((shift) => {
       const key = `${shift.date}|${shift.time_slot_code}`
-      allShiftsStatusMap.set(key, 'available')
+      if (!allShiftsStatusMap.has(key)) {
+        allShiftsStatusMap.set(key, 'available')
+      }
     })
     
     // Add cannot cover shifts
@@ -112,35 +123,48 @@ export default function SubFinderCard({
     if (isDeclined) {
       return <p className="text-xs text-muted-foreground">Declined all shifts</p>
     }
+    const normalizedSegments = coverageSegments?.length
+      ? [
+          ...coverageSegments.slice(0, totalShifts),
+          ...Array.from({ length: Math.max(0, totalShifts - coverageSegments.length) }).fill(
+            'unavailable'
+          ),
+        ]
+      : null
     return (
-      <div className="text-right flex flex-col items-end">
-        <div className="mb-1.5">
-          <div className="h-2 min-w-[64px] rounded-full overflow-hidden flex gap-0.5">
+      <div className="text-right flex w-full flex-col items-end">
+        <div className="mb-1.5 flex w-full justify-end">
+          <div className="h-2 rounded-full overflow-hidden flex gap-0.5">
             {totalShifts === 0 ? (
               <div
                 className="h-full w-[14px] rounded border"
                 style={{
-                  backgroundColor: '#d1d5db',
-                  borderColor: '#d1d5db',
+                  backgroundColor: shiftStatusColorValues.unavailable.border,
+                  borderColor: shiftStatusColorValues.unavailable.border,
                 }}
               />
             ) : (
-              Array.from({ length: totalShifts }).map((_, index) => {
-                const colors =
-                  index < coveredSegments
-                    ? { backgroundColor: '#a7f3d0', borderColor: '#a7f3d0' }
-                    : { backgroundColor: '#d1d5db', borderColor: '#d1d5db' }
-                return (
-                  <div
-                    key={`segment-${index}`}
-                    className="h-full rounded border"
-                    style={{
-                      width: '14px',
-                      ...colors,
-                    }}
-                  />
-                )
-              })
+              (normalizedSegments ?? Array.from({ length: totalShifts }).map(() => 'available')).map(
+                (status, index) => {
+                  const colors =
+                    normalizedSegments === null
+                      ? index < coveredSegments
+                        ? shiftStatusColorValues.available
+                        : shiftStatusColorValues.unavailable
+                      : shiftStatusColorValues[status]
+                  return (
+                    <div
+                      key={`segment-${index}`}
+                      className="h-full rounded border"
+                      style={{
+                        width: '14px',
+                        backgroundColor: colors.border,
+                        borderColor: colors.border,
+                      }}
+                    />
+                  )
+                }
+              )
             )}
           </div>
         </div>
@@ -164,7 +188,7 @@ export default function SubFinderCard({
         className="pt-4 px-4 pb-1.5 flex flex-col gap-2"
         style={outline('#60a5fa')}
       >
-        <div className="flex items-stretch gap-4">
+        <div className="flex w-full items-stretch justify-between gap-4">
           <div className="min-w-0 flex-1 pr-2" style={outline('#34d399')}>
             <SubCardHeader
               name={name}
@@ -220,7 +244,10 @@ export default function SubFinderCard({
             </div>
           )}
         </div>
-        <div className="ml-auto flex flex-col justify-between items-end shrink-0" style={outline('#fbbf24')}>
+        <div
+          className="ml-auto flex flex-col justify-between items-end shrink-0"
+          style={outline('#fbbf24')}
+        >
           {renderCoverageBar()}
         </div>
       </div>
@@ -298,15 +325,15 @@ export default function SubFinderCard({
             cannotCover={allCannotCover}
             shifts={allShifts.map((shift) => {
               const key = `${shift.date}|${shift.time_slot_code}`
-              const status = allShiftsStatusMap.get(key) || 'unavailable'
-              return {
-                date: shift.date,
-                time_slot_code: shift.time_slot_code,
-                status: status === 'available' ? 'available' : 'unavailable',
-                classroom_name: shift.classroom_name || null,
-                class_name: shift.class_name || null,
-              }
-            })}
+      const status = allShiftsStatusMap.get(key) || 'unavailable'
+      return {
+        date: shift.date,
+        time_slot_code: shift.time_slot_code,
+        status: status === 'assigned' ? 'assigned' : status === 'available' ? 'available' : 'unavailable',
+        classroom_name: shift.classroom_name || null,
+        class_name: shift.class_name || null,
+      }
+    })}
             isDeclined={isDeclined}
             recommendedShifts={canCover}
           />
