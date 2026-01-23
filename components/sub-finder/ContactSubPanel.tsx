@@ -1464,8 +1464,8 @@ export default function ContactSubPanel({
                   )}
                   {!isDeclinedWithShiftsSelected && (
                     <Button
-                      variant="outline"
-                      className={cn('flex-1', getButtonColors('teal').base)}
+                      variant="default"
+                      className="flex-1 !bg-teal-600 !text-white hover:!bg-teal-700"
                       onClick={responseStatus === 'declined_all' && selectedShiftsCount === 0 ? handleMarkAsDeclinedSave : handleAssignShifts}
                       disabled={loading || fetching || !coverageRequestId || (responseStatus !== 'declined_all' && selectedShiftsCount === 0) || isSubInactive}
                     >
