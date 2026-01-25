@@ -90,6 +90,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
   const [teacherClasses, setTeacherClasses] = useState<string[]>([])
   const [createTimeOffForMissing, setCreateTimeOffForMissing] = useState(false)
   const isInitialMountRef = useRef(true)
+  const shiftIdsKey = useMemo(() => shifts.map(shift => shift.id).join('|'), [shifts])
 
   // Get display name helper
   const getDisplayName = (
@@ -317,17 +318,18 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
 
   // Check conflicts when sub and shifts are available
   useEffect(() => {
-    if (!subId || !coverageRequestId || shifts.length === 0) return
+    if (!subId || !coverageRequestId || !shiftIdsKey) return
 
     const checkConflicts = async () => {
       try {
+        const shiftIds = shiftIdsKey.split('|').filter(Boolean)
         const response = await fetch('/api/sub-finder/check-conflicts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             sub_id: subId,
             coverage_request_id: coverageRequestId,
-            shift_ids: shifts.map(s => s.id),
+            shift_ids: shiftIds,
           }),
         })
 
@@ -355,7 +357,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
     }
 
     checkConflicts()
-  }, [subId, coverageRequestId, shifts.length])
+  }, [subId, coverageRequestId, shiftIdsKey])
 
   // Format date for display
   const formatDate = (dateString: string) => {

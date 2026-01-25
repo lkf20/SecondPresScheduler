@@ -64,10 +64,19 @@ export default function WeeklySchedulePage() {
   const { data: scheduleSettings, isLoading: isLoadingSettings } = useScheduleSettings()
   const { data: filterOptions, isLoading: isLoadingFilters } = useFilterOptions()
 
-  const selectedDayIds = scheduleSettings?.selected_day_ids || []
-  const availableDays = filterOptions?.days || []
-  const availableTimeSlots = filterOptions?.timeSlots || []
-  const availableClassrooms = filterOptions?.classrooms || []
+  const selectedDayIds = useMemo(
+    () => scheduleSettings?.selected_day_ids || [],
+    [scheduleSettings?.selected_day_ids]
+  )
+  const availableDays = useMemo(() => filterOptions?.days || [], [filterOptions?.days])
+  const availableTimeSlots = useMemo(
+    () => filterOptions?.timeSlots || [],
+    [filterOptions?.timeSlots]
+  )
+  const availableClassrooms = useMemo(
+    () => filterOptions?.classrooms || [],
+    [filterOptions?.classrooms]
+  )
 
   const loading = isLoadingSchedule || isLoadingSettings || isLoadingFilters
   const error = scheduleError
@@ -144,9 +153,9 @@ export default function WeeklySchedulePage() {
     }
   }, [
     filters,
-    availableDays.length,
-    availableTimeSlots.length,
-    availableClassrooms.length,
+    availableDays,
+    availableTimeSlots,
+    availableClassrooms,
     selectedDayIds,
   ])
 

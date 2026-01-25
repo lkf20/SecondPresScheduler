@@ -46,10 +46,19 @@ export default function BaselineSchedulePage() {
   const { data: scheduleSettings, isLoading: isLoadingSettings } = useScheduleSettings()
   const { data: filterOptions, isLoading: isLoadingFilters } = useFilterOptions()
 
-  const selectedDayIds = scheduleSettings?.selected_day_ids || []
-  const availableDays = filterOptions?.days || []
-  const availableTimeSlots = filterOptions?.timeSlots || []
-  const availableClassrooms = filterOptions?.classrooms || []
+  const selectedDayIds = useMemo(
+    () => scheduleSettings?.selected_day_ids || [],
+    [scheduleSettings?.selected_day_ids]
+  )
+  const availableDays = useMemo(() => filterOptions?.days || [], [filterOptions?.days])
+  const availableTimeSlots = useMemo(
+    () => filterOptions?.timeSlots || [],
+    [filterOptions?.timeSlots]
+  )
+  const availableClassrooms = useMemo(
+    () => filterOptions?.classrooms || [],
+    [filterOptions?.classrooms]
+  )
 
   const loading = isLoadingSchedule || isLoadingSettings || isLoadingFilters
   const error = scheduleError
@@ -126,9 +135,9 @@ export default function BaselineSchedulePage() {
     }
   }, [
     filters,
-    availableDays.length,
-    availableTimeSlots.length,
-    availableClassrooms.length,
+    availableDays,
+    availableTimeSlots,
+    availableClassrooms,
     selectedDayIds,
   ])
 
@@ -285,13 +294,13 @@ export default function BaselineSchedulePage() {
     // Calculate total slots if all filters were selected
     // Only use days that are selected in Settings (not all available days)
     const totalIfAllSelected =
-      sortedDays.length * availableTimeSlots.length * availableClassrooms.length
+      selectedDayIds.length * availableTimeSlots.length * availableClassrooms.length
 
     return {
       shown: totalShown,
       total: totalIfAllSelected,
     }
-  }, [filteredData, sortedDays, availableTimeSlots, availableClassrooms])
+  }, [filteredData, selectedDayIds.length, availableTimeSlots, availableClassrooms])
 
   return (
     <div>

@@ -166,7 +166,7 @@ export default function FilterPanel({
         }))
       }
     }
-  }, [initialFilters?.displayMode, hideStaffSection, filters.displayMode])
+  }, [initialFilters, hideStaffSection, filters.displayMode])
 
   // Ensure displayMode is permanent-only when hideStaffSection is true
   useEffect(() => {
