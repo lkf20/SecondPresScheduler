@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import React, { useState, useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
+import type { Resolver, SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useQueryClient } from '@tanstack/react-query'
@@ -56,7 +57,6 @@ type TimeOffFormData = z.infer<typeof timeOffSchema>
 interface TimeOffFormProps {
   onSuccess?: (teacherName: string, startDate: string, endDate: string) => void
   onCancel?: () => void
-  showBackLink?: boolean
   onHasUnsavedChanges?: (hasChanges: boolean) => void
   clearDraftOnMount?: boolean // Force clear draft when component mounts
   timeOffRequestId?: string | null // ID of time off request to edit
@@ -67,7 +67,6 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     {
       onSuccess,
       onCancel,
-      showBackLink = true,
       onHasUnsavedChanges,
       clearDraftOnMount = false,
       timeOffRequestId = null,
@@ -154,7 +153,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     const {
       register,
       handleSubmit,
-      formState: { errors, isSubmitting, isDirty, touchedFields },
+      formState: { errors, isSubmitting },
       setValue,
       setError: setFormError,
       clearErrors,
@@ -162,7 +161,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       reset,
       getValues,
     } = useForm<TimeOffFormData>({
-      resolver: zodResolver(timeOffSchema) as any,
+      resolver: zodResolver(timeOffSchema) as Resolver<TimeOffFormData>,
       defaultValues: {
         shift_selection_mode: 'all_scheduled',
       },
@@ -534,7 +533,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       }
     }, [shiftMode, selectedShifts.length, clearErrors])
 
-    const onSubmit = async (data: TimeOffFormData) => {
+    const onSubmit: SubmitHandler<TimeOffFormData> = async data => {
       try {
         setError(null)
         if (allShiftsRecorded) {
@@ -607,19 +606,6 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         const teacherName = teacher
           ? teacher.display_name || `${teacher.first_name} ${teacher.last_name}`.trim()
           : 'Teacher'
-
-        // Format date range
-        const formatDateForToast = (dateStr: string) => {
-          const [year, month, day] = dateStr.split('-').map(Number)
-          const date = new Date(year, month - 1, day)
-          return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-        }
-        const startDateFormatted = formatDateForToast(data.start_date)
-        const endDateFormatted = formatDateForToast(effectiveEndDate)
-        const dateRange =
-          startDateFormatted === endDateFormatted
-            ? startDateFormatted
-            : `${startDateFormatted}-${endDateFormatted}`
 
         // Show warning if shifts were excluded
         if (responseData.warning) {
@@ -813,7 +799,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         )}
 
         {!isLoadingRequest && (
-          <form onSubmit={handleSubmit(onSubmit as any)} className="flex-1 flex flex-col">
+          <form onSubmit={handleSubmit(onSubmit)} className="flex-1 flex flex-col">
             <div className="flex-1 overflow-y-auto space-y-6">
               <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-6">
                 <FormField label="Teacher" error={errors.teacher_id?.message} required>
@@ -973,7 +959,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                   />
                   {conflictSummary.conflictCount > 0 && (
                     <p className="text-xs text-muted-foreground">
-                      Already recorded shifts are locked and can't be selected.
+                      Already recorded shifts are locked and can&apos;t be selected.
                     </p>
                   )}
                 </div>

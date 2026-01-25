@@ -18,6 +18,41 @@ type TeacherScheduleEntry = {
   time_slots: { code: string | null; name: string | null } | null
 }
 
+type TeacherScheduleRow = {
+  day_of_week_id: string | null
+  time_slot_id: string | null
+  days_of_week:
+    | { name?: string | null; day_number?: number | null }
+    | Array<{ name?: string | null; day_number?: number | null }>
+    | null
+  time_slots:
+    | { code?: string | null; name?: string | null }
+    | Array<{ code?: string | null; name?: string | null }>
+    | null
+}
+
+type TimeOffRequestSummary = {
+  id: string
+  start_date: string
+  end_date: string | null
+  reason: string | null
+  teacher_id: string
+}
+
+type TimeOffShiftRow = {
+  date: string
+  time_slot_id: string
+  time_off_request_id: string
+  time_off_requests: TimeOffRequestSummary | TimeOffRequestSummary[] | null
+}
+
+type TimeOffShiftWithRequest = {
+  date: string
+  time_slot_id: string
+  time_off_request_id: string
+  time_off_requests: TimeOffRequestSummary | null
+}
+
 export async function getTimeOffShifts(requestId: string): Promise<TimeOffShiftWithDetails[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -109,7 +144,7 @@ export async function getTeacherScheduledShifts(
 
   // Transform the data to match TeacherScheduleEntry interface
   // Handle both array and object formats from Supabase
-  const transformedSchedule: TeacherScheduleEntry[] = schedule.map((entry: any) => {
+  const transformedSchedule: TeacherScheduleEntry[] = schedule.map((entry: TeacherScheduleRow) => {
     // Handle days_of_week - could be array or object
     let daysOfWeek = null
     if (entry.days_of_week) {
@@ -284,11 +319,10 @@ export async function getTeacherTimeOffShifts(
   if (!data) return []
 
   // Transform the data to match the expected return type
-  return data.map((item: any) => {
-    const timeOffRequest =
-      Array.isArray(item.time_off_requests) && item.time_off_requests.length > 0
-        ? item.time_off_requests[0]
-        : null
+  return data.map((item: TimeOffShiftRow) => {
+    const timeOffRequest = Array.isArray(item.time_off_requests)
+      ? item.time_off_requests[0] ?? null
+      : item.time_off_requests ?? null
 
     return {
       date: item.date,
@@ -304,18 +338,7 @@ export async function getTeacherTimeOffShifts(
           }
         : null,
     }
-  }) as Array<{
-    date: string
-    time_slot_id: string
-    time_off_request_id: string
-    time_off_requests: {
-      id: string
-      start_date: string
-      end_date: string | null
-      reason: string | null
-      teacher_id: string
-    }
-  }>
+  }) as TimeOffShiftWithRequest[]
 }
 
 export async function getTimeOffCoverageSummary(request: {

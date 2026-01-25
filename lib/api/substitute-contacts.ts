@@ -71,6 +71,14 @@ interface CoverageShift {
   days_of_week?: { name: string | null } | null
 }
 
+type CoverageShiftRow = {
+  id: string
+  date: string
+  time_slot_id: string
+  time_slots: Array<{ code: string | null }> | { code: string | null } | null
+  days_of_week: Array<{ name: string | null }> | { name: string | null } | null
+}
+
 /**
  * Get or create a substitute contact for a coverage request and sub
  */
@@ -202,7 +210,7 @@ export async function getSubstituteContact(
       if (coverageShifts) {
         // Create a map of (date, time_slot_id) -> coverage_request_shift for quick lookup
         const shiftMap = new Map<string, CoverageShift>()
-        coverageShifts.forEach((shift: any) => {
+        coverageShifts.forEach((shift: CoverageShiftRow) => {
           const key = `${shift.date}|${shift.time_slot_id}`
           // Transform the data to match CoverageShift interface
           const transformedShift: CoverageShift = {

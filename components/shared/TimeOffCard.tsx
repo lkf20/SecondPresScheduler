@@ -19,7 +19,6 @@ import { parseLocalDate } from '@/lib/utils/date'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import {
   getButtonColors,
-  getCoverageColorClasses,
   getNeutralChipClasses,
   coverageColorValues,
 } from '@/lib/utils/colors'

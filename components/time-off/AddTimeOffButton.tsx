@@ -40,7 +40,6 @@ export default function AddTimeOffButton({
   const [isTimeOffSheetOpen, setIsTimeOffSheetOpen] = useState(!!timeOffRequestId)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
-  const [pendingClose, setPendingClose] = useState(false)
   const [clearDraftOnMount, setClearDraftOnMount] = useState(!timeOffRequestId)
   const [editingRequestId, setEditingRequestId] = useState<string | null>(timeOffRequestId || null)
   const timeOffFormRef = useRef<{ reset: () => void }>(null)
@@ -104,7 +103,6 @@ export default function AddTimeOffButton({
   const handleCloseSheet = (open: boolean) => {
     if (!open && hasUnsavedChanges) {
       // Prevent closing and show warning dialog
-      setPendingClose(true)
       setShowUnsavedDialog(true)
       // Keep sheet open
       setIsTimeOffSheetOpen(true)

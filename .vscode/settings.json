@@ -1,0 +1,10 @@
+{
+  "terminal.integrated.cwd": "/Users/lisafrist/Desktop/Projects/SecondPres/scheduler-app",
+  "terminal.integrated.defaultProfile.osx": "project-zsh",
+  "terminal.integrated.profiles.osx": {
+    "project-zsh": {
+      "path": "/bin/zsh",
+      "args": ["-l", "-c", "cd /Users/lisafrist/Desktop/Projects/SecondPres/scheduler-app && exec zsh"]
+    }
+  }
+}

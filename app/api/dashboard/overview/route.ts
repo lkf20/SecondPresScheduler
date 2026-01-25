@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
       .map(cr => cr.source_request_id)
       .filter((id): id is string => id !== null)
 
-    let timeOffRequestsMap = new Map<string, { reason: string | null; notes: string | null }>()
+    const timeOffRequestsMap = new Map<string, { reason: string | null; notes: string | null }>()
 
     if (sourceRequestIds.length > 0) {
       const { data: timeOffRequests, error: timeOffError } = await supabase

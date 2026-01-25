@@ -1,6 +1,7 @@
 'use client'
 
 import { useForm } from 'react-hook-form'
+import type { Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useState, useEffect } from 'react'
@@ -47,7 +48,6 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
     existingTeacher: { first_name: string; last_name: string; email: string | null }
   } | null>(null)
   const [proceedWithDuplicate, setProceedWithDuplicate] = useState(false)
-  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false)
 
   const {
     register,
@@ -56,7 +56,7 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
     setValue,
     watch,
   } = useForm<TeacherFormData>({
-    resolver: zodResolver(teacherSchema) as any,
+    resolver: zodResolver(teacherSchema) as Resolver<TeacherFormData>,
     defaultValues: teacher
       ? {
           first_name: teacher.first_name,
@@ -92,7 +92,6 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
 
       // Debounce the check
       const timeoutId = setTimeout(async () => {
-        setIsCheckingDuplicate(true)
         try {
           const checkData = {
             first_name: firstName?.trim() || '',
@@ -124,8 +123,6 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
           }
         } catch (error) {
           console.error('Error checking duplicates:', error)
-        } finally {
-          setIsCheckingDuplicate(false)
         }
       }, 500) // 500ms debounce
 

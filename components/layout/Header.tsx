@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -45,7 +44,6 @@ export default function Header({ userEmail }: HeaderProps) {
   const [isTimeOffSheetOpen, setIsTimeOffSheetOpen] = useState(false)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
-  const [pendingClose, setPendingClose] = useState(false)
   const [clearDraftOnMount, setClearDraftOnMount] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
   const timeOffFormRef = useRef<{ reset: () => void }>(null)
@@ -100,7 +98,6 @@ export default function Header({ userEmail }: HeaderProps) {
   const handleCloseSheet = (open: boolean) => {
     if (!open && hasUnsavedChanges) {
       // Prevent closing and show warning dialog
-      setPendingClose(true)
       setShowUnsavedDialog(true)
       // Keep sheet open
       setIsTimeOffSheetOpen(true)
@@ -124,7 +121,6 @@ export default function Header({ userEmail }: HeaderProps) {
     }
     setHasUnsavedChanges(false)
     setShowUnsavedDialog(false)
-    setPendingClose(false)
     // Close the sheet
     setIsTimeOffSheetOpen(false)
     setActivePanel(null)
@@ -135,7 +131,6 @@ export default function Header({ userEmail }: HeaderProps) {
 
   const handleKeepEditing = () => {
     setShowUnsavedDialog(false)
-    setPendingClose(false)
     // Keep sheet open (already open)
   }
 

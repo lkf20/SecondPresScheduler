@@ -13,6 +13,12 @@ module.exports = {
       },
     },
     {
+      files: ['scripts/**/*.js'],
+      rules: {
+        '@typescript-eslint/no-require-imports': 'off',
+      },
+    },
+    {
       files: ['**/__tests__/**', '**/*.test.ts', '**/*.test.tsx', '**/*.test.js', '**/*.test.mjs'],
       rules: {
         '@typescript-eslint/no-explicit-any': 'off',

@@ -16,12 +16,6 @@ import { useScheduleSettings } from '@/lib/hooks/use-schedule-settings'
 import { useFilterOptions } from '@/lib/hooks/use-filter-options'
 import { invalidateWeeklySchedule } from '@/lib/utils/invalidation'
 import { useSchool } from '@/lib/contexts/SchoolContext'
-import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
-import type { Database } from '@/types/database'
-
-type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
-type TimeSlot = Database['public']['Tables']['time_slots']['Row']
-type Classroom = Database['public']['Tables']['classrooms']['Row']
 
 // Calculate Monday of current week as ISO string for query key
 function getWeekStartISO(): string {
@@ -70,10 +64,19 @@ export default function WeeklySchedulePage() {
   const { data: scheduleSettings, isLoading: isLoadingSettings } = useScheduleSettings()
   const { data: filterOptions, isLoading: isLoadingFilters } = useFilterOptions()
 
-  const selectedDayIds = scheduleSettings?.selected_day_ids || []
-  const availableDays = filterOptions?.days || []
-  const availableTimeSlots = filterOptions?.timeSlots || []
-  const availableClassrooms = filterOptions?.classrooms || []
+  const selectedDayIds = useMemo(
+    () => scheduleSettings?.selected_day_ids || [],
+    [scheduleSettings?.selected_day_ids]
+  )
+  const availableDays = useMemo(() => filterOptions?.days || [], [filterOptions?.days])
+  const availableTimeSlots = useMemo(
+    () => filterOptions?.timeSlots || [],
+    [filterOptions?.timeSlots]
+  )
+  const availableClassrooms = useMemo(
+    () => filterOptions?.classrooms || [],
+    [filterOptions?.classrooms]
+  )
 
   const loading = isLoadingSchedule || isLoadingSettings || isLoadingFilters
   const error = scheduleError
@@ -150,9 +153,9 @@ export default function WeeklySchedulePage() {
     }
   }, [
     filters,
-    availableDays.length,
-    availableTimeSlots.length,
-    availableClassrooms.length,
+    availableDays,
+    availableTimeSlots,
+    availableClassrooms,
     selectedDayIds,
   ])
 
@@ -208,19 +211,6 @@ export default function WeeklySchedulePage() {
       queryClient.invalidateQueries({ queryKey: ['scheduleSettings', schoolId] })
     }
   }
-
-  // Sort days - only show days selected in Settings > Days and Time Slots
-  const sortedDays = useMemo(() => {
-    const filtered =
-      selectedDayIds.length > 0
-        ? availableDays.filter(day => selectedDayIds.includes(day.id))
-        : availableDays
-    return filtered.sort((a, b) => {
-      const aNum = a.day_number === 0 ? 7 : a.day_number
-      const bNum = b.day_number === 0 ? 7 : b.day_number
-      return aNum - bNum
-    })
-  }, [availableDays, selectedDayIds])
 
   // Apply filters to data
   const filteredData = useMemo(() => {
@@ -310,8 +300,6 @@ export default function WeeklySchedulePage() {
                         scheduleCell.enrollment_for_staffing / classGroupForRatio.preferred_ratio
                       )
                     : undefined
-
-                  const classGroupIds = classGroups.map(cg => cg.id)
 
                   // Count all teachers assigned to this classroom/day/time slot for coverage
                   // Teachers are assigned to classrooms, not specific class groups

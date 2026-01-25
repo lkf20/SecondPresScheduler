@@ -3,7 +3,6 @@ import { revalidatePath } from 'next/cache'
 import {
   getTimeOffRequestById,
   updateTimeOffRequest,
-  deleteTimeOffRequest,
   getActiveSubAssignmentsForTimeOffRequest,
   cancelTimeOffRequest,
 } from '@/lib/api/time-off'

@@ -1,8 +1,7 @@
 'use client'
 
-/* eslint-disable react-hooks/incompatible-library */
-
 import { useForm } from 'react-hook-form'
+import type { Resolver, SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { Button } from '@/components/ui/button'
@@ -43,7 +42,7 @@ export default function SubForm({ sub, onSubmit, onCancel }: SubFormProps) {
     setValue,
     watch,
   } = useForm<SubFormData>({
-    resolver: zodResolver(subSchema) as any,
+    resolver: zodResolver(subSchema) as Resolver<SubFormData>,
     defaultValues: sub
       ? {
           first_name: sub.first_name,
@@ -63,8 +62,10 @@ export default function SubForm({ sub, onSubmit, onCancel }: SubFormProps) {
   const active = watch('active')
   const isTeacher = watch('is_teacher')
 
+  const handleFormSubmit: SubmitHandler<SubFormData> = data => onSubmit(data)
+
   return (
-    <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
+    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <FormField label="First Name" error={errors.first_name?.message} required>
           <Input {...register('first_name')} />

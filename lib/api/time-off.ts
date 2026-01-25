@@ -191,7 +191,7 @@ export async function cancelTimeOffRequest(
     // Get the coverage request details
     const { data: coverageRequest, error: crError } = await supabase
       .from('coverage_requests')
-      .select('*')
+      .select('id, teacher_id, school_id')
       .eq('id', coverageRequestId)
       .single()
 
@@ -221,7 +221,7 @@ export async function cancelTimeOffRequest(
     const endDate = dates[dates.length - 1]
 
     // Get school_id from the original coverage request
-    const schoolId = (coverageRequest as any).school_id || '00000000-0000-0000-0000-000000000001'
+    const schoolId = coverageRequest.school_id || '00000000-0000-0000-0000-000000000001'
 
     // Create new coverage request for extra coverage
     const { data: newCoverageRequest, error: newCrError } = await supabase
