@@ -79,6 +79,16 @@ interface ScheduleSidePanelProps {
   onSave?: () => void
 }
 
+const mapAssignmentsToTeachers = (assignments?: WeeklyScheduleData['assignments']): Teacher[] => {
+  if (!assignments) return []
+  return assignments.map(assignment => ({
+    id: assignment.teacher_id,
+    name: assignment.teacher_name || 'Unknown',
+    teacher_id: assignment.teacher_id,
+    is_floater: assignment.is_floater ?? false,
+  }))
+}
+
 export default function ScheduleSidePanel({
   isOpen,
   onClose,
@@ -108,6 +118,7 @@ export default function ScheduleSidePanel({
   const [enrollment, setEnrollment] = useState<number | null>(null)
   const [notes, setNotes] = useState<string | null>(null)
   const [selectedTeachers, setSelectedTeachers] = useState<Teacher[]>([])
+  const [isLoadingTeachers, setIsLoadingTeachers] = useState(false)
   const [allowedClassGroupIds, setAllowedClassGroupIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -136,7 +147,26 @@ export default function ScheduleSidePanel({
   const preserveTeachersRef = useRef(false)
   // Store teachers in ref so we can preserve them even if state hasn't updated
   const selectedTeachersRef = useRef<Teacher[]>([])
+  const teachersLoadedRef = useRef(false)
   const classGroupsRef = useRef<ClassGroupWithMeta[]>([])
+
+  const fallbackTeachers = selectedCellData?.assignments
+    ? mapAssignmentsToTeachers(selectedCellData.assignments)
+    : []
+  const displayTeachers =
+    selectedTeachers.length > 0 ? selectedTeachers : fallbackTeachers
+
+  useEffect(() => {
+    if (!isOpen) return
+    if (teachersLoadedRef.current) return
+    const mappedTeachers = mapAssignmentsToTeachers(selectedCellData?.assignments)
+    if (mappedTeachers.length === 0) return
+
+    console.log('[ScheduleSidePanel] Seeding teachers from selectedCellData.assignments', {
+      count: mappedTeachers.length,
+    })
+    setSelectedTeachers(mappedTeachers)
+  }, [isOpen, selectedCellData?.assignments])
 
   useEffect(() => {
     selectedTeachersRef.current = selectedTeachers
@@ -195,12 +225,14 @@ export default function ScheduleSidePanel({
       hasLoadedInitialDataRef.current = false
       initialClassGroupIdsRef.current = null
       preserveTeachersRef.current = false
+      teachersLoadedRef.current = false
       return
     }
 
     setLoading(true)
     hasLoadedInitialDataRef.current = false
     initialClassGroupIdsRef.current = null
+    teachersLoadedRef.current = false
 
     // If selectedCellData is provided and has a schedule_cell, use it
     // Note: selectedCellData structure has schedule_cell nested
@@ -227,12 +259,16 @@ export default function ScheduleSidePanel({
         hasLoadedInitialDataRef.current = true
       } else {
         console.log('[ScheduleSidePanel] Initial load - no class groups, setting empty array')
-        setClassGroups([])
-        hasLoadedInitialDataRef.current = true
-      }
+      setClassGroups([])
+      hasLoadedInitialDataRef.current = true
+    }
       setEnrollment(cellData.enrollment_for_staffing)
       setNotes(cellData.notes)
-      // Store original state for auto-activation logic
+      const mappedTeachers = mapAssignmentsToTeachers(selectedCellData.assignments)
+      if (mappedTeachers.length > 0 && !teachersLoadedRef.current) {
+        setSelectedTeachers(mappedTeachers)
+      }
+    // Store original state for auto-activation logic
       const originallyHadData = !!(
         classGroupIds.length > 0 || cellData.enrollment_for_staffing !== null
       )
@@ -499,6 +535,10 @@ export default function ScheduleSidePanel({
   useEffect(() => {
     if (!isOpen) return
 
+    if (!hasLoadedInitialDataRef.current) {
+      return
+    }
+
     // If we should preserve teachers (class groups were just removed), skip fetching
     console.log('[ScheduleSidePanel] Teacher fetch useEffect - checking preserve flag', {
       preserveFlag: preserveTeachersRef.current,
@@ -522,6 +562,7 @@ export default function ScheduleSidePanel({
       // Reset the flag after preserving (but keep teachers)
       preserveTeachersRef.current = false
       previousClassGroupIdsRef.current = classGroupIds
+      teachersLoadedRef.current = true
       return
     }
 
@@ -532,6 +573,7 @@ export default function ScheduleSidePanel({
     })
 
     // Fetch directly from teacher-schedules API for most up-to-date data
+    setIsLoadingTeachers(true)
     fetch('/api/teacher-schedules')
       .then(r => {
         if (!r.ok) {
@@ -556,14 +598,8 @@ export default function ScheduleSidePanel({
             return true
           }
 
-          // If classGroupIds is set, also filter by class_id (teacher schedules still use single class_id)
-          if (classGroupIds.length > 0) {
-            return schedule.class_id && classGroupIds.includes(schedule.class_id)
-          }
-
-          // If no class groups, show ALL teachers for this location (they may have old class_id from previous assignment)
-          // This prevents teachers from disappearing when class groups are removed
-          // They will be updated to null class_id when saved
+          // Teachers are assigned to the slot (classroom/day/time), not the class group,
+          // so show all teachers for this location regardless of class_id.
           return true
         })
 
@@ -592,10 +628,21 @@ export default function ScheduleSidePanel({
           })),
         })
 
+        if (teachers.length === 0 && selectedTeachersRef.current.length > 0) {
+          // Avoid clearing a visible list while data is still stabilizing
+          previousClassGroupIdsRef.current = classGroupIds
+          preserveTeachersRef.current = false
+          teachersLoadedRef.current = true
+          setIsLoadingTeachers(false)
+          return
+        }
+
         // Update the ref before setting teachers
         previousClassGroupIdsRef.current = classGroupIds
         // Reset preserve flag after fetch completes - teachers are now loaded/updated
         preserveTeachersRef.current = false
+        teachersLoadedRef.current = true
+        setIsLoadingTeachers(false)
         setSelectedTeachers(teachers)
       })
       .catch(err => {
@@ -604,11 +651,14 @@ export default function ScheduleSidePanel({
         if (preserveTeachersRef.current && selectedTeachersRef.current.length > 0) {
           preserveTeachersRef.current = false
           previousClassGroupIdsRef.current = classGroupIds
+          setIsLoadingTeachers(false)
           return
         }
 
         previousClassGroupIdsRef.current = classGroupIds
         preserveTeachersRef.current = false
+        teachersLoadedRef.current = true
+        setIsLoadingTeachers(false)
         setSelectedTeachers([])
       })
   }, [isOpen, classroomId, dayId, timeSlotId, classGroupIds])
@@ -1338,8 +1388,13 @@ export default function ScheduleSidePanel({
                   <Label className="text-base font-medium text-foreground block mb-6">
                     Assigned Teachers
                   </Label>
+                  {isLoadingTeachers && displayTeachers.length === 0 && (
+                    <div className="text-sm text-muted-foreground mb-3">
+                      Loading assigned teachers…
+                    </div>
+                  )}
                   <TeacherMultiSelect
-                    selectedTeachers={selectedTeachers}
+                    selectedTeachers={displayTeachers}
                     onTeachersChange={teachers => setSelectedTeachers(teachers)}
                     requiredCount={classGroupIds.length > 0 ? requiredTeachers : undefined}
                     preferredCount={classGroupIds.length > 0 ? preferredTeachers : undefined}
@@ -1347,7 +1402,7 @@ export default function ScheduleSidePanel({
                   />
 
                   {/* Warning message when teachers are assigned but no class groups */}
-                  {classGroupIds.length === 0 && selectedTeachers.length > 0 && (
+                  {classGroupIds.length === 0 && displayTeachers.length > 0 && (
                     <div className="bg-amber-50 border border-amber-200 rounded-md p-3 mt-4">
                       <p className="text-sm text-amber-800">
                         Teachers are assigned. Add class groups to filter by qualifications and

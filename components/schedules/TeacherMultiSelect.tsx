@@ -109,14 +109,17 @@ export default function TeacherMultiSelect({
     handleToggle(teacherId, false)
   }
 
-  const selectedTeachersList = teachers
-    .filter(t => selectedIds.has(t.id))
-    .sort((a, b) => {
-      // Sort by display_name first, then first_name if no display_name
-      const nameA = a.display_name || a.first_name || ''
-      const nameB = b.display_name || b.first_name || ''
-      return nameA.localeCompare(nameB)
-    })
+  const selectedTeachersList =
+    teachers.length > 0
+      ? teachers
+          .filter(t => selectedIds.has(t.id))
+          .sort((a, b) => {
+            // Sort by display_name first, then first_name if no display_name
+            const nameA = a.display_name || a.first_name || ''
+            const nameB = b.display_name || b.first_name || ''
+            return nameA.localeCompare(nameB)
+          })
+      : [...selectedTeachers].sort((a, b) => a.name.localeCompare(b.name))
   const assignedCount = selectedTeachersList.length
 
   // Close dropdown when clicking outside
