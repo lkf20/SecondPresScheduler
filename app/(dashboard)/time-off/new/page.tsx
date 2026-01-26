@@ -47,7 +47,7 @@ export default function NewTimeOffPage() {
 
       <div className="max-w-2xl">
         <div className="rounded-lg bg-gray-50 border border-gray-200 p-6">
-          <TimeOffForm onSuccess={handleSuccess} showBackLink={false} />
+          <TimeOffForm onSuccess={handleSuccess} />
         </div>
       </div>
     </div>

@@ -375,7 +375,6 @@ export default function Header({ userEmail }: HeaderProps) {
               ref={timeOffFormRef}
               onSuccess={handleTimeOffSuccess}
               onCancel={() => handleCloseSheet(false)}
-              showBackLink={false}
               onHasUnsavedChanges={setHasUnsavedChanges}
               clearDraftOnMount={clearDraftOnMount}
             />

@@ -144,46 +144,52 @@ export async function getTeacherScheduledShifts(
 
   // Transform the data to match TeacherScheduleEntry interface
   // Handle both array and object formats from Supabase
-  const transformedSchedule: TeacherScheduleEntry[] = schedule.map((entry: TeacherScheduleRow) => {
-    // Handle days_of_week - could be array or object
-    let daysOfWeek = null
-    if (entry.days_of_week) {
-      if (Array.isArray(entry.days_of_week) && entry.days_of_week.length > 0) {
-        daysOfWeek = {
-          name: entry.days_of_week[0]?.name ?? null,
-          day_number: entry.days_of_week[0]?.day_number ?? null,
-        }
-      } else if (typeof entry.days_of_week === 'object' && entry.days_of_week.name !== undefined) {
-        daysOfWeek = {
-          name: entry.days_of_week.name ?? null,
-          day_number: entry.days_of_week.day_number ?? null,
+  const transformedSchedule = schedule
+    .map((entry: TeacherScheduleRow): TeacherScheduleEntry | null => {
+      if (!entry.day_of_week_id || !entry.time_slot_id) {
+        return null
+      }
+
+      // Handle days_of_week - could be array or object
+      let daysOfWeek: TeacherScheduleEntry['days_of_week'] = null
+      if (entry.days_of_week) {
+        if (Array.isArray(entry.days_of_week) && entry.days_of_week.length > 0) {
+          daysOfWeek = {
+            name: entry.days_of_week[0]?.name ?? null,
+            day_number: entry.days_of_week[0]?.day_number ?? null,
+          }
+        } else if (!Array.isArray(entry.days_of_week) && 'name' in entry.days_of_week) {
+          daysOfWeek = {
+            name: entry.days_of_week.name ?? null,
+            day_number: entry.days_of_week.day_number ?? null,
+          }
         }
       }
-    }
 
-    // Handle time_slots - could be array or object
-    let timeSlots = null
-    if (entry.time_slots) {
-      if (Array.isArray(entry.time_slots) && entry.time_slots.length > 0) {
-        timeSlots = {
-          code: entry.time_slots[0]?.code ?? null,
-          name: entry.time_slots[0]?.name ?? null,
-        }
-      } else if (typeof entry.time_slots === 'object' && entry.time_slots.code !== undefined) {
-        timeSlots = {
-          code: entry.time_slots.code ?? null,
-          name: entry.time_slots.name ?? null,
+      // Handle time_slots - could be array or object
+      let timeSlots: TeacherScheduleEntry['time_slots'] = null
+      if (entry.time_slots) {
+        if (Array.isArray(entry.time_slots) && entry.time_slots.length > 0) {
+          timeSlots = {
+            code: entry.time_slots[0]?.code ?? null,
+            name: entry.time_slots[0]?.name ?? null,
+          }
+        } else if (!Array.isArray(entry.time_slots) && 'code' in entry.time_slots) {
+          timeSlots = {
+            code: entry.time_slots.code ?? null,
+            name: entry.time_slots.name ?? null,
+          }
         }
       }
-    }
 
-    return {
-      day_of_week_id: entry.day_of_week_id,
-      time_slot_id: entry.time_slot_id,
-      days_of_week: daysOfWeek,
-      time_slots: timeSlots,
-    }
-  })
+      return {
+        day_of_week_id: entry.day_of_week_id,
+        time_slot_id: entry.time_slot_id,
+        days_of_week: daysOfWeek,
+        time_slots: timeSlots,
+      }
+    })
+    .filter((entry): entry is TeacherScheduleEntry => entry !== null)
 
   console.log(
     '[getTeacherScheduledShifts] Transformed schedule entries:',

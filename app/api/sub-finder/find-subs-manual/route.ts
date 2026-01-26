@@ -293,6 +293,9 @@ export async function POST(request: NextRequest) {
 
         const name = sub.display_name || `${sub.first_name} ${sub.last_name}` || 'Unknown'
 
+        const qualificationMatches = 0
+        const qualificationTotal = 0
+
         return {
           id: sub.id,
           name,
