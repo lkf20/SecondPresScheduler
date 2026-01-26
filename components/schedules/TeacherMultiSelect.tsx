@@ -109,14 +109,25 @@ export default function TeacherMultiSelect({
     handleToggle(teacherId, false)
   }
 
-  const selectedTeachersList = teachers
-    .filter(t => selectedIds.has(t.id))
-    .sort((a, b) => {
-      // Sort by display_name first, then first_name if no display_name
-      const nameA = a.display_name || a.first_name || ''
-      const nameB = b.display_name || b.first_name || ''
-      return nameA.localeCompare(nameB)
-    })
+  const selectedTeachersList =
+    teachers.length > 0
+      ? teachers
+          .filter(t => selectedIds.has(t.id))
+          .sort((a, b) => {
+            // Sort by display_name first, then first_name if no display_name
+            const nameA = a.display_name || a.first_name || ''
+            const nameB = b.display_name || b.first_name || ''
+            return nameA.localeCompare(nameB)
+          })
+      : [...selectedTeachers].sort((a, b) => a.name.localeCompare(b.name))
+
+  const getTeacherLabel = (teacher: Staff | Teacher) => {
+    if ('name' in teacher && teacher.name) return teacher.name
+    const displayName = (teacher as Staff).display_name
+    const firstName = (teacher as Staff).first_name || ''
+    const lastName = (teacher as Staff).last_name || ''
+    return displayName || `${firstName} ${lastName}`.trim()
+  }
   const assignedCount = selectedTeachersList.length
 
   // Close dropdown when clicking outside
@@ -142,10 +153,7 @@ export default function TeacherMultiSelect({
       return 'Select teachers...'
     }
     if (selectedTeachersList.length === 1) {
-      return (
-        selectedTeachersList[0].display_name ||
-        `${selectedTeachersList[0].first_name} ${selectedTeachersList[0].last_name}`
-      )
+      return getTeacherLabel(selectedTeachersList[0])
     }
     return `${selectedTeachersList.length} teachers selected`
   }
@@ -259,7 +267,7 @@ export default function TeacherMultiSelect({
                     : 'bg-blue-100 text-blue-800'
                 }`}
               >
-                <span>{teacher.display_name || `${teacher.first_name} ${teacher.last_name}`}</span>
+                <span>{getTeacherLabel(teacher)}</span>
                 <Select
                   value={isFloater ? 'floater' : 'teacher'}
                   onValueChange={value => {

@@ -12,11 +12,9 @@ export default function NewSubPage() {
   const handleSubmit = async (data: SubFormData) => {
     try {
       setError(null)
-      // Convert empty email to null and exclude id (should not be sent for new subs)
-      const { id, ...subData } = data
-      void id
+      // Convert empty email to null (id isn't part of SubFormData)
       const payload = {
-        ...subData,
+        ...data,
         email: data.email && data.email.trim() !== '' ? data.email : null,
         is_sub: true, // Always true when creating from sub form
         is_teacher: data.is_teacher ?? false, // Include the checkbox value

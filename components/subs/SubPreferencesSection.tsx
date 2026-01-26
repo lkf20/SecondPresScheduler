@@ -143,6 +143,16 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
   }
 
   const selectedClassIds = classPreferences.map(p => p.class_id)
+  const normalizedQualifications = qualifications.map(q => ({
+    ...q,
+    qualification: q.qualification
+      ? {
+          ...q.qualification,
+          is_system: (q.qualification as { is_system?: boolean }).is_system ?? false,
+          is_active: (q.qualification as { is_active?: boolean }).is_active ?? true,
+        }
+      : undefined,
+  }))
 
   return (
     <div className="space-y-8">
@@ -157,7 +167,7 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
       <div>
         <SubQualifications
           subId={subId}
-          qualifications={qualifications}
+          qualifications={normalizedQualifications}
           onQualificationsChange={handleQualificationsChange}
         />
       </div>

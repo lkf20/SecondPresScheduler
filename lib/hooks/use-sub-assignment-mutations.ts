@@ -39,7 +39,7 @@ export function useAssignSubShifts() {
 
       return response.json()
     },
-    onMutate: async () => {
+    onMutate: async variables => {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: ['subRecommendations', schoolId] })
       await queryClient.cancelQueries({ queryKey: ['dashboard', schoolId] })

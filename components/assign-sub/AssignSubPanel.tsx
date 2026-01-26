@@ -347,7 +347,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
             return {
               ...shift,
               status: conflict.status,
-              conflict_message: conflict.message,
+              conflict_message: conflict.message ?? undefined,
             }
           })
         )

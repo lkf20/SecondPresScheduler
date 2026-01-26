@@ -130,7 +130,6 @@ export default function AddTimeOffButton({
     }
     setHasUnsavedChanges(false)
     setShowUnsavedDialog(false)
-    setPendingClose(false)
     // Close the sheet
     setIsTimeOffSheetOpen(false)
     setEditingRequestId(null) // Reset editing state
@@ -145,7 +144,6 @@ export default function AddTimeOffButton({
 
   const handleKeepEditing = () => {
     setShowUnsavedDialog(false)
-    setPendingClose(false)
     // Keep sheet open (already open)
   }
 
@@ -204,7 +202,6 @@ export default function AddTimeOffButton({
                 ref={timeOffFormRef}
                 onSuccess={handleTimeOffSuccess}
                 onCancel={() => handleCloseSheet(false)}
-                showBackLink={false}
                 onHasUnsavedChanges={setHasUnsavedChanges}
                 clearDraftOnMount={clearDraftOnMount}
                 timeOffRequestId={timeOffRequestId}
@@ -278,7 +275,6 @@ export default function AddTimeOffButton({
               ref={timeOffFormRef}
               onSuccess={handleTimeOffSuccess}
               onCancel={() => handleCloseSheet(false)}
-              showBackLink={false}
               onHasUnsavedChanges={setHasUnsavedChanges}
               clearDraftOnMount={clearDraftOnMount}
               timeOffRequestId={timeOffRequestId}
