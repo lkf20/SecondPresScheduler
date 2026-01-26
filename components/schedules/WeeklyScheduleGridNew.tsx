@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useEffect, useRef } from 'react'
+import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react'
 import { CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
 import ScheduleCell from './ScheduleCell'
 import ScheduleSidePanel from './ScheduleSidePanel'
@@ -144,6 +144,37 @@ export default function WeeklyScheduleGridNew({
     timeSlotEndTime: string | null
     classroomId: string
     classroomName: string
+  } | null>(null)
+  const [selectedCellSnapshot, setSelectedCellSnapshot] = useState<{
+    day_of_week_id: string
+    day_name: string
+    day_number: number
+    time_slot_id: string
+    time_slot_code: string
+    time_slot_name: string | null
+    time_slot_display_order: number | null
+    assignments: WeeklyScheduleData['assignments']
+    schedule_cell: {
+      id: string
+      is_active: boolean
+      enrollment_for_staffing: number | null
+      notes: string | null
+      class_groups?: Array<{
+        id: string
+        name: string
+        min_age: number | null
+        max_age: number | null
+        required_ratio: number
+        preferred_ratio: number | null
+      }>
+    } | null
+    absences?: Array<{
+      teacher_id: string
+      teacher_name: string
+      has_sub: boolean
+      is_partial: boolean
+      time_off_request_id?: string
+    }>
   } | null>(null)
   const { setActivePanel, previousPanel, restorePreviousPanel, registerPanelCloseHandler } =
     usePanelManager()
@@ -338,6 +369,33 @@ export default function WeeklyScheduleGridNew({
     hasAppliedInitialSelection.current = true
   }, [initialSelectedCell, data, timeSlots])
 
+  const buildSelectedCellData = useCallback(
+    (cell: { dayId: string; classroomId: string; timeSlotId: string }) => {
+      const classroom = data.find(c => c.classroom_id === cell.classroomId)
+      if (!classroom) return null
+
+      const day = classroom.days.find(d => d.day_of_week_id === cell.dayId)
+      if (!day) return null
+
+      const timeSlot = day.time_slots.find(ts => ts.time_slot_id === cell.timeSlotId)
+      if (!timeSlot) return null
+
+      return {
+        day_of_week_id: day.day_of_week_id,
+        day_name: day.day_name,
+        day_number: day.day_number,
+        time_slot_id: timeSlot.time_slot_id,
+        time_slot_code: timeSlot.time_slot_code,
+        time_slot_name: timeSlot.time_slot_name,
+        time_slot_display_order: timeSlot.time_slot_display_order,
+        assignments: timeSlot.assignments,
+        schedule_cell: timeSlot.schedule_cell || null,
+        absences: timeSlot.absences,
+      }
+    },
+    [data]
+  )
+
   const handleCellClick = (
     dayId: string,
     dayName: string,
@@ -370,6 +428,13 @@ export default function WeeklyScheduleGridNew({
       classroomId,
       classroomName,
     })
+    setSelectedCellSnapshot(
+      buildSelectedCellData({
+        dayId,
+        classroomId,
+        timeSlotId,
+      })
+    )
   }
 
   const handleSave = () => {
@@ -381,6 +446,7 @@ export default function WeeklyScheduleGridNew({
 
   const handleClosePanel = () => {
     setSelectedCell(null)
+    setSelectedCellSnapshot(null)
     setActivePanel(null)
   }
 
@@ -418,29 +484,7 @@ export default function WeeklyScheduleGridNew({
 
   // Get cell data for selected cell
   const selectedCellData = selectedCell
-    ? (() => {
-        const classroom = data.find(c => c.classroom_id === selectedCell.classroomId)
-        if (!classroom) return undefined
-
-        const day = classroom.days.find(d => d.day_of_week_id === selectedCell.dayId)
-        if (!day) return undefined
-
-        const timeSlot = day.time_slots.find(ts => ts.time_slot_id === selectedCell.timeSlotId)
-        return timeSlot
-          ? {
-              day_of_week_id: day.day_of_week_id,
-              day_name: day.day_name,
-              day_number: day.day_number,
-              time_slot_id: timeSlot.time_slot_id,
-              time_slot_code: timeSlot.time_slot_code,
-              time_slot_name: timeSlot.time_slot_name,
-              time_slot_display_order: timeSlot.time_slot_display_order,
-              assignments: timeSlot.assignments,
-              schedule_cell: timeSlot.schedule_cell || null,
-              absences: timeSlot.absences,
-            }
-          : undefined
-      })()
+    ? selectedCellSnapshot ?? buildSelectedCellData(selectedCell)
     : undefined
 
   // Final filter: ensure we only show selected days
