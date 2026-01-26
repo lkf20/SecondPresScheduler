@@ -12,11 +12,9 @@ export default function NewTeacherPage() {
   const handleSubmit = async (data: TeacherFormData) => {
     try {
       setError(null)
-      // Convert empty email to null and exclude id (should not be sent for new teachers)
-      const { id, ...teacherData } = data
-      void id
+      // Convert empty email to null (id is not part of TeacherFormData)
       const payload = {
-        ...teacherData,
+        ...data,
         email: data.email && data.email.trim() !== '' ? data.email : null,
         is_teacher: true, // Always true when creating from teacher form
         is_sub: data.is_sub ?? false, // Include the checkbox value
