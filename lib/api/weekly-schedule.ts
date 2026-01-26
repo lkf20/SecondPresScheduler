@@ -4,8 +4,14 @@ import { Database } from '@/types/database'
 type ClassGroupRow = Database['public']['Tables']['class_groups']['Row']
 type ScheduleCellRow = Database['public']['Tables']['schedule_cells']['Row']
 type StaffRow = Database['public']['Tables']['staff']['Row']
+type StaffLite = Pick<StaffRow, 'id' | 'first_name' | 'last_name' | 'display_name'>
 type TimeOffRequestRow = Database['public']['Tables']['time_off_requests']['Row']
-type TimeOffShiftRow = Database['public']['Tables']['time_off_shifts']['Row'] & {
+type TimeOffShiftRowFromQuery = {
+  id: string
+  date: string
+  day_of_week_id: string | null
+  time_slot_id: string
+  time_off_request_id: string
   time_off_requests?: Pick<TimeOffRequestRow, 'teacher_id' | 'status'> | Array<
     Pick<TimeOffRequestRow, 'teacher_id' | 'status'>
   > | null
@@ -15,9 +21,26 @@ type TeacherScheduleRow = Database['public']['Tables']['teacher_schedules']['Row
   class?: { id: string; name: string } | null
 }
 type ClassGroupLite = Pick<ClassGroupRow, 'id' | 'name'>
-type SubAssignmentRow = Database['public']['Tables']['sub_assignments']['Row'] & {
-  sub?: Pick<StaffRow, 'id' | 'first_name' | 'last_name' | 'display_name'> | null
-  teacher?: Pick<StaffRow, 'id' | 'first_name' | 'last_name' | 'display_name'> | null
+type SubAssignmentRowFromQuery = {
+  id: string
+  date: string
+  day_of_week_id: string | null
+  time_slot_id: string
+  classroom_id: string
+  sub_id: string
+  teacher_id: string
+  sub?: StaffLite | StaffLite[] | null
+  teacher?: StaffLite | StaffLite[] | null
+}
+
+const getStaffDisplayName = (staff: StaffLite | StaffLite[] | null | undefined) => {
+  const staffItem = Array.isArray(staff) ? staff[0] : staff
+  if (!staffItem) return 'Unknown'
+  return (
+    staffItem.display_name ||
+    `${staffItem.first_name || ''} ${staffItem.last_name || ''}`.trim() ||
+    'Unknown'
+  )
 }
 
 type ScheduleCellRaw = ScheduleCellRow & {
@@ -148,7 +171,7 @@ export async function getWeeklyScheduleData(
       if (timeOffShiftsError) {
         console.warn('Error fetching time_off_shifts:', timeOffShiftsError.message)
       } else if (timeOffShiftsData) {
-        timeOffShifts = timeOffShiftsData.map((shift: TimeOffShiftRow) => {
+        timeOffShifts = timeOffShiftsData.map((shift: TimeOffShiftRowFromQuery) => {
           const timeOffRequest = Array.isArray(shift.time_off_requests)
             ? shift.time_off_requests[0] ?? null
             : shift.time_off_requests ?? null
@@ -398,7 +421,7 @@ export async function getWeeklyScheduleData(
         console.warn('Error fetching sub_assignments:', subAssignmentsError.message)
       } else if (subAssignmentsData) {
         // Map sub_assignments - day_of_week_id is already in the database
-        subAssignments = subAssignmentsData.map((sa: SubAssignmentRow) => ({
+        subAssignments = subAssignmentsData.map((sa: SubAssignmentRowFromQuery) => ({
           id: sa.id,
           date: sa.date,
           day_of_week_id: sa.day_of_week_id,
@@ -406,14 +429,8 @@ export async function getWeeklyScheduleData(
           classroom_id: sa.classroom_id,
           sub_id: sa.sub_id,
           teacher_id: sa.teacher_id,
-          sub_name:
-            sa.sub?.display_name ||
-            `${sa.sub?.first_name || ''} ${sa.sub?.last_name || ''}`.trim() ||
-            'Unknown',
-          teacher_name:
-            sa.teacher?.display_name ||
-            `${sa.teacher?.first_name || ''} ${sa.teacher?.last_name || ''}`.trim() ||
-            'Unknown',
+          sub_name: getStaffDisplayName(sa.sub),
+          teacher_name: getStaffDisplayName(sa.teacher),
           class_id: null, // sub_assignments doesn't have class_id - will use first class group from schedule_cell
           class_name: null,
           // Note: teacher_id in sub_assignments represents the absent teacher
@@ -653,7 +670,7 @@ export async function getWeeklyScheduleData(
                 .in('id', teacherIds)
 
               const teachersMap = new Map(
-                (teachersData || []).map((t: StaffRow) => [
+                (teachersData || []).map((t: StaffLite) => [
                   t.id,
                   t.display_name ||
                     `${t.first_name || ''} ${t.last_name || ''}`.trim() ||

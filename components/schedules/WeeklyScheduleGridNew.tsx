@@ -175,7 +175,7 @@ export default function WeeklyScheduleGridNew({
       is_partial: boolean
       time_off_request_id?: string
     }>
-  } | null>(null)
+  }>()
   const { setActivePanel, previousPanel, restorePreviousPanel, registerPanelCloseHandler } =
     usePanelManager()
   const savedCellRef = useRef<typeof selectedCell>(null)
@@ -372,13 +372,13 @@ export default function WeeklyScheduleGridNew({
   const buildSelectedCellData = useCallback(
     (cell: { dayId: string; classroomId: string; timeSlotId: string }) => {
       const classroom = data.find(c => c.classroom_id === cell.classroomId)
-      if (!classroom) return null
+      if (!classroom) return undefined
 
       const day = classroom.days.find(d => d.day_of_week_id === cell.dayId)
-      if (!day) return null
+      if (!day) return undefined
 
       const timeSlot = day.time_slots.find(ts => ts.time_slot_id === cell.timeSlotId)
-      if (!timeSlot) return null
+      if (!timeSlot) return undefined
 
       return {
         day_of_week_id: day.day_of_week_id,
@@ -446,7 +446,7 @@ export default function WeeklyScheduleGridNew({
 
   const handleClosePanel = () => {
     setSelectedCell(null)
-    setSelectedCellSnapshot(null)
+    setSelectedCellSnapshot(undefined)
     setActivePanel(null)
   }
 
