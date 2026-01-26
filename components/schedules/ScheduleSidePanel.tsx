@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Sheet,
   SheetContent,
@@ -198,29 +198,32 @@ export default function ScheduleSidePanel({
   const timeRange =
     timeSlotStartTime && timeSlotEndTime ? `${timeSlotStartTime}–${timeSlotEndTime}` : ''
 
-  const normalizeClassGroup = (cg: {
-    id: string
-    name: string
-    parent_class_id?: string | null
-    min_age: number | null
-    max_age: number | null
-    required_ratio: number
-    preferred_ratio: number | null
-    is_active?: boolean | null
-    order?: number | null
-  }): ClassGroupWithMeta => ({
-    id: cg.id,
-    name: cg.name || '',
-    parent_class_id: cg.parent_class_id ?? null,
-    min_age: cg.min_age ?? null,
-    max_age: cg.max_age ?? null,
-    required_ratio: cg.required_ratio ?? 8,
-    preferred_ratio: cg.preferred_ratio ?? null,
-    is_active: cg.is_active ?? true,
-    order: cg.order ?? null,
-  })
+  const normalizeClassGroup = useCallback(
+    (cg: {
+      id: string
+      name: string
+      parent_class_id?: string | null
+      min_age: number | null
+      max_age: number | null
+      required_ratio: number
+      preferred_ratio: number | null
+      is_active?: boolean | null
+      order?: number | null
+    }): ClassGroupWithMeta => ({
+      id: cg.id,
+      name: cg.name || '',
+      parent_class_id: cg.parent_class_id ?? null,
+      min_age: cg.min_age ?? null,
+      max_age: cg.max_age ?? null,
+      required_ratio: cg.required_ratio ?? 8,
+      preferred_ratio: cg.preferred_ratio ?? null,
+      is_active: cg.is_active ?? true,
+      order: cg.order ?? null,
+    }),
+    []
+  )
 
-  const initializeFromCell = (
+  const initializeFromCell = useCallback((
     cellData: Partial<ScheduleCellWithDetails> & {
       id: string
       is_active: boolean
@@ -259,7 +262,7 @@ export default function ScheduleSidePanel({
       isActive: cellData.is_active ?? true,
       hasData: originallyHadData,
     }
-  }
+  }, [normalizeClassGroup])
 
   // Fetch time slots for 'day' scope
   useEffect(() => {
@@ -357,7 +360,7 @@ export default function ScheduleSidePanel({
         setAllAvailableClassGroups(items)
       })
       .catch(console.error)
-  }, [isOpen, classroomId, dayId, timeSlotId, selectedCellData])
+  }, [isOpen, classroomId, dayId, timeSlotId, selectedCellData, initializeFromCell])
 
   // Update classGroups when classGroupIds changes
   useEffect(() => {
@@ -661,7 +664,7 @@ export default function ScheduleSidePanel({
         setIsLoadingTeachers(false)
         setSelectedTeachers([])
       })
-  }, [isOpen, classroomId, dayId, timeSlotId, classGroupIds])
+  }, [isOpen, classroomId, dayId, timeSlotId, classGroupIds, isLoadingTeachers])
 
   // Determine if cell has data (current state)
   const hasData = !!(classGroupIds.length > 0 || enrollment !== null || selectedTeachers.length > 0)
