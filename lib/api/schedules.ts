@@ -134,7 +134,19 @@ export async function updateTeacherSchedule(
   schoolId?: string
 ) {
   const supabase = await createClient()
-  let query = supabase.from('teacher_schedules').update(updates).eq('id', id)
+  const updatePayload: Partial<TeacherSchedule> & {
+    class_group_id?: string | null
+  } = { ...updates }
+
+  // teacher_schedules still stores class_id; map class_group_id to class_id for now.
+  if ('class_group_id' in updatePayload) {
+    if (updatePayload.class_id === undefined) {
+      updatePayload.class_id = updatePayload.class_group_id
+    }
+    delete updatePayload.class_group_id
+  }
+
+  let query = supabase.from('teacher_schedules').update(updatePayload).eq('id', id)
 
   const effectiveSchoolId = schoolId || (await getUserSchoolId())
   if (effectiveSchoolId) {

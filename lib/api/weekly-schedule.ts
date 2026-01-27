@@ -299,7 +299,7 @@ export async function getWeeklyScheduleData(
     const classIds = [
       ...new Set(
         scheduleRows
-          .map(s => s.class_id)
+          .map(s => s.class_group_id ?? s.class_id)
           .filter(Boolean) as string[]
       ),
     ]
@@ -313,8 +313,9 @@ export async function getWeeklyScheduleData(
         (classGroups || []).map((cg: ClassGroupLite) => [cg.id, cg])
       )
       scheduleRows.forEach(schedule => {
-        if (schedule.class_id) {
-          schedule.class = classGroupsMap.get(schedule.class_id) || null
+        const classGroupId = schedule.class_group_id ?? schedule.class_id ?? null
+        if (classGroupId) {
+          schedule.class = classGroupsMap.get(classGroupId) || null
         }
         if (schedule.class_group_id === undefined) {
           schedule.class_group_id = schedule.class_id ?? null

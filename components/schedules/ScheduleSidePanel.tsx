@@ -887,7 +887,7 @@ export default function ScheduleSidePanel({
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                      class_id: primaryClassGroupId,
+                      class_group_id: primaryClassGroupId,
                     }),
                   }).then(async updateResponse => {
                     if (!updateResponse.ok) {
@@ -954,7 +954,7 @@ export default function ScheduleSidePanel({
                       method: 'PUT',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
-                        class_id: primaryClassGroupId,
+                        class_group_id: primaryClassGroupId,
                       }),
                     }).then(async updateResponse => {
                       if (!updateResponse.ok) {
@@ -1150,7 +1150,6 @@ export default function ScheduleSidePanel({
               resolution,
               target_classroom_id: conflict.target_classroom_id,
               target_class_group_id: classGroupIds.length > 0 ? classGroupIds[0] : null,
-              target_class_id: classGroupIds.length > 0 ? classGroupIds[0] : null,
               conflicting_schedule_id: conflict.conflicting_schedule_id,
             }),
           })

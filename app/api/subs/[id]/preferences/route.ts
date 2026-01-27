@@ -8,14 +8,44 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { data, error } = await supabase
       .from('sub_class_preferences')
-      .select('*, class_group:class_groups(*)')
+      .select('*, class:classes(id, name)')
       .eq('sub_id', id)
       .eq('can_teach', true) // Only get preferences where can_teach is true
       .order('class_id', { ascending: true })
 
     if (error) throw error
 
-    return NextResponse.json(data || [])
+    const classNames = Array.from(
+      new Set(
+        (data || [])
+          .map((pref: any) => pref.class?.name)
+          .filter((name: string | null | undefined): name is string => Boolean(name))
+      )
+    )
+
+    let classGroupMap = new Map<string, { id: string; name: string }>()
+    if (classNames.length > 0) {
+      const { data: classGroups, error: classGroupsError } = await supabase
+        .from('class_groups')
+        .select('id, name')
+        .in('name', classNames)
+
+      if (classGroupsError) throw classGroupsError
+
+      classGroupMap = new Map((classGroups || []).map(cg => [cg.name, cg]))
+    }
+
+    const enriched = (data || []).map((pref: any) => {
+      const className = pref.class?.name
+      const classGroup = className ? classGroupMap.get(className) : null
+      return {
+        ...pref,
+        class_group_id: classGroup?.id ?? null,
+        class_group: classGroup ?? null,
+      }
+    })
+
+    return NextResponse.json(enriched)
   } catch (error: any) {
     console.error('Error fetching sub preferences:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -35,6 +65,36 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const supabase = await createClient()
 
+    let classIdsToStore = ids
+    if (Array.isArray(class_group_ids)) {
+      const { data: classGroups, error: classGroupsError } = await supabase
+        .from('class_groups')
+        .select('id, name')
+        .in('id', class_group_ids)
+
+      if (classGroupsError) throw classGroupsError
+
+      const classGroupNames = Array.from(
+        new Set((classGroups || []).map(cg => cg.name).filter(Boolean))
+      )
+
+      let classNameToId = new Map<string, string>()
+      if (classGroupNames.length > 0) {
+        const { data: classes, error: classesError } = await supabase
+          .from('classes')
+          .select('id, name')
+          .in('name', classGroupNames)
+
+        if (classesError) throw classesError
+
+        classNameToId = new Map((classes || []).map(cls => [cls.name, cls.id]))
+      }
+
+      classIdsToStore = (classGroups || [])
+        .map(cg => classNameToId.get(cg.name))
+        .filter((id): id is string => Boolean(id))
+    }
+
     // Delete existing preferences for this sub
     const { error: deleteError } = await supabase
       .from('sub_class_preferences')
@@ -44,10 +104,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (deleteError) throw deleteError
 
     // Insert new preferences
-    if (ids.length > 0) {
-      const preferencesData = ids.map((class_group_id: string) => ({
+    if (classIdsToStore.length > 0) {
+      const preferencesData = classIdsToStore.map((class_id: string) => ({
         sub_id: id,
-        class_id: class_group_id,
+        class_id,
         can_teach: true,
       }))
 
