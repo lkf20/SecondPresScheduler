@@ -749,9 +749,6 @@ export default function ScheduleSidePanel({
         timeSlotsToUpdate = [timeSlotId]
       }
 
-      // Use first class group ID as the primary class group for the slot
-      const primaryClassGroupId = classGroupIds.length > 0 ? classGroupIds[0] : null
-
       // Update cells for each day/time slot combination
       const updates: Array<{
         classroom_id: string
