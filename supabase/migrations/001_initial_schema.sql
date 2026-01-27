@@ -1,11 +1,11 @@
 -- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Core Reference Tables
 
 -- 1. Classrooms
 CREATE TABLE classrooms (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT UNIQUE NOT NULL,
   capacity INTEGER,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -14,7 +14,7 @@ CREATE TABLE classrooms (
 
 -- 2. Classes
 CREATE TABLE classes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT UNIQUE NOT NULL,
   parent_class_id UUID REFERENCES classes(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -23,7 +23,7 @@ CREATE TABLE classes (
 
 -- 3. Time Slots
 CREATE TABLE time_slots (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   code TEXT UNIQUE NOT NULL,
   name TEXT,
   default_start_time TIME,
@@ -34,7 +34,7 @@ CREATE TABLE time_slots (
 
 -- 4. Days of Week
 CREATE TABLE days_of_week (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT UNIQUE NOT NULL,
   day_number INTEGER UNIQUE NOT NULL,
   display_order INTEGER,
@@ -63,7 +63,7 @@ CREATE TABLE staff (
 
 -- 6. Teacher Schedules
 CREATE TABLE teacher_schedules (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   teacher_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
   day_of_week_id UUID NOT NULL REFERENCES days_of_week(id) ON DELETE CASCADE,
   time_slot_id UUID NOT NULL REFERENCES time_slots(id) ON DELETE CASCADE,
@@ -76,7 +76,7 @@ CREATE TABLE teacher_schedules (
 
 -- 7. Sub Availability
 CREATE TABLE sub_availability (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sub_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
   day_of_week_id UUID NOT NULL REFERENCES days_of_week(id) ON DELETE CASCADE,
   time_slot_id UUID NOT NULL REFERENCES time_slots(id) ON DELETE CASCADE,
@@ -88,7 +88,7 @@ CREATE TABLE sub_availability (
 
 -- 8. Sub Availability Exceptions
 CREATE TABLE sub_availability_exceptions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sub_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
   date DATE NOT NULL,
   time_slot_id UUID NOT NULL REFERENCES time_slots(id) ON DELETE CASCADE,
@@ -101,7 +101,7 @@ CREATE TABLE sub_availability_exceptions (
 
 -- 9. Sub Class Preferences
 CREATE TABLE sub_class_preferences (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sub_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
   class_id UUID NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
   can_teach BOOLEAN DEFAULT TRUE,
@@ -112,7 +112,7 @@ CREATE TABLE sub_class_preferences (
 
 -- 10. Classroom Preferences
 CREATE TABLE classroom_preferences (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   staff_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
   classroom_id UUID NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
   can_teach BOOLEAN DEFAULT TRUE,
@@ -125,7 +125,7 @@ CREATE TABLE classroom_preferences (
 
 -- 11. Class Classroom Mappings
 CREATE TABLE class_classroom_mappings (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   class_id UUID NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
   classroom_id UUID NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
   day_of_week_id UUID NOT NULL REFERENCES days_of_week(id) ON DELETE CASCADE,
@@ -137,7 +137,7 @@ CREATE TABLE class_classroom_mappings (
 
 -- 12. Staffing Rules
 CREATE TABLE staffing_rules (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   class_id UUID NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
   day_of_week_id UUID NOT NULL REFERENCES days_of_week(id) ON DELETE CASCADE,
   time_slot_id UUID NOT NULL REFERENCES time_slots(id) ON DELETE CASCADE,
@@ -150,7 +150,7 @@ CREATE TABLE staffing_rules (
 
 -- 13. Enrollments
 CREATE TABLE enrollments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   class_id UUID NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
   day_of_week_id UUID NOT NULL REFERENCES days_of_week(id) ON DELETE CASCADE,
   time_slot_id UUID NOT NULL REFERENCES time_slots(id) ON DELETE CASCADE,
@@ -164,7 +164,7 @@ CREATE TABLE enrollments (
 
 -- 14. Time Off Requests
 CREATE TABLE time_off_requests (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   teacher_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
   start_date DATE NOT NULL,
   end_date DATE NOT NULL,
@@ -176,7 +176,7 @@ CREATE TABLE time_off_requests (
 
 -- 15. Sub Assignments
 CREATE TABLE sub_assignments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sub_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
   teacher_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
   date DATE NOT NULL,
@@ -194,7 +194,7 @@ CREATE TABLE sub_assignments (
 
 -- 16. Sub Contact Overrides
 CREATE TABLE sub_contact_overrides (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sub_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
   teacher_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
   shift_id TEXT NOT NULL,
@@ -211,7 +211,7 @@ CREATE TABLE sub_contact_overrides (
 
 -- 17. Sub Contact Log
 CREATE TABLE sub_contact_log (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sub_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
   teacher_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
   contact_date DATE NOT NULL,
@@ -269,4 +269,3 @@ CREATE TRIGGER update_sub_assignments_updated_at BEFORE UPDATE ON sub_assignment
 
 CREATE TRIGGER update_sub_contact_overrides_updated_at BEFORE UPDATE ON sub_contact_overrides
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
