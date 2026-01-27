@@ -21,7 +21,7 @@ export async function getClassrooms(
       `
       *,
       allowed_classes:classroom_allowed_classes(
-        class:class_groups(id, name)
+        class:class_groups!classroom_allowed_classes_class_group_id_fkey(id, name)
       )
     `
     )
