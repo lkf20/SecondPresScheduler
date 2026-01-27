@@ -15,7 +15,8 @@ export const createTeacherScheduleSchema = z.object({
   class_group_id: z
     .string()
     .uuid({ message: 'class_group_id must be a valid UUID' })
-    .nullable(),
+    .nullable()
+    .optional(),
   class_id: z
     .string()
     .uuid({ message: 'class_id must be a valid UUID' })
@@ -23,6 +24,14 @@ export const createTeacherScheduleSchema = z.object({
     .optional(),
   classroom_id: z.string().uuid({ message: 'classroom_id must be a valid UUID' }),
   is_floater: z.boolean().optional().default(false),
+}).superRefine((data, ctx) => {
+  if (!data.class_group_id && !data.class_id) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'class_group_id or class_id is required',
+      path: ['class_group_id'],
+    })
+  }
 })
 
 export const checkConflictsSchema = z.object({
@@ -46,7 +55,8 @@ export const resolveConflictSchema = z.object({
   target_classroom_id: z.string().uuid({ message: 'target_classroom_id must be a valid UUID' }),
   target_class_group_id: z
     .string()
-    .uuid({ message: 'target_class_group_id must be a valid UUID' }),
+    .uuid({ message: 'target_class_group_id must be a valid UUID' })
+    .optional(),
   target_class_id: z
     .string()
     .uuid({ message: 'target_class_id must be a valid UUID' })
@@ -55,4 +65,12 @@ export const resolveConflictSchema = z.object({
     .string()
     .uuid({ message: 'conflicting_schedule_id must be a valid UUID' })
     .optional(),
+}).superRefine((data, ctx) => {
+  if (!data.target_class_group_id && !data.target_class_id) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'target_class_group_id or target_class_id is required',
+      path: ['target_class_group_id'],
+    })
+  }
 })

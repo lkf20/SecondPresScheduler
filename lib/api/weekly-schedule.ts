@@ -342,6 +342,60 @@ export async function getWeeklyScheduleData(
     throw new Error(`Failed to fetch staffing rules: ${staffingRulesError.message}`)
   }
 
+  if (staffingRules && staffingRules.length > 0) {
+    const classIds = Array.from(
+      new Set(
+        staffingRules
+          .map(rule => rule.class_id)
+          .filter(Boolean) as string[]
+      )
+    )
+
+    if (classIds.length > 0) {
+      const { data: classes, error: classesError } = await supabase
+        .from('classes')
+        .select('id, name')
+        .in('id', classIds)
+
+      if (classesError) {
+        console.warn('Error fetching classes for staffing rules:', classesError.message)
+      } else {
+        const classNames = Array.from(
+          new Set((classes || []).map(cls => cls.name).filter(Boolean))
+        )
+        let classNameToGroupId = new Map<string, string>()
+
+        if (classNames.length > 0) {
+          const { data: classGroups, error: classGroupsError } = await supabase
+            .from('class_groups')
+            .select('id, name')
+            .in('name', classNames)
+
+          if (classGroupsError) {
+            console.warn('Error fetching class groups for staffing rules:', classGroupsError.message)
+          } else {
+            classNameToGroupId = new Map((classGroups || []).map(cg => [cg.name, cg.id]))
+          }
+        }
+
+        const classIdToGroupId = new Map(
+          (classes || [])
+            .map(cls => {
+              const groupId = classNameToGroupId.get(cls.name)
+              return groupId ? [cls.id, groupId] : null
+            })
+            .filter((entry): entry is [string, string] => Boolean(entry))
+        )
+
+        staffingRules.forEach((rule: any) => {
+          if (!rule.class_group_id && rule.class_id) {
+            rule.class_group_id = classIdToGroupId.get(rule.class_id) ?? null
+          }
+        })
+      }
+    }
+  }
+
   // Get schedule cells (gracefully handle if table doesn't exist yet)
   let scheduleCells: ScheduleCellRaw[] | null = null
   try {

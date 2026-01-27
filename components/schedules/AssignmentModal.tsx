@@ -41,6 +41,10 @@ interface ClassGroup {
   assigned_teachers: Array<{ id: string; name: string; teacher_id: string }>
 }
 
+type StaffingRule = StaffingRuleRow & {
+  class_group_id?: string | null
+}
+
 export default function AssignmentModal({
   dayName,
   timeSlotName,
@@ -50,7 +54,7 @@ export default function AssignmentModal({
   const [classes, setClasses] = useState<ClassGroupRow[]>([])
   const [classrooms, setClassrooms] = useState<ClassroomRow[]>([])
   const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([])
-  const [staffingRules, setStaffingRules] = useState<StaffingRuleRow[]>([])
+  const [staffingRules, setStaffingRules] = useState<StaffingRule[]>([])
   const [classGroups, setClassGroups] = useState<Map<string, ClassGroup>>(new Map())
   const [loading, setLoading] = useState(true)
 
@@ -173,8 +177,7 @@ export default function AssignmentModal({
         // Get staffing rule for this class/day/time
         const rule = staffingRules.find(
           r =>
-            ((r as { class_group_id?: string | null; class_id?: string | null }).class_group_id ??
-              r.class_id) === classGroupId &&
+            (r.class_group_id ?? r.class_id) === classGroupId &&
             r.day_of_week_id === data.day_of_week_id &&
             r.time_slot_id === data.time_slot_id
         )

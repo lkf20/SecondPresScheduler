@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
               before: {
                 classroom_id: conflictingSchedule.classroom_id,
                 class_id: conflictingSchedule.class_id,
+                class_group_id: classGroupId ?? null,
                 is_floater: conflictingSchedule.is_floater,
               },
             },
@@ -108,6 +109,7 @@ export async function POST(request: NextRequest) {
             after: {
               classroom_id: target_classroom_id,
               class_id: classGroupId ?? null,
+              class_group_id: classGroupId ?? null,
               is_floater: false,
             },
           },
@@ -131,6 +133,7 @@ export async function POST(request: NextRequest) {
             canceled: true,
             would_have_added_to_classroom_id: target_classroom_id,
             would_have_added_to_class_id: classGroupId ?? null,
+            would_have_added_to_class_group_id: classGroupId ?? null,
           },
           added_to_classroom_id: target_classroom_id,
           added_to_day_id: day_of_week_id,
@@ -159,11 +162,13 @@ export async function POST(request: NextRequest) {
               before: {
                 classroom_id: conflictingSchedule.classroom_id,
                 class_id: conflictingSchedule.class_id,
+                class_group_id: classGroupId ?? null,
                 is_floater: false,
               },
               after: {
                 classroom_id: conflictingSchedule.classroom_id,
                 class_id: conflictingSchedule.class_id,
+                class_group_id: classGroupId ?? null,
                 is_floater: true,
               },
             },
@@ -191,6 +196,7 @@ export async function POST(request: NextRequest) {
             after: {
               classroom_id: target_classroom_id,
               class_id: classGroupId ?? null,
+              class_group_id: classGroupId ?? null,
               is_floater: true,
             },
           },
