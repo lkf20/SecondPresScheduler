@@ -118,7 +118,7 @@ export default function TeacherScheduleForm({
           teacher_id: schedule.teacher_id,
           day_of_week_id: schedule.day_of_week_id,
           time_slot_id: schedule.time_slot_id,
-          class_group_id: schedule.class_group_id,
+          class_group_id: schedule.class_group_id ?? '',
           classroom_id: schedule.classroom_id,
         }
       : undefined,
@@ -131,7 +131,7 @@ export default function TeacherScheduleForm({
         teacher_id: schedule.teacher_id,
         day_of_week_id: schedule.day_of_week_id,
         time_slot_id: schedule.time_slot_id,
-        class_group_id: schedule.class_group_id,
+        class_group_id: schedule.class_group_id ?? '',
         classroom_id: schedule.classroom_id,
       })
     }

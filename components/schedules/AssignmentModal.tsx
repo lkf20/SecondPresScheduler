@@ -19,7 +19,7 @@ type ClassroomRow = Database['public']['Tables']['classrooms']['Row']
 type EnrollmentRow = Database['public']['Tables']['enrollments']['Row']
 type StaffingRuleRow = Database['public']['Tables']['staffing_rules']['Row']
 type ClassClassroomMapping = Database['public']['Tables']['class_classroom_mappings']['Row'] & {
-  class?: ClassGroupRow | null
+  class_group?: ClassGroupRow | null
   classroom?: ClassroomRow | null
 }
 
@@ -184,7 +184,7 @@ export default function AssignmentModal({
 
         groups.set(key, {
           class_group_id: classGroupId,
-          class_group_name: mapping.class_group?.name || mapping.class?.name || 'Unknown',
+          class_group_name: mapping.class_group?.name || 'Unknown',
           classroom_id: mapping.classroom_id,
           classroom_name: mapping.classroom?.name || 'Unknown',
           enrollment: enrollment?.enrollment_count || 0,

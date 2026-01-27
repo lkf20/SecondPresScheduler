@@ -142,7 +142,9 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
     )
   }
 
-  const selectedClassIds = classPreferences.map(p => p.class_group_id).filter(Boolean)
+  const selectedClassIds = classPreferences
+    .map(p => p.class_group_id)
+    .filter((id): id is string => Boolean(id))
   const normalizedQualifications = qualifications.map(q => ({
     ...q,
     qualification: q.qualification
