@@ -499,7 +499,8 @@ export default function WeeklySchedulePage() {
               if (!a.teacher_id) return false
               if (a.is_floater) return false
               if (a.is_substitute === true) return true
-              return !!a.class_id && classGroupIds.includes(a.class_id)
+              const classGroupId = a.class_group_id ?? a.class_id
+              return !!classGroupId && classGroupIds.includes(classGroupId)
             })
 
             const assignedCount = coverageAssignments.length

@@ -187,7 +187,7 @@ export default function ScheduleCell({
                   .map(a => ({
                     teacher_id: a.teacher_id,
                     teacher_name: a.teacher_name,
-                    class_id: a.class_id,
+                    class_group_id: a.class_group_id ?? a.class_id,
                     is_substitute: a.is_substitute,
                   })),
                 classGroupIds,
@@ -215,12 +215,12 @@ export default function ScheduleCell({
                   .map(a => ({
                     teacher_id: a.teacher_id,
                     teacher_name: a.teacher_name,
-                    class_id: a.class_id,
+                    class_group_id: a.class_group_id ?? a.class_id,
                     is_substitute: a.is_substitute,
                   })),
                 allAssignments: allAssignments.map(a => ({
                   teacher_name: a.teacher_name,
-                  class_id: a.class_id,
+                  class_group_id: a.class_group_id ?? a.class_id,
                   is_substitute: a.is_substitute,
                   is_floater: a.is_floater,
                 })),

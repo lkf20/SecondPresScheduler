@@ -140,7 +140,7 @@ export default function AssignmentModal({
         }
       } else {
         // Class info (for class group placeholders)
-        // Only create group if we have class_id and class_name
+        // Only create group if we have class_group_id and class_name
         if (!groups.has(key) && classGroupId && assignment.class_name) {
           groups.set(key, {
             class_group_id: classGroupId,
@@ -173,14 +173,15 @@ export default function AssignmentModal({
         // Get staffing rule for this class/day/time
         const rule = staffingRules.find(
           r =>
-            r.class_id === classGroupId &&
+            ((r as { class_group_id?: string | null; class_id?: string | null }).class_group_id ??
+              r.class_id) === classGroupId &&
             r.day_of_week_id === data.day_of_week_id &&
             r.time_slot_id === data.time_slot_id
         )
 
         groups.set(key, {
           class_group_id: classGroupId,
-          class_group_name: mapping.class?.name || 'Unknown',
+          class_group_name: mapping.class_group?.name || mapping.class?.name || 'Unknown',
           classroom_id: mapping.classroom_id,
           classroom_name: mapping.classroom?.name || 'Unknown',
           enrollment: enrollment?.enrollment_count || 0,

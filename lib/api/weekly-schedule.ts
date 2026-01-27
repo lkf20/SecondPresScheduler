@@ -17,6 +17,7 @@ type TimeOffShiftRowFromQuery = {
   > | null
 }
 type TeacherScheduleRow = Database['public']['Tables']['teacher_schedules']['Row'] & {
+  class_group_id?: string | null
   class_id: string | null
   class?: { id: string; name: string } | null
 }
@@ -43,6 +44,9 @@ const getStaffDisplayName = (staff: StaffLite | StaffLite[] | null | undefined) 
   )
 }
 
+const getRuleClassGroupId = (rule: { class_group_id?: string | null; class_id?: string | null }) =>
+  rule.class_group_id ?? rule.class_id ?? null
+
 type ScheduleCellRaw = ScheduleCellRow & {
   schedule_cell_class_groups?: Array<{ class_group: ClassGroupRow | null }>
   class_groups?: ClassGroupRow[]
@@ -58,6 +62,8 @@ type WeeklySubAssignment = {
   teacher_id: string
   sub_name: string
   teacher_name: string
+  class_group_id: string | null
+  /** @deprecated Use class_group_id instead. */
   class_id: string | null
   class_name: string | null
 }
@@ -74,6 +80,8 @@ export interface WeeklyScheduleData {
     id: string
     teacher_id: string
     teacher_name: string
+    class_group_id?: string // Optional: teachers are assigned to classrooms, not specific class groups
+    /** @deprecated Use class_group_id instead. */
     class_id?: string // Optional: teachers are assigned to classrooms, not specific class groups
     class_name?: string // Optional: teachers are assigned to classrooms, not specific class groups
     classroom_id: string
@@ -284,12 +292,16 @@ export async function getWeeklyScheduleData(
     throw new Error(`Failed to fetch teacher schedules: ${schedulesError.message}`)
   }
 
-  // Fetch class_groups separately if class_id exists
+  // Fetch class_groups separately if class_group_id/class_id exists
   // This avoids the schema cache issue with nullable foreign keys
   if (schedules && schedules.length > 0) {
     const scheduleRows = schedules as TeacherScheduleRow[]
     const classIds = [
-      ...new Set(scheduleRows.map(s => s.class_id).filter(Boolean) as string[]),
+      ...new Set(
+        scheduleRows
+          .map(s => s.class_id)
+          .filter(Boolean) as string[]
+      ),
     ]
     if (classIds.length > 0) {
       const { data: classGroups } = await supabase
@@ -303,6 +315,9 @@ export async function getWeeklyScheduleData(
       scheduleRows.forEach(schedule => {
         if (schedule.class_id) {
           schedule.class = classGroupsMap.get(schedule.class_id) || null
+        }
+        if (schedule.class_group_id === undefined) {
+          schedule.class_group_id = schedule.class_id ?? null
         }
       })
     }
@@ -431,6 +446,7 @@ export async function getWeeklyScheduleData(
           teacher_id: sa.teacher_id,
           sub_name: getStaffDisplayName(sa.sub),
           teacher_name: getStaffDisplayName(sa.teacher),
+          class_group_id: null, // sub_assignments doesn't have class_group_id
           class_id: null, // sub_assignments doesn't have class_id - will use first class group from schedule_cell
           class_name: null,
           // Note: teacher_id in sub_assignments represents the absent teacher
@@ -533,7 +549,8 @@ export async function getWeeklyScheduleData(
               assignment.teacher?.display_name ||
               `${assignment.teacher?.first_name || ''} ${assignment.teacher?.last_name || ''}`.trim() ||
               'Unknown',
-            class_id: assignment.class_id || undefined, // Include class_id for filtering
+            class_group_id: assignment.class_group_id ?? assignment.class_id ?? undefined,
+            class_id: assignment.class_id || undefined, // Legacy field for compatibility
             class_name: assignment.class?.name || undefined, // Include class_name for display
             classroom_id: assignment.classroom_id,
             classroom_name: assignment.classroom?.name || 'Unknown',
@@ -547,7 +564,7 @@ export async function getWeeklyScheduleData(
           const primaryClassGroupId = classGroupIds[0]
           const rule = staffingRules?.find(
             r =>
-              r.class_id === primaryClassGroupId &&
+              getRuleClassGroupId(r) === primaryClassGroupId &&
               r.day_of_week_id === day.id &&
               r.time_slot_id === timeSlot.id
           )
@@ -604,17 +621,22 @@ export async function getWeeklyScheduleData(
                 })
               }
 
+              const subClassGroupId = sub.class_group_id ?? sub.class_id
               const matchingClassGroup =
-                sub.class_id && classGroupIds.includes(sub.class_id)
-                  ? classGroups.find(cg => cg.id === sub.class_id)
+                subClassGroupId && classGroupIds.includes(subClassGroupId)
+                  ? classGroups.find(cg => cg.id === subClassGroupId)
                   : null
 
               assignments.push({
                 id: sub.id,
                 teacher_id: sub.sub_id,
                 teacher_name: sub.sub_name,
+                class_group_id:
+                  subClassGroupId ||
+                  (matchingClassGroup ? matchingClassGroup.id : classGroupIds[0]),
                 class_id:
-                  sub.class_id || (matchingClassGroup ? matchingClassGroup.id : classGroupIds[0]),
+                  subClassGroupId ||
+                  (matchingClassGroup ? matchingClassGroup.id : classGroupIds[0]),
                 class_name:
                   sub.class_name || (matchingClassGroup ? matchingClassGroup.name : 'Unknown'),
                 classroom_id: sub.classroom_id,
