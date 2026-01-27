@@ -17,6 +17,8 @@ interface Shift {
   day_name: string
   time_slot_id: string
   time_slot_code: string
+  class_group_id?: string | null
+  /** @deprecated Use class_group_id instead. */
   class_id?: string | null
   classroom_id?: string | null
   classroom_name?: string | null
@@ -170,6 +172,7 @@ export async function POST(request: NextRequest) {
         diaper_changing_required: boolean
         lifting_children_required: boolean
         class_group_name: string | null
+        class_group_id: string | null
       }
     >()
     const shiftIdMap = new Map<string, string>() // key: date|time_slot_code|classroom_id, value: coverage_request_shift_id
@@ -202,11 +205,38 @@ export async function POST(request: NextRequest) {
             diaper_changing_required: classGroup?.diaper_changing_required ?? false,
             lifting_children_required: classGroup?.lifting_children_required ?? false,
             class_group_name: classGroup?.name || null,
+            class_group_id: shift.class_group_id ?? null,
           })
 
           // Create shift ID map: date|time_slot_code|classroom_id -> coverage_request_shift_id
           const shiftIdKey = `${shift.date}|${shift.time_slots?.code || ''}|${shift.classroom_id || ''}`
           shiftIdMap.set(shiftIdKey, shift.id)
+        })
+      }
+    }
+
+    const classGroupNames = Array.from(
+      new Set(
+        Array.from(classGroupInfoMap.values())
+          .map(info => info.class_group_name)
+          .filter((name): name is string => Boolean(name))
+      )
+    )
+    const classGroupNameToClassId = new Map<string, string>()
+
+    if (classGroupNames.length > 0) {
+      const { data: classesByName, error: classesByNameError } = await supabase
+        .from('classes')
+        .select('id, name')
+        .in('name', classGroupNames)
+
+      if (classesByNameError) {
+        console.warn('Error fetching classes for class_group mapping:', classesByNameError.message)
+      } else {
+        ;(classesByName || []).forEach((row: any) => {
+          if (row?.name && row?.id) {
+            classGroupNameToClassId.set(row.name, row.id)
+          }
         })
       }
     }
@@ -218,7 +248,11 @@ export async function POST(request: NextRequest) {
         diaper_changing_required: false,
         lifting_children_required: false,
         class_group_name: null,
+        class_group_id: null,
       }
+      const classId = classGroupInfo.class_group_name
+        ? classGroupNameToClassId.get(classGroupInfo.class_group_name) || null
+        : null
       const scheduleKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
       const scheduleEntry = scheduleLookup.get(scheduleKey)
       const classroom_names = scheduleEntry?.classrooms?.size
@@ -240,7 +274,8 @@ export async function POST(request: NextRequest) {
         day_name: shift.day_of_week?.name || '',
         time_slot_id: shift.time_slot_id,
         time_slot_code: shift.time_slot?.code || '',
-        class_id: null, // TODO: Get from schedule cells
+        class_group_id: classGroupInfo.class_group_id,
+        class_id: classId, // Legacy class_id for qualification matching
         classroom_id: null, // TODO: Get from schedule cells
         classroom_name,
         classroom_color,
