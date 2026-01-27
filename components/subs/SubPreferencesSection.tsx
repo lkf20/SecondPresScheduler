@@ -8,7 +8,14 @@ import { Loader2 } from 'lucide-react'
 
 interface ClassPreference {
   id: string
-  class_id: string
+  class_group_id: string
+  /** @deprecated Use class_group_id instead. */
+  class_id?: string
+  class_group?: {
+    id: string
+    name: string
+  }
+  /** @deprecated Use class_group instead. */
   class?: {
     id: string
     name: string
@@ -78,7 +85,7 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
       const response = await fetch(`/api/subs/${subId}/preferences`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ class_ids: classIds }),
+        body: JSON.stringify({ class_group_ids: classIds }),
       })
 
       if (!response.ok) throw new Error('Failed to save preferences')
@@ -142,7 +149,7 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
     )
   }
 
-  const selectedClassIds = classPreferences.map(p => p.class_id)
+  const selectedClassIds = classPreferences.map(p => p.class_group_id ?? p.class_id).filter(Boolean)
   const normalizedQualifications = qualifications.map(q => ({
     ...q,
     qualification: q.qualification

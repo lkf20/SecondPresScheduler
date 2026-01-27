@@ -37,7 +37,7 @@ const scheduleSchema = z.object({
   teacher_id: z.string().min(1, 'Teacher is required'),
   day_of_week_id: z.string().min(1, 'Day of week is required'),
   time_slot_id: z.string().min(1, 'Time slot is required'),
-  class_id: z.string().min(1, 'Class group is required'),
+  class_group_id: z.string().min(1, 'Class group is required'),
   classroom_id: z.string().min(1, 'Classroom is required'),
 })
 
@@ -118,7 +118,7 @@ export default function TeacherScheduleForm({
           teacher_id: schedule.teacher_id,
           day_of_week_id: schedule.day_of_week_id,
           time_slot_id: schedule.time_slot_id,
-          class_id: schedule.class_id,
+          class_group_id: schedule.class_group_id ?? schedule.class_id,
           classroom_id: schedule.classroom_id,
         }
       : undefined,
@@ -131,7 +131,7 @@ export default function TeacherScheduleForm({
         teacher_id: schedule.teacher_id,
         day_of_week_id: schedule.day_of_week_id,
         time_slot_id: schedule.time_slot_id,
-        class_id: schedule.class_id,
+        class_group_id: schedule.class_group_id ?? schedule.class_id,
         classroom_id: schedule.classroom_id,
       })
     }
@@ -140,7 +140,7 @@ export default function TeacherScheduleForm({
   const teacherId = watch('teacher_id')
   const dayOfWeekId = watch('day_of_week_id')
   const timeSlotId = watch('time_slot_id')
-  const classId = watch('class_id')
+  const classGroupId = watch('class_group_id')
   const classroomId = watch('classroom_id')
 
   return (
@@ -204,8 +204,11 @@ export default function TeacherScheduleForm({
           </Select>
         </FormField>
 
-        <FormField label="Class Group" error={errors.class_id?.message} required>
-          <Select value={classId || ''} onValueChange={value => setValue('class_id', value)}>
+        <FormField label="Class Group" error={errors.class_group_id?.message} required>
+          <Select
+            value={classGroupId || ''}
+            onValueChange={value => setValue('class_group_id', value)}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select a class group" />
             </SelectTrigger>

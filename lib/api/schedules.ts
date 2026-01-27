@@ -50,7 +50,9 @@ export async function createTeacherSchedule(schedule: {
   teacher_id: string
   day_of_week_id: string
   time_slot_id: string
-  class_id: string | null
+  class_group_id: string | null
+  /** @deprecated Use class_group_id instead. */
+  class_id?: string | null
   classroom_id: string
   is_floater?: boolean
   school_id?: string
@@ -64,7 +66,11 @@ export async function createTeacherSchedule(schedule: {
   }
 
   const insertData = {
-    ...schedule,
+    teacher_id: schedule.teacher_id,
+    day_of_week_id: schedule.day_of_week_id,
+    time_slot_id: schedule.time_slot_id,
+    class_id: schedule.class_id ?? schedule.class_group_id,
+    classroom_id: schedule.classroom_id,
     school_id: schoolId,
     is_floater: schedule.is_floater ?? false,
   }
@@ -175,7 +181,9 @@ export async function bulkCreateTeacherSchedules(
   schedules: Array<{
     day_of_week_id: string
     time_slot_id: string
-    class_id: string
+    class_group_id: string
+    /** @deprecated Use class_group_id instead. */
+    class_id?: string
     classroom_id: string
   }>,
   schoolId?: string
@@ -190,7 +198,10 @@ export async function bulkCreateTeacherSchedules(
   const scheduleData = schedules.map(schedule => ({
     teacher_id: teacherId,
     school_id: effectiveSchoolId,
-    ...schedule,
+    day_of_week_id: schedule.day_of_week_id,
+    time_slot_id: schedule.time_slot_id,
+    class_id: schedule.class_id ?? schedule.class_group_id,
+    classroom_id: schedule.classroom_id,
   }))
 
   const { data, error } = await supabase.from('teacher_schedules').insert(scheduleData).select()

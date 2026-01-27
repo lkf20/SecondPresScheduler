@@ -27,8 +27,10 @@ export async function POST(request: NextRequest) {
       time_slot_id,
       resolution,
       target_classroom_id,
+      target_class_group_id,
       target_class_id,
     } = validation.data
+    const classGroupId = target_class_group_id ?? target_class_id
 
     const supabase = await createClient()
 
@@ -91,7 +93,8 @@ export async function POST(request: NextRequest) {
           teacher_id,
           day_of_week_id,
           time_slot_id,
-          class_id: target_class_id,
+          class_group_id: classGroupId ?? null,
+          class_id: classGroupId ?? null,
           classroom_id: target_classroom_id,
           is_floater: false,
         })
@@ -104,7 +107,7 @@ export async function POST(request: NextRequest) {
           action_details: {
             after: {
               classroom_id: target_classroom_id,
-              class_id: target_class_id,
+              class_id: classGroupId ?? null,
               is_floater: false,
             },
           },
@@ -127,7 +130,7 @@ export async function POST(request: NextRequest) {
           action_details: {
             canceled: true,
             would_have_added_to_classroom_id: target_classroom_id,
-            would_have_added_to_class_id: target_class_id,
+            would_have_added_to_class_id: classGroupId ?? null,
           },
           added_to_classroom_id: target_classroom_id,
           added_to_day_id: day_of_week_id,
@@ -173,7 +176,8 @@ export async function POST(request: NextRequest) {
           teacher_id,
           day_of_week_id,
           time_slot_id,
-          class_id: target_class_id,
+          class_group_id: classGroupId ?? null,
+          class_id: classGroupId ?? null,
           classroom_id: target_classroom_id,
           is_floater: true,
         })
@@ -186,7 +190,7 @@ export async function POST(request: NextRequest) {
           action_details: {
             after: {
               classroom_id: target_classroom_id,
-              class_id: target_class_id,
+              class_id: classGroupId ?? null,
               is_floater: true,
             },
           },
