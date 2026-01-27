@@ -39,3 +39,6 @@ next-env.d.ts
 # Local dev logs
 .devserver.log
 .eslintcache
+
+# Local database dumps
+db_dumps/
