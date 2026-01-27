@@ -41,6 +41,14 @@ export interface Classroom {
 export interface ClassroomWithAllowedClasses extends Classroom {
   allowed_classes?: Array<{
     id: string
+    class_group_id?: string
+    /** @deprecated Use class_group_id instead. */
+    class_id?: string
+    class_group?: {
+      id: string
+      name: string
+    } | null
+    /** @deprecated Use class_group instead. */
     class?: {
       id: string
       name: string
@@ -54,7 +62,9 @@ export interface TeacherSchedule {
   teacher_id: string
   day_of_week_id: string
   time_slot_id: string
-  class_id: string
+  class_group_id: string
+  /** @deprecated Use class_group_id instead. */
+  class_id?: string
   classroom_id: string
   is_floater: boolean
   teacher?: {
@@ -63,6 +73,11 @@ export interface TeacherSchedule {
     last_name: string
     display_name: string | null
   }
+  class_group?: {
+    id: string
+    name: string
+  }
+  /** @deprecated Use class_group instead. */
   class?: {
     id: string
     name: string

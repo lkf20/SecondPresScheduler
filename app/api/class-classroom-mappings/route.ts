@@ -15,7 +15,10 @@ export async function GET(request: NextRequest) {
     if (searchParams.get('time_slot_id')) {
       filters.time_slot_id = searchParams.get('time_slot_id')
     }
-    if (searchParams.get('class_id')) {
+    if (searchParams.get('class_group_id')) {
+      filters.class_group_id = searchParams.get('class_group_id')
+    } else if (searchParams.get('class_id')) {
+      // Deprecated: use class_group_id
       filters.class_id = searchParams.get('class_id')
     }
     if (searchParams.get('classroom_id')) {

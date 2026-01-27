@@ -31,8 +31,8 @@ interface AssignmentModalProps {
 }
 
 interface ClassGroup {
-  class_id: string
-  class_name: string
+  class_group_id: string
+  class_group_name: string
   classroom_id: string
   classroom_name: string
   enrollment: number
@@ -59,7 +59,7 @@ export default function AssignmentModal({
     const fetchData = async () => {
       try {
         const [classesRes, classroomsRes, enrollmentsRes, rulesRes] = await Promise.all([
-          fetch('/api/classes'),
+          fetch('/api/class-groups'),
           fetch('/api/classrooms'),
           fetch('/api/enrollments'),
           fetch('/api/staffing-rules'),
@@ -105,7 +105,8 @@ export default function AssignmentModal({
     // First, add existing assignments
     data.assignments.forEach(assignment => {
       // Use classroom_id as the key since teachers are now assigned to classrooms, not class groups
-      const key = `${assignment.class_id || 'no-class'}-${assignment.classroom_id}`
+      const classGroupId = assignment.class_group_id ?? assignment.class_id
+      const key = `${classGroupId || 'no-class'}-${assignment.classroom_id}`
 
       if (assignment.teacher_id) {
         // Teacher assignment
@@ -113,13 +114,13 @@ export default function AssignmentModal({
           const classInfo = data.assignments.find(
             a =>
               !a.teacher_id &&
-              a.class_id === assignment.class_id &&
+              (a.class_group_id ?? a.class_id) === classGroupId &&
               a.classroom_id === assignment.classroom_id
           )
-          if (classInfo && classInfo.class_id && classInfo.class_name) {
+          if (classInfo && classGroupId && classInfo.class_name) {
             groups.set(key, {
-              class_id: classInfo.class_id,
-              class_name: classInfo.class_name,
+              class_group_id: classGroupId,
+              class_group_name: classInfo.class_name,
               classroom_id: classInfo.classroom_id,
               classroom_name: classInfo.classroom_name,
               enrollment: classInfo.enrollment || 0,
@@ -140,10 +141,10 @@ export default function AssignmentModal({
       } else {
         // Class info (for class group placeholders)
         // Only create group if we have class_id and class_name
-        if (!groups.has(key) && assignment.class_id && assignment.class_name) {
+        if (!groups.has(key) && classGroupId && assignment.class_name) {
           groups.set(key, {
-            class_id: assignment.class_id,
-            class_name: assignment.class_name,
+            class_group_id: classGroupId,
+            class_group_name: assignment.class_name,
             classroom_id: assignment.classroom_id,
             classroom_name: assignment.classroom_name,
             enrollment: assignment.enrollment || 0,
@@ -157,12 +158,14 @@ export default function AssignmentModal({
 
     // Then, add configured mappings that don't have assignments yet
     mappings.forEach(mapping => {
-      const key = `${mapping.class_id}-${mapping.classroom_id}`
+      const classGroupId = mapping.class_group_id ?? mapping.class_id
+      if (!classGroupId) return
+      const key = `${classGroupId}-${mapping.classroom_id}`
       if (!groups.has(key)) {
         // Get enrollment for this class/day/time
         const enrollment = enrollments.find(
           e =>
-            e.class_id === mapping.class_id &&
+            (e.class_group_id ?? e.class_id) === classGroupId &&
             e.day_of_week_id === data.day_of_week_id &&
             e.time_slot_id === data.time_slot_id
         )
@@ -170,14 +173,14 @@ export default function AssignmentModal({
         // Get staffing rule for this class/day/time
         const rule = staffingRules.find(
           r =>
-            r.class_id === mapping.class_id &&
+            r.class_id === classGroupId &&
             r.day_of_week_id === data.day_of_week_id &&
             r.time_slot_id === data.time_slot_id
         )
 
         groups.set(key, {
-          class_id: mapping.class_id,
-          class_name: mapping.class?.name || 'Unknown',
+          class_group_id: classGroupId,
+          class_group_name: mapping.class?.name || 'Unknown',
           classroom_id: mapping.classroom_id,
           classroom_name: mapping.classroom?.name || 'Unknown',
           enrollment: enrollment?.enrollment_count || 0,
@@ -219,11 +222,11 @@ export default function AssignmentModal({
                 // Sort by classroom name first, then class name
                 const classroomCompare = a.classroom_name.localeCompare(b.classroom_name)
                 if (classroomCompare !== 0) return classroomCompare
-                return a.class_name.localeCompare(b.class_name)
+                return a.class_group_name.localeCompare(b.class_group_name)
               })
               .map(group => (
                 <div
-                  key={`${group.class_id}-${group.classroom_id}`}
+                  key={`${group.class_group_id}-${group.classroom_id}`}
                   className="border rounded-lg p-4 space-y-3"
                 >
                   <div className="flex items-start justify-between">
@@ -231,7 +234,7 @@ export default function AssignmentModal({
                       <div className="text-sm font-semibold text-muted-foreground">
                         {group.classroom_name}
                       </div>
-                      <div className="text-lg font-semibold">{group.class_name}</div>
+                      <div className="text-lg font-semibold">{group.class_group_name}</div>
                       {group.enrollment > 0 && (
                         <div className="text-sm text-muted-foreground mt-1">
                           Enrollment: {group.enrollment}
@@ -250,7 +253,7 @@ export default function AssignmentModal({
                     <TeacherSelector
                       dayOfWeekId={data.day_of_week_id}
                       timeSlotId={data.time_slot_id}
-                      classId={group.class_id}
+                      classId={group.class_group_id}
                       classroomId={group.classroom_id}
                       selectedTeachers={group.assigned_teachers}
                       onTeachersChange={teachers => {

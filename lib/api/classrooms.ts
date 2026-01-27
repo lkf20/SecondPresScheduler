@@ -3,7 +3,7 @@ import { Database } from '@/types/database'
 import { getUserSchoolId } from '@/lib/utils/auth'
 
 type Classroom = Database['public']['Tables']['classrooms']['Row']
-type AllowedClassJoin = { class: { id: string; name: string } | null }
+type AllowedClassJoin = { class_group: { id: string; name: string } | null }
 type ClassroomRaw = Classroom & { allowed_classes?: AllowedClassJoin[] }
 type ClassroomWithAllowedClasses = Classroom & {
   allowed_classes_names: string
@@ -21,7 +21,7 @@ export async function getClassrooms(
       `
       *,
       allowed_classes:classroom_allowed_classes(
-        class:class_groups(id, name)
+        class_group:class_groups(id, name)
       )
     `
     )
@@ -46,7 +46,7 @@ export async function getClassrooms(
     ...classroom,
     allowed_classes_names:
       classroom.allowed_classes
-        ?.map(ac => ac.class?.name)
+        ?.map(ac => ac.class_group?.name)
         .filter((name): name is string => Boolean(name))
         .join(', ') || 'None',
     allowed_classes_count: classroom.allowed_classes?.length || 0,
@@ -146,14 +146,17 @@ export async function getClassroomAllowedClasses(classroomId: string): Promise<s
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('classroom_allowed_classes')
-    .select('class_id, class:class_groups(id, name)')
+    .select('class_group_id, class_id, class_group:class_groups(id, name)')
     .eq('classroom_id', classroomId)
 
   if (error) throw error
-  return data.map(item => item.class_id)
+  return data.map(item => item.class_group_id ?? item.class_id)
 }
 
-export async function setClassroomAllowedClasses(classroomId: string, classIds: string[]) {
+export async function setClassroomAllowedClasses(
+  classroomId: string,
+  classGroupIds: string[]
+) {
   const supabase = await createClient()
 
   // Delete existing allowed classes
@@ -165,10 +168,11 @@ export async function setClassroomAllowedClasses(classroomId: string, classIds: 
   if (deleteError) throw deleteError
 
   // Insert new allowed classes
-  if (classIds.length > 0) {
-    const insertData = classIds.map(classId => ({
+  if (classGroupIds.length > 0) {
+    const insertData = classGroupIds.map(classGroupId => ({
       classroom_id: classroomId,
-      class_id: classId,
+      class_group_id: classGroupId,
+      class_id: classGroupId,
     }))
 
     const { error: insertError } = await supabase

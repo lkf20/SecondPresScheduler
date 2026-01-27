@@ -29,8 +29,8 @@ interface MappingConfigurationModalProps {
 }
 
 interface ClassClassroomCombo {
-  class_id: string
-  class_name: string
+  class_group_id: string
+  class_group_name: string
   classroom_id: string
   classroom_name: string
   isEnabled: boolean
@@ -66,11 +66,13 @@ export default function MappingConfigurationModal({
         ;(classesData as ClassGroup[]).forEach(cls => {
           ;(classroomsData as Classroom[]).forEach(classroom => {
             const existing = existingMappings.find(
-              m => m.class_id === cls.id && m.classroom_id === classroom.id
+              m =>
+                (m.class_group_id ?? m.class_id) === cls.id &&
+                m.classroom_id === classroom.id
             )
             combos.push({
-              class_id: cls.id,
-              class_name: cls.name,
+              class_group_id: cls.id,
+              class_group_name: cls.name,
               classroom_id: classroom.id,
               classroom_name: classroom.name,
               isEnabled: !!existing,
@@ -83,7 +85,7 @@ export default function MappingConfigurationModal({
           combos.sort((a, b) => {
             const classroomCompare = a.classroom_name.localeCompare(b.classroom_name)
             if (classroomCompare !== 0) return classroomCompare
-            return a.class_name.localeCompare(b.class_name)
+            return a.class_group_name.localeCompare(b.class_group_name)
           })
         )
       } catch (err: unknown) {
@@ -123,7 +125,7 @@ export default function MappingConfigurationModal({
       // Create new mappings
       if (toCreate.length > 0) {
         const newMappings = toCreate.map(c => ({
-          class_id: c.class_id,
+          class_group_id: c.class_group_id,
           classroom_id: c.classroom_id,
           day_of_week_id: dayOfWeekId,
           time_slot_id: timeSlotId,
@@ -162,7 +164,7 @@ export default function MappingConfigurationModal({
       for (const targetDayId of targetDays) {
         for (const combo of enabledCombos) {
           newMappings.push({
-            class_id: combo.class_id,
+            class_group_id: combo.class_group_id,
             classroom_id: combo.classroom_id,
             day_of_week_id: targetDayId,
             time_slot_id: timeSlotId,
@@ -219,7 +221,7 @@ export default function MappingConfigurationModal({
             <div className="space-y-2 mt-4 max-h-[60vh] overflow-y-auto">
               {combinations.map((combo, idx) => (
                 <div
-                  key={`${combo.class_id}-${combo.classroom_id}`}
+                  key={`${combo.class_group_id}-${combo.classroom_id}`}
                   className="flex items-center space-x-2 p-2 hover:bg-accent rounded cursor-pointer"
                   onClick={() => handleToggle(idx)}
                 >
@@ -229,7 +231,7 @@ export default function MappingConfigurationModal({
                       {combo.classroom_name}
                     </span>
                     {' - '}
-                    <span>{combo.class_name}</span>
+                    <span>{combo.class_group_name}</span>
                   </Label>
                 </div>
               ))}
