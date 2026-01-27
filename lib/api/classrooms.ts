@@ -169,11 +169,43 @@ export async function setClassroomAllowedClasses(
 
   // Insert new allowed classes
   if (classGroupIds.length > 0) {
-    const insertData = classGroupIds.map(classGroupId => ({
-      classroom_id: classroomId,
-      class_group_id: classGroupId,
-      class_id: classGroupId,
-    }))
+    const { data: classGroups, error: classGroupsError } = await supabase
+      .from('class_groups')
+      .select('id, name')
+      .in('id', classGroupIds)
+
+    if (classGroupsError) throw classGroupsError
+
+    const classGroupNames = Array.from(
+      new Set((classGroups || []).map(cg => cg.name).filter(Boolean))
+    )
+    const classNameToId = new Map<string, string>()
+
+    if (classGroupNames.length > 0) {
+      const { data: classes, error: classesError } = await supabase
+        .from('classes')
+        .select('id, name')
+        .in('name', classGroupNames)
+
+      if (classesError) throw classesError
+
+      ;(classes || []).forEach(cls => {
+        classNameToId.set(cls.name, cls.id)
+      })
+    }
+
+    const insertData = classGroupIds.map(classGroupId => {
+      const classGroup = classGroups?.find(cg => cg.id === classGroupId)
+      const classId = classGroup ? classNameToId.get(classGroup.name) : undefined
+      if (!classId) {
+        throw new Error(`No legacy class found for class_group_id ${classGroupId}`)
+      }
+      return {
+        classroom_id: classroomId,
+        class_group_id: classGroupId,
+        class_id: classId,
+      }
+    })
 
     const { error: insertError } = await supabase
       .from('classroom_allowed_classes')

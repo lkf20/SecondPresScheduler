@@ -868,7 +868,7 @@ export default function ScheduleSidePanel({
             }
 
             // Update schedules that have wrong class group but teacher is still selected
-            // This handles the case when class groups change - we update the class_id, not delete
+            // This handles the case when class groups change - we update the stored class group, not delete
             // Note: primaryClassGroupId should never be null here because we validate before saving
             for (const schedule of currentSchedules) {
               const teacherStillSelected = newTeacherIds.has(schedule.teacher_id)
@@ -981,7 +981,6 @@ export default function ScheduleSidePanel({
                   day_of_week_id: updateDayId,
                   time_slot_id: updateTimeSlotId,
                   class_group_id: primaryClassGroupId,
-                  class_id: primaryClassGroupId,
                   classroom_id: classroomId,
                   is_floater: teacher.is_floater ?? false,
                 }

@@ -8,7 +8,7 @@ import { Loader2 } from 'lucide-react'
 
 interface ClassPreference {
   id: string
-  class_group_id: string
+  class_group_id?: string | null
   /** @deprecated Use class_group_id instead. */
   class_id?: string
   class_group?: {
