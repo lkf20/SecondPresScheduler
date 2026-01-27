@@ -1,6 +1,8 @@
 -- Make email nullable in staff table
 -- This allows staff members to be created without an email address
 
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 ALTER TABLE staff 
   ALTER COLUMN email DROP NOT NULL;
 
@@ -17,7 +19,6 @@ ALTER TABLE staff DROP CONSTRAINT IF EXISTS staff_id_fkey;
 ALTER TABLE staff DROP CONSTRAINT IF EXISTS staff_id_auth_users_id_fkey;
 
 -- Add a default UUID generation for the id column
--- Note: This requires the uuid-ossp extension which should already be enabled
+-- Note: This requires the pgcrypto extension which should already be enabled
 ALTER TABLE staff
-  ALTER COLUMN id SET DEFAULT uuid_generate_v4();
-
+  ALTER COLUMN id SET DEFAULT gen_random_uuid();
