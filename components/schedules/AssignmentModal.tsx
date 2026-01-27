@@ -109,7 +109,7 @@ export default function AssignmentModal({
     // First, add existing assignments
     data.assignments.forEach(assignment => {
       // Use classroom_id as the key since teachers are now assigned to classrooms, not class groups
-      const classGroupId = assignment.class_group_id ?? assignment.class_id
+      const classGroupId = assignment.class_group_id
       const key = `${classGroupId || 'no-class'}-${assignment.classroom_id}`
 
       if (assignment.teacher_id) {
@@ -118,7 +118,7 @@ export default function AssignmentModal({
           const classInfo = data.assignments.find(
             a =>
               !a.teacher_id &&
-              (a.class_group_id ?? a.class_id) === classGroupId &&
+              a.class_group_id === classGroupId &&
               a.classroom_id === assignment.classroom_id
           )
           if (classInfo && classGroupId && classInfo.class_name) {
@@ -162,14 +162,14 @@ export default function AssignmentModal({
 
     // Then, add configured mappings that don't have assignments yet
     mappings.forEach(mapping => {
-      const classGroupId = mapping.class_group_id ?? mapping.class_id
+      const classGroupId = mapping.class_group_id
       if (!classGroupId) return
       const key = `${classGroupId}-${mapping.classroom_id}`
       if (!groups.has(key)) {
         // Get enrollment for this class/day/time
         const enrollment = enrollments.find(
           e =>
-            (e.class_group_id ?? e.class_id) === classGroupId &&
+            e.class_group_id === classGroupId &&
             e.day_of_week_id === data.day_of_week_id &&
             e.time_slot_id === data.time_slot_id
         )
@@ -177,7 +177,7 @@ export default function AssignmentModal({
         // Get staffing rule for this class/day/time
         const rule = staffingRules.find(
           r =>
-            (r.class_group_id ?? r.class_id) === classGroupId &&
+            r.class_group_id === classGroupId &&
             r.day_of_week_id === data.day_of_week_id &&
             r.time_slot_id === data.time_slot_id
         )

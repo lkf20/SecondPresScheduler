@@ -9,14 +9,7 @@ import { Loader2 } from 'lucide-react'
 interface ClassPreference {
   id: string
   class_group_id?: string | null
-  /** @deprecated Use class_group_id instead. */
-  class_id?: string
   class_group?: {
-    id: string
-    name: string
-  }
-  /** @deprecated Use class_group instead. */
-  class?: {
     id: string
     name: string
   }
@@ -149,7 +142,7 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
     )
   }
 
-  const selectedClassIds = classPreferences.map(p => p.class_group_id ?? p.class_id).filter(Boolean)
+  const selectedClassIds = classPreferences.map(p => p.class_group_id).filter(Boolean)
   const normalizedQualifications = qualifications.map(q => ({
     ...q,
     qualification: q.qualification

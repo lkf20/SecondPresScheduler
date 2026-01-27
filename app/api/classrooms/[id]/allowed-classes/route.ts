@@ -15,17 +15,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params
     const body = await request.json()
-    const { class_group_ids, class_ids } = body
-    const ids = Array.isArray(class_group_ids) ? class_group_ids : class_ids
+    const { class_group_ids } = body
 
-    if (!Array.isArray(ids)) {
+    if (!Array.isArray(class_group_ids)) {
       return NextResponse.json(
         { error: 'class_group_ids must be an array' },
         { status: 400 }
       )
     }
 
-    await setClassroomAllowedClasses(id, ids)
+    await setClassroomAllowedClasses(id, class_group_ids)
     return NextResponse.json({ success: true })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })

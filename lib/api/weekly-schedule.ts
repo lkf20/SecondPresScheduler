@@ -18,7 +18,6 @@ type TimeOffShiftRowFromQuery = {
 }
 type TeacherScheduleRow = Database['public']['Tables']['teacher_schedules']['Row'] & {
   class_group_id?: string | null
-  class_id: string | null
   class?: { id: string; name: string } | null
 }
 type ClassGroupLite = Pick<ClassGroupRow, 'id' | 'name'>
@@ -44,8 +43,8 @@ const getStaffDisplayName = (staff: StaffLite | StaffLite[] | null | undefined) 
   )
 }
 
-const getRuleClassGroupId = (rule: { class_group_id?: string | null; class_id?: string | null }) =>
-  rule.class_group_id ?? rule.class_id ?? null
+const getRuleClassGroupId = (rule: { class_group_id?: string | null }) =>
+  rule.class_group_id ?? null
 
 type ScheduleCellRaw = ScheduleCellRow & {
   schedule_cell_class_groups?: Array<{ class_group: ClassGroupRow | null }>
@@ -63,8 +62,6 @@ type WeeklySubAssignment = {
   sub_name: string
   teacher_name: string
   class_group_id: string | null
-  /** @deprecated Use class_group_id instead. */
-  class_id: string | null
   class_name: string | null
 }
 
@@ -81,8 +78,6 @@ export interface WeeklyScheduleData {
     teacher_id: string
     teacher_name: string
     class_group_id?: string // Optional: teachers are assigned to classrooms, not specific class groups
-    /** @deprecated Use class_group_id instead. */
-    class_id?: string // Optional: teachers are assigned to classrooms, not specific class groups
     class_name?: string // Optional: teachers are assigned to classrooms, not specific class groups
     classroom_id: string
     classroom_name: string
@@ -292,16 +287,12 @@ export async function getWeeklyScheduleData(
     throw new Error(`Failed to fetch teacher schedules: ${schedulesError.message}`)
   }
 
-  // Fetch class_groups separately if class_group_id/class_id exists
+  // Fetch class_groups separately if class_group_id exists
   // This avoids the schema cache issue with nullable foreign keys
   if (schedules && schedules.length > 0) {
     const scheduleRows = schedules as TeacherScheduleRow[]
     const classIds = [
-      ...new Set(
-        scheduleRows
-          .map(s => s.class_group_id ?? s.class_id)
-          .filter(Boolean) as string[]
-      ),
+      ...new Set(scheduleRows.map(s => s.class_group_id).filter(Boolean) as string[]),
     ]
     if (classIds.length > 0) {
       const { data: classGroups } = await supabase
@@ -313,12 +304,9 @@ export async function getWeeklyScheduleData(
         (classGroups || []).map((cg: ClassGroupLite) => [cg.id, cg])
       )
       scheduleRows.forEach(schedule => {
-        const classGroupId = schedule.class_group_id ?? schedule.class_id ?? null
+        const classGroupId = schedule.class_group_id ?? null
         if (classGroupId) {
           schedule.class = classGroupsMap.get(classGroupId) || null
-        }
-        if (schedule.class_group_id === undefined) {
-          schedule.class_group_id = schedule.class_id ?? null
         }
       })
     }
@@ -342,59 +330,7 @@ export async function getWeeklyScheduleData(
     throw new Error(`Failed to fetch staffing rules: ${staffingRulesError.message}`)
   }
 
-  if (staffingRules && staffingRules.length > 0) {
-    const classIds = Array.from(
-      new Set(
-        staffingRules
-          .map(rule => rule.class_id)
-          .filter(Boolean) as string[]
-      )
-    )
-
-    if (classIds.length > 0) {
-      const { data: classes, error: classesError } = await supabase
-        .from('classes')
-        .select('id, name')
-        .in('id', classIds)
-
-      if (classesError) {
-        console.warn('Error fetching classes for staffing rules:', classesError.message)
-      } else {
-        const classNames = Array.from(
-          new Set((classes || []).map(cls => cls.name).filter(Boolean))
-        )
-        let classNameToGroupId = new Map<string, string>()
-
-        if (classNames.length > 0) {
-          const { data: classGroups, error: classGroupsError } = await supabase
-            .from('class_groups')
-            .select('id, name')
-            .in('name', classNames)
-
-          if (classGroupsError) {
-            console.warn('Error fetching class groups for staffing rules:', classGroupsError.message)
-          } else {
-            classNameToGroupId = new Map((classGroups || []).map(cg => [cg.name, cg.id]))
-          }
-        }
-
-        const classIdToGroupId = new Map(
-          (classes || [])
-            .map(cls => {
-              const groupId = classNameToGroupId.get(cls.name)
-              return groupId ? [cls.id, groupId] : null
-            })
-            .filter((entry): entry is [string, string] => Boolean(entry))
-        )
-
-        staffingRules.forEach((rule: any) => {
-          if (!rule.class_group_id && rule.class_id) {
-            rule.class_group_id = classIdToGroupId.get(rule.class_id) ?? null
-          }
-        })
-      }
-    }
-  }
+  // staffing_rules now include class_group_id directly
 
   // Get schedule cells (gracefully handle if table doesn't exist yet)
   let scheduleCells: ScheduleCellRaw[] | null = null
@@ -502,7 +438,6 @@ export async function getWeeklyScheduleData(
           sub_name: getStaffDisplayName(sa.sub),
           teacher_name: getStaffDisplayName(sa.teacher),
           class_group_id: null, // sub_assignments doesn't have class_group_id
-          class_id: null, // sub_assignments doesn't have class_id - will use first class group from schedule_cell
           class_name: null,
           // Note: teacher_id in sub_assignments represents the absent teacher
           // sub_id represents the substitute covering for them
@@ -604,8 +539,7 @@ export async function getWeeklyScheduleData(
               assignment.teacher?.display_name ||
               `${assignment.teacher?.first_name || ''} ${assignment.teacher?.last_name || ''}`.trim() ||
               'Unknown',
-            class_group_id: assignment.class_group_id ?? assignment.class_id ?? undefined,
-            class_id: assignment.class_id || undefined, // Legacy field for compatibility
+            class_group_id: assignment.class_group_id ?? undefined,
             class_name: assignment.class?.name || undefined, // Include class_name for display
             classroom_id: assignment.classroom_id,
             classroom_name: assignment.classroom?.name || 'Unknown',
@@ -676,7 +610,7 @@ export async function getWeeklyScheduleData(
                 })
               }
 
-              const subClassGroupId = sub.class_group_id ?? sub.class_id
+              const subClassGroupId = sub.class_group_id ?? null
               const matchingClassGroup =
                 subClassGroupId && classGroupIds.includes(subClassGroupId)
                   ? classGroups.find(cg => cg.id === subClassGroupId)
@@ -687,9 +621,6 @@ export async function getWeeklyScheduleData(
                 teacher_id: sub.sub_id,
                 teacher_name: sub.sub_name,
                 class_group_id:
-                  subClassGroupId ||
-                  (matchingClassGroup ? matchingClassGroup.id : classGroupIds[0]),
-                class_id:
                   subClassGroupId ||
                   (matchingClassGroup ? matchingClassGroup.id : classGroupIds[0]),
                 class_name:

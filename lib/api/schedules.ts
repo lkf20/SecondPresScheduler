@@ -2,7 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
 import { getUserSchoolId } from '@/lib/utils/auth'
 
-type TeacherSchedule = Database['public']['Tables']['teacher_schedules']['Row']
+type TeacherSchedule = Database['public']['Tables']['teacher_schedules']['Row'] & {
+  class_group_id: string | null
+}
 type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
 type TimeSlot = Database['public']['Tables']['time_slots']['Row']
 type ClassGroup = Database['public']['Tables']['class_groups']['Row']
@@ -51,8 +53,6 @@ export async function createTeacherSchedule(schedule: {
   day_of_week_id: string
   time_slot_id: string
   class_group_id: string | null
-  /** @deprecated Use class_group_id instead. */
-  class_id?: string | null
   classroom_id: string
   is_floater?: boolean
   school_id?: string
@@ -69,7 +69,7 @@ export async function createTeacherSchedule(schedule: {
     teacher_id: schedule.teacher_id,
     day_of_week_id: schedule.day_of_week_id,
     time_slot_id: schedule.time_slot_id,
-    class_id: schedule.class_id ?? schedule.class_group_id,
+    class_group_id: schedule.class_group_id,
     classroom_id: schedule.classroom_id,
     school_id: schoolId,
     is_floater: schedule.is_floater ?? false,
@@ -134,19 +134,7 @@ export async function updateTeacherSchedule(
   schoolId?: string
 ) {
   const supabase = await createClient()
-  const updatePayload: Partial<TeacherSchedule> & {
-    class_group_id?: string | null
-  } = { ...updates }
-
-  // teacher_schedules still stores class_id; map class_group_id to class_id for now.
-  if ('class_group_id' in updatePayload) {
-    if (updatePayload.class_id === undefined) {
-      updatePayload.class_id = updatePayload.class_group_id
-    }
-    delete updatePayload.class_group_id
-  }
-
-  let query = supabase.from('teacher_schedules').update(updatePayload).eq('id', id)
+  let query = supabase.from('teacher_schedules').update(updates).eq('id', id)
 
   const effectiveSchoolId = schoolId || (await getUserSchoolId())
   if (effectiveSchoolId) {
@@ -193,9 +181,7 @@ export async function bulkCreateTeacherSchedules(
   schedules: Array<{
     day_of_week_id: string
     time_slot_id: string
-    class_group_id: string
-    /** @deprecated Use class_group_id instead. */
-    class_id?: string
+    class_group_id: string | null
     classroom_id: string
   }>,
   schoolId?: string
@@ -212,7 +198,7 @@ export async function bulkCreateTeacherSchedules(
     school_id: effectiveSchoolId,
     day_of_week_id: schedule.day_of_week_id,
     time_slot_id: schedule.time_slot_id,
-    class_id: schedule.class_id ?? schedule.class_group_id,
+    class_group_id: schedule.class_group_id,
     classroom_id: schedule.classroom_id,
   }))
 

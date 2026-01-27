@@ -67,7 +67,7 @@ export default function MappingConfigurationModal({
           ;(classroomsData as Classroom[]).forEach(classroom => {
             const existing = existingMappings.find(
               m =>
-                (m.class_group_id ?? m.class_id) === cls.id &&
+                m.class_group_id === cls.id &&
                 m.classroom_id === classroom.id
             )
             combos.push({

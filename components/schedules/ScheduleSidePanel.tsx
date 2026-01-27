@@ -105,8 +105,7 @@ const log = (...args: unknown[]) => {
   }
 }
 
-const getScheduleClassGroupId = (schedule: TeacherSchedule) =>
-  schedule.class_group_id ?? schedule.class_id ?? null
+const getScheduleClassGroupId = (schedule: TeacherSchedule) => schedule.class_group_id ?? null
 
 export default function ScheduleSidePanel({
   isOpen,
@@ -348,7 +347,7 @@ export default function ScheduleSidePanel({
         const classroom = data.find(c => c.id === classroomId)
         if (classroom && classroom.allowed_classes) {
           const ids = classroom.allowed_classes
-            .map(ac => ac.class?.id)
+            .map(ac => ac.class_group_id ?? ac.class_group?.id)
             .filter((id): id is string => Boolean(id))
           setAllowedClassGroupIds(ids)
         }
@@ -875,7 +874,7 @@ export default function ScheduleSidePanel({
               const hasWrongClassGroupId = getScheduleClassGroupId(schedule) !== primaryClassGroupId
 
               if (teacherStillSelected && hasWrongClassGroupId) {
-                // Update the schedule to have the correct class group (stored in class_id for now)
+                // Update the schedule to have the correct class group
                 log('[ScheduleSidePanel] Updating schedule class_group_id:', {
                   teacher_id: schedule.teacher_id,
                   schedule_id: schedule.id,

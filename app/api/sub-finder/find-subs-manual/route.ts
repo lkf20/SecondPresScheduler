@@ -244,7 +244,7 @@ export async function POST(request: NextRequest) {
           const hasScheduleConflict = scheduleConflicts.has(conflictKey)
           const hasTimeOffConflict = timeOffConflicts.has(conflictKey)
 
-          // Note: class_id is not part of ManualShiftInput, class information is derived from schedule lookup
+          // ManualShiftInput omits class IDs; class group details come from schedule lookup.
 
           const timeSlotCode = slotCodeMap.get(shift.time_slot_id) || ''
           const dayName = dayNameMap.get(shift.day_of_week_id) || ''
