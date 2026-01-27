@@ -4,7 +4,7 @@
 -- Step 1: Create the new class_groups table with the same structure as classes
 -- Note: This migration assumes classes table already has all fields from previous migrations
 CREATE TABLE IF NOT EXISTS class_groups (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL UNIQUE,
   parent_class_id UUID REFERENCES class_groups(id) ON DELETE SET NULL,
   min_age INTEGER,
@@ -37,7 +37,7 @@ WHERE parent_class_id IS NOT NULL AND parent_class_id NOT IN (SELECT id FROM cla
 
 -- Step 4: Create the schedule_cell_class_groups join table
 CREATE TABLE IF NOT EXISTS schedule_cell_class_groups (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   schedule_cell_id UUID NOT NULL REFERENCES schedule_cells(id) ON DELETE CASCADE,
   class_group_id UUID NOT NULL REFERENCES class_groups(id) ON DELETE CASCADE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

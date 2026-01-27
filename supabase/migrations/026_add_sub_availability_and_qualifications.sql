@@ -1,6 +1,6 @@
 -- Create qualification_definitions table
 CREATE TABLE IF NOT EXISTS qualification_definitions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   category TEXT,
   is_system BOOLEAN DEFAULT false,
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS qualification_definitions (
 
 -- Create staff_qualifications table
 CREATE TABLE IF NOT EXISTS staff_qualifications (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   staff_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
   qualification_id UUID NOT NULL REFERENCES qualification_definitions(id) ON DELETE CASCADE,
   level TEXT, -- e.g., "beginner", "intermediate", "advanced"
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS staff_qualifications (
 
 -- Create sub_availability_exception_headers table
 CREATE TABLE IF NOT EXISTS sub_availability_exception_headers (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sub_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
   start_date DATE NOT NULL,
   end_date DATE NOT NULL,

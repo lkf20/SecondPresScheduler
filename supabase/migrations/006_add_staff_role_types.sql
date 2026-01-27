@@ -1,6 +1,8 @@
 -- Create staff_role_types reference table
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 CREATE TABLE IF NOT EXISTS staff_role_types (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   code TEXT UNIQUE NOT NULL,
   label TEXT NOT NULL,
   is_system BOOLEAN DEFAULT FALSE,
@@ -22,5 +24,4 @@ CREATE INDEX IF NOT EXISTS idx_staff_role_types_code ON staff_role_types(code);
 
 -- Add index on staff_role_types.active for filtering
 CREATE INDEX IF NOT EXISTS idx_staff_role_types_active ON staff_role_types(active);
-
 

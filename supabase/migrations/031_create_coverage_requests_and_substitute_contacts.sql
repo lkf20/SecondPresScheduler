@@ -14,7 +14,7 @@
 -- ============================================================================
 INSERT INTO classrooms (id, name, capacity, is_active, "order", created_at, updated_at)
 SELECT 
-  uuid_generate_v4(),
+  gen_random_uuid(),
   'Unknown (needs review)',
   NULL,
   true,
@@ -29,7 +29,7 @@ WHERE NOT EXISTS (
 -- 2. Create coverage_requests abstraction table with counters
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS coverage_requests (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   request_type TEXT NOT NULL CHECK (request_type IN ('time_off', 'manual_coverage', 'emergency')),
   source_request_id UUID, -- Polymorphic reference (time_off_requests.id, etc.)
   teacher_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
@@ -54,7 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_coverage_requests_status ON coverage_requests(sta
 -- 3. Create coverage_request_shifts table
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS coverage_request_shifts (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   coverage_request_id UUID NOT NULL REFERENCES coverage_requests(id) ON DELETE CASCADE,
   date DATE NOT NULL,
   day_of_week_id UUID REFERENCES days_of_week(id),
@@ -101,7 +101,7 @@ COMMENT ON TABLE time_off_shifts IS 'DEPRECATED: Use coverage_request_shifts ins
 -- 6. Create substitute_contacts table (request-level)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS substitute_contacts (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   coverage_request_id UUID NOT NULL REFERENCES coverage_requests(id) ON DELETE CASCADE,
   sub_id UUID NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
   status TEXT NOT NULL CHECK (status IN ('not_contacted', 'contacted', 'pending', 'declined', 'assigned')) DEFAULT 'not_contacted',
@@ -126,7 +126,7 @@ CREATE INDEX IF NOT EXISTS idx_substitute_contacts_status ON substitute_contacts
 -- 7. Create sub_contact_shift_overrides table (shift-level director selections)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS sub_contact_shift_overrides (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   substitute_contact_id UUID NOT NULL REFERENCES substitute_contacts(id) ON DELETE CASCADE,
   coverage_request_shift_id UUID NOT NULL REFERENCES coverage_request_shifts(id) ON DELETE CASCADE,
   selected BOOLEAN NOT NULL DEFAULT true, -- Director selected this shift for assignment
@@ -162,7 +162,7 @@ INSERT INTO coverage_requests (
   updated_at
 )
 SELECT 
-  uuid_generate_v4(),
+  gen_random_uuid(),
   'time_off',
   tor.id,
   tor.teacher_id,
