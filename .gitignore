@@ -28,6 +28,8 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
+.env.local.prod
+.env.local.staging
 
 # vercel
 .vercel
@@ -39,6 +41,9 @@ next-env.d.ts
 # Local dev logs
 .devserver.log
 .eslintcache
+
+# Local db dumps
+db_dumps/
 
 # Local database dumps
 db_dumps/

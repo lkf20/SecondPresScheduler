@@ -153,10 +153,7 @@ export async function getClassroomAllowedClasses(classroomId: string): Promise<s
   return data.map(item => item.class_group_id)
 }
 
-export async function setClassroomAllowedClasses(
-  classroomId: string,
-  classGroupIds: string[]
-) {
+export async function setClassroomAllowedClasses(classroomId: string, classGroupIds: string[]) {
   const supabase = await createClient()
 
   // Delete existing allowed classes

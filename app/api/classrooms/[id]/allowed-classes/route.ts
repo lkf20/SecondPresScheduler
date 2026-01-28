@@ -18,10 +18,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const { class_group_ids } = body
 
     if (!Array.isArray(class_group_ids)) {
-      return NextResponse.json(
-        { error: 'class_group_ids must be an array' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'class_group_ids must be an array' }, { status: 400 })
     }
 
     await setClassroomAllowedClasses(id, class_group_ids)

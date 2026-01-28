@@ -12,9 +12,10 @@ type TimeOffShiftRowFromQuery = {
   day_of_week_id: string | null
   time_slot_id: string
   time_off_request_id: string
-  time_off_requests?: Pick<TimeOffRequestRow, 'teacher_id' | 'status'> | Array<
-    Pick<TimeOffRequestRow, 'teacher_id' | 'status'>
-  > | null
+  time_off_requests?:
+    | Pick<TimeOffRequestRow, 'teacher_id' | 'status'>
+    | Array<Pick<TimeOffRequestRow, 'teacher_id' | 'status'>>
+    | null
 }
 type TeacherScheduleRow = Database['public']['Tables']['teacher_schedules']['Row'] & {
   class_group_id?: string | null
@@ -176,8 +177,8 @@ export async function getWeeklyScheduleData(
       } else if (timeOffShiftsData) {
         timeOffShifts = timeOffShiftsData.map((shift: TimeOffShiftRowFromQuery) => {
           const timeOffRequest = Array.isArray(shift.time_off_requests)
-            ? shift.time_off_requests[0] ?? null
-            : shift.time_off_requests ?? null
+            ? (shift.time_off_requests[0] ?? null)
+            : (shift.time_off_requests ?? null)
           return {
             id: shift.id,
             date: shift.date,
@@ -300,9 +301,7 @@ export async function getWeeklyScheduleData(
         .select('id, name')
         .in('id', classIds)
 
-      const classGroupsMap = new Map(
-        (classGroups || []).map((cg: ClassGroupLite) => [cg.id, cg])
-      )
+      const classGroupsMap = new Map((classGroups || []).map((cg: ClassGroupLite) => [cg.id, cg]))
       scheduleRows.forEach(schedule => {
         const classGroupId = schedule.class_group_id ?? null
         if (classGroupId) {

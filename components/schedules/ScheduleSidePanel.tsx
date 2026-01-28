@@ -173,8 +173,7 @@ export default function ScheduleSidePanel({
   const fallbackTeachers = selectedCellData?.assignments
     ? mapAssignmentsToTeachers(selectedCellData.assignments)
     : []
-  const displayTeachers =
-    selectedTeachers.length > 0 ? selectedTeachers : fallbackTeachers
+  const displayTeachers = selectedTeachers.length > 0 ? selectedTeachers : fallbackTeachers
 
   useEffect(() => {
     if (!isOpen) return
@@ -225,46 +224,51 @@ export default function ScheduleSidePanel({
     []
   )
 
-  const initializeFromCell = useCallback((
-    cellData: Partial<ScheduleCellWithDetails> & {
-      id: string
-      is_active: boolean
-      enrollment_for_staffing: number | null
-      notes: string | null
+  const initializeFromCell = useCallback(
+    (
+      cellData: Partial<ScheduleCellWithDetails> & {
+        id: string
+        is_active: boolean
+        enrollment_for_staffing: number | null
+        notes: string | null
+      },
+      sourceAssignments?: WeeklyScheduleData['assignments']
+    ) => {
+      setCell(cellData)
+      setIsActive(cellData.is_active ?? true)
+      const mappedClassGroupIds = cellData.class_groups?.map(cg => cg.id) || []
+      log('[ScheduleSidePanel] Initial load - classGroupIds:', mappedClassGroupIds)
+      log('[ScheduleSidePanel] Initial load - cellData.class_groups:', cellData.class_groups)
+      initialClassGroupIdsRef.current = mappedClassGroupIds
+      previousClassGroupIdsRef.current = mappedClassGroupIds
+      preserveTeachersRef.current = false
+      setClassGroupIds(mappedClassGroupIds)
+      if (cellData.class_groups && cellData.class_groups.length > 0) {
+        const mappedClassGroups = cellData.class_groups.map(cg => normalizeClassGroup(cg))
+        log('[ScheduleSidePanel] Initial load - mappedClassGroups:', mappedClassGroups)
+        setClassGroups(mappedClassGroups)
+        hasLoadedInitialDataRef.current = true
+      } else {
+        log('[ScheduleSidePanel] Initial load - no class groups, setting empty array')
+        setClassGroups([])
+        hasLoadedInitialDataRef.current = true
+      }
+      setEnrollment(cellData.enrollment_for_staffing)
+      setNotes(cellData.notes)
+      const mappedTeachers = mapAssignmentsToTeachers(sourceAssignments)
+      if (mappedTeachers.length > 0 && !teachersLoadedRef.current) {
+        setSelectedTeachers(mappedTeachers)
+      }
+      const originallyHadData = !!(
+        mappedClassGroupIds.length > 0 || cellData.enrollment_for_staffing !== null
+      )
+      originalCellStateRef.current = {
+        isActive: cellData.is_active ?? true,
+        hasData: originallyHadData,
+      }
     },
-    sourceAssignments?: WeeklyScheduleData['assignments']
-  ) => {
-    setCell(cellData)
-    setIsActive(cellData.is_active ?? true)
-    const mappedClassGroupIds = cellData.class_groups?.map(cg => cg.id) || []
-    log('[ScheduleSidePanel] Initial load - classGroupIds:', mappedClassGroupIds)
-    log('[ScheduleSidePanel] Initial load - cellData.class_groups:', cellData.class_groups)
-    initialClassGroupIdsRef.current = mappedClassGroupIds
-    previousClassGroupIdsRef.current = mappedClassGroupIds
-    preserveTeachersRef.current = false
-    setClassGroupIds(mappedClassGroupIds)
-    if (cellData.class_groups && cellData.class_groups.length > 0) {
-      const mappedClassGroups = cellData.class_groups.map(cg => normalizeClassGroup(cg))
-      log('[ScheduleSidePanel] Initial load - mappedClassGroups:', mappedClassGroups)
-      setClassGroups(mappedClassGroups)
-      hasLoadedInitialDataRef.current = true
-    } else {
-      log('[ScheduleSidePanel] Initial load - no class groups, setting empty array')
-      setClassGroups([])
-      hasLoadedInitialDataRef.current = true
-    }
-    setEnrollment(cellData.enrollment_for_staffing)
-    setNotes(cellData.notes)
-    const mappedTeachers = mapAssignmentsToTeachers(sourceAssignments)
-    if (mappedTeachers.length > 0 && !teachersLoadedRef.current) {
-      setSelectedTeachers(mappedTeachers)
-    }
-    const originallyHadData = !!(mappedClassGroupIds.length > 0 || cellData.enrollment_for_staffing !== null)
-    originalCellStateRef.current = {
-      isActive: cellData.is_active ?? true,
-      hasData: originallyHadData,
-    }
-  }, [normalizeClassGroup])
+    [normalizeClassGroup]
+  )
 
   // Fetch time slots for 'day' scope
   useEffect(() => {
@@ -373,10 +377,7 @@ export default function ScheduleSidePanel({
     )
     log('[ScheduleSidePanel] useEffect - current classGroups:', classGroupsRef.current)
     log('[ScheduleSidePanel] useEffect - loading:', loading)
-    log(
-      '[ScheduleSidePanel] useEffect - hasLoadedInitialData:',
-      hasLoadedInitialDataRef.current
-    )
+    log('[ScheduleSidePanel] useEffect - hasLoadedInitialData:', hasLoadedInitialDataRef.current)
 
     // Don't update if we're still loading - wait for initial data to be set
     if (loading) {
@@ -471,10 +472,7 @@ export default function ScheduleSidePanel({
             if (orderA !== orderB) return orderA - orderB
             return a.name.localeCompare(b.name)
           })
-          log(
-            '[ScheduleSidePanel] useEffect - updating with combined classGroups:',
-            combined
-          )
+          log('[ScheduleSidePanel] useEffect - updating with combined classGroups:', combined)
           setClassGroups(combined)
         })
         // Update immediately with what we have (for removals)
@@ -828,9 +826,7 @@ export default function ScheduleSidePanel({
             ? currentSchedules.filter(
                 (s: TeacherSchedule) => getScheduleClassGroupId(s) === primaryClassGroupId
               )
-            : currentSchedules.filter(
-                (s: TeacherSchedule) => getScheduleClassGroupId(s) === null
-              )
+            : currentSchedules.filter((s: TeacherSchedule) => getScheduleClassGroupId(s) === null)
 
           // Update teacher assignments (works for both with and without class groups)
           // Note: This code path should only run when saving, and we validate classGroupIds.length > 0 before saving
@@ -980,11 +976,7 @@ export default function ScheduleSidePanel({
                   classroom_id: classroomId,
                   is_floater: teacher.is_floater ?? false,
                 }
-                log(
-                  '[ScheduleSidePanel] Creating new schedule for teacher:',
-                  teacher.name,
-                  payload
-                )
+                log('[ScheduleSidePanel] Creating new schedule for teacher:', teacher.name, payload)
                 createPromises.push(
                   fetch('/api/teacher-schedules', {
                     method: 'POST',
