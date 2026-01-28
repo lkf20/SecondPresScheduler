@@ -26,7 +26,9 @@ export default function ClassSelector({ selectedClassIds, onSelectionChange }: C
   const [classes, setClasses] = useState<ClassGroup[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(selectedClassIds))
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    () => new Set(selectedClassIds ?? [])
+  )
 
   useEffect(() => {
     fetch('/api/class-groups')
@@ -39,7 +41,7 @@ export default function ClassSelector({ selectedClassIds, onSelectionChange }: C
 
   // Sync selectedIds with prop changes
   useEffect(() => {
-    setSelectedIds(new Set(selectedClassIds))
+    setSelectedIds(new Set(selectedClassIds ?? []))
   }, [selectedClassIds])
 
   const filteredClasses = classes.filter(cls => {
