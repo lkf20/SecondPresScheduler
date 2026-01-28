@@ -37,8 +37,7 @@ interface TestResult {
 
 const results: TestResult[] = []
 
-const getErrorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : String(error)
+const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
 async function testColumnExists(table: string, column: string): Promise<boolean> {
   try {

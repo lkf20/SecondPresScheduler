@@ -17,11 +17,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { parseLocalDate } from '@/lib/utils/date'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
-import {
-  getButtonColors,
-  getNeutralChipClasses,
-  coverageColorValues,
-} from '@/lib/utils/colors'
+import { getButtonColors, getNeutralChipClasses, coverageColorValues } from '@/lib/utils/colors'
 
 export type TimeOffCardVariant = 'sub-finder' | 'dashboard' | 'time-off'
 
