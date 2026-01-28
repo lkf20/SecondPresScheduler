@@ -484,7 +484,7 @@ export default function WeeklyScheduleGridNew({
 
   // Get cell data for selected cell
   const selectedCellData = selectedCell
-    ? selectedCellSnapshot ?? buildSelectedCellData(selectedCell)
+    ? (selectedCellSnapshot ?? buildSelectedCellData(selectedCell))
     : undefined
 
   // Final filter: ensure we only show selected days

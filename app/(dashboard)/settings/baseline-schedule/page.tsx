@@ -133,13 +133,7 @@ export default function BaselineSchedulePage() {
         layout: 'days-x-classrooms', // Default layout
       })
     }
-  }, [
-    filters,
-    availableDays,
-    availableTimeSlots,
-    availableClassrooms,
-    selectedDayIds,
-  ])
+  }, [filters, availableDays, availableTimeSlots, availableClassrooms, selectedDayIds])
 
   useEffect(() => {
     if (!focusClassroomId || !focusDayId || !focusTimeSlotId) return

@@ -327,8 +327,8 @@ export async function getTeacherTimeOffShifts(
   // Transform the data to match the expected return type
   return data.map((item: TimeOffShiftRow) => {
     const timeOffRequest = Array.isArray(item.time_off_requests)
-      ? item.time_off_requests[0] ?? null
-      : item.time_off_requests ?? null
+      ? (item.time_off_requests[0] ?? null)
+      : (item.time_off_requests ?? null)
 
     return {
       date: item.date,

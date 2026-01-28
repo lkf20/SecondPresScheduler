@@ -32,6 +32,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    // Normalize legacy class_id into class_group_id to avoid schema cache errors
+    if (body?.class_id !== undefined && body?.class_group_id === undefined) {
+      body.class_group_id = body.class_id
+    }
+    if (body?.class_id !== undefined) {
+      delete body.class_id
+    }
 
     // Validate request body
     const validation = validateRequest(createTeacherScheduleSchema, body)

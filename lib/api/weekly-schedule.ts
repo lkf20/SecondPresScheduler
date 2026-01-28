@@ -12,9 +12,10 @@ type TimeOffShiftRowFromQuery = {
   day_of_week_id: string | null
   time_slot_id: string
   time_off_request_id: string
-  time_off_requests?: Pick<TimeOffRequestRow, 'teacher_id' | 'status'> | Array<
-    Pick<TimeOffRequestRow, 'teacher_id' | 'status'>
-  > | null
+  time_off_requests?:
+    | Pick<TimeOffRequestRow, 'teacher_id' | 'status'>
+    | Array<Pick<TimeOffRequestRow, 'teacher_id' | 'status'>>
+    | null
 }
 type TeacherScheduleRow = Database['public']['Tables']['teacher_schedules']['Row'] & {
   class_id: string | null
@@ -173,8 +174,8 @@ export async function getWeeklyScheduleData(
       } else if (timeOffShiftsData) {
         timeOffShifts = timeOffShiftsData.map((shift: TimeOffShiftRowFromQuery) => {
           const timeOffRequest = Array.isArray(shift.time_off_requests)
-            ? shift.time_off_requests[0] ?? null
-            : shift.time_off_requests ?? null
+            ? (shift.time_off_requests[0] ?? null)
+            : (shift.time_off_requests ?? null)
           return {
             id: shift.id,
             date: shift.date,
@@ -288,18 +289,14 @@ export async function getWeeklyScheduleData(
   // This avoids the schema cache issue with nullable foreign keys
   if (schedules && schedules.length > 0) {
     const scheduleRows = schedules as TeacherScheduleRow[]
-    const classIds = [
-      ...new Set(scheduleRows.map(s => s.class_id).filter(Boolean) as string[]),
-    ]
+    const classIds = [...new Set(scheduleRows.map(s => s.class_id).filter(Boolean) as string[])]
     if (classIds.length > 0) {
       const { data: classGroups } = await supabase
         .from('class_groups')
         .select('id, name')
         .in('id', classIds)
 
-      const classGroupsMap = new Map(
-        (classGroups || []).map((cg: ClassGroupLite) => [cg.id, cg])
-      )
+      const classGroupsMap = new Map((classGroups || []).map((cg: ClassGroupLite) => [cg.id, cg]))
       scheduleRows.forEach(schedule => {
         if (schedule.class_id) {
           schedule.class = classGroupsMap.get(schedule.class_id) || null
