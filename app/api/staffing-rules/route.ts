@@ -7,6 +7,7 @@ export async function GET() {
     const { data, error } = await supabase.from('staffing_rules').select('*')
 
     if (error) throw error
+
     return NextResponse.json(data || [])
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })

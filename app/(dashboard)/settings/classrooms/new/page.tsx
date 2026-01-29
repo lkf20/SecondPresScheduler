@@ -41,7 +41,7 @@ export default function NewClassroomPage() {
       const payload: {
         name: string
         capacity?: number
-        allowed_classes?: string[]
+        allowed_class_group_ids?: string[]
         color?: string | null
         is_active?: boolean
       } = { name: data.name }
@@ -53,7 +53,7 @@ export default function NewClassroomPage() {
       }
       // Order will be set automatically to the end (highest order + 1)
       if (allowedClassIds.length > 0) {
-        payload.allowed_classes = allowedClassIds
+        payload.allowed_class_group_ids = allowedClassIds
       }
       // Add color if selected
       if (selectedColor) {

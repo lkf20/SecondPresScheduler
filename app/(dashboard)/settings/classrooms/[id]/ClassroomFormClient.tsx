@@ -82,10 +82,14 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
       const payload: {
         name: string
         capacity?: number
-        allowed_classes: string[]
+        allowed_class_group_ids: string[]
         color?: string | null
         is_active: boolean
-      } = { name: data.name, allowed_classes: allowedClassIds, is_active: data.is_active ?? true }
+      } = {
+        name: data.name,
+        allowed_class_group_ids: allowedClassIds,
+        is_active: data.is_active ?? true,
+      }
       if (data.capacity && data.capacity !== '') {
         const capacityNum = Number(data.capacity)
         if (!isNaN(capacityNum) && capacityNum > 0) {

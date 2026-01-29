@@ -1,6 +1,6 @@
 -- Create time_off_shifts table to store individual shifts for time off requests
 CREATE TABLE time_off_shifts (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   time_off_request_id UUID NOT NULL REFERENCES time_off_requests(id) ON DELETE CASCADE,
   date DATE NOT NULL,
   day_of_week_id UUID REFERENCES days_of_week(id),

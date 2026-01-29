@@ -249,7 +249,7 @@ export default function WeeklySchedulePage() {
                 }
 
                 // In Subs mode, ONLY show slots that actually have a substitute assignment for this week.
-                // Don't rely on class_id filtering since sub assignments may not have a class_id.
+                // Don't rely on legacy filtering since sub assignments may not have a class group.
                 if (filters.displayMode === 'substitutes-only') {
                   return (slot.assignments || []).some(a => a.is_substitute === true)
                 }
@@ -493,7 +493,8 @@ export default function WeeklySchedulePage() {
               if (!a.teacher_id) return false
               if (a.is_floater) return false
               if (a.is_substitute === true) return true
-              return !!a.class_id && classGroupIds.includes(a.class_id)
+              const classGroupId = a.class_group_id
+              return !!classGroupId && classGroupIds.includes(classGroupId)
             })
 
             const assignedCount = coverageAssignments.length

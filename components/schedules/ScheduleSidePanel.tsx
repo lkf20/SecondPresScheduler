@@ -105,6 +105,9 @@ const log = (...args: unknown[]) => {
   }
 }
 
+const getScheduleClassGroupId = (schedule: TeacherSchedule) =>
+  schedule.class_group_id ?? schedule.class_id ?? null
+
 export default function ScheduleSidePanel({
   isOpen,
   onClose,
@@ -349,7 +352,7 @@ export default function ScheduleSidePanel({
         const classroom = data.find(c => c.id === classroomId)
         if (classroom && classroom.allowed_classes) {
           const ids = classroom.allowed_classes
-            .map(ac => ac.class?.id)
+            .map(ac => ac.class_group_id ?? ac.class_group?.id)
             .filter((id): id is string => Boolean(id))
           setAllowedClassGroupIds(ids)
         }
@@ -582,9 +585,9 @@ export default function ScheduleSidePanel({
         return r.json()
       })
       .then((data: TeacherSchedule[]) => {
-        // Filter by classroom, day, time slot, and class (if classGroupIds is set)
+        // Filter by classroom, day, time slot, and class group (if classGroupIds is set)
         // If we're preserving teachers (class groups were just changed), show all teachers for this location
-        // regardless of class_id, so they don't disappear from the UI
+        // regardless of class group, so they don't disappear from the UI
         const filtered = data.filter(schedule => {
           const matchesLocation =
             schedule.classroom_id === classroomId &&
@@ -599,7 +602,7 @@ export default function ScheduleSidePanel({
           }
 
           // Teachers are assigned to the slot (classroom/day/time), not the class group,
-          // so show all teachers for this location regardless of class_id.
+          // so show all teachers for this location regardless of class group.
           return true
         })
 
@@ -621,7 +624,7 @@ export default function ScheduleSidePanel({
           teachers: teachers.map(t => ({ name: t.name, teacher_id: t.teacher_id })),
           filtered: filtered.map(s => ({
             teacher_id: s.teacher_id,
-            class_id: s.class_id,
+            class_group_id: getScheduleClassGroupId(s),
             classroom_id: s.classroom_id,
             day: s.day_of_week_id,
             time: s.time_slot_id,
@@ -745,16 +748,12 @@ export default function ScheduleSidePanel({
         timeSlotsToUpdate = [timeSlotId]
       }
 
-      // Use first class group ID for class_id (primary class group)
-      const primaryClassGroupId = classGroupIds.length > 0 ? classGroupIds[0] : null
-
       // Update cells for each day/time slot combination
       const updates: Array<{
         classroom_id: string
         day_of_week_id: string
         time_slot_id: string
         is_active: boolean
-        class_id: string | null
         enrollment_for_staffing: number | null
         notes: string | null
       }> = []
@@ -766,7 +765,6 @@ export default function ScheduleSidePanel({
             day_of_week_id: updateDayId,
             time_slot_id: updateTimeSlotId,
             is_active: cellData.is_active,
-            class_id: primaryClassGroupId,
             enrollment_for_staffing: cellData.enrollment_for_staffing,
             notes: cellData.notes,
           })
@@ -815,7 +813,7 @@ export default function ScheduleSidePanel({
           )
 
           // Use first class group ID for teacher schedules (teachers are assigned to the slot, not individual class groups)
-          // Allow null class_id when no class groups are assigned (teachers can exist without class groups)
+          // Allow null class group when no class groups are assigned (teachers can exist without class groups)
           const primaryClassGroupId = classGroupIds.length > 0 ? classGroupIds[0] : null
 
           log('[ScheduleSidePanel] Processing cell:', {
@@ -826,18 +824,17 @@ export default function ScheduleSidePanel({
           })
 
           // Filter schedules for this slot
-          // If classGroupIds is set, filter to schedules matching the primary class group
-          // If no class groups, get schedules with null class_id (assigned without class groups)
+          // If no class assignments exist, use all current schedules for the slot.
+          // Otherwise, filter to schedules matching the primary class group (or null when none).
           const schedulesForThisSlot = !hasClassAssignments
             ? currentSchedules
             : primaryClassGroupId
               ? currentSchedules.filter(
-                  (s: TeacherSchedule) => (s.class_group_id ?? s.class_id) === primaryClassGroupId
+                  (s: TeacherSchedule) => getScheduleClassGroupId(s) === primaryClassGroupId
                 )
               : currentSchedules.filter(
                   (s: TeacherSchedule) =>
-                    (s.class_group_id ?? s.class_id) === null ||
-                    (s.class_group_id ?? s.class_id) === undefined
+                    getScheduleClassGroupId(s) === null || getScheduleClassGroupId(s) === undefined
                 )
 
           // Update teacher assignments (works for both with and without class groups)
@@ -847,7 +844,7 @@ export default function ScheduleSidePanel({
             const newTeacherIds = new Set(selectedTeachers.map(t => t.teacher_id))
 
             // Remove assignments that are no longer selected
-            // For schedules with wrong class_id, we'll update them instead of deleting
+            // For schedules with wrong class group, we'll update them instead of deleting
             for (const schedule of schedulesForThisSlot) {
               if (!newTeacherIds.has(schedule.teacher_id)) {
                 log('[ScheduleSidePanel] Deleting schedule - teacher no longer selected:', {
@@ -871,17 +868,17 @@ export default function ScheduleSidePanel({
               }
             }
 
-            // Update schedules that have wrong class_id but teacher is still selected
-            // This handles the case when class groups change - we update the class_id, not delete
+            // Update schedules that have wrong class group but teacher is still selected
+            // This handles the case when class groups change - we update the stored class group, not delete
             // Note: primaryClassGroupId should never be null here because we validate before saving
             if (hasClassAssignments) {
               for (const schedule of currentSchedules) {
                 const teacherStillSelected = newTeacherIds.has(schedule.teacher_id)
-                const scheduleClassGroupId = schedule.class_group_id ?? schedule.class_id ?? null
+                const scheduleClassGroupId = getScheduleClassGroupId(schedule)
                 const hasWrongClassId = scheduleClassGroupId !== primaryClassGroupId
 
                 if (teacherStillSelected && hasWrongClassId) {
-                  // Update the schedule to have the correct class_id
+                  // Update the schedule to have the correct class_group_id
                   log('[ScheduleSidePanel] Updating schedule class_group_id:', {
                     teacher_id: schedule.teacher_id,
                     schedule_id: schedule.id,
@@ -927,7 +924,7 @@ export default function ScheduleSidePanel({
                 continue
               }
 
-              // Check if teacher already has a schedule for this slot with matching class_id
+              // Check if teacher already has a schedule for this slot with matching class group
               const teacherScheduleForThisSlot = schedulesForThisSlot.find(
                 (s: TeacherSchedule) => s.teacher_id === teacher.teacher_id
               )
@@ -940,14 +937,14 @@ export default function ScheduleSidePanel({
               )
 
               if (!teacherScheduleForThisSlot) {
-                // Teacher doesn't have a schedule for this slot with the correct class_id
-                // Check if they have one with wrong class_id - if so, it should have been updated above
+                // Teacher doesn't have a schedule for this slot with the correct class group
+                // Check if they have one with wrong class group - if so, it should have been updated above
                 // But if it wasn't (edge case), we'll create a new one
                 const teacherScheduleForOtherClass = hasClassAssignments
                   ? currentSchedules.find(
                       (s: TeacherSchedule) =>
                         s.teacher_id === teacher.teacher_id &&
-                        (s.class_group_id ?? s.class_id) !== primaryClassGroupId
+                        getScheduleClassGroupId(s) !== primaryClassGroupId
                     )
                   : undefined
 
@@ -955,7 +952,7 @@ export default function ScheduleSidePanel({
                   // This schedule should have been updated in the loop above, but if it wasn't,
                   // we'll update it now as a fallback
                   log(
-                    '[ScheduleSidePanel] Updating existing schedule with wrong class_id (fallback):',
+                    '[ScheduleSidePanel] Updating existing schedule with wrong class_group_id (fallback):',
                     teacherScheduleForOtherClass.id
                   )
                   createPromises.push(

@@ -41,12 +41,13 @@ export interface Classroom {
 export interface ClassroomWithAllowedClasses extends Classroom {
   allowed_classes?: Array<{
     id: string
-    class?: {
+    class_group_id?: string
+    class_group?: {
       id: string
       name: string
     } | null
   }>
-  // Note: allowed_classes.class references class_groups table
+  // Note: allowed_classes.class_group references class_groups table
 }
 
 export interface TeacherSchedule {
@@ -64,6 +65,11 @@ export interface TeacherSchedule {
     last_name: string
     display_name: string | null
   }
+  class_group?: {
+    id: string
+    name: string
+  }
+  /** @deprecated Use class_group instead. */
   class?: {
     id: string
     name: string
@@ -82,6 +88,6 @@ export interface TeacherSchedule {
     code: string
     name: string | null
   }
-  created_at?: string
-  updated_at?: string
+  created_at?: string | null
+  updated_at?: string | null
 }

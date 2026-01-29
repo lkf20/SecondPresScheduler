@@ -8,13 +8,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { data, error } = await supabase
       .from('sub_class_preferences')
-      .select('*, class:class_groups(*)')
+      .select('*, class_group:class_groups(*)')
       .eq('sub_id', id)
       .eq('can_teach', true) // Only get preferences where can_teach is true
-      .order('class_id', { ascending: true })
+      .order('class_group_id', { ascending: true })
 
     if (error) throw error
-
     return NextResponse.json(data || [])
   } catch (error: any) {
     console.error('Error fetching sub preferences:', error)
@@ -26,10 +25,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params
     const body = await request.json()
-    const { class_ids } = body // Array of class IDs that the sub prefers
+    const { class_group_ids } = body // Array of class group IDs that the sub prefers
+    const ids = class_group_ids
 
-    if (!Array.isArray(class_ids)) {
-      return NextResponse.json({ error: 'class_ids must be an array' }, { status: 400 })
+    if (!Array.isArray(ids)) {
+      return NextResponse.json({ error: 'class_group_ids must be an array' }, { status: 400 })
     }
 
     const supabase = await createClient()
@@ -43,10 +43,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (deleteError) throw deleteError
 
     // Insert new preferences
-    if (class_ids.length > 0) {
-      const preferencesData = class_ids.map((class_id: string) => ({
+    if (ids.length > 0) {
+      const preferencesData = ids.map((class_group_id: string) => ({
         sub_id: id,
-        class_id,
+        class_group_id,
         can_teach: true,
       }))
 

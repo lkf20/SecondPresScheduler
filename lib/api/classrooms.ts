@@ -4,7 +4,7 @@ import { getUserSchoolId } from '@/lib/utils/auth'
 
 type Classroom = Database['public']['Tables']['classrooms']['Row']
 type AllowedClassJoin = {
-  class: { id: string; name: string } | null
+  class_group: { id: string; name: string } | null
   class_legacy?: { id: string; name: string } | null
 }
 type ClassroomRaw = Classroom & { allowed_classes?: AllowedClassJoin[] }
@@ -24,7 +24,7 @@ export async function getClassrooms(
       `
       *,
       allowed_classes:classroom_allowed_classes(
-        class:class_groups!classroom_allowed_classes_class_group_id_fkey(id, name),
+        class_group:class_groups!classroom_allowed_classes_class_group_id_fkey(id, name),
         class_legacy:class_groups!classroom_allowed_classes_class_id_fkey(id, name)
       )
     `
@@ -50,12 +50,13 @@ export async function getClassrooms(
     ...classroom,
     allowed_classes_names:
       classroom.allowed_classes
-        ?.map(ac => ac.class?.name || ac.class_legacy?.name)
+        ?.map(ac => ac.class_group?.name || ac.class_legacy?.name)
         .filter((name): name is string => Boolean(name))
         .join(', ') || 'None',
     allowed_classes_count:
-      classroom.allowed_classes?.filter(ac => Boolean(ac.class?.name || ac.class_legacy?.name))
-        .length || 0,
+      classroom.allowed_classes?.filter(ac =>
+        Boolean(ac.class_group?.name || ac.class_legacy?.name)
+      ).length || 0,
   }))
 }
 
@@ -153,7 +154,7 @@ export async function getClassroomAllowedClasses(classroomId: string): Promise<s
   const { data, error } = await supabase
     .from('classroom_allowed_classes')
     .select(
-      'class_id, class_group_id, class:class_groups!classroom_allowed_classes_class_group_id_fkey(id)'
+      'class_id, class_group_id, class_group:class_groups!classroom_allowed_classes_class_group_id_fkey(id)'
     )
     .eq('classroom_id', classroomId)
 
@@ -163,7 +164,7 @@ export async function getClassroomAllowedClasses(classroomId: string): Promise<s
     .filter((id): id is string => Boolean(id))
 }
 
-export async function setClassroomAllowedClasses(classroomId: string, classIds: string[]) {
+export async function setClassroomAllowedClasses(classroomId: string, classGroupIds: string[]) {
   const supabase = await createClient()
 
   // Delete existing allowed classes
@@ -175,12 +176,14 @@ export async function setClassroomAllowedClasses(classroomId: string, classIds: 
   if (deleteError) throw deleteError
 
   // Insert new allowed classes
-  if (classIds.length > 0) {
-    const insertData = classIds.map(classId => ({
-      classroom_id: classroomId,
-      class_id: classId,
-      class_group_id: classId,
-    }))
+  if (classGroupIds.length > 0) {
+    const insertData = classGroupIds.map(classGroupId => {
+      return {
+        classroom_id: classroomId,
+        class_group_id: classGroupId,
+        class_id: classGroupId,
+      }
+    })
 
     const { error: insertError } = await supabase
       .from('classroom_allowed_classes')

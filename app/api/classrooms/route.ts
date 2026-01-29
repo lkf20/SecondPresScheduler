@@ -14,14 +14,19 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { allowed_classes, ...classroomData } = body
+    const { allowed_class_group_ids, allowed_classes, ...classroomData } = body
 
     // Create the classroom
     const classroom = await createClassroom(classroomData)
 
     // Set allowed classes if provided
-    if (allowed_classes && Array.isArray(allowed_classes)) {
-      await setClassroomAllowedClasses(classroom.id, allowed_classes)
+    const allowedClassGroupIds = Array.isArray(allowed_class_group_ids)
+      ? allowed_class_group_ids
+      : Array.isArray(allowed_classes)
+        ? allowed_classes
+        : null
+    if (allowedClassGroupIds) {
+      await setClassroomAllowedClasses(classroom.id, allowedClassGroupIds)
     }
 
     return NextResponse.json(classroom, { status: 201 })

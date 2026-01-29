@@ -2,7 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
 import { getUserSchoolId } from '@/lib/utils/auth'
 
-type TeacherSchedule = Database['public']['Tables']['teacher_schedules']['Row']
+type TeacherSchedule = Database['public']['Tables']['teacher_schedules']['Row'] & {
+  class_group_id: string | null
+}
 type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
 type TimeSlot = Database['public']['Tables']['time_slots']['Row']
 type ClassGroup = Database['public']['Tables']['class_groups']['Row']

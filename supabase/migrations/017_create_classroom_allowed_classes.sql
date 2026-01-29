@@ -1,6 +1,6 @@
 -- Create junction table for classroom-class relationships (allowed classes)
 CREATE TABLE IF NOT EXISTS classroom_allowed_classes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   classroom_id UUID NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
   class_id UUID NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

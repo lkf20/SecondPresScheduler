@@ -20,14 +20,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params
     const body = await request.json()
-    const { allowed_classes, ...classroomData } = body
+    const { allowed_class_group_ids, allowed_classes, ...classroomData } = body
 
     // Update the classroom
     const classroom = await updateClassroom(id, classroomData)
 
     // Update allowed classes if provided
-    if (allowed_classes !== undefined) {
-      await setClassroomAllowedClasses(id, Array.isArray(allowed_classes) ? allowed_classes : [])
+    if (allowed_class_group_ids !== undefined || allowed_classes !== undefined) {
+      const ids = Array.isArray(allowed_class_group_ids)
+        ? allowed_class_group_ids
+        : Array.isArray(allowed_classes)
+          ? allowed_classes
+          : []
+      await setClassroomAllowedClasses(id, ids)
     }
 
     return NextResponse.json(classroom)

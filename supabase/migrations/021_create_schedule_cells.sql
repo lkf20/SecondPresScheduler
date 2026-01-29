@@ -1,6 +1,6 @@
 -- Create schedule_cells table to store cell configuration (classroom × weekday × time block)
 CREATE TABLE IF NOT EXISTS schedule_cells (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   classroom_id UUID NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
   day_of_week_id UUID NOT NULL REFERENCES days_of_week(id) ON DELETE CASCADE,
   time_slot_id UUID NOT NULL REFERENCES time_slots(id) ON DELETE CASCADE,

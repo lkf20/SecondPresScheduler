@@ -17,7 +17,7 @@ interface Shift {
   day_name: string
   time_slot_id: string
   time_slot_code: string
-  class_id?: string | null
+  class_group_id?: string | null
   classroom_id?: string | null
   classroom_name?: string | null
   classroom_color?: string | null
@@ -170,6 +170,7 @@ export async function POST(request: NextRequest) {
         diaper_changing_required: boolean
         lifting_children_required: boolean
         class_group_name: string | null
+        class_group_id: string | null
       }
     >()
     const shiftIdMap = new Map<string, string>() // key: date|time_slot_code|classroom_id, value: coverage_request_shift_id
@@ -202,6 +203,7 @@ export async function POST(request: NextRequest) {
             diaper_changing_required: classGroup?.diaper_changing_required ?? false,
             lifting_children_required: classGroup?.lifting_children_required ?? false,
             class_group_name: classGroup?.name || null,
+            class_group_id: shift.class_group_id ?? null,
           })
 
           // Create shift ID map: date|time_slot_code|classroom_id -> coverage_request_shift_id
@@ -218,6 +220,7 @@ export async function POST(request: NextRequest) {
         diaper_changing_required: false,
         lifting_children_required: false,
         class_group_name: null,
+        class_group_id: null,
       }
       const scheduleKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
       const scheduleEntry = scheduleLookup.get(scheduleKey)
@@ -240,7 +243,7 @@ export async function POST(request: NextRequest) {
         day_name: shift.day_of_week?.name || '',
         time_slot_id: shift.time_slot_id,
         time_slot_code: shift.time_slot?.code || '',
-        class_id: null, // TODO: Get from schedule cells
+        class_group_id: classGroupInfo.class_group_id,
         classroom_id: null, // TODO: Get from schedule cells
         classroom_name,
         classroom_color,
@@ -328,12 +331,12 @@ export async function POST(request: NextRequest) {
         // Get sub's class preferences/qualifications
         const { data: classPreferences } = await supabase
           .from('sub_class_preferences')
-          .select('class_id, can_teach')
+          .select('class_group_id, can_teach')
           .eq('sub_id', sub.id)
           .eq('can_teach', true)
 
-        const qualifiedClassIds = new Set(
-          (classPreferences || []).map((pref: any) => pref.class_id)
+        const qualifiedClassGroupIds = new Set(
+          (classPreferences || []).map((pref: any) => pref.class_group_id)
         )
 
         // Get sub's capabilities
@@ -380,11 +383,11 @@ export async function POST(request: NextRequest) {
           // Check for time off conflicts
           const hasTimeOffConflict = timeOffConflicts.has(conflictKey)
 
-          // Check qualifications (if class_id is known)
+          // Check qualifications (if class_group_id is known)
           let isQualified = true
-          if (shift.class_id) {
+          if (shift.class_group_id) {
             qualificationTotal++
-            if (qualifiedClassIds.has(shift.class_id)) {
+            if (qualifiedClassGroupIds.has(shift.class_group_id)) {
               qualificationMatches++
             } else {
               isQualified = false

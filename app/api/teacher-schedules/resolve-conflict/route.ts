@@ -30,7 +30,6 @@ export async function POST(request: NextRequest) {
       target_class_id,
       target_class_group_id,
     } = validation.data
-
     const targetClassGroupId = target_class_group_id ?? target_class_id ?? null
 
     const supabase = await createClient()
