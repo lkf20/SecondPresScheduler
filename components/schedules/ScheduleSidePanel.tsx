@@ -105,7 +105,8 @@ const log = (...args: unknown[]) => {
   }
 }
 
-const getScheduleClassGroupId = (schedule: TeacherSchedule) => schedule.class_group_id ?? null
+const getScheduleClassGroupId = (schedule: TeacherSchedule) =>
+  schedule.class_group_id ?? schedule.class_id ?? null
 
 export default function ScheduleSidePanel({
   isOpen,
@@ -788,6 +789,9 @@ export default function ScheduleSidePanel({
         throw new Error('Failed to fetch current teacher schedules')
       }
       const allSchedules = await allSchedulesResponse.json()
+      const hasClassAssignments = (allSchedules as TeacherSchedule[]).some(
+        schedule => schedule.class_group_id != null || schedule.class_id != null
+      )
 
       const deletePromises: Promise<void>[] = []
       const createPromises: Promise<void>[] = []
@@ -820,13 +824,18 @@ export default function ScheduleSidePanel({
           })
 
           // Filter schedules for this slot
-          // If classGroupIds is set, filter to schedules matching the primary class group
-          // If no class groups, get schedules with null class group (assigned without class groups)
-          const schedulesForThisSlot = primaryClassGroupId
-            ? currentSchedules.filter(
-                (s: TeacherSchedule) => getScheduleClassGroupId(s) === primaryClassGroupId
-              )
-            : currentSchedules.filter((s: TeacherSchedule) => getScheduleClassGroupId(s) === null)
+          // If no class assignments exist, use all current schedules for the slot.
+          // Otherwise, filter to schedules matching the primary class group (or null when none).
+          const schedulesForThisSlot = !hasClassAssignments
+            ? currentSchedules
+            : primaryClassGroupId
+              ? currentSchedules.filter(
+                  (s: TeacherSchedule) => getScheduleClassGroupId(s) === primaryClassGroupId
+                )
+              : currentSchedules.filter(
+                  (s: TeacherSchedule) =>
+                    getScheduleClassGroupId(s) === null || getScheduleClassGroupId(s) === undefined
+                )
 
           // Update teacher assignments (works for both with and without class groups)
           // Note: This code path should only run when saving, and we validate classGroupIds.length > 0 before saving
@@ -862,39 +871,42 @@ export default function ScheduleSidePanel({
             // Update schedules that have wrong class group but teacher is still selected
             // This handles the case when class groups change - we update the stored class group, not delete
             // Note: primaryClassGroupId should never be null here because we validate before saving
-            for (const schedule of currentSchedules) {
-              const teacherStillSelected = newTeacherIds.has(schedule.teacher_id)
-              const hasWrongClassGroupId = getScheduleClassGroupId(schedule) !== primaryClassGroupId
+            if (hasClassAssignments) {
+              for (const schedule of currentSchedules) {
+                const teacherStillSelected = newTeacherIds.has(schedule.teacher_id)
+                const scheduleClassGroupId = getScheduleClassGroupId(schedule)
+                const hasWrongClassId = scheduleClassGroupId !== primaryClassGroupId
 
-              if (teacherStillSelected && hasWrongClassGroupId) {
-                // Update the schedule to have the correct class group
-                log('[ScheduleSidePanel] Updating schedule class_group_id:', {
-                  teacher_id: schedule.teacher_id,
-                  schedule_id: schedule.id,
-                  old_class_group_id: getScheduleClassGroupId(schedule),
-                  new_class_group_id: primaryClassGroupId,
-                })
-                createPromises.push(
-                  fetch(`/api/teacher-schedules/${schedule.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      class_group_id: primaryClassGroupId,
-                    }),
-                  }).then(async updateResponse => {
-                    if (!updateResponse.ok) {
-                      console.error(`Failed to update teacher schedule ${schedule.id}`)
-                      const errorData = await updateResponse.json().catch(() => ({}))
-                      throw new Error(
-                        `Failed to update teacher schedule: ${errorData.error || updateResponse.statusText}`
-                      )
-                    }
-                    log(
-                      '[ScheduleSidePanel] Successfully updated schedule class_group_id:',
-                      schedule.id
-                    )
+                if (teacherStillSelected && hasWrongClassId) {
+                  // Update the schedule to have the correct class_group_id
+                  log('[ScheduleSidePanel] Updating schedule class_group_id:', {
+                    teacher_id: schedule.teacher_id,
+                    schedule_id: schedule.id,
+                    old_class_group_id: scheduleClassGroupId,
+                    new_class_group_id: primaryClassGroupId,
                   })
-                )
+                  createPromises.push(
+                    fetch(`/api/teacher-schedules/${schedule.id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        class_group_id: primaryClassGroupId,
+                      }),
+                    }).then(async updateResponse => {
+                      if (!updateResponse.ok) {
+                        console.error(`Failed to update teacher schedule ${schedule.id}`)
+                        const errorData = await updateResponse.json().catch(() => ({}))
+                        throw new Error(
+                          `Failed to update teacher schedule: ${errorData.error || updateResponse.statusText}`
+                        )
+                      }
+                      log(
+                        '[ScheduleSidePanel] Successfully updated schedule class_group_id:',
+                        schedule.id
+                      )
+                    })
+                  )
+                }
               }
             }
 
@@ -928,11 +940,13 @@ export default function ScheduleSidePanel({
                 // Teacher doesn't have a schedule for this slot with the correct class group
                 // Check if they have one with wrong class group - if so, it should have been updated above
                 // But if it wasn't (edge case), we'll create a new one
-                const teacherScheduleForOtherClass = currentSchedules.find(
-                  (s: TeacherSchedule) =>
-                    s.teacher_id === teacher.teacher_id &&
-                    getScheduleClassGroupId(s) !== primaryClassGroupId
-                )
+                const teacherScheduleForOtherClass = hasClassAssignments
+                  ? currentSchedules.find(
+                      (s: TeacherSchedule) =>
+                        s.teacher_id === teacher.teacher_id &&
+                        getScheduleClassGroupId(s) !== primaryClassGroupId
+                    )
+                  : undefined
 
                 if (teacherScheduleForOtherClass) {
                   // This schedule should have been updated in the loop above, but if it wasn't,
@@ -972,9 +986,9 @@ export default function ScheduleSidePanel({
                   teacher_id: teacher.teacher_id,
                   day_of_week_id: updateDayId,
                   time_slot_id: updateTimeSlotId,
-                  class_group_id: primaryClassGroupId,
                   classroom_id: classroomId,
                   is_floater: teacher.is_floater ?? false,
+                  ...(hasClassAssignments ? { class_group_id: primaryClassGroupId } : {}),
                 }
                 log('[ScheduleSidePanel] Creating new schedule for teacher:', teacher.name, payload)
                 createPromises.push(

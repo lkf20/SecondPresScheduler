@@ -18,6 +18,7 @@ type TimeOffShiftRowFromQuery = {
     | null
 }
 type TeacherScheduleRow = Database['public']['Tables']['teacher_schedules']['Row'] & {
+  class_id?: string | null
   class_group_id?: string | null
   class?: { id: string; name: string } | null
 }
@@ -293,7 +294,9 @@ export async function getWeeklyScheduleData(
   if (schedules && schedules.length > 0) {
     const scheduleRows = schedules as TeacherScheduleRow[]
     const classIds = [
-      ...new Set(scheduleRows.map(s => s.class_group_id).filter(Boolean) as string[]),
+      ...new Set(
+        scheduleRows.map(s => s.class_group_id ?? s.class_id ?? null).filter(Boolean) as string[]
+      ),
     ]
     if (classIds.length > 0) {
       const { data: classGroups } = await supabase
@@ -303,7 +306,7 @@ export async function getWeeklyScheduleData(
 
       const classGroupsMap = new Map((classGroups || []).map((cg: ClassGroupLite) => [cg.id, cg]))
       scheduleRows.forEach(schedule => {
-        const classGroupId = schedule.class_group_id ?? null
+        const classGroupId = schedule.class_group_id ?? schedule.class_id ?? null
         if (classGroupId) {
           schedule.class = classGroupsMap.get(classGroupId) || null
         }

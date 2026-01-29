@@ -58,13 +58,20 @@ export default function ClassroomFormClient({ classroom }: ClassroomFormClientPr
   // Load allowed classes on mount
   useEffect(() => {
     fetch(`/api/classrooms/${classroom.id}/allowed-classes`)
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) {
+          const errBody = await r.json().catch(() => ({}))
+          throw new Error(errBody.error || 'Failed to load allowed class groups')
+        }
+        return r.json()
+      })
       .then(data => {
-        setAllowedClassIds(data || [])
-        setLoadingAllowedClasses(false)
+        setAllowedClassIds(Array.isArray(data) ? data : [])
       })
       .catch(err => {
         console.error('Failed to load allowed class groups:', err)
+      })
+      .finally(() => {
         setLoadingAllowedClasses(false)
       })
   }, [classroom.id])

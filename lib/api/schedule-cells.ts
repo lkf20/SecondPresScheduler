@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
+import { getUserSchoolId } from '@/lib/utils/auth'
 
 type ScheduleCell = Database['public']['Tables']['schedule_cells']['Row']
 
@@ -30,6 +31,24 @@ type ScheduleCellClassGroupJoin = {
 type ScheduleCellRaw = Omit<ScheduleCellWithDetails, 'class_groups'> & {
   schedule_cell_class_groups?: ScheduleCellClassGroupJoin[]
   class_groups?: ScheduleCellWithDetails['class_groups']
+}
+
+async function getSchoolIdMapForClassrooms(classroomIds: string[]): Promise<Map<string, string>> {
+  if (classroomIds.length === 0) return new Map()
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('classrooms')
+    .select('id, school_id')
+    .in('id', classroomIds)
+
+  if (error) throw error
+  const map = new Map<string, string>()
+  ;(data || []).forEach(row => {
+    if (row.school_id) {
+      map.set(row.id, row.school_id)
+    }
+  })
+  return map
 }
 
 export interface ScheduleCellFilters {
@@ -156,8 +175,17 @@ export async function createScheduleCell(cell: {
   class_group_ids?: string[]
   enrollment_for_staffing?: number | null
   notes?: string | null
+  school_id?: string
 }): Promise<ScheduleCell> {
   const supabase = await createClient()
+  let schoolId = cell.school_id || (await getUserSchoolId())
+  if (!schoolId) {
+    const schoolMap = await getSchoolIdMapForClassrooms([cell.classroom_id])
+    schoolId = schoolMap.get(cell.classroom_id) ?? null
+  }
+  if (!schoolId) {
+    throw new Error('school_id is required to create a schedule cell')
+  }
   // Create the schedule cell
   const { data: cellData, error: cellError } = await supabase
     .from('schedule_cells')
@@ -165,6 +193,7 @@ export async function createScheduleCell(cell: {
       classroom_id: cell.classroom_id,
       day_of_week_id: cell.day_of_week_id,
       time_slot_id: cell.time_slot_id,
+      school_id: schoolId,
       is_active: cell.is_active ?? true,
       enrollment_for_staffing: cell.enrollment_for_staffing ?? null,
       notes: cell.notes ?? null,
@@ -253,6 +282,7 @@ export async function upsertScheduleCell(cell: {
   class_group_ids?: string[]
   enrollment_for_staffing?: number | null
   notes?: string | null
+  school_id?: string
 }): Promise<ScheduleCell> {
   // First try to find existing cell
   const existing = await getScheduleCell(cell.classroom_id, cell.day_of_week_id, cell.time_slot_id)
@@ -293,6 +323,7 @@ export async function bulkUpdateScheduleCells(
     class_group_ids?: string[]
     enrollment_for_staffing?: number | null
     notes?: string | null
+    school_id?: string
   }>
 ): Promise<ScheduleCell[]> {
   const supabase = await createClient()
@@ -300,6 +331,12 @@ export async function bulkUpdateScheduleCells(
   if (updates.length === 0) {
     return []
   }
+
+  const schoolId = updates[0]?.school_id || (await getUserSchoolId())
+  const classroomIds = [...new Set(updates.map(u => u.classroom_id))]
+  const schoolMap = schoolId
+    ? new Map<string, string>()
+    : await getSchoolIdMapForClassrooms(classroomIds)
 
   // Batch fetch existing cells
   const { data: existingCells, error: fetchError } = await supabase
@@ -322,10 +359,17 @@ export async function bulkUpdateScheduleCells(
 
   // Prepare cells to upsert (without class_group_ids)
   const cellsToUpsert = updates.map(update => {
+    const resolvedSchoolId = update.school_id || schoolId || schoolMap.get(update.classroom_id)
+    if (!resolvedSchoolId) {
+      throw new Error(
+        `school_id is required to update schedule cells (classroom_id: ${update.classroom_id})`
+      )
+    }
     return {
       classroom_id: update.classroom_id,
       day_of_week_id: update.day_of_week_id,
       time_slot_id: update.time_slot_id,
+      school_id: resolvedSchoolId,
       is_active: update.is_active !== undefined ? update.is_active : true,
       enrollment_for_staffing:
         update.enrollment_for_staffing !== undefined ? update.enrollment_for_staffing : null,
