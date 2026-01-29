@@ -5,8 +5,6 @@ type ClassClassroomMapping = Database['public']['Tables']['class_classroom_mappi
 
 export interface ClassClassroomMappingWithDetails extends ClassClassroomMapping {
   class_group?: { id: string; name: string }
-  /** @deprecated Use class_group instead. */
-  class?: { id: string; name: string }
   classroom?: { id: string; name: string }
   day_of_week?: { id: string; name: string; day_number: number }
   time_slot?: { id: string; code: string; name: string | null }
@@ -25,7 +23,6 @@ export async function getClassClassroomMappings(filters?: {
       `
       *,
       class_group:class_groups!class_classroom_mappings_class_group_id_fkey(id, name),
-      class:class_groups!class_classroom_mappings_class_id_fkey(id, name),
       classroom:classrooms(id, name),
       day_of_week:days_of_week(id, name, day_number),
       time_slot:time_slots(id, code, name)

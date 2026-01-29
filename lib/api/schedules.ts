@@ -2,19 +2,15 @@ import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
 import { getUserSchoolId } from '@/lib/utils/auth'
 
-type TeacherSchedule = Database['public']['Tables']['teacher_schedules']['Row'] & {
-  class_group_id: string | null
-}
+type TeacherSchedule = Database['public']['Tables']['teacher_schedules']['Row']
 type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
 type TimeSlot = Database['public']['Tables']['time_slots']['Row']
-type ClassGroup = Database['public']['Tables']['class_groups']['Row']
 type Classroom = Database['public']['Tables']['classrooms']['Row']
 type Staff = Database['public']['Tables']['staff']['Row']
 
 type TeacherScheduleWithDetails = TeacherSchedule & {
   day_of_week: DayOfWeek | null
   time_slot: TimeSlot | null
-  class: ClassGroup | null
   classroom: Classroom | null
 }
 
@@ -22,33 +18,8 @@ type TeacherScheduleWithTeacher = TeacherScheduleWithDetails & {
   teacher: Staff | null
 }
 
-type SupabaseErrorDetails = Error & {
-  code?: string | null
-  details?: string | null
-  hint?: string | null
-}
-
-type TeacherScheduleLike = {
-  class_id?: string | null
-  class_group_id?: string | null
-} & Record<string, unknown>
-
-function normalizeTeacherSchedule<T extends TeacherScheduleLike>(row: T): T {
-  if (row && row.class_id == null && row.class_group_id != null) {
-    return { ...row, class_id: row.class_group_id }
-  }
+function normalizeTeacherSchedule<T extends Record<string, unknown>>(row: T): T {
   return row
-}
-
-function isMissingColumnError(error: SupabaseErrorDetails, column: string): boolean {
-  const message = error?.message || ''
-  const details = error?.details || ''
-  return (
-    message.includes(`'${column}'`) ||
-    message.includes(`"${column}"`) ||
-    details.includes(`'${column}'`) ||
-    details.includes(`"${column}"`)
-  )
 }
 
 export async function getTeacherSchedules(
@@ -75,8 +46,6 @@ export async function createTeacherSchedule(schedule: {
   teacher_id: string
   day_of_week_id: string
   time_slot_id: string
-  class_id?: string | null
-  class_group_id?: string | null
   classroom_id: string
   is_floater?: boolean
   school_id?: string
@@ -94,7 +63,6 @@ export async function createTeacherSchedule(schedule: {
     day_of_week_id: schedule.day_of_week_id,
     time_slot_id: schedule.time_slot_id,
     classroom_id: schedule.classroom_id,
-    class_group_id: schedule.class_group_id ?? schedule.class_id ?? null,
     school_id: schoolId,
     is_floater: schedule.is_floater ?? false,
   }
@@ -105,66 +73,7 @@ export async function createTeacherSchedule(schedule: {
     .select()
     .single()
 
-  if (error) {
-    const enhancedError: SupabaseErrorDetails = new Error(error.message)
-    enhancedError.code = error.code
-    enhancedError.details = error.details
-    enhancedError.hint = error.hint
-
-    // Fallback for legacy schema without class_group_id
-    if (isMissingColumnError(enhancedError, 'class_group_id')) {
-      const legacyInsert = {
-        ...insertData,
-        class_id: schedule.class_id ?? schedule.class_group_id ?? null,
-      }
-      delete (legacyInsert as { class_group_id?: string | null }).class_group_id
-      const { data: legacyData, error: legacyError } = await supabase
-        .from('teacher_schedules')
-        .insert(legacyInsert)
-        .select()
-        .single()
-
-      if (legacyError) {
-        const legacyEnhanced: SupabaseErrorDetails = new Error(legacyError.message)
-        legacyEnhanced.code = legacyError.code
-        legacyEnhanced.details = legacyError.details
-        legacyEnhanced.hint = legacyError.hint
-
-        // Fallback for schema without class_id/class_group_id
-        if (isMissingColumnError(legacyEnhanced, 'class_id')) {
-          const minimalInsert = { ...insertData }
-          delete (minimalInsert as { class_group_id?: string | null }).class_group_id
-          const { data: minimalData, error: minimalError } = await supabase
-            .from('teacher_schedules')
-            .insert(minimalInsert)
-            .select()
-            .single()
-
-          if (minimalError) throw minimalError
-          return normalizeTeacherSchedule(minimalData) as TeacherSchedule
-        }
-
-        throw legacyEnhanced
-      }
-      return normalizeTeacherSchedule(legacyData) as TeacherSchedule
-    }
-
-    // Fallback for schema without class_id/class_group_id
-    if (isMissingColumnError(enhancedError, 'class_id')) {
-      const minimalInsert = { ...insertData }
-      delete (minimalInsert as { class_group_id?: string | null }).class_group_id
-      const { data: minimalData, error: minimalError } = await supabase
-        .from('teacher_schedules')
-        .insert(minimalInsert)
-        .select()
-        .single()
-
-      if (minimalError) throw minimalError
-      return normalizeTeacherSchedule(minimalData) as TeacherSchedule
-    }
-
-    throw enhancedError
-  }
+  if (error) throw error
   return normalizeTeacherSchedule(data) as TeacherSchedule
 }
 
@@ -206,16 +115,12 @@ export async function getTeacherScheduleById(
 
 export async function updateTeacherSchedule(
   id: string,
-  updates: Partial<TeacherSchedule> & { class_group_id?: string | null; class_id?: string | null },
+  updates: Partial<TeacherSchedule>,
   schoolId?: string
 ): Promise<TeacherSchedule | null> {
   const supabase = await createClient()
-  const { class_id, class_group_id, ...rest } = updates
   const updateData: Record<string, unknown> = {
-    ...rest,
-  }
-  if (class_group_id !== undefined || class_id !== undefined) {
-    updateData.class_group_id = class_group_id ?? class_id ?? null
+    ...updates,
   }
 
   let query = supabase.from('teacher_schedules').update(updateData).eq('id', id)
@@ -227,70 +132,7 @@ export async function updateTeacherSchedule(
 
   const { data, error } = await query.select().maybeSingle()
 
-  if (error) {
-    const enhancedError: SupabaseErrorDetails = new Error(error.message)
-    enhancedError.code = error.code
-    enhancedError.details = error.details
-    enhancedError.hint = error.hint
-
-    if (isMissingColumnError(enhancedError, 'class_group_id')) {
-      const legacyUpdate: Record<string, unknown> = {
-        ...rest,
-      }
-      if (class_group_id !== undefined || class_id !== undefined) {
-        legacyUpdate.class_id = class_id ?? class_group_id ?? null
-      }
-      const { data: legacyData, error: legacyError } = await supabase
-        .from('teacher_schedules')
-        .update(legacyUpdate)
-        .eq('id', id)
-        .select()
-        .maybeSingle()
-
-      if (legacyError) {
-        // Fallback for schema without class_id/class_group_id
-        if (isMissingColumnError(legacyError as SupabaseErrorDetails, 'class_id')) {
-          const minimalUpdate: Record<string, unknown> = { ...rest }
-          const { data: minimalData, error: minimalError } = await supabase
-            .from('teacher_schedules')
-            .update(minimalUpdate)
-            .eq('id', id)
-            .select()
-            .maybeSingle()
-
-          if (minimalError) throw minimalError
-          if (!minimalData) {
-            return null
-          }
-          return normalizeTeacherSchedule(minimalData) as TeacherSchedule
-        }
-
-        throw legacyError
-      }
-      if (!legacyData) {
-        return null
-      }
-      return normalizeTeacherSchedule(legacyData) as TeacherSchedule
-    }
-
-    if (isMissingColumnError(enhancedError, 'class_id')) {
-      const minimalUpdate: Record<string, unknown> = { ...rest }
-      const { data: minimalData, error: minimalError } = await supabase
-        .from('teacher_schedules')
-        .update(minimalUpdate)
-        .eq('id', id)
-        .select()
-        .maybeSingle()
-
-      if (minimalError) throw minimalError
-      if (!minimalData) {
-        return null
-      }
-      return normalizeTeacherSchedule(minimalData) as TeacherSchedule
-    }
-
-    throw enhancedError
-  }
+  if (error) throw error
   if (!data) {
     return null
   }
@@ -331,8 +173,6 @@ export async function bulkCreateTeacherSchedules(
   schedules: Array<{
     day_of_week_id: string
     time_slot_id: string
-    class_id?: string | null
-    class_group_id?: string | null
     classroom_id: string
   }>,
   schoolId?: string
@@ -350,73 +190,11 @@ export async function bulkCreateTeacherSchedules(
     day_of_week_id: schedule.day_of_week_id,
     time_slot_id: schedule.time_slot_id,
     classroom_id: schedule.classroom_id,
-    class_group_id: schedule.class_group_id ?? schedule.class_id ?? null,
   }))
 
   const { data, error } = await supabase.from('teacher_schedules').insert(scheduleData).select()
 
-  if (error) {
-    const enhancedError: SupabaseErrorDetails = new Error(error.message)
-    enhancedError.code = error.code
-    enhancedError.details = error.details
-    enhancedError.hint = error.hint
-
-    if (isMissingColumnError(enhancedError, 'class_group_id')) {
-      const legacyScheduleData = schedules.map(schedule => ({
-        teacher_id: teacherId,
-        school_id: effectiveSchoolId,
-        day_of_week_id: schedule.day_of_week_id,
-        time_slot_id: schedule.time_slot_id,
-        classroom_id: schedule.classroom_id,
-        class_id: schedule.class_id ?? schedule.class_group_id ?? null,
-      }))
-
-      const { data: legacyData, error: legacyError } = await supabase
-        .from('teacher_schedules')
-        .insert(legacyScheduleData)
-        .select()
-
-      if (legacyError) {
-        if (isMissingColumnError(legacyError as SupabaseErrorDetails, 'class_id')) {
-          const minimalScheduleData = schedules.map(schedule => ({
-            teacher_id: teacherId,
-            school_id: effectiveSchoolId,
-            day_of_week_id: schedule.day_of_week_id,
-            time_slot_id: schedule.time_slot_id,
-            classroom_id: schedule.classroom_id,
-          }))
-          const { data: minimalData, error: minimalError } = await supabase
-            .from('teacher_schedules')
-            .insert(minimalScheduleData)
-            .select()
-
-          if (minimalError) throw minimalError
-          return (minimalData || []).map(row => normalizeTeacherSchedule(row)) as TeacherSchedule[]
-        }
-        throw legacyError
-      }
-      return (legacyData || []).map(row => normalizeTeacherSchedule(row)) as TeacherSchedule[]
-    }
-
-    if (isMissingColumnError(enhancedError, 'class_id')) {
-      const minimalScheduleData = schedules.map(schedule => ({
-        teacher_id: teacherId,
-        school_id: effectiveSchoolId,
-        day_of_week_id: schedule.day_of_week_id,
-        time_slot_id: schedule.time_slot_id,
-        classroom_id: schedule.classroom_id,
-      }))
-      const { data: minimalData, error: minimalError } = await supabase
-        .from('teacher_schedules')
-        .insert(minimalScheduleData)
-        .select()
-
-      if (minimalError) throw minimalError
-      return (minimalData || []).map(row => normalizeTeacherSchedule(row)) as TeacherSchedule[]
-    }
-
-    throw enhancedError
-  }
+  if (error) throw error
   return (data || []).map(row => normalizeTeacherSchedule(row)) as TeacherSchedule[]
 }
 

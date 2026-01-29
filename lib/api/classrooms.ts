@@ -5,7 +5,6 @@ import { getUserSchoolId } from '@/lib/utils/auth'
 type Classroom = Database['public']['Tables']['classrooms']['Row']
 type AllowedClassJoin = {
   class_group: { id: string; name: string } | null
-  class_legacy?: { id: string; name: string } | null
 }
 type ClassroomRaw = Classroom & { allowed_classes?: AllowedClassJoin[] }
 type ClassroomWithAllowedClasses = Classroom & {
@@ -24,8 +23,7 @@ export async function getClassrooms(
       `
       *,
       allowed_classes:classroom_allowed_classes(
-        class_group:class_groups!classroom_allowed_classes_class_group_id_fkey(id, name),
-        class_legacy:class_groups!classroom_allowed_classes_class_id_fkey(id, name)
+        class_group:class_groups!classroom_allowed_classes_class_group_id_fkey(id, name)
       )
     `
     )
@@ -50,13 +48,11 @@ export async function getClassrooms(
     ...classroom,
     allowed_classes_names:
       classroom.allowed_classes
-        ?.map(ac => ac.class_group?.name || ac.class_legacy?.name)
+        ?.map(ac => ac.class_group?.name)
         .filter((name): name is string => Boolean(name))
         .join(', ') || 'None',
     allowed_classes_count:
-      classroom.allowed_classes?.filter(ac =>
-        Boolean(ac.class_group?.name || ac.class_legacy?.name)
-      ).length || 0,
+      classroom.allowed_classes?.filter(ac => Boolean(ac.class_group?.name)).length || 0,
   }))
 }
 
@@ -154,14 +150,12 @@ export async function getClassroomAllowedClasses(classroomId: string): Promise<s
   const { data, error } = await supabase
     .from('classroom_allowed_classes')
     .select(
-      'class_id, class_group_id, class_group:class_groups!classroom_allowed_classes_class_group_id_fkey(id)'
+      'class_group_id, class_group:class_groups!classroom_allowed_classes_class_group_id_fkey(id)'
     )
     .eq('classroom_id', classroomId)
 
   if (error) throw error
-  return data
-    .map(item => item.class_group_id || item.class_id)
-    .filter((id): id is string => Boolean(id))
+  return data.map(item => item.class_group_id).filter((id): id is string => Boolean(id))
 }
 
 export async function setClassroomAllowedClasses(classroomId: string, classGroupIds: string[]) {
@@ -181,7 +175,6 @@ export async function setClassroomAllowedClasses(classroomId: string, classGroup
       return {
         classroom_id: classroomId,
         class_group_id: classGroupId,
-        class_id: classGroupId,
       }
     })
 

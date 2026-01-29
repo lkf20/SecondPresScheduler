@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/select'
 import FormField from '@/components/shared/FormField'
 import { Database } from '@/types/database'
-import type { Classroom, ClassGroup, TimeSlot } from '@/types/api'
+import type { Classroom, TimeSlot } from '@/types/api'
 
 type TeacherSchedule = Database['public']['Tables']['teacher_schedules']['Row']
 
@@ -36,7 +36,6 @@ const scheduleSchema = z.object({
   teacher_id: z.string().min(1, 'Teacher is required'),
   day_of_week_id: z.string().min(1, 'Day of week is required'),
   time_slot_id: z.string().min(1, 'Time slot is required'),
-  class_group_id: z.string().min(1, 'Class group is required'),
   classroom_id: z.string().min(1, 'Classroom is required'),
 })
 
@@ -47,7 +46,6 @@ interface TeacherScheduleFormProps {
     teacher?: StaffOption | null
     day_of_week?: DayOfWeek | null
     time_slot?: TimeSlot | null
-    class?: ClassGroup | null
     classroom?: Classroom | null
   }
   onSubmit: (data: ScheduleFormData) => Promise<void>
@@ -62,7 +60,6 @@ export default function TeacherScheduleForm({
   const [teachers, setTeachers] = useState<StaffOption[]>([])
   const [daysOfWeek, setDaysOfWeek] = useState<DayOfWeek[]>([])
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
-  const [classes, setClasses] = useState<ClassGroup[]>([])
   const [classrooms, setClassrooms] = useState<Classroom[]>([])
 
   useEffect(() => {
@@ -73,10 +70,6 @@ export default function TeacherScheduleForm({
     fetch('/api/timeslots')
       .then(r => r.json())
       .then(data => setTimeSlots(Array.isArray(data) ? data : []))
-      .catch(console.error)
-    fetch('/api/class-groups')
-      .then(r => r.json())
-      .then(data => setClasses(Array.isArray(data) ? data : []))
       .catch(console.error)
     fetch('/api/classrooms')
       .then(r => r.json())
@@ -117,7 +110,6 @@ export default function TeacherScheduleForm({
           teacher_id: schedule.teacher_id,
           day_of_week_id: schedule.day_of_week_id,
           time_slot_id: schedule.time_slot_id,
-          class_group_id: schedule.class_group_id ?? '',
           classroom_id: schedule.classroom_id,
         }
       : undefined,
@@ -130,7 +122,6 @@ export default function TeacherScheduleForm({
         teacher_id: schedule.teacher_id,
         day_of_week_id: schedule.day_of_week_id,
         time_slot_id: schedule.time_slot_id,
-        class_group_id: schedule.class_group_id ?? '',
         classroom_id: schedule.classroom_id,
       })
     }
@@ -139,7 +130,6 @@ export default function TeacherScheduleForm({
   const teacherId = watch('teacher_id')
   const dayOfWeekId = watch('day_of_week_id')
   const timeSlotId = watch('time_slot_id')
-  const classGroupId = watch('class_group_id')
   const classroomId = watch('classroom_id')
 
   return (
@@ -199,24 +189,6 @@ export default function TeacherScheduleForm({
                     {slot.name || slot.code}
                   </SelectItem>
                 ))}
-            </SelectContent>
-          </Select>
-        </FormField>
-
-        <FormField label="Class Group" error={errors.class_group_id?.message} required>
-          <Select
-            value={classGroupId || ''}
-            onValueChange={value => setValue('class_group_id', value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select a class group" />
-            </SelectTrigger>
-            <SelectContent>
-              {classes.map(cls => (
-                <SelectItem key={cls.id} value={cls.id}>
-                  {cls.name}
-                </SelectItem>
-              ))}
             </SelectContent>
           </Select>
         </FormField>
