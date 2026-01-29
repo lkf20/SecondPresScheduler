@@ -905,7 +905,7 @@ export type Database = {
       }
       staffing_rules: {
         Row: {
-          class_group_id: string | null
+          classroom_id: string
           created_at: string | null
           day_of_week_id: string
           id: string
@@ -916,7 +916,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
-          class_group_id?: string | null
+          classroom_id: string
           created_at?: string | null
           day_of_week_id: string
           id?: string
@@ -927,7 +927,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
-          class_group_id?: string | null
+          classroom_id?: string
           created_at?: string | null
           day_of_week_id?: string
           id?: string
@@ -939,10 +939,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'staffing_rules_class_group_id_fkey'
-            columns: ['class_group_id']
+            foreignKeyName: 'staffing_rules_classroom_id_fkey'
+            columns: ['classroom_id']
             isOneToOne: false
-            referencedRelation: 'class_groups'
+            referencedRelation: 'classrooms'
             referencedColumns: ['id']
           },
           {
@@ -1216,7 +1216,6 @@ export type Database = {
       sub_class_preferences: {
         Row: {
           can_teach: boolean | null
-          class_group_id: string | null
           created_at: string | null
           id: string
           sub_id: string
@@ -1224,7 +1223,6 @@ export type Database = {
         }
         Insert: {
           can_teach?: boolean | null
-          class_group_id?: string | null
           created_at?: string | null
           id?: string
           sub_id: string
@@ -1232,20 +1230,12 @@ export type Database = {
         }
         Update: {
           can_teach?: boolean | null
-          class_group_id?: string | null
           created_at?: string | null
           id?: string
           sub_id?: string
           updated_at?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: 'sub_class_preferences_class_group_id_fkey'
-            columns: ['class_group_id']
-            isOneToOne: false
-            referencedRelation: 'class_groups'
-            referencedColumns: ['id']
-          },
           {
             foreignKeyName: 'sub_class_preferences_sub_id_fkey'
             columns: ['sub_id']
@@ -1436,10 +1426,10 @@ export type Database = {
           created_by: string | null
           declined_at: string | null
           id: string
-          is_contacted: boolean | null
+          is_contacted: boolean
           last_status_at: string
           notes: string | null
-          response_status: string | null
+          response_status: string
           status: string
           sub_id: string
           updated_at: string
@@ -1453,10 +1443,10 @@ export type Database = {
           created_by?: string | null
           declined_at?: string | null
           id?: string
-          is_contacted?: boolean | null
+          is_contacted?: boolean
           last_status_at?: string
           notes?: string | null
-          response_status?: string | null
+          response_status?: string
           status?: string
           sub_id: string
           updated_at?: string
@@ -1470,10 +1460,10 @@ export type Database = {
           created_by?: string | null
           declined_at?: string | null
           id?: string
-          is_contacted?: boolean | null
+          is_contacted?: boolean
           last_status_at?: string
           notes?: string | null
-          response_status?: string | null
+          response_status?: string
           status?: string
           sub_id?: string
           updated_at?: string
@@ -1620,7 +1610,6 @@ export type Database = {
       }
       teacher_schedules: {
         Row: {
-          class_group_id: string | null
           classroom_id: string
           created_at: string | null
           day_of_week_id: string
@@ -1632,7 +1621,6 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
-          class_group_id?: string | null
           classroom_id: string
           created_at?: string | null
           day_of_week_id: string
@@ -1644,7 +1632,6 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
-          class_group_id?: string | null
           classroom_id?: string
           created_at?: string | null
           day_of_week_id?: string
@@ -1656,13 +1643,6 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: 'teacher_schedules_class_group_id_fkey'
-            columns: ['class_group_id']
-            isOneToOne: false
-            referencedRelation: 'class_groups'
-            referencedColumns: ['id']
-          },
           {
             foreignKeyName: 'teacher_schedules_classroom_id_fkey'
             columns: ['classroom_id']

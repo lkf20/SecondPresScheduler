@@ -17,11 +17,6 @@ type TimeOffShiftRowFromQuery = {
     | Array<Pick<TimeOffRequestRow, 'teacher_id' | 'status'>>
     | null
 }
-type TeacherScheduleRow = Database['public']['Tables']['teacher_schedules']['Row'] & {
-  class_group_id?: string | null
-  class?: { id: string; name: string } | null
-}
-type ClassGroupLite = Pick<ClassGroupRow, 'id' | 'name'>
 type SubAssignmentRowFromQuery = {
   id: string
   date: string
@@ -43,9 +38,6 @@ const getStaffDisplayName = (staff: StaffLite | StaffLite[] | null | undefined) 
     'Unknown'
   )
 }
-
-const getRuleClassGroupId = (rule: { class_group_id?: string | null }) =>
-  rule.class_group_id ?? null
 
 type ScheduleCellRaw = ScheduleCellRow & {
   schedule_cell_class_groups?: Array<{ class_group: ClassGroupRow | null }>
@@ -288,29 +280,6 @@ export async function getWeeklyScheduleData(
     throw new Error(`Failed to fetch teacher schedules: ${schedulesError.message}`)
   }
 
-  // Fetch class_groups separately if class_group_id exists
-  // This avoids the schema cache issue with nullable foreign keys
-  if (schedules && schedules.length > 0) {
-    const scheduleRows = schedules as TeacherScheduleRow[]
-    const classIds = [
-      ...new Set(scheduleRows.map(s => s.class_group_id ?? null).filter(Boolean) as string[]),
-    ]
-    if (classIds.length > 0) {
-      const { data: classGroups } = await supabase
-        .from('class_groups')
-        .select('id, name')
-        .in('id', classIds)
-
-      const classGroupsMap = new Map((classGroups || []).map((cg: ClassGroupLite) => [cg.id, cg]))
-      scheduleRows.forEach(schedule => {
-        const classGroupId = schedule.class_group_id ?? null
-        if (classGroupId) {
-          schedule.class = classGroupsMap.get(classGroupId) || null
-        }
-      })
-    }
-  }
-
   // Get staffing rules
   const { data: staffingRules, error: staffingRulesError } = await supabase
     .from('staffing_rules')
@@ -328,30 +297,7 @@ export async function getWeeklyScheduleData(
     throw new Error(`Failed to fetch staffing rules: ${staffingRulesError.message}`)
   }
 
-  // staffing_rules now include class_group_id directly
-  if (staffingRules && staffingRules.length > 0) {
-    const ruleRows = staffingRules as Array<
-      Database['public']['Tables']['staffing_rules']['Row'] & {
-        class?: { id: string; name: string } | null
-      }
-    >
-    const ruleClassIds = [
-      ...new Set(ruleRows.map(rule => rule.class_group_id ?? null).filter(Boolean) as string[]),
-    ]
-    if (ruleClassIds.length > 0) {
-      const { data: classGroups } = await supabase
-        .from('class_groups')
-        .select('id, name')
-        .in('id', ruleClassIds)
-      const classGroupsMap = new Map((classGroups || []).map(cg => [cg.id, cg]))
-      ruleRows.forEach(rule => {
-        const classGroupId = rule.class_group_id ?? null
-        if (classGroupId) {
-          rule.class = classGroupsMap.get(classGroupId) || null
-        }
-      })
-    }
-  }
+  // staffing_rules do not include class_group_id in the schema
 
   // Get schedule cells (gracefully handle if table doesn't exist yet)
   let scheduleCells: ScheduleCellRaw[] | null = null
@@ -560,8 +506,6 @@ export async function getWeeklyScheduleData(
               assignment.teacher?.display_name ||
               `${assignment.teacher?.first_name || ''} ${assignment.teacher?.last_name || ''}`.trim() ||
               'Unknown',
-            class_group_id: assignment.class_group_id ?? undefined,
-            class_name: assignment.class?.name || undefined, // Include class_name for display
             classroom_id: assignment.classroom_id,
             classroom_name: assignment.classroom?.name || 'Unknown',
             is_floater: assignment.is_floater || false,
@@ -570,11 +514,10 @@ export async function getWeeklyScheduleData(
           // Get enrollment from schedule_cell (enrollment is for the whole slot, not per class group)
           const enrollment = scheduleCell.enrollment_for_staffing ?? null
 
-          // Get staffing rule for the primary class group/day/time
-          const primaryClassGroupId = classGroupIds[0]
+          // Get staffing rule for the classroom/day/time
           const rule = staffingRules?.find(
             r =>
-              getRuleClassGroupId(r) === primaryClassGroupId &&
+              r.classroom_id === classroom.id &&
               r.day_of_week_id === day.id &&
               r.time_slot_id === timeSlot.id
           )

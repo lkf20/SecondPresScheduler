@@ -25,9 +25,6 @@ export interface ClassGroup {
   updated_at?: string
 }
 
-// Legacy alias for backward compatibility during migration
-export type Class = ClassGroup
-
 export interface Classroom {
   id: string
   name: string
@@ -55,7 +52,6 @@ export interface TeacherSchedule {
   teacher_id: string
   day_of_week_id: string
   time_slot_id: string
-  class_group_id?: string | null
   classroom_id: string
   is_floater: boolean
   teacher?: {
@@ -63,10 +59,6 @@ export interface TeacherSchedule {
     first_name: string
     last_name: string
     display_name: string | null
-  }
-  class_group?: {
-    id: string
-    name: string
   }
   classroom?: {
     id: string

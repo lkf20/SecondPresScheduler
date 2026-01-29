@@ -21,15 +21,8 @@ export async function POST(request: NextRequest) {
       return validation.error
     }
 
-    const {
-      teacher_id,
-      day_of_week_id,
-      time_slot_id,
-      resolution,
-      target_classroom_id,
-      target_class_group_id,
-    } = validation.data
-    const targetClassGroupId = target_class_group_id ?? null
+    const { teacher_id, day_of_week_id, time_slot_id, resolution, target_classroom_id } =
+      validation.data
 
     const supabase = await createClient()
 
@@ -76,7 +69,6 @@ export async function POST(request: NextRequest) {
             action_details: {
               before: {
                 classroom_id: conflictingSchedule.classroom_id,
-                class_group_id: conflictingSchedule.class_group_id ?? null,
                 is_floater: conflictingSchedule.is_floater,
               },
             },
@@ -92,7 +84,6 @@ export async function POST(request: NextRequest) {
           teacher_id,
           day_of_week_id,
           time_slot_id,
-          class_group_id: targetClassGroupId,
           classroom_id: target_classroom_id,
           is_floater: false,
         })
@@ -105,7 +96,6 @@ export async function POST(request: NextRequest) {
           action_details: {
             after: {
               classroom_id: target_classroom_id,
-              class_group_id: targetClassGroupId,
               is_floater: false,
             },
           },
@@ -128,7 +118,6 @@ export async function POST(request: NextRequest) {
           action_details: {
             canceled: true,
             would_have_added_to_classroom_id: target_classroom_id,
-            would_have_added_to_class_group_id: targetClassGroupId,
           },
           added_to_classroom_id: target_classroom_id,
           added_to_day_id: day_of_week_id,
@@ -158,12 +147,10 @@ export async function POST(request: NextRequest) {
             action_details: {
               before: {
                 classroom_id: conflictingSchedule.classroom_id,
-                class_group_id: conflictingSchedule.class_group_id ?? null,
                 is_floater: false,
               },
               after: {
                 classroom_id: conflictingSchedule.classroom_id,
-                class_group_id: conflictingSchedule.class_group_id ?? null,
                 is_floater: true,
               },
             },
@@ -176,7 +163,6 @@ export async function POST(request: NextRequest) {
           teacher_id,
           day_of_week_id,
           time_slot_id,
-          class_group_id: targetClassGroupId,
           classroom_id: target_classroom_id,
           is_floater: true,
         })
@@ -189,7 +175,6 @@ export async function POST(request: NextRequest) {
           action_details: {
             after: {
               classroom_id: target_classroom_id,
-              class_group_id: targetClassGroupId,
               is_floater: true,
             },
           },
