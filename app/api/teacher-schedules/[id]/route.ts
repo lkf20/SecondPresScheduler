@@ -19,13 +19,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params
     const body = await request.json()
-    // Normalize legacy class_id into class_group_id to avoid schema cache errors
-    if (body?.class_id !== undefined && body?.class_group_id === undefined) {
-      body.class_group_id = body.class_id
-    }
-    if (body?.class_id !== undefined) {
-      delete body.class_id
-    }
     const schedule = await updateTeacherSchedule(id, body)
     if (!schedule) {
       return NextResponse.json({ updated: false }, { status: 200 })

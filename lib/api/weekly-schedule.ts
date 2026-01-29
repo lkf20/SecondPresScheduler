@@ -18,7 +18,6 @@ type TimeOffShiftRowFromQuery = {
     | null
 }
 type TeacherScheduleRow = Database['public']['Tables']['teacher_schedules']['Row'] & {
-  class_id?: string | null
   class_group_id?: string | null
   class?: { id: string; name: string } | null
 }
@@ -294,9 +293,7 @@ export async function getWeeklyScheduleData(
   if (schedules && schedules.length > 0) {
     const scheduleRows = schedules as TeacherScheduleRow[]
     const classIds = [
-      ...new Set(
-        scheduleRows.map(s => s.class_group_id ?? s.class_id ?? null).filter(Boolean) as string[]
-      ),
+      ...new Set(scheduleRows.map(s => s.class_group_id ?? null).filter(Boolean) as string[]),
     ]
     if (classIds.length > 0) {
       const { data: classGroups } = await supabase
@@ -306,7 +303,7 @@ export async function getWeeklyScheduleData(
 
       const classGroupsMap = new Map((classGroups || []).map((cg: ClassGroupLite) => [cg.id, cg]))
       scheduleRows.forEach(schedule => {
-        const classGroupId = schedule.class_group_id ?? schedule.class_id ?? null
+        const classGroupId = schedule.class_group_id ?? null
         if (classGroupId) {
           schedule.class = classGroupsMap.get(classGroupId) || null
         }
@@ -320,7 +317,6 @@ export async function getWeeklyScheduleData(
     .select(
       `
       *,
-      class:class_groups(*),
       day_of_week:days_of_week(*),
       time_slot:time_slots(*)
     `
@@ -333,6 +329,29 @@ export async function getWeeklyScheduleData(
   }
 
   // staffing_rules now include class_group_id directly
+  if (staffingRules && staffingRules.length > 0) {
+    const ruleRows = staffingRules as Array<
+      Database['public']['Tables']['staffing_rules']['Row'] & {
+        class?: { id: string; name: string } | null
+      }
+    >
+    const ruleClassIds = [
+      ...new Set(ruleRows.map(rule => rule.class_group_id ?? null).filter(Boolean) as string[]),
+    ]
+    if (ruleClassIds.length > 0) {
+      const { data: classGroups } = await supabase
+        .from('class_groups')
+        .select('id, name')
+        .in('id', ruleClassIds)
+      const classGroupsMap = new Map((classGroups || []).map(cg => [cg.id, cg]))
+      ruleRows.forEach(rule => {
+        const classGroupId = rule.class_group_id ?? null
+        if (classGroupId) {
+          rule.class = classGroupsMap.get(classGroupId) || null
+        }
+      })
+    }
+  }
 
   // Get schedule cells (gracefully handle if table doesn't exist yet)
   let scheduleCells: ScheduleCellRaw[] | null = null

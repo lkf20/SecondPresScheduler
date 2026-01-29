@@ -105,8 +105,7 @@ const log = (...args: unknown[]) => {
   }
 }
 
-const getScheduleClassGroupId = (schedule: TeacherSchedule) =>
-  schedule.class_group_id ?? schedule.class_id ?? null
+const getScheduleClassGroupId = (schedule: TeacherSchedule) => schedule.class_group_id ?? null
 
 export default function ScheduleSidePanel({
   isOpen,
@@ -790,7 +789,7 @@ export default function ScheduleSidePanel({
       }
       const allSchedules = await allSchedulesResponse.json()
       const hasClassAssignments = (allSchedules as TeacherSchedule[]).some(
-        schedule => schedule.class_group_id != null || schedule.class_id != null
+        schedule => schedule.class_group_id != null
       )
 
       const deletePromises: Promise<void>[] = []

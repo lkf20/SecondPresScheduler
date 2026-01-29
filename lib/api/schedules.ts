@@ -29,14 +29,10 @@ type SupabaseErrorDetails = Error & {
 }
 
 type TeacherScheduleLike = {
-  class_id?: string | null
   class_group_id?: string | null
 } & Record<string, unknown>
 
 function normalizeTeacherSchedule<T extends TeacherScheduleLike>(row: T): T {
-  if (row && row.class_id == null && row.class_group_id != null) {
-    return { ...row, class_id: row.class_group_id }
-  }
   return row
 }
 
@@ -75,7 +71,6 @@ export async function createTeacherSchedule(schedule: {
   teacher_id: string
   day_of_week_id: string
   time_slot_id: string
-  class_id?: string | null
   class_group_id?: string | null
   classroom_id: string
   is_floater?: boolean
@@ -94,7 +89,7 @@ export async function createTeacherSchedule(schedule: {
     day_of_week_id: schedule.day_of_week_id,
     time_slot_id: schedule.time_slot_id,
     classroom_id: schedule.classroom_id,
-    class_group_id: schedule.class_group_id ?? schedule.class_id ?? null,
+    class_group_id: schedule.class_group_id ?? null,
     school_id: schoolId,
     is_floater: schedule.is_floater ?? false,
   }
@@ -111,46 +106,8 @@ export async function createTeacherSchedule(schedule: {
     enhancedError.details = error.details
     enhancedError.hint = error.hint
 
-    // Fallback for legacy schema without class_group_id
+    // Fallback for schema without class_group_id
     if (isMissingColumnError(enhancedError, 'class_group_id')) {
-      const legacyInsert = {
-        ...insertData,
-        class_id: schedule.class_id ?? schedule.class_group_id ?? null,
-      }
-      delete (legacyInsert as { class_group_id?: string | null }).class_group_id
-      const { data: legacyData, error: legacyError } = await supabase
-        .from('teacher_schedules')
-        .insert(legacyInsert)
-        .select()
-        .single()
-
-      if (legacyError) {
-        const legacyEnhanced: SupabaseErrorDetails = new Error(legacyError.message)
-        legacyEnhanced.code = legacyError.code
-        legacyEnhanced.details = legacyError.details
-        legacyEnhanced.hint = legacyError.hint
-
-        // Fallback for schema without class_id/class_group_id
-        if (isMissingColumnError(legacyEnhanced, 'class_id')) {
-          const minimalInsert = { ...insertData }
-          delete (minimalInsert as { class_group_id?: string | null }).class_group_id
-          const { data: minimalData, error: minimalError } = await supabase
-            .from('teacher_schedules')
-            .insert(minimalInsert)
-            .select()
-            .single()
-
-          if (minimalError) throw minimalError
-          return normalizeTeacherSchedule(minimalData) as TeacherSchedule
-        }
-
-        throw legacyEnhanced
-      }
-      return normalizeTeacherSchedule(legacyData) as TeacherSchedule
-    }
-
-    // Fallback for schema without class_id/class_group_id
-    if (isMissingColumnError(enhancedError, 'class_id')) {
       const minimalInsert = { ...insertData }
       delete (minimalInsert as { class_group_id?: string | null }).class_group_id
       const { data: minimalData, error: minimalError } = await supabase
@@ -206,16 +163,16 @@ export async function getTeacherScheduleById(
 
 export async function updateTeacherSchedule(
   id: string,
-  updates: Partial<TeacherSchedule> & { class_group_id?: string | null; class_id?: string | null },
+  updates: Partial<TeacherSchedule> & { class_group_id?: string | null },
   schoolId?: string
 ): Promise<TeacherSchedule | null> {
   const supabase = await createClient()
-  const { class_id, class_group_id, ...rest } = updates
+  const { class_group_id, ...rest } = updates
   const updateData: Record<string, unknown> = {
     ...rest,
   }
-  if (class_group_id !== undefined || class_id !== undefined) {
-    updateData.class_group_id = class_group_id ?? class_id ?? null
+  if (class_group_id !== undefined) {
+    updateData.class_group_id = class_group_id ?? null
   }
 
   let query = supabase.from('teacher_schedules').update(updateData).eq('id', id)
@@ -234,46 +191,6 @@ export async function updateTeacherSchedule(
     enhancedError.hint = error.hint
 
     if (isMissingColumnError(enhancedError, 'class_group_id')) {
-      const legacyUpdate: Record<string, unknown> = {
-        ...rest,
-      }
-      if (class_group_id !== undefined || class_id !== undefined) {
-        legacyUpdate.class_id = class_id ?? class_group_id ?? null
-      }
-      const { data: legacyData, error: legacyError } = await supabase
-        .from('teacher_schedules')
-        .update(legacyUpdate)
-        .eq('id', id)
-        .select()
-        .maybeSingle()
-
-      if (legacyError) {
-        // Fallback for schema without class_id/class_group_id
-        if (isMissingColumnError(legacyError as SupabaseErrorDetails, 'class_id')) {
-          const minimalUpdate: Record<string, unknown> = { ...rest }
-          const { data: minimalData, error: minimalError } = await supabase
-            .from('teacher_schedules')
-            .update(minimalUpdate)
-            .eq('id', id)
-            .select()
-            .maybeSingle()
-
-          if (minimalError) throw minimalError
-          if (!minimalData) {
-            return null
-          }
-          return normalizeTeacherSchedule(minimalData) as TeacherSchedule
-        }
-
-        throw legacyError
-      }
-      if (!legacyData) {
-        return null
-      }
-      return normalizeTeacherSchedule(legacyData) as TeacherSchedule
-    }
-
-    if (isMissingColumnError(enhancedError, 'class_id')) {
       const minimalUpdate: Record<string, unknown> = { ...rest }
       const { data: minimalData, error: minimalError } = await supabase
         .from('teacher_schedules')
@@ -331,7 +248,6 @@ export async function bulkCreateTeacherSchedules(
   schedules: Array<{
     day_of_week_id: string
     time_slot_id: string
-    class_id?: string | null
     class_group_id?: string | null
     classroom_id: string
   }>,
@@ -350,7 +266,7 @@ export async function bulkCreateTeacherSchedules(
     day_of_week_id: schedule.day_of_week_id,
     time_slot_id: schedule.time_slot_id,
     classroom_id: schedule.classroom_id,
-    class_group_id: schedule.class_group_id ?? schedule.class_id ?? null,
+    class_group_id: schedule.class_group_id ?? null,
   }))
 
   const { data, error } = await supabase.from('teacher_schedules').insert(scheduleData).select()
@@ -362,43 +278,6 @@ export async function bulkCreateTeacherSchedules(
     enhancedError.hint = error.hint
 
     if (isMissingColumnError(enhancedError, 'class_group_id')) {
-      const legacyScheduleData = schedules.map(schedule => ({
-        teacher_id: teacherId,
-        school_id: effectiveSchoolId,
-        day_of_week_id: schedule.day_of_week_id,
-        time_slot_id: schedule.time_slot_id,
-        classroom_id: schedule.classroom_id,
-        class_id: schedule.class_id ?? schedule.class_group_id ?? null,
-      }))
-
-      const { data: legacyData, error: legacyError } = await supabase
-        .from('teacher_schedules')
-        .insert(legacyScheduleData)
-        .select()
-
-      if (legacyError) {
-        if (isMissingColumnError(legacyError as SupabaseErrorDetails, 'class_id')) {
-          const minimalScheduleData = schedules.map(schedule => ({
-            teacher_id: teacherId,
-            school_id: effectiveSchoolId,
-            day_of_week_id: schedule.day_of_week_id,
-            time_slot_id: schedule.time_slot_id,
-            classroom_id: schedule.classroom_id,
-          }))
-          const { data: minimalData, error: minimalError } = await supabase
-            .from('teacher_schedules')
-            .insert(minimalScheduleData)
-            .select()
-
-          if (minimalError) throw minimalError
-          return (minimalData || []).map(row => normalizeTeacherSchedule(row)) as TeacherSchedule[]
-        }
-        throw legacyError
-      }
-      return (legacyData || []).map(row => normalizeTeacherSchedule(row)) as TeacherSchedule[]
-    }
-
-    if (isMissingColumnError(enhancedError, 'class_id')) {
       const minimalScheduleData = schedules.map(schedule => ({
         teacher_id: teacherId,
         school_id: effectiveSchoolId,
