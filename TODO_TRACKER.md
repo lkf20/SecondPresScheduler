@@ -20,6 +20,7 @@ Issues that need to be fixed.
 - [ ] After assigning selected shifts, getting an assign shifts error sometimes
 - [ ] Add validation to prevent multiple subs from being assigned to the same classroom/slot/teacher combination - need better error controls and logic around how many subs can be assigned to a single shift
 - [ ] Investigate Sub Finder intermittently showing "No recommended subs found" after navigating away and back (repro: Kim B. Jan 19-23)
+- [ ] Time Off cancel flow: ensure coverage_requests + shifts are re-opened when time_off_requests go back to active; add cancel dialog when subs exist to choose remove vs keep (keep => extra_coverage)
 
 ---
 

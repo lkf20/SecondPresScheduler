@@ -683,15 +683,13 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
           throw new Error(errorData.error || 'Failed to save draft')
         }
 
-        const created = await response.json()
+        await response.json()
         if (typeof window !== 'undefined') {
           window.sessionStorage.removeItem(draftKey)
         }
         toast.success('Draft saved')
-        if (created?.id) {
-          router.push(`/time-off/${created.id}`)
-          router.refresh()
-        }
+        router.push('/time-off')
+        router.refresh()
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Failed to save draft')
       }
@@ -933,7 +931,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                             {conflictingRequests.map(request => (
                               <a
                                 key={request.id}
-                                href={`/time-off/${request.id}`}
+                                href={`/time-off?edit=${request.id}`}
                                 className="inline-flex items-center rounded-md border border-yellow-200 bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-700 hover:underline"
                               >
                                 {formatRange(request.start_date, request.end_date)}

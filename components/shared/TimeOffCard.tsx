@@ -108,7 +108,7 @@ export default function TimeOffCard({
     if (onEdit) {
       onEdit()
     } else {
-      router.push(`/time-off/${id}`)
+      router.push(`/time-off?edit=${id}`)
     }
   }
 
@@ -314,7 +314,7 @@ export default function TimeOffCard({
               </button>
             ) : (
               <Link
-                href={`/time-off/${id}`}
+                href={`/time-off?edit=${id}`}
                 onClick={e => e.stopPropagation()}
                 className="text-sm font-semibold text-teal-700 hover:text-teal-800 hover:underline"
               >
