@@ -42,6 +42,7 @@ export async function createSub(sub: {
   is_teacher?: boolean
   is_sub: boolean
   active?: boolean
+  school_id?: string
 }) {
   const supabase = await createClient()
 
@@ -56,6 +57,7 @@ export async function createSub(sub: {
     is_sub: true,
     is_teacher: sub.is_teacher ?? false, // Preserve is_teacher flag
     active: subData.active ?? true,
+    school_id: sub.school_id || '00000000-0000-0000-0000-000000000001',
   } as Partial<Staff> & { id: string }
 
   // Generate UUID if not provided

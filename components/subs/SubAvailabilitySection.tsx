@@ -44,6 +44,12 @@ interface TimeSlot {
   display_order?: number | null
 }
 
+interface DayOfWeek {
+  id: string
+  name: string
+  day_number: number
+}
+
 interface TeacherSchedule {
   day_of_week_id?: string | null
   time_slot_id?: string | null
@@ -58,6 +64,7 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
   const [saving, setSaving] = useState(false)
   const [availabilityData, setAvailabilityData] = useState<AvailabilityData | null>(null)
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
+  const [daysOfWeek, setDaysOfWeek] = useState<DayOfWeek[]>([])
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [conflicts, setConflicts] = useState<Array<{ day: string; timeSlot: string }>>([])
   const [showConflictWarning, setShowConflictWarning] = useState(false)
@@ -97,11 +104,23 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
     }
   }, [])
 
+  const fetchDaysOfWeek = useCallback(async () => {
+    try {
+      const response = await fetch('/api/days-of-week')
+      if (!response.ok) throw new Error('Failed to fetch days of week')
+      const data = await response.json()
+      setDaysOfWeek(data as DayOfWeek[])
+    } catch (error) {
+      console.error('Error fetching days of week:', error)
+    }
+  }, [])
+
   // Fetch initial data
   useEffect(() => {
     fetchAvailability()
     fetchTimeSlots()
-  }, [fetchAvailability, fetchTimeSlots])
+    fetchDaysOfWeek()
+  }, [fetchAvailability, fetchTimeSlots, fetchDaysOfWeek])
 
   const handleAvailabilityChange = async (
     availability: Array<{ day_of_week_id: string; time_slot_id: string; available: boolean }>
@@ -149,12 +168,16 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
 
           // Find conflicts
           const conflictList: Array<{ day: string; timeSlot: string }> = []
+          const dayMap = new Map(daysOfWeek.map(day => [day.id, day.name]))
+          const timeSlotMap = new Map(timeSlots.map(slot => [slot.id, slot.code]))
+
           availableSlots.forEach(item => {
             const key = `${item.day_of_week_id}|${item.time_slot_id}`
             if (teachingSlots.has(key)) {
               // Get day and time slot names from the item's nested data (already fetched by API)
-              const day = item.day_of_week?.name || 'Unknown'
-              const timeSlot = item.time_slot?.code || 'Unknown'
+              const day = dayMap.get(item.day_of_week_id) || item.day_of_week?.name || 'Unknown'
+              const timeSlot =
+                timeSlotMap.get(item.time_slot_id) || item.time_slot?.code || 'Unknown'
               conflictList.push({ day, timeSlot })
             }
           })

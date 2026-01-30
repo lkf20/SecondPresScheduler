@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createTeacher, updateTeacher } from '@/lib/api/teachers'
+import { getUserSchoolId } from '@/lib/utils/auth'
 import { createClient } from '@/lib/supabase/server'
 
 interface TeacherImport {
@@ -21,6 +22,13 @@ interface Resolution {
 
 export async function POST(request: NextRequest) {
   try {
+    const schoolId = await getUserSchoolId()
+    if (!schoolId) {
+      return NextResponse.json(
+        { error: 'User profile not found or missing school_id.' },
+        { status: 403 }
+      )
+    }
     const body = await request.json()
     const { teachers, resolutions = [] } = body as {
       teachers: TeacherImport[]
@@ -122,6 +130,7 @@ export async function POST(request: NextRequest) {
               is_teacher: true,
               is_sub: teacher.is_sub,
               active: teacher.active,
+              school_id: schoolId,
             })
             results.success++
             continue
@@ -151,6 +160,7 @@ export async function POST(request: NextRequest) {
             is_teacher: true,
             is_sub: teacher.is_sub,
             active: teacher.active,
+            school_id: schoolId,
           })
           results.success++
         }
@@ -169,6 +179,7 @@ export async function POST(request: NextRequest) {
               is_teacher: true,
               is_sub: teacher.is_sub,
               active: teacher.active,
+              school_id: schoolId,
             })
             results.success++
           } catch (createError: any) {

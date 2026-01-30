@@ -61,6 +61,7 @@ export async function createTimeOffRequest(request: {
   notes?: string
   shift_selection_mode?: string
   status?: string
+  school_id?: string
 }) {
   const supabase = await createClient()
   const { data, error } = await supabase.from('time_off_requests').insert(request).select().single()
