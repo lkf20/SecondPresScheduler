@@ -28,12 +28,21 @@ export async function upsertSubAvailability(
   }
 ) {
   const supabase = await createClient()
+  const { data: subRow, error: subError } = await supabase
+    .from('staff')
+    .select('school_id')
+    .eq('id', subId)
+    .single()
+
+  if (subError) throw subError
+  const schoolId = subRow?.school_id || '00000000-0000-0000-0000-000000000001'
   const { data, error } = await supabase
     .from('sub_availability')
     .upsert(
       {
         sub_id: subId,
         ...availability,
+        school_id: schoolId,
       },
       {
         onConflict: 'sub_id,day_of_week_id,time_slot_id',
@@ -77,9 +86,17 @@ export async function createSubAvailabilityException(exception: {
   available: boolean
 }) {
   const supabase = await createClient()
+  const { data: subRow, error: subError } = await supabase
+    .from('staff')
+    .select('school_id')
+    .eq('id', exception.sub_id)
+    .single()
+
+  if (subError) throw subError
+  const schoolId = subRow?.school_id || '00000000-0000-0000-0000-000000000001'
   const { data, error } = await supabase
     .from('sub_availability_exceptions')
-    .insert(exception)
+    .insert({ ...exception, school_id: schoolId })
     .select()
     .single()
 

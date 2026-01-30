@@ -5,7 +5,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params
     const supabase = await createClient()
-
     const { data, error } = await supabase
       .from('sub_class_preferences')
       .select('*, class_group:class_groups(*)')
@@ -33,6 +32,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const supabase = await createClient()
+    const { data: subRow, error: subError } = await supabase
+      .from('staff')
+      .select('school_id')
+      .eq('id', id)
+      .single()
+
+    if (subError) throw subError
+    const schoolId = subRow?.school_id || '00000000-0000-0000-0000-000000000001'
 
     // Delete existing preferences for this sub
     const { error: deleteError } = await supabase
@@ -40,7 +47,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       .delete()
       .eq('sub_id', id)
 
-    if (deleteError) throw deleteError
+    if (deleteError) {
+      console.error('Error deleting sub preferences:', deleteError)
+      throw deleteError
+    }
 
     // Insert new preferences
     if (ids.length > 0) {
@@ -48,13 +58,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         sub_id: id,
         class_group_id,
         can_teach: true,
+        school_id: schoolId,
       }))
 
       const { error: insertError } = await supabase
         .from('sub_class_preferences')
         .insert(preferencesData)
 
-      if (insertError) throw insertError
+      if (insertError) {
+        console.error('Error inserting sub preferences:', insertError)
+        throw insertError
+      }
     }
 
     return NextResponse.json({ success: true })

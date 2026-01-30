@@ -7,7 +7,7 @@ BEGIN
     SELECT 1
     FROM coverage_requests
     WHERE request_type IS NOT NULL
-      AND request_type NOT IN ('time_off', 'manual_coverage', 'extra_coverage')
+      AND request_type::text NOT IN ('time_off', 'extra_coverage')
   ) THEN
     RAISE EXCEPTION 'Unexpected coverage_requests.request_type values exist';
   END IF;
@@ -52,7 +52,7 @@ END $$;
 -- Normalize request_type values
 UPDATE coverage_requests
 SET request_type = 'extra_coverage'
-WHERE request_type = 'manual_coverage';
+WHERE request_type::text = 'manual_coverage';
 
 -- Drop defaults before type changes to avoid cast errors
 ALTER TABLE coverage_requests
@@ -68,12 +68,29 @@ ALTER TABLE time_off_requests
 ALTER TABLE sub_assignments
   ALTER COLUMN status DROP DEFAULT;
 
--- Create enums
-CREATE TYPE coverage_request_status AS ENUM ('open', 'filled', 'cancelled');
-CREATE TYPE coverage_request_shift_status AS ENUM ('active', 'cancelled');
-CREATE TYPE time_off_request_status AS ENUM ('draft', 'active', 'cancelled');
-CREATE TYPE sub_assignment_status AS ENUM ('active', 'cancelled');
-CREATE TYPE coverage_request_type AS ENUM ('time_off', 'extra_coverage');
+-- Create enums (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'coverage_request_status') THEN
+    CREATE TYPE coverage_request_status AS ENUM ('open', 'filled', 'cancelled');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'coverage_request_shift_status') THEN
+    CREATE TYPE coverage_request_shift_status AS ENUM ('active', 'cancelled');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'time_off_request_status') THEN
+    CREATE TYPE time_off_request_status AS ENUM ('draft', 'active', 'cancelled');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'sub_assignment_status') THEN
+    CREATE TYPE sub_assignment_status AS ENUM ('active', 'cancelled');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'coverage_request_type') THEN
+    CREATE TYPE coverage_request_type AS ENUM ('time_off', 'extra_coverage');
+  END IF;
+END $$;
 
 -- Convert columns to enums
 ALTER TABLE coverage_requests

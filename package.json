@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
+    "restart-dev": "pkill -f \"next dev\" || true && rm -rf .next && npm run dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "jest",

@@ -13,6 +13,7 @@ import {
   getTeacherScheduledShifts,
   getTeacherTimeOffShifts,
 } from '@/lib/api/time-off-shifts'
+import { getUserSchoolId } from '@/lib/utils/auth'
 import { parseLocalDate } from '@/lib/utils/date'
 import { createClient } from '@/lib/supabase/server'
 
@@ -106,7 +107,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     let warning: string | null = null
 
     // Update the time off request
-    const updatedRequest = await updateTimeOffRequest(id, { ...requestData, status })
+    const sessionSchoolId = await getUserSchoolId()
+    const updatedRequest = await updateTimeOffRequest(id, {
+      ...requestData,
+      status,
+      school_id: existingRequest.school_id || sessionSchoolId || undefined,
+    })
 
     // Update the corresponding coverage_request's dates to match the time_off_request
     const supabase = await createClient()

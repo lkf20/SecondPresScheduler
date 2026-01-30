@@ -78,6 +78,15 @@ export async function createTimeOffShifts(
   }>
 ) {
   const supabase = await createClient()
+  const { data: timeOffRequest, error: timeOffError } = await supabase
+    .from('time_off_requests')
+    .select('school_id')
+    .eq('id', requestId)
+    .single()
+
+  if (timeOffError) throw timeOffError
+  const schoolId = timeOffRequest?.school_id || '00000000-0000-0000-0000-000000000001'
+
   const shiftData = shifts.map(shift => ({
     time_off_request_id: requestId,
     date: shift.date,
@@ -86,6 +95,7 @@ export async function createTimeOffShifts(
     is_partial: shift.is_partial ?? false,
     start_time: shift.start_time || null,
     end_time: shift.end_time || null,
+    school_id: schoolId,
   }))
 
   const { data, error } = await supabase.from('time_off_shifts').insert(shiftData).select()

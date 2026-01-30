@@ -58,6 +58,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const supabase = await createClient()
+    const { data: subRow, error: subError } = await supabase
+      .from('staff')
+      .select('school_id')
+      .eq('id', id)
+      .single()
+
+    if (subError) throw subError
+    const schoolId = subRow?.school_id || '00000000-0000-0000-0000-000000000001'
 
     // Delete existing weekly availability for this sub
     const { error: deleteError } = await supabase.from('sub_availability').delete().eq('sub_id', id)
@@ -71,6 +79,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         day_of_week_id: item.day_of_week_id,
         time_slot_id: item.time_slot_id,
         available: item.available ?? true,
+        school_id: schoolId,
       }))
 
       const { error: insertError } = await supabase

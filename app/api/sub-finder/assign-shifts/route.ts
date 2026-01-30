@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     // The coverage_requests table has teacher_id directly, and source_request_id for time_off requests
     const { data: coverageRequest, error: coverageError } = await supabase
       .from('coverage_requests')
-      .select('teacher_id, source_request_id, request_type')
+      .select('teacher_id, source_request_id, request_type, school_id')
       .eq('id', coverage_request_id)
       .in('status', ['open', 'filled']) // Only active coverage requests
       .single()
@@ -110,6 +110,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create sub_assignments for each selected shift
+    const requestSchoolId = coverageRequest.school_id || '00000000-0000-0000-0000-000000000001'
     const assignments = coverageRequestShifts.map((shift: any) => {
       const fallbackKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
       const resolvedClassroomId = shift.classroom_id || fallbackClassroomMap.get(fallbackKey)
@@ -131,6 +132,7 @@ export async function POST(request: NextRequest) {
         notes: null,
         status: 'active', // Default status
         assignment_kind: 'absence_coverage', // Default assignment kind
+        school_id: requestSchoolId,
       }
     })
 

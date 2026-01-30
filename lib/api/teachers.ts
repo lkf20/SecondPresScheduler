@@ -49,6 +49,7 @@ export async function createTeacher(teacher: {
   is_teacher: boolean
   is_sub?: boolean
   active?: boolean
+  school_id?: string
 }) {
   const supabase = await createClient()
 
@@ -64,6 +65,7 @@ export async function createTeacher(teacher: {
     is_teacher: true,
     is_sub: teacher.is_sub ?? false, // Preserve is_sub flag
     role_type_id: teacher.role_type_id, // Include role_type_id
+    school_id: teacher.school_id || '00000000-0000-0000-0000-000000000001',
   }
 
   const { data, error } = await supabase.from('staff').insert(insertData).select().single()

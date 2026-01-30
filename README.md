@@ -64,6 +64,15 @@ A modern web application for managing substitute teacher scheduling, built with 
 7. **Open your browser:**
    Navigate to [http://localhost:3000](http://localhost:3000)
 
+### Supabase project linking (staging/prod)
+
+We store project refs in local env files and provide a helper script so you don't have to copy/paste IDs.
+
+```
+./scripts/supabase-link.sh staging
+./scripts/supabase-link.sh prod
+```
+
 ## Project Structure
 
 ```

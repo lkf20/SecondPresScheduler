@@ -20,6 +20,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const supabase = await createClient()
+    const { data: subRow, error: subError } = await supabase
+      .from('staff')
+      .select('school_id')
+      .eq('id', id)
+      .single()
+
+    if (subError) throw subError
+    const schoolId = subRow?.school_id || '00000000-0000-0000-0000-000000000001'
 
     // Create exception header
     const { data: header, error: headerError } = await supabase
@@ -29,6 +37,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         start_date,
         end_date,
         available,
+        school_id: schoolId,
       })
       .select()
       .single()
@@ -58,6 +67,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           time_slot_id,
           available,
           exception_header_id: header.id,
+          school_id: schoolId,
         })
       }
     }

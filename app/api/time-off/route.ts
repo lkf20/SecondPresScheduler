@@ -234,7 +234,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the time off request
-    const createdRequest = await createTimeOffRequest({ ...requestData, status })
+    const createdRequest = await createTimeOffRequest({
+      ...requestData,
+      status,
+      school_id: schoolId,
+    })
 
     // Create shifts (only non-conflicting ones)
     if (shiftsToCreate.length > 0) {

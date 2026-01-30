@@ -100,6 +100,15 @@ export async function getOrCreateSubstituteContact(
     return existing as SubstituteContact
   }
 
+  const { data: coverageRequest, error: coverageRequestError } = await supabase
+    .from('coverage_requests')
+    .select('school_id')
+    .eq('id', coverageRequestId)
+    .single()
+
+  if (coverageRequestError) throw coverageRequestError
+  const schoolId = coverageRequest?.school_id || '00000000-0000-0000-0000-000000000001'
+
   // Create new contact if it doesn't exist
   const { data: created, error: createError } = await supabase
     .from('substitute_contacts')
@@ -108,6 +117,7 @@ export async function getOrCreateSubstituteContact(
       sub_id: subId,
       response_status: 'none',
       is_contacted: false,
+      school_id: schoolId,
     })
     .select()
     .single()
@@ -335,6 +345,14 @@ export async function upsertShiftOverrides(
   }>
 ): Promise<void> {
   const supabase = await createClient()
+  const { data: substituteContact, error: substituteContactError } = await supabase
+    .from('substitute_contacts')
+    .select('school_id')
+    .eq('id', substituteContactId)
+    .single()
+
+  if (substituteContactError) throw substituteContactError
+  const schoolId = substituteContact?.school_id || '00000000-0000-0000-0000-000000000001'
 
   // Get all existing overrides for this contact
   const { data: existingOverrides } = await supabase
@@ -370,6 +388,7 @@ export async function upsertShiftOverrides(
     notes: override.notes ?? null,
     override_availability: override.override_availability ?? false,
     updated_at: new Date().toISOString(),
+    school_id: schoolId,
   }))
 
   if (overridesToUpsert.length > 0) {
