@@ -312,7 +312,7 @@ export type Database = {
           is_partial: boolean | null
           school_id: string
           start_time: string | null
-          status: string
+          status: Database['public']['Enums']['coverage_request_shift_status']
           time_slot_id: string
         }
         Insert: {
@@ -327,7 +327,7 @@ export type Database = {
           is_partial?: boolean | null
           school_id: string
           start_time?: string | null
-          status?: string
+          status?: Database['public']['Enums']['coverage_request_shift_status']
           time_slot_id: string
         }
         Update: {
@@ -342,7 +342,7 @@ export type Database = {
           is_partial?: boolean | null
           school_id?: string
           start_time?: string | null
-          status?: string
+          status?: Database['public']['Enums']['coverage_request_shift_status']
           time_slot_id?: string
         }
         Relationships: [
@@ -396,11 +396,11 @@ export type Database = {
           created_at: string | null
           end_date: string
           id: string
-          request_type: string
+          request_type: Database['public']['Enums']['coverage_request_type']
           school_id: string
           source_request_id: string | null
           start_date: string
-          status: string
+          status: Database['public']['Enums']['coverage_request_status']
           teacher_id: string
           total_shifts: number
           updated_at: string | null
@@ -410,11 +410,11 @@ export type Database = {
           created_at?: string | null
           end_date: string
           id?: string
-          request_type: string
+          request_type?: Database['public']['Enums']['coverage_request_type']
           school_id: string
           source_request_id?: string | null
           start_date: string
-          status?: string
+          status?: Database['public']['Enums']['coverage_request_status']
           teacher_id: string
           total_shifts?: number
           updated_at?: string | null
@@ -424,11 +424,11 @@ export type Database = {
           created_at?: string | null
           end_date?: string
           id?: string
-          request_type?: string
+          request_type?: Database['public']['Enums']['coverage_request_type']
           school_id?: string
           source_request_id?: string | null
           start_date?: string
-          status?: string
+          status?: Database['public']['Enums']['coverage_request_status']
           teacher_id?: string
           total_shifts?: number
           updated_at?: string | null
@@ -531,7 +531,7 @@ export type Database = {
           created_at: string | null
           first_name: string | null
           last_name: string | null
-          role: string
+          role: Database['public']['Enums']['profile_role']
           school_id: string
           theme: string
           updated_at: string | null
@@ -541,7 +541,7 @@ export type Database = {
           created_at?: string | null
           first_name?: string | null
           last_name?: string | null
-          role?: string
+          role?: Database['public']['Enums']['profile_role']
           school_id: string
           theme?: string
           updated_at?: string | null
@@ -551,7 +551,7 @@ export type Database = {
           created_at?: string | null
           first_name?: string | null
           last_name?: string | null
-          role?: string
+          role?: Database['public']['Enums']['profile_role']
           school_id?: string
           theme?: string
           updated_at?: string | null
@@ -982,7 +982,7 @@ export type Database = {
           notes: string | null
           partial_end_time: string | null
           partial_start_time: string | null
-          status: string
+          status: Database['public']['Enums']['sub_assignment_status']
           sub_id: string
           teacher_id: string
           time_slot_id: string
@@ -1001,7 +1001,7 @@ export type Database = {
           notes?: string | null
           partial_end_time?: string | null
           partial_start_time?: string | null
-          status?: string
+          status?: Database['public']['Enums']['sub_assignment_status']
           sub_id: string
           teacher_id: string
           time_slot_id: string
@@ -1020,7 +1020,7 @@ export type Database = {
           notes?: string | null
           partial_end_time?: string | null
           partial_start_time?: string | null
-          status?: string
+          status?: Database['public']['Enums']['sub_assignment_status']
           sub_id?: string
           teacher_id?: string
           time_slot_id?: string
@@ -1248,7 +1248,7 @@ export type Database = {
       sub_contact_log: {
         Row: {
           contact_date: string
-          contact_status: string
+          contact_status: Database['public']['Enums']['sub_contact_status']
           created_at: string | null
           created_by: string | null
           id: string
@@ -1258,7 +1258,7 @@ export type Database = {
         }
         Insert: {
           contact_date: string
-          contact_status: string
+          contact_status: Database['public']['Enums']['sub_contact_status']
           created_at?: string | null
           created_by?: string | null
           id?: string
@@ -1268,7 +1268,7 @@ export type Database = {
         }
         Update: {
           contact_date?: string
-          contact_status?: string
+          contact_status?: Database['public']['Enums']['sub_contact_status']
           created_at?: string | null
           created_by?: string | null
           id?: string
@@ -1688,9 +1688,9 @@ export type Database = {
           id: string
           notes: string | null
           reason: string | null
-          shift_selection_mode: string | null
+          shift_selection_mode: Database['public']['Enums']['time_off_shift_selection_mode'] | null
           start_date: string
-          status: string
+          status: Database['public']['Enums']['time_off_request_status']
           teacher_id: string
           updated_at: string | null
         }
@@ -1701,9 +1701,9 @@ export type Database = {
           id?: string
           notes?: string | null
           reason?: string | null
-          shift_selection_mode?: string | null
+          shift_selection_mode?: Database['public']['Enums']['time_off_shift_selection_mode'] | null
           start_date: string
-          status?: string
+          status?: Database['public']['Enums']['time_off_request_status']
           teacher_id: string
           updated_at?: string | null
         }
@@ -1714,9 +1714,9 @@ export type Database = {
           id?: string
           notes?: string | null
           reason?: string | null
-          shift_selection_mode?: string | null
+          shift_selection_mode?: Database['public']['Enums']['time_off_shift_selection_mode'] | null
           start_date?: string
-          status?: string
+          status?: Database['public']['Enums']['time_off_request_status']
           teacher_id?: string
           updated_at?: string | null
         }
@@ -1848,6 +1848,14 @@ export type Database = {
     }
     Enums: {
       assignment_kind: 'absence_coverage' | 'extra_coverage'
+      coverage_request_shift_status: 'active' | 'cancelled'
+      coverage_request_status: 'open' | 'filled' | 'cancelled'
+      coverage_request_type: 'time_off' | 'extra_coverage'
+      profile_role: 'admin' | 'director' | 'teacher' | 'viewer'
+      sub_assignment_status: 'active' | 'cancelled'
+      sub_contact_status: 'no_response' | 'pending' | 'confirmed' | 'declined'
+      time_off_request_status: 'draft' | 'active' | 'cancelled'
+      time_off_shift_selection_mode: 'select_shifts' | 'all_scheduled'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1974,6 +1982,14 @@ export const Constants = {
   public: {
     Enums: {
       assignment_kind: ['absence_coverage', 'extra_coverage'],
+      coverage_request_shift_status: ['active', 'cancelled'],
+      coverage_request_status: ['open', 'filled', 'cancelled'],
+      coverage_request_type: ['time_off', 'extra_coverage'],
+      profile_role: ['admin', 'director', 'teacher', 'viewer'],
+      sub_assignment_status: ['active', 'cancelled'],
+      sub_contact_status: ['no_response', 'pending', 'confirmed', 'declined'],
+      time_off_request_status: ['draft', 'active', 'cancelled'],
+      time_off_shift_selection_mode: ['select_shifts', 'all_scheduled'],
     },
   },
 } as const

@@ -143,10 +143,18 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
 
   const handleEdit = (id: string) => {
     setEditingRequestId(id)
+    const url = new URL(window.location.href)
+    url.searchParams.set('edit', id)
+    window.history.replaceState({}, '', url)
   }
 
   const handleEditClose = () => {
     setEditingRequestId(null)
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('edit')
+      window.history.replaceState({}, '', url)
+    }
   }
 
   useEffect(() => {
