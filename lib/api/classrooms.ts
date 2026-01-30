@@ -160,12 +160,22 @@ export async function getClassroomAllowedClasses(classroomId: string): Promise<s
 
 export async function setClassroomAllowedClasses(classroomId: string, classGroupIds: string[]) {
   const supabase = await createClient()
+  const { data: classroomRow, error: classroomError } = await supabase
+    .from('classrooms')
+    .select('school_id')
+    .eq('id', classroomId)
+    .single()
+
+  if (classroomError) throw classroomError
+  const schoolId =
+    classroomRow?.school_id || (await getUserSchoolId()) || '00000000-0000-0000-0000-000000000001'
 
   // Delete existing allowed classes
   const { error: deleteError } = await supabase
     .from('classroom_allowed_classes')
     .delete()
     .eq('classroom_id', classroomId)
+    .eq('school_id', schoolId)
 
   if (deleteError) throw deleteError
 
@@ -175,6 +185,7 @@ export async function setClassroomAllowedClasses(classroomId: string, classGroup
       return {
         classroom_id: classroomId,
         class_group_id: classGroupId,
+        school_id: schoolId,
       }
     })
 

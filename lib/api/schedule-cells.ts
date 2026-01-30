@@ -208,6 +208,7 @@ export async function createScheduleCell(cell: {
     const joinRows = cell.class_group_ids.map(class_group_id => ({
       schedule_cell_id: cellData.id,
       class_group_id,
+      school_id: schoolId,
     }))
 
     const supabase2 = await createClient()
@@ -242,6 +243,8 @@ export async function updateScheduleCell(
     .single()
 
   if (error) throw error
+  const schoolId =
+    data?.school_id || (await getUserSchoolId()) || '00000000-0000-0000-0000-000000000001'
 
   // Update class group associations if provided
   if (class_group_ids !== undefined) {
@@ -258,6 +261,7 @@ export async function updateScheduleCell(
       const joinRows = class_group_ids.map(class_group_id => ({
         schedule_cell_id: id,
         class_group_id,
+        school_id: schoolId,
       }))
 
       const { error: insertError } = await supabase
@@ -402,16 +406,31 @@ export async function bulkUpdateScheduleCells(
 
     if (cell && update.class_group_ids !== undefined) {
       // Delete existing associations
-      await supabase.from('schedule_cell_class_groups').delete().eq('schedule_cell_id', cell.id)
+      const { error: deleteError } = await supabase
+        .from('schedule_cell_class_groups')
+        .delete()
+        .eq('schedule_cell_id', cell.id)
+      if (deleteError) throw deleteError
 
       // Insert new associations
       if (update.class_group_ids.length > 0) {
+        const resolvedSchoolId =
+          update.school_id || cell.school_id || schoolId || schoolMap.get(update.classroom_id)
+        if (!resolvedSchoolId) {
+          throw new Error(
+            `school_id is required to update schedule cell class groups (classroom_id: ${update.classroom_id})`
+          )
+        }
         const joinRows = update.class_group_ids.map(class_group_id => ({
           schedule_cell_id: cell.id,
           class_group_id,
+          school_id: resolvedSchoolId,
         }))
 
-        await supabase.from('schedule_cell_class_groups').insert(joinRows)
+        const { error: insertError } = await supabase
+          .from('schedule_cell_class_groups')
+          .insert(joinRows)
+        if (insertError) throw insertError
       }
     }
   }
