@@ -56,7 +56,7 @@ export type Database = {
           created_at: string | null
           day_of_week_id: string
           id: string
-          school_id: string
+          school_id: string | null
           time_slot_id: string
           updated_at: string | null
         }
@@ -66,7 +66,7 @@ export type Database = {
           created_at?: string | null
           day_of_week_id: string
           id?: string
-          school_id: string
+          school_id?: string | null
           time_slot_id: string
           updated_at?: string | null
         }
@@ -76,7 +76,7 @@ export type Database = {
           created_at?: string | null
           day_of_week_id?: string
           id?: string
-          school_id?: string
+          school_id?: string | null
           time_slot_id?: string
           updated_at?: string | null
         }
@@ -186,21 +186,21 @@ export type Database = {
           classroom_id: string
           created_at: string | null
           id: string
-          school_id: string
+          school_id: string | null
         }
         Insert: {
           class_group_id?: string | null
           classroom_id: string
           created_at?: string | null
           id?: string
-          school_id: string
+          school_id?: string | null
         }
         Update: {
           class_group_id?: string | null
           classroom_id?: string
           created_at?: string | null
           id?: string
-          school_id?: string
+          school_id?: string | null
         }
         Relationships: [
           {
@@ -225,7 +225,7 @@ export type Database = {
           classroom_id: string
           created_at: string | null
           id: string
-          school_id: string
+          school_id: string | null
           staff_id: string
           updated_at: string | null
         }
@@ -234,7 +234,7 @@ export type Database = {
           classroom_id: string
           created_at?: string | null
           id?: string
-          school_id: string
+          school_id?: string | null
           staff_id: string
           updated_at?: string | null
         }
@@ -243,7 +243,7 @@ export type Database = {
           classroom_id?: string
           created_at?: string | null
           id?: string
-          school_id?: string
+          school_id?: string | null
           staff_id?: string
           updated_at?: string | null
         }
@@ -490,7 +490,7 @@ export type Database = {
           day_of_week_id: string
           enrollment_count: number
           id: string
-          school_id: string
+          school_id: string | null
           time_slot_id: string
           updated_at: string | null
         }
@@ -500,7 +500,7 @@ export type Database = {
           day_of_week_id: string
           enrollment_count?: number
           id?: string
-          school_id: string
+          school_id?: string | null
           time_slot_id: string
           updated_at?: string | null
         }
@@ -510,7 +510,7 @@ export type Database = {
           day_of_week_id?: string
           enrollment_count?: number
           id?: string
-          school_id?: string
+          school_id?: string | null
           time_slot_id?: string
           updated_at?: string | null
         }
@@ -618,21 +618,21 @@ export type Database = {
           created_at: string | null
           id: string
           schedule_cell_id: string
-          school_id: string
+          school_id: string | null
         }
         Insert: {
           class_group_id: string
           created_at?: string | null
           id?: string
           schedule_cell_id: string
-          school_id: string
+          school_id?: string | null
         }
         Update: {
           class_group_id?: string
           created_at?: string | null
           id?: string
           schedule_cell_id?: string
-          school_id?: string
+          school_id?: string | null
         }
         Relationships: [
           {
@@ -786,7 +786,7 @@ export type Database = {
           last_name: string
           phone: string | null
           role_type_id: string | null
-          school_id: string
+          school_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -805,7 +805,7 @@ export type Database = {
           last_name: string
           phone?: string | null
           role_type_id?: string | null
-          school_id: string
+          school_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -824,7 +824,7 @@ export type Database = {
           last_name?: string
           phone?: string | null
           role_type_id?: string | null
-          school_id?: string
+          school_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -896,7 +896,7 @@ export type Database = {
           id: string
           is_system: boolean | null
           label: string
-          school_id: string
+          school_id: string | null
           sort_order: number | null
           updated_at: string | null
         }
@@ -907,7 +907,7 @@ export type Database = {
           id?: string
           is_system?: boolean | null
           label: string
-          school_id: string
+          school_id?: string | null
           sort_order?: number | null
           updated_at?: string | null
         }
@@ -918,7 +918,7 @@ export type Database = {
           id?: string
           is_system?: boolean | null
           label?: string
-          school_id?: string
+          school_id?: string | null
           sort_order?: number | null
           updated_at?: string | null
         }
@@ -926,7 +926,7 @@ export type Database = {
       }
       staffing_rules: {
         Row: {
-          class_group_id: string | null
+          classroom_id: string
           created_at: string | null
           day_of_week_id: string
           id: string
@@ -937,7 +937,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
-          class_group_id?: string | null
+          classroom_id: string
           created_at?: string | null
           day_of_week_id: string
           id?: string
@@ -948,7 +948,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
-          class_group_id?: string | null
+          classroom_id?: string
           created_at?: string | null
           day_of_week_id?: string
           id?: string
@@ -960,10 +960,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'staffing_rules_class_group_id_fkey'
-            columns: ['class_group_id']
+            foreignKeyName: 'staffing_rules_classroom_id_fkey'
+            columns: ['classroom_id']
             isOneToOne: false
-            referencedRelation: 'class_groups'
+            referencedRelation: 'classrooms'
             referencedColumns: ['id']
           },
           {
@@ -1101,7 +1101,7 @@ export type Database = {
           created_at: string | null
           day_of_week_id: string
           id: string
-          school_id: string
+          school_id: string | null
           sub_id: string
           time_slot_id: string
           updated_at: string | null
@@ -1111,7 +1111,7 @@ export type Database = {
           created_at?: string | null
           day_of_week_id: string
           id?: string
-          school_id: string
+          school_id?: string | null
           sub_id: string
           time_slot_id: string
           updated_at?: string | null
@@ -1121,7 +1121,7 @@ export type Database = {
           created_at?: string | null
           day_of_week_id?: string
           id?: string
-          school_id?: string
+          school_id?: string | null
           sub_id?: string
           time_slot_id?: string
           updated_at?: string | null
@@ -1156,7 +1156,7 @@ export type Database = {
           created_at: string | null
           end_date: string
           id: string
-          school_id: string
+          school_id: string | null
           start_date: string
           sub_id: string
           updated_at: string | null
@@ -1166,7 +1166,7 @@ export type Database = {
           created_at?: string | null
           end_date: string
           id?: string
-          school_id: string
+          school_id?: string | null
           start_date: string
           sub_id: string
           updated_at?: string | null
@@ -1176,7 +1176,7 @@ export type Database = {
           created_at?: string | null
           end_date?: string
           id?: string
-          school_id?: string
+          school_id?: string | null
           start_date?: string
           sub_id?: string
           updated_at?: string | null
@@ -1198,7 +1198,7 @@ export type Database = {
           date: string
           exception_header_id: string | null
           id: string
-          school_id: string
+          school_id: string | null
           sub_id: string
           time_slot_id: string
         }
@@ -1208,7 +1208,7 @@ export type Database = {
           date: string
           exception_header_id?: string | null
           id?: string
-          school_id: string
+          school_id?: string | null
           sub_id: string
           time_slot_id: string
         }
@@ -1218,7 +1218,7 @@ export type Database = {
           date?: string
           exception_header_id?: string | null
           id?: string
-          school_id?: string
+          school_id?: string | null
           sub_id?: string
           time_slot_id?: string
         }
@@ -1249,39 +1249,29 @@ export type Database = {
       sub_class_preferences: {
         Row: {
           can_teach: boolean | null
-          class_group_id: string | null
           created_at: string | null
           id: string
-          school_id: string
+          school_id: string | null
           sub_id: string
           updated_at: string | null
         }
         Insert: {
           can_teach?: boolean | null
-          class_group_id?: string | null
           created_at?: string | null
           id?: string
-          school_id: string
+          school_id?: string | null
           sub_id: string
           updated_at?: string | null
         }
         Update: {
           can_teach?: boolean | null
-          class_group_id?: string | null
           created_at?: string | null
           id?: string
-          school_id?: string
+          school_id?: string | null
           sub_id?: string
           updated_at?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: 'sub_class_preferences_class_group_id_fkey'
-            columns: ['class_group_id']
-            isOneToOne: false
-            referencedRelation: 'class_groups'
-            referencedColumns: ['id']
-          },
           {
             foreignKeyName: 'sub_class_preferences_sub_id_fkey'
             columns: ['sub_id']
@@ -1299,7 +1289,7 @@ export type Database = {
           created_by: string | null
           id: string
           notes: string | null
-          school_id: string
+          school_id: string | null
           sub_id: string
           teacher_id: string
         }
@@ -1310,7 +1300,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           notes?: string | null
-          school_id: string
+          school_id?: string | null
           sub_id: string
           teacher_id: string
         }
@@ -1321,7 +1311,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           notes?: string | null
-          school_id?: string
+          school_id?: string | null
           sub_id?: string
           teacher_id?: string
         }
@@ -1357,7 +1347,7 @@ export type Database = {
           id: string
           is_partial: boolean | null
           notes: string | null
-          school_id: string
+          school_id: string | null
           shift_id: string
           start_time: string | null
           sub_id: string
@@ -1372,7 +1362,7 @@ export type Database = {
           id?: string
           is_partial?: boolean | null
           notes?: string | null
-          school_id: string
+          school_id?: string | null
           shift_id: string
           start_time?: string | null
           sub_id: string
@@ -1387,7 +1377,7 @@ export type Database = {
           id?: string
           is_partial?: boolean | null
           notes?: string | null
-          school_id?: string
+          school_id?: string | null
           shift_id?: string
           start_time?: string | null
           sub_id?: string
@@ -1422,7 +1412,7 @@ export type Database = {
           override_availability: boolean
           partial_end_time: string | null
           partial_start_time: string | null
-          school_id: string
+          school_id: string | null
           selected: boolean
           substitute_contact_id: string
           updated_at: string
@@ -1436,7 +1426,7 @@ export type Database = {
           override_availability?: boolean
           partial_end_time?: string | null
           partial_start_time?: string | null
-          school_id: string
+          school_id?: string | null
           selected?: boolean
           substitute_contact_id: string
           updated_at?: string
@@ -1450,7 +1440,7 @@ export type Database = {
           override_availability?: boolean
           partial_end_time?: string | null
           partial_start_time?: string | null
-          school_id?: string
+          school_id?: string | null
           selected?: boolean
           substitute_contact_id?: string
           updated_at?: string
@@ -1481,11 +1471,11 @@ export type Database = {
           created_by: string | null
           declined_at: string | null
           id: string
-          is_contacted: boolean | null
+          is_contacted: boolean
           last_status_at: string
           notes: string | null
-          response_status: string | null
-          school_id: string
+          response_status: string
+          school_id: string | null
           status: string
           sub_id: string
           updated_at: string
@@ -1499,11 +1489,11 @@ export type Database = {
           created_by?: string | null
           declined_at?: string | null
           id?: string
-          is_contacted?: boolean | null
+          is_contacted?: boolean
           last_status_at?: string
           notes?: string | null
-          response_status?: string | null
-          school_id: string
+          response_status?: string
+          school_id?: string | null
           status?: string
           sub_id: string
           updated_at?: string
@@ -1517,11 +1507,11 @@ export type Database = {
           created_by?: string | null
           declined_at?: string | null
           id?: string
-          is_contacted?: boolean | null
+          is_contacted?: boolean
           last_status_at?: string
           notes?: string | null
-          response_status?: string | null
-          school_id?: string
+          response_status?: string
+          school_id?: string | null
           status?: string
           sub_id?: string
           updated_at?: string
@@ -1571,7 +1561,7 @@ export type Database = {
           removed_from_classroom_id: string | null
           removed_from_day_id: string | null
           removed_from_time_slot_id: string | null
-          school_id: string
+          school_id: string | null
           teacher_id: string
           teacher_schedule_id: string | null
           user_id: string | null
@@ -1588,7 +1578,7 @@ export type Database = {
           removed_from_classroom_id?: string | null
           removed_from_day_id?: string | null
           removed_from_time_slot_id?: string | null
-          school_id: string
+          school_id?: string | null
           teacher_id: string
           teacher_schedule_id?: string | null
           user_id?: string | null
@@ -1605,7 +1595,7 @@ export type Database = {
           removed_from_classroom_id?: string | null
           removed_from_day_id?: string | null
           removed_from_time_slot_id?: string | null
-          school_id?: string
+          school_id?: string | null
           teacher_id?: string
           teacher_schedule_id?: string | null
           user_id?: string | null
@@ -1671,7 +1661,6 @@ export type Database = {
       }
       teacher_schedules: {
         Row: {
-          class_group_id: string | null
           classroom_id: string
           created_at: string | null
           day_of_week_id: string
@@ -1683,7 +1672,6 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
-          class_group_id?: string | null
           classroom_id: string
           created_at?: string | null
           day_of_week_id: string
@@ -1695,7 +1683,6 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
-          class_group_id?: string | null
           classroom_id?: string
           created_at?: string | null
           day_of_week_id?: string
@@ -1707,13 +1694,6 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: 'teacher_schedules_class_group_id_fkey'
-            columns: ['class_group_id']
-            isOneToOne: false
-            referencedRelation: 'class_groups'
-            referencedColumns: ['id']
-          },
           {
             foreignKeyName: 'teacher_schedules_classroom_id_fkey'
             columns: ['classroom_id']
@@ -1819,7 +1799,7 @@ export type Database = {
           end_time: string | null
           id: string
           is_partial: boolean | null
-          school_id: string
+          school_id: string | null
           start_time: string | null
           time_off_request_id: string
           time_slot_id: string
@@ -1831,7 +1811,7 @@ export type Database = {
           end_time?: string | null
           id?: string
           is_partial?: boolean | null
-          school_id: string
+          school_id?: string | null
           start_time?: string | null
           time_off_request_id: string
           time_slot_id: string
@@ -1843,7 +1823,7 @@ export type Database = {
           end_time?: string | null
           id?: string
           is_partial?: boolean | null
-          school_id?: string
+          school_id?: string | null
           start_time?: string | null
           time_off_request_id?: string
           time_slot_id?: string

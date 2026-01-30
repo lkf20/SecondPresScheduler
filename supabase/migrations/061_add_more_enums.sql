@@ -45,10 +45,21 @@ ALTER TABLE sub_contact_log
 ALTER TABLE profiles
   ALTER COLUMN role DROP DEFAULT;
 
--- Create enums
-CREATE TYPE time_off_shift_selection_mode AS ENUM ('select_shifts', 'all_scheduled');
-CREATE TYPE sub_contact_status AS ENUM ('no_response', 'pending', 'confirmed', 'declined');
-CREATE TYPE profile_role AS ENUM ('admin', 'director', 'teacher', 'viewer');
+-- Create enums (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'time_off_shift_selection_mode') THEN
+    CREATE TYPE time_off_shift_selection_mode AS ENUM ('select_shifts', 'all_scheduled');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'sub_contact_status') THEN
+    CREATE TYPE sub_contact_status AS ENUM ('no_response', 'pending', 'confirmed', 'declined');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'profile_role') THEN
+    CREATE TYPE profile_role AS ENUM ('admin', 'director', 'teacher', 'viewer');
+  END IF;
+END $$;
 
 -- Convert columns to enums
 ALTER TABLE time_off_requests
