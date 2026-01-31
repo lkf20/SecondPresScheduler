@@ -26,6 +26,7 @@ export function useSubFinderShifts(
       time_slot_code: shift.time_slot_code,
       class_name: shift.class_name ?? null,
       classroom_name: shift.classroom_name ?? null,
+      classroom_color: shift.classroom_color ?? null,
       status: shift.status,
       sub_name: shift.sub_name ?? null,
       is_partial: shift.is_partial ?? false,

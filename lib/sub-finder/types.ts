@@ -7,6 +7,7 @@ export interface SubFinderShift {
   day_name: string
   time_slot_code: string
   classroom_name: string | null
+  classroom_color?: string | null
   class_name: string | null
   status: SubFinderCoverageStatus
   sub_name?: string | null

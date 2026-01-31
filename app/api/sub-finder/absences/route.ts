@@ -393,6 +393,7 @@ export async function GET(request: NextRequest) {
         time_slot_code: detail.time_slot_code || '',
         class_name: detail.class_name || null,
         classroom_name: detail.classroom_name || null,
+        classroom_color: detail.classroom_color || null,
         status:
           detail.status === 'covered'
             ? 'fully_covered'

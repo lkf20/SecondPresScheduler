@@ -15,7 +15,6 @@ import RecommendedSubsList from '@/components/sub-finder/RecommendedSubsList'
 import type { RecommendedSub } from '@/components/sub-finder/ContactSubPanel'
 import RecommendedCombination from '@/components/sub-finder/RecommendedCombination'
 import ContactSubPanel from '@/components/sub-finder/ContactSubPanel'
-import CoverageSummary from '@/components/sub-finder/CoverageSummary'
 import {
   useSubFinderData,
   type Mode,
@@ -31,6 +30,8 @@ import { toast } from 'sonner'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 import { saveSubFinderState, loadSubFinderState } from '@/lib/utils/sub-finder-state'
 import { findTopCombinations } from '@/lib/utils/sub-combination'
+import CoverageSummary from '@/components/sub-finder/CoverageSummary'
+import ShiftStatusCard from '@/components/sub-finder/ShiftStatusCard'
 import { useSubFinderShifts } from '@/components/sub-finder/hooks/useSubFinderShifts'
 
 export default function SubFinderPage() {
@@ -192,6 +193,17 @@ export default function SubFinderPage() {
     ).map(name => ({ id: name, name, color: null }))
   }, [selectedAbsence, shiftDetails])
   const visibleShiftSummary = shiftSummary ?? selectedAbsence?.shifts ?? null
+  const sortedVisibleShifts = useMemo(() => {
+    if (!visibleShiftSummary) return visibleShiftDetails
+    return visibleShiftSummary.shift_details_sorted ?? visibleShiftDetails
+  }, [visibleShiftDetails, visibleShiftSummary])
+  const coverageSummaryLine = useMemo(() => {
+    if (!visibleShiftSummary) return null
+    const remaining =
+      (visibleShiftSummary.uncovered ?? 0) + (visibleShiftSummary.partially_covered ?? 0)
+    const total = visibleShiftSummary.total ?? 0
+    return `${remaining} of ${total} upcoming shifts need coverage`
+  }, [visibleShiftSummary])
   const absenceForUI = useMemo(() => {
     if (!selectedAbsence) return null
     if (!visibleShiftSummary) return selectedAbsence
@@ -858,7 +870,7 @@ export default function SubFinderPage() {
                 <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-slate-400 bg-white">
                   <Search className="h-3.5 w-3.5" />
                 </span>
-                <span className="leading-tight text-[11px] font-medium text-slate-700">
+                <span className="leading-tight text-[9px] font-medium text-slate-700">
                   Show
                   <br />
                   Absences
@@ -1154,7 +1166,7 @@ export default function SubFinderPage() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem+1.5rem+4rem)] -mx-4 -mt-[calc(1.5rem+4rem)] -mb-6 relative flex-col md:flex-row">
+    <div className="flex min-h-[calc(100vh-4rem+1.5rem+4rem)] -mx-4 -mt-[calc(1.5rem+4rem)] -mb-6 relative flex-col md:flex-row md:-ml-8">
       <div className="md:hidden px-4 py-3 border-b bg-white">
         <Sheet open={isMobileRailOpen} onOpenChange={setIsMobileRailOpen}>
           <SheetTrigger asChild>
@@ -1180,7 +1192,7 @@ export default function SubFinderPage() {
           {/* Fixed Header Bar */}
           {selectedAbsence && (
             <>
-              <div className="sticky top-0 z-10 border-b bg-white shadow-sm">
+              <div className="border-b bg-white shadow-sm">
                 <div className="px-6 pt-10 pb-2">
                   {/* Header Row */}
                   <div className="mb-5">
@@ -1256,231 +1268,34 @@ export default function SubFinderPage() {
                       <CoverageSummary
                         shifts={visibleShiftSummary}
                         onShiftClick={handleShiftClick}
+                        variant="compact"
+                        headerText={coverageSummaryLine ?? undefined}
                       />
                     </div>
                   )}
 
-                  {/* Toolbar Row */}
-                  <div className="flex items-end justify-between pb-3">
-                    {/* Color Key - Left aligned, bottom aligned */}
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                      <div className="flex items-center gap-1.5">
-                        <div
-                          className="w-3 h-3 rounded bg-blue-50"
-                          style={{
-                            borderWidth: '1px',
-                            borderStyle: 'solid',
-                            borderColor: 'rgb(96, 165, 250)', // blue-400
-                          }}
-                        />
-                        <span>Covered</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div
-                          className="w-3 h-3 rounded bg-orange-50"
-                          style={{
-                            borderWidth: '1px',
-                            borderStyle: 'solid',
-                            borderColor: 'rgb(251, 146, 60)', // orange-400
-                          }}
-                        />
-                        <span>Uncovered</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div
-                          className="w-3 h-3 rounded bg-emerald-50"
-                          style={{
-                            borderWidth: '1px',
-                            borderStyle: 'solid',
-                            borderColor: 'rgb(153, 246, 228)', // teal-200 (emerald-200 equivalent)
-                          }}
-                        />
-                        <span>Available</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div
-                          className="w-3 h-3 rounded bg-gray-100"
-                          style={{
-                            borderWidth: '1px',
-                            borderStyle: 'solid',
-                            borderColor: 'rgb(209, 213, 219)', // gray-300
-                          }}
-                        />
-                        <span>Unavailable</span>
-                      </div>
-                    </div>
-                    {/* Buttons - Right aligned */}
-                    <div className="flex items-center gap-3">
-                      <Button
-                        onClick={handleRerunFinder}
-                        disabled={loading}
-                        size="sm"
-                        variant="outline"
-                      >
-                        <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                        Rerun Finder
-                      </Button>
-
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" size="sm" className="relative">
-                            <Settings2 className="h-4 w-4 mr-2" />
-                            Search & Filter
-                            {(includePartiallyCovered ||
-                              !includeOnlyRecommended ||
-                              !includeFlexibleStaff) && (
-                              <Badge
-                                variant="secondary"
-                                className="ml-2 h-5 min-w-[20px] px-1.5 text-xs"
-                              >
-                                {
-                                  [
-                                    includePartiallyCovered,
-                                    !includeOnlyRecommended,
-                                    !includeFlexibleStaff,
-                                  ].filter(Boolean).length
-                                }
-                              </Badge>
-                            )}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          className="w-80"
-                          align="start"
-                          onOpenAutoFocus={event => event.preventDefault()}
-                        >
-                          <div className="space-y-4">
-                            <div>
-                              <Label className="text-sm font-medium">Substitute</Label>
-                              <div
-                                ref={subSearchRef}
-                                className="mt-2 rounded-md border border-slate-200 bg-white"
-                              >
-                                <div className="border-b border-slate-100 p-2">
-                                  <Input
-                                    placeholder="Search substitutes..."
-                                    value={subSearch}
-                                    onChange={event => setSubSearch(event.target.value)}
-                                    onFocus={() => setIsSubSearchOpen(true)}
-                                    className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
-                                  />
-                                </div>
-                                {isSubSearchOpen && (
-                                  <div className="max-h-60 overflow-y-auto p-2">
-                                    {filteredSubsForSearch.length === 0 ? (
-                                      <div className="p-2 text-xs text-muted-foreground">
-                                        No matches
-                                      </div>
-                                    ) : (
-                                      <div className="space-y-1">
-                                        {filteredSubsForSearch.map(sub => {
-                                          const name = getDisplayName(sub)
-                                          const canCover =
-                                            (sub.shifts_covered ?? 0) > 0 ||
-                                            (sub.can_cover?.length ?? 0) > 0
-                                          return (
-                                            <button
-                                              key={sub.id}
-                                              type="button"
-                                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
-                                              onClick={() => {
-                                                if (!canCover && includeOnlyRecommended) {
-                                                  setIncludeOnlyRecommended(false)
-                                                  applySubResults(allSubs, {
-                                                    useOnlyRecommended: false,
-                                                  })
-                                                  toast(
-                                                    'Turning off “Include only recommended subs” to show this selection.'
-                                                  )
-                                                  setTimeout(() => scrollToSubCard(sub.id), 50)
-                                                } else {
-                                                  scrollToSubCard(sub.id)
-                                                }
-                                                setIsSubSearchOpen(false)
-                                              }}
-                                            >
-                                              <span
-                                                className={`h-2 w-2 rounded-full ${canCover ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                                              />
-                                              <span>{name.trim()}</span>
-                                            </button>
-                                          )
-                                        })}
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <div>
-                              <h4 className="font-medium text-sm mb-3">Filter Options</h4>
-                              <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex-1">
-                                    <Label
-                                      htmlFor="include-only-recommended"
-                                      className="text-sm font-normal cursor-pointer"
-                                    >
-                                      Include only recommended subs
-                                    </Label>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                      Show only subs who can cover at least one shift
-                                    </p>
-                                  </div>
-                                  <Switch
-                                    id="include-only-recommended"
-                                    checked={includeOnlyRecommended}
-                                    onCheckedChange={setIncludeOnlyRecommended}
-                                  />
-                                </div>
-
-                                <div className="flex items-center justify-between">
-                                  <div className="flex-1">
-                                    <Label
-                                      htmlFor="include-partial"
-                                      className="text-sm font-normal cursor-pointer"
-                                    >
-                                      Include partially covered shifts
-                                    </Label>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                      Show absences with partial coverage
-                                    </p>
-                                  </div>
-                                  <Switch
-                                    id="include-partial"
-                                    checked={includePartiallyCovered}
-                                    onCheckedChange={setIncludePartiallyCovered}
-                                  />
-                                </div>
-
-                                <div className="flex items-center justify-between">
-                                  <div className="flex-1">
-                                    <Label
-                                      htmlFor="include-flexible"
-                                      className="text-sm font-normal cursor-pointer"
-                                    >
-                                      Include Flexible Staff
-                                    </Label>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                      Include staff who can sub when not teaching
-                                    </p>
-                                  </div>
-                                  <Switch
-                                    id="include-flexible"
-                                    checked={includeFlexibleStaff}
-                                    onCheckedChange={handleFlexibleStaffChange}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </div>
+                  {/* Toolbar moved to right column */}
                 </div>
               </div>
             </>
+          )}
+
+          {selectedAbsence && (
+            <div className="py-6 flex flex-col gap-3 w-full">
+              {sortedVisibleShifts.length > 0 ? (
+                sortedVisibleShifts.map(shift => (
+                  <ShiftStatusCard
+                    key={shift.id}
+                    shift={shift}
+                    teacherName={selectedAbsence.teacher_name}
+                  />
+                ))
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">
+                  No shifts to display.
+                </div>
+              )}
+            </div>
           )}
 
           {/* Middle column content ends above */}
@@ -1525,12 +1340,175 @@ export default function SubFinderPage() {
                     allShifts={visibleShiftDetails}
                     includePastShifts={includePastShifts}
                   />
-                  <div className="mt-16 text-sm font-semibold text-slate-700">
-                    All Available Subs
-                  </div>
-                  <div className="mt-2 border-t border-slate-200 pt-6" />
                 </div>
               )}
+
+              <div className="mt-6 flex flex-col gap-3">
+                <Button
+                  onClick={handleRerunFinder}
+                  disabled={loading}
+                  size="sm"
+                  variant="outline"
+                  className="w-full justify-center"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                  Rerun Finder
+                </Button>
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="relative w-full justify-center">
+                      <Settings2 className="h-4 w-4 mr-2" />
+                      Search & Filter
+                      {(includePartiallyCovered ||
+                        !includeOnlyRecommended ||
+                        !includeFlexibleStaff) && (
+                        <Badge variant="secondary" className="ml-2 h-5 min-w-[20px] px-1.5 text-xs">
+                          {
+                            [
+                              includePartiallyCovered,
+                              !includeOnlyRecommended,
+                              !includeFlexibleStaff,
+                            ].filter(Boolean).length
+                          }
+                        </Badge>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-80"
+                    align="start"
+                    onOpenAutoFocus={event => event.preventDefault()}
+                  >
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-sm font-medium">Substitute</Label>
+                        <div
+                          ref={subSearchRef}
+                          className="mt-2 rounded-md border border-slate-200 bg-white"
+                        >
+                          <div className="border-b border-slate-100 p-2">
+                            <Input
+                              placeholder="Search substitutes..."
+                              value={subSearch}
+                              onChange={event => setSubSearch(event.target.value)}
+                              onFocus={() => setIsSubSearchOpen(true)}
+                              className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
+                            />
+                          </div>
+                          {isSubSearchOpen && (
+                            <div className="max-h-60 overflow-y-auto p-2">
+                              {filteredSubsForSearch.length === 0 ? (
+                                <div className="p-2 text-xs text-muted-foreground">No matches</div>
+                              ) : (
+                                <div className="space-y-1">
+                                  {filteredSubsForSearch.map(sub => {
+                                    const name = getDisplayName(sub)
+                                    const canCover =
+                                      (sub.shifts_covered ?? 0) > 0 ||
+                                      (sub.can_cover?.length ?? 0) > 0
+                                    return (
+                                      <button
+                                        key={sub.id}
+                                        type="button"
+                                        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
+                                        onClick={() => {
+                                          if (!canCover && includeOnlyRecommended) {
+                                            setIncludeOnlyRecommended(false)
+                                            applySubResults(allSubs, {
+                                              useOnlyRecommended: false,
+                                            })
+                                            toast(
+                                              'Turning off “Include only recommended subs” to show this selection.'
+                                            )
+                                            setTimeout(() => scrollToSubCard(sub.id), 50)
+                                          } else {
+                                            scrollToSubCard(sub.id)
+                                          }
+                                          setIsSubSearchOpen(false)
+                                        }}
+                                      >
+                                        <span
+                                          className={`h-2 w-2 rounded-full ${canCover ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                        />
+                                        <span>{name.trim()}</span>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-sm mb-3">Filter Options</h4>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <Label
+                                htmlFor="include-only-recommended"
+                                className="text-sm font-normal cursor-pointer"
+                              >
+                                Include only recommended subs
+                              </Label>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Show only subs who can cover at least one shift
+                              </p>
+                            </div>
+                            <Switch
+                              id="include-only-recommended"
+                              checked={includeOnlyRecommended}
+                              onCheckedChange={setIncludeOnlyRecommended}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <Label
+                                htmlFor="include-partial"
+                                className="text-sm font-normal cursor-pointer"
+                              >
+                                Include partially covered shifts
+                              </Label>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Show absences with partial coverage
+                              </p>
+                            </div>
+                            <Switch
+                              id="include-partial"
+                              checked={includePartiallyCovered}
+                              onCheckedChange={setIncludePartiallyCovered}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <Label
+                                htmlFor="include-flexible"
+                                className="text-sm font-normal cursor-pointer"
+                              >
+                                Include Flexible Staff
+                              </Label>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Include staff who can sub when not teaching
+                              </p>
+                            </div>
+                            <Switch
+                              id="include-flexible"
+                              checked={includeFlexibleStaff}
+                              onCheckedChange={handleFlexibleStaffChange}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="mt-8 text-sm font-semibold text-slate-700">All Available Subs</div>
+              <div className="mt-2 border-t border-slate-200 pt-6" />
 
               <RecommendedSubsList
                 subs={recommendedSubs}

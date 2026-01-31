@@ -31,6 +31,7 @@ export interface Absence {
       time_slot_code: string
       class_name: string | null
       classroom_name: string | null
+      classroom_color?: string | null
       status: 'uncovered' | 'partially_covered' | 'fully_covered'
       sub_name?: string | null
       is_partial?: boolean
@@ -40,6 +41,9 @@ export interface Absence {
       date: string
       day_name: string
       time_slot_code: string
+      class_name: string | null
+      classroom_name: string | null
+      classroom_color?: string | null
       status: 'uncovered' | 'partially_covered' | 'fully_covered'
       sub_name?: string | null
       is_partial?: boolean
@@ -167,6 +171,7 @@ export function useSubFinderData({
           time_slot_code: detail.time_slot_code,
           class_name: detail.class_name || null,
           classroom_name: detail.classroom_name || null,
+          classroom_color: detail.classroom_color || null,
           status:
             detail.status === 'partial' || detail.status === 'partially_covered'
               ? 'partially_covered'

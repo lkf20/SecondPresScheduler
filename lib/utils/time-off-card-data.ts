@@ -32,6 +32,7 @@ export type TimeOffCardData = {
     time_slot_code?: string
     class_name?: string | null
     classroom_name?: string | null
+    classroom_color?: string | null
     sub_name?: string | null
     is_partial?: boolean
   }>
@@ -224,6 +225,7 @@ export function transformTimeOffCardData(
         time_slot_code: shift.time_slot?.code || undefined,
         class_name: className || undefined,
         classroom_name: classroom?.name || undefined,
+        classroom_color: classroom?.color || undefined,
         sub_name: assignment?.subName || undefined,
         is_partial: assignment?.hasPartial && !assignment?.hasFull,
       })
