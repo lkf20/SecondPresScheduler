@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// See docs/data-lifecycle.md: time_off_requests lifecycle
 export async function POST(request: NextRequest) {
   try {
     // Require schoolId from session

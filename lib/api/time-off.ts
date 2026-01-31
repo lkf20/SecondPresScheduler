@@ -1,4 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
+import {
+  canTransitionCoverageRequestShiftStatus,
+  canTransitionCoverageRequestStatus,
+  canTransitionSubAssignmentStatus,
+  canTransitionTimeOffStatus,
+  formatTransitionError,
+  type CoverageRequestShiftStatus,
+  type CoverageRequestStatus,
+  type SubAssignmentStatus,
+  type TimeOffStatus,
+} from '@/lib/lifecycle/status-transitions'
 import { Database } from '@/types/database'
 
 type TimeOffRequest = Database['public']['Tables']['time_off_requests']['Row']
@@ -7,6 +18,7 @@ type TimeOffShift = Database['public']['Tables']['time_off_shifts']['Row']
 type TimeOffRequestWithTeacher = TimeOffRequest & { teacher: Teacher }
 type TimeOffRequestWithDetails = TimeOffRequestWithTeacher & { shifts: TimeOffShift[] }
 
+// See docs/data-lifecycle.md: time_off_requests lifecycle
 export async function getTimeOffRequests(filters?: {
   teacher_id?: string
   start_date?: string
@@ -132,7 +144,7 @@ export async function cancelTimeOffRequest(
   // Get the time off request
   const { data: timeOffRequest, error: requestError } = await supabase
     .from('time_off_requests')
-    .select('id, coverage_request_id, teacher_id')
+    .select('id, coverage_request_id, teacher_id, status')
     .eq('id', timeOffRequestId)
     .single()
 
@@ -141,11 +153,35 @@ export async function cancelTimeOffRequest(
     throw new Error('Time off request not found')
   }
 
+  if (
+    timeOffRequest.status &&
+    !canTransitionTimeOffStatus(timeOffRequest.status as TimeOffStatus, 'cancelled')
+  ) {
+    throw new Error(formatTransitionError(timeOffRequest.status ?? 'unknown', 'cancelled'))
+  }
+
   const coverageRequestId = timeOffRequest.coverage_request_id
   if (!coverageRequestId) {
     // No coverage request, just cancel the time off request
     await deleteTimeOffRequest(timeOffRequestId)
     return { cancelled: true, assignmentsHandled: 0 }
+  }
+
+  const { data: coverageRequestRow, error: coverageRequestRowError } = await supabase
+    .from('coverage_requests')
+    .select('id, status')
+    .eq('id', coverageRequestId)
+    .single()
+
+  if (coverageRequestRowError) throw coverageRequestRowError
+  if (
+    coverageRequestRow?.status &&
+    !canTransitionCoverageRequestStatus(
+      coverageRequestRow.status as CoverageRequestStatus,
+      'cancelled'
+    )
+  ) {
+    throw new Error(formatTransitionError(coverageRequestRow.status ?? 'unknown', 'cancelled'))
   }
 
   // Get active sub assignments for this coverage request
@@ -157,6 +193,24 @@ export async function cancelTimeOffRequest(
       .from('coverage_requests')
       .update({ status: 'cancelled' })
       .eq('id', coverageRequestId)
+
+    const { data: shiftsToCancel, error: shiftsToCancelError } = await supabase
+      .from('coverage_request_shifts')
+      .select('id, status')
+      .eq('coverage_request_id', coverageRequestId)
+
+    if (shiftsToCancelError) throw shiftsToCancelError
+    for (const shift of shiftsToCancel || []) {
+      if (
+        shift.status &&
+        !canTransitionCoverageRequestShiftStatus(
+          shift.status as CoverageRequestShiftStatus,
+          'cancelled'
+        )
+      ) {
+        throw new Error(formatTransitionError(shift.status ?? 'unknown', 'cancelled'))
+      }
+    }
 
     await supabase
       .from('coverage_request_shifts')
@@ -181,6 +235,14 @@ export async function cancelTimeOffRequest(
   // Cancel assignments that should be cancelled
   if (assignmentsToCancel.length > 0) {
     const assignmentIdsToCancel = assignmentsToCancel.map(a => a.id)
+    for (const assignment of assignmentsToCancel) {
+      if (
+        assignment.status &&
+        !canTransitionSubAssignmentStatus(assignment.status as SubAssignmentStatus, 'cancelled')
+      ) {
+        throw new Error(formatTransitionError(assignment.status ?? 'unknown', 'cancelled'))
+      }
+    }
     await supabase
       .from('sub_assignments')
       .update({ status: 'cancelled' })
@@ -299,6 +361,15 @@ export async function cancelTimeOffRequest(
 
     // Update new coverage request status if all shifts are covered
     if (newCoverageRequest.total_shifts === assignmentsToKeep.length) {
+      if (
+        newCoverageRequest.status &&
+        !canTransitionCoverageRequestStatus(
+          newCoverageRequest.status as CoverageRequestStatus,
+          'filled'
+        )
+      ) {
+        throw new Error(formatTransitionError(newCoverageRequest.status ?? 'unknown', 'filled'))
+      }
       await supabase
         .from('coverage_requests')
         .update({ status: 'filled' })
@@ -311,6 +382,24 @@ export async function cancelTimeOffRequest(
     .from('coverage_requests')
     .update({ status: 'cancelled' })
     .eq('id', coverageRequestId)
+
+  const { data: finalShiftsToCancel, error: finalShiftsError } = await supabase
+    .from('coverage_request_shifts')
+    .select('id, status')
+    .eq('coverage_request_id', coverageRequestId)
+
+  if (finalShiftsError) throw finalShiftsError
+  for (const shift of finalShiftsToCancel || []) {
+    if (
+      shift.status &&
+      !canTransitionCoverageRequestShiftStatus(
+        shift.status as CoverageRequestShiftStatus,
+        'cancelled'
+      )
+    ) {
+      throw new Error(formatTransitionError(shift.status ?? 'unknown', 'cancelled'))
+    }
+  }
 
   await supabase
     .from('coverage_request_shifts')
