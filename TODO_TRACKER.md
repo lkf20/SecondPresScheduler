@@ -28,6 +28,7 @@ Issues that need to be fixed.
 
 Features to implement soon (within the next few weeks).
 
+- [ ] Before real data: create dedicated Test School in prod and optional read-only mode for non-test tenants
 - [ ] Ensure layout consistency in Weekly Schedule page - add w-full max-w-4xl wrapper to match Dashboard and Time Off page structure for consistent spacing between navigation panel and main content
 - [ ] Add summary text of who has already been assigned to sub in Sub Finder under (for example) "3 of 5 Shifts Require Subs"
 - [ ] Add option to view absences in Sub Finder left rail that are already covered
@@ -49,6 +50,7 @@ Features to implement soon (within the next few weeks).
 - [ ] Add tooltip to Covered badge to see subs and shifts
 - [ ] Add tooltip to Uncovered badge to see shifts
 - [ ] Add borders/shading to shifts in Upcoming Time Off to match Uncovered and Covered pills
+- [ ] Enrollments: add classroom_id (or clarify model) and wire write UI/API for per-class-group enrollment
 
 ---
 

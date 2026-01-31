@@ -17,11 +17,6 @@ import { Database } from '@/types/database'
 type ClassGroupRow = Database['public']['Tables']['class_groups']['Row']
 type ClassroomRow = Database['public']['Tables']['classrooms']['Row']
 type EnrollmentRow = Database['public']['Tables']['enrollments']['Row']
-type StaffingRuleRow = Database['public']['Tables']['staffing_rules']['Row']
-type ClassClassroomMapping = Database['public']['Tables']['class_classroom_mappings']['Row'] & {
-  class_group?: ClassGroupRow | null
-  classroom?: ClassroomRow | null
-}
 
 interface AssignmentModalProps {
   dayName: string
@@ -41,10 +36,6 @@ interface ClassGroup {
   assigned_teachers: Array<{ id: string; name: string; teacher_id: string }>
 }
 
-type StaffingRule = StaffingRuleRow & {
-  class_group_id?: string | null
-}
-
 export default function AssignmentModal({
   dayName,
   timeSlotName,
@@ -54,30 +45,26 @@ export default function AssignmentModal({
   const [classes, setClasses] = useState<ClassGroupRow[]>([])
   const [classrooms, setClassrooms] = useState<ClassroomRow[]>([])
   const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([])
-  const [staffingRules, setStaffingRules] = useState<StaffingRule[]>([])
   const [classGroups, setClassGroups] = useState<Map<string, ClassGroup>>(new Map())
   const [loading, setLoading] = useState(true)
 
-  // Fetch all classes, classrooms, enrollments, and staffing rules
+  // Fetch all classes, classrooms, and enrollments
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [classesRes, classroomsRes, enrollmentsRes, rulesRes] = await Promise.all([
+        const [classesRes, classroomsRes, enrollmentsRes] = await Promise.all([
           fetch('/api/class-groups'),
           fetch('/api/classrooms'),
           fetch('/api/enrollments'),
-          fetch('/api/staffing-rules'),
         ])
 
         const classesData = await classesRes.json()
         const classroomsData = await classroomsRes.json()
         const enrollmentsData = await enrollmentsRes.json().catch(() => [])
-        const rulesData = await rulesRes.json().catch(() => [])
 
         setClasses(classesData as ClassGroupRow[])
         setClassrooms(classroomsData as ClassroomRow[])
         setEnrollments(enrollmentsData as EnrollmentRow[])
-        setStaffingRules(rulesData as StaffingRuleRow[])
       } catch (error) {
         console.error('Error fetching data:', error)
       } finally {
@@ -87,18 +74,6 @@ export default function AssignmentModal({
 
     fetchData()
   }, [])
-
-  const [mappings, setMappings] = useState<ClassClassroomMapping[]>([])
-
-  // Fetch class-classroom mappings for this day/time
-  useEffect(() => {
-    fetch(
-      `/api/class-classroom-mappings?day_of_week_id=${data.day_of_week_id}&time_slot_id=${data.time_slot_id}`
-    )
-      .then(r => r.json())
-      .then(data => setMappings(data as ClassClassroomMapping[]))
-      .catch(console.error)
-  }, [data.day_of_week_id, data.time_slot_id])
 
   // Build class groups from existing assignments and configured mappings only
   useEffect(() => {
@@ -160,43 +135,8 @@ export default function AssignmentModal({
       }
     })
 
-    // Then, add configured mappings that don't have assignments yet
-    mappings.forEach(mapping => {
-      const classGroupId = mapping.class_group_id
-      if (!classGroupId) return
-      const key = `${classGroupId}-${mapping.classroom_id}`
-      if (!groups.has(key)) {
-        // Get enrollment for this class/day/time
-        const enrollment = enrollments.find(
-          e =>
-            e.class_group_id === classGroupId &&
-            e.day_of_week_id === data.day_of_week_id &&
-            e.time_slot_id === data.time_slot_id
-        )
-
-        // Get staffing rule for this class/day/time
-        const rule = staffingRules.find(
-          r =>
-            r.class_group_id === classGroupId &&
-            r.day_of_week_id === data.day_of_week_id &&
-            r.time_slot_id === data.time_slot_id
-        )
-
-        groups.set(key, {
-          class_group_id: classGroupId,
-          class_group_name: mapping.class_group?.name || 'Unknown',
-          classroom_id: mapping.classroom_id,
-          classroom_name: mapping.classroom?.name || 'Unknown',
-          enrollment: enrollment?.enrollment_count || 0,
-          required_teachers: rule?.required_teachers,
-          preferred_teachers: rule?.preferred_teachers,
-          assigned_teachers: [],
-        })
-      }
-    })
-
     setClassGroups(groups)
-  }, [data, classes, classrooms, enrollments, staffingRules, mappings, loading])
+  }, [data, classes, classrooms, enrollments, loading])
 
   return (
     <Dialog open={true} onOpenChange={onClose}>

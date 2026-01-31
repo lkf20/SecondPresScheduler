@@ -280,25 +280,6 @@ export async function getWeeklyScheduleData(
     throw new Error(`Failed to fetch teacher schedules: ${schedulesError.message}`)
   }
 
-  // Get staffing rules
-  const { data: staffingRules, error: staffingRulesError } = await supabase
-    .from('staffing_rules')
-    .select(
-      `
-      *,
-      day_of_week:days_of_week(*),
-      time_slot:time_slots(*)
-    `
-    )
-    .eq('school_id', schoolId)
-
-  if (staffingRulesError) {
-    console.error('API Error: Failed to fetch staffing rules:', staffingRulesError)
-    throw new Error(`Failed to fetch staffing rules: ${staffingRulesError.message}`)
-  }
-
-  // staffing_rules do not include class_group_id in the schema
-
   // Get schedule cells (gracefully handle if table doesn't exist yet)
   let scheduleCells: ScheduleCellRaw[] | null = null
   try {
@@ -514,21 +495,13 @@ export async function getWeeklyScheduleData(
           // Get enrollment from schedule_cell (enrollment is for the whole slot, not per class group)
           const enrollment = scheduleCell.enrollment_for_staffing ?? null
 
-          // Get staffing rule for the classroom/day/time
-          const rule = staffingRules?.find(
-            r =>
-              r.classroom_id === classroom.id &&
-              r.day_of_week_id === day.id &&
-              r.time_slot_id === timeSlot.id
-          )
-
           // Add teacher assignments for this slot
           for (const teacher of teachers) {
             assignments.push({
               ...teacher,
               enrollment: enrollment ?? 0,
-              required_teachers: rule?.required_teachers,
-              preferred_teachers: rule?.preferred_teachers,
+              required_teachers: undefined,
+              preferred_teachers: undefined,
               assigned_count: teachers.length,
             })
           }
@@ -595,8 +568,8 @@ export async function getWeeklyScheduleData(
                 is_substitute: true,
                 absent_teacher_id: sub.teacher_id,
                 enrollment: enrollment ?? 0,
-                required_teachers: rule?.required_teachers,
-                preferred_teachers: rule?.preferred_teachers,
+                required_teachers: undefined,
+                preferred_teachers: undefined,
                 assigned_count: teachers.length + uniqueSubsForSlot.length,
               })
             }
