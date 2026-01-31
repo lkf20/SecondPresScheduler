@@ -51,6 +51,7 @@ Features to implement soon (within the next few weeks).
 - [ ] Add tooltip to Uncovered badge to see shifts
 - [ ] Add borders/shading to shifts in Upcoming Time Off to match Uncovered and Covered pills
 - [ ] Enrollments: add classroom_id (or clarify model) and wire write UI/API for per-class-group enrollment
+- [ ] Performance: review query plans and tailor indexes to actual slow queries before launch
 
 ---
 
