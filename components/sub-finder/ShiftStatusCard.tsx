@@ -8,6 +8,7 @@ import type { SubFinderShift } from '@/lib/sub-finder/types'
 interface ShiftStatusCardProps {
   shift: SubFinderShift
   teacherName: string
+  onSelectShift?: (shift: SubFinderShift) => void
 }
 
 function formatShiftLabel(shift: SubFinderShift) {
@@ -47,7 +48,11 @@ function getAssignmentStatus(shift: SubFinderShift) {
   return { label: 'Declined', icon: XCircle, className: 'text-red-600' }
 }
 
-export default function ShiftStatusCard({ shift, teacherName }: ShiftStatusCardProps) {
+export default function ShiftStatusCard({
+  shift,
+  teacherName,
+  onSelectShift,
+}: ShiftStatusCardProps) {
   const coverage = getCoverageStatus(shift)
   const contact = getContactStatus(shift)
   const assignment = getAssignmentStatus(shift)
@@ -59,8 +64,22 @@ export default function ShiftStatusCard({ shift, teacherName }: ShiftStatusCardP
     <div
       className={cn(
         'flex w-full max-w-none self-stretch min-w-0 items-start justify-between gap-6 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm',
-        isCovered && 'opacity-60'
+        isCovered && 'opacity-80',
+        onSelectShift && 'cursor-pointer'
       )}
+      role={onSelectShift ? 'button' : undefined}
+      tabIndex={onSelectShift ? 0 : undefined}
+      onClick={onSelectShift ? () => onSelectShift(shift) : undefined}
+      onKeyDown={
+        onSelectShift
+          ? event => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onSelectShift(shift)
+              }
+            }
+          : undefined
+      }
     >
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
