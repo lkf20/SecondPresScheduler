@@ -16,6 +16,11 @@ import {
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { parseLocalDate } from '@/lib/utils/date'
 import { createClient } from '@/lib/supabase/server'
+import {
+  canTransitionTimeOffStatus,
+  formatTransitionError,
+  type TimeOffStatus,
+} from '@/lib/lifecycle/status-transitions'
 
 // Helper function to format date as "Mon Jan 20"
 function formatExcludedDate(dateStr: string): string {
@@ -59,13 +64,27 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
+// See docs/data-lifecycle.md: time_off_requests lifecycle
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await request.json()
     const { shifts, ...requestData } = body
     const existingRequest = await getTimeOffRequestById(id)
-    const status = requestData.status || existingRequest.status || 'active'
+    const nextStatus = (requestData.status || existingRequest.status || 'active') as TimeOffStatus
+
+    if (
+      requestData.status &&
+      existingRequest.status &&
+      !canTransitionTimeOffStatus(existingRequest.status as TimeOffStatus, nextStatus)
+    ) {
+      return NextResponse.json(
+        { error: formatTransitionError(existingRequest.status, nextStatus) },
+        { status: 400 }
+      )
+    }
+
+    const status = nextStatus
     const effectiveEndDate = requestData.end_date || requestData.start_date
 
     const normalizeDate = (dateStr: string) => {

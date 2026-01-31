@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { parseLocalDate } from '@/lib/utils/date'
 
+// See docs/data-lifecycle.md: coverage_requests lifecycle
 /**
  * Get school_id for a teacher
  * Tries profile first, then teacher_schedules, then defaults to the default school

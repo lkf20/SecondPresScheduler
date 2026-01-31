@@ -4,6 +4,7 @@ import { createErrorResponse, getErrorMessage } from '@/lib/utils/errors'
 import { createAuditLog } from '@/lib/api/audit-logs'
 import { revalidatePath } from 'next/cache'
 
+// See docs/data-lifecycle.md: sub_assignments lifecycle
 /**
  * POST /api/sub-finder/assign-shifts
  * Assign a sub to selected shifts by creating sub_assignments
