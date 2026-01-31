@@ -30,6 +30,7 @@ export function useSubFinderShifts(
       status: shift.status,
       sub_name: shift.sub_name ?? null,
       is_partial: shift.is_partial ?? false,
+      assignment_status: shift.assignment_status ?? null,
     }))
   }, [absence])
 

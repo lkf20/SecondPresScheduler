@@ -1,6 +1,7 @@
 'use client'
 
 import { CheckCircle, AlertTriangle, HelpCircle, XCircle } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import type { SubFinderShift } from '@/lib/sub-finder/types'
 
@@ -52,9 +53,15 @@ export default function ShiftStatusCard({ shift, teacherName }: ShiftStatusCardP
   const assignment = getAssignmentStatus(shift)
   const classroomStyle = getClassroomPillStyle(shift.classroom_color ?? null)
   const hasConfirmedSub = Boolean(shift.sub_name) && shift.status === 'fully_covered'
+  const isCovered = shift.status === 'fully_covered'
 
   return (
-    <div className="flex w-full max-w-none self-stretch min-w-0 items-start justify-between gap-6 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+    <div
+      className={cn(
+        'flex w-full max-w-none self-stretch min-w-0 items-start justify-between gap-6 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm',
+        isCovered && 'opacity-60'
+      )}
+    >
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold text-slate-900">{formatShiftLabel(shift)}</span>

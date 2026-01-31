@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { useSubFinderAbsences, type SubFinderAbsence } from '@/lib/hooks/use-sub-finder-absences'
 import { useSubRecommendations } from '@/lib/hooks/use-sub-recommendations'
 import type { RecommendedCombination } from '@/lib/utils/sub-combination'
+import type { SubFinderAssignmentStatus } from '@/lib/sub-finder/types'
 import type { SubRecommendationsQueryParams } from '@/lib/utils/query-keys'
 export type Mode = 'existing' | 'manual'
 
@@ -35,6 +36,7 @@ export interface Absence {
       status: 'uncovered' | 'partially_covered' | 'fully_covered'
       sub_name?: string | null
       is_partial?: boolean
+      assignment_status?: SubFinderAssignmentStatus | null
     }>
     shift_details_sorted?: Array<{
       id: string
@@ -47,6 +49,7 @@ export interface Absence {
       status: 'uncovered' | 'partially_covered' | 'fully_covered'
       sub_name?: string | null
       is_partial?: boolean
+      assignment_status?: SubFinderAssignmentStatus | null
     }>
     coverage_segments?: Array<{
       id: string
@@ -150,6 +153,16 @@ export function useSubFinderData({
     skipInitialFetch ? undefined : [] // Don't provide initial data if skipping fetch
   )
 
+  const normalizeAssignmentStatus = useCallback(
+    (status: unknown): SubFinderAssignmentStatus | null => {
+      if (!status) return null
+      if (status === 'pending' || status === 'confirmed' || status === 'declined') return status
+      if (status === 'no_response' || status === 'none') return 'no_response'
+      return null
+    },
+    []
+  )
+
   const mapAbsence = useCallback(
     (apiAbsence: SubFinderAbsence): Absence => ({
       id: apiAbsence.id,
@@ -180,10 +193,11 @@ export function useSubFinderData({
                 : 'uncovered',
           sub_name: detail.sub_name || detail.assigned_sub?.name || null,
           is_partial: detail.status === 'partial' || detail.status === 'partially_covered',
+          assignment_status: normalizeAssignmentStatus(detail.assignment_status),
         })),
       },
     }),
-    []
+    [normalizeAssignmentStatus]
   )
 
   const transformedAbsences: Absence[] = useMemo(() => {

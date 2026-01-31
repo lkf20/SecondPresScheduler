@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { ChevronLeft, RefreshCw, Search, Settings2, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, RefreshCw, Search, Settings2, X } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
@@ -41,6 +41,7 @@ export default function SubFinderPage() {
   const requestedTeacherId = searchParams.get('teacher_id')
   const [mode, setMode] = useState<Mode>('existing')
   const [includePastShifts, setIncludePastShifts] = useState(false)
+  const [shiftFilters, setShiftFilters] = useState<string[]>(['all'])
   const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(false)
   const [isMobileRailOpen, setIsMobileRailOpen] = useState(false)
   const subRecommendationParams = useMemo(() => ({ includePastShifts }), [includePastShifts])
@@ -197,6 +198,70 @@ export default function SubFinderPage() {
     if (!visibleShiftSummary) return visibleShiftDetails
     return visibleShiftSummary.shift_details_sorted ?? visibleShiftDetails
   }, [visibleShiftDetails, visibleShiftSummary])
+  const shiftFilterCounts = useMemo(() => {
+    const counts = {
+      all: sortedVisibleShifts.length,
+      needs_coverage: 0,
+      not_contacted: 0,
+      declined: 0,
+      pending: 0,
+      covered: 0,
+    }
+    sortedVisibleShifts.forEach(shift => {
+      if (shift.status === 'fully_covered') {
+        counts.covered += 1
+      } else {
+        counts.needs_coverage += 1
+      }
+      if (!shift.sub_name) {
+        counts.not_contacted += 1
+      }
+      if (shift.assignment_status === 'declined') {
+        counts.declined += 1
+      }
+      if (shift.assignment_status === 'pending') {
+        counts.pending += 1
+      }
+    })
+    return counts
+  }, [sortedVisibleShifts])
+  const shiftFilterOptions = useMemo(
+    () => [
+      { key: 'all', label: 'All', count: shiftFilterCounts.all },
+      { key: 'needs_coverage', label: 'Needs Coverage', count: shiftFilterCounts.needs_coverage },
+      { key: 'not_contacted', label: 'Not contacted', count: shiftFilterCounts.not_contacted },
+      { key: 'declined', label: 'Declined', count: shiftFilterCounts.declined },
+      { key: 'pending', label: 'Pending', count: shiftFilterCounts.pending },
+      { key: 'covered', label: 'Covered', count: shiftFilterCounts.covered },
+    ],
+    [shiftFilterCounts]
+  )
+  const toggleShiftFilter = useCallback((key: string) => {
+    setShiftFilters(prev => {
+      if (key === 'all') return ['all']
+      const next = new Set(prev.filter(item => item !== 'all'))
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next.size === 0 ? ['all'] : Array.from(next)
+    })
+  }, [])
+  const filteredShiftDetails = useMemo(() => {
+    if (shiftFilters.includes('all')) return sortedVisibleShifts
+    const active = new Set(shiftFilters)
+    return sortedVisibleShifts.filter(shift => {
+      const matches: Array<[string, boolean]> = [
+        ['needs_coverage', shift.status !== 'fully_covered'],
+        ['covered', shift.status === 'fully_covered'],
+        ['not_contacted', !shift.sub_name],
+        ['declined', shift.assignment_status === 'declined'],
+        ['pending', shift.assignment_status === 'pending'],
+      ]
+      return matches.some(([key, isMatch]) => isMatch && active.has(key))
+    })
+  }, [shiftFilters, sortedVisibleShifts])
   const coverageSummaryLine = useMemo(() => {
     if (!visibleShiftSummary) return null
     const remaining =
@@ -1282,8 +1347,62 @@ export default function SubFinderPage() {
 
           {selectedAbsence && (
             <div className="py-6 flex flex-col gap-3 w-full">
-              {sortedVisibleShifts.length > 0 ? (
-                sortedVisibleShifts.map(shift => (
+              <div className="flex flex-col gap-2">
+                <div className="hidden md:flex flex-wrap gap-2 md:flex-row md:items-center">
+                  {shiftFilterOptions.map(option => {
+                    const isActive = shiftFilters.includes(option.key)
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => toggleShiftFilter(option.key)}
+                        className={cn(
+                          'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                          isActive
+                            ? 'border-slate-900 bg-slate-900 text-white'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                        )}
+                      >
+                        {option.label} ({option.count})
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="md:hidden">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="w-full justify-between">
+                        Filters ({shiftFilters.length})
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-72" align="start">
+                      <div className="space-y-2">
+                        {shiftFilterOptions.map(option => {
+                          const isActive = shiftFilters.includes(option.key)
+                          return (
+                            <button
+                              key={option.key}
+                              type="button"
+                              onClick={() => toggleShiftFilter(option.key)}
+                              className={cn(
+                                'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',
+                                isActive ? 'bg-slate-900 text-white' : 'hover:bg-slate-100'
+                              )}
+                            >
+                              <span>{option.label}</span>
+                              <span className="text-xs text-slate-500">{option.count}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+
+              {filteredShiftDetails.length > 0 ? (
+                filteredShiftDetails.map(shift => (
                   <ShiftStatusCard
                     key={shift.id}
                     shift={shift}
