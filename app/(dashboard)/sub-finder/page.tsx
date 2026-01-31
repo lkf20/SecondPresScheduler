@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { ChevronLeft, RefreshCw, Search, Settings2, X } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import AbsenceList from '@/components/sub-finder/AbsenceList'
 import RecommendedSubsList from '@/components/sub-finder/RecommendedSubsList'
 import type { RecommendedSub } from '@/components/sub-finder/ContactSubPanel'
@@ -39,6 +40,7 @@ export default function SubFinderPage() {
   const [mode, setMode] = useState<Mode>('existing')
   const [includePastShifts, setIncludePastShifts] = useState(false)
   const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(false)
+  const [isMobileRailOpen, setIsMobileRailOpen] = useState(false)
   const subRecommendationParams = useMemo(() => ({ includePastShifts }), [includePastShifts])
   const {
     absences,
@@ -840,40 +842,41 @@ export default function SubFinderPage() {
     absences.length,
   ])
 
-  return (
-    <div className="flex h-[calc(100vh-4rem+1.5rem+4rem)] -mx-4 -mt-[calc(1.5rem+4rem)] -mb-6 relative">
-      {/* Left Rail */}
+  const renderLeftRail = (railCollapsed: boolean, allowCollapse: boolean) => {
+    return (
       <div
         className={cn(
           'border-r border-slate-200 bg-slate-100 shadow-[2px_0_6px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden transition-all',
-          isLeftRailCollapsed ? 'w-14' : 'w-80'
+          railCollapsed ? 'w-14' : 'w-80'
         )}
       >
         <div
           className={cn(
             'sticky top-0 z-10 border-b border-slate-200 bg-slate-100 flex flex-col',
-            isLeftRailCollapsed ? 'px-2 pt-6 pb-3 items-center' : 'px-3 pt-10 pb-4'
+            railCollapsed ? 'px-2 pt-6 pb-3 items-center' : 'px-3 pt-10 pb-4'
           )}
         >
           <div
             className={cn(
               'flex w-full items-center',
-              isLeftRailCollapsed ? 'justify-center' : 'justify-between'
+              railCollapsed ? 'justify-center' : 'justify-between'
             )}
           >
-            {!isLeftRailCollapsed ? (
+            {!railCollapsed ? (
               <>
                 <h1 className="text-xl font-bold text-slate-900 pl-2">Sub Finder</h1>
-                <button
-                  type="button"
-                  aria-label="Collapse left panel"
-                  className={cn(
-                    'inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900'
-                  )}
-                  onClick={() => setIsLeftRailCollapsed(true)}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
+                {allowCollapse && (
+                  <button
+                    type="button"
+                    aria-label="Collapse left panel"
+                    className={cn(
+                      'inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900'
+                    )}
+                    onClick={() => setIsLeftRailCollapsed(true)}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                )}
               </>
             ) : (
               <button
@@ -894,7 +897,7 @@ export default function SubFinderPage() {
             )}
           </div>
 
-          {!isLeftRailCollapsed && (
+          {!railCollapsed && (
             <>
               {/* Mode Toggle - Pill */}
               <div className="mt-4 mb-4 rounded-full border border-slate-200 bg-white/70 p-1">
@@ -1165,8 +1168,8 @@ export default function SubFinderPage() {
         </div>
 
         {/* Absences List */}
-        {!isLeftRailCollapsed && mode === 'existing' && (
-          <div className="flex-1 overflow-y-auto">
+        {!railCollapsed && mode === 'existing' && (
+          <div className="flex-1">
             <AbsenceList
               absences={filteredAbsences}
               selectedAbsence={selectedAbsence}
@@ -1177,317 +1180,344 @@ export default function SubFinderPage() {
           </div>
         )}
       </div>
+    )
+  }
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden px-8">
-        {/* Fixed Header Bar */}
-        {selectedAbsence && (
-          <>
-            <div className="sticky top-0 z-10 border-b bg-white shadow-sm">
-              <div className="px-6 pt-10 pb-2">
-                {/* Header Row */}
-                <div className="mb-5">
-                  <h2 className="text-xl font-semibold flex flex-wrap items-center gap-2">
-                    <span>Sub Finder</span>
-                    <span className="text-muted-foreground">→</span>
-                    <span>{selectedAbsence.teacher_name}</span>
-                    <span className="text-muted-foreground">→</span>
-                    <span>
-                      {(() => {
-                        const formatDate = (dateString: string) => {
-                          const date = parseLocalDate(dateString)
-                          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-                          const dayName = dayNames[date.getDay()]
-                          const monthNames = [
-                            'Jan',
-                            'Feb',
-                            'Mar',
-                            'Apr',
-                            'May',
-                            'Jun',
-                            'Jul',
-                            'Aug',
-                            'Sep',
-                            'Oct',
-                            'Nov',
-                            'Dec',
-                          ]
-                          const month = monthNames[date.getMonth()]
-                          const day = date.getDate()
-                          return `${dayName} ${month} ${day}`
-                        }
-                        const startDate = formatDate(selectedAbsence.start_date)
-                        if (
-                          selectedAbsence.end_date &&
-                          selectedAbsence.end_date !== selectedAbsence.start_date
-                        ) {
-                          const endDate = formatDate(selectedAbsence.end_date)
-                          return (
-                            <>
-                              {startDate}
-                              <span className="font-normal text-slate-500"> - </span>
-                              {endDate}
-                            </>
-                          )
-                        }
-                        return startDate
-                      })()}
-                    </span>
-                    <span className="h-4 w-px bg-slate-500 mx-2" />
-                    {selectedClassrooms.length > 0 ? (
-                      <span className="flex flex-wrap items-center gap-1.5">
-                        {selectedClassrooms.map(classroom => (
-                          <span
-                            key={classroom.id || classroom.name}
-                            className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
-                            style={getClassroomPillStyle(classroom.color)}
-                          >
-                            {classroom.name}
-                          </span>
-                        ))}
+  return (
+    <div className="flex min-h-[calc(100vh-4rem+1.5rem+4rem)] -mx-4 -mt-[calc(1.5rem+4rem)] -mb-6 relative flex-col md:flex-row">
+      <div className="md:hidden px-4 py-3 border-b bg-white">
+        <Sheet open={isMobileRailOpen} onOpenChange={setIsMobileRailOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" size="sm" className="w-full justify-between">
+              Absences & Filters
+              <Search className="h-4 w-4" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="p-0 w-[320px] sm:w-[360px]">
+            <SheetHeader className="px-4 py-3 border-b">
+              <SheetTitle>Sub Finder</SheetTitle>
+            </SheetHeader>
+            {renderLeftRail(false, false)}
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      <div className="hidden md:flex">{renderLeftRail(isLeftRailCollapsed, true)}</div>
+
+      <div className="flex flex-1 flex-col md:flex-row">
+        {/* Middle Column */}
+        <div className="flex-1 border-x bg-slate-50/40 px-6 md:px-8">
+          {/* Fixed Header Bar */}
+          {selectedAbsence && (
+            <>
+              <div className="sticky top-0 z-10 border-b bg-white shadow-sm">
+                <div className="px-6 pt-10 pb-2">
+                  {/* Header Row */}
+                  <div className="mb-5">
+                    <h2 className="text-xl font-semibold flex flex-wrap items-center gap-2">
+                      <span>Sub Finder</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span>{selectedAbsence.teacher_name}</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span>
+                        {(() => {
+                          const formatDate = (dateString: string) => {
+                            const date = parseLocalDate(dateString)
+                            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+                            const dayName = dayNames[date.getDay()]
+                            const monthNames = [
+                              'Jan',
+                              'Feb',
+                              'Mar',
+                              'Apr',
+                              'May',
+                              'Jun',
+                              'Jul',
+                              'Aug',
+                              'Sep',
+                              'Oct',
+                              'Nov',
+                              'Dec',
+                            ]
+                            const month = monthNames[date.getMonth()]
+                            const day = date.getDate()
+                            return `${dayName} ${month} ${day}`
+                          }
+                          const startDate = formatDate(selectedAbsence.start_date)
+                          if (
+                            selectedAbsence.end_date &&
+                            selectedAbsence.end_date !== selectedAbsence.start_date
+                          ) {
+                            const endDate = formatDate(selectedAbsence.end_date)
+                            return (
+                              <>
+                                {startDate}
+                                <span className="font-normal text-slate-500"> - </span>
+                                {endDate}
+                              </>
+                            )
+                          }
+                          return startDate
+                        })()}
                       </span>
-                    ) : (
-                      <span className="text-xs font-normal text-muted-foreground">
-                        Classroom unavailable
-                      </span>
-                    )}
-                  </h2>
-                </div>
-
-                {filteredShiftSummary && filteredShiftSummary.total > 0 && (
-                  <div className="mt-4 mb-8">
-                    <CoverageSummary
-                      shifts={filteredShiftSummary}
-                      onShiftClick={handleShiftClick}
-                    />
-                  </div>
-                )}
-
-                {/* Toolbar Row */}
-                <div className="flex items-end justify-between pb-3">
-                  {/* Color Key - Left aligned, bottom aligned */}
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1.5">
-                      <div
-                        className="w-3 h-3 rounded bg-blue-50"
-                        style={{
-                          borderWidth: '1px',
-                          borderStyle: 'solid',
-                          borderColor: 'rgb(96, 165, 250)', // blue-400
-                        }}
-                      />
-                      <span>Covered</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div
-                        className="w-3 h-3 rounded bg-orange-50"
-                        style={{
-                          borderWidth: '1px',
-                          borderStyle: 'solid',
-                          borderColor: 'rgb(251, 146, 60)', // orange-400
-                        }}
-                      />
-                      <span>Uncovered</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div
-                        className="w-3 h-3 rounded bg-emerald-50"
-                        style={{
-                          borderWidth: '1px',
-                          borderStyle: 'solid',
-                          borderColor: 'rgb(153, 246, 228)', // teal-200 (emerald-200 equivalent)
-                        }}
-                      />
-                      <span>Available</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div
-                        className="w-3 h-3 rounded bg-gray-100"
-                        style={{
-                          borderWidth: '1px',
-                          borderStyle: 'solid',
-                          borderColor: 'rgb(209, 213, 219)', // gray-300
-                        }}
-                      />
-                      <span>Unavailable</span>
-                    </div>
-                  </div>
-                  {/* Buttons - Right aligned */}
-                  <div className="flex items-center gap-3">
-                    <Button
-                      onClick={handleRerunFinder}
-                      disabled={loading}
-                      size="sm"
-                      variant="outline"
-                    >
-                      <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                      Rerun Finder
-                    </Button>
-
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" size="sm" className="relative">
-                          <Settings2 className="h-4 w-4 mr-2" />
-                          Search & Filter
-                          {(includePartiallyCovered ||
-                            !includeOnlyRecommended ||
-                            !includeFlexibleStaff) && (
-                            <Badge
-                              variant="secondary"
-                              className="ml-2 h-5 min-w-[20px] px-1.5 text-xs"
+                      <span className="h-4 w-px bg-slate-500 mx-2" />
+                      {selectedClassrooms.length > 0 ? (
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          {selectedClassrooms.map(classroom => (
+                            <span
+                              key={classroom.id || classroom.name}
+                              className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                              style={getClassroomPillStyle(classroom.color)}
                             >
-                              {
-                                [
-                                  includePartiallyCovered,
-                                  !includeOnlyRecommended,
-                                  !includeFlexibleStaff,
-                                ].filter(Boolean).length
-                              }
-                            </Badge>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        className="w-80"
-                        align="start"
-                        onOpenAutoFocus={event => event.preventDefault()}
+                              {classroom.name}
+                            </span>
+                          ))}
+                        </span>
+                      ) : (
+                        <span className="text-xs font-normal text-muted-foreground">
+                          Classroom unavailable
+                        </span>
+                      )}
+                    </h2>
+                  </div>
+
+                  {filteredShiftSummary && filteredShiftSummary.total > 0 && (
+                    <div className="mt-4 mb-8">
+                      <CoverageSummary
+                        shifts={filteredShiftSummary}
+                        onShiftClick={handleShiftClick}
+                      />
+                    </div>
+                  )}
+
+                  {/* Toolbar Row */}
+                  <div className="flex items-end justify-between pb-3">
+                    {/* Color Key - Left aligned, bottom aligned */}
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1.5">
+                        <div
+                          className="w-3 h-3 rounded bg-blue-50"
+                          style={{
+                            borderWidth: '1px',
+                            borderStyle: 'solid',
+                            borderColor: 'rgb(96, 165, 250)', // blue-400
+                          }}
+                        />
+                        <span>Covered</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div
+                          className="w-3 h-3 rounded bg-orange-50"
+                          style={{
+                            borderWidth: '1px',
+                            borderStyle: 'solid',
+                            borderColor: 'rgb(251, 146, 60)', // orange-400
+                          }}
+                        />
+                        <span>Uncovered</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div
+                          className="w-3 h-3 rounded bg-emerald-50"
+                          style={{
+                            borderWidth: '1px',
+                            borderStyle: 'solid',
+                            borderColor: 'rgb(153, 246, 228)', // teal-200 (emerald-200 equivalent)
+                          }}
+                        />
+                        <span>Available</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div
+                          className="w-3 h-3 rounded bg-gray-100"
+                          style={{
+                            borderWidth: '1px',
+                            borderStyle: 'solid',
+                            borderColor: 'rgb(209, 213, 219)', // gray-300
+                          }}
+                        />
+                        <span>Unavailable</span>
+                      </div>
+                    </div>
+                    {/* Buttons - Right aligned */}
+                    <div className="flex items-center gap-3">
+                      <Button
+                        onClick={handleRerunFinder}
+                        disabled={loading}
+                        size="sm"
+                        variant="outline"
                       >
-                        <div className="space-y-4">
-                          <div>
-                            <Label className="text-sm font-medium">Substitute</Label>
-                            <div
-                              ref={subSearchRef}
-                              className="mt-2 rounded-md border border-slate-200 bg-white"
-                            >
-                              <div className="border-b border-slate-100 p-2">
-                                <Input
-                                  placeholder="Search substitutes..."
-                                  value={subSearch}
-                                  onChange={event => setSubSearch(event.target.value)}
-                                  onFocus={() => setIsSubSearchOpen(true)}
-                                  className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
-                                />
-                              </div>
-                              {isSubSearchOpen && (
-                                <div className="max-h-60 overflow-y-auto p-2">
-                                  {filteredSubsForSearch.length === 0 ? (
-                                    <div className="p-2 text-xs text-muted-foreground">
-                                      No matches
-                                    </div>
-                                  ) : (
-                                    <div className="space-y-1">
-                                      {filteredSubsForSearch.map(sub => {
-                                        const name = getDisplayName(sub)
-                                        const canCover =
-                                          (sub.shifts_covered ?? 0) > 0 ||
-                                          (sub.can_cover?.length ?? 0) > 0
-                                        return (
-                                          <button
-                                            key={sub.id}
-                                            type="button"
-                                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
-                                            onClick={() => {
-                                              if (!canCover && includeOnlyRecommended) {
-                                                setIncludeOnlyRecommended(false)
-                                                applySubResults(allSubs, {
-                                                  useOnlyRecommended: false,
-                                                })
-                                                toast(
-                                                  'Turning off “Include only recommended subs” to show this selection.'
-                                                )
-                                                setTimeout(() => scrollToSubCard(sub.id), 50)
-                                              } else {
-                                                scrollToSubCard(sub.id)
-                                              }
-                                              setIsSubSearchOpen(false)
-                                            }}
-                                          >
-                                            <span
-                                              className={`h-2 w-2 rounded-full ${canCover ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                                            />
-                                            <span>{name.trim()}</span>
-                                          </button>
-                                        )
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <div>
-                            <h4 className="font-medium text-sm mb-3">Filter Options</h4>
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                  <Label
-                                    htmlFor="include-only-recommended"
-                                    className="text-sm font-normal cursor-pointer"
-                                  >
-                                    Include only recommended subs
-                                  </Label>
-                                  <p className="text-xs text-muted-foreground mt-0.5">
-                                    Show only subs who can cover at least one shift
-                                  </p>
-                                </div>
-                                <Switch
-                                  id="include-only-recommended"
-                                  checked={includeOnlyRecommended}
-                                  onCheckedChange={setIncludeOnlyRecommended}
-                                />
-                              </div>
+                        <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                        Rerun Finder
+                      </Button>
 
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                  <Label
-                                    htmlFor="include-partial"
-                                    className="text-sm font-normal cursor-pointer"
-                                  >
-                                    Include partially covered shifts
-                                  </Label>
-                                  <p className="text-xs text-muted-foreground mt-0.5">
-                                    Show absences with partial coverage
-                                  </p>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="sm" className="relative">
+                            <Settings2 className="h-4 w-4 mr-2" />
+                            Search & Filter
+                            {(includePartiallyCovered ||
+                              !includeOnlyRecommended ||
+                              !includeFlexibleStaff) && (
+                              <Badge
+                                variant="secondary"
+                                className="ml-2 h-5 min-w-[20px] px-1.5 text-xs"
+                              >
+                                {
+                                  [
+                                    includePartiallyCovered,
+                                    !includeOnlyRecommended,
+                                    !includeFlexibleStaff,
+                                  ].filter(Boolean).length
+                                }
+                              </Badge>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          className="w-80"
+                          align="start"
+                          onOpenAutoFocus={event => event.preventDefault()}
+                        >
+                          <div className="space-y-4">
+                            <div>
+                              <Label className="text-sm font-medium">Substitute</Label>
+                              <div
+                                ref={subSearchRef}
+                                className="mt-2 rounded-md border border-slate-200 bg-white"
+                              >
+                                <div className="border-b border-slate-100 p-2">
+                                  <Input
+                                    placeholder="Search substitutes..."
+                                    value={subSearch}
+                                    onChange={event => setSubSearch(event.target.value)}
+                                    onFocus={() => setIsSubSearchOpen(true)}
+                                    className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
+                                  />
                                 </div>
-                                <Switch
-                                  id="include-partial"
-                                  checked={includePartiallyCovered}
-                                  onCheckedChange={setIncludePartiallyCovered}
-                                />
-                              </div>
-
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                  <Label
-                                    htmlFor="include-flexible"
-                                    className="text-sm font-normal cursor-pointer"
-                                  >
-                                    Include Flexible Staff
-                                  </Label>
-                                  <p className="text-xs text-muted-foreground mt-0.5">
-                                    Include staff who can sub when not teaching
-                                  </p>
-                                </div>
-                                <Switch
-                                  id="include-flexible"
-                                  checked={includeFlexibleStaff}
-                                  onCheckedChange={handleFlexibleStaffChange}
-                                />
+                                {isSubSearchOpen && (
+                                  <div className="max-h-60 overflow-y-auto p-2">
+                                    {filteredSubsForSearch.length === 0 ? (
+                                      <div className="p-2 text-xs text-muted-foreground">
+                                        No matches
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-1">
+                                        {filteredSubsForSearch.map(sub => {
+                                          const name = getDisplayName(sub)
+                                          const canCover =
+                                            (sub.shifts_covered ?? 0) > 0 ||
+                                            (sub.can_cover?.length ?? 0) > 0
+                                          return (
+                                            <button
+                                              key={sub.id}
+                                              type="button"
+                                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
+                                              onClick={() => {
+                                                if (!canCover && includeOnlyRecommended) {
+                                                  setIncludeOnlyRecommended(false)
+                                                  applySubResults(allSubs, {
+                                                    useOnlyRecommended: false,
+                                                  })
+                                                  toast(
+                                                    'Turning off “Include only recommended subs” to show this selection.'
+                                                  )
+                                                  setTimeout(() => scrollToSubCard(sub.id), 50)
+                                                } else {
+                                                  scrollToSubCard(sub.id)
+                                                }
+                                                setIsSubSearchOpen(false)
+                                              }}
+                                            >
+                                              <span
+                                                className={`h-2 w-2 rounded-full ${canCover ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                              />
+                                              <span>{name.trim()}</span>
+                                            </button>
+                                          )
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
+                            <div>
+                              <h4 className="font-medium text-sm mb-3">Filter Options</h4>
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1">
+                                    <Label
+                                      htmlFor="include-only-recommended"
+                                      className="text-sm font-normal cursor-pointer"
+                                    >
+                                      Include only recommended subs
+                                    </Label>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      Show only subs who can cover at least one shift
+                                    </p>
+                                  </div>
+                                  <Switch
+                                    id="include-only-recommended"
+                                    checked={includeOnlyRecommended}
+                                    onCheckedChange={setIncludeOnlyRecommended}
+                                  />
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1">
+                                    <Label
+                                      htmlFor="include-partial"
+                                      className="text-sm font-normal cursor-pointer"
+                                    >
+                                      Include partially covered shifts
+                                    </Label>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      Show absences with partial coverage
+                                    </p>
+                                  </div>
+                                  <Switch
+                                    id="include-partial"
+                                    checked={includePartiallyCovered}
+                                    onCheckedChange={setIncludePartiallyCovered}
+                                  />
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1">
+                                    <Label
+                                      htmlFor="include-flexible"
+                                      className="text-sm font-normal cursor-pointer"
+                                    >
+                                      Include Flexible Staff
+                                    </Label>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      Include staff who can sub when not teaching
+                                    </p>
+                                  </div>
+                                  <Switch
+                                    id="include-flexible"
+                                    checked={includeFlexibleStaff}
+                                    onCheckedChange={handleFlexibleStaffChange}
+                                  />
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </>
-        )}
+            </>
+          )}
 
-        {/* Recommended Combination and Subs List - now scrollable without header */}
-        <div className="flex-1 overflow-y-auto">
+          {/* Middle column content ends above */}
+        </div>
+
+        {/* Right Column */}
+        <div className="w-full md:flex-[0_0_380px] md:max-w-sm border-l bg-white">
           {selectedAbsence ? (
             <div className="p-4">
               {showPastShiftsBanner && (
@@ -1511,7 +1541,6 @@ export default function SubFinderPage() {
                   </label>
                 </div>
               )}
-              {/* Recommended Combination Section */}
               {displayRecommendedCombinations.length > 0 && (
                 <div className="mt-2">
                   <RecommendedCombination
