@@ -135,40 +135,8 @@ export default function AssignmentModal({
       }
     })
 
-<<<<<<< HEAD
-    // Then, add configured mappings that don't have assignments yet
-    mappings.forEach(mapping => {
-      const classGroupId = mapping.class_group_id
-      if (!classGroupId) return
-      const key = `${classGroupId}-${mapping.classroom_id}`
-      if (!groups.has(key)) {
-        // Get enrollment for this class/day/time
-        const enrollment = enrollments.find(
-          e =>
-            e.class_group_id === classGroupId &&
-            e.day_of_week_id === data.day_of_week_id &&
-            e.time_slot_id === data.time_slot_id
-        )
-
-        groups.set(key, {
-          class_group_id: classGroupId,
-          class_group_name: mapping.class_group?.name || 'Unknown',
-          classroom_id: mapping.classroom_id,
-          classroom_name: mapping.classroom?.name || 'Unknown',
-          enrollment: enrollment?.enrollment_count || 0,
-          required_teachers: undefined,
-          preferred_teachers: undefined,
-          assigned_teachers: [],
-        })
-      }
-    })
-
-    setClassGroups(groups)
-  }, [data, classes, classrooms, enrollments, mappings, loading])
-=======
     setClassGroups(groups)
   }, [data, classes, classrooms, enrollments, loading])
->>>>>>> 43e2e07 (chore(db): drop staffing_rules and audit log table, add audit policy)
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
