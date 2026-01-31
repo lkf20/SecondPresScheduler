@@ -1077,6 +1077,7 @@ export type Database = {
       sub_class_preferences: {
         Row: {
           can_teach: boolean | null
+          class_group_id: string | null
           created_at: string | null
           id: string
           school_id: string | null
@@ -1085,6 +1086,7 @@ export type Database = {
         }
         Insert: {
           can_teach?: boolean | null
+          class_group_id?: string | null
           created_at?: string | null
           id?: string
           school_id?: string | null
@@ -1093,6 +1095,7 @@ export type Database = {
         }
         Update: {
           can_teach?: boolean | null
+          class_group_id?: string | null
           created_at?: string | null
           id?: string
           school_id?: string | null
@@ -1100,6 +1103,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: 'sub_class_preferences_class_group_id_fkey'
+            columns: ['class_group_id']
+            isOneToOne: false
+            referencedRelation: 'class_groups'
+            referencedColumns: ['id']
+          },
           {
             foreignKeyName: 'sub_class_preferences_sub_id_fkey'
             columns: ['sub_id']
