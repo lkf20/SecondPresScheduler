@@ -14,10 +14,15 @@ import { deleteClassroom, updateClassroom } from '../classrooms'
 import { deleteTeacher, updateTeacher } from '../teachers'
 import { deleteSub, updateSub } from '../subs'
 import { createClient } from '@/lib/supabase/server'
+import { getUserSchoolId } from '@/lib/utils/auth'
 
 // Mock Supabase client
 jest.mock('@/lib/supabase/server', () => ({
   createClient: jest.fn(),
+}))
+jest.mock('@/lib/utils/auth', () => ({
+  getUserSchoolId: jest.fn(),
+  getCurrentUserId: jest.fn(),
 }))
 
 describe('Deletion and Deactivation Handling', () => {
@@ -44,6 +49,7 @@ describe('Deletion and Deactivation Handling', () => {
       order: jest.fn().mockReturnThis(),
     }
     ;(createClient as jest.Mock).mockResolvedValue(mockSupabase)
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('00000000-0000-0000-0000-000000000001')
   })
 
   afterEach(() => {

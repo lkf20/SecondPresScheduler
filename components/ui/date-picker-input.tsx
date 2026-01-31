@@ -37,6 +37,7 @@ interface DatePickerInputProps {
   className?: string
   tabIndex?: number
   closeOnSelect?: boolean
+  openToDate?: string
 }
 
 const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
@@ -50,19 +51,21 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
       className,
       tabIndex,
       closeOnSelect = false,
+      openToDate,
     },
     ref
   ) => {
     const selectedDate = useMemo(() => parseDate(value), [value])
+    const openToParsed = useMemo(() => parseDate(openToDate || ''), [openToDate])
     const [open, setOpen] = useState(false)
     const [viewDate, setViewDate] = useState(() => {
-      const base = selectedDate || new Date()
+      const base = selectedDate || openToParsed || new Date()
       return new Date(base.getFullYear(), base.getMonth(), 1)
     })
 
     const handleOpenChange = (nextOpen: boolean) => {
       if (nextOpen) {
-        const base = selectedDate || new Date()
+        const base = selectedDate || openToParsed || new Date()
         setViewDate(new Date(base.getFullYear(), base.getMonth(), 1))
       }
       setOpen(nextOpen)

@@ -144,6 +144,19 @@ export async function getTeacherScheduledShifts(
     throw scheduleError
   }
 
+  const { data: daysOfWeekRows, error: daysOfWeekError } = await supabase
+    .from('days_of_week')
+    .select('id, name, day_number')
+
+  if (daysOfWeekError) {
+    console.error('[getTeacherScheduledShifts] days_of_week fetch error:', daysOfWeekError)
+    throw daysOfWeekError
+  }
+
+  const daysOfWeekById = new Map(
+    (daysOfWeekRows || []).map(row => [row.id, { name: row.name, day_number: row.day_number }])
+  )
+
   console.log('[getTeacherScheduledShifts] Raw schedule data:', schedule)
   console.log('[getTeacherScheduledShifts] Schedule count:', schedule?.length || 0)
 
@@ -172,6 +185,16 @@ export async function getTeacherScheduledShifts(
           daysOfWeek = {
             name: entry.days_of_week.name ?? null,
             day_number: entry.days_of_week.day_number ?? null,
+          }
+        }
+      }
+
+      if (!daysOfWeek) {
+        const fallback = daysOfWeekById.get(entry.day_of_week_id || '')
+        if (fallback) {
+          daysOfWeek = {
+            name: fallback.name ?? null,
+            day_number: fallback.day_number ?? null,
           }
         }
       }
