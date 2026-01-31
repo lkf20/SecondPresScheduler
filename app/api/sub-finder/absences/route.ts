@@ -92,7 +92,6 @@ export async function GET(request: NextRequest) {
           })
         }
         // Note: class groups are no longer directly on teacher_schedules
-        // They can be retrieved from class_classroom_mappings if needed
         scheduleLookup.set(key, entry)
       })
     }

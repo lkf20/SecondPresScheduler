@@ -89,7 +89,6 @@ export async function POST(request: NextRequest) {
       }
       if (schedule.classroom?.name) entry.classrooms.add(schedule.classroom.name)
       // Note: class groups are no longer directly on teacher_schedules
-      // They can be retrieved from class_classroom_mappings if needed
       scheduleLookup.set(key, entry)
     })
 

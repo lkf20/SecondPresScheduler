@@ -17,10 +17,6 @@ import { Database } from '@/types/database'
 type ClassGroupRow = Database['public']['Tables']['class_groups']['Row']
 type ClassroomRow = Database['public']['Tables']['classrooms']['Row']
 type EnrollmentRow = Database['public']['Tables']['enrollments']['Row']
-type ClassClassroomMapping = Database['public']['Tables']['class_classroom_mappings']['Row'] & {
-  class_group?: ClassGroupRow | null
-  classroom?: ClassroomRow | null
-}
 
 interface AssignmentModalProps {
   dayName: string
@@ -78,18 +74,6 @@ export default function AssignmentModal({
 
     fetchData()
   }, [])
-
-  const [mappings, setMappings] = useState<ClassClassroomMapping[]>([])
-
-  // Fetch class-classroom mappings for this day/time
-  useEffect(() => {
-    fetch(
-      `/api/class-classroom-mappings?day_of_week_id=${data.day_of_week_id}&time_slot_id=${data.time_slot_id}`
-    )
-      .then(r => r.json())
-      .then(data => setMappings(data as ClassClassroomMapping[]))
-      .catch(console.error)
-  }, [data.day_of_week_id, data.time_slot_id])
 
   // Build class groups from existing assignments and configured mappings only
   useEffect(() => {
@@ -151,6 +135,7 @@ export default function AssignmentModal({
       }
     })
 
+<<<<<<< HEAD
     // Then, add configured mappings that don't have assignments yet
     mappings.forEach(mapping => {
       const classGroupId = mapping.class_group_id
@@ -180,6 +165,10 @@ export default function AssignmentModal({
 
     setClassGroups(groups)
   }, [data, classes, classrooms, enrollments, mappings, loading])
+=======
+    setClassGroups(groups)
+  }, [data, classes, classrooms, enrollments, loading])
+>>>>>>> 43e2e07 (chore(db): drop staffing_rules and audit log table, add audit policy)
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
