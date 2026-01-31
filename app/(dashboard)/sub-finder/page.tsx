@@ -31,6 +31,7 @@ import { toast } from 'sonner'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 import { saveSubFinderState, loadSubFinderState } from '@/lib/utils/sub-finder-state'
 import { findTopCombinations } from '@/lib/utils/sub-combination'
+import { useSubFinderShifts } from '@/components/sub-finder/hooks/useSubFinderShifts'
 
 export default function SubFinderPage() {
   const router = useRouter()
@@ -160,6 +161,13 @@ export default function SubFinderPage() {
     await runManualFinder()
     setIsLeftRailCollapsed(true)
   }, [runManualFinder])
+  const {
+    shiftDetails,
+    visibleShiftDetails,
+    summary: shiftSummary,
+    pastShiftCount,
+    upcomingShiftCount,
+  } = useSubFinderShifts(selectedAbsence, includePastShifts)
   const selectedClassrooms = useMemo(() => {
     if (!selectedAbsence) return []
     if (
@@ -177,68 +185,30 @@ export default function SubFinderPage() {
     }
     return Array.from(
       new Set(
-        selectedAbsence.shifts.shift_details
+        shiftDetails
           .map(shift => shift.classroom_name)
           .filter((name): name is string => Boolean(name))
       )
     ).map(name => ({ id: name, name, color: null }))
-  }, [selectedAbsence])
-  const { pastShiftCount, upcomingShiftCount } = useMemo(() => {
-    if (!selectedAbsence?.shifts?.shift_details?.length) {
-      return { pastShiftCount: 0, upcomingShiftCount: 0 }
-    }
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    let past = 0
-    let upcoming = 0
-    selectedAbsence.shifts.shift_details.forEach(shift => {
-      if (!shift?.date) return
-      const shiftDate = parseLocalDate(shift.date)
-      shiftDate.setHours(0, 0, 0, 0)
-      if (shiftDate < today) {
-        past++
-      } else {
-        upcoming++
-      }
-    })
-    return { pastShiftCount: past, upcomingShiftCount: upcoming }
-  }, [selectedAbsence])
-  const filteredShiftSummary = useMemo(() => {
-    if (!selectedAbsence?.shifts?.shift_details?.length) {
-      return null
-    }
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const shiftDetails = selectedAbsence.shifts.shift_details.filter(shift => {
-      if (!shift?.date) return false
-      if (includePastShifts) return true
-      const shiftDate = parseLocalDate(shift.date)
-      shiftDate.setHours(0, 0, 0, 0)
-      return shiftDate >= today
-    })
-    const totals = shiftDetails.reduce(
-      (acc, shift) => {
-        acc.total++
-        if (shift.status === 'uncovered') {
-          acc.uncovered++
-        } else if (shift.status === 'partially_covered') {
-          acc.partially_covered++
-        } else if (shift.status === 'fully_covered') {
-          acc.fully_covered++
-        }
-        return acc
-      },
-      { total: 0, uncovered: 0, partially_covered: 0, fully_covered: 0 }
-    )
+  }, [selectedAbsence, shiftDetails])
+  const visibleShiftSummary = shiftSummary ?? selectedAbsence?.shifts ?? null
+  const absenceForUI = useMemo(() => {
+    if (!selectedAbsence) return null
+    if (!visibleShiftSummary) return selectedAbsence
     return {
-      total: totals.total,
-      uncovered: totals.uncovered,
-      partially_covered: totals.partially_covered,
-      fully_covered: totals.fully_covered,
-      shift_details: shiftDetails,
+      ...selectedAbsence,
+      shifts: {
+        ...selectedAbsence.shifts,
+        total: visibleShiftSummary.total,
+        uncovered: visibleShiftSummary.uncovered,
+        partially_covered: visibleShiftSummary.partially_covered,
+        fully_covered: visibleShiftSummary.fully_covered,
+        shift_details: visibleShiftDetails,
+        shift_details_sorted: visibleShiftSummary.shift_details_sorted,
+        coverage_segments: visibleShiftSummary.coverage_segments,
+      },
     }
-  }, [selectedAbsence, includePastShifts])
-  const visibleShiftSummary = filteredShiftSummary ?? selectedAbsence?.shifts ?? null
+  }, [selectedAbsence, visibleShiftDetails, visibleShiftSummary])
   const showPastShiftsBanner = Boolean(selectedAbsence && pastShiftCount > 0)
   const sortedSubs = useMemo(() => {
     return [...allSubs].sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)))
@@ -1281,10 +1251,10 @@ export default function SubFinderPage() {
                     </h2>
                   </div>
 
-                  {filteredShiftSummary && filteredShiftSummary.total > 0 && (
+                  {visibleShiftSummary && visibleShiftSummary.total > 0 && (
                     <div className="mt-4 mb-8">
                       <CoverageSummary
-                        shifts={filteredShiftSummary}
+                        shifts={visibleShiftSummary}
                         onShiftClick={handleShiftClick}
                       />
                     </div>
@@ -1552,7 +1522,7 @@ export default function SubFinderPage() {
                       (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
                     }
                     allSubs={allSubs}
-                    allShifts={selectedAbsence.shifts.shift_details || []}
+                    allShifts={visibleShiftDetails}
                     includePastShifts={includePastShifts}
                   />
                   <div className="mt-16 text-sm font-semibold text-slate-700">
@@ -1565,7 +1535,8 @@ export default function SubFinderPage() {
               <RecommendedSubsList
                 subs={recommendedSubs}
                 loading={loading}
-                absence={selectedAbsence}
+                absence={absenceForUI ?? selectedAbsence}
+                shiftDetails={shiftDetails}
                 showAllSubs={!includeOnlyRecommended}
                 onContactSub={handleContactSub}
                 hideHeader

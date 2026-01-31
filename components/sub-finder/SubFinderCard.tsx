@@ -8,6 +8,7 @@ import ShiftChips from '@/components/sub-finder/ShiftChips'
 import SubCardHeader from '@/components/sub-finder/SubCardHeader'
 import { shiftStatusColorValues } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
+import type { SubFinderShift } from '@/lib/sub-finder/types'
 
 type Shift = {
   date: string
@@ -52,15 +53,7 @@ interface SubFinderCardProps {
   onContact?: () => void
   showDebugOutlines?: boolean
   recommendedShiftCount?: number // Number of recommended shifts for this sub
-  allShifts?: Array<{
-    // All shifts that need coverage
-    id: string
-    date: string
-    day_name: string
-    time_slot_code: string
-    classroom_name?: string | null
-    class_name?: string | null
-  }>
+  allShifts?: SubFinderShift[] // All shifts that need coverage
   allCanCover?: Shift[] // All shifts this sub can cover
   allCannotCover?: Shift[] // All shifts this sub cannot cover
   allAssigned?: Shift[] // All shifts this sub is assigned to
