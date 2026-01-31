@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { RefreshCw, Search, Settings2, X } from 'lucide-react'
+import { ChevronLeft, RefreshCw, Search, Settings2, X } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
 import AbsenceList from '@/components/sub-finder/AbsenceList'
@@ -38,6 +38,7 @@ export default function SubFinderPage() {
   const requestedTeacherId = searchParams.get('teacher_id')
   const [mode, setMode] = useState<Mode>('existing')
   const [includePastShifts, setIncludePastShifts] = useState(false)
+  const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(false)
   const subRecommendationParams = useMemo(() => ({ includePastShifts }), [includePastShifts])
   const {
     absences,
@@ -140,6 +141,23 @@ export default function SubFinderPage() {
       shifts: manualSelectedShifts,
     })
   }, [manualTeacherId, manualStartDate, manualEndDate, manualSelectedShifts, handleFindManualSubs])
+  const runFinderForAbsence = useCallback(
+    async (absence: Absence) => {
+      await handleFindSubs(absence)
+    },
+    [handleFindSubs]
+  )
+  const runFinderForAbsenceAndCollapse = useCallback(
+    async (absence: Absence) => {
+      await handleFindSubs(absence)
+      setIsLeftRailCollapsed(true)
+    },
+    [handleFindSubs]
+  )
+  const runManualFinderAndCollapse = useCallback(async () => {
+    await runManualFinder()
+    setIsLeftRailCollapsed(true)
+  }, [runManualFinder])
   const selectedClassrooms = useMemo(() => {
     if (!selectedAbsence) return []
     if (
@@ -272,7 +290,7 @@ export default function SubFinderPage() {
       await runManualFinder()
       return
     }
-    await handleFindSubs(selectedAbsence)
+    await runFinderForAbsence(selectedAbsence)
   }
 
   const lastIncludePastShiftsRef = useRef(includePastShifts)
@@ -280,11 +298,11 @@ export default function SubFinderPage() {
     if (lastIncludePastShiftsRef.current === includePastShifts) return
     lastIncludePastShiftsRef.current = includePastShifts
     if (mode === 'existing' && selectedAbsence) {
-      handleFindSubs(selectedAbsence).catch(error => {
+      runFinderForAbsence(selectedAbsence).catch(error => {
         console.error('Failed to refresh subs after toggling past shifts:', error)
       })
     }
-  }, [includePastShifts, mode, selectedAbsence, handleFindSubs])
+  }, [includePastShifts, mode, selectedAbsence, runFinderForAbsence])
 
   // Helper to create cache key
   const getCacheKey = (subId: string, absenceId: string) => `${subId}-${absenceId}`
@@ -428,12 +446,12 @@ export default function SubFinderPage() {
   useEffect(() => {
     if (isFlexibleStaffChangeUserInitiatedRef.current && selectedAbsence && mode === 'existing') {
       isFlexibleStaffChangeUserInitiatedRef.current = false // Reset flag
-      handleFindSubs(selectedAbsence)
+      runFinderForAbsence(selectedAbsence)
     } else if (isFlexibleStaffChangeUserInitiatedRef.current) {
       // Reset flag even if we don't rerun (e.g., no selected absence)
       isFlexibleStaffChangeUserInitiatedRef.current = false
     }
-  }, [includeFlexibleStaff, selectedAbsence, mode, handleFindSubs])
+  }, [includeFlexibleStaff, selectedAbsence, mode, runFinderForAbsence])
 
   // Handler for combination contact button
   const handleCombinationContact = (subId: string) => {
@@ -700,7 +718,7 @@ export default function SubFinderPage() {
 
       console.log('[SubFinder] Re-running finder')
       setTimeout(() => {
-        handleFindSubs(absence).finally(() => {
+        runFinderForAbsence(absence).finally(() => {
           isRestoringStateRef.current = false
           hasRestoredStateRef.current = true
         })
@@ -722,7 +740,7 @@ export default function SubFinderPage() {
     mode,
     selectedAbsence,
     setSelectedAbsence,
-    handleFindSubs,
+    runFinderForAbsence,
     applySubResults,
     setRecommendedCombinations,
   ])
@@ -825,280 +843,335 @@ export default function SubFinderPage() {
   return (
     <div className="flex h-[calc(100vh-4rem+1.5rem+4rem)] -mx-4 -mt-[calc(1.5rem+4rem)] -mb-6 relative">
       {/* Left Rail */}
-      <div className="w-80 border-r border-slate-200 bg-slate-100 shadow-[2px_0_6px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden">
-        <div className="sticky top-0 z-10 px-3 pt-10 pb-4 border-b border-slate-200 bg-slate-100 flex flex-col">
-          <h1 className="text-xl font-bold mb-4 text-slate-900 pl-2">Sub Finder</h1>
-
-          {/* Mode Toggle - Pill */}
-          <div className="mb-4 rounded-full border border-slate-200 bg-white/70 p-1">
-            <div className="flex gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setMode('existing')}
-                className={cn(
-                  'flex-1 rounded-full text-xs font-semibold transition-all',
-                  mode === 'existing'
-                    ? '!bg-button-fill !text-button-fill-foreground shadow-sm'
-                    : 'text-slate-600 hover:bg-white hover:text-slate-900'
-                )}
+      <div
+        className={cn(
+          'border-r border-slate-200 bg-slate-100 shadow-[2px_0_6px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden transition-all',
+          isLeftRailCollapsed ? 'w-14' : 'w-80'
+        )}
+      >
+        <div
+          className={cn(
+            'sticky top-0 z-10 border-b border-slate-200 bg-slate-100 flex flex-col',
+            isLeftRailCollapsed ? 'px-2 pt-6 pb-3 items-center' : 'px-3 pt-10 pb-4'
+          )}
+        >
+          <div
+            className={cn(
+              'flex w-full items-center',
+              isLeftRailCollapsed ? 'justify-center' : 'justify-between'
+            )}
+          >
+            {!isLeftRailCollapsed ? (
+              <>
+                <h1 className="text-xl font-bold text-slate-900 pl-2">Sub Finder</h1>
+                <button
+                  type="button"
+                  aria-label="Collapse left panel"
+                  className={cn(
+                    'inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900'
+                  )}
+                  onClick={() => setIsLeftRailCollapsed(true)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                aria-label="Expand absences panel"
+                className="flex w-full flex-col items-center gap-1 py-3 text-xs text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                onClick={() => setIsLeftRailCollapsed(false)}
               >
-                Existing Absences
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setMode('manual')}
-                className={cn(
-                  'flex-1 rounded-full text-xs font-semibold transition-all',
-                  mode === 'manual'
-                    ? '!bg-button-fill !text-button-fill-foreground shadow-sm'
-                    : 'text-slate-600 hover:bg-white hover:text-slate-900'
-                )}
-              >
-                Manual Coverage
-              </Button>
-            </div>
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-slate-400 bg-white">
+                  <Search className="h-3.5 w-3.5" />
+                </span>
+                <span className="leading-tight text-[11px] font-medium text-slate-700">
+                  Show
+                  <br />
+                  Absences
+                </span>
+              </button>
+            )}
           </div>
 
-          {/* Search/Filter (for existing absences mode) */}
-          {mode === 'existing' && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Search className="h-4 w-4 text-slate-400" />
-                <div className="flex-1">
-                  <div className="rounded-md border border-slate-200 bg-white/80">
-                    <div className="px-2 py-1">
-                      <input
-                        type="text"
-                        placeholder="Search teachers..."
-                        value={isTeacherSearchOpen ? teacherSearchInput : searchQuery}
-                        onChange={e => {
-                          if (isTeacherSearchOpen) {
-                            setTeacherSearchInput(e.target.value)
-                          } else {
-                            setSearchQuery(e.target.value)
-                          }
-                        }}
-                        onFocus={() => {
-                          setTeacherSearchInput('') // Clear dropdown input when opening
-                          setIsTeacherSearchOpen(true)
-                        }}
-                        onBlur={() => {
-                          setTimeout(() => {
-                            setIsTeacherSearchOpen(false)
-                            setTeacherSearchInput('')
-                          }, 150)
-                        }}
-                        className="w-full bg-transparent text-sm focus:outline-none"
-                      />
-                    </div>
-                    {isTeacherSearchOpen && (
-                      <div className="border-t border-slate-100 max-h-40 overflow-y-auto px-2 py-1">
-                        {teacherNames
-                          .filter(name => {
-                            const query = teacherSearchInput.toLowerCase()
-                            // If there's a query in the dropdown input, filter by it. Otherwise show all teachers
-                            return !query || name.toLowerCase().includes(query)
-                          })
-                          .map(name => {
-                            const teacher = teachers.find(t => getDisplayName(t) === name)
-                            const teacherId = teacher?.id
-                            const isSelected = Boolean(
-                              teacherId && selectedTeacherIds.includes(teacherId)
-                            )
-                            return (
-                              <button
-                                key={name}
-                                type="button"
-                                className={cn(
-                                  'w-full rounded px-1.5 py-1 text-left text-sm text-slate-700 hover:bg-slate-100',
-                                  isSelected && 'bg-slate-100 opacity-60'
-                                )}
-                                onClick={() => {
-                                  if (teacherId && !isSelected) {
-                                    addTeacherToSelection(teacherId)
-                                  }
-                                }}
-                                disabled={isSelected}
-                              >
-                                {name}
-                              </button>
-                            )
-                          })}
-                        {teacherNames.filter(name => {
-                          const query = teacherSearchInput.toLowerCase()
-                          return !query || name.toLowerCase().includes(query)
-                        }).length === 0 && (
-                          <div className="px-1.5 py-1 text-xs text-muted-foreground">
-                            No matches
+          {!isLeftRailCollapsed && (
+            <>
+              {/* Mode Toggle - Pill */}
+              <div className="mt-4 mb-4 rounded-full border border-slate-200 bg-white/70 p-1">
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMode('existing')}
+                    className={cn(
+                      'flex-1 rounded-full text-xs font-semibold transition-all',
+                      mode === 'existing'
+                        ? '!bg-button-fill !text-button-fill-foreground shadow-sm'
+                        : 'text-slate-600 hover:bg-white hover:text-slate-900'
+                    )}
+                  >
+                    Existing Absences
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMode('manual')}
+                    className={cn(
+                      'flex-1 rounded-full text-xs font-semibold transition-all',
+                      mode === 'manual'
+                        ? '!bg-button-fill !text-button-fill-foreground shadow-sm'
+                        : 'text-slate-600 hover:bg-white hover:text-slate-900'
+                    )}
+                  >
+                    Manual Coverage
+                  </Button>
+                </div>
+              </div>
+
+              {/* Search/Filter (for existing absences mode) */}
+              {mode === 'existing' && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Search className="h-4 w-4 text-slate-400" />
+                    <div className="flex-1">
+                      <div className="rounded-md border border-slate-200 bg-white/80">
+                        <div className="px-2 py-1">
+                          <input
+                            type="text"
+                            placeholder="Search teachers..."
+                            value={isTeacherSearchOpen ? teacherSearchInput : searchQuery}
+                            onChange={e => {
+                              if (isTeacherSearchOpen) {
+                                setTeacherSearchInput(e.target.value)
+                              } else {
+                                setSearchQuery(e.target.value)
+                              }
+                            }}
+                            onFocus={() => {
+                              setTeacherSearchInput('') // Clear dropdown input when opening
+                              setIsTeacherSearchOpen(true)
+                            }}
+                            onBlur={() => {
+                              setTimeout(() => {
+                                setIsTeacherSearchOpen(false)
+                                setTeacherSearchInput('')
+                              }, 150)
+                            }}
+                            className="w-full bg-transparent text-sm focus:outline-none"
+                          />
+                        </div>
+                        {isTeacherSearchOpen && (
+                          <div className="border-t border-slate-100 max-h-40 overflow-y-auto px-2 py-1">
+                            {teacherNames
+                              .filter(name => {
+                                const query = teacherSearchInput.toLowerCase()
+                                // If there's a query in the dropdown input, filter by it. Otherwise show all teachers
+                                return !query || name.toLowerCase().includes(query)
+                              })
+                              .map(name => {
+                                const teacher = teachers.find(t => getDisplayName(t) === name)
+                                const teacherId = teacher?.id
+                                const isSelected = Boolean(
+                                  teacherId && selectedTeacherIds.includes(teacherId)
+                                )
+                                return (
+                                  <button
+                                    key={name}
+                                    type="button"
+                                    className={cn(
+                                      'w-full rounded px-1.5 py-1 text-left text-sm text-slate-700 hover:bg-slate-100',
+                                      isSelected && 'bg-slate-100 opacity-60'
+                                    )}
+                                    onClick={() => {
+                                      if (teacherId && !isSelected) {
+                                        addTeacherToSelection(teacherId)
+                                      }
+                                    }}
+                                    disabled={isSelected}
+                                  >
+                                    {name}
+                                  </button>
+                                )
+                              })}
+                            {teacherNames.filter(name => {
+                              const query = teacherSearchInput.toLowerCase()
+                              return !query || name.toLowerCase().includes(query)
+                            }).length === 0 && (
+                              <div className="px-1.5 py-1 text-xs text-muted-foreground">
+                                No matches
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
-                    )}
+                    </div>
                   </div>
-                </div>
-              </div>
-              {/* Selected Teachers Pills */}
-              {selectedTeacherIds.length > 0 && (
-                <div className="flex flex-wrap gap-2 pt-2">
-                  {selectedTeacherIds.map(teacherId => {
-                    const teacher = teachers.find(t => t.id === teacherId)
-                    if (!teacher) return null
-                    const teacherName = getDisplayName(teacher)
-                    return (
-                      <div
-                        key={teacherId}
-                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600"
-                      >
-                        <span>{teacherName}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeTeacherFromSelection(teacherId)}
-                          className="hover:bg-slate-200 rounded-full p-0.5 -mr-1 ml-0.5"
-                          aria-label={`Remove ${teacherName}`}
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    )
-                  })}
+                  {/* Selected Teachers Pills */}
+                  {selectedTeacherIds.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      {selectedTeacherIds.map(teacherId => {
+                        const teacher = teachers.find(t => t.id === teacherId)
+                        if (!teacher) return null
+                        const teacherName = getDisplayName(teacher)
+                        return (
+                          <div
+                            key={teacherId}
+                            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600"
+                          >
+                            <span>{teacherName}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeTeacherFromSelection(teacherId)}
+                              className="hover:bg-slate-200 rounded-full p-0.5 -mr-1 ml-0.5"
+                              aria-label={`Remove ${teacherName}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
 
-          {/* Manual Coverage Form (for manual mode) */}
-          {mode === 'manual' && (
-            <div className="space-y-2">
-              <div>
-                <Label className="text-sm">Teacher</Label>
-                <div className="mt-1">
-                  <div className="rounded-md border border-slate-200 bg-white">
-                    <div className="border-b border-slate-100 px-2 py-1">
-                      <Input
-                        placeholder="Search teachers..."
-                        value={manualTeacherSearch}
-                        onChange={event => setManualTeacherSearch(event.target.value)}
-                        onFocus={() => setIsManualTeacherSearchOpen(true)}
-                        onBlur={() => {
-                          setTimeout(() => setIsManualTeacherSearchOpen(false), 150)
-                        }}
-                        className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
-                      />
-                    </div>
-                    {isManualTeacherSearchOpen && (
-                      <div className="max-h-52 overflow-y-auto p-2">
-                        {filteredManualTeachers.map(teacher => {
-                          const name = getDisplayName(teacher)
-                          return (
-                            <button
-                              key={teacher.id}
-                              type="button"
-                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
-                              onClick={() => {
-                                setManualTeacherId(teacher.id)
-                                setManualTeacherSearch(name)
-                                setIsManualTeacherSearchOpen(false)
-                              }}
-                            >
-                              {name}
-                            </button>
-                          )
-                        })}
-                        {filteredManualTeachers.length === 0 && (
-                          <div className="px-2 py-1 text-xs text-muted-foreground">No matches</div>
+              {/* Manual Coverage Form (for manual mode) */}
+              {mode === 'manual' && (
+                <div className="space-y-2">
+                  <div>
+                    <Label className="text-sm">Teacher</Label>
+                    <div className="mt-1">
+                      <div className="rounded-md border border-slate-200 bg-white">
+                        <div className="border-b border-slate-100 px-2 py-1">
+                          <Input
+                            placeholder="Search teachers..."
+                            value={manualTeacherSearch}
+                            onChange={event => setManualTeacherSearch(event.target.value)}
+                            onFocus={() => setIsManualTeacherSearchOpen(true)}
+                            onBlur={() => {
+                              setTimeout(() => setIsManualTeacherSearchOpen(false), 150)
+                            }}
+                            className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
+                          />
+                        </div>
+                        {isManualTeacherSearchOpen && (
+                          <div className="max-h-52 overflow-y-auto p-2">
+                            {filteredManualTeachers.map(teacher => {
+                              const name = getDisplayName(teacher)
+                              return (
+                                <button
+                                  key={teacher.id}
+                                  type="button"
+                                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
+                                  onClick={() => {
+                                    setManualTeacherId(teacher.id)
+                                    setManualTeacherSearch(name)
+                                    setIsManualTeacherSearchOpen(false)
+                                  }}
+                                >
+                                  {name}
+                                </button>
+                              )
+                            })}
+                            {filteredManualTeachers.length === 0 && (
+                              <div className="px-2 py-1 text-xs text-muted-foreground">
+                                No matches
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-sm">Start Date</Label>
+                    <div className="mt-1">
+                      <DatePickerInput
+                        value={manualStartDate}
+                        onChange={value => {
+                          setManualStartDate(value)
+                          if (manualEndDate && value && manualEndDate < value) {
+                            setManualEndDate(value)
+                            setCorrectionNotice()
+                          } else if (manualEndDate) {
+                            setEndDateCorrected(false)
+                          }
+                          setTimeout(() => {
+                            manualEndDateRef.current?.focus()
+                            manualEndDateRef.current?.click()
+                          }, 0)
+                        }}
+                        placeholder="Select start date"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-sm">End Date</Label>
+                    <div className="mt-1">
+                      <DatePickerInput
+                        ref={manualEndDateRef}
+                        value={manualEndDate}
+                        onChange={value => {
+                          if (manualStartDate && value && value < manualStartDate) {
+                            setManualEndDate(manualStartDate)
+                            setCorrectionNotice()
+                            return
+                          }
+                          setManualEndDate(value)
+                          setEndDateCorrected(false)
+                        }}
+                        placeholder="Select end date"
+                        allowClear
+                        closeOnSelect
+                      />
+                    </div>
+                    {endDateCorrected && (
+                      <p className="text-xs text-amber-600 mt-1">
+                        End date adjusted to match start date.
+                      </p>
                     )}
                   </div>
+                  <div className="pt-3 mt-2 border-t border-slate-200">
+                    <ShiftSelectionTable
+                      teacherId={manualTeacherId || null}
+                      startDate={manualStartDate}
+                      endDate={manualEndDate || manualStartDate}
+                      selectedShifts={manualSelectedShifts}
+                      onShiftsChange={shifts => {
+                        setManualSelectedShifts(shifts)
+                      }}
+                      autoSelectScheduled
+                      tableClassName="text-xs [&_th]:px-2 [&_td]:px-2"
+                    />
+                    {manualSelectedShifts.length === 0 && (
+                      <p className="text-xs text-amber-600 mt-2">Select at least one shift.</p>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full border-slate-200 text-primary hover:bg-button-fill hover:text-button-fill-foreground focus:bg-button-fill focus:text-button-fill-foreground"
+                    disabled={
+                      !manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0
+                    }
+                    onClick={runManualFinderAndCollapse}
+                  >
+                    Find Subs
+                  </Button>
                 </div>
-              </div>
-              <div>
-                <Label className="text-sm">Start Date</Label>
-                <div className="mt-1">
-                  <DatePickerInput
-                    value={manualStartDate}
-                    onChange={value => {
-                      setManualStartDate(value)
-                      if (manualEndDate && value && manualEndDate < value) {
-                        setManualEndDate(value)
-                        setCorrectionNotice()
-                      } else if (manualEndDate) {
-                        setEndDateCorrected(false)
-                      }
-                      setTimeout(() => {
-                        manualEndDateRef.current?.focus()
-                        manualEndDateRef.current?.click()
-                      }, 0)
-                    }}
-                    placeholder="Select start date"
-                  />
-                </div>
-              </div>
-              <div>
-                <Label className="text-sm">End Date</Label>
-                <div className="mt-1">
-                  <DatePickerInput
-                    ref={manualEndDateRef}
-                    value={manualEndDate}
-                    onChange={value => {
-                      if (manualStartDate && value && value < manualStartDate) {
-                        setManualEndDate(manualStartDate)
-                        setCorrectionNotice()
-                        return
-                      }
-                      setManualEndDate(value)
-                      setEndDateCorrected(false)
-                    }}
-                    placeholder="Select end date"
-                    allowClear
-                    closeOnSelect
-                  />
-                </div>
-                {endDateCorrected && (
-                  <p className="text-xs text-amber-600 mt-1">
-                    End date adjusted to match start date.
-                  </p>
-                )}
-              </div>
-              <div className="pt-3 mt-2 border-t border-slate-200">
-                <ShiftSelectionTable
-                  teacherId={manualTeacherId || null}
-                  startDate={manualStartDate}
-                  endDate={manualEndDate || manualStartDate}
-                  selectedShifts={manualSelectedShifts}
-                  onShiftsChange={shifts => {
-                    setManualSelectedShifts(shifts)
-                  }}
-                  autoSelectScheduled
-                  tableClassName="text-xs [&_th]:px-2 [&_td]:px-2"
-                />
-                {manualSelectedShifts.length === 0 && (
-                  <p className="text-xs text-amber-600 mt-2">Select at least one shift.</p>
-                )}
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full border-slate-200 text-primary hover:bg-button-fill hover:text-button-fill-foreground focus:bg-button-fill focus:text-button-fill-foreground"
-                disabled={!manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0}
-                onClick={runManualFinder}
-              >
-                Find Subs
-              </Button>
-            </div>
+              )}
+            </>
           )}
         </div>
 
         {/* Absences List */}
-        {mode === 'existing' && (
+        {!isLeftRailCollapsed && mode === 'existing' && (
           <div className="flex-1 overflow-y-auto">
             <AbsenceList
               absences={filteredAbsences}
               selectedAbsence={selectedAbsence}
               onSelectAbsence={setSelectedAbsence}
-              onFindSubs={handleFindSubs}
+              onFindSubs={runFinderForAbsenceAndCollapse}
               loading={loading}
             />
           </div>
@@ -1519,7 +1592,7 @@ export default function SubFinderPage() {
             // This will also recalculate the combination and properly categorize
             // subs based on their updated response_status
             if (selectedAbsence) {
-              await handleFindSubs(selectedAbsence)
+              await runFinderForAbsence(selectedAbsence)
             }
           }}
         />
