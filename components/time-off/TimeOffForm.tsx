@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import type { Resolver, SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -9,13 +9,6 @@ import * as z from 'zod'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import DatePickerInput from '@/components/ui/date-picker-input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
@@ -78,6 +71,8 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     const schoolId = useSchool()
     const [error, setError] = useState<string | null>(null)
     const [teachers, setTeachers] = useState<Staff[]>([])
+    const [teacherQuery, setTeacherQuery] = useState('')
+    const [isTeacherSearchOpen, setIsTeacherSearchOpen] = useState(false)
     const [selectedShifts, setSelectedShifts] = useState<
       Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
     >([])
@@ -109,6 +104,15 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     } | null>(null)
     const [showAssignmentDetails, setShowAssignmentDetails] = useState(false)
     const [assignmentHandling, setAssignmentHandling] = useState<'unassign' | 'keep'>('unassign')
+    const filteredTeachers = useMemo(() => {
+      const query = teacherQuery.trim().toLowerCase()
+      if (!query) return teachers
+      return teachers.filter(teacher => {
+        const label =
+          teacher.display_name || `${teacher.first_name ?? ''} ${teacher.last_name ?? ''}`.trim()
+        return label.toLowerCase().includes(query)
+      })
+    }, [teacherQuery, teachers])
     const draftKey = timeOffRequestId ? `time-off:edit:${timeOffRequestId}` : 'time-off:new'
     const initialFormStateRef = useRef<{
       teacher_id: string
@@ -405,6 +409,12 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     const endDate = watch('end_date')
     const shiftMode = watch('shift_selection_mode')
     const reason = watch('reason')
+    const selectedTeacherName = useMemo(() => {
+      if (!teacherId) return ''
+      const teacher = teachers.find(item => item.id === teacherId)
+      if (!teacher) return ''
+      return teacher.display_name || `${teacher.first_name ?? ''} ${teacher.last_name ?? ''}`.trim()
+    }, [teacherId, teachers])
     const allShiftsRecorded =
       conflictSummary.totalScheduled > 0 &&
       conflictSummary.conflictCount === conflictSummary.totalScheduled
@@ -801,29 +811,75 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
             <div className="flex-1 overflow-y-auto space-y-6">
               <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-6">
                 <FormField label="Teacher" error={errors.teacher_id?.message} required>
-                  <Select
-                    value={teacherId || ''}
-                    onValueChange={value => setValue('teacher_id', value)}
-                  >
-                    <SelectTrigger
-                      tabIndex={1}
-                      onKeyDown={event => {
-                        if (event.key === 'Tab' && !event.shiftKey) {
-                          event.preventDefault()
-                          focusStartDate()
-                        }
-                      }}
-                    >
-                      <SelectValue placeholder="Select a teacher" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {teachers.map(teacher => (
-                        <SelectItem key={teacher.id} value={teacher.id}>
-                          {teacher.display_name || `${teacher.first_name} ${teacher.last_name}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="rounded-md border border-input bg-background">
+                    <div className="px-2 py-1">
+                      <input
+                        type="text"
+                        tabIndex={1}
+                        placeholder="Select a teacher"
+                        value={isTeacherSearchOpen ? teacherQuery : selectedTeacherName}
+                        onChange={event => {
+                          if (!isTeacherSearchOpen) {
+                            setIsTeacherSearchOpen(true)
+                          }
+                          setTeacherQuery(event.target.value)
+                        }}
+                        onFocus={() => {
+                          setTeacherQuery('')
+                          setIsTeacherSearchOpen(true)
+                        }}
+                        onBlur={() => {
+                          setTimeout(() => {
+                            setIsTeacherSearchOpen(false)
+                            setTeacherQuery('')
+                          }, 150)
+                        }}
+                        onKeyDown={event => {
+                          if (event.key === 'Tab' && !event.shiftKey) {
+                            event.preventDefault()
+                            focusStartDate()
+                          }
+                        }}
+                        className="w-full bg-transparent text-sm focus:outline-none"
+                      />
+                    </div>
+                    {isTeacherSearchOpen && (
+                      <div className="border-t border-slate-100 max-h-40 overflow-y-auto px-2 py-1">
+                        {filteredTeachers.map(teacher => {
+                          const label =
+                            teacher.display_name ||
+                            `${teacher.first_name ?? ''} ${teacher.last_name ?? ''}`.trim()
+                          const isSelected = teacher.id === teacherId
+                          return (
+                            <button
+                              key={teacher.id}
+                              type="button"
+                              className={`w-full rounded px-1.5 py-1 text-left text-sm text-slate-700 hover:bg-slate-100 ${
+                                isSelected ? 'bg-slate-100 opacity-60' : ''
+                              }`}
+                              onClick={() => {
+                                if (isSelected) return
+                                setValue('teacher_id', teacher.id, {
+                                  shouldDirty: true,
+                                  shouldValidate: true,
+                                })
+                                setTeacherQuery('')
+                                setIsTeacherSearchOpen(false)
+                              }}
+                              disabled={isSelected}
+                            >
+                              {label || 'Unnamed teacher'}
+                            </button>
+                          )
+                        })}
+                        {filteredTeachers.length === 0 && (
+                          <div className="px-1.5 py-1 text-sm text-muted-foreground">
+                            No matching teachers
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </FormField>
 
                 <FormField label="Start Date" error={errors.start_date?.message} required>
@@ -849,6 +905,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                   <DatePickerInput
                     id="time-off-end-date"
                     value={endDate || ''}
+                    openToDate={startDate || ''}
                     onChange={value =>
                       setValue('end_date', value, { shouldValidate: true, shouldDirty: true })
                     }
