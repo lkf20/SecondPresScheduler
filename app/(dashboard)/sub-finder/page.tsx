@@ -920,7 +920,7 @@ export default function SubFinderPage() {
     return (
       <div
         className={cn(
-          'border-r border-slate-200 bg-slate-100 shadow-[2px_0_6px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden transition-all',
+          'border-r border-slate-200 bg-slate-100 shadow-[2px_0_6px_rgba(0,0,0,0.03)] flex flex-col overflow-y-auto transition-all h-full',
           railCollapsed ? 'w-14' : 'w-80',
           isRightPanelOpen && !railCollapsed && 'opacity-85'
         )}
@@ -1259,7 +1259,7 @@ export default function SubFinderPage() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem+1.5rem+4rem)] -mx-4 -mt-[calc(1.5rem+4rem)] -mb-6 relative flex-col md:flex-row md:-ml-8">
+    <div className="flex min-h-[calc(100vh-4rem+1.5rem+4rem)] h-[calc(100vh-4rem+1.5rem+4rem)] overflow-hidden -mx-4 -mt-[calc(1.5rem+4rem)] -mb-6 relative flex-col md:flex-row md:-ml-8">
       <div className="md:hidden px-4 py-3 border-b bg-white">
         <Sheet open={isMobileRailOpen} onOpenChange={setIsMobileRailOpen}>
           <SheetTrigger asChild>
@@ -1277,13 +1277,13 @@ export default function SubFinderPage() {
         </Sheet>
       </div>
 
-      <div className="hidden md:flex">{renderLeftRail(isLeftRailCollapsed, true)}</div>
+      <div className="hidden md:flex h-full">{renderLeftRail(isLeftRailCollapsed, true)}</div>
 
       <div className="flex flex-1 flex-col md:flex-row">
         {/* Middle Column */}
         <div
           className={cn(
-            'flex-1 border-x bg-white px-6 md:px-8 transition-opacity',
+            'flex-1 border-x bg-white px-6 md:px-8 transition-opacity h-full overflow-y-auto',
             isRightPanelOpen && 'opacity-95'
           )}
         >
@@ -1706,7 +1706,7 @@ export default function SubFinderPage() {
 
         {/* Right Column */}
         {isRightPanelOpen && (
-          <div className="w-full md:flex-[0_0_380px] md:max-w-sm border-l bg-white transition-all">
+          <div className="w-full md:flex-[0_0_380px] md:max-w-sm border-l bg-white transition-all h-full overflow-y-auto">
             {viewMode === 'recommended' && selectedAbsence && selectedSub ? (
               <ContactSubPanel
                 isOpen={isRightPanelOpen}
