@@ -52,6 +52,8 @@ Features to implement soon (within the next few weeks).
 - [ ] Add borders/shading to shifts in Upcoming Time Off to match Uncovered and Covered pills
 - [ ] Enrollments: add classroom_id (or clarify model) and wire write UI/API for per-class-group enrollment
 - [ ] Performance: review query plans and tailor indexes to actual slow queries before launch
+- [ ] Mobile navigation: design and implement a mobile-friendly global nav pattern (current left rail is not usable on small screens)
+- [ ] Mobile UX: comprehensive pass to make all pages mobile friendly (navigation, layouts, and responsive interactions)
 
 ---
 
