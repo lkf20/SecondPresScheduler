@@ -1283,15 +1283,15 @@ export default function SubFinderPage() {
         {/* Middle Column */}
         <div
           className={cn(
-            'flex-1 border-x bg-slate-50/40 px-6 md:px-8 transition-opacity',
+            'flex-1 border-x bg-white px-6 md:px-8 transition-opacity',
             isRightPanelOpen && 'opacity-95'
           )}
         >
           {/* Fixed Header Bar */}
           {selectedAbsence && (
             <>
-              <div className="border-b bg-white shadow-sm">
-                <div className="px-6 pt-10 pb-2">
+              <div className="border-b border-slate-200 bg-white">
+                <div className="px-6 pt-10 pb-0">
                   {/* Header Row */}
                   <div className="mb-5">
                     <h2 className="text-xl font-semibold flex flex-wrap items-center gap-2">
@@ -1347,7 +1347,7 @@ export default function SubFinderPage() {
                   </div>
 
                   {visibleShiftSummary && visibleShiftSummary.total > 0 && (
-                    <div className="mt-4 mb-8">
+                    <div className="mt-4 mb-6">
                       <CoverageSummary
                         shifts={visibleShiftSummary}
                         onShiftClick={handleShiftClick}
@@ -1612,7 +1612,7 @@ export default function SubFinderPage() {
                 </div>
               </div>
 
-              <div className="border-t border-slate-200 pt-6" />
+              <div className="border-t border-slate-400 pt-0" />
 
               <RecommendedSubsList
                 subs={recommendedSubs}
@@ -1643,7 +1643,7 @@ export default function SubFinderPage() {
                           'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                           isActive
                             ? 'border-slate-900 bg-slate-900 text-white'
-                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                            : 'border-slate-400 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                         )}
                       >
                         {option.label} ({option.count})

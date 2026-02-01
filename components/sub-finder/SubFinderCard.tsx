@@ -188,10 +188,23 @@ export default function SubFinderCard({
     <Card
       id={id}
       className={cn(
-        'hover:shadow-md transition-shadow',
+        'border border-slate-300 hover:shadow-md transition-shadow',
         highlighted && 'ring-2 ring-blue-500 ring-offset-2 animate-pulse',
         className
       )}
+      role={onContact ? 'button' : undefined}
+      tabIndex={onContact ? 0 : undefined}
+      onClick={onContact ? () => onContact?.() : undefined}
+      onKeyDown={
+        onContact
+          ? event => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onContact?.()
+              }
+            }
+          : undefined
+      }
     >
       <CardContent className="pt-4 px-4 pb-1.5 flex flex-col gap-2" style={outline('#60a5fa')}>
         <div className="flex w-full items-stretch justify-between gap-4">
@@ -297,7 +310,10 @@ export default function SubFinderCard({
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setIsAllShiftsExpanded(!isAllShiftsExpanded)}
+                onClick={event => {
+                  event.stopPropagation()
+                  setIsAllShiftsExpanded(!isAllShiftsExpanded)
+                }}
                 className="flex items-center gap-2 p-2 hover:underline hover:bg-transparent hover:text-slate-700 text-sm font-medium text-slate-700 justify-start"
               >
                 <span>View all shifts</span>
@@ -313,7 +329,10 @@ export default function SubFinderCard({
                   variant="ghost"
                   className="hover:bg-primary/10 -mr-2"
                   style={{ color: '#115E59' }}
-                  onClick={() => onContact?.()}
+                  onClick={event => {
+                    event.stopPropagation()
+                    onContact?.()
+                  }}
                 >
                   Contact & Assign <ArrowRight className="h-3.5 w-3.5 ml-0.5" />
                 </Button>
@@ -332,7 +351,10 @@ export default function SubFinderCard({
                 variant="ghost"
                 className="hover:bg-primary/10 -mr-2"
                 style={{ color: '#115E59' }}
-                onClick={() => onContact?.()}
+                onClick={event => {
+                  event.stopPropagation()
+                  onContact?.()
+                }}
               >
                 Contact & Assign <ArrowRight className="h-3.5 w-3.5 ml-0.5" />
               </Button>

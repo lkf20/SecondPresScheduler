@@ -451,9 +451,15 @@ export default function ContactSubPanel({
               </button>
             </SheetClose>
           )}
-          <SheetHeader>
-            <SheetTitle>Contact Sub</SheetTitle>
-          </SheetHeader>
+          {isInline ? (
+            <div className="text-left">
+              <div className="text-lg font-semibold text-slate-900">Contact Sub</div>
+            </div>
+          ) : (
+            <SheetHeader>
+              <SheetTitle>Contact Sub</SheetTitle>
+            </SheetHeader>
+          )}
         </div>
         <div className="px-6">
           <div className="flex items-center justify-center py-12 text-muted-foreground">
@@ -952,29 +958,55 @@ export default function ContactSubPanel({
             </button>
           </SheetClose>
         )}
-        <SheetHeader className="text-left">
-          <SheetTitle className="text-2xl mb-1">{sub.name}</SheetTitle>
-          <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-            {sub.phone && (
-              <span className="flex items-center gap-1.5">
-                <Phone className="h-3.5 w-3.5" />
-                <span>{sub.phone}</span>
-              </span>
-            )}
-            {sub.email && (
-              <span className="flex items-center gap-1.5">
-                <Mail className="h-3.5 w-3.5" />
-                <span>{sub.email}</span>
-              </span>
-            )}
+        {isInline ? (
+          <div className="text-left">
+            <div className="text-2xl font-semibold text-slate-900 mb-1">{sub.name}</div>
+            <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+              {sub.phone && (
+                <span className="flex items-center gap-1.5">
+                  <Phone className="h-3.5 w-3.5" />
+                  <span>{sub.phone}</span>
+                </span>
+              )}
+              {sub.email && (
+                <span className="flex items-center gap-1.5">
+                  <Mail className="h-3.5 w-3.5" />
+                  <span>{sub.email}</span>
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              {formatDateRange() && <>{formatDateRange()} | </>}
+              {responseStatus === 'declined_all'
+                ? 'Declined all shifts'
+                : `Available for ${remainingShiftsCovered} of ${remainingShifts} remaining shifts`}
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground mt-2">
-            {formatDateRange() && <>{formatDateRange()} | </>}
-            {responseStatus === 'declined_all'
-              ? 'Declined all shifts'
-              : `Available for ${remainingShiftsCovered} of ${remainingShifts} remaining shifts`}
-          </p>
-        </SheetHeader>
+        ) : (
+          <SheetHeader className="text-left">
+            <SheetTitle className="text-2xl mb-1">{sub.name}</SheetTitle>
+            <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+              {sub.phone && (
+                <span className="flex items-center gap-1.5">
+                  <Phone className="h-3.5 w-3.5" />
+                  <span>{sub.phone}</span>
+                </span>
+              )}
+              {sub.email && (
+                <span className="flex items-center gap-1.5">
+                  <Mail className="h-3.5 w-3.5" />
+                  <span>{sub.email}</span>
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              {formatDateRange() && <>{formatDateRange()} | </>}
+              {responseStatus === 'declined_all'
+                ? 'Declined all shifts'
+                : `Available for ${remainingShiftsCovered} of ${remainingShifts} remaining shifts`}
+            </p>
+          </SheetHeader>
+        )}
       </div>
 
       <div className="px-6">
