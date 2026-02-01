@@ -15,6 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { AlertTriangle, Info, X, ExternalLink } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
+import { DAY_NAMES, MONTH_NAMES, FULL_DAY_NAMES } from '@/lib/utils/date-format'
 import SearchableSelect, { type SearchableSelectOption } from '@/components/shared/SearchableSelect'
 import DatePickerInput from '@/components/ui/date-picker-input'
 import { getPanelBackgroundClasses } from '@/lib/utils/colors'
@@ -216,16 +217,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
 
               // Get day name from date
               const date = parseLocalDate(shift.date)
-              const dayNames = [
-                'Sunday',
-                'Monday',
-                'Tuesday',
-                'Wednesday',
-                'Thursday',
-                'Friday',
-                'Saturday',
-              ]
-              const dayName = dayNames[date.getDay()]
+              const dayName = FULL_DAY_NAMES[date.getDay()]
 
               return {
                 ...shift,
@@ -362,23 +354,8 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
   // Format date for display
   const formatDate = (dateString: string) => {
     const date = parseLocalDate(dateString)
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    const monthNames = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ]
-    const dayName = dayNames[date.getDay()]
-    const month = monthNames[date.getMonth()]
+    const dayName = DAY_NAMES[date.getDay()]
+    const month = MONTH_NAMES[date.getMonth()]
     const day = date.getDate()
     return `${dayName} ${month} ${day}`
   }

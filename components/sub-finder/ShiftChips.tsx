@@ -5,6 +5,7 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/comp
 import { Check } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 import { shiftStatusColorValues } from '@/lib/utils/colors'
+import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
 
 interface Shift {
   date: string
@@ -35,46 +36,16 @@ interface ShiftChipsProps {
 // Format shift label as "Mon AM • Feb 9"
 export function formatShiftLabel(dateString: string, timeSlotCode: string): string {
   const date = parseLocalDate(dateString)
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const monthNames = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ]
-  const dayName = dayNames[date.getDay()]
-  const month = monthNames[date.getMonth()]
+  const dayName = DAY_NAMES[date.getDay()]
+  const month = MONTH_NAMES[date.getMonth()]
   const day = date.getDate()
   return `${dayName} ${timeSlotCode} • ${month} ${day}`
 }
 
 const formatShiftTooltipLabel = (dateString: string, timeSlotCode: string): string => {
   const date = parseLocalDate(dateString)
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const monthNames = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ]
-  const dayName = dayNames[date.getDay()]
-  const month = monthNames[date.getMonth()]
+  const dayName = DAY_NAMES[date.getDay()]
+  const month = MONTH_NAMES[date.getMonth()]
   const day = date.getDate()
   return `${dayName} ${timeSlotCode} • ${month} ${day}`
 }

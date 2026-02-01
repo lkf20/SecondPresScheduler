@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { parseLocalDate } from '@/lib/utils/date'
+import { MONTH_NAMES } from '@/lib/utils/date-format'
 
 export async function GET(request: NextRequest) {
   try {
@@ -467,21 +468,7 @@ export async function GET(request: NextRequest) {
           const timeCode = timeSlot?.code || '—'
 
           const date = parseLocalDate(shift.date)
-          const monthNames = [
-            'Jan',
-            'Feb',
-            'Mar',
-            'Apr',
-            'May',
-            'Jun',
-            'Jul',
-            'Aug',
-            'Sep',
-            'Oct',
-            'Nov',
-            'Dec',
-          ]
-          const month = monthNames[date.getMonth()]
+          const month = MONTH_NAMES[date.getMonth()]
           const day = date.getDate()
           const label = `${dayName} ${timeCode} • ${month} ${day}`
 

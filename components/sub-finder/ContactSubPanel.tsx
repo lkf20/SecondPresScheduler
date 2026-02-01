@@ -20,6 +20,7 @@ import {
   shiftStatusColorValues,
 } from '@/lib/utils/colors'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
+import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
 import { toast } from 'sonner'
 import { useAssignSubShifts } from '@/lib/hooks/use-sub-assignment-mutations'
 
@@ -359,23 +360,8 @@ export default function ContactSubPanel({
   // Format date for display
   const formatDate = (dateString: string) => {
     const date = parseLocalDate(dateString)
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    const monthNames = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ]
-    const dayName = dayNames[date.getDay()]
-    const month = monthNames[date.getMonth()]
+    const dayName = DAY_NAMES[date.getDay()]
+    const month = MONTH_NAMES[date.getMonth()]
     const day = date.getDate()
     return `${dayName} ${month} ${day}`
   }
@@ -422,21 +408,7 @@ export default function ContactSubPanel({
     } else if (contactedDay.getTime() === yesterday.getTime()) {
       return `Yesterday at ${timeStr}`
     } else {
-      const monthNames = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ]
-      const month = monthNames[contactedDate.getMonth()]
+      const month = MONTH_NAMES[contactedDate.getMonth()]
       const day = contactedDate.getDate()
       const year = contactedDate.getFullYear()
       const currentYear = now.getFullYear()

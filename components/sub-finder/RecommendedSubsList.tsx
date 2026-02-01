@@ -9,6 +9,7 @@ import type { SubCandidate } from '@/components/sub-finder/hooks/useSubFinderDat
 import type { SubFinderShift } from '@/lib/sub-finder/types'
 import { filterVisibleShifts, getShiftKey } from '@/lib/sub-finder/shift-helpers'
 import { parseLocalDate } from '@/lib/utils/date'
+import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
 
 type RecommendedSub = SubCandidate
 
@@ -47,23 +48,8 @@ export default function RecommendedSubsList({
   // Format date as "Mon Jan 11"
   const formatDate = (dateString: string) => {
     const date = parseLocalDate(dateString)
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    const monthNames = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ]
-    const dayName = dayNames[date.getDay()]
-    const month = monthNames[date.getMonth()]
+    const dayName = DAY_NAMES[date.getDay()]
+    const month = MONTH_NAMES[date.getMonth()]
     const day = date.getDate()
     return `${dayName} ${month} ${day}`
   }

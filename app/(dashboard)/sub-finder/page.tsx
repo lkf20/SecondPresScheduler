@@ -24,6 +24,7 @@ import {
 import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
 import DatePickerInput from '@/components/ui/date-picker-input'
 import { parseLocalDate } from '@/lib/utils/date'
+import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -1302,23 +1303,8 @@ export default function SubFinderPage() {
                         {(() => {
                           const formatDate = (dateString: string) => {
                             const date = parseLocalDate(dateString)
-                            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-                            const dayName = dayNames[date.getDay()]
-                            const monthNames = [
-                              'Jan',
-                              'Feb',
-                              'Mar',
-                              'Apr',
-                              'May',
-                              'Jun',
-                              'Jul',
-                              'Aug',
-                              'Sep',
-                              'Oct',
-                              'Nov',
-                              'Dec',
-                            ]
-                            const month = monthNames[date.getMonth()]
+                            const dayName = DAY_NAMES[date.getDay()]
+                            const month = MONTH_NAMES[date.getMonth()]
                             const day = date.getDate()
                             return `${dayName} ${month} ${day}`
                           }
