@@ -43,11 +43,7 @@ export default function SubFinderPage() {
   const [mode, setMode] = useState<Mode>('existing')
   const [includePastShifts, setIncludePastShifts] = useState(false)
   const [shiftFilters, setShiftFilters] = useState<string[]>(['all'])
-  const [viewMode, setViewMode] = useState<'recommended' | 'shift'>('recommended')
   const [mobileView, setMobileView] = useState<'absences' | 'shifts' | 'assign'>('absences')
-  const [lastMobileListView, setLastMobileListView] = useState<'recommended' | 'shift'>(
-    'recommended'
-  )
   const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(false)
   const subRecommendationParams = useMemo(() => ({ includePastShifts }), [includePastShifts])
   const {
@@ -84,6 +80,7 @@ export default function SubFinderPage() {
   const [selectedSub, setSelectedSub] = useState<SubCandidate | null>(null)
   const [isContactPanelOpen, setIsContactPanelOpen] = useState(false)
   const [selectedShift, setSelectedShift] = useState<SubFinderShift | null>(null)
+  const [isAllSubsOpen, setIsAllSubsOpen] = useState(false)
   const [isTeacherSearchOpen, setIsTeacherSearchOpen] = useState(false)
   const { setActivePanel, previousPanel, restorePreviousPanel, registerPanelCloseHandler } =
     usePanelManager()
@@ -233,6 +230,16 @@ export default function SubFinderPage() {
     })
     return counts
   }, [sortedVisibleShifts])
+
+  const rightPanelSubs = useMemo(() => {
+    if (!selectedShift) return allSubs
+    return allSubs.filter(sub =>
+      sub.can_cover?.some(
+        shift =>
+          shift.date === selectedShift.date && shift.time_slot_code === selectedShift.time_slot_code
+      )
+    )
+  }, [allSubs, selectedShift])
   const shiftFilterOptions = useMemo(
     () => [
       { key: 'all', label: 'All', count: shiftFilterCounts.all },
@@ -295,9 +302,7 @@ export default function SubFinderPage() {
     }
   }, [selectedAbsence, visibleShiftDetails, visibleShiftSummary])
   const showPastShiftsBanner = Boolean(selectedAbsence && pastShiftCount > 0)
-  const isRightPanelOpen = Boolean(
-    (viewMode === 'recommended' && selectedSub) || (viewMode === 'shift' && selectedShift)
-  )
+  const isRightPanelOpen = Boolean(selectedSub || selectedShift || isAllSubsOpen)
   const sortedSubs = useMemo(() => {
     return [...allSubs].sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)))
   }, [allSubs, getDisplayName])
@@ -446,6 +451,14 @@ export default function SubFinderPage() {
     setSelectedShift(shift)
     setSelectedSub(null)
     setIsContactPanelOpen(false)
+    setIsAllSubsOpen(true)
+    setMobileView('assign')
+  }, [])
+
+  const openAllSubsPanel = useCallback(() => {
+    setIsAllSubsOpen(true)
+    setSelectedShift(null)
+    setSelectedSub(null)
     setMobileView('assign')
   }, [])
 
@@ -453,11 +466,8 @@ export default function SubFinderPage() {
     setIsContactPanelOpen(false)
     setSelectedSub(null)
     setSelectedShift(null)
+    setIsAllSubsOpen(false)
   }, [])
-
-  useEffect(() => {
-    setLastMobileListView(viewMode)
-  }, [viewMode])
 
   useEffect(() => {
     if (!isRightPanelOpen) return
@@ -1285,21 +1295,17 @@ export default function SubFinderPage() {
             }}
           >
             <ChevronLeft className="h-4 w-4" />
-            {mobileView === 'assign'
-              ? lastMobileListView === 'recommended'
-                ? 'Recommended Coverage'
-                : 'Shifts'
-              : 'Absences'}
+            {mobileView === 'assign' ? 'Shifts' : 'Absences'}
           </button>
         )}
         <div className="text-sm font-semibold text-slate-900">
           {mobileView === 'absences'
             ? 'Absences'
             : mobileView === 'assign'
-              ? 'Assign Sub'
-              : viewMode === 'recommended'
-                ? 'Recommended Coverage'
-                : 'Shifts'}
+              ? selectedSub
+                ? 'Assign Sub'
+                : 'All Subs'
+              : 'Shifts'}
         </div>
       </div>
 
@@ -1308,38 +1314,8 @@ export default function SubFinderPage() {
         {mobileView === 'absences' && renderLeftRail(false, false)}
         {mobileView === 'shifts' && (
           <>
-            {selectedAbsence && (
-              <div className="px-4 pt-4 pb-2">
-                <div className="inline-flex rounded-full border border-slate-200 bg-white p-1">
-                  <button
-                    type="button"
-                    onClick={() => setViewMode('recommended')}
-                    className={cn(
-                      'h-9 px-4 text-xs font-semibold rounded-full transition-colors',
-                      viewMode === 'recommended'
-                        ? 'bg-slate-900 text-white'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    )}
-                  >
-                    Recommended Coverage
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode('shift')}
-                    className={cn(
-                      'h-9 px-4 text-xs font-semibold rounded-full transition-colors',
-                      viewMode === 'shift'
-                        ? 'bg-slate-900 text-white'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    )}
-                  >
-                    Shift-by-Shift
-                  </button>
-                </div>
-              </div>
-            )}
             <div className="px-4">
-              {selectedAbsence && viewMode === 'recommended' && (
+              {selectedAbsence && (
                 <div className="py-4 flex flex-col gap-6 w-full">
                   {displayRecommendedCombinations.length > 0 && (
                     <div className="mt-2">
@@ -1354,202 +1330,13 @@ export default function SubFinderPage() {
                         allSubs={allSubs}
                         allShifts={visibleShiftDetails}
                         includePastShifts={includePastShifts}
+                        onShowAllSubs={openAllSubsPanel}
                       />
                     </div>
                   )}
-
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-sm font-semibold text-slate-700">All Available Subs</div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        onClick={handleRerunFinder}
-                        disabled={loading}
-                        size="sm"
-                        variant="outline"
-                        className="w-auto justify-center"
-                      >
-                        <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                        Rerun Finder
-                      </Button>
-
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="relative w-auto justify-center"
-                          >
-                            <Settings2 className="h-4 w-4 mr-2" />
-                            Search & Filter
-                            {(includePartiallyCovered ||
-                              !includeOnlyRecommended ||
-                              !includeFlexibleStaff) && (
-                              <Badge
-                                variant="secondary"
-                                className="ml-2 h-5 min-w-[20px] px-1.5 text-xs"
-                              >
-                                {
-                                  [
-                                    includePartiallyCovered,
-                                    !includeOnlyRecommended,
-                                    !includeFlexibleStaff,
-                                  ].filter(Boolean).length
-                                }
-                              </Badge>
-                            )}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          className="w-80"
-                          align="start"
-                          onOpenAutoFocus={event => event.preventDefault()}
-                        >
-                          <div className="space-y-4">
-                            <div>
-                              <Label className="text-sm font-medium">Substitute</Label>
-                              <div
-                                ref={subSearchRef}
-                                className="mt-2 rounded-md border border-slate-200 bg-white"
-                              >
-                                <div className="border-b border-slate-100 p-2">
-                                  <Input
-                                    placeholder="Search substitutes..."
-                                    value={subSearch}
-                                    onChange={event => setSubSearch(event.target.value)}
-                                    onFocus={() => setIsSubSearchOpen(true)}
-                                    className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
-                                  />
-                                </div>
-                                {isSubSearchOpen && (
-                                  <div className="max-h-60 overflow-y-auto p-2">
-                                    {filteredSubsForSearch.length === 0 ? (
-                                      <div className="p-2 text-xs text-muted-foreground">
-                                        No matches
-                                      </div>
-                                    ) : (
-                                      <div className="space-y-1">
-                                        {filteredSubsForSearch.map(sub => {
-                                          const name = getDisplayName(sub)
-                                          const canCover =
-                                            (sub.shifts_covered ?? 0) > 0 ||
-                                            (sub.can_cover?.length ?? 0) > 0
-                                          return (
-                                            <button
-                                              key={sub.id}
-                                              type="button"
-                                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
-                                              onClick={() => {
-                                                if (!canCover && includeOnlyRecommended) {
-                                                  setIncludeOnlyRecommended(false)
-                                                  applySubResults(allSubs, {
-                                                    useOnlyRecommended: false,
-                                                  })
-                                                  toast(
-                                                    'Turning off “Include only recommended subs” to show this selection.'
-                                                  )
-                                                  setTimeout(() => scrollToSubCard(sub.id), 50)
-                                                } else {
-                                                  scrollToSubCard(sub.id)
-                                                }
-                                                setIsSubSearchOpen(false)
-                                              }}
-                                            >
-                                              <span
-                                                className={`h-2 w-2 rounded-full ${canCover ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                                              />
-                                              <span>{name.trim()}</span>
-                                            </button>
-                                          )
-                                        })}
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <div>
-                              <h4 className="font-medium text-sm mb-3">Filter Options</h4>
-                              <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex-1">
-                                    <Label
-                                      htmlFor="include-only-recommended-mobile"
-                                      className="text-sm font-normal cursor-pointer"
-                                    >
-                                      Include only recommended subs
-                                    </Label>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                      Show only subs who can cover at least one shift
-                                    </p>
-                                  </div>
-                                  <Switch
-                                    id="include-only-recommended-mobile"
-                                    checked={includeOnlyRecommended}
-                                    onCheckedChange={setIncludeOnlyRecommended}
-                                  />
-                                </div>
-
-                                <div className="flex items-center justify-between">
-                                  <div className="flex-1">
-                                    <Label
-                                      htmlFor="include-partial-mobile"
-                                      className="text-sm font-normal cursor-pointer"
-                                    >
-                                      Include partially covered shifts
-                                    </Label>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                      Show absences with partial coverage
-                                    </p>
-                                  </div>
-                                  <Switch
-                                    id="include-partial-mobile"
-                                    checked={includePartiallyCovered}
-                                    onCheckedChange={setIncludePartiallyCovered}
-                                  />
-                                </div>
-
-                                <div className="flex items-center justify-between">
-                                  <div className="flex-1">
-                                    <Label
-                                      htmlFor="include-flexible-mobile"
-                                      className="text-sm font-normal cursor-pointer"
-                                    >
-                                      Include Flexible Staff
-                                    </Label>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                      Include staff who can sub when not teaching
-                                    </p>
-                                  </div>
-                                  <Switch
-                                    id="include-flexible-mobile"
-                                    checked={includeFlexibleStaff}
-                                    onCheckedChange={handleFlexibleStaffChange}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-slate-200 pt-6" />
-
-                  <RecommendedSubsList
-                    subs={recommendedSubs}
-                    loading={loading}
-                    absence={absenceForUI ?? selectedAbsence}
-                    shiftDetails={shiftDetails}
-                    showAllSubs={!includeOnlyRecommended}
-                    onContactSub={handleContactSub}
-                    hideHeader
-                    highlightedSubId={highlightedSubId}
-                    includePastShifts={includePastShifts}
-                  />
                 </div>
               )}
-              {selectedAbsence && viewMode === 'shift' && (
+              {selectedAbsence && (
                 <div className="py-4 flex flex-col gap-3 w-full">
                   <div className="flex flex-col gap-2">
                     <div className="flex flex-wrap gap-2 md:flex-row md:items-center">
@@ -1595,7 +1382,7 @@ export default function SubFinderPage() {
         )}
         {mobileView === 'assign' && (
           <div className="px-4 py-4">
-            {viewMode === 'recommended' && selectedAbsence && selectedSub ? (
+            {selectedAbsence && selectedSub ? (
               <ContactSubPanel
                 isOpen={isRightPanelOpen}
                 onClose={closeRightPanel}
@@ -1625,13 +1412,11 @@ export default function SubFinderPage() {
                   }
                 }}
               />
-            ) : viewMode === 'shift' && selectedShift && selectedAbsence ? (
+            ) : selectedAbsence ? (
               <div className="rounded-lg border border-slate-200 bg-white">
                 <div className="flex items-center justify-between border-b px-4 py-3">
                   <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-400">
-                      Shift details
-                    </div>
+                    <div className="text-xs uppercase tracking-wide text-slate-400">All Subs</div>
                     <div className="text-sm font-semibold text-slate-900">
                       {selectedAbsence.teacher_name}
                     </div>
@@ -1645,10 +1430,190 @@ export default function SubFinderPage() {
                     <X className="h-4 w-4" />
                   </button>
                 </div>
-                <div className="p-4">
-                  <ShiftStatusCard
-                    shift={selectedShift}
-                    teacherName={selectedAbsence.teacher_name}
+                <div className="p-4 space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      onClick={handleRerunFinder}
+                      disabled={loading}
+                      size="sm"
+                      variant="outline"
+                      className="w-auto justify-center"
+                    >
+                      <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                      Rerun Finder
+                    </Button>
+
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="relative w-auto justify-center"
+                        >
+                          <Settings2 className="h-4 w-4 mr-2" />
+                          Search & Filter
+                          {(includePartiallyCovered ||
+                            !includeOnlyRecommended ||
+                            !includeFlexibleStaff) && (
+                            <Badge
+                              variant="secondary"
+                              className="ml-2 h-5 min-w-[20px] px-1.5 text-xs"
+                            >
+                              {
+                                [
+                                  includePartiallyCovered,
+                                  !includeOnlyRecommended,
+                                  !includeFlexibleStaff,
+                                ].filter(Boolean).length
+                              }
+                            </Badge>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-80"
+                        align="start"
+                        onOpenAutoFocus={event => event.preventDefault()}
+                      >
+                        <div className="space-y-4">
+                          <div>
+                            <Label className="text-sm font-medium">Substitute</Label>
+                            <div
+                              ref={subSearchRef}
+                              className="mt-2 rounded-md border border-slate-200 bg-white"
+                            >
+                              <div className="border-b border-slate-100 p-2">
+                                <Input
+                                  placeholder="Search substitutes..."
+                                  value={subSearch}
+                                  onChange={event => setSubSearch(event.target.value)}
+                                  onFocus={() => setIsSubSearchOpen(true)}
+                                  className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
+                                />
+                              </div>
+                              {isSubSearchOpen && (
+                                <div className="max-h-60 overflow-y-auto p-2">
+                                  {filteredSubsForSearch.length === 0 ? (
+                                    <div className="p-2 text-xs text-muted-foreground">
+                                      No matches
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-1">
+                                      {filteredSubsForSearch.map(sub => {
+                                        const name = getDisplayName(sub)
+                                        const canCover =
+                                          (sub.shifts_covered ?? 0) > 0 ||
+                                          (sub.can_cover?.length ?? 0) > 0
+                                        return (
+                                          <button
+                                            key={sub.id}
+                                            type="button"
+                                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
+                                            onClick={() => {
+                                              if (!canCover && includeOnlyRecommended) {
+                                                setIncludeOnlyRecommended(false)
+                                                applySubResults(allSubs, {
+                                                  useOnlyRecommended: false,
+                                                })
+                                                toast(
+                                                  'Turning off “Include only recommended subs” to show this selection.'
+                                                )
+                                                setTimeout(() => scrollToSubCard(sub.id), 50)
+                                              } else {
+                                                scrollToSubCard(sub.id)
+                                              }
+                                              setIsSubSearchOpen(false)
+                                            }}
+                                          >
+                                            <span
+                                              className={`h-2 w-2 rounded-full ${canCover ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                            />
+                                            <span>{name.trim()}</span>
+                                          </button>
+                                        )
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <h4 className="font-medium text-sm mb-3">Filter Options</h4>
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <Label
+                                    htmlFor="include-only-recommended-mobile-all"
+                                    className="text-sm font-normal cursor-pointer"
+                                  >
+                                    Include only recommended subs
+                                  </Label>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Show only subs who can cover at least one shift
+                                  </p>
+                                </div>
+                                <Switch
+                                  id="include-only-recommended-mobile-all"
+                                  checked={includeOnlyRecommended}
+                                  onCheckedChange={setIncludeOnlyRecommended}
+                                />
+                              </div>
+
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <Label
+                                    htmlFor="include-partial-mobile-all"
+                                    className="text-sm font-normal cursor-pointer"
+                                  >
+                                    Include partially covered shifts
+                                  </Label>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Show absences with partial coverage
+                                  </p>
+                                </div>
+                                <Switch
+                                  id="include-partial-mobile-all"
+                                  checked={includePartiallyCovered}
+                                  onCheckedChange={setIncludePartiallyCovered}
+                                />
+                              </div>
+
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <Label
+                                    htmlFor="include-flexible-mobile-all"
+                                    className="text-sm font-normal cursor-pointer"
+                                  >
+                                    Include Flexible Staff
+                                  </Label>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Include staff who can sub when not teaching
+                                  </p>
+                                </div>
+                                <Switch
+                                  id="include-flexible-mobile-all"
+                                  checked={includeFlexibleStaff}
+                                  onCheckedChange={handleFlexibleStaffChange}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  <RecommendedSubsList
+                    subs={rightPanelSubs}
+                    loading={loading}
+                    absence={absenceForUI ?? selectedAbsence}
+                    shiftDetails={shiftDetails}
+                    showAllSubs
+                    onContactSub={handleContactSub}
+                    hideHeader
+                    highlightedSubId={highlightedSubId}
+                    includePastShifts={includePastShifts}
                   />
                 </div>
               </div>
@@ -1729,44 +1694,25 @@ export default function SubFinderPage() {
                   </div>
 
                   {visibleShiftSummary && visibleShiftSummary.total > 0 && (
-                    <div className="mt-4 mb-6">
+                    <div className="mt-4 mb-2 flex flex-wrap items-end justify-between gap-4">
                       <CoverageSummary
                         shifts={visibleShiftSummary}
                         onShiftClick={handleShiftClick}
                         variant="compact"
                         headerText={coverageSummaryLine ?? undefined}
                       />
+                      <Button
+                        onClick={handleRerunFinder}
+                        disabled={loading}
+                        size="sm"
+                        variant="outline"
+                        className="w-auto justify-center"
+                      >
+                        <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                        Rerun Finder
+                      </Button>
                     </div>
                   )}
-
-                  <div className="mb-6 flex items-center gap-2">
-                    <div className="inline-flex rounded-full border border-slate-200 bg-white p-1">
-                      <button
-                        type="button"
-                        onClick={() => setViewMode('recommended')}
-                        className={cn(
-                          'h-9 px-4 text-xs font-semibold rounded-full transition-colors',
-                          viewMode === 'recommended'
-                            ? 'bg-slate-900 text-white'
-                            : 'text-slate-600 hover:bg-slate-100'
-                        )}
-                      >
-                        Recommended Coverage
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setViewMode('shift')}
-                        className={cn(
-                          'h-9 px-4 text-xs font-semibold rounded-full transition-colors',
-                          viewMode === 'shift'
-                            ? 'bg-slate-900 text-white'
-                            : 'text-slate-600 hover:bg-slate-100'
-                        )}
-                      >
-                        Shift-by-Shift
-                      </button>
-                    </div>
-                  </div>
 
                   {showPastShiftsBanner && (
                     <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-slate-900">
@@ -1799,7 +1745,7 @@ export default function SubFinderPage() {
             </>
           )}
 
-          {selectedAbsence && viewMode === 'recommended' && (
+          {selectedAbsence && (
             <div className="py-6 flex flex-col gap-6 w-full">
               {displayRecommendedCombinations.length > 0 && (
                 <div className="mt-2">
@@ -1814,24 +1760,170 @@ export default function SubFinderPage() {
                     allSubs={allSubs}
                     allShifts={visibleShiftDetails}
                     includePastShifts={includePastShifts}
+                    onShowAllSubs={openAllSubsPanel}
                   />
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-slate-700">All Available Subs</div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    onClick={handleRerunFinder}
-                    disabled={loading}
-                    size="sm"
-                    variant="outline"
-                    className="w-auto justify-center"
-                  >
-                    <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                    Rerun Finder
-                  </Button>
+              <div className="flex flex-col gap-2">
+                <div className="hidden md:flex flex-wrap gap-2 md:flex-row md:items-center">
+                  {shiftFilterOptions.map(option => {
+                    const isActive = shiftFilters.includes(option.key)
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => toggleShiftFilter(option.key)}
+                        className={cn(
+                          'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                          isActive
+                            ? 'border-slate-900 bg-slate-900 text-white'
+                            : 'border-slate-400 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                        )}
+                      >
+                        {option.label} ({option.count})
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="md:hidden">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="w-full justify-between">
+                        Filters ({shiftFilters.length})
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-72" align="start">
+                      <div className="space-y-2">
+                        {shiftFilterOptions.map(option => {
+                          const isActive = shiftFilters.includes(option.key)
+                          return (
+                            <button
+                              key={option.key}
+                              type="button"
+                              onClick={() => toggleShiftFilter(option.key)}
+                              className={cn(
+                                'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',
+                                isActive ? 'bg-slate-900 text-white' : 'hover:bg-slate-100'
+                              )}
+                            >
+                              <span>{option.label}</span>
+                              <span className="text-xs text-slate-500">{option.count}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
 
+              {filteredShiftDetails.length > 0 ? (
+                filteredShiftDetails.map(shift => (
+                  <ShiftStatusCard
+                    key={shift.id}
+                    shift={shift}
+                    teacherName={selectedAbsence.teacher_name}
+                    onSelectShift={handleSelectShift}
+                  />
+                ))
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">
+                  No shifts to display.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Middle column content ends above */}
+        </div>
+
+        {/* Right Column */}
+        {isRightPanelOpen && (
+          <div className="w-full md:flex-[0_0_400px] md:max-w-[400px] border-l bg-gray-50 transition-all h-full overflow-y-auto">
+            {selectedAbsence && selectedSub ? (
+              <ContactSubPanel
+                isOpen={isRightPanelOpen}
+                onClose={closeRightPanel}
+                sub={selectedSub as RecommendedSub}
+                absence={selectedAbsence}
+                variant="inline"
+                initialContactData={
+                  selectedSub && selectedAbsence
+                    ? contactDataCache.get(getCacheKey(selectedSub.id, selectedAbsence.id))
+                    : undefined
+                }
+                onAssignmentComplete={async () => {
+                  if (selectedAbsence) {
+                    setContactDataCache(prev => {
+                      const next = new Map(prev)
+                      for (const [key] of next) {
+                        if (key.endsWith(`-${selectedAbsence.id}`)) {
+                          next.delete(key)
+                        }
+                      }
+                      return next
+                    })
+                  }
+                  await fetchAbsences()
+                  if (selectedAbsence) {
+                    await runFinderForAbsence(selectedAbsence)
+                  }
+                }}
+              />
+            ) : selectedAbsence ? (
+              <div className="p-6 space-y-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex flex-col gap-1">
+                    {selectedShift ? (
+                      <>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-semibold text-slate-900">
+                            {(() => {
+                              const date = parseLocalDate(selectedShift.date)
+                              const dayName = DAY_NAMES[date.getDay()]
+                              const month = MONTH_NAMES[date.getMonth()]
+                              const day = date.getDate()
+                              return `Subs for ${dayName} ${month} ${day} • ${selectedShift.time_slot_code}`
+                            })()}
+                          </span>
+                          {selectedShift.classroom_name ? (
+                            <span
+                              className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                              style={getClassroomPillStyle(selectedShift.classroom_color ?? null)}
+                            >
+                              {selectedShift.classroom_name}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              Classroom unavailable
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-xs uppercase tracking-wide text-slate-400">
+                          All Subs
+                        </div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          {selectedAbsence.teacher_name}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeRightPanel}
+                    aria-label="Close"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
@@ -1933,7 +2025,7 @@ export default function SubFinderPage() {
                             <div className="flex items-center justify-between">
                               <div className="flex-1">
                                 <Label
-                                  htmlFor="include-only-recommended"
+                                  htmlFor="include-only-recommended-right"
                                   className="text-sm font-normal cursor-pointer"
                                 >
                                   Include only recommended subs
@@ -1943,7 +2035,7 @@ export default function SubFinderPage() {
                                 </p>
                               </div>
                               <Switch
-                                id="include-only-recommended"
+                                id="include-only-recommended-right"
                                 checked={includeOnlyRecommended}
                                 onCheckedChange={setIncludeOnlyRecommended}
                               />
@@ -1952,7 +2044,7 @@ export default function SubFinderPage() {
                             <div className="flex items-center justify-between">
                               <div className="flex-1">
                                 <Label
-                                  htmlFor="include-partial"
+                                  htmlFor="include-partial-right"
                                   className="text-sm font-normal cursor-pointer"
                                 >
                                   Include partially covered shifts
@@ -1962,7 +2054,7 @@ export default function SubFinderPage() {
                                 </p>
                               </div>
                               <Switch
-                                id="include-partial"
+                                id="include-partial-right"
                                 checked={includePartiallyCovered}
                                 onCheckedChange={setIncludePartiallyCovered}
                               />
@@ -1971,7 +2063,7 @@ export default function SubFinderPage() {
                             <div className="flex items-center justify-between">
                               <div className="flex-1">
                                 <Label
-                                  htmlFor="include-flexible"
+                                  htmlFor="include-flexible-right"
                                   className="text-sm font-normal cursor-pointer"
                                 >
                                   Include Flexible Staff
@@ -1981,7 +2073,7 @@ export default function SubFinderPage() {
                                 </p>
                               </div>
                               <Switch
-                                id="include-flexible"
+                                id="include-flexible-right"
                                 checked={includeFlexibleStaff}
                                 onCheckedChange={handleFlexibleStaffChange}
                               />
@@ -1992,157 +2084,19 @@ export default function SubFinderPage() {
                     </PopoverContent>
                   </Popover>
                 </div>
-              </div>
+                <div className="border-t border-slate-200" />
 
-              <div className="border-t border-slate-400 pt-0" />
-
-              <RecommendedSubsList
-                subs={recommendedSubs}
-                loading={loading}
-                absence={absenceForUI ?? selectedAbsence}
-                shiftDetails={shiftDetails}
-                showAllSubs={!includeOnlyRecommended}
-                onContactSub={handleContactSub}
-                hideHeader
-                highlightedSubId={highlightedSubId}
-                includePastShifts={includePastShifts}
-              />
-            </div>
-          )}
-
-          {selectedAbsence && viewMode === 'shift' && (
-            <div className="py-6 flex flex-col gap-3 w-full">
-              <div className="flex flex-col gap-2">
-                <div className="hidden md:flex flex-wrap gap-2 md:flex-row md:items-center">
-                  {shiftFilterOptions.map(option => {
-                    const isActive = shiftFilters.includes(option.key)
-                    return (
-                      <button
-                        key={option.key}
-                        type="button"
-                        onClick={() => toggleShiftFilter(option.key)}
-                        className={cn(
-                          'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                          isActive
-                            ? 'border-slate-900 bg-slate-900 text-white'
-                            : 'border-slate-400 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                        )}
-                      >
-                        {option.label} ({option.count})
-                      </button>
-                    )
-                  })}
-                </div>
-                <div className="md:hidden">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="w-full justify-between">
-                        Filters ({shiftFilters.length})
-                        <ChevronDown className="h-4 w-4" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72" align="start">
-                      <div className="space-y-2">
-                        {shiftFilterOptions.map(option => {
-                          const isActive = shiftFilters.includes(option.key)
-                          return (
-                            <button
-                              key={option.key}
-                              type="button"
-                              onClick={() => toggleShiftFilter(option.key)}
-                              className={cn(
-                                'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',
-                                isActive ? 'bg-slate-900 text-white' : 'hover:bg-slate-100'
-                              )}
-                            >
-                              <span>{option.label}</span>
-                              <span className="text-xs text-slate-500">{option.count}</span>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              </div>
-
-              {filteredShiftDetails.length > 0 ? (
-                filteredShiftDetails.map(shift => (
-                  <ShiftStatusCard
-                    key={shift.id}
-                    shift={shift}
-                    teacherName={selectedAbsence.teacher_name}
-                    onSelectShift={handleSelectShift}
-                  />
-                ))
-              ) : (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">
-                  No shifts to display.
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Middle column content ends above */}
-        </div>
-
-        {/* Right Column */}
-        {isRightPanelOpen && (
-          <div className="w-full md:flex-[0_0_380px] md:max-w-sm border-l bg-white transition-all h-full overflow-y-auto">
-            {viewMode === 'recommended' && selectedAbsence && selectedSub ? (
-              <ContactSubPanel
-                isOpen={isRightPanelOpen}
-                onClose={closeRightPanel}
-                sub={selectedSub as RecommendedSub}
-                absence={selectedAbsence}
-                variant="inline"
-                initialContactData={
-                  selectedSub && selectedAbsence
-                    ? contactDataCache.get(getCacheKey(selectedSub.id, selectedAbsence.id))
-                    : undefined
-                }
-                onAssignmentComplete={async () => {
-                  if (selectedAbsence) {
-                    setContactDataCache(prev => {
-                      const next = new Map(prev)
-                      for (const [key] of next) {
-                        if (key.endsWith(`-${selectedAbsence.id}`)) {
-                          next.delete(key)
-                        }
-                      }
-                      return next
-                    })
-                  }
-                  await fetchAbsences()
-                  if (selectedAbsence) {
-                    await runFinderForAbsence(selectedAbsence)
-                  }
-                }}
-              />
-            ) : viewMode === 'shift' && selectedShift && selectedAbsence ? (
-              <div className="h-full flex flex-col">
-                <div className="flex items-center justify-between border-b px-4 py-3">
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-400">
-                      Shift details
-                    </div>
-                    <div className="text-sm font-semibold text-slate-900">
-                      {selectedAbsence.teacher_name}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={closeRightPanel}
-                    aria-label="Close"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4">
-                  <ShiftStatusCard
-                    shift={selectedShift}
-                    teacherName={selectedAbsence.teacher_name}
+                <div>
+                  <RecommendedSubsList
+                    subs={rightPanelSubs}
+                    loading={loading}
+                    absence={absenceForUI ?? selectedAbsence}
+                    shiftDetails={shiftDetails}
+                    showAllSubs
+                    onContactSub={handleContactSub}
+                    hideHeader
+                    highlightedSubId={highlightedSubId}
+                    includePastShifts={includePastShifts}
                   />
                 </div>
               </div>

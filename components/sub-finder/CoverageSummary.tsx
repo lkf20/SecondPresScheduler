@@ -103,7 +103,7 @@ export default function CoverageSummary({
       )}
     >
       {/* Header */}
-      <div className="mb-3 flex flex-wrap items-center gap-3">
+      <div className="mb-0 flex flex-wrap items-center gap-3">
         <div className={headerClass}>{headerLabel}</div>
         <div className="h-2 rounded-full overflow-hidden flex gap-0.5">
           {(
@@ -138,7 +138,7 @@ export default function CoverageSummary({
       </div>
 
       {coveredCount > 0 && (
-        <div className="mb-3 -mt-2 text-sm text-muted-foreground">
+        <div className="mt-1 mb-0 text-sm text-muted-foreground">
           {coveredCount} Shift{coveredCount === 1 ? '' : 's'} covered by{' '}
           {coveredSubNames.join(', ')}
         </div>

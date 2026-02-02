@@ -188,7 +188,7 @@ export default function SubFinderCard({
     <Card
       id={id}
       className={cn(
-        'border border-slate-300 hover:shadow-md transition-shadow',
+        'border border-slate-200 hover:shadow-md transition-shadow',
         highlighted && 'ring-2 ring-blue-500 ring-offset-2 animate-pulse',
         className
       )}
