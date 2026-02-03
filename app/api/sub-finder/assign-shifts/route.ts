@@ -32,12 +32,6 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient()
 
-    console.log('Assign shifts request:', {
-      coverage_request_id,
-      sub_id,
-      selected_shift_ids_count: selected_shift_ids.length,
-    })
-
     // Get active coverage_request to get teacher_id
     // The coverage_requests table has teacher_id directly, and source_request_id for time_off requests
     const { data: coverageRequest, error: coverageError } = await supabase

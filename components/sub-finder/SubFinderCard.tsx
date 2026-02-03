@@ -406,8 +406,13 @@ export default function SubFinderCard({
                         onClick={async event => {
                           event.stopPropagation()
                           const next = noteDraft.trim()
-                          await onSaveNote?.(next.length > 0 ? next : null)
-                          setIsEditingNote(false)
+                          try {
+                            await onSaveNote?.(next.length > 0 ? next : null)
+                          } catch (error) {
+                            console.error('Failed to save sub note', error)
+                          } finally {
+                            setIsEditingNote(false)
+                          }
                         }}
                       >
                         Save

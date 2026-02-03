@@ -242,19 +242,8 @@ export default function SubFinderPage() {
     }
     // Note: do not filter by selectedShift here; we want all subs visible,
     // even if unavailable for the currently selected shift.
-    if (typeof window !== 'undefined') {
-      console.debug('[Sub Finder Debug] rightPanelSubs filter', {
-        all_subs: allSubs.length,
-        selectedSubIds: selectedSubIds.length,
-        includeOnlyRecommended,
-        selectedShift: selectedShift
-          ? { date: selectedShift.date, time_slot_code: selectedShift.time_slot_code }
-          : null,
-        result: subs.length,
-      })
-    }
     return subs
-  }, [allSubs, includeOnlyRecommended, selectedShift, selectedSubIds])
+  }, [allSubs, includeOnlyRecommended, selectedSubIds])
 
   const selectedSubChips = useMemo(() => {
     if (selectedSubIds.length === 0) return []
@@ -708,29 +697,20 @@ export default function SubFinderPage() {
   // Load saved state on mount (only if no URL params override)
   useEffect(() => {
     if (hasRestoredStateRef.current) return
-    console.log('[SubFinder] Initial state restoration effect running')
     // Only restore if we don't have URL params that override
     if (requestedAbsenceId || requestedTeacherId) {
-      console.log('[SubFinder] URL params present, skipping restoration')
       hasRestoredStateRef.current = true // Mark as complete even if we skip restoration
       return // URL params take precedence
     }
 
     const savedState = loadSubFinderState()
-    console.log('[SubFinder] Loaded saved state:', {
-      hasSavedState: !!savedState,
-      savedAbsenceId: savedState?.selectedAbsenceId,
-      savedMode: savedState?.mode,
-    })
 
     if (!savedState) {
-      console.log('[SubFinder] No saved state found')
       hasRestoredStateRef.current = true // Mark as complete if no saved state
       return
     }
 
     isRestoringStateRef.current = true
-    console.log('[SubFinder] Starting state restoration')
 
     // Restore mode
     if (savedState.mode) {
@@ -779,9 +759,7 @@ export default function SubFinderPage() {
     // Reset flag after a short delay to allow other effects to run
     setTimeout(() => {
       isRestoringStateRef.current = false
-      console.log('[SubFinder] State restoration complete, isRestoring flag cleared')
       if (mode === 'existing') {
-        console.log('[SubFinder] Fetching absences')
         fetchAbsences()
       }
     }, 500) // Give enough time for all restoration effects to complete
@@ -805,19 +783,7 @@ export default function SubFinderPage() {
     const targetAbsenceId =
       selectedAbsenceIdRef.current || savedState?.selectedAbsenceId || selectedAbsence?.id
 
-    console.log('[SubFinder] Restore absence effect:', {
-      hasSavedState: !!savedState,
-      savedAbsenceId: savedState?.selectedAbsenceId,
-      refAbsenceId: selectedAbsenceIdRef.current,
-      targetAbsenceId,
-      currentSelectedAbsenceId: selectedAbsence?.id,
-      absencesCount: absences.length,
-      isRestoring: isRestoringStateRef.current,
-      hasRestored: hasRestoredStateRef.current,
-    })
-
     if (!targetAbsenceId) {
-      console.log('[SubFinder] No saved absence ID to restore')
       return // No saved absence to restore
     }
 
@@ -826,9 +792,6 @@ export default function SubFinderPage() {
       const absence = absences.find(a => a.id === targetAbsenceId)
       if (absence && absence !== selectedAbsence) {
         // Update to new object reference to keep in sync
-        console.log(
-          '[SubFinder] Updating selected absence to new object reference (already selected)'
-        )
         setSelectedAbsence(absence)
       }
       selectedAbsenceIdRef.current = targetAbsenceId
@@ -836,31 +799,17 @@ export default function SubFinderPage() {
     }
 
     // Check if it's a manual mode absence (starts with 'manual-')
-    if (targetAbsenceId.startsWith('manual-')) {
-      console.log('[SubFinder] Manual mode absence, skipping')
-      // This is handled in manual mode restoration
-      return
-    }
+    if (targetAbsenceId.startsWith('manual-')) return
 
     // Find the absence in the current absences list
     const absence = absences.find(a => a.id === targetAbsenceId)
-    console.log('[SubFinder] Found absence in list:', {
-      found: !!absence,
-      absenceId: absence?.id,
-    })
 
     // If we have a selected absence, check if it still exists in the new list
     if (selectedAbsence) {
       const currentAbsenceStillExists = absences.find(a => a.id === selectedAbsence.id)
-      console.log('[SubFinder] Current selected absence check:', {
-        currentId: selectedAbsence.id,
-        stillExists: !!currentAbsenceStillExists,
-        matchesTarget: selectedAbsence.id === targetAbsenceId,
-      })
       if (currentAbsenceStillExists) {
         // Update to the new object reference to keep it in sync with React Query data
         if (currentAbsenceStillExists !== selectedAbsence) {
-          console.log('[SubFinder] Updating selected absence to new object reference')
           setSelectedAbsence(currentAbsenceStillExists)
         }
         // Update ref to track the current selection
@@ -869,17 +818,14 @@ export default function SubFinderPage() {
       }
       // Current selected absence no longer exists in the list - clear it
       // and try to restore from saved state below
-      console.log('[SubFinder] Current selected absence no longer exists, will try to restore')
     }
 
     // Restore from saved state if we found the absence
     if (absence) {
-      console.log('[SubFinder] Restoring absence from saved state:', absence.id)
       isRestoringStateRef.current = true
       selectedAbsenceIdRef.current = absence.id // Update ref immediately
       setSelectedAbsence(absence)
 
-      console.log('[SubFinder] Re-running finder')
       setTimeout(() => {
         runFinderForAbsence(absence).finally(() => {
           isRestoringStateRef.current = false
@@ -888,13 +834,8 @@ export default function SubFinderPage() {
       }, 100)
     } else if (selectedAbsence && !absences.find(a => a.id === selectedAbsence.id)) {
       // Selected absence no longer exists in the list - clear it
-      console.log('[SubFinder] Selected absence no longer exists, clearing selection')
       selectedAbsenceIdRef.current = null
       setSelectedAbsence(null)
-    } else {
-      console.log(
-        '[SubFinder] Could not restore absence - not found in list and no current selection'
-      )
     }
   }, [
     absences,
@@ -956,23 +897,10 @@ export default function SubFinderPage() {
   // Save state whenever it changes (but not during restoration or before initial restoration)
   useEffect(() => {
     if (isRestoringStateRef.current || !hasRestoredStateRef.current) {
-      console.log(
-        '[SubFinder] Skipping save - isRestoring:',
-        isRestoringStateRef.current,
-        'hasRestored:',
-        hasRestoredStateRef.current
-      )
       return
     }
     // Use ref if selectedAbsence is null but we have a ref value (during brief restoration moments)
     const absenceIdToSave = selectedAbsence?.id || selectedAbsenceIdRef.current || null
-    console.log('[SubFinder] Saving state:', {
-      selectedAbsenceId: absenceIdToSave,
-      fromState: selectedAbsence?.id,
-      fromRef: selectedAbsenceIdRef.current,
-      mode,
-      absencesCount: absences.length,
-    })
     saveSubFinderState({
       mode,
       selectedTeacherIds,

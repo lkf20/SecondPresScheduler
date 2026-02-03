@@ -142,7 +142,6 @@ export function useSubFinderData({
   const [includeFlexibleStaff, setIncludeFlexibleStaff] = useState(true)
   const [includeOnlyRecommended, setIncludeOnlyRecommended] = useState(false)
   const [teachers, setTeachers] = useState<Teacher[]>([])
-  const loggedRecommendationDebugRef = useRef(new Set<string>())
 
   // Use React Query for absences
   const {
@@ -228,8 +227,6 @@ export function useSubFinderData({
     data: subRecommendationsData,
     isLoading: isLoadingRecommendations,
     isFetching: isFetchingRecommendations,
-    isError: isRecommendationsError,
-    error: recommendationsError,
     refetch: refetchRecommendations,
   } = useSubRecommendations(selectedAbsenceId, recommendationParams)
 
@@ -275,12 +272,6 @@ export function useSubFinderData({
       if (forceOnlyRecommended) {
         setIncludeOnlyRecommended(true)
       }
-      if (typeof window !== 'undefined') {
-        console.debug('[Sub Finder Debug] applySubResults', {
-          subs_count: subs.length,
-          effectiveOnlyRecommended,
-        })
-      }
       const filteredSubs = effectiveOnlyRecommended
         ? subs.filter(sub => sub.coverage_percent > 0)
         : subs
@@ -305,37 +296,8 @@ export function useSubFinderData({
           : [])
       setRecommendedCombinations(combinations)
       applySubResults(subs)
-      if (
-        selectedAbsence &&
-        selectedAbsence.teacher_name === 'Kim B.' &&
-        selectedAbsence.start_date === '2026-01-19' &&
-        selectedAbsence.end_date === '2026-01-23'
-      ) {
-        const logKey = `${selectedAbsence.id}:${subs.length}:${combinations.length}`
-        if (!loggedRecommendationDebugRef.current.has(logKey)) {
-          loggedRecommendationDebugRef.current.add(logKey)
-          console.warn('[Sub Finder Debug] Recommendations response', {
-            absence_id: selectedAbsence.id,
-            subs_count: subs.length,
-            combinations_count: combinations.length,
-            includeFlexibleStaff,
-            subRecommendationParams,
-            isError: isRecommendationsError,
-            error: recommendationsError instanceof Error ? recommendationsError.message : null,
-          })
-        }
-      }
     }
-  }, [
-    subRecommendationsData,
-    selectedAbsenceId,
-    applySubResults,
-    selectedAbsence,
-    includeFlexibleStaff,
-    subRecommendationParams,
-    isRecommendationsError,
-    recommendationsError,
-  ])
+  }, [subRecommendationsData, selectedAbsenceId, applySubResults, selectedAbsence])
 
   // Fetch absences using React Query - just trigger refetch
   const fetchAbsences = useCallback(async () => {
