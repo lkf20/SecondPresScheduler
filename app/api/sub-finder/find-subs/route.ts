@@ -531,17 +531,19 @@ export async function POST(request: NextRequest) {
 
         // Get response_status from substitute_contacts if coverage request exists
         let responseStatus: string | null = null
+        let contactNotes: string | null = null
         if (coverageRequestId) {
           try {
             const { data: contact } = await supabase
               .from('substitute_contacts')
-              .select('response_status')
+              .select('response_status, notes')
               .eq('coverage_request_id', coverageRequestId)
               .eq('sub_id', sub.id)
               .single()
 
             if (contact) {
               responseStatus = contact.response_status
+              contactNotes = contact.notes ?? null
             }
           } catch {
             // Contact doesn't exist yet, which is fine
@@ -571,6 +573,7 @@ export async function POST(request: NextRequest) {
           can_lift_children: subCapabilities.can_lift_children,
           response_status: responseStatus,
           is_flexible_staff: isFlexibleStaff,
+          notes: contactNotes,
         }
       })
     )

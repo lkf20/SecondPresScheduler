@@ -25,6 +25,7 @@ interface RecommendedSubsListProps {
   shiftDetails: SubFinderShift[]
   showAllSubs?: boolean
   onContactSub?: (sub: SubCandidate) => void
+  onSaveNote?: (sub: SubCandidate, nextNote: string | null) => Promise<void> | void
   hideHeader?: boolean
   highlightedSubId?: string | null
   includePastShifts?: boolean
@@ -38,6 +39,7 @@ export default function RecommendedSubsList({
   shiftDetails,
   showAllSubs = false,
   onContactSub,
+  onSaveNote,
   hideHeader = false,
   highlightedSubId = null,
   includePastShifts = false,
@@ -466,6 +468,9 @@ export default function RecommendedSubsList({
         shift.reason,
       ])
     )
+    const selectedShiftKey = selectedShift
+      ? `${selectedShift.date}|${selectedShift.time_slot_code}`
+      : null
     const shiftChips = visibleAbsenceShifts.reduce<
       Array<{
         date: string
@@ -525,11 +530,23 @@ export default function RecommendedSubsList({
       })
       return acc
     }, [])
+    const filterBySelectedShift = <T extends { date?: string; time_slot_code?: string }>(
+      shifts: T[] = []
+    ) =>
+      selectedShiftKey
+        ? shifts.filter(
+            shift => `${shift.date ?? ''}|${shift.time_slot_code ?? ''}` === selectedShiftKey
+          )
+        : shifts
+    const filteredCanCover = filterBySelectedShift(canCoverWithClassrooms)
+    const filteredCannotCover = filterBySelectedShift(cannotCoverWithClassrooms)
+    const filteredAssigned = filterBySelectedShift(assignedWithClassrooms)
+    const filteredShiftChips = filterBySelectedShift(shiftChips)
     const coverageSegments = derived.hasAssignedShifts
-      ? shiftChips
+      ? filteredShiftChips
           .filter(shift => derived.remainingShiftKeys.has(`${shift.date}|${shift.time_slot_code}`))
           .map(shift => shift.status)
-      : shiftChips.map(shift => shift.status)
+      : filteredShiftChips.map(shift => shift.status)
 
     return (
       <SubFinderCard
@@ -544,19 +561,27 @@ export default function RecommendedSubsList({
             : derived.totalShiftsNeedingCoverage
         }
         useRemainingLabel={derived.hasAssignedShifts}
-        canCover={canCoverWithClassrooms}
-        cannotCover={cannotCoverWithClassrooms}
-        assigned={assignedWithClassrooms}
-        shiftChips={shiftChips}
+        canCover={filteredCanCover}
+        cannotCover={filteredCannotCover}
+        assigned={filteredAssigned}
+        shiftChips={filteredShiftChips}
         coverageSegments={coverageSegments}
         notes={sub.notes}
         isDeclined={sub.response_status === 'declined_all'}
+        isContacted={
+          sub.response_status === 'pending' ||
+          sub.response_status === 'confirmed' ||
+          sub.is_contacted === true
+        }
+        responseStatus={sub.response_status ?? null}
+        onSaveNote={onSaveNote ? next => onSaveNote(sub, next) : undefined}
         highlighted={highlightedSubId === sub.id}
         onContact={() => onContactSub?.(sub)}
         allShifts={visibleAbsenceShifts}
         allCanCover={visibleCanCover}
         allCannotCover={visibleCannotCover}
         allAssigned={visibleAssigned}
+        showDebugOutlines={false}
       />
     )
   }

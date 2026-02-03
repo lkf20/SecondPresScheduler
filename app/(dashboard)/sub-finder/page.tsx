@@ -461,6 +461,51 @@ export default function SubFinderPage() {
     }
   }
 
+  const handleSaveSubNote = async (sub: SubCandidate, nextNote: string | null) => {
+    if (!selectedAbsence || selectedAbsence.id.startsWith('manual-')) {
+      toast('Notes can only be saved for existing absences.')
+      return
+    }
+    const contactData = await fetchContactDataForSub(sub, selectedAbsence)
+    if (!contactData?.id) {
+      toast('Unable to load contact record for this sub.')
+      return
+    }
+    try {
+      const response = await fetch('/api/sub-finder/substitute-contacts', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: contactData.id, notes: nextNote }),
+      })
+      if (!response.ok) {
+        const errorBody = await response.text().catch(() => '')
+        console.error('Failed to update sub note', response.status, errorBody)
+        toast('Failed to save note.')
+        return
+      }
+      const updated = allSubs.map(item =>
+        item.id === sub.id ? { ...item, notes: nextNote } : item
+      )
+      applySubResults(updated)
+      const cacheKey = getCacheKey(sub.id, selectedAbsence.id)
+      setContactDataCache(prev => {
+        const next = new Map(prev)
+        const existing = next.get(cacheKey)
+        if (existing) {
+          next.set(cacheKey, { ...existing, notes: nextNote })
+        }
+        return next
+      })
+      if (selectedSub?.id === sub.id) {
+        setSelectedSub({ ...selectedSub, notes: nextNote })
+      }
+      toast('Note saved.')
+    } catch (error) {
+      console.error('Failed to update sub note', error)
+      toast('Failed to save note.')
+    }
+  }
+
   const scrollToSubCard = (subId: string) => {
     const element = document.getElementById(`sub-card-${subId}`)
     if (element) {
@@ -1544,6 +1589,7 @@ export default function SubFinderPage() {
                     shiftDetails={shiftDetails}
                     showAllSubs
                     onContactSub={handleContactSub}
+                    onSaveNote={handleSaveSubNote}
                     hideHeader
                     highlightedSubId={highlightedSubId}
                     includePastShifts={includePastShifts}
@@ -1955,6 +2001,7 @@ export default function SubFinderPage() {
                     shiftDetails={shiftDetails}
                     showAllSubs
                     onContactSub={handleContactSub}
+                    onSaveNote={handleSaveSubNote}
                     hideHeader
                     highlightedSubId={highlightedSubId}
                     includePastShifts={includePastShifts}
