@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getTimeOffRequestById } from '@/lib/api/time-off'
 import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
-import { getSubs } from '@/lib/api/subs'
 import { getSubAvailability, getSubAvailabilityExceptions } from '@/lib/api/sub-availability'
 import { getTeacherScheduledShifts } from '@/lib/api/time-off-shifts'
 import { getTimeOffRequests } from '@/lib/api/time-off'
@@ -34,6 +33,7 @@ interface SubMatch {
   coverage_percent: number
   shifts_covered: number
   total_shifts: number
+  is_flexible_staff?: boolean
   can_cover: Array<{
     date: string
     day_name: string
@@ -252,9 +252,42 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // 3. Get all active subs
-    const allSubs = await getSubs()
-    const activeSubs = allSubs.filter(sub => sub.active !== false)
+    const { data: roleTypes, error: roleTypesError } = await supabase
+      .from('staff_role_types')
+      .select('id, code')
+      .eq('school_id', schoolId)
+
+    if (roleTypesError) {
+      console.warn('Failed to load staff role types', roleTypesError)
+    }
+    const roleTypeById = new Map((roleTypes || []).map(rt => [rt.id, rt.code]))
+    const flexibleRoleTypeIds = new Set(
+      (roleTypes || []).filter(rt => rt.code === 'FLEXIBLE').map(rt => rt.id)
+    )
+
+    // 3. Get all active subs + flexible staff
+    let staffQuery = supabase.from('staff').select('*').eq('school_id', schoolId)
+    if (flexibleRoleTypeIds.size > 0) {
+      staffQuery = staffQuery.or(
+        `is_sub.eq.true,role_type_id.in.(${Array.from(flexibleRoleTypeIds).join(',')})`
+      )
+    } else {
+      staffQuery = staffQuery.eq('is_sub', true)
+    }
+
+    const { data: staffRows, error: staffError } = await staffQuery
+    if (staffError) {
+      throw staffError
+    }
+
+    const activeSubs = (staffRows || []).filter(sub => sub.active !== false)
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[Sub Finder Debug] Staff query counts', {
+        staff_rows: staffRows?.length ?? 0,
+        active_staff: activeSubs.length,
+        flexible_role_type_ids: Array.from(flexibleRoleTypeIds),
+      })
+    }
 
     // 4. Get date range for checking conflicts
     const startDate = timeOffRequest.start_date
@@ -518,11 +551,14 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        const isFlexibleStaff = roleTypeById.get(sub.role_type_id ?? '') === 'FLEXIBLE'
+
         return {
           id: sub.id,
           name,
           phone: sub.phone,
           email: sub.email,
+          is_sub: sub.is_sub,
           coverage_percent: coveragePercentage,
           shifts_covered: availableShifts,
           total_shifts: shiftsToCover.length,
@@ -534,6 +570,7 @@ export async function POST(request: NextRequest) {
           can_change_diapers: subCapabilities.can_change_diapers,
           can_lift_children: subCapabilities.can_lift_children,
           response_status: responseStatus,
+          is_flexible_staff: isFlexibleStaff,
         }
       })
     )
@@ -543,6 +580,13 @@ export async function POST(request: NextRequest) {
     let filteredMatches = subMatches
     if (!include_flexible_staff) {
       filteredMatches = subMatches.filter(match => match.coverage_percent > 0)
+    }
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[Sub Finder Debug] Sub match counts', {
+        matches: subMatches.length,
+        filtered: filteredMatches.length,
+        include_flexible_staff,
+      })
     }
 
     // 8. Sort by coverage percentage (descending), then by name

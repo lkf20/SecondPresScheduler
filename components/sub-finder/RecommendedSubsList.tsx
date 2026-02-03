@@ -28,6 +28,7 @@ interface RecommendedSubsListProps {
   hideHeader?: boolean
   highlightedSubId?: string | null
   includePastShifts?: boolean
+  selectedShift?: SubFinderShift | null
 }
 
 export default function RecommendedSubsList({
@@ -40,8 +41,17 @@ export default function RecommendedSubsList({
   hideHeader = false,
   highlightedSubId = null,
   includePastShifts = false,
+  selectedShift = null,
 }: RecommendedSubsListProps) {
   const [isDeclinedExpanded, setIsDeclinedExpanded] = useState(false)
+  const [expandedSections, setExpandedSections] = useState({
+    assigned: false,
+    contacted: false,
+    available: false,
+    availableLimited: false,
+    unavailable: false,
+    declined: false,
+  })
   const loggedCoverageMismatchRef = useRef(new Set<string>())
   const loggedAssignedMismatchRef = useRef<Set<string>>(new Set())
 
@@ -259,6 +269,135 @@ export default function RecommendedSubsList({
     absence.teacher_name,
   ])
 
+  const groupedSubs = useMemo(() => {
+    if (!showAllSubs) {
+      return null
+    }
+    const debugKey = `${absence.id}:${subs.length}`
+    if (typeof window !== 'undefined' && !loggedCoverageMismatchRef.current.has(debugKey)) {
+      loggedCoverageMismatchRef.current.add(debugKey)
+      console.debug('[Sub Finder Debug] Right panel subs total', {
+        absence_id: absence.id,
+        subs_count: subs.length,
+      })
+    }
+    const assigned: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
+    const contacted: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
+    const available: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
+    const availableLimited: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
+    const unavailable: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
+    const declined: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
+    const selectedShiftKey = selectedShift
+      ? `${selectedShift.date}|${selectedShift.time_slot_code}`
+      : null
+
+    subs.forEach(sub => {
+      const shiftsCovered = sub.shifts_covered ?? 0
+      const coveragePercent = sub.coverage_percent ?? 0
+      const isSub = sub.is_sub === true
+      const isFlexibleStaff = sub.is_flexible_staff === true && !isSub
+      const hasQualificationGap = (sub.cannot_cover || []).some(
+        shift => shift.reason === 'Not qualified for this class'
+      )
+      const isAssigned = (sub.assigned_shifts?.length ?? 0) > 0
+      const isAvailable = coveragePercent > 0
+      const isDeclined = sub.response_status === 'declined_all'
+      const isUnavailable = coveragePercent === 0 && !isDeclined
+      const isPartiallyAvailable = false // TODO: detect partial-shift availability once data is available
+      const isContacted =
+        sub.response_status === 'pending' ||
+        sub.response_status === 'confirmed' ||
+        sub.is_contacted === true
+      const isAvailableMissingReqs = isAvailable && hasQualificationGap
+      const isAvailableLimited =
+        isAvailableMissingReqs || isPartiallyAvailable || (isAvailable && isFlexibleStaff)
+      const isAssignedForSelected = selectedShiftKey
+        ? (sub.assigned_shifts || []).some(
+            shift => `${shift.date}|${shift.time_slot_code}` === selectedShiftKey
+          )
+        : isAssigned
+      const isAvailableForSelected = selectedShiftKey
+        ? (sub.can_cover || []).some(
+            shift => `${shift.date}|${shift.time_slot_code}` === selectedShiftKey
+          )
+        : isAvailable
+      const hasQualificationGapForSelected = selectedShiftKey
+        ? (sub.cannot_cover || []).some(
+            shift =>
+              shift.reason === 'Not qualified for this class' &&
+              `${shift.date}|${shift.time_slot_code}` === selectedShiftKey
+          )
+        : hasQualificationGap
+      const isAvailableLimitedForSelected = selectedShiftKey
+        ? isAvailableForSelected &&
+          (hasQualificationGapForSelected || isPartiallyAvailable || isFlexibleStaff)
+        : isAvailableLimited
+
+      if (typeof window !== 'undefined' && !loggedAssignedMismatchRef.current.has(sub.id)) {
+        loggedAssignedMismatchRef.current.add(sub.id)
+        console.debug('[Sub Finder Debug] Right panel sub flags', {
+          sub_id: sub.id,
+          name: sub.name,
+          coverage_percent: coveragePercent,
+          is_declined: isDeclined,
+          is_assigned: isAssigned,
+          is_contacted: isContacted,
+          is_flexible_staff: isFlexibleStaff,
+          is_sub: isSub,
+          has_qualification_gap: hasQualificationGap,
+          is_available: isAvailable,
+          is_available_limited: isAvailableLimited,
+        })
+      }
+
+      if (isDeclined) {
+        declined.push({ sub, shiftsCovered })
+      } else if (isAssignedForSelected) {
+        assigned.push({ sub, shiftsCovered })
+      } else if (isContacted) {
+        contacted.push({ sub, shiftsCovered })
+      } else if (isAvailableLimitedForSelected) {
+        availableLimited.push({ sub, shiftsCovered })
+      } else if (isAvailableForSelected) {
+        available.push({ sub, shiftsCovered })
+      } else if (isUnavailable) {
+        unavailable.push({ sub, shiftsCovered })
+      } else {
+        unavailable.push({ sub, shiftsCovered })
+      }
+    })
+
+    const byAvailability = (
+      a: { sub: RecommendedSub; shiftsCovered: number },
+      b: { sub: RecommendedSub; shiftsCovered: number }
+    ) => {
+      const coverageA = a.sub.coverage_percent ?? 0
+      const coverageB = b.sub.coverage_percent ?? 0
+      if (coverageB !== coverageA) return coverageB - coverageA
+      return (b.sub.shifts_covered ?? 0) - (a.sub.shifts_covered ?? 0)
+    }
+
+    available.sort(byAvailability)
+    if (typeof window !== 'undefined') {
+      console.debug('[Sub Finder Debug] Right panel bucket counts', {
+        assigned: assigned.length,
+        contacted: contacted.length,
+        available: available.length,
+        available_limited: availableLimited.length,
+        unavailable: unavailable.length,
+        declined: declined.length,
+      })
+    }
+    return {
+      assigned,
+      contacted,
+      available,
+      availableLimited,
+      unavailable,
+      declined,
+    }
+  }, [showAllSubs, subs, selectedShift, absence.id])
+
   const filterSubShifts = <
     T extends {
       date?: string
@@ -422,6 +561,49 @@ export default function RecommendedSubsList({
     )
   }
 
+  const renderSection = (
+    key: 'assigned' | 'contacted' | 'available' | 'availableLimited' | 'unavailable' | 'declined',
+    label: string,
+    items: Array<{ sub: RecommendedSub; shiftsCovered: number }>,
+    options: { collapsible?: boolean } = {}
+  ) => {
+    const { collapsible = true } = options
+    const isExpanded = expandedSections[key]
+    return (
+      <div className="space-y-3">
+        <Button
+          variant="ghost"
+          onClick={
+            collapsible
+              ? () =>
+                  setExpandedSections(prev => ({
+                    ...prev,
+                    [key]: !prev[key],
+                  }))
+              : undefined
+          }
+          className="w-full flex items-center justify-between p-2 hover:bg-gray-100"
+          disabled={items.length === 0}
+        >
+          <span className="font-medium text-sm">
+            {label} ({items.length})
+          </span>
+          {collapsible &&
+            (isExpanded ? (
+              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            ))}
+        </Button>
+        {items.length > 0 && (!collapsible || isExpanded) && (
+          <div className="space-y-4">
+            {items.map(({ sub, shiftsCovered }) => renderSubCard({ sub, shiftsCovered }))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -437,7 +619,9 @@ export default function RecommendedSubsList({
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
         <div className="text-center">
-          <p className="text-lg mb-2">No recommended subs found</p>
+          <p className="text-lg mb-2">
+            {showAllSubs ? 'No subs found' : 'No recommended subs found'}
+          </p>
           <p className="text-sm">Try adjusting your filters or check sub availability</p>
         </div>
       </div>
@@ -465,146 +649,170 @@ export default function RecommendedSubsList({
           </div>
         )}
 
-        {derived.nonDeclinedSubs.map(({ sub, shiftsCovered }) =>
-          renderSubCard({ sub, shiftsCovered })
-        )}
+        {showAllSubs && groupedSubs ? (
+          <div className="space-y-4">
+            {renderSection('assigned', 'Assigned', groupedSubs.assigned)}
+            {renderSection('contacted', 'Contacted', groupedSubs.contacted)}
+            {renderSection('available', 'Available', groupedSubs.available)}
+            {renderSection(
+              'availableLimited',
+              'Available (with limitations)',
+              groupedSubs.availableLimited
+            )}
+            {renderSection('unavailable', 'Unavailable', groupedSubs.unavailable)}
+            {groupedSubs.declined.length > 0 && <div className="border-t border-slate-200" />}
+            <div className="opacity-70">
+              {renderSection('declined', 'Declined', groupedSubs.declined)}
+            </div>
+          </div>
+        ) : (
+          <>
+            {derived.nonDeclinedSubs.map(({ sub, shiftsCovered }) =>
+              renderSubCard({ sub, shiftsCovered })
+            )}
 
-        {/* Declined Subs Collapsible Section */}
-        {derived.declinedSubs.length > 0 && (
-          <div className="mt-6 border-t pt-4">
-            <Button
-              variant="ghost"
-              onClick={() => setIsDeclinedExpanded(!isDeclinedExpanded)}
-              className="w-full flex items-center justify-between p-2 hover:bg-gray-100"
-            >
-              <span className="font-medium text-sm">Declined ({derived.declinedSubs.length})</span>
-              {isDeclinedExpanded ? (
-                <ChevronUp className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              )}
-            </Button>
+            {/* Declined Subs Collapsible Section */}
+            {derived.declinedSubs.length > 0 && (
+              <div className="mt-6 border-t pt-4">
+                <Button
+                  variant="ghost"
+                  onClick={() => setIsDeclinedExpanded(!isDeclinedExpanded)}
+                  className="w-full flex items-center justify-between p-2 hover:bg-gray-100"
+                >
+                  <span className="font-medium text-sm">
+                    Declined ({derived.declinedSubs.length})
+                  </span>
+                  {isDeclinedExpanded ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </Button>
 
-            {isDeclinedExpanded && (
-              <div className="mt-4 space-y-4">
-                {derived.declinedSubs.map(({ sub, shiftsCovered }) => {
-                  const visibleCanCover = filterSubShifts(sub.can_cover)
-                  const visibleCannotCover = filterSubShifts(sub.cannot_cover)
-                  const visibleAssigned = filterSubShifts(sub.assigned_shifts ?? [])
-                  const canCoverWithClassrooms = withClassroomName(visibleCanCover)
-                  const cannotCoverWithClassrooms = withClassroomName(visibleCannotCover)
-                  const assignedWithClassrooms = withClassroomName(visibleAssigned)
-                  const canCoverMap = new Set(
-                    canCoverWithClassrooms.map(shift => `${shift.date}|${shift.time_slot_code}`)
-                  )
-                  const assignedMap = new Set(
-                    assignedWithClassrooms.map(shift => `${shift.date}|${shift.time_slot_code}`)
-                  )
-                  const cannotCoverMap = new Map(
-                    cannotCoverWithClassrooms.map(shift => [
-                      `${shift.date}|${shift.time_slot_code}`,
-                      shift.reason,
-                    ])
-                  )
-                  const shiftChips = visibleAbsenceShifts.reduce<
-                    Array<{
-                      date: string
-                      time_slot_code: string
-                      status: 'assigned' | 'available' | 'unavailable'
-                      reason?: string
-                      classroom_name?: string | null
-                      class_name?: string | null
-                    }>
-                  >((acc, shift) => {
-                    const key = `${shift.date}|${shift.time_slot_code}`
-                    if (shift.status !== 'uncovered' && !assignedMap.has(key)) {
-                      return acc
-                    }
-                    if (assignedMap.has(key)) {
-                      if (shift.status === 'uncovered') {
-                        const logKey = `${absence.id}|${sub.id}|${key}`
-                        if (!loggedAssignedMismatchRef.current.has(logKey)) {
-                          loggedAssignedMismatchRef.current.add(logKey)
-                          console.warn(
-                            '[Sub Finder] Assigned shift marked uncovered in absence data',
-                            {
-                              absence_id: absence.id,
-                              sub_id: sub.id,
-                              shift_key: key,
-                              shift_status: shift.status,
-                              shift_date: shift.date,
-                              shift_time_slot_code: shift.time_slot_code,
-                            }
-                          )
+                {isDeclinedExpanded && (
+                  <div className="mt-4 space-y-4">
+                    {derived.declinedSubs.map(({ sub, shiftsCovered }) => {
+                      const visibleCanCover = filterSubShifts(sub.can_cover)
+                      const visibleCannotCover = filterSubShifts(sub.cannot_cover)
+                      const visibleAssigned = filterSubShifts(sub.assigned_shifts ?? [])
+                      const canCoverWithClassrooms = withClassroomName(visibleCanCover)
+                      const cannotCoverWithClassrooms = withClassroomName(visibleCannotCover)
+                      const assignedWithClassrooms = withClassroomName(visibleAssigned)
+                      const canCoverMap = new Set(
+                        canCoverWithClassrooms.map(shift => `${shift.date}|${shift.time_slot_code}`)
+                      )
+                      const assignedMap = new Set(
+                        assignedWithClassrooms.map(shift => `${shift.date}|${shift.time_slot_code}`)
+                      )
+                      const cannotCoverMap = new Map(
+                        cannotCoverWithClassrooms.map(shift => [
+                          `${shift.date}|${shift.time_slot_code}`,
+                          shift.reason,
+                        ])
+                      )
+                      const shiftChips = visibleAbsenceShifts.reduce<
+                        Array<{
+                          date: string
+                          time_slot_code: string
+                          status: 'assigned' | 'available' | 'unavailable'
+                          reason?: string
+                          classroom_name?: string | null
+                          class_name?: string | null
+                        }>
+                      >((acc, shift) => {
+                        const key = `${shift.date}|${shift.time_slot_code}`
+                        if (shift.status !== 'uncovered' && !assignedMap.has(key)) {
+                          return acc
                         }
-                      }
-                      acc.push({
-                        date: shift.date as string,
-                        time_slot_code: shift.time_slot_code as string,
-                        status: 'assigned' as const,
-                        classroom_name: shift.classroom_name ?? null,
-                        class_name: shift.class_name ?? null,
-                      })
-                      return acc
-                    }
-                    if (canCoverMap.has(key)) {
-                      acc.push({
-                        date: shift.date as string,
-                        time_slot_code: shift.time_slot_code as string,
-                        status: 'available' as const,
-                        classroom_name: shift.classroom_name ?? null,
-                        class_name: shift.class_name ?? null,
-                      })
-                      return acc
-                    }
-                    const reason = cannotCoverMap.get(key)
-                    acc.push({
-                      date: shift.date as string,
-                      time_slot_code: shift.time_slot_code as string,
-                      status: 'unavailable' as const,
-                      reason: reason || undefined,
-                      classroom_name: shift.classroom_name ?? null,
-                      class_name: shift.class_name ?? null,
-                    })
-                    return acc
-                  }, [])
-                  const coverageSegments = derived.hasAssignedShifts
-                    ? shiftChips
-                        .filter(shift =>
-                          derived.remainingShiftKeys.has(`${shift.date}|${shift.time_slot_code}`)
-                        )
-                        .map(shift => shift.status)
-                    : shiftChips.map(shift => shift.status)
+                        if (assignedMap.has(key)) {
+                          if (shift.status === 'uncovered') {
+                            const logKey = `${absence.id}|${sub.id}|${key}`
+                            if (!loggedAssignedMismatchRef.current.has(logKey)) {
+                              loggedAssignedMismatchRef.current.add(logKey)
+                              console.warn(
+                                '[Sub Finder] Assigned shift marked uncovered in absence data',
+                                {
+                                  absence_id: absence.id,
+                                  sub_id: sub.id,
+                                  shift_key: key,
+                                  shift_status: shift.status,
+                                  shift_date: shift.date,
+                                  shift_time_slot_code: shift.time_slot_code,
+                                }
+                              )
+                            }
+                          }
+                          acc.push({
+                            date: shift.date as string,
+                            time_slot_code: shift.time_slot_code as string,
+                            status: 'assigned' as const,
+                            classroom_name: shift.classroom_name ?? null,
+                            class_name: shift.class_name ?? null,
+                          })
+                          return acc
+                        }
+                        if (canCoverMap.has(key)) {
+                          acc.push({
+                            date: shift.date as string,
+                            time_slot_code: shift.time_slot_code as string,
+                            status: 'available' as const,
+                            classroom_name: shift.classroom_name ?? null,
+                            class_name: shift.class_name ?? null,
+                          })
+                          return acc
+                        }
+                        const reason = cannotCoverMap.get(key)
+                        acc.push({
+                          date: shift.date as string,
+                          time_slot_code: shift.time_slot_code as string,
+                          status: 'unavailable' as const,
+                          reason: reason || undefined,
+                          classroom_name: shift.classroom_name ?? null,
+                          class_name: shift.class_name ?? null,
+                        })
+                        return acc
+                      }, [])
+                      const coverageSegments = derived.hasAssignedShifts
+                        ? shiftChips
+                            .filter(shift =>
+                              derived.remainingShiftKeys.has(
+                                `${shift.date}|${shift.time_slot_code}`
+                              )
+                            )
+                            .map(shift => shift.status)
+                        : shiftChips.map(shift => shift.status)
 
-                  return (
-                    <SubFinderCard
-                      key={sub.id}
-                      id={`sub-card-${sub.id}`}
-                      name={sub.name}
-                      phone={sub.phone}
-                      shiftsCovered={shiftsCovered}
-                      totalShifts={
-                        derived.hasAssignedShifts
-                          ? derived.remainingShiftCount
-                          : derived.totalShiftsNeedingCoverage
-                      }
-                      useRemainingLabel={derived.hasAssignedShifts}
-                      canCover={canCoverWithClassrooms}
-                      cannotCover={cannotCoverWithClassrooms}
-                      assigned={assignedWithClassrooms}
-                      shiftChips={shiftChips}
-                      coverageSegments={coverageSegments}
-                      notes={sub.notes}
-                      isDeclined={true}
-                      highlighted={highlightedSubId === sub.id}
-                      className="bg-gray-100/50 opacity-75"
-                      onContact={() => onContactSub?.(sub)}
-                    />
-                  )
-                })}
+                      return (
+                        <SubFinderCard
+                          key={sub.id}
+                          id={`sub-card-${sub.id}`}
+                          name={sub.name}
+                          phone={sub.phone}
+                          shiftsCovered={shiftsCovered}
+                          totalShifts={
+                            derived.hasAssignedShifts
+                              ? derived.remainingShiftCount
+                              : derived.totalShiftsNeedingCoverage
+                          }
+                          useRemainingLabel={derived.hasAssignedShifts}
+                          canCover={canCoverWithClassrooms}
+                          cannotCover={cannotCoverWithClassrooms}
+                          assigned={assignedWithClassrooms}
+                          shiftChips={shiftChips}
+                          coverageSegments={coverageSegments}
+                          notes={sub.notes}
+                          isDeclined={true}
+                          highlighted={highlightedSubId === sub.id}
+                          className="bg-gray-100/50 opacity-75"
+                          onContact={() => onContactSub?.(sub)}
+                        />
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
     </TooltipProvider>

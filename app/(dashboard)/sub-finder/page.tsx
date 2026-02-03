@@ -6,9 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { ChevronDown, ChevronLeft, RefreshCw, Search, Settings2, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, RefreshCw, Search, X } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Badge } from '@/components/ui/badge'
 import AbsenceList from '@/components/sub-finder/AbsenceList'
 import RecommendedSubsList from '@/components/sub-finder/RecommendedSubsList'
 import type { RecommendedSub } from '@/components/sub-finder/ContactSubPanel'
@@ -77,10 +76,12 @@ export default function SubFinderPage() {
   const [selectedTeacherIds, setSelectedTeacherIds] = useState<string[]>([]) // Array of selected teacher IDs
   const [subSearch, setSubSearch] = useState('')
   const [isSubSearchOpen, setIsSubSearchOpen] = useState(false)
+  const teacherSearchRef = useRef<HTMLInputElement | null>(null)
   const [selectedSub, setSelectedSub] = useState<SubCandidate | null>(null)
   const [isContactPanelOpen, setIsContactPanelOpen] = useState(false)
   const [selectedShift, setSelectedShift] = useState<SubFinderShift | null>(null)
   const [isAllSubsOpen, setIsAllSubsOpen] = useState(false)
+  const [selectedSubIds, setSelectedSubIds] = useState<string[]>([])
   const [isTeacherSearchOpen, setIsTeacherSearchOpen] = useState(false)
   const { setActivePanel, previousPanel, restorePreviousPanel, registerPanelCloseHandler } =
     usePanelManager()
@@ -232,14 +233,38 @@ export default function SubFinderPage() {
   }, [sortedVisibleShifts])
 
   const rightPanelSubs = useMemo(() => {
-    if (!selectedShift) return allSubs
-    return allSubs.filter(sub =>
-      sub.can_cover?.some(
-        shift =>
-          shift.date === selectedShift.date && shift.time_slot_code === selectedShift.time_slot_code
-      )
-    )
-  }, [allSubs, selectedShift])
+    if (selectedSubIds.length > 0) {
+      return allSubs.filter(sub => selectedSubIds.includes(sub.id))
+    }
+    let subs = allSubs
+    if (includeOnlyRecommended) {
+      subs = subs.filter(sub => (sub.coverage_percent ?? 0) > 0 || (sub.can_cover?.length ?? 0) > 0)
+    }
+    // Note: do not filter by selectedShift here; we want all subs visible,
+    // even if unavailable for the currently selected shift.
+    if (typeof window !== 'undefined') {
+      console.debug('[Sub Finder Debug] rightPanelSubs filter', {
+        all_subs: allSubs.length,
+        selectedSubIds: selectedSubIds.length,
+        includeOnlyRecommended,
+        selectedShift: selectedShift
+          ? { date: selectedShift.date, time_slot_code: selectedShift.time_slot_code }
+          : null,
+        result: subs.length,
+      })
+    }
+    return subs
+  }, [allSubs, includeOnlyRecommended, selectedShift, selectedSubIds])
+
+  const selectedSubChips = useMemo(() => {
+    if (selectedSubIds.length === 0) return []
+    return selectedSubIds
+      .map(id => {
+        const sub = allSubs.find(item => item.id === id)
+        return sub ? { id, name: getDisplayName(sub) } : { id, name: 'Unknown' }
+      })
+      .filter(item => item.name)
+  }, [allSubs, getDisplayName, selectedSubIds])
   const shiftFilterOptions = useMemo(
     () => [
       { key: 'all', label: 'All', count: shiftFilterCounts.all },
@@ -532,11 +557,7 @@ export default function SubFinderPage() {
     setSelectedAbsence,
   ])
 
-  // Wrapper for setIncludeFlexibleStaff that marks change as user-initiated
-  const handleFlexibleStaffChange = (checked: boolean) => {
-    isFlexibleStaffChangeUserInitiatedRef.current = true
-    setIncludeFlexibleStaff(checked)
-  }
+  // Wrapper for setIncludeFlexibleStaff removed (no longer used)
 
   // Auto-rerun Finder when includeFlexibleStaff changes (user-initiated only)
   useEffect(() => {
@@ -624,6 +645,7 @@ export default function SubFinderPage() {
     }
     setTeacherSearchInput('')
     setIsTeacherSearchOpen(false)
+    teacherSearchRef.current?.blur()
   }
 
   // Remove teacher from selection
@@ -1038,6 +1060,7 @@ export default function SubFinderPage() {
                             type="text"
                             placeholder="Search teachers..."
                             value={isTeacherSearchOpen ? teacherSearchInput : searchQuery}
+                            ref={teacherSearchRef}
                             onChange={e => {
                               if (isTeacherSearchOpen) {
                                 setTeacherSearchInput(e.target.value)
@@ -1443,165 +1466,75 @@ export default function SubFinderPage() {
                       Rerun Finder
                     </Button>
 
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="relative w-auto justify-center"
-                        >
-                          <Settings2 className="h-4 w-4 mr-2" />
-                          Search & Filter
-                          {(includePartiallyCovered ||
-                            !includeOnlyRecommended ||
-                            !includeFlexibleStaff) && (
-                            <Badge
-                              variant="secondary"
-                              className="ml-2 h-5 min-w-[20px] px-1.5 text-xs"
-                            >
-                              {
-                                [
-                                  includePartiallyCovered,
-                                  !includeOnlyRecommended,
-                                  !includeFlexibleStaff,
-                                ].filter(Boolean).length
-                              }
-                            </Badge>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        className="w-80"
-                        align="start"
-                        onOpenAutoFocus={event => event.preventDefault()}
+                    <div className="flex-1 space-y-2">
+                      <Label className="text-sm font-medium">Search subs</Label>
+                      <div
+                        ref={subSearchRef}
+                        className="rounded-md border border-slate-200 bg-white"
                       >
-                        <div className="space-y-4">
-                          <div>
-                            <Label className="text-sm font-medium">Substitute</Label>
-                            <div
-                              ref={subSearchRef}
-                              className="mt-2 rounded-md border border-slate-200 bg-white"
-                            >
-                              <div className="border-b border-slate-100 p-2">
-                                <Input
-                                  placeholder="Search substitutes..."
-                                  value={subSearch}
-                                  onChange={event => setSubSearch(event.target.value)}
-                                  onFocus={() => setIsSubSearchOpen(true)}
-                                  className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
-                                />
-                              </div>
-                              {isSubSearchOpen && (
-                                <div className="max-h-60 overflow-y-auto p-2">
-                                  {filteredSubsForSearch.length === 0 ? (
-                                    <div className="p-2 text-xs text-muted-foreground">
-                                      No matches
-                                    </div>
-                                  ) : (
-                                    <div className="space-y-1">
-                                      {filteredSubsForSearch.map(sub => {
-                                        const name = getDisplayName(sub)
-                                        const canCover =
-                                          (sub.shifts_covered ?? 0) > 0 ||
-                                          (sub.can_cover?.length ?? 0) > 0
-                                        return (
-                                          <button
-                                            key={sub.id}
-                                            type="button"
-                                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
-                                            onClick={() => {
-                                              if (!canCover && includeOnlyRecommended) {
-                                                setIncludeOnlyRecommended(false)
-                                                applySubResults(allSubs, {
-                                                  useOnlyRecommended: false,
-                                                })
-                                                toast(
-                                                  'Turning off “Include only recommended subs” to show this selection.'
-                                                )
-                                                setTimeout(() => scrollToSubCard(sub.id), 50)
-                                              } else {
-                                                scrollToSubCard(sub.id)
-                                              }
-                                              setIsSubSearchOpen(false)
-                                            }}
-                                          >
-                                            <span
-                                              className={`h-2 w-2 rounded-full ${canCover ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                                            />
-                                            <span>{name.trim()}</span>
-                                          </button>
-                                        )
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <div>
-                            <h4 className="font-medium text-sm mb-3">Filter Options</h4>
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                  <Label
-                                    htmlFor="include-only-recommended-mobile-all"
-                                    className="text-sm font-normal cursor-pointer"
-                                  >
-                                    Include only recommended subs
-                                  </Label>
-                                  <p className="text-xs text-muted-foreground mt-0.5">
-                                    Show only subs who can cover at least one shift
-                                  </p>
-                                </div>
-                                <Switch
-                                  id="include-only-recommended-mobile-all"
-                                  checked={includeOnlyRecommended}
-                                  onCheckedChange={setIncludeOnlyRecommended}
-                                />
-                              </div>
-
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                  <Label
-                                    htmlFor="include-partial-mobile-all"
-                                    className="text-sm font-normal cursor-pointer"
-                                  >
-                                    Include partially covered shifts
-                                  </Label>
-                                  <p className="text-xs text-muted-foreground mt-0.5">
-                                    Show absences with partial coverage
-                                  </p>
-                                </div>
-                                <Switch
-                                  id="include-partial-mobile-all"
-                                  checked={includePartiallyCovered}
-                                  onCheckedChange={setIncludePartiallyCovered}
-                                />
-                              </div>
-
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                  <Label
-                                    htmlFor="include-flexible-mobile-all"
-                                    className="text-sm font-normal cursor-pointer"
-                                  >
-                                    Include Flexible Staff
-                                  </Label>
-                                  <p className="text-xs text-muted-foreground mt-0.5">
-                                    Include staff who can sub when not teaching
-                                  </p>
-                                </div>
-                                <Switch
-                                  id="include-flexible-mobile-all"
-                                  checked={includeFlexibleStaff}
-                                  onCheckedChange={handleFlexibleStaffChange}
-                                />
-                              </div>
-                            </div>
-                          </div>
+                        <div className="border-b border-slate-100 p-2">
+                          <Input
+                            placeholder="Search substitutes..."
+                            value={subSearch}
+                            onChange={event => setSubSearch(event.target.value)}
+                            onFocus={() => setIsSubSearchOpen(true)}
+                            className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
+                          />
                         </div>
-                      </PopoverContent>
-                    </Popover>
+                        {isSubSearchOpen && (
+                          <div className="max-h-60 overflow-y-auto p-2">
+                            {filteredSubsForSearch.length === 0 ? (
+                              <div className="p-2 text-xs text-muted-foreground">No matches</div>
+                            ) : (
+                              <div className="space-y-1">
+                                {filteredSubsForSearch.map(sub => {
+                                  const name = getDisplayName(sub)
+                                  const canCover = selectedShift
+                                    ? (sub.can_cover?.some(
+                                        shift =>
+                                          shift.date === selectedShift.date &&
+                                          shift.time_slot_code === selectedShift.time_slot_code
+                                      ) ?? false)
+                                    : (sub.shifts_covered ?? 0) > 0 ||
+                                      (sub.can_cover?.length ?? 0) > 0
+                                  return (
+                                    <button
+                                      key={sub.id}
+                                      type="button"
+                                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
+                                      onClick={() => {
+                                        if (!canCover && includeOnlyRecommended) {
+                                          setIncludeOnlyRecommended(false)
+                                          applySubResults(allSubs, {
+                                            useOnlyRecommended: false,
+                                          })
+                                          toast(
+                                            'Turning off “Include only recommended subs” to show this selection.'
+                                          )
+                                          setTimeout(() => scrollToSubCard(sub.id), 50)
+                                        } else {
+                                          scrollToSubCard(sub.id)
+                                        }
+                                        setSelectedSubIds(prev =>
+                                          prev.includes(sub.id) ? prev : [...prev, sub.id]
+                                        )
+                                        setSubSearch('')
+                                        setIsSubSearchOpen(false)
+                                      }}
+                                    >
+                                      <span
+                                        className={`h-2 w-2 rounded-full ${canCover ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                      />
+                                      <span>{name.trim()}</span>
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   <RecommendedSubsList
@@ -1614,6 +1547,7 @@ export default function SubFinderPage() {
                     hideHeader
                     highlightedSubId={highlightedSubId}
                     includePastShifts={includePastShifts}
+                    selectedShift={selectedShift}
                   />
                 </div>
               </div>
@@ -1879,7 +1813,7 @@ export default function SubFinderPage() {
                     {selectedShift ? (
                       <>
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-semibold text-slate-900">
+                          <span className="text-base font-semibold text-slate-900">
                             {(() => {
                               const date = parseLocalDate(selectedShift.date)
                               const dayName = DAY_NAMES[date.getDay()]
@@ -1907,7 +1841,7 @@ export default function SubFinderPage() {
                         <div className="text-xs uppercase tracking-wide text-slate-400">
                           All Subs
                         </div>
-                        <div className="text-sm font-semibold text-slate-900">
+                        <div className="text-base font-semibold text-slate-900">
                           {selectedAbsence.teacher_name}
                         </div>
                       </>
@@ -1923,167 +1857,94 @@ export default function SubFinderPage() {
                   </button>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="relative w-auto justify-center"
-                      >
-                        <Settings2 className="h-4 w-4 mr-2" />
-                        Search & Filter
-                        {(includePartiallyCovered ||
-                          !includeOnlyRecommended ||
-                          !includeFlexibleStaff) && (
-                          <Badge
-                            variant="secondary"
-                            className="ml-2 h-5 min-w-[20px] px-1.5 text-xs"
-                          >
-                            {
-                              [
-                                includePartiallyCovered,
-                                !includeOnlyRecommended,
-                                !includeFlexibleStaff,
-                              ].filter(Boolean).length
-                            }
-                          </Badge>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      className="w-80"
-                      align="start"
-                      onOpenAutoFocus={event => event.preventDefault()}
-                    >
-                      <div className="space-y-4">
-                        <div>
-                          <Label className="text-sm font-medium">Substitute</Label>
-                          <div
-                            ref={subSearchRef}
-                            className="mt-2 rounded-md border border-slate-200 bg-white"
-                          >
-                            <div className="border-b border-slate-100 p-2">
-                              <Input
-                                placeholder="Search substitutes..."
-                                value={subSearch}
-                                onChange={event => setSubSearch(event.target.value)}
-                                onFocus={() => setIsSubSearchOpen(true)}
-                                className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
-                              />
-                            </div>
-                            {isSubSearchOpen && (
-                              <div className="max-h-60 overflow-y-auto p-2">
-                                {filteredSubsForSearch.length === 0 ? (
-                                  <div className="p-2 text-xs text-muted-foreground">
-                                    No matches
-                                  </div>
-                                ) : (
-                                  <div className="space-y-1">
-                                    {filteredSubsForSearch.map(sub => {
-                                      const name = getDisplayName(sub)
-                                      const canCover =
-                                        (sub.shifts_covered ?? 0) > 0 ||
-                                        (sub.can_cover?.length ?? 0) > 0
-                                      return (
-                                        <button
-                                          key={sub.id}
-                                          type="button"
-                                          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
-                                          onClick={() => {
-                                            if (!canCover && includeOnlyRecommended) {
-                                              setIncludeOnlyRecommended(false)
-                                              applySubResults(allSubs, {
-                                                useOnlyRecommended: false,
-                                              })
-                                              toast(
-                                                'Turning off “Include only recommended subs” to show this selection.'
-                                              )
-                                              setTimeout(() => scrollToSubCard(sub.id), 50)
-                                            } else {
-                                              scrollToSubCard(sub.id)
-                                            }
-                                            setIsSubSearchOpen(false)
-                                          }}
-                                        >
-                                          <span
-                                            className={`h-2 w-2 rounded-full ${canCover ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                                          />
-                                          <span>{name.trim()}</span>
-                                        </button>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Search subs</Label>
+                  <div ref={subSearchRef} className="rounded-md border border-slate-200 bg-white">
+                    <div className="border-b border-slate-100 p-2">
+                      <Input
+                        placeholder="Search substitutes..."
+                        value={subSearch}
+                        onChange={event => setSubSearch(event.target.value)}
+                        onFocus={() => setIsSubSearchOpen(true)}
+                        className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
+                      />
+                    </div>
+                    {isSubSearchOpen && (
+                      <div className="max-h-60 overflow-y-auto p-2">
+                        {filteredSubsForSearch.length === 0 ? (
+                          <div className="p-2 text-xs text-muted-foreground">No matches</div>
+                        ) : (
+                          <div className="space-y-1">
+                            {filteredSubsForSearch.map(sub => {
+                              const name = getDisplayName(sub)
+                              const canCover = selectedShift
+                                ? (sub.can_cover?.some(
+                                    shift =>
+                                      shift.date === selectedShift.date &&
+                                      shift.time_slot_code === selectedShift.time_slot_code
+                                  ) ?? false)
+                                : (sub.shifts_covered ?? 0) > 0 || (sub.can_cover?.length ?? 0) > 0
+                              return (
+                                <button
+                                  key={sub.id}
+                                  type="button"
+                                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
+                                  onClick={() => {
+                                    if (!canCover && includeOnlyRecommended) {
+                                      setIncludeOnlyRecommended(false)
+                                      applySubResults(allSubs, {
+                                        useOnlyRecommended: false,
+                                      })
+                                      toast(
+                                        'Turning off “Include only recommended subs” to show this selection.'
                                       )
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                                      setTimeout(() => scrollToSubCard(sub.id), 50)
+                                    } else {
+                                      scrollToSubCard(sub.id)
+                                    }
+                                    setSelectedSubIds(prev =>
+                                      prev.includes(sub.id) ? prev : [...prev, sub.id]
+                                    )
+                                    setSubSearch('')
+                                    setIsSubSearchOpen(false)
+                                  }}
+                                >
+                                  <span
+                                    className={`h-2 w-2 rounded-full ${canCover ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                  />
+                                  <span>{name.trim()}</span>
+                                </button>
+                              )
+                            })}
                           </div>
-                        </div>
-                        <div>
-                          <h4 className="font-medium text-sm mb-3">Filter Options</h4>
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <Label
-                                  htmlFor="include-only-recommended-right"
-                                  className="text-sm font-normal cursor-pointer"
-                                >
-                                  Include only recommended subs
-                                </Label>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  Show only subs who can cover at least one shift
-                                </p>
-                              </div>
-                              <Switch
-                                id="include-only-recommended-right"
-                                checked={includeOnlyRecommended}
-                                onCheckedChange={setIncludeOnlyRecommended}
-                              />
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <Label
-                                  htmlFor="include-partial-right"
-                                  className="text-sm font-normal cursor-pointer"
-                                >
-                                  Include partially covered shifts
-                                </Label>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  Show absences with partial coverage
-                                </p>
-                              </div>
-                              <Switch
-                                id="include-partial-right"
-                                checked={includePartiallyCovered}
-                                onCheckedChange={setIncludePartiallyCovered}
-                              />
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <Label
-                                  htmlFor="include-flexible-right"
-                                  className="text-sm font-normal cursor-pointer"
-                                >
-                                  Include Flexible Staff
-                                </Label>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  Include staff who can sub when not teaching
-                                </p>
-                              </div>
-                              <Switch
-                                id="include-flexible-right"
-                                checked={includeFlexibleStaff}
-                                onCheckedChange={handleFlexibleStaffChange}
-                              />
-                            </div>
-                          </div>
-                        </div>
+                        )}
                       </div>
-                    </PopoverContent>
-                  </Popover>
+                    )}
+                  </div>
                 </div>
+
+                {selectedSubChips.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedSubChips.map(chip => (
+                      <span
+                        key={chip.id}
+                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700"
+                      >
+                        {chip.name}
+                        <button
+                          type="button"
+                          className="text-slate-400 hover:text-slate-600"
+                          aria-label={`Remove ${chip.name}`}
+                          onClick={() =>
+                            setSelectedSubIds(prev => prev.filter(id => id !== chip.id))
+                          }
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className="border-t border-slate-200" />
 
                 <div>
@@ -2097,6 +1958,7 @@ export default function SubFinderPage() {
                     hideHeader
                     highlightedSubId={highlightedSubId}
                     includePastShifts={includePastShifts}
+                    selectedShift={selectedShift}
                   />
                 </div>
               </div>

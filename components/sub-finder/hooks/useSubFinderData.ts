@@ -110,6 +110,8 @@ export interface SubCandidate {
   }>
   notes?: string | null
   response_status?: string | null
+  is_flexible_staff?: boolean
+  is_sub?: boolean
   [key: string]: unknown
 }
 
@@ -138,7 +140,7 @@ export function useSubFinderData({
   )
   const [includePartiallyCovered, setIncludePartiallyCovered] = useState(false)
   const [includeFlexibleStaff, setIncludeFlexibleStaff] = useState(true)
-  const [includeOnlyRecommended, setIncludeOnlyRecommended] = useState(true)
+  const [includeOnlyRecommended, setIncludeOnlyRecommended] = useState(false)
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const loggedRecommendationDebugRef = useRef(new Set<string>())
 
@@ -217,9 +219,9 @@ export function useSubFinderData({
   const recommendationParams = useMemo(
     () => ({
       ...(subRecommendationParams || {}),
-      includeFlexibleStaff,
+      includeFlexibleStaff: true,
     }),
-    [includeFlexibleStaff, subRecommendationParams]
+    [subRecommendationParams]
   )
 
   const {
@@ -272,6 +274,12 @@ export function useSubFinderData({
             : includeOnlyRecommended
       if (forceOnlyRecommended) {
         setIncludeOnlyRecommended(true)
+      }
+      if (typeof window !== 'undefined') {
+        console.debug('[Sub Finder Debug] applySubResults', {
+          subs_count: subs.length,
+          effectiveOnlyRecommended,
+        })
       }
       const filteredSubs = effectiveOnlyRecommended
         ? subs.filter(sub => sub.coverage_percent > 0)

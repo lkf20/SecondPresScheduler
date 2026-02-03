@@ -67,6 +67,7 @@ Features for later consideration (beyond the next few weeks).
 - [ ] Preserve application state when navigating between sections - maintain user context (e.g., selected absence, sub finder filters, selected shifts) when switching to dashboard or other sections and returning, so users don't lose their work in progress
 - [ ] Add AI chat assistant for coverage planning; keep coverage/assignment logic in reusable server functions and make "find sub"/"assign shifts" deterministic and explainable so the AI can justify choices
 - [ ] Mobile UX overhaul: create a global mobile-friendly navigation pattern and adjust Sub Finder layout/flows to use it
+- [ ] Sub Finder: detect partial-shift availability and classify subs into the "Partially Available" section
 
 ### API Enhancements for AI Chat (Phase 3)
 
