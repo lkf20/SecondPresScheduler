@@ -125,11 +125,17 @@ export interface WeeklyScheduleDataByClassroom {
   }>
 }
 
-export async function getWeeklyScheduleData(
-  schoolId: string,
-  selectedDayIds?: string[],
-  weekStartISO?: string
-) {
+export async function getScheduleSnapshotData({
+  schoolId,
+  selectedDayIds,
+  startDateISO,
+  endDateISO,
+}: {
+  schoolId: string
+  selectedDayIds?: string[]
+  startDateISO?: string
+  endDateISO?: string
+}) {
   const supabase = await createClient()
 
   // Fetch time off shifts for the week to identify uncovered absences
@@ -142,12 +148,10 @@ export async function getWeeklyScheduleData(
     time_off_request_id: string
   }> = []
 
-  if (weekStartISO) {
-    try {
-      const weekStart = new Date(weekStartISO + 'T00:00:00')
-      const weekEnd = new Date(weekStart)
-      weekEnd.setDate(weekEnd.getDate() + 6)
+  const hasDateRange = Boolean(startDateISO && endDateISO)
 
+  if (hasDateRange && startDateISO && endDateISO) {
+    try {
       const { data: timeOffShiftsData, error: timeOffShiftsError } = await supabase
         .from('time_off_shifts')
         .select(
@@ -160,8 +164,8 @@ export async function getWeeklyScheduleData(
           time_off_requests!inner(teacher_id, status)
         `
         )
-        .gte('date', weekStartISO)
-        .lte('date', weekEnd.toISOString().split('T')[0])
+        .gte('date', startDateISO)
+        .lte('date', endDateISO)
         .eq('time_off_requests.status', 'active')
 
       if (timeOffShiftsError) {
@@ -234,6 +238,7 @@ export async function getWeeklyScheduleData(
     .from('classrooms')
     .select('*')
     .eq('school_id', schoolId)
+    .eq('is_active', true)
     .order('order', { ascending: true, nullsFirst: false })
     .order('name', { ascending: true })
 
@@ -332,7 +337,7 @@ export async function getWeeklyScheduleData(
     scheduleCells = null
   }
 
-  // Fetch substitute assignments for the selected week (if weekStartISO is provided)
+  // Fetch substitute assignments for the selected date range (if provided)
   type SubAssignmentKey = string
   let subAssignments: WeeklySubAssignment[] = []
   const getSubAssignmentKey = (sub: WeeklySubAssignment): SubAssignmentKey =>
@@ -345,14 +350,9 @@ export async function getWeeklyScheduleData(
       sub.sub_id,
     ].join('|')
 
-  if (weekStartISO) {
+  if (hasDateRange && startDateISO && endDateISO) {
     try {
-      // Calculate week start and end dates
-      const weekStart = new Date(weekStartISO + 'T00:00:00')
-      const weekEnd = new Date(weekStart)
-      weekEnd.setDate(weekEnd.getDate() + 6) // Add 6 days to get Sunday
-
-      // Fetch sub_assignments for the week
+      // Fetch sub_assignments for the date range
       const { data: subAssignmentsData, error: subAssignmentsError } = await supabase
         .from('sub_assignments')
         .select(
@@ -368,8 +368,8 @@ export async function getWeeklyScheduleData(
           teacher:staff!sub_assignments_teacher_id_fkey(id, first_name, last_name, display_name)
         `
         )
-        .gte('date', weekStartISO)
-        .lte('date', weekEnd.toISOString().split('T')[0])
+        .gte('date', startDateISO)
+        .lte('date', endDateISO)
 
       if (subAssignmentsError) {
         console.warn('Error fetching sub_assignments:', subAssignmentsError.message)
@@ -397,7 +397,7 @@ export async function getWeeklyScheduleData(
     }
   }
 
-  // Build the weekly schedule data structure grouped by classroom
+  // Build the schedule data structure grouped by classroom
   const weeklyDataByClassroom: WeeklyScheduleDataByClassroom[] = []
 
   // Process each classroom
@@ -507,7 +507,7 @@ export async function getWeeklyScheduleData(
           }
 
           const subsForSlot =
-            weekStartISO && day.id
+            hasDateRange && day.id
               ? subAssignments.filter(
                   sa =>
                     sa.day_of_week_id === day.id &&
@@ -534,8 +534,8 @@ export async function getWeeklyScheduleData(
             }
           >()
 
-          // Add substitute assignments for this day/time/classroom (if weekStartISO is provided)
-          if (weekStartISO && day.id) {
+          // Add substitute assignments for this day/time/classroom (if date range is provided)
+          if (hasDateRange && day.id) {
             for (const sub of uniqueSubsForSlot) {
               if (sub.teacher_id && !absentTeachers.has(sub.teacher_id)) {
                 absentTeachers.set(sub.teacher_id, {
@@ -575,9 +575,9 @@ export async function getWeeklyScheduleData(
             }
           }
 
-          // Check for uncovered absences from time_off_shifts (if weekStartISO is provided)
+          // Check for uncovered absences from time_off_shifts (if date range is provided)
           // Only add absences for teachers who are actually assigned to this classroom
-          if (weekStartISO && day.id) {
+          if (hasDateRange && day.id) {
             const timeOffForSlot = timeOffShifts.filter(
               tos => tos.day_of_week_id === day.id && tos.time_slot_id === timeSlot.id
             )
@@ -697,4 +697,26 @@ export async function getWeeklyScheduleData(
   }
 
   return weeklyDataByClassroom
+}
+
+export async function getWeeklyScheduleData(
+  schoolId: string,
+  selectedDayIds?: string[],
+  weekStartISO?: string
+) {
+  if (!weekStartISO) {
+    return getScheduleSnapshotData({ schoolId, selectedDayIds })
+  }
+
+  const weekStart = new Date(weekStartISO + 'T00:00:00')
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekEnd.getDate() + 6)
+  const weekEndISO = weekEnd.toISOString().split('T')[0]
+
+  return getScheduleSnapshotData({
+    schoolId,
+    selectedDayIds,
+    startDateISO: weekStartISO,
+    endDateISO: weekEndISO,
+  })
 }
