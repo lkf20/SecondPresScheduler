@@ -47,12 +47,12 @@ export default function RecommendedSubsList({
 }: RecommendedSubsListProps) {
   const [isDeclinedExpanded, setIsDeclinedExpanded] = useState(false)
   const [expandedSections, setExpandedSections] = useState({
-    assigned: false,
-    contacted: false,
-    available: false,
-    availableLimited: false,
-    unavailable: false,
-    declined: false,
+    assigned: true,
+    contacted: true,
+    available: true,
+    availableLimited: true,
+    unavailable: true,
+    declined: true,
   })
   const loggedCoverageMismatchRef = useRef(new Set<string>())
   const loggedAssignedMismatchRef = useRef<Set<string>>(new Set())
@@ -629,6 +629,43 @@ export default function RecommendedSubsList({
     )
   }
 
+  const sectionCounts = groupedSubs
+    ? {
+        assigned: groupedSubs.assigned.length,
+        contacted: groupedSubs.contacted.length,
+        available: groupedSubs.available.length,
+        availableLimited: groupedSubs.availableLimited.length,
+        unavailable: groupedSubs.unavailable.length,
+        declined: groupedSubs.declined.length,
+      }
+    : {
+        assigned: 0,
+        contacted: 0,
+        available: 0,
+        availableLimited: 0,
+        unavailable: 0,
+        declined: 0,
+      }
+
+  const allCount = Object.values(sectionCounts).reduce((sum, count) => sum + count, 0)
+
+  const sectionFilters = [
+    { key: 'assigned', label: 'Assigned' },
+    { key: 'contacted', label: 'Contacted' },
+    { key: 'available', label: 'Available' },
+    { key: 'availableLimited', label: 'Available with limitations' },
+    { key: 'unavailable', label: 'Unavailable' },
+    { key: 'declined', label: 'Declined' },
+  ] as const
+
+  const [activeFilter, setActiveFilter] = useState<string | null>(null)
+
+  const toggleFilter = (key: string) => {
+    setActiveFilter(prev => (prev === key ? null : key))
+  }
+
+  const showSection = (key: string) => (activeFilter ? activeFilter === key : true)
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -676,18 +713,52 @@ export default function RecommendedSubsList({
 
         {showAllSubs && groupedSubs ? (
           <div className="space-y-4">
-            {renderSection('assigned', 'Assigned', groupedSubs.assigned)}
-            {renderSection('contacted', 'Contacted', groupedSubs.contacted)}
-            {renderSection('available', 'Available', groupedSubs.available)}
-            {renderSection(
-              'availableLimited',
-              'Available (with limitations)',
-              groupedSubs.availableLimited
-            )}
-            {renderSection('unavailable', 'Unavailable', groupedSubs.unavailable)}
-            {groupedSubs.declined.length > 0 && <div className="border-t border-slate-200" />}
-            <div className="opacity-70">
-              {renderSection('declined', 'Declined', groupedSubs.declined)}
+            <div className="mt-2 flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+              <Button
+                type="button"
+                variant={activeFilter === null ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setActiveFilter(null)}
+                className="h-7 px-2 text-xs"
+              >
+                All ({allCount})
+              </Button>
+              {sectionFilters.map(filter => (
+                <Button
+                  key={filter.key}
+                  type="button"
+                  variant={activeFilter === filter.key ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => toggleFilter(filter.key)}
+                  className="h-7 px-2 text-xs"
+                >
+                  {filter.label} ({sectionCounts[filter.key]})
+                </Button>
+              ))}
+            </div>
+            <div>
+              {showSection('assigned') &&
+                renderSection('assigned', 'Assigned', groupedSubs.assigned)}
+              {showSection('contacted') &&
+                renderSection('contacted', 'Contacted', groupedSubs.contacted)}
+              {showSection('available') &&
+                renderSection('available', 'Available', groupedSubs.available)}
+              {showSection('availableLimited') &&
+                renderSection(
+                  'availableLimited',
+                  'Available (with limitations)',
+                  groupedSubs.availableLimited
+                )}
+              {showSection('unavailable') &&
+                renderSection('unavailable', 'Unavailable', groupedSubs.unavailable)}
+              {showSection('declined') && groupedSubs.declined.length > 0 && (
+                <>
+                  <div className="border-t border-slate-200" />
+                  <div className="opacity-70">
+                    {renderSection('declined', 'Declined', groupedSubs.declined)}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         ) : (

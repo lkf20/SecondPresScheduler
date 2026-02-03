@@ -1481,12 +1481,48 @@ export default function SubFinderPage() {
                 }}
               />
             ) : selectedAbsence ? (
-              <div className="rounded-lg border border-slate-200 bg-white">
+              <div className="rounded-lg border border-slate-200 bg-slate-100">
                 <div className="flex items-center justify-between border-b px-4 py-3">
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-400">All Subs</div>
-                    <div className="text-sm font-semibold text-slate-900">
-                      {selectedAbsence.teacher_name}
+                  <div className="space-y-1">
+                    <div className="text-base font-semibold text-slate-900">
+                      Subs for {selectedAbsence.teacher_name}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                      <span>
+                        {(() => {
+                          const formatDate = (dateString: string) => {
+                            const date = parseLocalDate(dateString)
+                            const dayName = DAY_NAMES[date.getDay()]
+                            const month = MONTH_NAMES[date.getMonth()]
+                            const day = date.getDate()
+                            return `${dayName} ${month} ${day}`
+                          }
+                          const startDate = formatDate(selectedAbsence.start_date)
+                          if (
+                            selectedAbsence.end_date &&
+                            selectedAbsence.end_date !== selectedAbsence.start_date
+                          ) {
+                            const endDate = formatDate(selectedAbsence.end_date)
+                            return `${startDate} - ${endDate}`
+                          }
+                          return startDate
+                        })()}
+                      </span>
+                      {selectedClassrooms.length > 0 ? (
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          {selectedClassrooms.map(classroom => (
+                            <span
+                              key={classroom.id || classroom.name}
+                              className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                              style={getClassroomPillStyle(classroom.color)}
+                            >
+                              {classroom.name}
+                            </span>
+                          ))}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-500">Classroom unavailable</span>
+                      )}
                     </div>
                   </div>
                   <button
@@ -1513,11 +1549,8 @@ export default function SubFinderPage() {
 
                     <div className="flex-1 space-y-2">
                       <Label className="text-sm font-medium">Search subs</Label>
-                      <div
-                        ref={subSearchRef}
-                        className="rounded-md border border-slate-200 bg-white"
-                      >
-                        <div className="border-b border-slate-100 p-2">
+                      <div ref={subSearchRef} className="rounded-md bg-white">
+                        <div className="p-2">
                           <Input
                             placeholder="Search substitutes..."
                             value={subSearch}
@@ -1883,14 +1916,50 @@ export default function SubFinderPage() {
                         </div>
                       </>
                     ) : (
-                      <>
-                        <div className="text-xs uppercase tracking-wide text-slate-400">
-                          All Subs
-                        </div>
+                      <div className="flex flex-col gap-1">
                         <div className="text-base font-semibold text-slate-900">
-                          {selectedAbsence.teacher_name}
+                          Subs for {selectedAbsence.teacher_name}
                         </div>
-                      </>
+                        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                          <span>
+                            {(() => {
+                              const formatDate = (dateString: string) => {
+                                const date = parseLocalDate(dateString)
+                                const dayName = DAY_NAMES[date.getDay()]
+                                const month = MONTH_NAMES[date.getMonth()]
+                                const day = date.getDate()
+                                return `${dayName} ${month} ${day}`
+                              }
+                              const startDate = formatDate(selectedAbsence.start_date)
+                              if (
+                                selectedAbsence.end_date &&
+                                selectedAbsence.end_date !== selectedAbsence.start_date
+                              ) {
+                                const endDate = formatDate(selectedAbsence.end_date)
+                                return `${startDate} - ${endDate}`
+                              }
+                              return startDate
+                            })()}
+                          </span>
+                          {selectedClassrooms.length > 0 ? (
+                            <span className="flex flex-wrap items-center gap-1.5">
+                              {selectedClassrooms.map(classroom => (
+                                <span
+                                  key={classroom.id || classroom.name}
+                                  className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                                  style={getClassroomPillStyle(classroom.color)}
+                                >
+                                  {classroom.name}
+                                </span>
+                              ))}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              Classroom unavailable
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
                   <button
@@ -1905,14 +1974,14 @@ export default function SubFinderPage() {
 
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Search subs</Label>
-                  <div ref={subSearchRef} className="rounded-md border border-slate-200 bg-white">
-                    <div className="border-b border-slate-100 p-2">
+                  <div ref={subSearchRef} className="rounded-md bg-white">
+                    <div className="p-2">
                       <Input
                         placeholder="Search substitutes..."
                         value={subSearch}
                         onChange={event => setSubSearch(event.target.value)}
                         onFocus={() => setIsSubSearchOpen(true)}
-                        className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
+                        className="h-8 border-0  text-sm focus-visible:ring-0"
                       />
                     </div>
                     {isSubSearchOpen && (
