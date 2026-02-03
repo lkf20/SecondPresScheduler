@@ -218,9 +218,9 @@ export function useSubFinderData({
   const recommendationParams = useMemo(
     () => ({
       ...(subRecommendationParams || {}),
-      includeFlexibleStaff: true,
+      includeFlexibleStaff,
     }),
-    [subRecommendationParams]
+    [includeFlexibleStaff, subRecommendationParams]
   )
 
   const {

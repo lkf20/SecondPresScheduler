@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getTimeOffRequestById } from '@/lib/api/time-off'
 import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
-import { getSubAvailability, getSubAvailabilityExceptions } from '@/lib/api/sub-availability'
 import { getTeacherScheduledShifts } from '@/lib/api/time-off-shifts'
 import { getTimeOffRequests } from '@/lib/api/time-off'
 import { createErrorResponse } from '@/lib/utils/errors'
@@ -285,6 +284,7 @@ export async function POST(request: NextRequest) {
     }
 
     const activeSubs = (staffRows || []).filter(sub => sub.active !== false)
+    const subIds = activeSubs.map(sub => sub.id).filter(Boolean)
 
     // 4. Get date range for checking conflicts
     const startDate = timeOffRequest.start_date
@@ -305,28 +305,66 @@ export async function POST(request: NextRequest) {
       timeOffByTeacher.get(req.teacher_id)!.push(req)
     })
 
+    // 5b. Batch availability + exceptions for all subs in range
+    const availabilityBySub = new Map<string, Map<string, boolean>>()
+    const exceptionsBySub = new Map<
+      string,
+      Array<{ date: string; time_slot_id: string; available: boolean }>
+    >()
+
+    if (subIds.length > 0) {
+      const { data: availabilityRows, error: availabilityError } = await supabase
+        .from('sub_availability')
+        .select('sub_id, day_of_week_id, time_slot_id, available')
+        .in('sub_id', subIds)
+
+      if (availabilityError) throw availabilityError
+      ;(availabilityRows || []).forEach(row => {
+        if (!row?.sub_id || !row.available) return
+        const key = `${row.day_of_week_id}|${row.time_slot_id}`
+        if (!availabilityBySub.has(row.sub_id)) {
+          availabilityBySub.set(row.sub_id, new Map())
+        }
+        availabilityBySub.get(row.sub_id)!.set(key, true)
+      })
+
+      let exceptionsQuery = supabase
+        .from('sub_availability_exceptions')
+        .select('sub_id, date, time_slot_id, available')
+        .in('sub_id', subIds)
+
+      if (startDate) {
+        exceptionsQuery = exceptionsQuery.gte('date', startDate)
+      }
+      if (endDate) {
+        exceptionsQuery = exceptionsQuery.lte('date', endDate)
+      }
+
+      const { data: exceptionRows, error: exceptionError } = await exceptionsQuery
+      if (exceptionError) throw exceptionError
+      ;(exceptionRows || []).forEach(row => {
+        if (!row?.sub_id) return
+        if (!exceptionsBySub.has(row.sub_id)) {
+          exceptionsBySub.set(row.sub_id, [])
+        }
+        exceptionsBySub.get(row.sub_id)!.push({
+          date: row.date,
+          time_slot_id: row.time_slot_id,
+          available: row.available,
+        })
+      })
+    }
+
     // 6. For each sub, calculate match score
     const subMatches = await Promise.all(
       activeSubs.map(async sub => {
         try {
-          // Get sub's availability
-          const availability = await getSubAvailability(sub.id)
-          const availabilityExceptions = await getSubAvailabilityExceptions(sub.id, {
-            start_date: startDate,
-            end_date: endDate,
-          })
-
           // Create availability map: day_of_week_id + time_slot_id -> available
-          const availabilityMap = new Map<string, boolean>()
-          availability.forEach((avail: any) => {
-            if (avail.available) {
-              const key = `${avail.day_of_week_id}|${avail.time_slot_id}`
-              availabilityMap.set(key, true)
-            }
-          })
+          const availabilityMap = new Map<string, boolean>(availabilityBySub.get(sub.id) ?? [])
 
-          // Override with exceptions
-          availabilityExceptions.forEach((exception: any) => {
+          // Override with exceptions (date + time_slot_id)
+          const availabilityExceptions = exceptionsBySub.get(sub.id) || []
+          availabilityExceptions.forEach(exception => {
             const key = `${exception.date}|${exception.time_slot_id}`
             availabilityMap.set(key, exception.available)
           })

@@ -409,7 +409,7 @@ export default function RecommendedSubsList({
       }>
     >((acc, shift) => {
       const key = `${shift.date}|${shift.time_slot_code}`
-      if (shift.status !== 'uncovered' && !assignedMap.has(key)) {
+      if (shift.status !== 'uncovered' && !assignedMap.has(key) && key !== selectedShiftKey) {
         return acc
       }
       if (assignedMap.has(key)) {
