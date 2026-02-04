@@ -205,7 +205,7 @@ export default function SubFinderCard({
   }
 
   const isAssigned = assigned.length > 0
-  const resolvedResponseStatus = responseStatus || (isDeclined ? 'declined_all' : null)
+  const resolvedResponseStatus = responseStatus ?? (isDeclined ? 'declined_all' : null)
   const responseMeta =
     resolvedResponseStatus === 'confirmed'
       ? { label: 'Confirmed', icon: CheckCircle, className: 'text-emerald-600' }

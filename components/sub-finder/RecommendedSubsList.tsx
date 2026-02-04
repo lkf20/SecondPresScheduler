@@ -3,13 +3,12 @@
 import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import SubFinderCard from '@/components/sub-finder/SubFinderCard'
 import type { SubCandidate } from '@/components/sub-finder/hooks/useSubFinderData'
 import type { SubFinderShift } from '@/lib/sub-finder/types'
 import { filterVisibleShifts, getShiftKey } from '@/lib/sub-finder/shift-helpers'
-import { parseLocalDate } from '@/lib/utils/date'
-import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
+import { formatAbsenceDateRange } from '@/lib/utils/date-format'
 
 type RecommendedSub = SubCandidate
 
@@ -54,24 +53,7 @@ export default function RecommendedSubsList({
     declined: true,
   })
 
-  // Format date as "Mon Jan 11"
-  const formatDate = (dateString: string) => {
-    const date = parseLocalDate(dateString)
-    const dayName = DAY_NAMES[date.getDay()]
-    const month = MONTH_NAMES[date.getMonth()]
-    const day = date.getDate()
-    return `${dayName} ${month} ${day}`
-  }
-
-  // Format date range for display
-  const formatDateRange = () => {
-    const startDate = formatDate(absence.start_date)
-    if (absence.end_date && absence.end_date !== absence.start_date) {
-      const endDate = formatDate(absence.end_date)
-      return `${startDate} - ${endDate}`
-    }
-    return startDate
-  }
+  const formatDateRange = () => formatAbsenceDateRange(absence.start_date, absence.end_date)
   const classroomLookup = useMemo(() => {
     if (loading || subs.length === 0) {
       return new Map<string, string>()
@@ -233,22 +215,16 @@ export default function RecommendedSubsList({
     }
   }, [loading, showAllSubs, subs, visibleShiftKeys, visibleAbsenceShifts])
 
-  const groupedSubs = useMemo(() => {
-    if (!showAllSubs) {
-      return null
-    }
-    const assigned: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
-    const contacted: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
-    const available: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
-    const availableLimited: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
-    const unavailable: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
-    const declined: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
-    const selectedShiftKey = selectedShift
-      ? `${selectedShift.date}|${selectedShift.time_slot_code}`
-      : null
+  type SubBucket =
+    | 'declined'
+    | 'assigned'
+    | 'contacted'
+    | 'available'
+    | 'availableLimited'
+    | 'unavailable'
 
-    subs.forEach(sub => {
-      const shiftsCovered = sub.shifts_covered ?? 0
+  const getSubBucket = useCallback(
+    (sub: RecommendedSub, selectedShiftKey: string | null): SubBucket => {
       const coveragePercent = sub.coverage_percent ?? 0
       const isSub = sub.is_sub === true
       const isFlexibleStaff = sub.is_flexible_staff === true && !isSub
@@ -258,7 +234,6 @@ export default function RecommendedSubsList({
       const isAssigned = (sub.assigned_shifts?.length ?? 0) > 0
       const isAvailable = coveragePercent > 0
       const isDeclined = sub.response_status === 'declined_all'
-      const isUnavailable = coveragePercent === 0 && !isDeclined
       const isPartiallyAvailable = false // TODO: detect partial-shift availability once data is available
       const isContacted =
         sub.response_status === 'pending' ||
@@ -288,21 +263,57 @@ export default function RecommendedSubsList({
         ? isAvailableForSelected &&
           (hasQualificationGapForSelected || isPartiallyAvailable || isFlexibleStaff)
         : isAvailableLimited
+      const isUnavailableForSelected = selectedShiftKey
+        ? !isAvailableForSelected && !isAssignedForSelected && !isAvailableLimitedForSelected
+        : coveragePercent === 0 && !isDeclined
 
-      if (isDeclined) {
-        declined.push({ sub, shiftsCovered })
-      } else if (isAssignedForSelected) {
-        assigned.push({ sub, shiftsCovered })
-      } else if (isContacted) {
-        contacted.push({ sub, shiftsCovered })
-      } else if (isAvailableLimitedForSelected) {
-        availableLimited.push({ sub, shiftsCovered })
-      } else if (isAvailableForSelected) {
-        available.push({ sub, shiftsCovered })
-      } else if (isUnavailable) {
-        unavailable.push({ sub, shiftsCovered })
-      } else {
-        unavailable.push({ sub, shiftsCovered })
+      if (isDeclined) return 'declined'
+      if (isAssignedForSelected) return 'assigned'
+      if (isContacted) return 'contacted'
+      if (isAvailableLimitedForSelected) return 'availableLimited'
+      if (isAvailableForSelected) return 'available'
+      if (isUnavailableForSelected) return 'unavailable'
+      return 'unavailable'
+    },
+    []
+  )
+
+  const groupedSubs = useMemo(() => {
+    if (!showAllSubs) {
+      return null
+    }
+    const assigned: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
+    const contacted: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
+    const available: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
+    const availableLimited: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
+    const unavailable: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
+    const declined: Array<{ sub: RecommendedSub; shiftsCovered: number }> = []
+    const selectedShiftKey = selectedShift
+      ? `${selectedShift.date}|${selectedShift.time_slot_code}`
+      : null
+
+    subs.forEach(sub => {
+      const shiftsCovered = sub.shifts_covered ?? 0
+      const bucket = getSubBucket(sub, selectedShiftKey)
+      switch (bucket) {
+        case 'declined':
+          declined.push({ sub, shiftsCovered })
+          break
+        case 'assigned':
+          assigned.push({ sub, shiftsCovered })
+          break
+        case 'contacted':
+          contacted.push({ sub, shiftsCovered })
+          break
+        case 'availableLimited':
+          availableLimited.push({ sub, shiftsCovered })
+          break
+        case 'available':
+          available.push({ sub, shiftsCovered })
+          break
+        case 'unavailable':
+        default:
+          unavailable.push({ sub, shiftsCovered })
       }
     })
 
@@ -325,7 +336,7 @@ export default function RecommendedSubsList({
       unavailable,
       declined,
     }
-  }, [showAllSubs, subs, selectedShift])
+  }, [getSubBucket, showAllSubs, subs, selectedShift])
 
   const filterSubShifts = <
     T extends {
@@ -370,13 +381,7 @@ export default function RecommendedSubsList({
         null,
     }))
 
-  const renderSubCard = ({
-    sub,
-    shiftsCovered,
-  }: {
-    sub: RecommendedSub
-    shiftsCovered: number
-  }) => {
+  const buildShiftChipsForSub = (sub: RecommendedSub) => {
     const visibleCanCover = filterSubShifts(sub.can_cover)
     const visibleCannotCover = filterSubShifts(sub.cannot_cover)
     const visibleAssigned = filterSubShifts(sub.assigned_shifts ?? [])
@@ -455,6 +460,37 @@ export default function RecommendedSubsList({
     const filteredCannotCover = filterBySelectedShift(cannotCoverWithClassrooms)
     const filteredAssigned = filterBySelectedShift(assignedWithClassrooms)
     const filteredShiftChips = filterBySelectedShift(shiftChips)
+
+    return {
+      visibleCanCover,
+      visibleCannotCover,
+      visibleAssigned,
+      canCoverWithClassrooms,
+      cannotCoverWithClassrooms,
+      assignedWithClassrooms,
+      filteredCanCover,
+      filteredCannotCover,
+      filteredAssigned,
+      filteredShiftChips,
+    }
+  }
+
+  const renderSubCard = ({
+    sub,
+    shiftsCovered,
+  }: {
+    sub: RecommendedSub
+    shiftsCovered: number
+  }) => {
+    const {
+      visibleCanCover,
+      visibleCannotCover,
+      visibleAssigned,
+      filteredCanCover,
+      filteredCannotCover,
+      filteredAssigned,
+      filteredShiftChips,
+    } = buildShiftChipsForSub(sub)
     const coverageSegments = derived.hasAssignedShifts
       ? filteredShiftChips
           .filter(shift => derived.remainingShiftKeys.has(`${shift.date}|${shift.time_slot_code}`))

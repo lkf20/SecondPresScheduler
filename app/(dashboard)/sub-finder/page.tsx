@@ -21,8 +21,7 @@ import {
 } from '@/components/sub-finder/hooks/useSubFinderData'
 import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
 import DatePickerInput from '@/components/ui/date-picker-input'
-import { parseLocalDate } from '@/lib/utils/date'
-import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
+import { formatAbsenceDateRange, formatShortDate } from '@/lib/utils/date-format'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -236,14 +235,9 @@ export default function SubFinderPage() {
     if (selectedSubIds.length > 0) {
       return allSubs.filter(sub => selectedSubIds.includes(sub.id))
     }
-    let subs = allSubs
-    if (includeOnlyRecommended) {
-      subs = subs.filter(sub => (sub.coverage_percent ?? 0) > 0 || (sub.can_cover?.length ?? 0) > 0)
-    }
-    // Note: do not filter by selectedShift here; we want all subs visible,
-    // even if unavailable for the currently selected shift.
-    return subs
-  }, [allSubs, includeOnlyRecommended, selectedSubIds])
+    // Always show all subs in the right panel; availability is handled downstream.
+    return allSubs
+  }, [allSubs, selectedSubIds])
 
   const selectedSubChips = useMemo(() => {
     if (selectedSubIds.length === 0) return []
@@ -1417,24 +1411,10 @@ export default function SubFinderPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
                       <span>
-                        {(() => {
-                          const formatDate = (dateString: string) => {
-                            const date = parseLocalDate(dateString)
-                            const dayName = DAY_NAMES[date.getDay()]
-                            const month = MONTH_NAMES[date.getMonth()]
-                            const day = date.getDate()
-                            return `${dayName} ${month} ${day}`
-                          }
-                          const startDate = formatDate(selectedAbsence.start_date)
-                          if (
-                            selectedAbsence.end_date &&
-                            selectedAbsence.end_date !== selectedAbsence.start_date
-                          ) {
-                            const endDate = formatDate(selectedAbsence.end_date)
-                            return `${startDate} - ${endDate}`
-                          }
-                          return startDate
-                        })()}
+                        {formatAbsenceDateRange(
+                          selectedAbsence.start_date,
+                          selectedAbsence.end_date
+                        )}
                       </span>
                       {selectedClassrooms.length > 0 ? (
                         <span className="flex flex-wrap items-center gap-1.5">
@@ -1588,30 +1568,10 @@ export default function SubFinderPage() {
                       <span>{selectedAbsence.teacher_name}</span>
                       <span className="text-muted-foreground">→</span>
                       <span>
-                        {(() => {
-                          const formatDate = (dateString: string) => {
-                            const date = parseLocalDate(dateString)
-                            const dayName = DAY_NAMES[date.getDay()]
-                            const month = MONTH_NAMES[date.getMonth()]
-                            const day = date.getDate()
-                            return `${dayName} ${month} ${day}`
-                          }
-                          const startDate = formatDate(selectedAbsence.start_date)
-                          if (
-                            selectedAbsence.end_date &&
-                            selectedAbsence.end_date !== selectedAbsence.start_date
-                          ) {
-                            const endDate = formatDate(selectedAbsence.end_date)
-                            return (
-                              <>
-                                {startDate}
-                                <span className="font-normal text-slate-500"> - </span>
-                                {endDate}
-                              </>
-                            )
-                          }
-                          return startDate
-                        })()}
+                        {formatAbsenceDateRange(
+                          selectedAbsence.start_date,
+                          selectedAbsence.end_date
+                        )}
                       </span>
                       <span className="h-4 w-px bg-slate-500 mx-2" />
                       {selectedClassrooms.length > 0 ? (
@@ -1821,13 +1781,7 @@ export default function SubFinderPage() {
                       <>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-base font-semibold text-slate-900">
-                            {(() => {
-                              const date = parseLocalDate(selectedShift.date)
-                              const dayName = DAY_NAMES[date.getDay()]
-                              const month = MONTH_NAMES[date.getMonth()]
-                              const day = date.getDate()
-                              return `Subs for ${dayName} ${month} ${day} • ${selectedShift.time_slot_code}`
-                            })()}
+                            {`Subs for ${formatShortDate(selectedShift.date)} • ${selectedShift.time_slot_code}`}
                           </span>
                           {selectedShift.classroom_name ? (
                             <span
@@ -1850,24 +1804,10 @@ export default function SubFinderPage() {
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
                           <span>
-                            {(() => {
-                              const formatDate = (dateString: string) => {
-                                const date = parseLocalDate(dateString)
-                                const dayName = DAY_NAMES[date.getDay()]
-                                const month = MONTH_NAMES[date.getMonth()]
-                                const day = date.getDate()
-                                return `${dayName} ${month} ${day}`
-                              }
-                              const startDate = formatDate(selectedAbsence.start_date)
-                              if (
-                                selectedAbsence.end_date &&
-                                selectedAbsence.end_date !== selectedAbsence.start_date
-                              ) {
-                                const endDate = formatDate(selectedAbsence.end_date)
-                                return `${startDate} - ${endDate}`
-                              }
-                              return startDate
-                            })()}
+                            {formatAbsenceDateRange(
+                              selectedAbsence.start_date,
+                              selectedAbsence.end_date
+                            )}
                           </span>
                           {selectedClassrooms.length > 0 ? (
                             <span className="flex flex-wrap items-center gap-1.5">
