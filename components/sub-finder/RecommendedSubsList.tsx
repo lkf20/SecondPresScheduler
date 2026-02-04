@@ -496,6 +496,13 @@ export default function RecommendedSubsList({
           .filter(shift => derived.remainingShiftKeys.has(`${shift.date}|${shift.time_slot_code}`))
           .map(shift => shift.status)
       : filteredShiftChips.map(shift => shift.status)
+    const remainingCoveredCount = derived.hasAssignedShifts
+      ? filteredShiftChips.filter(
+          shift =>
+            derived.remainingShiftKeys.has(`${shift.date}|${shift.time_slot_code}`) &&
+            shift.status !== 'unavailable'
+        ).length
+      : shiftsCovered
 
     return (
       <SubFinderCard
@@ -503,7 +510,7 @@ export default function RecommendedSubsList({
         id={`sub-card-${sub.id}`}
         name={sub.name}
         phone={sub.phone}
-        shiftsCovered={shiftsCovered}
+        shiftsCovered={remainingCoveredCount}
         totalShifts={
           derived.hasAssignedShifts
             ? derived.remainingShiftCount
@@ -530,7 +537,6 @@ export default function RecommendedSubsList({
         allCanCover={visibleCanCover}
         allCannotCover={visibleCannotCover}
         allAssigned={visibleAssigned}
-        showDebugOutlines={false}
       />
     )
   }
