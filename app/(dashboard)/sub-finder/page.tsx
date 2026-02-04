@@ -139,6 +139,17 @@ export default function SubFinderPage() {
     return []
   }, [recommendedCombinations, recommendedSubs])
 
+  const renderRecommendedPlaceholder = () => (
+    <div className="mt-2 space-y-3">
+      <div className="h-6 w-44 rounded bg-slate-200/80 animate-pulse" />
+      <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 animate-pulse">
+        <div className="h-6 w-1/3 rounded bg-slate-200" />
+        <div className="h-5 w-1/2 rounded bg-slate-200" />
+        <div className="h-16 rounded bg-slate-200" />
+      </div>
+    </div>
+  )
+
   const runManualFinder = useCallback(async () => {
     if (!manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0) return
     setHighlightedSubId(null)
@@ -1307,23 +1318,25 @@ export default function SubFinderPage() {
             <div className="px-4">
               {selectedAbsence && (
                 <div className="py-4 flex flex-col gap-6 w-full">
-                  {displayRecommendedCombinations.length > 0 && (
-                    <div className="mt-2">
-                      <RecommendedCombination
-                        combinations={displayRecommendedCombinations}
-                        onContactSub={handleCombinationContact}
-                        totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
-                        useRemainingLabel={
-                          (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
-                          (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
-                        }
-                        allSubs={allSubs}
-                        allShifts={visibleShiftDetails}
-                        includePastShifts={includePastShifts}
-                        onShowAllSubs={openAllSubsPanel}
-                      />
-                    </div>
-                  )}
+                  {loading
+                    ? renderRecommendedPlaceholder()
+                    : displayRecommendedCombinations.length > 0 && (
+                        <div className="mt-2">
+                          <RecommendedCombination
+                            combinations={displayRecommendedCombinations}
+                            onContactSub={handleCombinationContact}
+                            totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
+                            useRemainingLabel={
+                              (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
+                              (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
+                            }
+                            allSubs={allSubs}
+                            allShifts={visibleShiftDetails}
+                            includePastShifts={includePastShifts}
+                            onShowAllSubs={openAllSubsPanel}
+                          />
+                        </div>
+                      )}
                 </div>
               )}
               {selectedAbsence && (
@@ -1648,23 +1661,25 @@ export default function SubFinderPage() {
 
           {selectedAbsence && (
             <div className="py-6 flex flex-col gap-6 w-full">
-              {displayRecommendedCombinations.length > 0 && (
-                <div className="mt-2">
-                  <RecommendedCombination
-                    combinations={displayRecommendedCombinations}
-                    onContactSub={handleCombinationContact}
-                    totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
-                    useRemainingLabel={
-                      (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
-                      (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
-                    }
-                    allSubs={allSubs}
-                    allShifts={visibleShiftDetails}
-                    includePastShifts={includePastShifts}
-                    onShowAllSubs={openAllSubsPanel}
-                  />
-                </div>
-              )}
+              {loading
+                ? renderRecommendedPlaceholder()
+                : displayRecommendedCombinations.length > 0 && (
+                    <div className="mt-2">
+                      <RecommendedCombination
+                        combinations={displayRecommendedCombinations}
+                        onContactSub={handleCombinationContact}
+                        totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
+                        useRemainingLabel={
+                          (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
+                          (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
+                        }
+                        allSubs={allSubs}
+                        allShifts={visibleShiftDetails}
+                        includePastShifts={includePastShifts}
+                        onShowAllSubs={openAllSubsPanel}
+                      />
+                    </div>
+                  )}
 
               <div className="flex flex-col gap-2">
                 <div className="hidden md:flex flex-wrap gap-2 md:flex-row md:items-center">
