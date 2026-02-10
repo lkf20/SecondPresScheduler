@@ -54,6 +54,7 @@ Features to implement soon (within the next few weeks).
 - [ ] Performance: review query plans and tailor indexes to actual slow queries before launch
 - [ ] Mobile navigation: design and implement a mobile-friendly global nav pattern (current left rail is not usable on small screens)
 - [ ] Mobile UX: comprehensive pass to make all pages mobile friendly (navigation, layouts, and responsive interactions)
+- [ ] Add Flex staff to Daily Schedule and to Weekly Schedule. Update Flex staff database logic.
 
 ---
 
