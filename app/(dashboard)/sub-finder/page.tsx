@@ -1564,195 +1564,197 @@ export default function SubFinderPage() {
         {/* Middle Column */}
         <div
           className={cn(
-            'flex-1 border-x bg-white px-6 md:px-8 transition-opacity h-full overflow-y-auto',
+            'flex-1 border-x bg-white transition-opacity h-full overflow-y-auto',
             isRightPanelOpen && 'opacity-95'
           )}
         >
-          {/* Fixed Header Bar */}
-          {selectedAbsence && (
-            <>
-              <div className="border-b border-slate-200 bg-white">
-                <div className="px-6 pt-10 pb-0">
-                  {/* Header Row */}
-                  <div className="mb-5">
-                    <h2 className="text-xl font-semibold flex flex-wrap items-center gap-2">
-                      <span>Sub Finder</span>
-                      <span className="text-muted-foreground">→</span>
-                      <span>{selectedAbsence.teacher_name}</span>
-                      <span className="text-muted-foreground">→</span>
-                      <span>
-                        {formatAbsenceDateRange(
-                          selectedAbsence.start_date,
-                          selectedAbsence.end_date
+          <div className="w-full max-w-[1000px] px-6 md:px-8">
+            {/* Fixed Header Bar */}
+            {selectedAbsence && (
+              <>
+                <div className="border-b border-slate-200 bg-white">
+                  <div className="pt-10 pb-0">
+                    {/* Header Row */}
+                    <div className="mb-5">
+                      <h2 className="text-xl font-semibold flex flex-wrap items-center gap-2">
+                        <span>Sub Finder</span>
+                        <span className="text-muted-foreground">→</span>
+                        <span>{selectedAbsence.teacher_name}</span>
+                        <span className="text-muted-foreground">→</span>
+                        <span>
+                          {formatAbsenceDateRange(
+                            selectedAbsence.start_date,
+                            selectedAbsence.end_date
+                          )}
+                        </span>
+                        <span className="h-4 w-px bg-slate-500 mx-2" />
+                        {selectedClassrooms.length > 0 ? (
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            {selectedClassrooms.map(classroom => (
+                              <span
+                                key={classroom.id || classroom.name}
+                                className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                                style={getClassroomPillStyle(classroom.color)}
+                              >
+                                {classroom.name}
+                              </span>
+                            ))}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-normal text-muted-foreground">
+                            Classroom unavailable
+                          </span>
                         )}
-                      </span>
-                      <span className="h-4 w-px bg-slate-500 mx-2" />
-                      {selectedClassrooms.length > 0 ? (
-                        <span className="flex flex-wrap items-center gap-1.5">
-                          {selectedClassrooms.map(classroom => (
-                            <span
-                              key={classroom.id || classroom.name}
-                              className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
-                              style={getClassroomPillStyle(classroom.color)}
-                            >
-                              {classroom.name}
-                            </span>
-                          ))}
-                        </span>
-                      ) : (
-                        <span className="text-xs font-normal text-muted-foreground">
-                          Classroom unavailable
-                        </span>
-                      )}
-                    </h2>
-                  </div>
-
-                  {visibleShiftSummary && visibleShiftSummary.total > 0 && (
-                    <div className="mt-4 mb-2 flex flex-wrap items-end justify-between gap-4">
-                      <CoverageSummary
-                        shifts={visibleShiftSummary}
-                        onShiftClick={handleShiftClick}
-                        variant="compact"
-                        headerText={coverageSummaryLine ?? undefined}
-                      />
-                      <Button
-                        onClick={handleRerunFinder}
-                        disabled={loading}
-                        size="sm"
-                        variant="outline"
-                        className="w-auto justify-center"
-                      >
-                        <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                        Rerun Finder
-                      </Button>
+                      </h2>
                     </div>
-                  )}
 
-                  {showPastShiftsBanner && (
-                    <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-slate-900">
-                      <p className="max-w-3xl leading-snug">
-                        This absence includes <strong>{pastShiftCount}</strong> past shift
-                        {pastShiftCount === 1 ? '' : 's'} and <strong>{upcomingShiftCount}</strong>{' '}
-                        upcoming shift
-                        {upcomingShiftCount === 1 ? '' : 's'}.{' '}
-                        {includePastShifts
-                          ? 'Showing all shifts.'
-                          : 'Showing upcoming shifts only.'}
-                      </p>
-                      <label
-                        htmlFor="include-past-shifts"
-                        className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-900"
-                      >
-                        <Switch
-                          id="include-past-shifts"
-                          checked={includePastShifts}
-                          onCheckedChange={setIncludePastShifts}
+                    {visibleShiftSummary && visibleShiftSummary.total > 0 && (
+                      <div className="mt-4 mb-2 flex flex-wrap items-end justify-between gap-4">
+                        <CoverageSummary
+                          shifts={visibleShiftSummary}
+                          onShiftClick={handleShiftClick}
+                          variant="compact"
+                          headerText={coverageSummaryLine ?? undefined}
                         />
-                        Include past shifts
-                      </label>
-                    </div>
-                  )}
-
-                  {/* Toolbar moved to right column */}
-                </div>
-              </div>
-            </>
-          )}
-
-          {selectedAbsence && (
-            <div className="py-6 flex flex-col gap-6 w-full">
-              {loading
-                ? renderRecommendedPlaceholder()
-                : displayRecommendedCombinations.length > 0 && (
-                    <div className="mt-2">
-                      <RecommendedCombination
-                        combinations={displayRecommendedCombinations}
-                        onContactSub={handleCombinationContact}
-                        totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
-                        useRemainingLabel={
-                          (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
-                          (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
-                        }
-                        allSubs={allSubs}
-                        allShifts={visibleShiftDetails}
-                        includePastShifts={includePastShifts}
-                        onShowAllSubs={openAllSubsPanel}
-                      />
-                    </div>
-                  )}
-
-              <div className="flex flex-col gap-2">
-                <div className="hidden md:flex flex-wrap gap-2 md:flex-row md:items-center">
-                  {shiftFilterOptions.map(option => {
-                    const isActive = shiftFilters.includes(option.key)
-                    return (
-                      <button
-                        key={option.key}
-                        type="button"
-                        onClick={() => toggleShiftFilter(option.key)}
-                        className={cn(
-                          'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                          isActive
-                            ? 'border-slate-900 bg-slate-900 text-white'
-                            : 'border-slate-400 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                        )}
-                      >
-                        {option.label} ({option.count})
-                      </button>
-                    )
-                  })}
-                </div>
-                <div className="md:hidden">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="w-full justify-between">
-                        Filters ({shiftFilters.length})
-                        <ChevronDown className="h-4 w-4" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72" align="start">
-                      <div className="space-y-2">
-                        {shiftFilterOptions.map(option => {
-                          const isActive = shiftFilters.includes(option.key)
-                          return (
-                            <button
-                              key={option.key}
-                              type="button"
-                              onClick={() => toggleShiftFilter(option.key)}
-                              className={cn(
-                                'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',
-                                isActive ? 'bg-slate-900 text-white' : 'hover:bg-slate-100'
-                              )}
-                            >
-                              <span>{option.label}</span>
-                              <span className="text-xs text-slate-500">{option.count}</span>
-                            </button>
-                          )
-                        })}
+                        <Button
+                          onClick={handleRerunFinder}
+                          disabled={loading}
+                          size="sm"
+                          variant="outline"
+                          className="w-auto justify-center"
+                        >
+                          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                          Rerun Finder
+                        </Button>
                       </div>
-                    </PopoverContent>
-                  </Popover>
+                    )}
+
+                    {showPastShiftsBanner && (
+                      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-slate-900">
+                        <p className="max-w-3xl leading-snug">
+                          This absence includes <strong>{pastShiftCount}</strong> past shift
+                          {pastShiftCount === 1 ? '' : 's'} and{' '}
+                          <strong>{upcomingShiftCount}</strong> upcoming shift
+                          {upcomingShiftCount === 1 ? '' : 's'}.{' '}
+                          {includePastShifts
+                            ? 'Showing all shifts.'
+                            : 'Showing upcoming shifts only.'}
+                        </p>
+                        <label
+                          htmlFor="include-past-shifts"
+                          className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-900"
+                        >
+                          <Switch
+                            id="include-past-shifts"
+                            checked={includePastShifts}
+                            onCheckedChange={setIncludePastShifts}
+                          />
+                          Include past shifts
+                        </label>
+                      </div>
+                    )}
+
+                    {/* Toolbar moved to right column */}
+                  </div>
                 </div>
+              </>
+            )}
+
+            {selectedAbsence && (
+              <div className="py-6 flex flex-col gap-6 w-full">
+                {loading
+                  ? renderRecommendedPlaceholder()
+                  : displayRecommendedCombinations.length > 0 && (
+                      <div className="mt-2">
+                        <RecommendedCombination
+                          combinations={displayRecommendedCombinations}
+                          onContactSub={handleCombinationContact}
+                          totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
+                          useRemainingLabel={
+                            (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
+                            (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
+                          }
+                          allSubs={allSubs}
+                          allShifts={visibleShiftDetails}
+                          includePastShifts={includePastShifts}
+                          onShowAllSubs={openAllSubsPanel}
+                        />
+                      </div>
+                    )}
+
+                <div className="flex flex-col gap-2">
+                  <div className="hidden md:flex flex-wrap gap-2 md:flex-row md:items-center">
+                    {shiftFilterOptions.map(option => {
+                      const isActive = shiftFilters.includes(option.key)
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          onClick={() => toggleShiftFilter(option.key)}
+                          className={cn(
+                            'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                            isActive
+                              ? 'border-slate-900 bg-slate-900 text-white'
+                              : 'border-slate-400 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                          )}
+                        >
+                          {option.label} ({option.count})
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className="md:hidden">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="w-full justify-between">
+                          Filters ({shiftFilters.length})
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72" align="start">
+                        <div className="space-y-2">
+                          {shiftFilterOptions.map(option => {
+                            const isActive = shiftFilters.includes(option.key)
+                            return (
+                              <button
+                                key={option.key}
+                                type="button"
+                                onClick={() => toggleShiftFilter(option.key)}
+                                className={cn(
+                                  'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',
+                                  isActive ? 'bg-slate-900 text-white' : 'hover:bg-slate-100'
+                                )}
+                              >
+                                <span>{option.label}</span>
+                                <span className="text-xs text-slate-500">{option.count}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+
+                {filteredShiftDetails.length > 0 ? (
+                  filteredShiftDetails.map(shift => (
+                    <ShiftStatusCard
+                      key={shift.id}
+                      shift={shift}
+                      teacherName={selectedAbsence.teacher_name}
+                      onSelectShift={handleSelectShift}
+                    />
+                  ))
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">
+                    No shifts to display.
+                  </div>
+                )}
               </div>
+            )}
 
-              {filteredShiftDetails.length > 0 ? (
-                filteredShiftDetails.map(shift => (
-                  <ShiftStatusCard
-                    key={shift.id}
-                    shift={shift}
-                    teacherName={selectedAbsence.teacher_name}
-                    onSelectShift={handleSelectShift}
-                  />
-                ))
-              ) : (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">
-                  No shifts to display.
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Middle column content ends above */}
+            {/* Middle column content ends above */}
+          </div>
         </div>
 
         {/* Right Column */}
