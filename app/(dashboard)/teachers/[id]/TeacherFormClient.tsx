@@ -6,7 +6,7 @@ import TeacherForm, { type TeacherFormData } from '@/components/teachers/Teacher
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import { Database } from '@/types/database'
 
-type Staff = Database['public']['Tables']['staff']['Row']
+type Staff = Database['public']['Tables']['staff']['Row'] & { role_type_ids?: string[] }
 
 interface TeacherFormClientProps {
   teacher: Staff
@@ -43,7 +43,7 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
         email: data.email && data.email.trim() !== '' ? data.email : null,
         is_teacher: true, // Always true when updating from teacher form
         is_sub: data.is_sub ?? false, // Include the checkbox value
-        role_type_id: data.role_type_id, // Include the role type
+        role_type_ids: data.role_type_ids, // Include role types
       }
       const response = await fetch(`/api/teachers/${teacher.id}`, {
         method: 'PUT',

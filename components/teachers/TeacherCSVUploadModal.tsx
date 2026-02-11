@@ -353,7 +353,7 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
           display_name: row.display_name?.trim() || null,
           email: row.email?.trim() || null,
           phone: row.phone?.trim() || null,
-          role_type_id: roleTypeId || null,
+          role_type_ids: roleTypeId ? [roleTypeId] : [],
           active: parseStatus(row.status),
           is_sub: parseIsSub(row.is_sub),
           is_teacher: true,

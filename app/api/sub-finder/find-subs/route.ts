@@ -263,17 +263,30 @@ export async function POST(request: NextRequest) {
     if (roleTypesError) {
       console.warn('Failed to load staff role types', roleTypesError)
     }
-    const roleTypeById = new Map((roleTypes || []).map(rt => [rt.id, rt.code]))
     const flexibleRoleTypeIds = new Set(
       (roleTypes || []).filter(rt => rt.code === 'FLEXIBLE').map(rt => rt.id)
     )
+    let flexibleStaffIds = new Set<string>()
+    if (flexibleRoleTypeIds.size > 0) {
+      const { data: flexibleAssignments, error: flexibleAssignmentsError } = await supabase
+        .from('staff_role_type_assignments')
+        .select('staff_id')
+        .eq('school_id', schoolId)
+        .in('role_type_id', Array.from(flexibleRoleTypeIds))
+
+      if (flexibleAssignmentsError) {
+        console.warn('Failed to load flexible staff assignments', flexibleAssignmentsError)
+      }
+
+      flexibleStaffIds = new Set(
+        (flexibleAssignments || []).map(assignment => assignment.staff_id).filter(Boolean)
+      )
+    }
 
     // 3. Get all active subs + flexible staff
     let staffQuery = supabase.from('staff').select('*').eq('school_id', schoolId)
-    if (flexibleRoleTypeIds.size > 0) {
-      staffQuery = staffQuery.or(
-        `is_sub.eq.true,role_type_id.in.(${Array.from(flexibleRoleTypeIds).join(',')})`
-      )
+    if (flexibleStaffIds.size > 0) {
+      staffQuery = staffQuery.or(`is_sub.eq.true,id.in.(${Array.from(flexibleStaffIds).join(',')})`)
     } else {
       staffQuery = staffQuery.eq('is_sub', true)
     }
@@ -588,7 +601,7 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          const isFlexibleStaff = roleTypeById.get(sub.role_type_id ?? '') === 'FLEXIBLE'
+          const isFlexibleStaff = flexibleStaffIds.has(sub.id)
 
           return {
             id: sub.id,
