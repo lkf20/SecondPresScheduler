@@ -7,7 +7,7 @@ interface TeacherImport {
   display_name?: string | null
   email?: string | null
   phone?: string | null
-  role_type_id?: string | null
+  role_type_ids?: string[]
   active: boolean
   is_sub: boolean
   is_teacher: boolean
