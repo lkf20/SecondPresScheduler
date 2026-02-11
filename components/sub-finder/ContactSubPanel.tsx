@@ -1538,12 +1538,12 @@ export default function ContactSubPanel({
                           onClick={handleSave}
                           disabled={true}
                         >
-                          Save as Pending
+                          Save
                         </Button>
                       </span>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Pending isn&apos;t applicable when a sub has declined all shifts.</p>
+                      <p>Save isn&apos;t applicable when a sub has declined all shifts.</p>
                     </TooltipContent>
                   </Tooltip>
                 ) : (
@@ -1553,7 +1553,7 @@ export default function ContactSubPanel({
                     onClick={handleSave}
                     disabled={loading || fetching || !coverageRequestId}
                   >
-                    Save as Pending
+                    Save
                   </Button>
                 )}
                 {!isDeclinedWithShiftsSelected && (
@@ -1573,9 +1573,7 @@ export default function ContactSubPanel({
                       isSubInactive
                     }
                   >
-                    {responseStatus === 'declined_all'
-                      ? 'Mark as Declined'
-                      : 'Assign Selected Shifts'}
+                    {responseStatus === 'declined_all' ? 'Mark as Declined' : 'Assign'}
                   </Button>
                 )}
               </div>

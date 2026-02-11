@@ -445,6 +445,7 @@ export default function SubFinderPage() {
     setSelectedSub(sub)
     setIsContactPanelOpen(true)
     setSelectedShift(null)
+    setIsAllSubsOpen(true)
     setMobileView('assign')
 
     // Prefetch contact data in background if we have an absence
@@ -533,18 +534,27 @@ export default function SubFinderPage() {
     setIsAllSubsOpen(false)
   }, [])
 
+  const closeContactPanel = useCallback(() => {
+    setIsContactPanelOpen(false)
+    setSelectedSub(null)
+  }, [])
+
   useEffect(() => {
     if (!isRightPanelOpen) return
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        closeRightPanel()
+        if (isContactPanelOpen) {
+          closeContactPanel()
+        } else {
+          closeRightPanel()
+        }
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [closeRightPanel, isRightPanelOpen])
+  }, [closeRightPanel, closeContactPanel, isContactPanelOpen, isRightPanelOpen])
 
   // Handle panel restoration when Add Time Off closes
   useEffect(() => {
@@ -1760,37 +1770,7 @@ export default function SubFinderPage() {
         {/* Right Column */}
         {isRightPanelOpen && (
           <div className="w-full md:flex-[0_0_400px] md:max-w-[400px] border-l bg-gray-50 transition-all h-full overflow-y-auto">
-            {selectedAbsence && selectedSub ? (
-              <ContactSubPanel
-                isOpen={isRightPanelOpen}
-                onClose={closeRightPanel}
-                sub={selectedSub as RecommendedSub}
-                absence={selectedAbsence}
-                variant="inline"
-                initialContactData={
-                  selectedSub && selectedAbsence
-                    ? contactDataCache.get(getCacheKey(selectedSub.id, selectedAbsence.id))
-                    : undefined
-                }
-                onAssignmentComplete={async () => {
-                  if (selectedAbsence) {
-                    setContactDataCache(prev => {
-                      const next = new Map(prev)
-                      for (const [key] of next) {
-                        if (key.endsWith(`-${selectedAbsence.id}`)) {
-                          next.delete(key)
-                        }
-                      }
-                      return next
-                    })
-                  }
-                  await fetchAbsences()
-                  if (selectedAbsence) {
-                    await runFinderForAbsence(selectedAbsence)
-                  }
-                }}
-              />
-            ) : selectedAbsence ? (
+            {selectedAbsence ? (
               <div className="p-6 space-y-4">
                 <div className="flex items-start justify-between">
                   <div className="flex flex-col gap-1">
@@ -1965,6 +1945,43 @@ export default function SubFinderPage() {
               </div>
             ) : null}
           </div>
+        )}
+
+        {isContactPanelOpen && selectedAbsence && selectedSub && (
+          <>
+            <div className="fixed inset-0 z-40 bg-slate-900/20" />
+            <div className="fixed inset-y-0 right-0 z-50 w-full max-w-[400px]">
+              <ContactSubPanel
+                isOpen={isContactPanelOpen}
+                onClose={closeContactPanel}
+                sub={selectedSub as RecommendedSub}
+                absence={selectedAbsence}
+                variant="inline"
+                initialContactData={
+                  selectedSub && selectedAbsence
+                    ? contactDataCache.get(getCacheKey(selectedSub.id, selectedAbsence.id))
+                    : undefined
+                }
+                onAssignmentComplete={async () => {
+                  if (selectedAbsence) {
+                    setContactDataCache(prev => {
+                      const next = new Map(prev)
+                      for (const [key] of next) {
+                        if (key.endsWith(`-${selectedAbsence.id}`)) {
+                          next.delete(key)
+                        }
+                      }
+                      return next
+                    })
+                  }
+                  await fetchAbsences()
+                  if (selectedAbsence) {
+                    await runFinderForAbsence(selectedAbsence)
+                  }
+                }}
+              />
+            </div>
+          </>
         )}
       </div>
     </div>
