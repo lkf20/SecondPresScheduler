@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Users, CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { RecommendedCombination as RecommendedCombinationType } from '@/lib/utils/sub-combination'
 import type { SubCandidate, Absence } from '@/components/sub-finder/hooks/useSubFinderData'
@@ -15,6 +16,7 @@ interface RecommendedCombinationProps {
   allSubs?: SubCandidate[] // All subs data to find can_cover/cannot_cover
   allShifts?: Absence['shifts']['shift_details'] // All shifts that need coverage
   includePastShifts?: boolean
+  onShowAllSubs?: () => void
 }
 
 export default function RecommendedCombination({
@@ -25,6 +27,7 @@ export default function RecommendedCombination({
   allSubs = [],
   allShifts = [],
   includePastShifts = false,
+  onShowAllSubs,
 }: RecommendedCombinationProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
 
@@ -170,39 +173,51 @@ export default function RecommendedCombination({
           )
         })}
       </div>
-      {totalCombinations > 1 && (
-        <div className="flex items-center justify-center gap-3 px-6 pb-5">
-          <button
-            type="button"
-            className="h-8 w-8 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
-            onClick={() => setCurrentIndex(prev => Math.max(prev - 1, 0))}
-            disabled={currentIndex === 0}
-            aria-label="Previous recommended combination"
-          >
-            <ChevronLeft className="h-4 w-4 mx-auto" />
-          </button>
-          <div className="flex items-center gap-2">
-            {combinations.map((_, index) => (
+      {(totalCombinations > 1 || onShowAllSubs) && (
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center px-6 pb-5">
+          <div />
+          {totalCombinations > 1 && (
+            <div className="flex items-center justify-center gap-3">
               <button
-                key={`combo-dot-${index}`}
                 type="button"
-                onClick={() => setCurrentIndex(index)}
-                className={`h-2.5 w-2.5 rounded-full ${
-                  index === currentIndex ? 'bg-amber-400' : 'bg-slate-300'
-                }`}
-                aria-label={`Recommended combination ${index + 1}`}
-              />
-            ))}
+                className="h-8 w-8 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                onClick={() => setCurrentIndex(prev => Math.max(prev - 1, 0))}
+                disabled={currentIndex === 0}
+                aria-label="Previous recommended combination"
+              >
+                <ChevronLeft className="h-4 w-4 mx-auto" />
+              </button>
+              <div className="flex items-center gap-2">
+                {combinations.map((_, index) => (
+                  <button
+                    key={`combo-dot-${index}`}
+                    type="button"
+                    onClick={() => setCurrentIndex(index)}
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      index === currentIndex ? 'bg-amber-400' : 'bg-slate-300'
+                    }`}
+                    aria-label={`Recommended combination ${index + 1}`}
+                  />
+                ))}
+              </div>
+              <button
+                type="button"
+                className="h-8 w-8 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                onClick={() => setCurrentIndex(prev => Math.min(prev + 1, totalCombinations - 1))}
+                disabled={currentIndex === totalCombinations - 1}
+                aria-label="Next recommended combination"
+              >
+                <ChevronRight className="h-4 w-4 mx-auto" />
+              </button>
+            </div>
+          )}
+          <div className="flex justify-end">
+            {onShowAllSubs && (
+              <Button size="sm" variant="outline" onClick={onShowAllSubs}>
+                Show all subs
+              </Button>
+            )}
           </div>
-          <button
-            type="button"
-            className="h-8 w-8 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
-            onClick={() => setCurrentIndex(prev => Math.min(prev + 1, totalCombinations - 1))}
-            disabled={currentIndex === totalCombinations - 1}
-            aria-label="Next recommended combination"
-          >
-            <ChevronRight className="h-4 w-4 mx-auto" />
-          </button>
         </div>
       )}
     </Card>

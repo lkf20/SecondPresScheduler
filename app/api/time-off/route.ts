@@ -8,6 +8,7 @@ import {
 } from '@/lib/api/time-off-shifts'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { parseLocalDate } from '@/lib/utils/date'
+import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
 
 // Helper function to format date as "Mon Jan 20"
 function formatExcludedDate(dateStr: string): string {
@@ -15,21 +16,8 @@ function formatExcludedDate(dateStr: string): string {
   try {
     const date = parseLocalDate(dateStr)
     if (isNaN(date.getTime())) return dateStr // Return original if invalid
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    const monthNames = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ]
+    const dayNames = DAY_NAMES
+    const monthNames = MONTH_NAMES
     const dayAbbr = dayNames[date.getDay()]
     const monthAbbr = monthNames[date.getMonth()]
     const day = date.getDate()

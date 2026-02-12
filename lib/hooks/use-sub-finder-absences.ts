@@ -30,6 +30,7 @@ export type SubFinderAbsence = {
       id?: string
       status: 'covered' | 'partial' | 'fully_covered' | 'partially_covered' | 'uncovered'
       sub_name?: string | null
+      assignment_status?: 'pending' | 'confirmed' | 'declined' | 'no_response' | 'none' | null
       assigned_sub?: {
         name: string
       }

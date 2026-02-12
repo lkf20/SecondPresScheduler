@@ -1,4 +1,5 @@
 import { parseLocalDate } from './date'
+import { MONTH_NAMES } from './date-format'
 
 /**
  * Shared utility for transforming time off request data into a consistent format
@@ -32,6 +33,7 @@ export type TimeOffCardData = {
     time_slot_code?: string
     class_name?: string | null
     classroom_name?: string | null
+    classroom_color?: string | null
     sub_name?: string | null
     is_partial?: boolean
   }>
@@ -188,21 +190,7 @@ export function transformTimeOffCardData(
     const dayName = formatDay(shift.day_of_week?.name)
     const timeCode = shift.time_slot?.code || '—'
     const date = parseLocalDate(shift.date)
-    const monthNames = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ]
-    const month = monthNames[date.getMonth()]
+    const month = MONTH_NAMES[date.getMonth()]
     const day = date.getDate()
     const label = `${dayName} ${timeCode} • ${month} ${day}`
 
@@ -224,6 +212,7 @@ export function transformTimeOffCardData(
         time_slot_code: shift.time_slot?.code || undefined,
         class_name: className || undefined,
         classroom_name: classroom?.name || undefined,
+        classroom_color: classroom?.color || undefined,
         sub_name: assignment?.subName || undefined,
         is_partial: assignment?.hasPartial && !assignment?.hasFull,
       })

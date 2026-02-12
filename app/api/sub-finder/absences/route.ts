@@ -29,38 +29,6 @@ export async function GET(request: NextRequest) {
     // Fetch time off requests directly
     const timeOffRequests = await getTimeOffRequests({ statuses: ['active'] })
 
-    // Log for debugging - check for Anupa B.
-    console.log('[Sub Finder Absences] Total time off requests fetched:', timeOffRequests.length)
-    const anupaRequest = timeOffRequests.find((req: any) => {
-      const teacher = req.teacher
-      const name =
-        teacher?.display_name || `${teacher?.first_name} ${teacher?.last_name}`.trim() || ''
-      return name.toLowerCase().includes('anupa') || name.toLowerCase().includes('b.')
-    })
-    if (anupaRequest) {
-      console.log('[Sub Finder Absences] Found Anupa B. request in database:', {
-        id: anupaRequest.id,
-        teacher_id: anupaRequest.teacher_id,
-        start_date: anupaRequest.start_date,
-        end_date: anupaRequest.end_date,
-        status: anupaRequest.status,
-        teacher_name:
-          anupaRequest.teacher?.display_name ||
-          `${anupaRequest.teacher?.first_name} ${anupaRequest.teacher?.last_name}`.trim(),
-      })
-    } else {
-      console.log('[Sub Finder Absences] Anupa B. request NOT found in database query')
-      console.log(
-        '[Sub Finder Absences] Sample teacher names:',
-        timeOffRequests
-          .slice(0, 5)
-          .map(
-            (r: any) =>
-              r.teacher?.display_name || `${r.teacher?.first_name} ${r.teacher?.last_name}`.trim()
-          )
-      )
-    }
-
     // Build schedule lookup for classrooms
     const teacherIds = Array.from(new Set(timeOffRequests.map(r => r.teacher_id).filter(Boolean)))
     const scheduleLookup = new Map<
@@ -110,7 +78,6 @@ export async function GET(request: NextRequest) {
           shifts = []
         }
         const timeOffShiftKeys = new Set(shifts.map(shift => `${shift.date}|${shift.time_slot_id}`))
-        const debugRequestId = '79e63040-e72d-484e-b8bd-6afb639a6874'
         const loggedMissingShiftKeys = new Set<string>()
 
         // Get assignments
@@ -210,16 +177,6 @@ export async function GET(request: NextRequest) {
               .map(assignment => `${assignment.date}|${assignment.time_slot_id}`)
               .filter(key => Boolean(key))
           )
-          if (request.id === debugRequestId) {
-            console.log('[Sub Finder Absences] Debug assignment/time-off shift keys', {
-              request_id: request.id,
-              coverage_request_id: coverageRequestId,
-              time_off_shift_keys: Array.from(timeOffShiftKeys),
-              assignment_keys: Array.from(assignmentKeys),
-              assignments_count: assignments.length,
-              shifts_count: shifts.length,
-            })
-          }
           const overlapKeys = Array.from(assignmentKeys).filter(key => timeOffShiftKeys.has(key))
           if (overlapKeys.length === 0) {
             console.warn('[Sub Finder Absences] Assignments do not match time_off_shifts', {
@@ -251,26 +208,6 @@ export async function GET(request: NextRequest) {
           if (!name) return '—'
           if (name === 'Tuesday') return 'Tues'
           return name.slice(0, 3)
-        }
-
-        if (request.id === debugRequestId) {
-          const assignmentKeyDetails = assignments.map(assignment => ({
-            date: assignment.date,
-            time_slot_id: assignment.time_slot_id,
-            is_partial: assignment.is_partial,
-            assignment_type: assignment.assignment_type,
-            sub_name: assignment.sub?.display_name || assignment.sub?.first_name || null,
-          }))
-          const shiftKeyDetails = shifts.map(shift => ({
-            date: shift.date,
-            time_slot_id: shift.time_slot_id,
-            time_slot_code: shift.time_slot?.code || null,
-          }))
-          console.log('[Sub Finder Absences] Debug coverage inputs', {
-            request_id: request.id,
-            assignments: assignmentKeyDetails,
-            shifts: shiftKeyDetails,
-          })
         }
 
         const transformed = transformTimeOffCardData(
@@ -353,36 +290,6 @@ export async function GET(request: NextRequest) {
       })
     )
 
-    // Log for debugging - check for Anupa B. in transformed data
-    console.log(
-      '[Sub Finder Absences] Total time off requests transformed:',
-      transformedRequests.length
-    )
-    const anupaTransformedRequest = transformedRequests.find(
-      (req: any) =>
-        req.teacher_name?.toLowerCase().includes('anupa') ||
-        req.teacher_name?.toLowerCase().includes('b.')
-    )
-    if (anupaTransformedRequest) {
-      console.log('[Sub Finder Absences] Found Anupa B. request in transformed data:', {
-        id: anupaTransformedRequest.id,
-        teacher_name: anupaTransformedRequest.teacher_name,
-        teacher_id: anupaTransformedRequest.teacher_id,
-        start_date: anupaTransformedRequest.start_date,
-        end_date: anupaTransformedRequest.end_date,
-        total: anupaTransformedRequest.total,
-        uncovered: anupaTransformedRequest.uncovered,
-        partial: anupaTransformedRequest.partial,
-        covered: anupaTransformedRequest.covered,
-      })
-    } else {
-      console.log('[Sub Finder Absences] Anupa B. request NOT found in transformed requests')
-      console.log(
-        '[Sub Finder Absences] Available teacher names:',
-        transformedRequests.map((r: any) => r.teacher_name)
-      )
-    }
-
     // Map transformed data to Sub Finder format
     const absencesWithCoverage = transformedRequests.map((transformed: any) => {
       // Map shift details to Sub Finder format
@@ -393,6 +300,7 @@ export async function GET(request: NextRequest) {
         time_slot_code: detail.time_slot_code || '',
         class_name: detail.class_name || null,
         classroom_name: detail.classroom_name || null,
+        classroom_color: detail.classroom_color || null,
         status:
           detail.status === 'covered'
             ? 'fully_covered'
@@ -449,69 +357,24 @@ export async function GET(request: NextRequest) {
     const filteredAbsences = absencesWithCoverage.filter(absence => {
       const startDate = absence.start_date
       const endDate = absence.end_date || absence.start_date
-      const isAnupa =
-        absence.teacher_name?.toLowerCase().includes('anupa') ||
-        absence.teacher_name?.toLowerCase().includes('b.')
-
-      // Log filtering for Anupa B.
-      if (isAnupa) {
-        console.log('[Sub Finder Absences] Filtering Anupa B. request:', {
-          startDate,
-          endDate,
-          todayString,
-          isPast: startDate < todayString && endDate < todayString,
-          total: absence.shifts.total,
-          uncovered: absence.shifts.uncovered,
-          partially_covered: absence.shifts.partially_covered,
-          includePartiallyCovered,
-        })
-      }
-
       if (startDate < todayString && endDate < todayString) {
-        if (isAnupa) {
-          console.log('[Sub Finder Absences] Anupa B. request filtered out: past date')
-        }
         return false
       }
       // Always show if there are no shifts (newly created time off)
       if (absence.shifts.total === 0) {
-        if (isAnupa) {
-          console.log('[Sub Finder Absences] Anupa B. request included: no shifts (newly created)')
-        }
         return true
       }
 
       // If includePartiallyCovered is false, only show uncovered
       if (!includePartiallyCovered) {
         const included = absence.shifts.uncovered > 0
-        if (isAnupa) {
-          console.log('[Sub Finder Absences] Anupa B. request filter (uncovered only):', included)
-        }
         return included
       }
 
       // If includePartiallyCovered is true, show uncovered or partially covered
       const included = absence.shifts.uncovered > 0 || absence.shifts.partially_covered > 0
-      if (isAnupa) {
-        console.log(
-          '[Sub Finder Absences] Anupa B. request filter (uncovered or partial):',
-          included
-        )
-      }
       return included
     })
-
-    // Log final result
-    const anupaInFiltered = filteredAbsences.find(
-      (a: any) =>
-        a.teacher_name?.toLowerCase().includes('anupa') ||
-        a.teacher_name?.toLowerCase().includes('b.')
-    )
-    if (anupaInFiltered) {
-      console.log('[Sub Finder Absences] Anupa B. request included in final results')
-    } else if (anupaTransformedRequest) {
-      console.log('[Sub Finder Absences] Anupa B. request was filtered out')
-    }
 
     const sortKey = (absence: any) => {
       const startDate = absence.start_date

@@ -52,6 +52,8 @@ Features to implement soon (within the next few weeks).
 - [ ] Add borders/shading to shifts in Upcoming Time Off to match Uncovered and Covered pills
 - [ ] Enrollments: add classroom_id (or clarify model) and wire write UI/API for per-class-group enrollment
 - [ ] Performance: review query plans and tailor indexes to actual slow queries before launch
+- [ ] Mobile navigation: design and implement a mobile-friendly global nav pattern (current left rail is not usable on small screens)
+- [ ] Mobile UX: comprehensive pass to make all pages mobile friendly (navigation, layouts, and responsive interactions)
 
 ---
 
@@ -64,6 +66,8 @@ Features for later consideration (beyond the next few weeks).
 - [ ] Specify enrollment by class grouping (e.g., Toddler A (2), Toddler B (3)) instead of a single enrollment value
 - [ ] Preserve application state when navigating between sections - maintain user context (e.g., selected absence, sub finder filters, selected shifts) when switching to dashboard or other sections and returning, so users don't lose their work in progress
 - [ ] Add AI chat assistant for coverage planning; keep coverage/assignment logic in reusable server functions and make "find sub"/"assign shifts" deterministic and explainable so the AI can justify choices
+- [ ] Mobile UX overhaul: create a global mobile-friendly navigation pattern and adjust Sub Finder layout/flows to use it
+- [ ] Sub Finder: detect partial-shift availability and classify subs into the "Partially Available" section
 
 ### API Enhancements for AI Chat (Phase 3)
 

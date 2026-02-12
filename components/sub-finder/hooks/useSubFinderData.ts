@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { useSubFinderAbsences, type SubFinderAbsence } from '@/lib/hooks/use-sub-finder-absences'
 import { useSubRecommendations } from '@/lib/hooks/use-sub-recommendations'
 import type { RecommendedCombination } from '@/lib/utils/sub-combination'
+import type { SubFinderAssignmentStatus } from '@/lib/sub-finder/types'
 import type { SubRecommendationsQueryParams } from '@/lib/utils/query-keys'
 export type Mode = 'existing' | 'manual'
 
@@ -31,18 +32,24 @@ export interface Absence {
       time_slot_code: string
       class_name: string | null
       classroom_name: string | null
+      classroom_color?: string | null
       status: 'uncovered' | 'partially_covered' | 'fully_covered'
       sub_name?: string | null
       is_partial?: boolean
+      assignment_status?: SubFinderAssignmentStatus | null
     }>
     shift_details_sorted?: Array<{
       id: string
       date: string
       day_name: string
       time_slot_code: string
+      class_name: string | null
+      classroom_name: string | null
+      classroom_color?: string | null
       status: 'uncovered' | 'partially_covered' | 'fully_covered'
       sub_name?: string | null
       is_partial?: boolean
+      assignment_status?: SubFinderAssignmentStatus | null
     }>
     coverage_segments?: Array<{
       id: string
@@ -103,6 +110,8 @@ export interface SubCandidate {
   }>
   notes?: string | null
   response_status?: string | null
+  is_flexible_staff?: boolean
+  is_sub?: boolean
   [key: string]: unknown
 }
 
@@ -131,9 +140,8 @@ export function useSubFinderData({
   )
   const [includePartiallyCovered, setIncludePartiallyCovered] = useState(false)
   const [includeFlexibleStaff, setIncludeFlexibleStaff] = useState(true)
-  const [includeOnlyRecommended, setIncludeOnlyRecommended] = useState(true)
+  const [includeOnlyRecommended, setIncludeOnlyRecommended] = useState(false)
   const [teachers, setTeachers] = useState<Teacher[]>([])
-  const loggedRecommendationDebugRef = useRef(new Set<string>())
 
   // Use React Query for absences
   const {
@@ -144,6 +152,16 @@ export function useSubFinderData({
   } = useSubFinderAbsences(
     { includePartiallyCovered },
     skipInitialFetch ? undefined : [] // Don't provide initial data if skipping fetch
+  )
+
+  const normalizeAssignmentStatus = useCallback(
+    (status: unknown): SubFinderAssignmentStatus | null => {
+      if (!status) return null
+      if (status === 'pending' || status === 'confirmed' || status === 'declined') return status
+      if (status === 'no_response' || status === 'none') return 'no_response'
+      return null
+    },
+    []
   )
 
   const mapAbsence = useCallback(
@@ -167,6 +185,7 @@ export function useSubFinderData({
           time_slot_code: detail.time_slot_code,
           class_name: detail.class_name || null,
           classroom_name: detail.classroom_name || null,
+          classroom_color: detail.classroom_color || null,
           status:
             detail.status === 'partial' || detail.status === 'partially_covered'
               ? 'partially_covered'
@@ -175,10 +194,11 @@ export function useSubFinderData({
                 : 'uncovered',
           sub_name: detail.sub_name || detail.assigned_sub?.name || null,
           is_partial: detail.status === 'partial' || detail.status === 'partially_covered',
+          assignment_status: normalizeAssignmentStatus(detail.assignment_status),
         })),
       },
     }),
-    []
+    [normalizeAssignmentStatus]
   )
 
   const transformedAbsences: Absence[] = useMemo(() => {
@@ -207,8 +227,6 @@ export function useSubFinderData({
     data: subRecommendationsData,
     isLoading: isLoadingRecommendations,
     isFetching: isFetchingRecommendations,
-    isError: isRecommendationsError,
-    error: recommendationsError,
     refetch: refetchRecommendations,
   } = useSubRecommendations(selectedAbsenceId, recommendationParams)
 
@@ -278,37 +296,8 @@ export function useSubFinderData({
           : [])
       setRecommendedCombinations(combinations)
       applySubResults(subs)
-      if (
-        selectedAbsence &&
-        selectedAbsence.teacher_name === 'Kim B.' &&
-        selectedAbsence.start_date === '2026-01-19' &&
-        selectedAbsence.end_date === '2026-01-23'
-      ) {
-        const logKey = `${selectedAbsence.id}:${subs.length}:${combinations.length}`
-        if (!loggedRecommendationDebugRef.current.has(logKey)) {
-          loggedRecommendationDebugRef.current.add(logKey)
-          console.warn('[Sub Finder Debug] Recommendations response', {
-            absence_id: selectedAbsence.id,
-            subs_count: subs.length,
-            combinations_count: combinations.length,
-            includeFlexibleStaff,
-            subRecommendationParams,
-            isError: isRecommendationsError,
-            error: recommendationsError instanceof Error ? recommendationsError.message : null,
-          })
-        }
-      }
     }
-  }, [
-    subRecommendationsData,
-    selectedAbsenceId,
-    applySubResults,
-    selectedAbsence,
-    includeFlexibleStaff,
-    subRecommendationParams,
-    isRecommendationsError,
-    recommendationsError,
-  ])
+  }, [subRecommendationsData, selectedAbsenceId, applySubResults, selectedAbsence])
 
   // Fetch absences using React Query - just trigger refetch
   const fetchAbsences = useCallback(async () => {

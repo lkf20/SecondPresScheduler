@@ -20,6 +20,7 @@ import {
   shiftStatusColorValues,
 } from '@/lib/utils/colors'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
+import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
 import { toast } from 'sonner'
 import { useAssignSubShifts } from '@/lib/hooks/use-sub-assignment-mutations'
 
@@ -101,6 +102,7 @@ interface ContactSubPanelProps {
   onClose: () => void
   sub: RecommendedSub | null
   absence: Absence | null
+  variant?: 'sheet' | 'inline'
   initialContactData?: ContactData // Cached contact data from parent
   onAssignmentComplete?: () => void // Callback to refresh data after assignment
 }
@@ -110,6 +112,7 @@ export default function ContactSubPanel({
   onClose,
   sub,
   absence,
+  variant = 'sheet',
   initialContactData,
   onAssignmentComplete,
 }: ContactSubPanelProps) {
@@ -357,23 +360,8 @@ export default function ContactSubPanel({
   // Format date for display
   const formatDate = (dateString: string) => {
     const date = parseLocalDate(dateString)
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    const monthNames = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ]
-    const dayName = dayNames[date.getDay()]
-    const month = monthNames[date.getMonth()]
+    const dayName = DAY_NAMES[date.getDay()]
+    const month = MONTH_NAMES[date.getMonth()]
     const day = date.getDate()
     return `${dayName} ${month} ${day}`
   }
@@ -420,21 +408,7 @@ export default function ContactSubPanel({
     } else if (contactedDay.getTime() === yesterday.getTime()) {
       return `Yesterday at ${timeStr}`
     } else {
-      const monthNames = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ]
-      const month = monthNames[contactedDate.getMonth()]
+      const month = MONTH_NAMES[contactedDate.getMonth()]
       const day = contactedDate.getDate()
       const year = contactedDate.getFullYear()
       const currentYear = now.getFullYear()
@@ -447,19 +421,26 @@ export default function ContactSubPanel({
     }
   }
 
+  const isInline = variant === 'inline'
+
   // Don't render if no sub or absence, but Sheet must still have a title when open
   if (!sub || !absence) {
     if (!isOpen) return null
-    // If panel is open but no data, show empty state with proper title
-    return (
-      <Sheet open={isOpen} onOpenChange={onClose}>
-        <SheetContent
-          showCloseButton={false}
-          className={`w-full sm:max-w-2xl overflow-y-auto p-0 ${getPanelBackgroundClasses()}`}
+    const emptyBody = (
+      <>
+        <div
+          className={`sticky top-0 z-10 ${getPanelHeaderBackgroundClasses()} ${panelBackgrounds.panelBorder} border-b px-6 pt-6 pb-4 relative`}
         >
-          <div
-            className={`sticky top-0 z-10 ${getPanelHeaderBackgroundClasses()} ${panelBackgrounds.panelBorder} border-b px-6 pt-6 pb-4 relative`}
-          >
+          {isInline ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute right-6 top-6 inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:text-slate-700 hover:bg-white"
+            >
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </button>
+          ) : (
             <SheetClose asChild>
               <button
                 type="button"
@@ -469,15 +450,40 @@ export default function ContactSubPanel({
                 <span className="sr-only">Close</span>
               </button>
             </SheetClose>
+          )}
+          {isInline ? (
+            <div className="text-left">
+              <div className="text-lg font-semibold text-slate-900">Contact Sub</div>
+            </div>
+          ) : (
             <SheetHeader>
               <SheetTitle>Contact Sub</SheetTitle>
             </SheetHeader>
+          )}
+        </div>
+        <div className="px-6">
+          <div className="flex items-center justify-center py-12 text-muted-foreground">
+            <p>No sub selected</p>
           </div>
-          <div className="px-6">
-            <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <p>No sub selected</p>
-            </div>
-          </div>
+        </div>
+      </>
+    )
+
+    if (isInline) {
+      return (
+        <div className={`h-full overflow-y-auto p-0 ${getPanelBackgroundClasses()}`}>
+          {emptyBody}
+        </div>
+      )
+    }
+
+    return (
+      <Sheet open={isOpen} onOpenChange={onClose}>
+        <SheetContent
+          showCloseButton={false}
+          className={`w-full sm:max-w-2xl overflow-y-auto p-0 ${getPanelBackgroundClasses()}`}
+        >
+          {emptyBody}
         </SheetContent>
       </Sheet>
     )
@@ -922,21 +928,26 @@ export default function ContactSubPanel({
       : typeof sub.remaining_shift_count === 'number'
         ? sub.remaining_shift_count
         : sub.total_shifts
-
   const remainingShiftsCovered = remainingCanCover.length
 
   // Check if declined_all is selected and any shifts are selected
   const isDeclinedWithShiftsSelected = responseStatus === 'declined_all' && selectedShiftsCount > 0
 
-  return (
-    <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent
-        showCloseButton={false}
-        className={`w-full sm:max-w-2xl overflow-y-auto p-0 ${getPanelBackgroundClasses()}`}
+  const panelBody = (
+    <>
+      <div
+        className={`sticky top-0 z-10 ${getPanelHeaderBackgroundClasses()} ${panelBackgrounds.panelBorder} border-b px-6 pt-6 pb-4 relative`}
       >
-        <div
-          className={`sticky top-0 z-10 ${getPanelHeaderBackgroundClasses()} ${panelBackgrounds.panelBorder} border-b px-6 pt-6 pb-4 relative`}
-        >
+        {isInline ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute right-6 top-6 inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:text-slate-700 hover:bg-white"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </button>
+        ) : (
           <SheetClose asChild>
             <button
               type="button"
@@ -946,6 +957,32 @@ export default function ContactSubPanel({
               <span className="sr-only">Close</span>
             </button>
           </SheetClose>
+        )}
+        {isInline ? (
+          <div className="text-left">
+            <div className="text-2xl font-semibold text-slate-900 mb-1">{sub.name}</div>
+            <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+              {sub.phone && (
+                <span className="flex items-center gap-1.5">
+                  <Phone className="h-3.5 w-3.5" />
+                  <span>{sub.phone}</span>
+                </span>
+              )}
+              {sub.email && (
+                <span className="flex items-center gap-1.5">
+                  <Mail className="h-3.5 w-3.5" />
+                  <span>{sub.email}</span>
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              {formatDateRange() && <>{formatDateRange()} | </>}
+              {responseStatus === 'declined_all'
+                ? 'Declined all shifts'
+                : `Available for ${remainingShiftsCovered} of ${remainingShifts} remaining shifts`}
+            </p>
+          </div>
+        ) : (
           <SheetHeader className="text-left">
             <SheetTitle className="text-2xl mb-1">{sub.name}</SheetTitle>
             <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
@@ -969,290 +1006,301 @@ export default function ContactSubPanel({
                 : `Available for ${remainingShiftsCovered} of ${remainingShifts} remaining shifts`}
             </p>
           </SheetHeader>
-        </div>
+        )}
+      </div>
 
-        <div className="px-6">
-          <div className="mt-6 space-y-10">
-            {/* Declined Message */}
-            {responseStatus === 'declined_all' && (
-              <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
-                <p className="text-sm text-amber-800">
-                  This sub has declined all shifts. Change response status to enable assignment.
-                </p>
-              </div>
-            )}
-
-            {/* Coverage Summary */}
-            <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-2">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium">Coverage Summary</h3>
-                <span className="text-sm text-muted-foreground">
-                  {responseStatus === 'declined_all'
-                    ? 'Declined all shifts'
-                    : `${remainingShiftsCovered} of ${remainingShifts} shifts`}
-                </span>
-              </div>
-              {remainingCanCover.length > 0 || assignedShifts.length > 0 ? (
-                <TooltipProvider>
-                  <ShiftChips
-                    canCover={remainingCanCover}
-                    cannotCover={[]}
-                    assigned={[]}
-                    showLegend={true}
-                    isDeclined={responseStatus === 'declined_all'}
-                  />
-                </TooltipProvider>
-              ) : (
-                <p className="text-sm text-muted-foreground">No shifts available</p>
-              )}
-              {/* Status */}
-              <div className="space-y-2 border-t pt-[5px]">
-                <Label className="text-sm font-medium mb-2 block pt-2">Status</Label>
-                {assignedShifts.length > 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Assigned to {assignedShifts.length} shift
-                    {assignedShifts.length !== 1 ? 's' : ''}
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Not Assigned</p>
-                )}
-              </div>
+      <div className="px-6">
+        <div className="mt-6 space-y-10">
+          {/* Declined Message */}
+          {responseStatus === 'declined_all' && (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
+              <p className="text-sm text-amber-800">
+                This sub has declined all shifts. Change response status to enable assignment.
+              </p>
             </div>
+          )}
 
-            {/* Contextual Warnings */}
-            {warnings.length > 0 && (
-              <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 space-y-1">
-                <div className="flex items-center gap-2 text-sm font-medium text-amber-800 mb-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  <span>Important Information</span>
-                </div>
-                {warnings.map((warning, idx) => (
-                  <p key={idx} className="text-sm text-amber-700">
-                    • {warning}
-                  </p>
-                ))}
-              </div>
+          {/* Coverage Summary */}
+          <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-2">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium">Coverage Summary</h3>
+              <span className="text-sm text-muted-foreground">
+                {responseStatus === 'declined_all'
+                  ? 'Declined all shifts'
+                  : `${remainingShiftsCovered} of ${remainingShifts} shifts`}
+              </span>
+            </div>
+            {remainingCanCover.length > 0 || assignedShifts.length > 0 ? (
+              <TooltipProvider>
+                <ShiftChips
+                  canCover={remainingCanCover}
+                  cannotCover={[]}
+                  assigned={[]}
+                  showLegend={true}
+                  isDeclined={responseStatus === 'declined_all'}
+                />
+              </TooltipProvider>
+            ) : (
+              <p className="text-sm text-muted-foreground">No shifts available</p>
             )}
-
-            {/* Contact Summary & Notes */}
-            <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-6">
-              <h3 className="text-sm font-medium mb-4">Contact Summary</h3>
-              {fetching ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">Loading contact information...</p>
-                  </div>
-                </div>
+            {/* Status */}
+            <div className="space-y-2 border-t pt-[5px]">
+              <Label className="text-sm font-medium mb-2 block pt-2">Status</Label>
+              {assignedShifts.length > 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Assigned to {assignedShifts.length} shift
+                  {assignedShifts.length !== 1 ? 's' : ''}
+                </p>
               ) : (
-                <>
-                  <div className="space-y-4">
-                    {/* Contacted Checkbox */}
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="is_contacted"
-                          checked={isContacted}
-                          onCheckedChange={checked => {
-                            setIsContacted(checked === true)
-                            // Set contacted_at immediately if checking and it's null
-                            if (checked === true && !contactedAt) {
-                              setContactedAt(new Date().toISOString())
-                            }
-                          }}
-                        />
-                        <Label
-                          htmlFor="is_contacted"
-                          className="text-sm font-medium cursor-pointer"
-                        >
-                          Contacted
-                        </Label>
-                      </div>
-                      {isContacted && contactedAt && (
-                        <p className="text-xs text-muted-foreground ml-6">
-                          Contact status updated {formatContactedTimestamp(contactedAt)}
-                        </p>
-                      )}
-                    </div>
+                <p className="text-sm text-muted-foreground">Not Assigned</p>
+              )}
+            </div>
+          </div>
 
-                    {/* Response Status */}
-                    <div className="space-y-2 border-t pt-[5px] mt-[30px]">
-                      <Label className="text-sm font-medium mb-3 block pt-2">Response</Label>
-                      <RadioGroup
-                        value={responseStatus}
-                        onValueChange={(value: ResponseStatus) => {
-                          setResponseStatus(value)
-                          // If "Declined All" is selected, uncheck all shifts
-                          if (value === 'declined_all') {
-                            setSelectedShifts(new Set())
-                            // Also clear any overridden shifts
-                            setOverriddenShiftIds(new Set())
+          {/* Contextual Warnings */}
+          {warnings.length > 0 && (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 space-y-1">
+              <div className="flex items-center gap-2 text-sm font-medium text-amber-800 mb-2">
+                <AlertTriangle className="h-4 w-4" />
+                <span>Important Information</span>
+              </div>
+              {warnings.map((warning, idx) => (
+                <p key={idx} className="text-sm text-amber-700">
+                  • {warning}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {/* Contact Summary & Notes */}
+          <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-6">
+            <h3 className="text-sm font-medium mb-4">Contact Summary</h3>
+            {fetching ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">Loading contact information...</p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4">
+                  {/* Contacted Checkbox */}
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="is_contacted"
+                        checked={isContacted}
+                        onCheckedChange={checked => {
+                          setIsContacted(checked === true)
+                          // Set contacted_at immediately if checking and it's null
+                          if (checked === true && !contactedAt) {
+                            setContactedAt(new Date().toISOString())
                           }
                         }}
-                      >
-                        <div className="space-y-2">
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="none" id="response_none" />
-                            <Label htmlFor="response_none" className="font-normal cursor-pointer">
-                              No response yet
-                            </Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="pending" id="response_pending" />
-                            <Label
-                              htmlFor="response_pending"
-                              className="font-normal cursor-pointer"
-                            >
-                              Pending
-                            </Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="confirmed" id="response_confirmed" />
-                            <Label
-                              htmlFor="response_confirmed"
-                              className="font-normal cursor-pointer"
-                            >
-                              Confirmed (some or all)
-                            </Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="declined_all" id="response_declined_all" />
-                            <Label
-                              htmlFor="response_declined_all"
-                              className="font-normal cursor-pointer"
-                            >
-                              Declined all
-                            </Label>
-                          </div>
+                      />
+                      <Label htmlFor="is_contacted" className="text-sm font-medium cursor-pointer">
+                        Contacted
+                      </Label>
+                    </div>
+                    {isContacted && contactedAt && (
+                      <p className="text-xs text-muted-foreground ml-6">
+                        Contact status updated {formatContactedTimestamp(contactedAt)}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Response Status */}
+                  <div className="space-y-2 border-t pt-[5px] mt-[30px]">
+                    <Label className="text-sm font-medium mb-3 block pt-2">Response</Label>
+                    <RadioGroup
+                      value={responseStatus}
+                      onValueChange={(value: ResponseStatus) => {
+                        setResponseStatus(value)
+                        // If "Declined All" is selected, uncheck all shifts
+                        if (value === 'declined_all') {
+                          setSelectedShifts(new Set())
+                          // Also clear any overridden shifts
+                          setOverriddenShiftIds(new Set())
+                        }
+                      }}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="none" id="response_none" />
+                          <Label htmlFor="response_none" className="font-normal cursor-pointer">
+                            No response yet
+                          </Label>
                         </div>
-                      </RadioGroup>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 border-t pt-6">
-                    <Label htmlFor="notes" className="text-sm font-medium mb-2 block">
-                      Notes
-                    </Label>
-                    <Textarea
-                      id="notes"
-                      placeholder="Left voicemail… can do mornings only… prefers Orange room…"
-                      value={notes}
-                      onChange={e => setNotes(e.target.value)}
-                      rows={4}
-                      className="resize-none"
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Shift Assignments - Combined Section */}
-            {(assignedShifts.length > 0 ||
-              (sub.can_cover && sub.can_cover.length > 0) ||
-              (sub.cannot_cover && sub.cannot_cover.length > 0)) && (
-              <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-6">
-                <h3 className="text-sm font-medium">Shift Assignments</h3>
-
-                {/* Shifts Assigned to This Sub */}
-                {assignedShifts.length > 0 && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium block">Assigned to this sub</Label>
-                    <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3 bg-gray-50">
-                      {assignedShifts.map((shift, idx) => {
-                        return (
-                          <div
-                            key={idx}
-                            className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md bg-white"
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="pending" id="response_pending" />
+                          <Label htmlFor="response_pending" className="font-normal cursor-pointer">
+                            Pending
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="confirmed" id="response_confirmed" />
+                          <Label
+                            htmlFor="response_confirmed"
+                            className="font-normal cursor-pointer"
                           >
-                            <Checkbox id={`assigned-shift-${idx}`} checked={true} disabled={true} />
-                            <Label
-                              htmlFor={`assigned-shift-${idx}`}
-                              className="flex-1 cursor-pointer font-normal"
-                            >
-                              <Badge
-                                variant="outline"
-                                className="text-xs"
-                                style={
-                                  {
-                                    backgroundColor: shiftStatusColorValues.assigned.bg,
-                                    borderWidth: '1px',
-                                    borderStyle: 'solid',
-                                    borderColor: shiftStatusColorValues.assigned.border,
-                                    color: shiftStatusColorValues.assigned.text,
-                                  } as React.CSSProperties
-                                }
-                              >
-                                {formatShiftLabel(shift.date, shift.time_slot_code)}
-                              </Badge>
-                            </Label>
-                          </div>
-                        )
-                      })}
-                    </div>
+                            Confirmed (some or all)
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="declined_all" id="response_declined_all" />
+                          <Label
+                            htmlFor="response_declined_all"
+                            className="font-normal cursor-pointer"
+                          >
+                            Declined all
+                          </Label>
+                        </div>
+                      </div>
+                    </RadioGroup>
                   </div>
-                )}
+                </div>
 
-                {/* Available & Not Assigned */}
-                {remainingCanCover.length > 0 &&
-                  (() => {
-                    // Use the already filtered remaining shifts
-                    const availableShifts = remainingCanCover
+                <div className="space-y-2 border-t pt-6">
+                  <Label htmlFor="notes" className="text-sm font-medium mb-2 block">
+                    Notes
+                  </Label>
+                  <Textarea
+                    id="notes"
+                    placeholder="Left voicemail… can do mornings only… prefers Orange room…"
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    rows={4}
+                    className="resize-none"
+                  />
+                </div>
+              </>
+            )}
+          </div>
 
-                    if (availableShifts.length === 0) return null
+          {/* Shift Assignments - Combined Section */}
+          {(assignedShifts.length > 0 ||
+            (sub.can_cover && sub.can_cover.length > 0) ||
+            (sub.cannot_cover && sub.cannot_cover.length > 0)) && (
+            <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-6">
+              <h3 className="text-sm font-medium">Shift Assignments</h3>
 
-                    const isDeclined = responseStatus === 'declined_all'
+              {/* Shifts Assigned to This Sub */}
+              {assignedShifts.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium block">Assigned to this sub</Label>
+                  <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3 bg-gray-50">
+                    {assignedShifts.map((shift, idx) => {
+                      return (
+                        <div
+                          key={idx}
+                          className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md bg-white"
+                        >
+                          <Checkbox id={`assigned-shift-${idx}`} checked={true} disabled={true} />
+                          <Label
+                            htmlFor={`assigned-shift-${idx}`}
+                            className="flex-1 cursor-pointer font-normal"
+                          >
+                            <Badge
+                              variant="outline"
+                              className="text-xs"
+                              style={
+                                {
+                                  backgroundColor: shiftStatusColorValues.assigned.bg,
+                                  borderWidth: '1px',
+                                  borderStyle: 'solid',
+                                  borderColor: shiftStatusColorValues.assigned.border,
+                                  color: shiftStatusColorValues.assigned.text,
+                                } as React.CSSProperties
+                              }
+                            >
+                              {formatShiftLabel(shift.date, shift.time_slot_code)}
+                            </Badge>
+                          </Label>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
 
-                    return (
-                      <>
-                        {assignedShifts.length > 0 && <div className="border-t pt-4" />}
-                        <div className="space-y-2">
-                          {isDeclined ? (
-                            <>
-                              <Button
-                                variant="ghost"
-                                onClick={() =>
-                                  setIsPreviouslyAvailableExpanded(!isPreviouslyAvailableExpanded)
-                                }
-                                className="w-full flex items-center justify-between p-2 h-auto hover:bg-gray-100"
-                              >
-                                <div className="flex flex-col items-start">
-                                  <Label className="text-sm font-medium block">
-                                    Previously available ({availableShifts.length})
-                                  </Label>
-                                  <span className="text-xs text-muted-foreground mt-0.5">
-                                    (assignment disabled while declined)
-                                  </span>
-                                </div>
-                                {isPreviouslyAvailableExpanded ? (
-                                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                                ) : (
-                                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                                )}
-                              </Button>
-                              {isPreviouslyAvailableExpanded && (
-                                <div className="space-y-2 border rounded-md p-3 bg-gray-50">
-                                  <p className="text-xs text-muted-foreground mb-2">
-                                    Change response to re-enable these shifts
-                                  </p>
-                                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                                    {availableShifts.map((shift, idx) => {
-                                      return (
-                                        <div
-                                          key={idx}
-                                          className="flex items-center space-x-2 p-2 rounded-md bg-white opacity-60"
+              {/* Available & Not Assigned */}
+              {remainingCanCover.length > 0 &&
+                (() => {
+                  // Use the already filtered remaining shifts
+                  const availableShifts = remainingCanCover
+
+                  if (availableShifts.length === 0) return null
+
+                  const isDeclined = responseStatus === 'declined_all'
+
+                  return (
+                    <>
+                      {assignedShifts.length > 0 && <div className="border-t pt-4" />}
+                      <div className="space-y-2">
+                        {isDeclined ? (
+                          <>
+                            <Button
+                              variant="ghost"
+                              onClick={() =>
+                                setIsPreviouslyAvailableExpanded(!isPreviouslyAvailableExpanded)
+                              }
+                              className="w-full flex items-center justify-between p-2 h-auto hover:bg-gray-100"
+                            >
+                              <div className="flex flex-col items-start">
+                                <Label className="text-sm font-medium block">
+                                  Previously available ({availableShifts.length})
+                                </Label>
+                                <span className="text-xs text-muted-foreground mt-0.5">
+                                  (assignment disabled while declined)
+                                </span>
+                              </div>
+                              {isPreviouslyAvailableExpanded ? (
+                                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                              )}
+                            </Button>
+                            {isPreviouslyAvailableExpanded && (
+                              <div className="space-y-2 border rounded-md p-3 bg-gray-50">
+                                <p className="text-xs text-muted-foreground mb-2">
+                                  Change response to re-enable these shifts
+                                </p>
+                                <div className="space-y-2 max-h-64 overflow-y-auto">
+                                  {availableShifts.map((shift, idx) => {
+                                    return (
+                                      <div
+                                        key={idx}
+                                        className="flex items-center space-x-2 p-2 rounded-md bg-white opacity-60"
+                                      >
+                                        <Checkbox
+                                          id={`shift-${idx}`}
+                                          checked={false}
+                                          disabled={true}
+                                        />
+                                        <Label
+                                          htmlFor={`shift-${idx}`}
+                                          className="flex-1 font-normal cursor-not-allowed"
                                         >
-                                          <Checkbox
-                                            id={`shift-${idx}`}
-                                            checked={false}
-                                            disabled={true}
-                                          />
-                                          <Label
-                                            htmlFor={`shift-${idx}`}
-                                            className="flex-1 font-normal cursor-not-allowed"
+                                          <Badge
+                                            variant="outline"
+                                            className="text-xs"
+                                            style={
+                                              {
+                                                backgroundColor: 'rgb(243, 244, 246)', // gray-100
+                                                borderWidth: '1px',
+                                                borderStyle: 'solid',
+                                                borderColor: 'rgb(209, 213, 219)', // gray-300
+                                                color: 'rgb(75, 85, 99)', // gray-600
+                                              } as React.CSSProperties
+                                            }
                                           >
+                                            {formatShiftLabel(shift.date, shift.time_slot_code)}
+                                          </Badge>
+                                          {shift.class_name && (
                                             <Badge
                                               variant="outline"
-                                              className="text-xs"
+                                              className="text-xs ml-2"
                                               style={
                                                 {
                                                   backgroundColor: 'rgb(243, 244, 246)', // gray-100
@@ -1263,294 +1311,292 @@ export default function ContactSubPanel({
                                                 } as React.CSSProperties
                                               }
                                             >
-                                              {formatShiftLabel(shift.date, shift.time_slot_code)}
+                                              {shift.class_name}
                                             </Badge>
-                                            {shift.class_name && (
-                                              <Badge
-                                                variant="outline"
-                                                className="text-xs ml-2"
-                                                style={
-                                                  {
-                                                    backgroundColor: 'rgb(243, 244, 246)', // gray-100
-                                                    borderWidth: '1px',
-                                                    borderStyle: 'solid',
-                                                    borderColor: 'rgb(209, 213, 219)', // gray-300
-                                                    color: 'rgb(75, 85, 99)', // gray-600
-                                                  } as React.CSSProperties
-                                                }
-                                              >
-                                                {shift.class_name}
-                                              </Badge>
-                                            )}
-                                          </Label>
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
+                                          )}
+                                        </Label>
+                                      </div>
+                                    )
+                                  })}
                                 </div>
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <Label className="text-sm font-medium block">
-                                Available & not assigned
-                              </Label>
-                              <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3 bg-gray-50">
-                                {availableShifts.map((shift, idx) => {
-                                  const shiftKey = `${shift.date}|${shift.time_slot_code}`
-                                  const isSelected = selectedShifts.has(shiftKey)
-
-                                  return (
-                                    <div
-                                      key={idx}
-                                      className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md bg-white"
-                                    >
-                                      <Checkbox
-                                        id={`shift-${idx}`}
-                                        checked={isSelected}
-                                        onCheckedChange={() => handleShiftToggle(shiftKey, true)}
-                                      />
-                                      <Label
-                                        htmlFor={`shift-${idx}`}
-                                        className="flex-1 cursor-pointer font-normal"
-                                      >
-                                        <Badge
-                                          variant="outline"
-                                          className="text-xs"
-                                          style={
-                                            {
-                                              backgroundColor: shiftStatusColorValues.available.bg,
-                                              borderWidth: '1px',
-                                              borderStyle: 'solid',
-                                              borderColor: shiftStatusColorValues.available.border,
-                                              color: shiftStatusColorValues.available.text,
-                                            } as React.CSSProperties
-                                          }
-                                        >
-                                          {formatShiftLabel(shift.date, shift.time_slot_code)}
-                                        </Badge>
-                                        {shift.classroom_name && (
-                                          <span
-                                            className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ml-2"
-                                            style={
-                                              {
-                                                ...getClassroomPillStyle(
-                                                  shift.classroom_color || null
-                                                ),
-                                                borderWidth: '1px',
-                                                borderStyle: 'solid',
-                                              } as React.CSSProperties
-                                            }
-                                          >
-                                            {shift.classroom_name}
-                                          </span>
-                                        )}
-                                      </Label>
-                                    </div>
-                                  )
-                                })}
                               </div>
-                            </>
-                          )}
-                        </div>
-                      </>
-                    )
-                  })()}
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <Label className="text-sm font-medium block">
+                              Available & not assigned
+                            </Label>
+                            <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3 bg-gray-50">
+                              {availableShifts.map((shift, idx) => {
+                                const shiftKey = `${shift.date}|${shift.time_slot_code}`
+                                const isSelected = selectedShifts.has(shiftKey)
 
-                {/* Unavailable Shifts (can override) */}
-                {sub.cannot_cover && sub.cannot_cover.length > 0 && (
-                  <>
-                    {(assignedShifts.length > 0 || (sub.can_cover && sub.can_cover.length > 0)) && (
-                      <div className="border-t pt-4" />
-                    )}
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm font-medium">Unavailable (can override)</Label>
-                      </div>
-                      <div className="space-y-2">
-                        {sub.cannot_cover.map((shift, idx) => {
-                          const shiftKey = `${shift.date}|${shift.time_slot_code}`
-                          const isOverridden = overriddenShiftIds.has(shiftKey)
-                          const isSelected = selectedShifts.has(shiftKey)
-                          const canSelect =
-                            isOverridden && !isSubInactive && responseStatus !== 'declined_all'
-
-                          return (
-                            <div
-                              key={idx}
-                              className={`flex items-center gap-3 p-3 rounded-lg border ${
-                                isOverridden
-                                  ? 'bg-amber-50 border-amber-200'
-                                  : 'bg-gray-50 border-gray-200'
-                              }`}
-                            >
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={() => handleShiftToggle(shiftKey, false)}
-                                disabled={!canSelect}
-                              />
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs"
-                                    style={
-                                      {
-                                        backgroundColor: 'rgb(243, 244, 246)', // gray-100
-                                        borderWidth: '1px',
-                                        borderStyle: 'solid',
-                                        borderColor: 'rgb(209, 213, 219)', // gray-300
-                                        color: 'rgb(55, 65, 81)', // gray-700
-                                      } as React.CSSProperties
-                                    }
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md bg-white"
                                   >
-                                    {formatShiftLabel(shift.date, shift.time_slot_code)}
-                                  </Badge>
-                                  <span className="text-xs text-muted-foreground">
-                                    {shift.reason}
-                                  </span>
-                                  {isOverridden && (
-                                    <>
-                                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                    <Checkbox
+                                      id={`shift-${idx}`}
+                                      checked={isSelected}
+                                      onCheckedChange={() => handleShiftToggle(shiftKey, true)}
+                                    />
+                                    <Label
+                                      htmlFor={`shift-${idx}`}
+                                      className="flex-1 cursor-pointer font-normal"
+                                    >
                                       <Badge
                                         variant="outline"
                                         className="text-xs"
                                         style={
                                           {
-                                            backgroundColor: 'rgb(254, 243, 199)', // amber-100
+                                            backgroundColor: shiftStatusColorValues.available.bg,
                                             borderWidth: '1px',
                                             borderStyle: 'solid',
-                                            borderColor: 'rgb(252, 211, 77)', // amber-300
-                                            color: 'rgb(146, 64, 14)', // amber-800
+                                            borderColor: shiftStatusColorValues.available.border,
+                                            color: shiftStatusColorValues.available.text,
                                           } as React.CSSProperties
                                         }
                                       >
-                                        Override
+                                        {formatShiftLabel(shift.date, shift.time_slot_code)}
                                       </Badge>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleToggleOverride(shiftKey)}
-                                disabled={isSubInactive || responseStatus === 'declined_all'}
-                              >
-                                Override
-                              </Button>
+                                      {shift.classroom_name && (
+                                        <span
+                                          className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ml-2"
+                                          style={
+                                            {
+                                              ...getClassroomPillStyle(
+                                                shift.classroom_color || null
+                                              ),
+                                              borderWidth: '1px',
+                                              borderStyle: 'solid',
+                                            } as React.CSSProperties
+                                          }
+                                        >
+                                          {shift.classroom_name}
+                                        </span>
+                                      )}
+                                    </Label>
+                                  </div>
+                                )
+                              })}
                             </div>
-                          )
-                        })}
+                          </>
+                        )}
                       </div>
+                    </>
+                  )
+                })()}
+
+              {/* Unavailable Shifts (can override) */}
+              {sub.cannot_cover && sub.cannot_cover.length > 0 && (
+                <>
+                  {(assignedShifts.length > 0 || (sub.can_cover && sub.can_cover.length > 0)) && (
+                    <div className="border-t pt-4" />
+                  )}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium">Unavailable (can override)</Label>
                     </div>
-                  </>
-                )}
+                    <div className="space-y-2">
+                      {sub.cannot_cover.map((shift, idx) => {
+                        const shiftKey = `${shift.date}|${shift.time_slot_code}`
+                        const isOverridden = overriddenShiftIds.has(shiftKey)
+                        const isSelected = selectedShifts.has(shiftKey)
+                        const canSelect =
+                          isOverridden && !isSubInactive && responseStatus !== 'declined_all'
+
+                        return (
+                          <div
+                            key={idx}
+                            className={`flex items-center gap-3 p-3 rounded-lg border ${
+                              isOverridden
+                                ? 'bg-amber-50 border-amber-200'
+                                : 'bg-gray-50 border-gray-200'
+                            }`}
+                          >
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => handleShiftToggle(shiftKey, false)}
+                              disabled={!canSelect}
+                            />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs"
+                                  style={
+                                    {
+                                      backgroundColor: 'rgb(243, 244, 246)', // gray-100
+                                      borderWidth: '1px',
+                                      borderStyle: 'solid',
+                                      borderColor: 'rgb(209, 213, 219)', // gray-300
+                                      color: 'rgb(55, 65, 81)', // gray-700
+                                    } as React.CSSProperties
+                                  }
+                                >
+                                  {formatShiftLabel(shift.date, shift.time_slot_code)}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  {shift.reason}
+                                </span>
+                                {isOverridden && (
+                                  <>
+                                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs"
+                                      style={
+                                        {
+                                          backgroundColor: 'rgb(254, 243, 199)', // amber-100
+                                          borderWidth: '1px',
+                                          borderStyle: 'solid',
+                                          borderColor: 'rgb(252, 211, 77)', // amber-300
+                                          color: 'rgb(146, 64, 14)', // amber-800
+                                        } as React.CSSProperties
+                                      }
+                                    >
+                                      Override
+                                    </Badge>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleToggleOverride(shiftKey)}
+                              disabled={isSubInactive || responseStatus === 'declined_all'}
+                            >
+                              Override
+                            </Button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex flex-col gap-2 pt-4 pb-6 border-t">
+            {isDeclinedWithShiftsSelected ? (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 mb-2">
+                <p className="text-sm text-amber-800">⚠️ Conflicting selections</p>
+                <p className="text-sm text-amber-800 mt-1">
+                  You&apos;ve marked this sub as Declined (all) but also selected shifts.
+                </p>
+              </div>
+            ) : (
+              responseStatus === 'declined_all' && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 mb-2">
+                  <p className="text-sm text-amber-800">Declining all shifts</p>
+                </div>
+              )
+            )}
+            {isSubInactive && (
+              <div className="rounded-lg bg-gray-100 border border-gray-300 p-3 mb-2">
+                <p className="text-sm text-gray-700">
+                  This sub is inactive. Assignment is disabled.
+                </p>
               </div>
             )}
-
-            {/* Action Buttons */}
-            <div className="flex flex-col gap-2 pt-4 pb-6 border-t">
-              {isDeclinedWithShiftsSelected ? (
-                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 mb-2">
-                  <p className="text-sm text-amber-800">⚠️ Conflicting selections</p>
-                  <p className="text-sm text-amber-800 mt-1">
-                    You&apos;ve marked this sub as Declined (all) but also selected shifts.
-                  </p>
-                </div>
-              ) : (
-                responseStatus === 'declined_all' && (
-                  <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 mb-2">
-                    <p className="text-sm text-amber-800">Declining all shifts</p>
-                  </div>
-                )
-              )}
-              {isSubInactive && (
-                <div className="rounded-lg bg-gray-100 border border-gray-300 p-3 mb-2">
-                  <p className="text-sm text-gray-700">
-                    This sub is inactive. Assignment is disabled.
-                  </p>
-                </div>
-              )}
-              <TooltipProvider>
-                <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1" onClick={onClose} disabled={loading}>
-                    Cancel
-                  </Button>
-                  {isDeclinedWithShiftsSelected ? (
-                    <>
-                      <Button
-                        variant="outline"
-                        className="flex-1"
-                        onClick={handleMarkAsDeclined}
-                        disabled={loading || fetching || !coverageRequestId}
-                      >
-                        Mark as Declined
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="flex-1"
-                        onClick={handleChangeToConfirmed}
-                        disabled={loading || fetching || !coverageRequestId}
-                      >
-                        Change to Confirmed
-                      </Button>
-                    </>
-                  ) : responseStatus === 'declined_all' ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="flex-1">
-                          <Button
-                            variant="outline"
-                            className="flex-1 w-full"
-                            onClick={handleSave}
-                            disabled={true}
-                          >
-                            Save as Pending
-                          </Button>
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Pending isn&apos;t applicable when a sub has declined all shifts.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : (
+            <TooltipProvider>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={onClose} disabled={loading}>
+                  Cancel
+                </Button>
+                {isDeclinedWithShiftsSelected ? (
+                  <>
                     <Button
                       variant="outline"
                       className="flex-1"
-                      onClick={handleSave}
+                      onClick={handleMarkAsDeclined}
                       disabled={loading || fetching || !coverageRequestId}
                     >
-                      Save as Pending
+                      Mark as Declined
                     </Button>
-                  )}
-                  {!isDeclinedWithShiftsSelected && (
                     <Button
-                      variant="default"
-                      className="flex-1 !bg-teal-600 !text-white hover:!bg-teal-700"
-                      onClick={
-                        responseStatus === 'declined_all' && selectedShiftsCount === 0
-                          ? handleMarkAsDeclinedSave
-                          : handleAssignShifts
-                      }
-                      disabled={
-                        loading ||
-                        fetching ||
-                        !coverageRequestId ||
-                        (responseStatus !== 'declined_all' && selectedShiftsCount === 0) ||
-                        isSubInactive
-                      }
+                      variant="outline"
+                      className="flex-1"
+                      onClick={handleChangeToConfirmed}
+                      disabled={loading || fetching || !coverageRequestId}
                     >
-                      {responseStatus === 'declined_all'
-                        ? 'Mark as Declined'
-                        : 'Assign Selected Shifts'}
+                      Change to Confirmed
                     </Button>
-                  )}
-                </div>
-              </TooltipProvider>
-            </div>
+                  </>
+                ) : responseStatus === 'declined_all' ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="flex-1">
+                        <Button
+                          variant="outline"
+                          className="flex-1 w-full"
+                          onClick={handleSave}
+                          disabled={true}
+                        >
+                          Save
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Save isn&apos;t applicable when a sub has declined all shifts.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={handleSave}
+                    disabled={loading || fetching || !coverageRequestId}
+                  >
+                    Save
+                  </Button>
+                )}
+                {!isDeclinedWithShiftsSelected && (
+                  <Button
+                    variant="default"
+                    className="flex-1 !bg-teal-600 !text-white hover:!bg-teal-700"
+                    onClick={
+                      responseStatus === 'declined_all' && selectedShiftsCount === 0
+                        ? handleMarkAsDeclinedSave
+                        : handleAssignShifts
+                    }
+                    disabled={
+                      loading ||
+                      fetching ||
+                      !coverageRequestId ||
+                      (responseStatus !== 'declined_all' && selectedShiftsCount === 0) ||
+                      isSubInactive
+                    }
+                  >
+                    {responseStatus === 'declined_all' ? 'Mark as Declined' : 'Assign'}
+                  </Button>
+                )}
+              </div>
+            </TooltipProvider>
           </div>
         </div>
+      </div>
+    </>
+  )
+
+  if (isInline) {
+    return (
+      <div className={`h-full overflow-y-auto p-0 ${getPanelBackgroundClasses()}`}>{panelBody}</div>
+    )
+  }
+
+  return (
+    <Sheet open={isOpen} onOpenChange={onClose}>
+      <SheetContent
+        showCloseButton={false}
+        className={`w-full sm:max-w-2xl overflow-y-auto p-0 ${getPanelBackgroundClasses()}`}
+      >
+        {panelBody}
       </SheetContent>
     </Sheet>
   )
