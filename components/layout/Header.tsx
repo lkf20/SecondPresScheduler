@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { CalendarPlus, LogOut, UserPlus, UserSearch } from 'lucide-react'
+import { CalendarPlus, LogOut, Printer, UserPlus, UserSearch } from 'lucide-react'
 import {
   Sheet,
   SheetContent,
@@ -61,6 +61,12 @@ export default function Header({ userEmail }: HeaderProps) {
   const [teacherSearch, setTeacherSearch] = useState('')
   const [isTeacherDropdownOpen, setIsTeacherDropdownOpen] = useState(false)
   const teacherSearchRef = useRef<HTMLDivElement | null>(null)
+  const formatISODate = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -212,6 +218,20 @@ export default function Header({ userEmail }: HeaderProps) {
         </div>
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 border-r border-slate-200 pr-4">
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                onClick={() => {
+                  const today = formatISODate(new Date())
+                  router.push(`/reports/daily-schedule?date=${today}`)
+                }}
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Print Daily Schedule
+              </Button>
+            </div>
             <Button
               size="sm"
               variant="outline"

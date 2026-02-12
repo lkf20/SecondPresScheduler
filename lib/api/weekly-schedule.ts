@@ -39,6 +39,15 @@ const getStaffDisplayName = (staff: StaffLite | StaffLite[] | null | undefined) 
   )
 }
 
+const getStaffNameParts = (staff: StaffLite | StaffLite[] | null | undefined) => {
+  const staffItem = Array.isArray(staff) ? staff[0] : staff
+  return {
+    first_name: staffItem?.first_name ?? null,
+    last_name: staffItem?.last_name ?? null,
+    display_name: staffItem?.display_name ?? null,
+  }
+}
+
 type ScheduleCellRaw = ScheduleCellRow & {
   schedule_cell_class_groups?: Array<{ class_group: ClassGroupRow | null }>
   class_groups?: ClassGroupRow[]
@@ -53,7 +62,13 @@ type WeeklySubAssignment = {
   sub_id: string
   teacher_id: string
   sub_name: string
+  sub_first_name?: string | null
+  sub_last_name?: string | null
+  sub_display_name?: string | null
   teacher_name: string
+  teacher_first_name?: string | null
+  teacher_last_name?: string | null
+  teacher_display_name?: string | null
   class_group_id: string | null
   class_name: string | null
 }
@@ -70,6 +85,9 @@ export interface WeeklyScheduleData {
     id: string
     teacher_id: string
     teacher_name: string
+    teacher_first_name?: string | null
+    teacher_last_name?: string | null
+    teacher_display_name?: string | null
     class_group_id?: string // Optional: teachers are assigned to classrooms, not specific class groups
     class_name?: string // Optional: teachers are assigned to classrooms, not specific class groups
     classroom_id: string
@@ -103,6 +121,9 @@ export interface WeeklyScheduleDataByClassroom {
       absences?: Array<{
         teacher_id: string
         teacher_name: string
+        teacher_first_name?: string | null
+        teacher_last_name?: string | null
+        teacher_display_name?: string | null
         has_sub: boolean
         is_partial: boolean
         time_off_request_id?: string // ID of the time off request this absence belongs to
@@ -375,21 +396,31 @@ export async function getScheduleSnapshotData({
         console.warn('Error fetching sub_assignments:', subAssignmentsError.message)
       } else if (subAssignmentsData) {
         // Map sub_assignments - day_of_week_id is already in the database
-        subAssignments = subAssignmentsData.map((sa: SubAssignmentRowFromQuery) => ({
-          id: sa.id,
-          date: sa.date,
-          day_of_week_id: sa.day_of_week_id,
-          time_slot_id: sa.time_slot_id,
-          classroom_id: sa.classroom_id,
-          sub_id: sa.sub_id,
-          teacher_id: sa.teacher_id,
-          sub_name: getStaffDisplayName(sa.sub),
-          teacher_name: getStaffDisplayName(sa.teacher),
-          class_group_id: null, // sub_assignments doesn't have class_group_id
-          class_name: null,
-          // Note: teacher_id in sub_assignments represents the absent teacher
-          // sub_id represents the substitute covering for them
-        }))
+        subAssignments = subAssignmentsData.map((sa: SubAssignmentRowFromQuery) => {
+          const subParts = getStaffNameParts(sa.sub)
+          const teacherParts = getStaffNameParts(sa.teacher)
+          return {
+            id: sa.id,
+            date: sa.date,
+            day_of_week_id: sa.day_of_week_id,
+            time_slot_id: sa.time_slot_id,
+            classroom_id: sa.classroom_id,
+            sub_id: sa.sub_id,
+            teacher_id: sa.teacher_id,
+            sub_name: getStaffDisplayName(sa.sub),
+            sub_first_name: subParts.first_name,
+            sub_last_name: subParts.last_name,
+            sub_display_name: subParts.display_name,
+            teacher_name: getStaffDisplayName(sa.teacher),
+            teacher_first_name: teacherParts.first_name,
+            teacher_last_name: teacherParts.last_name,
+            teacher_display_name: teacherParts.display_name,
+            class_group_id: null, // sub_assignments doesn't have class_group_id
+            class_name: null,
+            // Note: teacher_id in sub_assignments represents the absent teacher
+            // sub_id represents the substitute covering for them
+          }
+        })
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err)
@@ -465,6 +496,9 @@ export async function getScheduleSnapshotData({
         const absences: Array<{
           teacher_id: string
           teacher_name: string
+          teacher_first_name?: string | null
+          teacher_last_name?: string | null
+          teacher_display_name?: string | null
           has_sub: boolean
           is_partial: boolean
           time_off_request_id?: string
@@ -487,6 +521,9 @@ export async function getScheduleSnapshotData({
               assignment.teacher?.display_name ||
               `${assignment.teacher?.first_name || ''} ${assignment.teacher?.last_name || ''}`.trim() ||
               'Unknown',
+            teacher_first_name: assignment.teacher?.first_name ?? null,
+            teacher_last_name: assignment.teacher?.last_name ?? null,
+            teacher_display_name: assignment.teacher?.display_name ?? null,
             classroom_id: assignment.classroom_id,
             classroom_name: assignment.classroom?.name || 'Unknown',
             is_floater: assignment.is_floater || false,
@@ -528,6 +565,9 @@ export async function getScheduleSnapshotData({
             {
               teacher_id: string
               teacher_name: string
+              teacher_first_name?: string | null
+              teacher_last_name?: string | null
+              teacher_display_name?: string | null
               has_sub: boolean
               is_partial: boolean
               time_off_request_id?: string
@@ -541,6 +581,9 @@ export async function getScheduleSnapshotData({
                 absentTeachers.set(sub.teacher_id, {
                   teacher_id: sub.teacher_id,
                   teacher_name: sub.teacher_name,
+                  teacher_first_name: sub.teacher_first_name ?? null,
+                  teacher_last_name: sub.teacher_last_name ?? null,
+                  teacher_display_name: sub.teacher_display_name ?? null,
                   has_sub: true,
                   is_partial: false,
                   time_off_request_id: undefined,
@@ -557,6 +600,9 @@ export async function getScheduleSnapshotData({
                 id: sub.id,
                 teacher_id: sub.sub_id,
                 teacher_name: sub.sub_name,
+                teacher_first_name: sub.sub_first_name ?? null,
+                teacher_last_name: sub.sub_last_name ?? null,
+                teacher_display_name: sub.sub_display_name ?? null,
                 class_group_id:
                   subClassGroupId ||
                   (matchingClassGroup ? matchingClassGroup.id : classGroupIds[0]),
@@ -617,9 +663,15 @@ export async function getScheduleSnapshotData({
               const teachersMap = new Map(
                 (teachersData || []).map((t: StaffLite) => [
                   t.id,
-                  t.display_name ||
-                    `${t.first_name || ''} ${t.last_name || ''}`.trim() ||
-                    'Unknown',
+                  {
+                    name:
+                      t.display_name ||
+                      `${t.first_name || ''} ${t.last_name || ''}`.trim() ||
+                      'Unknown',
+                    first_name: t.first_name ?? null,
+                    last_name: t.last_name ?? null,
+                    display_name: t.display_name ?? null,
+                  },
                 ])
               )
 
@@ -635,9 +687,13 @@ export async function getScheduleSnapshotData({
 
                 // Only add if not already tracked (from sub_assignments)
                 if (!absentTeachers.has(timeOff.teacher_id)) {
+                  const teacherInfo = teachersMap.get(timeOff.teacher_id)
                   absentTeachers.set(timeOff.teacher_id, {
                     teacher_id: timeOff.teacher_id,
-                    teacher_name: teachersMap.get(timeOff.teacher_id) || 'Unknown',
+                    teacher_name: teacherInfo?.name || 'Unknown',
+                    teacher_first_name: teacherInfo?.first_name ?? null,
+                    teacher_last_name: teacherInfo?.last_name ?? null,
+                    teacher_display_name: teacherInfo?.display_name ?? null,
                     has_sub: hasSub,
                     is_partial: false, // TODO: Determine if partial based on coverage
                     time_off_request_id: timeOff.time_off_request_id, // Include time_off_request_id
