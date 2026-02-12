@@ -9,7 +9,7 @@ interface TeacherImport {
   display_name?: string | null
   email?: string | null
   phone?: string | null
-  role_type_id?: string | null
+  role_type_ids?: string[]
   active: boolean
   is_sub: boolean
   is_teacher: boolean
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
               display_name: teacher.display_name || undefined,
               email: teacher.email || undefined,
               phone: teacher.phone || undefined,
-              role_type_id: teacher.role_type_id || undefined,
+              role_type_ids: teacher.role_type_ids || [],
               is_sub: teacher.is_sub,
               active: teacher.active,
             })
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
               display_name: teacher.display_name || undefined,
               email: teacher.email || undefined,
               phone: teacher.phone || undefined,
-              role_type_id: teacher.role_type_id || undefined,
+              role_type_ids: teacher.role_type_ids || [],
               is_teacher: true,
               is_sub: teacher.is_sub,
               active: teacher.active,
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
             display_name: teacher.display_name || undefined,
             email: teacher.email || undefined,
             phone: teacher.phone || undefined,
-            role_type_id: teacher.role_type_id || undefined,
+            role_type_ids: teacher.role_type_ids || [],
             is_teacher: true,
             is_sub: teacher.is_sub,
             active: teacher.active,
@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
               display_name: teacher.display_name || undefined,
               email: teacher.email || undefined,
               phone: teacher.phone || undefined,
-              role_type_id: teacher.role_type_id || undefined,
+              role_type_ids: teacher.role_type_ids || [],
               is_teacher: true,
               is_sub: teacher.is_sub,
               active: teacher.active,

@@ -252,9 +252,49 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // 3. Get all active subs
-    const allSubs = await getSubs()
-    const activeSubs = allSubs.filter(sub => sub.active !== false)
+    const { data: roleTypes, error: roleTypesError } = await supabase
+      .from('staff_role_types')
+      .select('id, code')
+      .eq('school_id', schoolId)
+
+    if (roleTypesError) {
+      console.warn('Failed to load staff role types', roleTypesError)
+    }
+    const flexibleRoleTypeIds = new Set(
+      (roleTypes || []).filter(rt => rt.code === 'FLEXIBLE').map(rt => rt.id)
+    )
+    let flexibleStaffIds = new Set<string>()
+    if (flexibleRoleTypeIds.size > 0) {
+      const { data: flexibleAssignments, error: flexibleAssignmentsError } = await supabase
+        .from('staff_role_type_assignments')
+        .select('staff_id')
+        .eq('school_id', schoolId)
+        .in('role_type_id', Array.from(flexibleRoleTypeIds))
+
+      if (flexibleAssignmentsError) {
+        console.warn('Failed to load flexible staff assignments', flexibleAssignmentsError)
+      }
+
+      flexibleStaffIds = new Set(
+        (flexibleAssignments || []).map(assignment => assignment.staff_id).filter(Boolean)
+      )
+    }
+
+    // 3. Get all active subs + flexible staff
+    let staffQuery = supabase.from('staff').select('*').eq('school_id', schoolId)
+    if (flexibleStaffIds.size > 0) {
+      staffQuery = staffQuery.or(`is_sub.eq.true,id.in.(${Array.from(flexibleStaffIds).join(',')})`)
+    } else {
+      staffQuery = staffQuery.eq('is_sub', true)
+    }
+
+    const { data: staffRows, error: staffError } = await staffQuery
+    if (staffError) {
+      throw staffError
+    }
+
+    const activeSubs = (staffRows || []).filter(sub => sub.active !== false)
+    const subIds = activeSubs.map(sub => sub.id).filter(Boolean)
 
     // 4. Get date range for checking conflicts
     const startDate = timeOffRequest.start_date

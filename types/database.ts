@@ -678,7 +678,6 @@ export type Database = {
           is_teacher: boolean | null
           last_name: string
           phone: string | null
-          role_type_id: string | null
           school_id: string | null
           updated_at: string | null
         }
@@ -697,7 +696,6 @@ export type Database = {
           is_teacher?: boolean | null
           last_name: string
           phone?: string | null
-          role_type_id?: string | null
           school_id?: string | null
           updated_at?: string | null
         }
@@ -716,19 +714,10 @@ export type Database = {
           is_teacher?: boolean | null
           last_name?: string
           phone?: string | null
-          role_type_id?: string | null
           school_id?: string | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: 'staff_role_type_id_fkey'
-            columns: ['role_type_id']
-            isOneToOne: false
-            referencedRelation: 'staff_role_types'
-            referencedColumns: ['id']
-          },
-        ]
+        Relationships: []
       }
       staff_qualifications: {
         Row: {
@@ -816,6 +805,48 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      staff_role_type_assignments: {
+        Row: {
+          created_at: string | null
+          id: string
+          role_type_id: string
+          school_id: string
+          staff_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role_type_id: string
+          school_id: string
+          staff_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role_type_id?: string
+          school_id?: string
+          staff_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'staff_role_type_assignments_role_type_id_fkey'
+            columns: ['role_type_id']
+            isOneToOne: false
+            referencedRelation: 'staff_role_types'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'staff_role_type_assignments_staff_id_fkey'
+            columns: ['staff_id']
+            isOneToOne: false
+            referencedRelation: 'staff'
+            referencedColumns: ['id']
+          },
+        ]
       }
       sub_assignments: {
         Row: {
