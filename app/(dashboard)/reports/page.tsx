@@ -17,6 +17,12 @@ const reports = [
     icon: Calendar,
   },
   {
+    name: "Today's Schedule",
+    description: 'Printable daily schedule snapshot',
+    href: '/reports/daily-schedule',
+    icon: Calendar,
+  },
+  {
     name: 'Sub Availability',
     description: 'View sub availability matrix',
     href: '/reports/sub-availability',
