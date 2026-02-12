@@ -9,13 +9,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import FormField from '@/components/shared/FormField'
 import { Database } from '@/types/database'
 import { AlertCircle } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
 type Staff = Database['public']['Tables']['staff']['Row']
+type StaffWithRoleIds = Staff & { role_type_ids?: string[] }
 type StaffRoleType = Database['public']['Tables']['staff_role_types']['Row']
 
 const teacherSchema = z.object({
@@ -27,7 +27,7 @@ const teacherSchema = z.object({
     .union([z.string().email('Invalid email address'), z.literal('')])
     .optional()
     .transform(val => (val === '' ? undefined : val)),
-  role_type_id: z.string().min(1, 'Staff role is required'),
+  role_type_ids: z.array(z.string()).min(1, 'At least one staff role is required'),
   active: z.boolean().default(true),
   is_sub: z.boolean().default(false),
 })
@@ -35,7 +35,7 @@ const teacherSchema = z.object({
 export type TeacherFormData = z.infer<typeof teacherSchema>
 
 interface TeacherFormProps {
-  teacher?: Staff
+  teacher?: StaffWithRoleIds
   onSubmit: (data: TeacherFormData) => Promise<void>
   onCancel?: () => void
 }
@@ -64,13 +64,14 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
           display_name: teacher.display_name || '',
           phone: teacher.phone || '',
           email: teacher.email || '',
-          role_type_id: teacher.role_type_id || '',
+          role_type_ids: teacher.role_type_ids || [],
           active: teacher.active ?? true,
           is_sub: teacher.is_sub ?? false,
         }
       : {
           active: true,
           is_sub: false,
+          role_type_ids: [],
         },
   })
 
@@ -151,7 +152,7 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
 
   const active = watch('active')
   const isSub = watch('is_sub')
-  const roleTypeId = watch('role_type_id')
+  const roleTypeIds = watch('role_type_ids') || []
 
   const handleFormSubmit = async (data: TeacherFormData) => {
     // If duplicate warning exists and user hasn't confirmed, prevent submission
@@ -194,39 +195,45 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
             Active
           </Label>
         </div>
-
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="is_sub"
-            checked={isSub}
-            onCheckedChange={checked => setValue('is_sub', checked === true)}
-          />
-          <Label htmlFor="is_sub" className="font-normal cursor-pointer">
-            Is also a sub
-          </Label>
-        </div>
       </div>
 
       <div className="space-y-4 pt-4 border-t">
-        <FormField label="Staff Role" error={errors.role_type_id?.message} required>
+        <FormField label="Staff Role" error={errors.role_type_ids?.message} required>
           {loadingRoleTypes ? (
             <div className="text-sm text-muted-foreground">Loading...</div>
           ) : (
-            <RadioGroup
-              value={roleTypeId || ''}
-              onValueChange={value => setValue('role_type_id', value)}
-            >
-              <div className="flex items-center space-x-6">
-                {roleTypes.map(roleType => (
+            <div className="flex flex-wrap items-center gap-6">
+              {roleTypes.map(roleType => {
+                const checked = roleTypeIds.includes(roleType.id)
+                return (
                   <div key={roleType.id} className="flex items-center space-x-2">
-                    <RadioGroupItem value={roleType.id} id={`role-${roleType.id}`} />
+                    <Checkbox
+                      id={`role-${roleType.id}`}
+                      checked={checked}
+                      onCheckedChange={value => {
+                        const next = value
+                          ? [...roleTypeIds, roleType.id]
+                          : roleTypeIds.filter(id => id !== roleType.id)
+                        setValue('role_type_ids', next, { shouldValidate: true })
+                      }}
+                    />
                     <Label htmlFor={`role-${roleType.id}`} className="font-normal cursor-pointer">
                       {roleType.label}
                     </Label>
                   </div>
-                ))}
+                )
+              })}
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="is_sub"
+                  checked={isSub}
+                  onCheckedChange={checked => setValue('is_sub', checked === true)}
+                />
+                <Label htmlFor="is_sub" className="font-normal cursor-pointer">
+                  Is also a sub
+                </Label>
               </div>
-            </RadioGroup>
+            </div>
           )}
         </FormField>
       </div>

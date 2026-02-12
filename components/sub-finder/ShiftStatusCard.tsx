@@ -3,6 +3,7 @@
 import { CheckCircle, AlertTriangle, HelpCircle, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
+import { shiftStatusColorValues } from '@/lib/utils/colors'
 import type { SubFinderShift } from '@/lib/sub-finder/types'
 
 interface ShiftStatusCardProps {
@@ -60,13 +61,18 @@ export default function ShiftStatusCard({
   const hasConfirmedSub = Boolean(shift.sub_name) && shift.status === 'fully_covered'
   const isCovered = shift.status === 'fully_covered'
 
+  const statusBorderColor = isCovered
+    ? shiftStatusColorValues.available.border
+    : shiftStatusColorValues.unavailable.border
+
   return (
     <div
       className={cn(
-        'flex w-full max-w-none self-stretch min-w-0 items-start justify-between gap-6 rounded-lg border border-slate-300 bg-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md',
+        'flex w-full max-w-none self-stretch min-w-0 items-start justify-between gap-6 rounded-lg border border-l-4 border-slate-300 bg-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md',
         isCovered && 'opacity-80',
         onSelectShift && 'cursor-pointer'
       )}
+      style={{ borderLeftColor: statusBorderColor }}
       role={onSelectShift ? 'button' : undefined}
       tabIndex={onSelectShift ? 0 : undefined}
       onClick={onSelectShift ? () => onSelectShift(shift) : undefined}

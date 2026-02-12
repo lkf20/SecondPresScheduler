@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getTimeOffRequestById } from '@/lib/api/time-off'
 import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
-import { getSubAvailability, getSubAvailabilityExceptions } from '@/lib/api/sub-availability'
 import { getTeacherScheduledShifts } from '@/lib/api/time-off-shifts'
 import { getTimeOffRequests } from '@/lib/api/time-off'
 import { createErrorResponse } from '@/lib/utils/errors'
@@ -30,10 +29,13 @@ interface SubMatch {
   name: string
   phone: string | null
   email: string | null
+  is_sub: boolean
   coverage_percent: number
   shifts_covered: number
   total_shifts: number
-  is_flexible_staff?: boolean
+  is_flexible_staff: boolean
+  response_status: 'none' | 'pending' | 'confirmed' | 'declined_all' | null
+  notes: string | null
   can_cover: Array<{
     date: string
     day_name: string
@@ -54,12 +56,13 @@ interface SubMatch {
   }>
   qualification_matches: number
   qualification_total: number
-  can_change_diapers?: boolean
-  can_lift_children?: boolean
-  assigned_shifts?: Array<{
+  can_change_diapers: boolean
+  can_lift_children: boolean
+  assigned_shifts: Array<{
     date: string
     day_name: string
     time_slot_code: string
+    classroom_name?: string | null
   }>
 }
 
@@ -260,17 +263,30 @@ export async function POST(request: NextRequest) {
     if (roleTypesError) {
       console.warn('Failed to load staff role types', roleTypesError)
     }
-    const roleTypeById = new Map((roleTypes || []).map(rt => [rt.id, rt.code]))
     const flexibleRoleTypeIds = new Set(
       (roleTypes || []).filter(rt => rt.code === 'FLEXIBLE').map(rt => rt.id)
     )
+    let flexibleStaffIds = new Set<string>()
+    if (flexibleRoleTypeIds.size > 0) {
+      const { data: flexibleAssignments, error: flexibleAssignmentsError } = await supabase
+        .from('staff_role_type_assignments')
+        .select('staff_id')
+        .eq('school_id', schoolId)
+        .in('role_type_id', Array.from(flexibleRoleTypeIds))
+
+      if (flexibleAssignmentsError) {
+        console.warn('Failed to load flexible staff assignments', flexibleAssignmentsError)
+      }
+
+      flexibleStaffIds = new Set(
+        (flexibleAssignments || []).map(assignment => assignment.staff_id).filter(Boolean)
+      )
+    }
 
     // 3. Get all active subs + flexible staff
     let staffQuery = supabase.from('staff').select('*').eq('school_id', schoolId)
-    if (flexibleRoleTypeIds.size > 0) {
-      staffQuery = staffQuery.or(
-        `is_sub.eq.true,role_type_id.in.(${Array.from(flexibleRoleTypeIds).join(',')})`
-      )
+    if (flexibleStaffIds.size > 0) {
+      staffQuery = staffQuery.or(`is_sub.eq.true,id.in.(${Array.from(flexibleStaffIds).join(',')})`)
     } else {
       staffQuery = staffQuery.eq('is_sub', true)
     }
@@ -281,13 +297,7 @@ export async function POST(request: NextRequest) {
     }
 
     const activeSubs = (staffRows || []).filter(sub => sub.active !== false)
-    if (process.env.NODE_ENV !== 'production') {
-      console.debug('[Sub Finder Debug] Staff query counts', {
-        staff_rows: staffRows?.length ?? 0,
-        active_staff: activeSubs.length,
-        flexible_role_type_ids: Array.from(flexibleRoleTypeIds),
-      })
-    }
+    const subIds = activeSubs.map(sub => sub.id).filter(Boolean)
 
     // 4. Get date range for checking conflicts
     const startDate = timeOffRequest.start_date
@@ -308,288 +318,323 @@ export async function POST(request: NextRequest) {
       timeOffByTeacher.get(req.teacher_id)!.push(req)
     })
 
+    // 5b. Batch availability + exceptions for all subs in range
+    const availabilityBySub = new Map<string, Map<string, boolean>>()
+    const exceptionsBySub = new Map<
+      string,
+      Array<{ date: string; time_slot_id: string; available: boolean }>
+    >()
+
+    if (subIds.length > 0) {
+      const { data: availabilityRows, error: availabilityError } = await supabase
+        .from('sub_availability')
+        .select('sub_id, day_of_week_id, time_slot_id, available')
+        .in('sub_id', subIds)
+
+      if (availabilityError) throw availabilityError
+      ;(availabilityRows || []).forEach(row => {
+        if (!row?.sub_id || !row.available) return
+        const key = `${row.day_of_week_id}|${row.time_slot_id}`
+        if (!availabilityBySub.has(row.sub_id)) {
+          availabilityBySub.set(row.sub_id, new Map())
+        }
+        availabilityBySub.get(row.sub_id)!.set(key, true)
+      })
+
+      let exceptionsQuery = supabase
+        .from('sub_availability_exceptions')
+        .select('sub_id, date, time_slot_id, available')
+        .in('sub_id', subIds)
+
+      if (startDate) {
+        exceptionsQuery = exceptionsQuery.gte('date', startDate)
+      }
+      if (endDate) {
+        exceptionsQuery = exceptionsQuery.lte('date', endDate)
+      }
+
+      const { data: exceptionRows, error: exceptionError } = await exceptionsQuery
+      if (exceptionError) throw exceptionError
+      ;(exceptionRows || []).forEach(row => {
+        if (!row?.sub_id) return
+        if (!exceptionsBySub.has(row.sub_id)) {
+          exceptionsBySub.set(row.sub_id, [])
+        }
+        exceptionsBySub.get(row.sub_id)!.push({
+          date: row.date,
+          time_slot_id: row.time_slot_id,
+          available: row.available,
+        })
+      })
+    }
+
     // 6. For each sub, calculate match score
-    const subMatches: SubMatch[] = await Promise.all(
+    const subMatches = await Promise.all(
       activeSubs.map(async sub => {
-        // Get sub's availability
-        const availability = await getSubAvailability(sub.id)
-        const availabilityExceptions = await getSubAvailabilityExceptions(sub.id, {
-          start_date: startDate,
-          end_date: endDate,
-        })
+        try {
+          // Create availability map: day_of_week_id + time_slot_id -> available
+          const availabilityMap = new Map<string, boolean>(availabilityBySub.get(sub.id) ?? [])
 
-        // Create availability map: day_of_week_id + time_slot_id -> available
-        const availabilityMap = new Map<string, boolean>()
-        availability.forEach((avail: any) => {
-          if (avail.available) {
-            const key = `${avail.day_of_week_id}|${avail.time_slot_id}`
-            availabilityMap.set(key, true)
-          }
-        })
+          // Override with exceptions (date + time_slot_id)
+          const availabilityExceptions = exceptionsBySub.get(sub.id) || []
+          availabilityExceptions.forEach(exception => {
+            const key = `${exception.date}|${exception.time_slot_id}`
+            availabilityMap.set(key, exception.available)
+          })
 
-        // Override with exceptions
-        availabilityExceptions.forEach((exception: any) => {
-          const key = `${exception.date}|${exception.time_slot_id}`
-          availabilityMap.set(key, exception.available)
-        })
+          // Get sub's regular teaching schedule
+          const subScheduledShifts = await getTeacherScheduledShifts(sub.id, startDate, endDate)
 
-        // Get sub's regular teaching schedule
-        const subScheduledShifts = await getTeacherScheduledShifts(sub.id, startDate, endDate)
+          // Create schedule conflict map: date + time_slot_id -> conflict
+          const scheduleConflicts = new Set<string>()
+          subScheduledShifts.forEach(scheduledShift => {
+            const key = `${scheduledShift.date}|${scheduledShift.time_slot_id}`
+            scheduleConflicts.add(key)
+          })
 
-        // Create schedule conflict map: date + time_slot_id -> conflict
-        const scheduleConflicts = new Set<string>()
-        subScheduledShifts.forEach(scheduledShift => {
-          const key = `${scheduledShift.date}|${scheduledShift.time_slot_id}`
-          scheduleConflicts.add(key)
-        })
+          // Get sub's time off requests for conflict checking
+          const subTimeOffRequests = timeOffByTeacher.get(sub.id) || []
+          const timeOffConflicts = new Set<string>()
 
-        // Get sub's time off requests for conflict checking
-        const subTimeOffRequests = timeOffByTeacher.get(sub.id) || []
-        const timeOffConflicts = new Set<string>()
-
-        // Fetch shifts for each time off request
-        for (const req of subTimeOffRequests) {
-          try {
-            const reqShifts = await getTimeOffShifts(req.id)
-            reqShifts.forEach((shift: any) => {
-              const key = `${shift.date}|${shift.time_slot_id}`
-              timeOffConflicts.add(key)
-            })
-          } catch (error) {
-            console.error(`Error fetching shifts for time off request ${req.id}:`, error)
-          }
-        }
-
-        // Get sub's class preferences/qualifications
-        const { data: classPreferences } = await supabase
-          .from('sub_class_preferences')
-          .select('class_group_id, can_teach')
-          .eq('sub_id', sub.id)
-          .eq('can_teach', true)
-
-        const qualifiedClassGroupIds = new Set(
-          (classPreferences || []).map((pref: any) => pref.class_group_id)
-        )
-
-        // Get sub's capabilities
-        const subCapabilities = {
-          can_change_diapers: sub.can_change_diapers ?? false,
-          can_lift_children: sub.can_lift_children ?? false,
-        }
-
-        // Calculate coverage
-        let availableShifts = 0
-        const canCover: Array<{
-          date: string
-          day_name: string
-          time_slot_code: string
-          class_name: string | null
-          classroom_name?: string | null
-          classroom_color?: string | null
-          diaper_changing_required?: boolean
-          lifting_children_required?: boolean
-        }> = []
-        const cannotCover: Array<{
-          date: string
-          day_name: string
-          time_slot_code: string
-          reason: string
-          classroom_name?: string | null
-          coverage_request_shift_id?: string
-        }> = []
-        let qualificationMatches = 0
-        let qualificationTotal = 0
-
-        shiftsToCover.forEach(shift => {
-          const availabilityKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
-          const conflictKey = `${shift.date}|${shift.time_slot_id}`
-
-          // Check if sub is available (base availability + exceptions)
-          const isAvailable = availabilityMap.has(availabilityKey)
-            ? availabilityMap.get(availabilityKey)!
-            : false
-
-          // Check for schedule conflicts
-          const hasScheduleConflict = scheduleConflicts.has(conflictKey)
-
-          // Check for time off conflicts
-          const hasTimeOffConflict = timeOffConflicts.has(conflictKey)
-
-          // Check qualifications (if class_group_id is known)
-          let isQualified = true
-          if (shift.class_group_id) {
-            qualificationTotal++
-            if (qualifiedClassGroupIds.has(shift.class_group_id)) {
-              qualificationMatches++
-            } else {
-              isQualified = false
+          // Fetch shifts for each time off request
+          for (const req of subTimeOffRequests) {
+            try {
+              const reqShifts = await getTimeOffShifts(req.id)
+              reqShifts.forEach((shift: any) => {
+                const key = `${shift.date}|${shift.time_slot_id}`
+                timeOffConflicts.add(key)
+              })
+            } catch (error) {
+              console.error(`Error fetching shifts for time off request ${req.id}:`, error)
             }
           }
 
-          if (isAvailable && !hasScheduleConflict && !hasTimeOffConflict && isQualified) {
-            // Can cover this shift
-            availableShifts++
-            canCover.push({
-              date: shift.date,
-              day_name: shift.day_name,
-              time_slot_code: shift.time_slot_code,
-              class_name: shift.class_group_name || null,
-              classroom_name: shift.classroom_name || null,
-              classroom_color: shift.classroom_color || null,
-              diaper_changing_required: shift.diaper_changing_required,
-              lifting_children_required: shift.lifting_children_required,
-            })
-          } else {
-            // Cannot cover - determine reason with better wording
-            let reason = ''
-            if (!isAvailable) {
-              reason = 'Marked as unavailable'
-            } else if (hasScheduleConflict) {
-              reason = 'Scheduled to teach'
-            } else if (hasTimeOffConflict) {
-              reason = 'Has time off'
-            } else if (!isQualified) {
-              reason = 'Not qualified for this class'
-            } else {
-              reason = 'Not available'
+          // Get sub's class preferences/qualifications
+          const { data: classPreferences } = await supabase
+            .from('sub_class_preferences')
+            .select('class_group_id, can_teach')
+            .eq('sub_id', sub.id)
+            .eq('can_teach', true)
+
+          const qualifiedClassGroupIds = new Set(
+            (classPreferences || []).map((pref: any) => pref.class_group_id)
+          )
+
+          // Get sub's capabilities
+          const subCapabilities = {
+            can_change_diapers: sub.can_change_diapers ?? false,
+            can_lift_children: sub.can_lift_children ?? false,
+          }
+
+          // Calculate coverage
+          let availableShifts = 0
+          const canCover: Array<{
+            date: string
+            day_name: string
+            time_slot_code: string
+            class_name: string | null
+            classroom_name?: string | null
+            classroom_color?: string | null
+            diaper_changing_required?: boolean
+            lifting_children_required?: boolean
+          }> = []
+          const cannotCover: Array<{
+            date: string
+            day_name: string
+            time_slot_code: string
+            reason: string
+            classroom_name?: string | null
+            coverage_request_shift_id?: string
+          }> = []
+          let qualificationMatches = 0
+          let qualificationTotal = 0
+
+          shiftsToCover.forEach(shift => {
+            const availabilityKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
+            const conflictKey = `${shift.date}|${shift.time_slot_id}`
+
+            // Check if sub is available (base availability + exceptions)
+            const isAvailable = availabilityMap.has(availabilityKey)
+              ? availabilityMap.get(availabilityKey)!
+              : false
+
+            // Check for schedule conflicts
+            const hasScheduleConflict = scheduleConflicts.has(conflictKey)
+
+            // Check for time off conflicts
+            const hasTimeOffConflict = timeOffConflicts.has(conflictKey)
+
+            // Check qualifications (if class_group_id is known)
+            let isQualified = true
+            if (shift.class_group_id) {
+              qualificationTotal++
+              if (qualifiedClassGroupIds.has(shift.class_group_id)) {
+                qualificationMatches++
+              } else {
+                isQualified = false
+              }
             }
 
-            // Get coverage_request_shift_id from map
-            const shiftKey = `${shift.date}|${shift.time_slot_code}|${shift.classroom_id || ''}`
-            const coverageRequestShiftId = shiftIdMap.get(shiftKey)
+            if (isAvailable && !hasScheduleConflict && !hasTimeOffConflict && isQualified) {
+              // Can cover this shift
+              availableShifts++
+              canCover.push({
+                date: shift.date,
+                day_name: shift.day_name,
+                time_slot_code: shift.time_slot_code,
+                class_name: shift.class_group_name || null,
+                classroom_name: shift.classroom_name || null,
+                classroom_color: shift.classroom_color || null,
+                diaper_changing_required: shift.diaper_changing_required,
+                lifting_children_required: shift.lifting_children_required,
+              })
+            } else {
+              // Cannot cover - determine reason with better wording
+              let reason = ''
+              if (!isAvailable) {
+                reason = 'Marked as unavailable'
+              } else if (hasScheduleConflict) {
+                reason = 'Scheduled to teach'
+              } else if (hasTimeOffConflict) {
+                reason = 'Has time off'
+              } else if (!isQualified) {
+                reason = 'Not qualified for this class'
+              } else {
+                reason = 'Not available'
+              }
 
-            cannotCover.push({
-              date: shift.date,
-              day_name: shift.day_name,
-              time_slot_code: shift.time_slot_code,
-              reason,
-              classroom_name: shift.classroom_name || null,
-              coverage_request_shift_id: coverageRequestShiftId,
-            })
-          }
-        })
+              // Get coverage_request_shift_id from map
+              const shiftKey = `${shift.date}|${shift.time_slot_code}|${shift.classroom_id || ''}`
+              const coverageRequestShiftId = shiftIdMap.get(shiftKey)
 
-        // Check for existing assignments for this sub and coverage request
-        const assignedShifts: Array<{
-          date: string
-          day_name: string
-          time_slot_code: string
-          classroom_name?: string | null
-        }> = []
+              cannotCover.push({
+                date: shift.date,
+                day_name: shift.day_name,
+                time_slot_code: shift.time_slot_code,
+                reason,
+                classroom_name: shift.classroom_name || null,
+                coverage_request_shift_id: coverageRequestShiftId,
+              })
+            }
+          })
 
-        if (coverageRequestId) {
-          // Get teacher_id from coverage_request
-          const { data: coverageRequest } = await supabase
-            .from('coverage_requests')
-            .select('teacher_id')
-            .eq('id', coverageRequestId)
-            .single()
+          // Check for existing assignments for this sub and coverage request
+          const assignedShifts: Array<{
+            date: string
+            day_name: string
+            time_slot_code: string
+            classroom_name?: string | null
+          }> = []
 
-          if (coverageRequest) {
-            // Get existing sub_assignments for this sub, teacher, and date range
-            const { data: existingAssignments } = await supabase
-              .from('sub_assignments')
-              .select(
-                `
+          if (coverageRequestId) {
+            // Get teacher_id from coverage_request
+            const { data: coverageRequest } = await supabase
+              .from('coverage_requests')
+              .select('teacher_id')
+              .eq('id', coverageRequestId)
+              .single()
+
+            if (coverageRequest) {
+              // Get existing sub_assignments for this sub, teacher, and date range
+              const { data: existingAssignments } = await supabase
+                .from('sub_assignments')
+                .select(
+                  `
                 date,
                 time_slot_id,
                 time_slots:time_slots(code),
                 days_of_week:day_of_week_id(name)
               `
-              )
-              .eq('sub_id', sub.id)
-              .eq('teacher_id', coverageRequest.teacher_id)
-              .gte('date', startDate)
-              .lte('date', endDate)
-              .eq('assignment_type', 'Substitute Shift')
-
-            if (existingAssignments) {
-              existingAssignments.forEach((assignment: any) => {
-                // Check if this assignment covers one of the shifts we're looking for
-                const matchingShift = shiftsToCover.find(
-                  s =>
-                    s.date === assignment.date && s.time_slot_code === assignment.time_slots?.code
                 )
+                .eq('sub_id', sub.id)
+                .eq('teacher_id', coverageRequest.teacher_id)
+                .gte('date', startDate)
+                .lte('date', endDate)
+                .eq('assignment_type', 'Substitute Shift')
 
-                if (matchingShift) {
-                  assignedShifts.push({
-                    date: assignment.date,
-                    day_name: assignment.days_of_week?.name || matchingShift.day_name,
-                    time_slot_code: assignment.time_slots?.code || matchingShift.time_slot_code,
-                    classroom_name: matchingShift.classroom_name || null,
-                  })
-                }
-              })
+              if (existingAssignments) {
+                existingAssignments.forEach((assignment: any) => {
+                  // Check if this assignment covers one of the shifts we're looking for
+                  const matchingShift = shiftsToCover.find(
+                    s =>
+                      s.date === assignment.date && s.time_slot_code === assignment.time_slots?.code
+                  )
+
+                  if (matchingShift) {
+                    assignedShifts.push({
+                      date: assignment.date,
+                      day_name: assignment.days_of_week?.name || matchingShift.day_name,
+                      time_slot_code: assignment.time_slots?.code || matchingShift.time_slot_code,
+                      classroom_name: matchingShift.classroom_name || null,
+                    })
+                  }
+                })
+              }
             }
           }
-        }
 
-        const coveragePercentage =
-          shiftsToCover.length > 0 ? Math.round((availableShifts / shiftsToCover.length) * 100) : 0
+          const coveragePercentage =
+            shiftsToCover.length > 0
+              ? Math.round((availableShifts / shiftsToCover.length) * 100)
+              : 0
 
-        const name = sub.display_name || `${sub.first_name} ${sub.last_name}` || 'Unknown'
+          const name = sub.display_name || `${sub.first_name} ${sub.last_name}` || 'Unknown'
 
-        // Get response_status from substitute_contacts if coverage request exists
-        let responseStatus: string | null = null
-        let contactNotes: string | null = null
-        if (coverageRequestId) {
-          try {
-            const { data: contact } = await supabase
-              .from('substitute_contacts')
-              .select('response_status, notes')
-              .eq('coverage_request_id', coverageRequestId)
-              .eq('sub_id', sub.id)
-              .single()
+          // Get response_status from substitute_contacts if coverage request exists
+          let responseStatus: string | null = null
+          let contactNotes: string | null = null
+          if (coverageRequestId) {
+            try {
+              const { data: contact } = await supabase
+                .from('substitute_contacts')
+                .select('response_status, notes')
+                .eq('coverage_request_id', coverageRequestId)
+                .eq('sub_id', sub.id)
+                .single()
 
-            if (contact) {
-              responseStatus = contact.response_status
-              contactNotes = contact.notes ?? null
+              if (contact) {
+                responseStatus = contact.response_status
+                contactNotes = contact.notes ?? null
+              }
+            } catch {
+              // Contact doesn't exist yet, which is fine
             }
-          } catch {
-            // Contact doesn't exist yet, which is fine
-            console.debug(
-              `No contact found for sub ${sub.id} and coverage request ${coverageRequestId}`
-            )
           }
-        }
 
-        const isFlexibleStaff = roleTypeById.get(sub.role_type_id ?? '') === 'FLEXIBLE'
+          const isFlexibleStaff = flexibleStaffIds.has(sub.id)
 
-        return {
-          id: sub.id,
-          name,
-          phone: sub.phone,
-          email: sub.email,
-          is_sub: sub.is_sub,
-          coverage_percent: coveragePercentage,
-          shifts_covered: availableShifts,
-          total_shifts: shiftsToCover.length,
-          can_cover: canCover,
-          cannot_cover: cannotCover,
-          assigned_shifts: assignedShifts, // Shifts already assigned to this sub
-          qualification_matches: qualificationMatches,
-          qualification_total: qualificationTotal,
-          can_change_diapers: subCapabilities.can_change_diapers,
-          can_lift_children: subCapabilities.can_lift_children,
-          response_status: responseStatus,
-          is_flexible_staff: isFlexibleStaff,
-          notes: contactNotes,
+          return {
+            id: sub.id,
+            name,
+            phone: sub.phone,
+            email: sub.email,
+            is_sub: sub.is_sub,
+            coverage_percent: coveragePercentage,
+            shifts_covered: availableShifts,
+            total_shifts: shiftsToCover.length,
+            can_cover: canCover,
+            cannot_cover: cannotCover,
+            assigned_shifts: assignedShifts, // Shifts already assigned to this sub
+            qualification_matches: qualificationMatches,
+            qualification_total: qualificationTotal,
+            can_change_diapers: subCapabilities.can_change_diapers,
+            can_lift_children: subCapabilities.can_lift_children,
+            response_status: responseStatus,
+            is_flexible_staff: isFlexibleStaff,
+            notes: contactNotes,
+          }
+        } catch (error) {
+          console.error(`Error evaluating sub ${sub.id}:`, error)
+          return null
         }
       })
     )
 
     // 7. Filter out subs with 0% coverage unless include_flexible_staff is true
     // (Flexible staff might be teachers who can sub when not teaching)
-    let filteredMatches = subMatches
+    let filteredMatches = subMatches.filter((match): match is SubMatch => match !== null)
     if (!include_flexible_staff) {
-      filteredMatches = subMatches.filter(match => match.coverage_percent > 0)
-    }
-    if (process.env.NODE_ENV !== 'production') {
-      console.debug('[Sub Finder Debug] Sub match counts', {
-        matches: subMatches.length,
-        filtered: filteredMatches.length,
-        include_flexible_staff,
-      })
+      filteredMatches = filteredMatches.filter(match => match.coverage_percent > 0)
     }
 
     // 8. Sort by coverage percentage (descending), then by name

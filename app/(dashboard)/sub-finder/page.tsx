@@ -21,8 +21,7 @@ import {
 } from '@/components/sub-finder/hooks/useSubFinderData'
 import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
 import DatePickerInput from '@/components/ui/date-picker-input'
-import { parseLocalDate } from '@/lib/utils/date'
-import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
+import { formatAbsenceDateRange, formatShortDate } from '@/lib/utils/date-format'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -140,6 +139,17 @@ export default function SubFinderPage() {
     return []
   }, [recommendedCombinations, recommendedSubs])
 
+  const renderRecommendedPlaceholder = () => (
+    <div className="mt-2 space-y-3">
+      <div className="h-6 w-44 rounded bg-slate-200/80 animate-pulse" />
+      <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 animate-pulse">
+        <div className="h-6 w-1/3 rounded bg-slate-200" />
+        <div className="h-5 w-1/2 rounded bg-slate-200" />
+        <div className="h-16 rounded bg-slate-200" />
+      </div>
+    </div>
+  )
+
   const runManualFinder = useCallback(async () => {
     if (!manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0) return
     setHighlightedSubId(null)
@@ -236,25 +246,9 @@ export default function SubFinderPage() {
     if (selectedSubIds.length > 0) {
       return allSubs.filter(sub => selectedSubIds.includes(sub.id))
     }
-    let subs = allSubs
-    if (includeOnlyRecommended) {
-      subs = subs.filter(sub => (sub.coverage_percent ?? 0) > 0 || (sub.can_cover?.length ?? 0) > 0)
-    }
-    // Note: do not filter by selectedShift here; we want all subs visible,
-    // even if unavailable for the currently selected shift.
-    if (typeof window !== 'undefined') {
-      console.debug('[Sub Finder Debug] rightPanelSubs filter', {
-        all_subs: allSubs.length,
-        selectedSubIds: selectedSubIds.length,
-        includeOnlyRecommended,
-        selectedShift: selectedShift
-          ? { date: selectedShift.date, time_slot_code: selectedShift.time_slot_code }
-          : null,
-        result: subs.length,
-      })
-    }
-    return subs
-  }, [allSubs, includeOnlyRecommended, selectedShift, selectedSubIds])
+    // Always show all subs in the right panel; availability is handled downstream.
+    return allSubs
+  }, [allSubs, selectedSubIds])
 
   const selectedSubChips = useMemo(() => {
     if (selectedSubIds.length === 0) return []
@@ -451,6 +445,7 @@ export default function SubFinderPage() {
     setSelectedSub(sub)
     setIsContactPanelOpen(true)
     setSelectedShift(null)
+    setIsAllSubsOpen(true)
     setMobileView('assign')
 
     // Prefetch contact data in background if we have an absence
@@ -539,18 +534,27 @@ export default function SubFinderPage() {
     setIsAllSubsOpen(false)
   }, [])
 
+  const closeContactPanel = useCallback(() => {
+    setIsContactPanelOpen(false)
+    setSelectedSub(null)
+  }, [])
+
   useEffect(() => {
     if (!isRightPanelOpen) return
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        closeRightPanel()
+        if (isContactPanelOpen) {
+          closeContactPanel()
+        } else {
+          closeRightPanel()
+        }
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [closeRightPanel, isRightPanelOpen])
+  }, [closeRightPanel, closeContactPanel, isContactPanelOpen, isRightPanelOpen])
 
   // Handle panel restoration when Add Time Off closes
   useEffect(() => {
@@ -708,29 +712,20 @@ export default function SubFinderPage() {
   // Load saved state on mount (only if no URL params override)
   useEffect(() => {
     if (hasRestoredStateRef.current) return
-    console.log('[SubFinder] Initial state restoration effect running')
     // Only restore if we don't have URL params that override
     if (requestedAbsenceId || requestedTeacherId) {
-      console.log('[SubFinder] URL params present, skipping restoration')
       hasRestoredStateRef.current = true // Mark as complete even if we skip restoration
       return // URL params take precedence
     }
 
     const savedState = loadSubFinderState()
-    console.log('[SubFinder] Loaded saved state:', {
-      hasSavedState: !!savedState,
-      savedAbsenceId: savedState?.selectedAbsenceId,
-      savedMode: savedState?.mode,
-    })
 
     if (!savedState) {
-      console.log('[SubFinder] No saved state found')
       hasRestoredStateRef.current = true // Mark as complete if no saved state
       return
     }
 
     isRestoringStateRef.current = true
-    console.log('[SubFinder] Starting state restoration')
 
     // Restore mode
     if (savedState.mode) {
@@ -779,9 +774,7 @@ export default function SubFinderPage() {
     // Reset flag after a short delay to allow other effects to run
     setTimeout(() => {
       isRestoringStateRef.current = false
-      console.log('[SubFinder] State restoration complete, isRestoring flag cleared')
       if (mode === 'existing') {
-        console.log('[SubFinder] Fetching absences')
         fetchAbsences()
       }
     }, 500) // Give enough time for all restoration effects to complete
@@ -805,19 +798,7 @@ export default function SubFinderPage() {
     const targetAbsenceId =
       selectedAbsenceIdRef.current || savedState?.selectedAbsenceId || selectedAbsence?.id
 
-    console.log('[SubFinder] Restore absence effect:', {
-      hasSavedState: !!savedState,
-      savedAbsenceId: savedState?.selectedAbsenceId,
-      refAbsenceId: selectedAbsenceIdRef.current,
-      targetAbsenceId,
-      currentSelectedAbsenceId: selectedAbsence?.id,
-      absencesCount: absences.length,
-      isRestoring: isRestoringStateRef.current,
-      hasRestored: hasRestoredStateRef.current,
-    })
-
     if (!targetAbsenceId) {
-      console.log('[SubFinder] No saved absence ID to restore')
       return // No saved absence to restore
     }
 
@@ -826,9 +807,6 @@ export default function SubFinderPage() {
       const absence = absences.find(a => a.id === targetAbsenceId)
       if (absence && absence !== selectedAbsence) {
         // Update to new object reference to keep in sync
-        console.log(
-          '[SubFinder] Updating selected absence to new object reference (already selected)'
-        )
         setSelectedAbsence(absence)
       }
       selectedAbsenceIdRef.current = targetAbsenceId
@@ -836,31 +814,17 @@ export default function SubFinderPage() {
     }
 
     // Check if it's a manual mode absence (starts with 'manual-')
-    if (targetAbsenceId.startsWith('manual-')) {
-      console.log('[SubFinder] Manual mode absence, skipping')
-      // This is handled in manual mode restoration
-      return
-    }
+    if (targetAbsenceId.startsWith('manual-')) return
 
     // Find the absence in the current absences list
     const absence = absences.find(a => a.id === targetAbsenceId)
-    console.log('[SubFinder] Found absence in list:', {
-      found: !!absence,
-      absenceId: absence?.id,
-    })
 
     // If we have a selected absence, check if it still exists in the new list
     if (selectedAbsence) {
       const currentAbsenceStillExists = absences.find(a => a.id === selectedAbsence.id)
-      console.log('[SubFinder] Current selected absence check:', {
-        currentId: selectedAbsence.id,
-        stillExists: !!currentAbsenceStillExists,
-        matchesTarget: selectedAbsence.id === targetAbsenceId,
-      })
       if (currentAbsenceStillExists) {
         // Update to the new object reference to keep it in sync with React Query data
         if (currentAbsenceStillExists !== selectedAbsence) {
-          console.log('[SubFinder] Updating selected absence to new object reference')
           setSelectedAbsence(currentAbsenceStillExists)
         }
         // Update ref to track the current selection
@@ -869,17 +833,14 @@ export default function SubFinderPage() {
       }
       // Current selected absence no longer exists in the list - clear it
       // and try to restore from saved state below
-      console.log('[SubFinder] Current selected absence no longer exists, will try to restore')
     }
 
     // Restore from saved state if we found the absence
     if (absence) {
-      console.log('[SubFinder] Restoring absence from saved state:', absence.id)
       isRestoringStateRef.current = true
       selectedAbsenceIdRef.current = absence.id // Update ref immediately
       setSelectedAbsence(absence)
 
-      console.log('[SubFinder] Re-running finder')
       setTimeout(() => {
         runFinderForAbsence(absence).finally(() => {
           isRestoringStateRef.current = false
@@ -888,13 +849,8 @@ export default function SubFinderPage() {
       }, 100)
     } else if (selectedAbsence && !absences.find(a => a.id === selectedAbsence.id)) {
       // Selected absence no longer exists in the list - clear it
-      console.log('[SubFinder] Selected absence no longer exists, clearing selection')
       selectedAbsenceIdRef.current = null
       setSelectedAbsence(null)
-    } else {
-      console.log(
-        '[SubFinder] Could not restore absence - not found in list and no current selection'
-      )
     }
   }, [
     absences,
@@ -956,23 +912,10 @@ export default function SubFinderPage() {
   // Save state whenever it changes (but not during restoration or before initial restoration)
   useEffect(() => {
     if (isRestoringStateRef.current || !hasRestoredStateRef.current) {
-      console.log(
-        '[SubFinder] Skipping save - isRestoring:',
-        isRestoringStateRef.current,
-        'hasRestored:',
-        hasRestoredStateRef.current
-      )
       return
     }
     // Use ref if selectedAbsence is null but we have a ref value (during brief restoration moments)
     const absenceIdToSave = selectedAbsence?.id || selectedAbsenceIdRef.current || null
-    console.log('[SubFinder] Saving state:', {
-      selectedAbsenceId: absenceIdToSave,
-      fromState: selectedAbsence?.id,
-      fromRef: selectedAbsenceIdRef.current,
-      mode,
-      absencesCount: absences.length,
-    })
     saveSubFinderState({
       mode,
       selectedTeacherIds,
@@ -1385,23 +1328,25 @@ export default function SubFinderPage() {
             <div className="px-4">
               {selectedAbsence && (
                 <div className="py-4 flex flex-col gap-6 w-full">
-                  {displayRecommendedCombinations.length > 0 && (
-                    <div className="mt-2">
-                      <RecommendedCombination
-                        combinations={displayRecommendedCombinations}
-                        onContactSub={handleCombinationContact}
-                        totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
-                        useRemainingLabel={
-                          (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
-                          (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
-                        }
-                        allSubs={allSubs}
-                        allShifts={visibleShiftDetails}
-                        includePastShifts={includePastShifts}
-                        onShowAllSubs={openAllSubsPanel}
-                      />
-                    </div>
-                  )}
+                  {loading
+                    ? renderRecommendedPlaceholder()
+                    : displayRecommendedCombinations.length > 0 && (
+                        <div className="mt-2">
+                          <RecommendedCombination
+                            combinations={displayRecommendedCombinations}
+                            onContactSub={handleCombinationContact}
+                            totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
+                            useRemainingLabel={
+                              (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
+                              (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
+                            }
+                            allSubs={allSubs}
+                            allShifts={visibleShiftDetails}
+                            includePastShifts={includePastShifts}
+                            onShowAllSubs={openAllSubsPanel}
+                          />
+                        </div>
+                      )}
                 </div>
               )}
               {selectedAbsence && (
@@ -1489,24 +1434,10 @@ export default function SubFinderPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
                       <span>
-                        {(() => {
-                          const formatDate = (dateString: string) => {
-                            const date = parseLocalDate(dateString)
-                            const dayName = DAY_NAMES[date.getDay()]
-                            const month = MONTH_NAMES[date.getMonth()]
-                            const day = date.getDate()
-                            return `${dayName} ${month} ${day}`
-                          }
-                          const startDate = formatDate(selectedAbsence.start_date)
-                          if (
-                            selectedAbsence.end_date &&
-                            selectedAbsence.end_date !== selectedAbsence.start_date
-                          ) {
-                            const endDate = formatDate(selectedAbsence.end_date)
-                            return `${startDate} - ${endDate}`
-                          }
-                          return startDate
-                        })()}
+                        {formatAbsenceDateRange(
+                          selectedAbsence.start_date,
+                          selectedAbsence.end_date
+                        )}
                       </span>
                       {selectedClassrooms.length > 0 ? (
                         <span className="flex flex-wrap items-center gap-1.5">
@@ -1643,249 +1574,203 @@ export default function SubFinderPage() {
         {/* Middle Column */}
         <div
           className={cn(
-            'flex-1 border-x bg-white px-6 md:px-8 transition-opacity h-full overflow-y-auto',
+            'flex-1 border-x bg-white transition-opacity h-full overflow-y-auto',
             isRightPanelOpen && 'opacity-95'
           )}
         >
-          {/* Fixed Header Bar */}
-          {selectedAbsence && (
-            <>
-              <div className="border-b border-slate-200 bg-white">
-                <div className="px-6 pt-10 pb-0">
-                  {/* Header Row */}
-                  <div className="mb-5">
-                    <h2 className="text-xl font-semibold flex flex-wrap items-center gap-2">
-                      <span>Sub Finder</span>
-                      <span className="text-muted-foreground">→</span>
-                      <span>{selectedAbsence.teacher_name}</span>
-                      <span className="text-muted-foreground">→</span>
-                      <span>
-                        {(() => {
-                          const formatDate = (dateString: string) => {
-                            const date = parseLocalDate(dateString)
-                            const dayName = DAY_NAMES[date.getDay()]
-                            const month = MONTH_NAMES[date.getMonth()]
-                            const day = date.getDate()
-                            return `${dayName} ${month} ${day}`
-                          }
-                          const startDate = formatDate(selectedAbsence.start_date)
-                          if (
-                            selectedAbsence.end_date &&
-                            selectedAbsence.end_date !== selectedAbsence.start_date
-                          ) {
-                            const endDate = formatDate(selectedAbsence.end_date)
-                            return (
-                              <>
-                                {startDate}
-                                <span className="font-normal text-slate-500"> - </span>
-                                {endDate}
-                              </>
-                            )
-                          }
-                          return startDate
-                        })()}
-                      </span>
-                      <span className="h-4 w-px bg-slate-500 mx-2" />
-                      {selectedClassrooms.length > 0 ? (
-                        <span className="flex flex-wrap items-center gap-1.5">
-                          {selectedClassrooms.map(classroom => (
-                            <span
-                              key={classroom.id || classroom.name}
-                              className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
-                              style={getClassroomPillStyle(classroom.color)}
-                            >
-                              {classroom.name}
-                            </span>
-                          ))}
+          <div className="w-full max-w-[1000px] px-6 md:px-8">
+            {/* Fixed Header Bar */}
+            {selectedAbsence && (
+              <>
+                <div className="border-b border-slate-200 bg-white">
+                  <div className="pt-10 pb-0">
+                    {/* Header Row */}
+                    <div className="mb-5">
+                      <h2 className="text-xl font-semibold flex flex-wrap items-center gap-2">
+                        <span>Sub Finder</span>
+                        <span className="text-muted-foreground">→</span>
+                        <span>{selectedAbsence.teacher_name}</span>
+                        <span className="text-muted-foreground">→</span>
+                        <span>
+                          {formatAbsenceDateRange(
+                            selectedAbsence.start_date,
+                            selectedAbsence.end_date
+                          )}
                         </span>
-                      ) : (
-                        <span className="text-xs font-normal text-muted-foreground">
-                          Classroom unavailable
-                        </span>
-                      )}
-                    </h2>
-                  </div>
-
-                  {visibleShiftSummary && visibleShiftSummary.total > 0 && (
-                    <div className="mt-4 mb-2 flex flex-wrap items-end justify-between gap-4">
-                      <CoverageSummary
-                        shifts={visibleShiftSummary}
-                        onShiftClick={handleShiftClick}
-                        variant="compact"
-                        headerText={coverageSummaryLine ?? undefined}
-                      />
-                      <Button
-                        onClick={handleRerunFinder}
-                        disabled={loading}
-                        size="sm"
-                        variant="outline"
-                        className="w-auto justify-center"
-                      >
-                        <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                        Rerun Finder
-                      </Button>
-                    </div>
-                  )}
-
-                  {showPastShiftsBanner && (
-                    <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-slate-900">
-                      <p className="max-w-3xl leading-snug">
-                        This absence includes <strong>{pastShiftCount}</strong> past shift
-                        {pastShiftCount === 1 ? '' : 's'} and <strong>{upcomingShiftCount}</strong>{' '}
-                        upcoming shift
-                        {upcomingShiftCount === 1 ? '' : 's'}.{' '}
-                        {includePastShifts
-                          ? 'Showing all shifts.'
-                          : 'Showing upcoming shifts only.'}
-                      </p>
-                      <label
-                        htmlFor="include-past-shifts"
-                        className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-900"
-                      >
-                        <Switch
-                          id="include-past-shifts"
-                          checked={includePastShifts}
-                          onCheckedChange={setIncludePastShifts}
-                        />
-                        Include past shifts
-                      </label>
-                    </div>
-                  )}
-
-                  {/* Toolbar moved to right column */}
-                </div>
-              </div>
-            </>
-          )}
-
-          {selectedAbsence && (
-            <div className="py-6 flex flex-col gap-6 w-full">
-              {displayRecommendedCombinations.length > 0 && (
-                <div className="mt-2">
-                  <RecommendedCombination
-                    combinations={displayRecommendedCombinations}
-                    onContactSub={handleCombinationContact}
-                    totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
-                    useRemainingLabel={
-                      (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
-                      (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
-                    }
-                    allSubs={allSubs}
-                    allShifts={visibleShiftDetails}
-                    includePastShifts={includePastShifts}
-                    onShowAllSubs={openAllSubsPanel}
-                  />
-                </div>
-              )}
-
-              <div className="flex flex-col gap-2">
-                <div className="hidden md:flex flex-wrap gap-2 md:flex-row md:items-center">
-                  {shiftFilterOptions.map(option => {
-                    const isActive = shiftFilters.includes(option.key)
-                    return (
-                      <button
-                        key={option.key}
-                        type="button"
-                        onClick={() => toggleShiftFilter(option.key)}
-                        className={cn(
-                          'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                          isActive
-                            ? 'border-slate-900 bg-slate-900 text-white'
-                            : 'border-slate-400 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                        <span className="h-4 w-px bg-slate-500 mx-2" />
+                        {selectedClassrooms.length > 0 ? (
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            {selectedClassrooms.map(classroom => (
+                              <span
+                                key={classroom.id || classroom.name}
+                                className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                                style={getClassroomPillStyle(classroom.color)}
+                              >
+                                {classroom.name}
+                              </span>
+                            ))}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-normal text-muted-foreground">
+                            Classroom unavailable
+                          </span>
                         )}
-                      >
-                        {option.label} ({option.count})
-                      </button>
-                    )
-                  })}
-                </div>
-                <div className="md:hidden">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="w-full justify-between">
-                        Filters ({shiftFilters.length})
-                        <ChevronDown className="h-4 w-4" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72" align="start">
-                      <div className="space-y-2">
-                        {shiftFilterOptions.map(option => {
-                          const isActive = shiftFilters.includes(option.key)
-                          return (
-                            <button
-                              key={option.key}
-                              type="button"
-                              onClick={() => toggleShiftFilter(option.key)}
-                              className={cn(
-                                'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',
-                                isActive ? 'bg-slate-900 text-white' : 'hover:bg-slate-100'
-                              )}
-                            >
-                              <span>{option.label}</span>
-                              <span className="text-xs text-slate-500">{option.count}</span>
-                            </button>
-                          )
-                        })}
+                      </h2>
+                    </div>
+
+                    {visibleShiftSummary && visibleShiftSummary.total > 0 && (
+                      <div className="mt-4 mb-2 flex flex-wrap items-end justify-between gap-4">
+                        <CoverageSummary
+                          shifts={visibleShiftSummary}
+                          onShiftClick={handleShiftClick}
+                          variant="compact"
+                          headerText={coverageSummaryLine ?? undefined}
+                        />
+                        <Button
+                          onClick={handleRerunFinder}
+                          disabled={loading}
+                          size="sm"
+                          variant="outline"
+                          className="w-auto justify-center"
+                        >
+                          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                          Rerun Finder
+                        </Button>
                       </div>
-                    </PopoverContent>
-                  </Popover>
+                    )}
+
+                    {showPastShiftsBanner && (
+                      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-slate-900">
+                        <p className="max-w-3xl leading-snug">
+                          This absence includes <strong>{pastShiftCount}</strong> past shift
+                          {pastShiftCount === 1 ? '' : 's'} and{' '}
+                          <strong>{upcomingShiftCount}</strong> upcoming shift
+                          {upcomingShiftCount === 1 ? '' : 's'}.{' '}
+                          {includePastShifts
+                            ? 'Showing all shifts.'
+                            : 'Showing upcoming shifts only.'}
+                        </p>
+                        <label
+                          htmlFor="include-past-shifts"
+                          className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-900"
+                        >
+                          <Switch
+                            id="include-past-shifts"
+                            checked={includePastShifts}
+                            onCheckedChange={setIncludePastShifts}
+                          />
+                          Include past shifts
+                        </label>
+                      </div>
+                    )}
+
+                    {/* Toolbar moved to right column */}
+                  </div>
                 </div>
+              </>
+            )}
+
+            {selectedAbsence && (
+              <div className="py-6 flex flex-col gap-6 w-full">
+                {loading
+                  ? renderRecommendedPlaceholder()
+                  : displayRecommendedCombinations.length > 0 && (
+                      <div className="mt-2">
+                        <RecommendedCombination
+                          combinations={displayRecommendedCombinations}
+                          onContactSub={handleCombinationContact}
+                          totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
+                          useRemainingLabel={
+                            (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
+                            (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
+                          }
+                          allSubs={allSubs}
+                          allShifts={visibleShiftDetails}
+                          includePastShifts={includePastShifts}
+                          onShowAllSubs={openAllSubsPanel}
+                        />
+                      </div>
+                    )}
+
+                <div className="flex flex-col gap-2">
+                  <div className="hidden md:flex flex-wrap gap-2 md:flex-row md:items-center">
+                    {shiftFilterOptions.map(option => {
+                      const isActive = shiftFilters.includes(option.key)
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          onClick={() => toggleShiftFilter(option.key)}
+                          className={cn(
+                            'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                            isActive
+                              ? 'border-slate-900 bg-slate-900 text-white'
+                              : 'border-slate-400 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                          )}
+                        >
+                          {option.label} ({option.count})
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className="md:hidden">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="w-full justify-between">
+                          Filters ({shiftFilters.length})
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72" align="start">
+                        <div className="space-y-2">
+                          {shiftFilterOptions.map(option => {
+                            const isActive = shiftFilters.includes(option.key)
+                            return (
+                              <button
+                                key={option.key}
+                                type="button"
+                                onClick={() => toggleShiftFilter(option.key)}
+                                className={cn(
+                                  'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',
+                                  isActive ? 'bg-slate-900 text-white' : 'hover:bg-slate-100'
+                                )}
+                              >
+                                <span>{option.label}</span>
+                                <span className="text-xs text-slate-500">{option.count}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+
+                {filteredShiftDetails.length > 0 ? (
+                  filteredShiftDetails.map(shift => (
+                    <ShiftStatusCard
+                      key={shift.id}
+                      shift={shift}
+                      teacherName={selectedAbsence.teacher_name}
+                      onSelectShift={handleSelectShift}
+                    />
+                  ))
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">
+                    No shifts to display.
+                  </div>
+                )}
               </div>
+            )}
 
-              {filteredShiftDetails.length > 0 ? (
-                filteredShiftDetails.map(shift => (
-                  <ShiftStatusCard
-                    key={shift.id}
-                    shift={shift}
-                    teacherName={selectedAbsence.teacher_name}
-                    onSelectShift={handleSelectShift}
-                  />
-                ))
-              ) : (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">
-                  No shifts to display.
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Middle column content ends above */}
+            {/* Middle column content ends above */}
+          </div>
         </div>
 
         {/* Right Column */}
         {isRightPanelOpen && (
           <div className="w-full md:flex-[0_0_400px] md:max-w-[400px] border-l bg-gray-50 transition-all h-full overflow-y-auto">
-            {selectedAbsence && selectedSub ? (
-              <ContactSubPanel
-                isOpen={isRightPanelOpen}
-                onClose={closeRightPanel}
-                sub={selectedSub as RecommendedSub}
-                absence={selectedAbsence}
-                variant="inline"
-                initialContactData={
-                  selectedSub && selectedAbsence
-                    ? contactDataCache.get(getCacheKey(selectedSub.id, selectedAbsence.id))
-                    : undefined
-                }
-                onAssignmentComplete={async () => {
-                  if (selectedAbsence) {
-                    setContactDataCache(prev => {
-                      const next = new Map(prev)
-                      for (const [key] of next) {
-                        if (key.endsWith(`-${selectedAbsence.id}`)) {
-                          next.delete(key)
-                        }
-                      }
-                      return next
-                    })
-                  }
-                  await fetchAbsences()
-                  if (selectedAbsence) {
-                    await runFinderForAbsence(selectedAbsence)
-                  }
-                }}
-              />
-            ) : selectedAbsence ? (
+            {selectedAbsence ? (
               <div className="p-6 space-y-4">
                 <div className="flex items-start justify-between">
                   <div className="flex flex-col gap-1">
@@ -1893,13 +1778,7 @@ export default function SubFinderPage() {
                       <>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-base font-semibold text-slate-900">
-                            {(() => {
-                              const date = parseLocalDate(selectedShift.date)
-                              const dayName = DAY_NAMES[date.getDay()]
-                              const month = MONTH_NAMES[date.getMonth()]
-                              const day = date.getDate()
-                              return `Subs for ${dayName} ${month} ${day} • ${selectedShift.time_slot_code}`
-                            })()}
+                            {`Subs for ${formatShortDate(selectedShift.date)} • ${selectedShift.time_slot_code}`}
                           </span>
                           {selectedShift.classroom_name ? (
                             <span
@@ -1922,24 +1801,10 @@ export default function SubFinderPage() {
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
                           <span>
-                            {(() => {
-                              const formatDate = (dateString: string) => {
-                                const date = parseLocalDate(dateString)
-                                const dayName = DAY_NAMES[date.getDay()]
-                                const month = MONTH_NAMES[date.getMonth()]
-                                const day = date.getDate()
-                                return `${dayName} ${month} ${day}`
-                              }
-                              const startDate = formatDate(selectedAbsence.start_date)
-                              if (
-                                selectedAbsence.end_date &&
-                                selectedAbsence.end_date !== selectedAbsence.start_date
-                              ) {
-                                const endDate = formatDate(selectedAbsence.end_date)
-                                return `${startDate} - ${endDate}`
-                              }
-                              return startDate
-                            })()}
+                            {formatAbsenceDateRange(
+                              selectedAbsence.start_date,
+                              selectedAbsence.end_date
+                            )}
                           </span>
                           {selectedClassrooms.length > 0 ? (
                             <span className="flex flex-wrap items-center gap-1.5">
@@ -2080,6 +1945,43 @@ export default function SubFinderPage() {
               </div>
             ) : null}
           </div>
+        )}
+
+        {isContactPanelOpen && selectedAbsence && selectedSub && (
+          <>
+            <div className="fixed inset-0 z-40 bg-slate-900/20" />
+            <div className="fixed inset-y-0 right-0 z-50 w-full max-w-[400px]">
+              <ContactSubPanel
+                isOpen={isContactPanelOpen}
+                onClose={closeContactPanel}
+                sub={selectedSub as RecommendedSub}
+                absence={selectedAbsence}
+                variant="inline"
+                initialContactData={
+                  selectedSub && selectedAbsence
+                    ? contactDataCache.get(getCacheKey(selectedSub.id, selectedAbsence.id))
+                    : undefined
+                }
+                onAssignmentComplete={async () => {
+                  if (selectedAbsence) {
+                    setContactDataCache(prev => {
+                      const next = new Map(prev)
+                      for (const [key] of next) {
+                        if (key.endsWith(`-${selectedAbsence.id}`)) {
+                          next.delete(key)
+                        }
+                      }
+                      return next
+                    })
+                  }
+                  await fetchAbsences()
+                  if (selectedAbsence) {
+                    await runFinderForAbsence(selectedAbsence)
+                  }
+                }}
+              />
+            </div>
+          </>
         )}
       </div>
     </div>

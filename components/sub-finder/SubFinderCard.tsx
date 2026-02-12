@@ -64,7 +64,6 @@ interface SubFinderCardProps {
   isContacted?: boolean
   responseStatus?: string | null
   onSaveNote?: (nextNote: string | null) => Promise<void> | void
-  showDebugOutlines?: boolean
   recommendedShiftCount?: number // Number of recommended shifts for this sub
   allShifts?: SubFinderShift[] // All shifts that need coverage
   allCanCover?: Shift[] // All shifts this sub can cover
@@ -93,7 +92,6 @@ export default function SubFinderCard({
   isContacted = false,
   responseStatus = null,
   onSaveNote,
-  showDebugOutlines = false,
   recommendedShiftCount,
   allShifts = [],
   allCanCover = [],
@@ -106,9 +104,6 @@ export default function SubFinderCard({
   const [noteDraft, setNoteDraft] = useState(notes || '')
   const noteTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const coveredSegments = Math.min(shiftsCovered, totalShifts)
-  const outline = (color: string) =>
-    showDebugOutlines ? { outline: `1px solid ${color}` } : undefined
-
   // Build map of assigned/available/unavailable shifts for "View all shifts" section
   const allShiftsStatusMap = new Map<string, 'assigned' | 'available' | 'unavailable'>()
   if (
@@ -205,7 +200,7 @@ export default function SubFinderCard({
   }
 
   const isAssigned = assigned.length > 0
-  const resolvedResponseStatus = responseStatus || (isDeclined ? 'declined_all' : null)
+  const resolvedResponseStatus = responseStatus ?? (isDeclined ? 'declined_all' : null)
   const responseMeta =
     resolvedResponseStatus === 'confirmed'
       ? { label: 'Confirmed', icon: CheckCircle, className: 'text-emerald-600' }
@@ -238,9 +233,9 @@ export default function SubFinderCard({
       role={undefined}
       tabIndex={undefined}
     >
-      <CardContent className="pt-4 px-4 pb-1.5 flex flex-col gap-2" style={outline('#60a5fa')}>
+      <CardContent className="pt-4 px-4 pb-1.5 flex flex-col gap-2">
         <div className="flex w-full items-start justify-between gap-4">
-          <div className="min-w-0 flex-1 pr-2" style={outline('#34d399')}>
+          <div className="min-w-0 flex-1 pr-2">
             <SubCardHeader
               name={name}
               phone={phone}
@@ -250,18 +245,38 @@ export default function SubFinderCard({
               showCoverage={false}
             />
           </div>
-          <div className="ml-auto shrink-0" style={outline('#fbbf24')}>
-            {renderCoverageBar()}
-          </div>
+          <div className="ml-auto shrink-0">{renderCoverageBar()}</div>
         </div>
 
         <div className="flex w-full items-start justify-between gap-4">
-          <div className="min-w-0 flex-1 pr-2 pb-4" style={outline('#7dd3fc')}>
-            {(canCover.length > 0 ||
-              cannotCover.length > 0 ||
-              assigned.length > 0 ||
-              (shiftChips?.length ?? 0) > 0) &&
-              recommendedShiftCount === undefined && (
+          <div className="min-w-0 flex-1 pr-2 pb-4">
+            {recommendedShiftCount !== undefined && recommendedShiftCount > 0 ? (
+              <>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Recommended: {recommendedShiftCount} shift
+                  {recommendedShiftCount !== 1 ? 's' : ''}
+                </p>
+                {(canCover.length > 0 ||
+                  cannotCover.length > 0 ||
+                  assigned.length > 0 ||
+                  (shiftChips?.length ?? 0) > 0) && (
+                  <div className="w-full">
+                    <ShiftChips
+                      canCover={canCover}
+                      cannotCover={cannotCover}
+                      assigned={assigned}
+                      shifts={shiftChips}
+                      isDeclined={isDeclined}
+                      recommendedShifts={canCover}
+                    />
+                  </div>
+                )}
+              </>
+            ) : (
+              (canCover.length > 0 ||
+                cannotCover.length > 0 ||
+                assigned.length > 0 ||
+                (shiftChips?.length ?? 0) > 0) && (
                 <ShiftChips
                   canCover={canCover}
                   cannotCover={cannotCover}
@@ -270,7 +285,8 @@ export default function SubFinderCard({
                   isDeclined={isDeclined}
                   recommendedShifts={canCover}
                 />
-              )}
+              )
+            )}
 
             {conflicts && conflicts.total > 0 && (
               <div className="mb-3 rounded-md bg-amber-50 border border-amber-200 p-2.5 space-y-1">
@@ -301,10 +317,7 @@ export default function SubFinderCard({
               </div>
             )}
           </div>
-          <div
-            className="ml-auto flex flex-col items-end gap-2 shrink-0 pb-4"
-            style={outline('#fbbf24')}
-          >
+          <div className="ml-auto flex flex-col items-end gap-2 shrink-0 pb-4">
             <div
               className={cn(
                 'flex flex-col items-start gap-2 border-l-4 pl-2 text-sm leading-5 text-slate-600',
@@ -396,6 +409,7 @@ export default function SubFinderCard({
                           event.stopPropagation()
                           setNoteDraft(notes || '')
                           setIsEditingNote(false)
+                          setIsNoteExpanded(false)
                         }}
                       >
                         Cancel
@@ -406,8 +420,13 @@ export default function SubFinderCard({
                         onClick={async event => {
                           event.stopPropagation()
                           const next = noteDraft.trim()
-                          await onSaveNote?.(next.length > 0 ? next : null)
-                          setIsEditingNote(false)
+                          try {
+                            await onSaveNote?.(next.length > 0 ? next : null)
+                          } catch (error) {
+                            console.error('Failed to save sub note', error)
+                          } finally {
+                            setIsEditingNote(false)
+                          }
                         }}
                       >
                         Save
@@ -436,30 +455,6 @@ export default function SubFinderCard({
                     )}
                   </div>
                 )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Recommended shifts section - full width */}
-        {recommendedShiftCount !== undefined && recommendedShiftCount > 0 && (
-          <div className="mb-0 -mt-1">
-            <p className="text-sm text-muted-foreground mb-2">
-              Recommended: {recommendedShiftCount} shift{recommendedShiftCount !== 1 ? 's' : ''}
-            </p>
-            {(canCover.length > 0 ||
-              cannotCover.length > 0 ||
-              assigned.length > 0 ||
-              (shiftChips?.length ?? 0) > 0) && (
-              <div className="w-full">
-                <ShiftChips
-                  canCover={canCover}
-                  cannotCover={cannotCover}
-                  assigned={assigned}
-                  shifts={shiftChips}
-                  isDeclined={isDeclined}
-                  recommendedShifts={canCover}
-                />
               </div>
             )}
           </div>
