@@ -248,7 +248,9 @@ export function buildDailySchedulePdfHtml({
             const floaterLines = floaters
               .map(
                 f =>
-                  `<div style="color:${color.floater}; font-weight:500;">◇ ${escapeHtml(
+                  `<div style="color:${color.floater}; font-weight:500;">${
+                    options.colorFriendly ? '' : '↔ '
+                  }${escapeHtml(
                     formatTeacherName(
                       {
                         teacher_name: f.teacher_name,
@@ -268,7 +270,9 @@ export function buildDailySchedulePdfHtml({
                     const subLines = subsForAbsence
                       .map(
                         sub =>
-                          `<div style="margin-left:12px; color:${color.sub}; font-weight:500;">↳ → ${escapeHtml(
+                          `<div style="color:${color.sub}; font-weight:500;">${
+                            options.colorFriendly ? '' : '↳ '
+                          }${escapeHtml(
                             formatTeacherName(
                               {
                                 teacher_name: sub.teacher_name,
@@ -286,8 +290,8 @@ export function buildDailySchedulePdfHtml({
                         ? `<span style="color:${color.absent};"> (no sub)</span>`
                         : ''
                     return `
-                    <div style="color:${color.absent}; font-weight:500;">
-                      × ${escapeHtml(
+                    <div style="color:${color.absent}; font-weight:500; text-decoration: line-through;">
+                      ${escapeHtml(
                         formatTeacherName(
                           {
                             teacher_name: absence.teacher_name,
@@ -372,9 +376,11 @@ export function buildDailySchedulePdfHtml({
                 </div>
                 <div class="legend" style="margin-bottom:14px;">
                   <div style="color:${color.permanent};">Permanent</div>
-                  <div style="color:${color.floater};">◇ Floater</div>
-                  <div style="color:${color.sub};">→ Sub</div>
-                  <div style="color:${color.absent};">× Absent</div>
+                  <div style="color:${color.floater};">${
+                    options.colorFriendly ? 'Floater' : '↔ Floater'
+                  }</div>
+                  <div style="color:${color.sub};">↳ Sub</div>
+                  <div style="color:${color.absent}; text-decoration: line-through;">Absent</div>
                 </div>
                 ${renderTable(classrooms)}
               </div>
