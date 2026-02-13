@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Sheet,
   SheetClose,
@@ -23,6 +23,8 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 interface Teacher {
   id: string
@@ -90,23 +92,32 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
   const [subQualifications, setSubQualifications] = useState<Qualification[]>([])
   const [teacherClasses, setTeacherClasses] = useState<string[]>([])
   const [createTimeOffForMissing, setCreateTimeOffForMissing] = useState(false)
+  const { format: displayNameFormat } = useDisplayNameFormat()
   const isInitialMountRef = useRef(true)
   const shiftIdsKey = useMemo(() => shifts.map(shift => shift.id).join('|'), [shifts])
 
   // Get display name helper
-  const getDisplayName = (
-    person:
-      | { display_name?: string | null; first_name?: string | null; last_name?: string | null }
-      | null
-      | undefined,
-    fallback = 'Unknown'
-  ) => {
-    if (!person) return fallback
-    const name = (
-      person.display_name || `${person.first_name ?? ''} ${person.last_name ?? ''}`
-    ).trim()
-    return name || fallback
-  }
+  const getDisplayName = useCallback(
+    (
+      person:
+        | { display_name?: string | null; first_name?: string | null; last_name?: string | null }
+        | null
+        | undefined,
+      fallback = 'Unknown'
+    ) => {
+      if (!person) return fallback
+      const name = getStaffDisplayName(
+        {
+          first_name: person.first_name ?? '',
+          last_name: person.last_name ?? '',
+          display_name: person.display_name ?? null,
+        },
+        displayNameFormat
+      )
+      return name || fallback
+    },
+    [displayNameFormat]
+  )
 
   // Fetch teachers
   useEffect(() => {
@@ -125,7 +136,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
       }
     }
     fetchTeachers()
-  }, [])
+  }, [getDisplayName])
 
   // Fetch subs
   useEffect(() => {
@@ -144,7 +155,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
       }
     }
     fetchSubs()
-  }, [])
+  }, [getDisplayName])
 
   // Fetch shifts when teacher and dates are selected
   useEffect(() => {
@@ -374,7 +385,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
       id: teacher.id,
       label: getDisplayName(teacher),
     }))
-  }, [teachers])
+  }, [teachers, getDisplayName])
 
   // Sub options for SearchableSelect
   const subOptions: SearchableSelectOption[] = useMemo(() => {
@@ -382,7 +393,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
       id: sub.id,
       label: getDisplayName(sub),
     }))
-  }, [subs])
+  }, [subs, getDisplayName])
 
   // Filter qualifications by teacher's classes
   const relevantQualifications = useMemo(() => {

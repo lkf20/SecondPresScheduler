@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 export interface Column<T> {
   key: string
@@ -223,7 +224,12 @@ export default function DataTable<T extends Record<string, unknown>>({
                     if (column.key === 'display_name' && !cellContent) {
                       const firstName = row['first_name'] || ''
                       const lastName = row['last_name'] || ''
-                      cellContent = `${firstName} ${lastName}`.trim() || '—'
+                      cellContent =
+                        getStaffDisplayName({
+                          first_name: String(firstName),
+                          last_name: String(lastName),
+                          display_name: null,
+                        }) || '—'
                     }
 
                     // Handle null/undefined values

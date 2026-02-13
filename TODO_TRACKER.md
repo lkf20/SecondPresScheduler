@@ -55,6 +55,7 @@ Features to implement soon (within the next few weeks).
 - [ ] Mobile navigation: design and implement a mobile-friendly global nav pattern (current left rail is not usable on small screens)
 - [ ] Mobile UX: comprehensive pass to make all pages mobile friendly (navigation, layouts, and responsive interactions)
 - [ ] Add Flex staff to Daily Schedule and to Weekly Schedule. Update Flex staff database logic.
+- [ ] Standardize filter styles to match Time Off chips across the app (Staff, Sub Finder, etc.)
 
 ---
 
@@ -69,6 +70,7 @@ Features for later consideration (beyond the next few weeks).
 - [ ] Add AI chat assistant for coverage planning; keep coverage/assignment logic in reusable server functions and make "find sub"/"assign shifts" deterministic and explainable so the AI can justify choices
 - [ ] Mobile UX overhaul: create a global mobile-friendly navigation pattern and adjust Sub Finder layout/flows to use it
 - [ ] Sub Finder: detect partial-shift availability and classify subs into the "Partially Available" section
+- [ ] Create reusable FilterChip component and standardize filter styles across the app
 
 ### API Enhancements for AI Chat (Phase 3)
 

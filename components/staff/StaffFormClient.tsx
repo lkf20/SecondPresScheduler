@@ -8,7 +8,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import SubAvailabilitySection from '@/components/subs/SubAvailabilitySection'
 import SubPreferencesSection from '@/components/subs/SubPreferencesSection'
+import { ArrowLeft } from 'lucide-react'
 import { Database } from '@/types/database'
+import type { DisplayNameFormat } from '@/lib/utils/staff-display-name'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
+import { toast } from 'sonner'
 
 interface StaffFormClientProps {
   staff: Database['public']['Tables']['staff']['Row'] & {
@@ -27,6 +31,7 @@ export default function StaffFormClient({ staff }: StaffFormClientProps) {
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [roleTypes, setRoleTypes] = useState<RoleTypeLookup>({})
+  const [defaultFormat, setDefaultFormat] = useState<DisplayNameFormat>('first_last_initial')
 
   const returnPage = searchParams.get('returnPage') || '1'
   const returnSearch = searchParams.get('returnSearch')
@@ -47,7 +52,21 @@ export default function StaffFormClient({ staff }: StaffFormClientProps) {
       }
     }
 
+    const fetchSettings = async () => {
+      try {
+        const response = await fetch('/api/schedule-settings')
+        if (!response.ok) return
+        const data = await response.json()
+        if (data?.default_display_name_format) {
+          setDefaultFormat(data.default_display_name_format)
+        }
+      } catch (err) {
+        console.error('Failed to fetch schedule settings', err)
+      }
+    }
+
     fetchRoleTypes()
+    fetchSettings()
   }, [])
 
   const getReturnUrl = () => {
@@ -107,8 +126,8 @@ export default function StaffFormClient({ staff }: StaffFormClientProps) {
         throw new Error(errorData.error || 'Failed to update staff')
       }
 
-      router.push(getReturnUrl())
       router.refresh()
+      toast.success('Staff updated.')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to update staff')
     }
@@ -135,10 +154,28 @@ export default function StaffFormClient({ staff }: StaffFormClientProps) {
     }
   }
 
-  const staffName = staff.display_name || `${staff.first_name} ${staff.last_name}`
+  const staffName =
+    getStaffDisplayName(
+      {
+        first_name: staff.first_name ?? '',
+        last_name: staff.last_name ?? '',
+        display_name: staff.display_name ?? null,
+      },
+      defaultFormat
+    ) || `${staff.first_name} ${staff.last_name}`
 
   return (
     <div>
+      <div className="mb-4">
+        <button
+          type="button"
+          onClick={() => router.push(getReturnUrl())}
+          className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Staff
+        </button>
+      </div>
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">Edit Staff</h1>
         <p className="text-muted-foreground mt-2">{staffName}</p>
@@ -166,6 +203,7 @@ export default function StaffFormClient({ staff }: StaffFormClientProps) {
                   staff={staff}
                   onSubmit={handleSubmit}
                   onCancel={() => router.push(getReturnUrl())}
+                  defaultDisplayNameFormat={defaultFormat}
                 />
                 <div className="mt-6 pt-6 border-t">
                   <button

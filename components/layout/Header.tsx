@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { CalendarPlus, LogOut, Printer, UserPlus, UserSearch } from 'lucide-react'
@@ -26,11 +26,12 @@ import { toast } from 'sonner'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 import TimeOffForm from '@/components/time-off/TimeOffForm'
 import AssignSubPanel from '@/components/assign-sub/AssignSubPanel'
-import { useRef, useMemo } from 'react'
 import { getPanelBackgroundClasses } from '@/lib/utils/colors'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
 import { Database } from '@/types/database'
+import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 type Staff = Database['public']['Tables']['staff']['Row']
 
@@ -59,6 +60,7 @@ export default function Header({ userEmail }: HeaderProps) {
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('')
   const [teachers, setTeachers] = useState<Staff[]>([])
   const [teacherSearch, setTeacherSearch] = useState('')
+  const { format: displayNameFormat } = useDisplayNameFormat()
   const [isTeacherDropdownOpen, setIsTeacherDropdownOpen] = useState(false)
   const teacherSearchRef = useRef<HTMLDivElement | null>(null)
   const formatISODate = (date: Date) => {
@@ -146,14 +148,28 @@ export default function Header({ userEmail }: HeaderProps) {
       .then(r => r.json())
       .then(data => {
         const sorted = (data as Staff[]).sort((a, b) => {
-          const nameA = a.display_name || `${a.first_name} ${a.last_name}`.trim() || ''
-          const nameB = b.display_name || `${b.first_name} ${b.last_name}`.trim() || ''
+          const nameA = getStaffDisplayName(
+            {
+              first_name: a.first_name ?? '',
+              last_name: a.last_name ?? '',
+              display_name: a.display_name ?? null,
+            },
+            displayNameFormat
+          )
+          const nameB = getStaffDisplayName(
+            {
+              first_name: b.first_name ?? '',
+              last_name: b.last_name ?? '',
+              display_name: b.display_name ?? null,
+            },
+            displayNameFormat
+          )
           return nameA.localeCompare(nameB)
         })
         setTeachers(sorted)
       })
       .catch(console.error)
-  }, [])
+  }, [displayNameFormat])
 
   const handleFindSubGo = () => {
     if (!selectedTeacherId) {
@@ -166,9 +182,21 @@ export default function Header({ userEmail }: HeaderProps) {
     router.push(`/sub-finder?teacher_id=${selectedTeacherId}`)
   }
 
-  const getTeacherDisplayName = (teacher: Staff) => {
-    return teacher.display_name || `${teacher.first_name} ${teacher.last_name}`.trim() || 'Unknown'
-  }
+  const getTeacherDisplayName = useCallback(
+    (teacher: Staff) => {
+      return (
+        getStaffDisplayName(
+          {
+            first_name: teacher.first_name ?? '',
+            last_name: teacher.last_name ?? '',
+            display_name: teacher.display_name ?? null,
+          },
+          displayNameFormat
+        ) || 'Unknown'
+      )
+    },
+    [displayNameFormat]
+  )
 
   const filteredTeachers = useMemo(() => {
     const query = teacherSearch.trim().toLowerCase()
@@ -177,7 +205,7 @@ export default function Header({ userEmail }: HeaderProps) {
       const name = getTeacherDisplayName(teacher)
       return name.toLowerCase().includes(query)
     })
-  }, [teachers, teacherSearch])
+  }, [teachers, teacherSearch, getTeacherDisplayName])
 
   const selectedTeacher = useMemo(() => {
     return teachers.find(t => t.id === selectedTeacherId)

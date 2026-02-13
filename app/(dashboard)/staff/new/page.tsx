@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import StaffForm, { type StaffFormData } from '@/components/staff/StaffForm'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import { Database } from '@/types/database'
+import type { DisplayNameFormat } from '@/lib/utils/staff-display-name'
 
 export default function NewStaffPage() {
   const router = useRouter()
@@ -12,6 +13,7 @@ export default function NewStaffPage() {
   const [roleTypes, setRoleTypes] = useState<
     Database['public']['Tables']['staff_role_types']['Row'][]
   >([])
+  const [defaultFormat, setDefaultFormat] = useState<DisplayNameFormat>('first_last_initial')
 
   useEffect(() => {
     const fetchRoleTypes = async () => {
@@ -24,7 +26,20 @@ export default function NewStaffPage() {
         console.error('Failed to fetch staff role types', err)
       }
     }
+    const fetchSettings = async () => {
+      try {
+        const response = await fetch('/api/schedule-settings')
+        if (!response.ok) return
+        const data = await response.json()
+        if (data?.default_display_name_format) {
+          setDefaultFormat(data.default_display_name_format)
+        }
+      } catch (err) {
+        console.error('Failed to fetch schedule settings', err)
+      }
+    }
     fetchRoleTypes()
+    fetchSettings()
   }, [])
 
   const handleSubmit = async (data: StaffFormData) => {
@@ -71,7 +86,11 @@ export default function NewStaffPage() {
       {error && <ErrorMessage message={error} className="mb-6" />}
 
       <div className="max-w-2xl">
-        <StaffForm onSubmit={handleSubmit} onCancel={() => router.push('/staff')} />
+        <StaffForm
+          onSubmit={handleSubmit}
+          onCancel={() => router.push('/staff')}
+          defaultDisplayNameFormat={defaultFormat}
+        />
       </div>
     </div>
   )

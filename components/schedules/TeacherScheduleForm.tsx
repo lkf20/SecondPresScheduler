@@ -15,6 +15,8 @@ import {
 import FormField from '@/components/shared/FormField'
 import { Database } from '@/types/database'
 import type { Classroom, TimeSlot } from '@/types/api'
+import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 type TeacherSchedule = Database['public']['Tables']['teacher_schedules']['Row']
 
@@ -61,6 +63,7 @@ export default function TeacherScheduleForm({
   const [daysOfWeek, setDaysOfWeek] = useState<DayOfWeek[]>([])
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const [classrooms, setClassrooms] = useState<Classroom[]>([])
+  const { format: displayNameFormat } = useDisplayNameFormat()
 
   useEffect(() => {
     fetch('/api/teachers')
@@ -145,7 +148,14 @@ export default function TeacherScheduleForm({
                 .filter(t => t.is_teacher)
                 .map(teacher => (
                   <SelectItem key={teacher.id} value={teacher.id}>
-                    {teacher.display_name || `${teacher.first_name} ${teacher.last_name}`}
+                    {getStaffDisplayName(
+                      {
+                        first_name: teacher.first_name ?? '',
+                        last_name: teacher.last_name ?? '',
+                        display_name: teacher.display_name ?? null,
+                      },
+                      displayNameFormat
+                    )}
                   </SelectItem>
                 ))}
             </SelectContent>

@@ -13,11 +13,16 @@ import FormField from '@/components/shared/FormField'
 import { Database } from '@/types/database'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle } from 'lucide-react'
+import {
+  computeDisplayName,
+  formatStaffDisplayName,
+  type DisplayNameFormat,
+} from '@/lib/utils/staff-display-name'
 
 const staffSchema = z.object({
   first_name: z.string().min(1, 'First name is required'),
   last_name: z.string().min(1, 'Last name is required'),
-  display_name: z.string().optional(),
+  display_name: z.string().min(1, 'Display name is required'),
   phone: z.string().optional(),
   email: z
     .union([z.string().email('Invalid email address'), z.literal('')])
@@ -38,9 +43,15 @@ interface StaffFormProps {
   staff?: StaffWithRoleIds
   onSubmit: (data: StaffFormData) => Promise<void>
   onCancel?: () => void
+  defaultDisplayNameFormat?: DisplayNameFormat
 }
 
-export default function StaffForm({ staff, onSubmit, onCancel }: StaffFormProps) {
+export default function StaffForm({
+  staff,
+  onSubmit,
+  onCancel,
+  defaultDisplayNameFormat = 'first_last_initial',
+}: StaffFormProps) {
   const [roleTypes, setRoleTypes] = useState<StaffRoleType[]>([])
   const [loadingRoleTypes, setLoadingRoleTypes] = useState(true)
   const [duplicateWarning, setDuplicateWarning] = useState<{
@@ -80,7 +91,27 @@ export default function StaffForm({ staff, onSubmit, onCancel }: StaffFormProps)
   const email = watch('email')
   const active = watch('active')
   const isSub = watch('is_sub')
+  const displayName = watch('display_name')
   const roleTypeIds = watch('role_type_ids') || []
+  const [useDefaultDisplayName, setUseDefaultDisplayName] = useState(() => {
+    if (!staff) return true
+    const { isCustom } = computeDisplayName(staff, defaultDisplayNameFormat)
+    return !isCustom
+  })
+  const defaultDisplayNamePreview = formatStaffDisplayName(
+    {
+      first_name: firstName || '',
+      last_name: lastName || '',
+      display_name: displayName || '',
+    },
+    defaultDisplayNameFormat
+  )
+
+  useEffect(() => {
+    if (!useDefaultDisplayName) return
+    if (!defaultDisplayNamePreview) return
+    setValue('display_name', defaultDisplayNamePreview)
+  }, [useDefaultDisplayName, defaultDisplayNamePreview, setValue])
 
   useEffect(() => {
     if (staff) return
@@ -134,6 +165,12 @@ export default function StaffForm({ staff, onSubmit, onCancel }: StaffFormProps)
   }, [firstName, lastName, email, staff])
 
   useEffect(() => {
+    if (!staff) return
+    const { isCustom } = computeDisplayName(staff, defaultDisplayNameFormat)
+    setUseDefaultDisplayName(!isCustom)
+  }, [staff, defaultDisplayNameFormat])
+
+  useEffect(() => {
     async function fetchRoleTypes() {
       try {
         const response = await fetch('/api/staff-role-types')
@@ -168,9 +205,32 @@ export default function StaffForm({ staff, onSubmit, onCancel }: StaffFormProps)
           <Input {...register('last_name')} />
         </FormField>
 
-        <FormField label="Display Name" error={errors.display_name?.message}>
-          <Input {...register('display_name')} placeholder="Optional" />
-        </FormField>
+        <div className="md:col-span-2 space-y-2">
+          <FormField label="Display Name" error={errors.display_name?.message} required>
+            <Input {...register('display_name')} disabled={useDefaultDisplayName} />
+          </FormField>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="use-default-display-name"
+              checked={useDefaultDisplayName}
+              onCheckedChange={checked => {
+                const next = checked === true
+                setUseDefaultDisplayName(next)
+                if (next) {
+                  setValue('display_name', defaultDisplayNamePreview)
+                }
+              }}
+            />
+            <Label htmlFor="use-default-display-name" className="font-normal cursor-pointer">
+              Use default format
+            </Label>
+          </div>
+          {!useDefaultDisplayName && (
+            <p className="text-sm text-muted-foreground">
+              Default: {defaultDisplayNamePreview || '—'}
+            </p>
+          )}
+        </div>
 
         <FormField label="Email" error={errors.email?.message}>
           <Input type="email" {...register('email')} placeholder="Optional" />
