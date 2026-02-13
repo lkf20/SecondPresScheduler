@@ -1,16 +1,23 @@
-import { notFound } from 'next/navigation'
-import { getTeacherById } from '@/lib/api/teachers'
-import TeacherFormClient from './TeacherFormClient'
+import { redirect } from 'next/navigation'
 
-export default async function TeacherDetailPage(props: { params: Promise<{ id: string }> }) {
-  const { id } = await props.params
+export default async function TeacherDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams?: Record<string, string | string[] | undefined>
+}) {
+  const { id } = await params
+  const query = (() => {
+    if (!searchParams) return ''
+    const pairs = Object.entries(searchParams).flatMap(([key, value]) => {
+      if (value === undefined) return []
+      return Array.isArray(value)
+        ? value.map(item => `${encodeURIComponent(key)}=${encodeURIComponent(item)}`)
+        : [`${encodeURIComponent(key)}=${encodeURIComponent(value)}`]
+    })
+    return pairs.length > 0 ? `?${pairs.join('&')}` : ''
+  })()
 
-  let teacher
-  try {
-    teacher = await getTeacherById(id)
-  } catch {
-    notFound()
-  }
-
-  return <TeacherFormClient teacher={teacher} />
+  redirect(`/staff/${id}${query}`)
 }

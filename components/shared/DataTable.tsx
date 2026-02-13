@@ -32,6 +32,7 @@ interface DataTableProps<T> {
   onRowClick?: (row: T) => void
   className?: string
   emptyMessage?: string
+  paginate?: boolean
 }
 
 export default function DataTable<T extends Record<string, unknown>>({
@@ -42,6 +43,7 @@ export default function DataTable<T extends Record<string, unknown>>({
   onRowClick,
   className,
   emptyMessage = 'No data available',
+  paginate = true,
 }: DataTableProps<T>) {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -100,12 +102,10 @@ export default function DataTable<T extends Record<string, unknown>>({
       })
     : filteredData
 
-  // Paginate data
   const totalPages = Math.ceil(sortedData.length / itemsPerPage)
-  const paginatedData = sortedData.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  )
+  const paginatedData = paginate
+    ? sortedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+    : sortedData
 
   const handleSort = (key: string) => {
     const newDirection = sortKey === key && sortDirection === 'asc' ? 'desc' : 'asc'
@@ -250,7 +250,7 @@ export default function DataTable<T extends Record<string, unknown>>({
         </Table>
       </div>
 
-      {totalPages > 1 && (
+      {paginate && totalPages > 1 && (
         <div className="flex items-center justify-between">
           <div className="text-sm text-muted-foreground">
             Showing {(currentPage - 1) * itemsPerPage + 1} to{' '}
