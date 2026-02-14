@@ -22,6 +22,8 @@ import {
   invalidateTimeOffRequests,
   invalidateWeeklySchedule,
 } from '@/lib/utils/invalidation'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 
 interface StaffFormClientProps {
   staff: Database['public']['Tables']['staff']['Row'] & {
@@ -43,6 +45,7 @@ export default function StaffFormClient({ staff }: StaffFormClientProps) {
   const [activeTab, setActiveTab] = useState('overview')
   const [roleTypes, setRoleTypes] = useState<RoleTypeLookup>({})
   const [defaultFormat, setDefaultFormat] = useState<DisplayNameFormat>('first_last_initial')
+  const [isActive, setIsActive] = useState(staff.active ?? true)
 
   const returnPage = searchParams.get('returnPage') || '1'
   const returnSearch = searchParams.get('returnSearch')
@@ -124,6 +127,7 @@ export default function StaffFormClient({ staff }: StaffFormClientProps) {
         is_teacher: isTeacherRole,
         is_sub: data.is_sub ?? false,
         role_type_ids: data.role_type_ids,
+        active: isActive,
       }
 
       const response = await fetch(`/api/staff/${staff.id}`, {
@@ -194,9 +198,25 @@ export default function StaffFormClient({ staff }: StaffFormClientProps) {
           Back to Staff
         </button>
       </div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Edit Staff</h1>
-        <p className="text-muted-foreground mt-2">{staffName}</p>
+      <div className="mb-6 max-w-2xl">
+        <div className="flex items-center justify-between gap-6">
+          <p className="text-3xl font-bold tracking-tight text-slate-900">{staffName}</p>
+          <div className="flex items-center gap-3">
+            <Switch
+              id="active-toggle"
+              checked={isActive}
+              onCheckedChange={checked => setIsActive(checked === true)}
+            />
+            <Label htmlFor="active-toggle" className="font-normal cursor-pointer">
+              {isActive ? 'Active' : 'Inactive'}
+            </Label>
+          </div>
+        </div>
+        <p className="text-sm text-muted-foreground mt-2">
+          {isActive
+            ? 'Available for scheduling and assignments.'
+            : 'Cannot be scheduled or assigned. Past records are preserved.'}
+        </p>
       </div>
 
       {error && <ErrorMessage message={error} className="mb-6" />}
@@ -223,14 +243,6 @@ export default function StaffFormClient({ staff }: StaffFormClientProps) {
                   onCancel={() => router.push(getReturnUrl())}
                   defaultDisplayNameFormat={defaultFormat}
                 />
-                <div className="mt-6 pt-6 border-t">
-                  <button
-                    onClick={handleDelete}
-                    className="text-sm text-destructive hover:underline"
-                  >
-                    Delete Staff
-                  </button>
-                </div>
               </div>
             </CardContent>
           </Card>

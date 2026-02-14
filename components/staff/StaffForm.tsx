@@ -89,7 +89,6 @@ export default function StaffForm({
   const firstName = watch('first_name')
   const lastName = watch('last_name')
   const email = watch('email')
-  const active = watch('active')
   const isSub = watch('is_sub')
   const displayName = watch('display_name')
   const roleTypeIds = watch('role_type_ids') || []
@@ -239,21 +238,10 @@ export default function StaffForm({
         <FormField label="Phone" error={errors.phone?.message}>
           <Input type="tel" {...register('phone')} placeholder="Optional" />
         </FormField>
-
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="active"
-            checked={active}
-            onCheckedChange={checked => setValue('active', checked === true)}
-          />
-          <Label htmlFor="active" className="font-normal cursor-pointer">
-            Active
-          </Label>
-        </div>
       </div>
 
       <div className="space-y-4 pt-4 border-t">
-        <FormField label="Staff Role" error={errors.role_type_ids?.message} required>
+        <FormField label="Staff Roles" error={errors.role_type_ids?.message} required>
           {loadingRoleTypes ? (
             <div className="text-sm text-muted-foreground">Loading...</div>
           ) : (
@@ -285,7 +273,7 @@ export default function StaffForm({
                   onCheckedChange={checked => setValue('is_sub', checked === true)}
                 />
                 <Label htmlFor="is_sub" className="font-normal cursor-pointer">
-                  Is also a sub
+                  Substitute
                 </Label>
               </div>
             </div>
