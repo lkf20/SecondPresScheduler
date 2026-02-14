@@ -30,6 +30,10 @@ type SubAssignmentRowFromQuery = {
   sub?: StaffLite | StaffLite[] | null
   teacher?: StaffLite | StaffLite[] | null
 }
+type StaffRoleAssignmentRow = {
+  staff_id: string
+  role_type: { code: string } | { code: string }[] | null
+}
 
 const getStaffDisplayName = (
   staff: StaffLite | StaffLite[] | null | undefined,
@@ -110,6 +114,7 @@ export interface WeeklyScheduleData {
     teacher_first_name?: string | null
     teacher_last_name?: string | null
     teacher_display_name?: string | null
+    is_flexible?: boolean
     class_group_id?: string // Optional: teachers are assigned to classrooms, not specific class groups
     class_name?: string // Optional: teachers are assigned to classrooms, not specific class groups
     classroom_id: string
@@ -345,6 +350,34 @@ export async function getScheduleSnapshotData({
     throw new Error(`Failed to fetch teacher schedules: ${schedulesError.message}`)
   }
 
+  const teacherIdsForRoles = Array.from(
+    new Set((schedules || []).map(schedule => schedule.teacher_id).filter(Boolean))
+  )
+  let roleCodesByTeacherId = new Map<string, Set<string>>()
+  if (teacherIdsForRoles.length > 0) {
+    const { data: roleAssignments, error: roleAssignmentsError } = await supabase
+      .from('staff_role_type_assignments')
+      .select('staff_id, role_type:staff_role_types(code)')
+      .in('staff_id', teacherIdsForRoles)
+      .eq('school_id', schoolId)
+
+    if (roleAssignmentsError) {
+      console.warn('Failed to fetch staff role assignments:', roleAssignmentsError.message)
+    } else {
+      roleCodesByTeacherId = new Map()
+      ;((roleAssignments || []) as StaffRoleAssignmentRow[]).forEach(assignment => {
+        const code = Array.isArray(assignment.role_type)
+          ? assignment.role_type[0]?.code
+          : assignment.role_type?.code
+        if (!code) return
+        if (!roleCodesByTeacherId.has(assignment.staff_id)) {
+          roleCodesByTeacherId.set(assignment.staff_id, new Set())
+        }
+        roleCodesByTeacherId.get(assignment.staff_id)!.add(code)
+      })
+    }
+  }
+
   // Get schedule cells (gracefully handle if table doesn't exist yet)
   let scheduleCells: ScheduleCellRaw[] | null = null
   try {
@@ -573,6 +606,9 @@ export async function getScheduleSnapshotData({
               teacher_display_name: teacherInfo
                 ? formatDisplayName(teacherInfo, displayNameFormat)
                 : null,
+              is_flexible: Boolean(
+                roleCodesByTeacherId.get(assignment.teacher_id)?.has('FLEXIBLE')
+              ),
               classroom_id: assignment.classroom_id,
               classroom_name: assignment.classroom?.name || 'Unknown',
               is_floater: assignment.is_floater || false,

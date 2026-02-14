@@ -585,6 +585,12 @@ export default function DailyScheduleReportPage() {
                 <span className="text-slate-800">Permanent</span>
               </div>
               <div className="flex items-center gap-2">
+                {!displayColorFriendly && <span className="text-slate-600">◦</span>}
+                <span className={cn(displayColorFriendly ? 'text-blue-800' : 'text-slate-600')}>
+                  Flex
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
                 {!displayColorFriendly && <span className="text-slate-600">↔</span>}
                 <span className={cn(displayColorFriendly ? 'text-purple-700' : 'text-slate-600')}>
                   Floater
@@ -703,6 +709,16 @@ export default function DailyScheduleReportPage() {
                             a =>
                               !a.is_substitute &&
                               !a.is_floater &&
+                              !absentTeacherIds.has(a.teacher_id) &&
+                              !a.is_flexible
+                          )
+                          .sort(sortByName)
+                        const flexTeachers = assignments
+                          .filter(
+                            a =>
+                              !a.is_substitute &&
+                              !a.is_floater &&
+                              a.is_flexible &&
                               !absentTeacherIds.has(a.teacher_id)
                           )
                           .sort(sortByName)
@@ -736,6 +752,34 @@ export default function DailyScheduleReportPage() {
                                             teacher_first_name: teacher.teacher_first_name,
                                             teacher_last_name: teacher.teacher_last_name,
                                             teacher_display_name: teacher.teacher_display_name,
+                                          },
+                                          teacherNameFormat
+                                        )}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {flexTeachers.length > 0 && (
+                                <div>
+                                  <ul className="mt-1 space-y-1 text-[12px] font-medium text-slate-700">
+                                    {flexTeachers.map(flexTeacher => (
+                                      <li
+                                        key={flexTeacher.id}
+                                        className={cn(
+                                          displayColorFriendly ? 'text-blue-800' : 'text-slate-700'
+                                        )}
+                                      >
+                                        {!displayColorFriendly && (
+                                          <span className="text-slate-500">◦</span>
+                                        )}{' '}
+                                        {formatTeacherName(
+                                          {
+                                            teacher_name: flexTeacher.teacher_name,
+                                            teacher_first_name: flexTeacher.teacher_first_name,
+                                            teacher_last_name: flexTeacher.teacher_last_name,
+                                            teacher_display_name: flexTeacher.teacher_display_name,
                                           },
                                           teacherNameFormat
                                         )}
@@ -783,18 +827,30 @@ export default function DailyScheduleReportPage() {
                                         substitutesByAbsentTeacher.get(absence.teacher_id) || []
                                       return (
                                         <li key={absence.teacher_id} className="space-y-1">
-                                          <div className={cn('text-slate-400', 'line-through')}>
-                                            {formatTeacherName(
-                                              {
-                                                teacher_name: absence.teacher_name,
-                                                teacher_first_name: absence.teacher_first_name,
-                                                teacher_last_name: absence.teacher_last_name,
-                                                teacher_display_name: absence.teacher_display_name,
-                                              },
-                                              teacherNameFormat
-                                            )}
+                                          <div className="text-slate-400">
+                                            <span className="line-through">
+                                              {formatTeacherName(
+                                                {
+                                                  teacher_name: absence.teacher_name,
+                                                  teacher_first_name: absence.teacher_first_name,
+                                                  teacher_last_name: absence.teacher_last_name,
+                                                  teacher_display_name:
+                                                    absence.teacher_display_name,
+                                                },
+                                                teacherNameFormat
+                                              )}
+                                            </span>
                                             {!absence.has_sub && subsForAbsence.length === 0 && (
-                                              <span className="text-slate-400"> (no sub)</span>
+                                              <span
+                                                className={cn(
+                                                  displayColorFriendly
+                                                    ? 'text-orange-600'
+                                                    : 'text-slate-400'
+                                                )}
+                                              >
+                                                {' '}
+                                                (no sub)
+                                              </span>
                                             )}
                                           </div>
                                           {subsForAbsence.map(sub => (
