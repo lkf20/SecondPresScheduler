@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import SubAvailabilitySection from '@/components/subs/SubAvailabilitySection'
 import SubPreferencesSection from '@/components/subs/SubPreferencesSection'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Database } from '@/types/database'
 import type { DisplayNameFormat } from '@/lib/utils/staff-display-name'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
@@ -30,13 +30,14 @@ interface StaffFormClientProps {
     role_type_ids?: string[]
     role_type_codes?: string[]
   }
+  defaultDisplayNameFormat?: DisplayNameFormat
 }
 
 type StaffRoleType = Database['public']['Tables']['staff_role_types']['Row']
 
 type RoleTypeLookup = Record<string, StaffRoleType>
 
-export default function StaffFormClient({ staff }: StaffFormClientProps) {
+export default function StaffFormClient({ staff, defaultDisplayNameFormat }: StaffFormClientProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const schoolId = useSchool()
@@ -44,8 +45,11 @@ export default function StaffFormClient({ staff }: StaffFormClientProps) {
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [roleTypes, setRoleTypes] = useState<RoleTypeLookup>({})
-  const [defaultFormat, setDefaultFormat] = useState<DisplayNameFormat>('first_last_initial')
+  const [defaultFormat, setDefaultFormat] = useState<DisplayNameFormat>(
+    defaultDisplayNameFormat ?? 'first_last_initial'
+  )
   const [isActive, setIsActive] = useState(staff.active ?? true)
+  const [staffList, setStaffList] = useState<Array<{ id: string }>>([])
 
   const returnPage = searchParams.get('returnPage') || '1'
   const returnSearch = searchParams.get('returnSearch')
@@ -83,6 +87,21 @@ export default function StaffFormClient({ staff }: StaffFormClientProps) {
     fetchSettings()
   }, [])
 
+  useEffect(() => {
+    const fetchStaffList = async () => {
+      try {
+        const response = await fetch('/api/staff')
+        if (!response.ok) return
+        const data = (await response.json()) as Array<{ id: string }>
+        setStaffList(data)
+      } catch (err) {
+        console.error('Failed to fetch staff list', err)
+      }
+    }
+
+    fetchStaffList()
+  }, [])
+
   const getReturnUrl = () => {
     const params = new URLSearchParams()
     if (returnPage !== '1') {
@@ -94,6 +113,25 @@ export default function StaffFormClient({ staff }: StaffFormClientProps) {
     const queryString = params.toString()
     return `/staff${queryString ? `?${queryString}` : ''}`
   }
+
+  const getStaffDetailUrl = (staffId: string) => {
+    const params = new URLSearchParams()
+    if (returnPage !== '1') {
+      params.set('returnPage', returnPage)
+    }
+    if (returnSearch) {
+      params.set('returnSearch', returnSearch)
+    }
+    const queryString = params.toString()
+    return `/staff/${staffId}${queryString ? `?${queryString}` : ''}`
+  }
+
+  const staffIndex = useMemo(() => {
+    return staffList.findIndex(item => item.id === staff.id)
+  }, [staffList, staff.id])
+  const previousStaffId = staffIndex > 0 ? staffList[staffIndex - 1]?.id : null
+  const nextStaffId =
+    staffIndex >= 0 && staffIndex < staffList.length - 1 ? staffList[staffIndex + 1]?.id : null
 
   const roleTypeCodes = useMemo(() => {
     if (staff.role_type_codes && staff.role_type_codes.length > 0) {
@@ -200,7 +238,27 @@ export default function StaffFormClient({ staff }: StaffFormClientProps) {
       </div>
       <div className="mb-6 max-w-2xl">
         <div className="flex items-center justify-between gap-6">
-          <p className="text-3xl font-bold tracking-tight text-slate-900">{staffName}</p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => previousStaffId && router.push(getStaffDetailUrl(previousStaffId))}
+              disabled={!previousStaffId}
+              className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Previous staff member"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <p className="text-3xl font-bold tracking-tight text-slate-900">{staffName}</p>
+            <button
+              type="button"
+              onClick={() => nextStaffId && router.push(getStaffDetailUrl(nextStaffId))}
+              disabled={!nextStaffId}
+              className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Next staff member"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
           <div className="flex items-center gap-3">
             <Switch
               id="active-toggle"

@@ -3,9 +3,11 @@ import Script from 'next/script'
 import './globals.css'
 import { ThemeProvider } from '@/lib/contexts/ThemeContext'
 import { SchoolProvider } from '@/lib/contexts/SchoolContext'
+import { DisplayNameFormatProvider } from '@/lib/contexts/DisplayNameFormatContext'
 import { QueryProvider } from '@/components/providers/QueryProvider'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
+import { getScheduleSettings } from '@/lib/api/schedule-settings'
 
 export const metadata: Metadata = {
   title: 'Scheduler App',
@@ -54,6 +56,10 @@ export default async function RootLayout({
     }
   }
 
+  const scheduleSettings = schoolId ? await getScheduleSettings(schoolId) : null
+  const defaultDisplayNameFormat =
+    scheduleSettings?.default_display_name_format ?? 'first_last_initial'
+
   return (
     <html lang="en" data-theme={initialTheme}>
       <head>
@@ -77,7 +83,9 @@ export default async function RootLayout({
       <body className="antialiased">
         <QueryProvider>
           <SchoolProvider schoolId={schoolId}>
-            <ThemeProvider initialTheme={initialTheme}>{children}</ThemeProvider>
+            <DisplayNameFormatProvider defaultFormat={defaultDisplayNameFormat}>
+              <ThemeProvider initialTheme={initialTheme}>{children}</ThemeProvider>
+            </DisplayNameFormatProvider>
           </SchoolProvider>
         </QueryProvider>
       </body>

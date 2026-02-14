@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Plus } from 'lucide-react'
 import DataTable, { Column } from '@/components/shared/DataTable'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import type { StaffWithRole } from '@/lib/api/staff'
@@ -25,6 +26,7 @@ import {
 interface StaffPageClientProps {
   staff: StaffWithRole[]
   error: string | null
+  defaultDisplayNameFormat?: DisplayNameFormat
 }
 
 type FilterKey = 'permanent' | 'flexible' | 'substitute'
@@ -41,10 +43,16 @@ const formatOptions: Array<{ value: DisplayNameFormat; label: string }> = [
   { value: 'first_name', label: 'First Name' },
 ]
 
-export default function StaffPageClient({ staff, error }: StaffPageClientProps) {
+export default function StaffPageClient({
+  staff,
+  error,
+  defaultDisplayNameFormat,
+}: StaffPageClientProps) {
   const [activeFilters, setActiveFilters] = useState<FilterKey[]>([])
   const [staffState, setStaffState] = useState(staff)
-  const [defaultFormat, setDefaultFormat] = useState<DisplayNameFormat>('first_last_initial')
+  const [defaultFormat, setDefaultFormat] = useState<DisplayNameFormat>(
+    defaultDisplayNameFormat ?? 'first_last_initial'
+  )
   const [selectedDayIds, setSelectedDayIds] = useState<string[]>([])
   const [settingsLoaded, setSettingsLoaded] = useState(false)
   const [isUpdatingFormat, setIsUpdatingFormat] = useState(false)
@@ -264,7 +272,10 @@ export default function StaffPageClient({ staff, error }: StaffPageClientProps) 
           <p className="text-muted-foreground mt-2">Manage staff information and roles</p>
         </div>
         <Link href="/staff/new">
-          <Button>Add Staff</Button>
+          <Button>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Staff
+          </Button>
         </Link>
       </div>
 

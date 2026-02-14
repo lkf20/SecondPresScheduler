@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import SubClassPreferences from './SubClassPreferences'
 import SubQualifications from './SubQualifications'
-import SubCapabilities from './SubCapabilities'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
@@ -44,6 +43,7 @@ interface SubPreferencesSectionProps {
 export default function SubPreferencesSection({ subId, sub }: SubPreferencesSectionProps) {
   const [loading, setLoading] = useState(true)
   const [classPreferences, setClassPreferences] = useState<ClassPreference[]>([])
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([])
   const [qualifications, setQualifications] = useState<StaffQualification[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [capabilitiesState, setCapabilitiesState] = useState({
@@ -59,6 +59,11 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
       if (!response.ok) throw new Error('Failed to fetch preferences')
       const data = await response.json()
       setClassPreferences(data)
+      setSelectedClassIds(
+        (data as ClassPreference[])
+          .map(p => p.class_group_id)
+          .filter((id): id is string => Boolean(id))
+      )
     } catch (error) {
       console.error('Error fetching preferences:', error)
     }
@@ -91,20 +96,8 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
     })
   }, [sub])
 
-  const handleClassPreferencesChange = async (classIds: string[]) => {
-    try {
-      const response = await fetch(`/api/subs/${subId}/preferences`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ class_group_ids: classIds }),
-      })
-
-      if (!response.ok) throw new Error('Failed to save preferences')
-      await fetchPreferences()
-    } catch (error) {
-      console.error('Error saving preferences:', error)
-      alert('Failed to save preferences. Please try again.')
-    }
+  const handleClassPreferencesChange = (classIds: string[]) => {
+    setSelectedClassIds(classIds)
   }
 
   const handleQualificationsChange = async (
@@ -116,46 +109,35 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
       notes?: string | null
     }>
   ) => {
-    try {
-      const response = await fetch(`/api/subs/${subId}/qualifications`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qualifications }),
+    setQualifications(prev => {
+      const byId = new Map(prev.map(item => [item.qualification_id, item]))
+      return qualifications.map(item => {
+        const existing = byId.get(item.qualification_id)
+        return {
+          id: existing?.id || `temp-${item.qualification_id}`,
+          qualification_id: item.qualification_id,
+          level: item.level ?? null,
+          expires_on: item.expires_on ?? null,
+          verified: item.verified ?? null,
+          notes: item.notes ?? null,
+          qualification: existing?.qualification,
+        }
       })
-
-      if (!response.ok) throw new Error('Failed to save qualifications')
-      await fetchQualifications()
-    } catch (error) {
-      console.error('Error saving qualifications:', error)
-      alert('Failed to save qualifications. Please try again.')
-    }
+    })
   }
 
-  const handleCapabilitiesChange = async (capabilities: {
+  const handleCapabilitiesChange = (capabilities: {
     can_change_diapers: boolean
     can_lift_children: boolean
     can_assist_with_toileting: boolean
     capabilities_notes: string | null
   }) => {
-    try {
-      setCapabilitiesState({
-        can_change_diapers: capabilities.can_change_diapers,
-        can_lift_children: capabilities.can_lift_children,
-        can_assist_with_toileting: capabilities.can_assist_with_toileting,
-        capabilities_notes: capabilities.capabilities_notes || '',
-      })
-      const response = await fetch(`/api/subs/${subId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(capabilities),
-      })
-
-      if (!response.ok) throw new Error('Failed to save capabilities')
-      // Refresh the page data would be handled by parent component
-    } catch (error) {
-      console.error('Error saving capabilities:', error)
-      alert('Failed to save capabilities. Please try again.')
-    }
+    setCapabilitiesState({
+      can_change_diapers: capabilities.can_change_diapers,
+      can_lift_children: capabilities.can_lift_children,
+      can_assist_with_toileting: capabilities.can_assist_with_toileting,
+      capabilities_notes: capabilities.capabilities_notes || '',
+    })
   }
 
   if (loading) {
@@ -166,9 +148,6 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
     )
   }
 
-  const selectedClassIds = classPreferences
-    .map(p => p.class_group_id)
-    .filter((id): id is string => Boolean(id))
   const normalizedQualifications = qualifications.map(q => ({
     ...q,
     qualification: q.qualification
@@ -183,10 +162,6 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
   const handleSaveAll = async () => {
     setIsSaving(true)
     try {
-      const selectedClassIds = classPreferences
-        .map(p => p.class_group_id)
-        .filter((id): id is string => Boolean(id))
-
       const qualificationsPayload = qualifications.map(q => ({
         qualification_id: q.qualification_id,
         level: q.level ?? null,
@@ -194,13 +169,32 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
         verified: q.verified ?? null,
         notes: q.notes ?? null,
       }))
-
-      await handleClassPreferencesChange(selectedClassIds)
-      await handleQualificationsChange(qualificationsPayload)
-      await handleCapabilitiesChange({
+      const capabilitiesPayload = {
         ...capabilitiesState,
         capabilities_notes: capabilitiesState.capabilities_notes.trim() || null,
+      }
+
+      const preferencesResponse = await fetch(`/api/subs/${subId}/preferences`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ class_group_ids: selectedClassIds }),
       })
+      if (!preferencesResponse.ok) throw new Error('Failed to save preferences')
+
+      const qualificationsResponse = await fetch(`/api/subs/${subId}/qualifications`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qualifications: qualificationsPayload }),
+      })
+      if (!qualificationsResponse.ok) throw new Error('Failed to save qualifications')
+
+      const capabilitiesResponse = await fetch(`/api/subs/${subId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(capabilitiesPayload),
+      })
+      if (!capabilitiesResponse.ok) throw new Error('Failed to save capabilities')
+
       toast.success('Preferences saved.')
     } catch (error) {
       console.error('Error saving preferences', error)
@@ -224,19 +218,13 @@ export default function SubPreferencesSection({ subId, sub }: SubPreferencesSect
         <SubQualifications
           subId={subId}
           qualifications={normalizedQualifications}
-          onQualificationsChange={handleQualificationsChange}
-        />
-      </div>
-
-      <div>
-        <SubCapabilities
-          subId={subId}
           capabilities={{
             can_change_diapers: capabilitiesState.can_change_diapers,
             can_lift_children: capabilitiesState.can_lift_children,
             can_assist_with_toileting: capabilitiesState.can_assist_with_toileting,
             capabilities_notes: capabilitiesState.capabilities_notes || null,
           }}
+          onQualificationsChange={handleQualificationsChange}
           onCapabilitiesChange={handleCapabilitiesChange}
         />
       </div>

@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
+import type { DisplayNameFormat } from '@/lib/utils/staff-display-name'
 
 export interface ScheduleSettings {
   id: string
   school_id: string
   selected_day_ids: string[]
-  default_display_name_format: string
+  default_display_name_format: DisplayNameFormat
   created_at: string
   updated_at: string
 }

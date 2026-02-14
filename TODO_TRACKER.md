@@ -56,6 +56,8 @@ Features to implement soon (within the next few weeks).
 - [ ] Mobile UX: comprehensive pass to make all pages mobile friendly (navigation, layouts, and responsive interactions)
 - [ ] Add Flex staff to Daily Schedule and to Weekly Schedule. Update Flex staff database logic.
 - [ ] Standardize filter styles to match Time Off chips across the app (Staff, Sub Finder, etc.)
+- [ ] Enable Skills category in Staff Qualifications once skill tracking UI is ready
+- [ ] Re-enable "Infant qualified" certification when ready
 
 ---
 
