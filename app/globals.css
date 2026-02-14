@@ -23,9 +23,6 @@
   --input: 0 0% 89.8%;
   --ring: 0 0% 3.9%;
   --radius: 0.5rem;
-  --sidebar-width: 16rem;
-  --sidebar-collapsed-width: 3.5rem;
-
   /* Sidebar colors - default to system theme values */
   --sidebar-bg: 0 0% 100%;
   --sidebar-foreground: 0 0% 3.9%;
@@ -36,7 +33,9 @@
   --sidebar-active-foreground: 0 0% 9%;
   --sidebar-width: 16rem;
   --sidebar-collapsed-width: 3.5rem;
-  --sidebar-current-width: var(--sidebar-width);
+  --sidebar-layout-width: var(--sidebar-collapsed-width);
+  --sidebar-visual-width: var(--sidebar-collapsed-width);
+  --sidebar-current-width: var(--sidebar-layout-width);
 
   /* Button fill color - default to slate-900 for system theme */
   --button-fill: 222 47% 11%;

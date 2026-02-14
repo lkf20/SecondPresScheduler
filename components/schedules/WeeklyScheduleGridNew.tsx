@@ -670,7 +670,7 @@ export default function WeeklyScheduleGridNew({
           >
             {/* Header Row - Time Column Header */}
             <div
-              className="sticky top-0 z-30 text-center pt-2 pb-0.5"
+              className="sticky top-0 z-20 text-center pt-2 pb-0.5"
               style={{
                 position: 'sticky',
                 top: 0,
@@ -679,7 +679,7 @@ export default function WeeklyScheduleGridNew({
                 gridColumn: 1,
                 gridRow: 1,
                 minWidth: '120px', // Match the column width
-                zIndex: 50, // Higher than classroom headers (z-40) to stay on top when scrolling
+                zIndex: 20, // Keep below sidebar when expanded
               }}
             ></div>
             {data.map((classroom, index) => {
@@ -687,7 +687,7 @@ export default function WeeklyScheduleGridNew({
               return (
                 <div
                   key={classroom.classroom_id}
-                  className="sticky top-0 z-40 text-center pt-2 pb-0.5"
+                  className="sticky top-0 z-20 text-center pt-2 pb-0.5"
                   style={{
                     backgroundColor: 'white',
                     gridColumn: index + 2,
@@ -763,7 +763,7 @@ export default function WeeklyScheduleGridNew({
                       position: 'sticky',
                       top: '30px',
                       left: 0,
-                      zIndex: 50,
+                      zIndex: 20,
                       backgroundColor: '#f9fafb',
                       borderTop: '1px solid #e5e7eb',
                       borderLeft: '1px solid #e5e7eb',
@@ -1017,7 +1017,7 @@ export default function WeeklyScheduleGridNew({
             {filteredDays.map((day, dayIndex) => (
               <div
                 key={`day-header-${day.id}`}
-                className="sticky top-0 z-30 text-center pt-2 pb-0.5"
+                className="sticky top-0 z-20 text-center pt-2 pb-0.5"
                 style={{
                   backgroundColor: dayIndex % 2 === 0 ? 'white' : '#f3f4f6',
                   gridColumn: `${dayIndex * timeSlots.length + 2} / ${(dayIndex + 1) * timeSlots.length + 2}`,
@@ -1046,7 +1046,7 @@ export default function WeeklyScheduleGridNew({
               timeSlots.map((slot, slotIndex) => (
                 <div
                   key={`time-header-${day.id}-${slot.id}`}
-                  className="sticky z-30 text-center pt-2 pb-3"
+                  className="sticky z-20 text-center pt-2 pb-3"
                   style={{
                     backgroundColor: 'white',
                     gridColumn: dayIndex * timeSlots.length + slotIndex + 2,
