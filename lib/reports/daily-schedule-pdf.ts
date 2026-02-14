@@ -169,6 +169,7 @@ export function buildDailySchedulePdfHtml({
   const color = {
     permanent: '#0F172A',
     floater: options.colorFriendly ? '#7E22CE' : '#334155',
+    flex: options.colorFriendly ? '#1E40AF' : '#334155',
     sub: options.colorFriendly ? '#0F766E' : '#334155',
     absent: '#94A3B8',
     grid: '#E2E8F0',
@@ -222,7 +223,22 @@ export function buildDailySchedulePdfHtml({
               substitutesByAbsentTeacher.get(sub.absent_teacher_id)!.push(sub)
             })
             const regularTeachers = assignments
-              .filter(a => !a.is_substitute && !a.is_floater && !absentTeacherIds.has(a.teacher_id))
+              .filter(
+                a =>
+                  !a.is_substitute &&
+                  !a.is_floater &&
+                  !a.is_flexible &&
+                  !absentTeacherIds.has(a.teacher_id)
+              )
+              .sort(sortByName)
+            const flexTeachers = assignments
+              .filter(
+                a =>
+                  !a.is_substitute &&
+                  !a.is_floater &&
+                  a.is_flexible &&
+                  !absentTeacherIds.has(a.teacher_id)
+              )
               .sort(sortByName)
             const floaters = assignments
               .filter(a => !a.is_substitute && a.is_floater && !absentTeacherIds.has(a.teacher_id))
@@ -248,7 +264,27 @@ export function buildDailySchedulePdfHtml({
             const floaterLines = floaters
               .map(
                 f =>
-                  `<div style="color:${color.floater}; font-weight:500;">◇ ${escapeHtml(
+                  `<div style="color:${color.floater}; font-weight:500;">${
+                    options.colorFriendly ? '' : '↔ '
+                  }${escapeHtml(
+                    formatTeacherName(
+                      {
+                        teacher_name: f.teacher_name,
+                        teacher_first_name: f.teacher_first_name,
+                        teacher_last_name: f.teacher_last_name,
+                        teacher_display_name: f.teacher_display_name,
+                      },
+                      options.teacherNameFormat
+                    )
+                  )}</div>`
+              )
+              .join('')
+            const flexLines = flexTeachers
+              .map(
+                f =>
+                  `<div style="color:${color.flex}; font-weight:500;">${
+                    options.colorFriendly ? '' : '◦ '
+                  }${escapeHtml(
                     formatTeacherName(
                       {
                         teacher_name: f.teacher_name,
@@ -268,7 +304,7 @@ export function buildDailySchedulePdfHtml({
                     const subLines = subsForAbsence
                       .map(
                         sub =>
-                          `<div style="margin-left:12px; color:${color.sub}; font-weight:500;">↳ → ${escapeHtml(
+                          `<div style="color:${color.sub}; font-weight:500;">↳ ${escapeHtml(
                             formatTeacherName(
                               {
                                 teacher_name: sub.teacher_name,
@@ -283,11 +319,11 @@ export function buildDailySchedulePdfHtml({
                       .join('')
                     const noSub =
                       !absence.has_sub && subsForAbsence.length === 0
-                        ? `<span style="color:${color.absent};"> (no sub)</span>`
+                        ? `<span style="color:${options.colorFriendly ? '#EA580C' : color.absent};"> (no sub)</span>`
                         : ''
                     return `
                     <div style="color:${color.absent}; font-weight:500;">
-                      × ${escapeHtml(
+                      <span style="text-decoration: line-through;">${escapeHtml(
                         formatTeacherName(
                           {
                             teacher_name: absence.teacher_name,
@@ -297,7 +333,7 @@ export function buildDailySchedulePdfHtml({
                           },
                           options.teacherNameFormat
                         )
-                      )}${noSub}
+                      )}</span>${noSub}
                     </div>
                     ${subLines}`
                   })
@@ -309,6 +345,7 @@ export function buildDailySchedulePdfHtml({
               <div style="display:flex; flex-direction:column; gap:4px;">
                 ${teacherLines}
                 ${floaterLines}
+                ${flexLines}
                 ${absenceLines}
               </div>
             </td>`
@@ -372,9 +409,14 @@ export function buildDailySchedulePdfHtml({
                 </div>
                 <div class="legend" style="margin-bottom:14px;">
                   <div style="color:${color.permanent};">Permanent</div>
-                  <div style="color:${color.floater};">◇ Floater</div>
-                  <div style="color:${color.sub};">→ Sub</div>
-                  <div style="color:${color.absent};">× Absent</div>
+                  <div style="color:${color.flex};">${
+                    options.colorFriendly ? 'Flex' : '◦ Flex'
+                  }</div>
+                  <div style="color:${color.floater};">${
+                    options.colorFriendly ? 'Floater' : '↔ Floater'
+                  }</div>
+                  <div style="color:${color.sub};">↳ Sub</div>
+                  <div style="color:${color.absent}; text-decoration: line-through;">Absent</div>
                 </div>
                 ${renderTable(classrooms)}
               </div>

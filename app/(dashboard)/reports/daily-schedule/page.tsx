@@ -226,6 +226,7 @@ export default function DailyScheduleReportPage() {
   const [teacherNameFormat, setTeacherNameFormat] = useState<
     'default' | 'first_last' | 'first_last_initial' | 'first_initial_last' | 'first'
   >('default')
+  const [isPdfSettingsOpen, setIsPdfSettingsOpen] = useState(false)
   const { data, isLoading, error } = useDailySchedule(selectedDate)
   const [generatedAt, setGeneratedAt] = useState('')
   const pdfEnabled = isValidDateString(selectedDate)
@@ -371,7 +372,7 @@ export default function DailyScheduleReportPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <Popover>
+              <Popover open={isPdfSettingsOpen} onOpenChange={setIsPdfSettingsOpen}>
                 <PopoverTrigger asChild>
                   <Button type="button" variant="outline" size="icon" aria-label="PDF settings">
                     <Settings2 className="h-4 w-4" />
@@ -514,6 +515,7 @@ export default function DailyScheduleReportPage() {
                           teacherNameFormat,
                         }
                         window.localStorage.setItem(settingsKey, JSON.stringify(payload))
+                        setIsPdfSettingsOpen(false)
                       }}
                     >
                       Save as default
@@ -583,22 +585,37 @@ export default function DailyScheduleReportPage() {
                 <span className="text-slate-800">Permanent</span>
               </div>
               <div className="flex items-center gap-2">
+                {!displayColorFriendly && <span className="text-slate-600">◦</span>}
+                <span className={cn(displayColorFriendly ? 'text-blue-800' : 'text-slate-600')}>
+                  Flex
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {!displayColorFriendly && <span className="text-slate-600">↔</span>}
                 <span className={cn(displayColorFriendly ? 'text-purple-700' : 'text-slate-600')}>
-                  ◇
+                  Floater
                 </span>
-                <span>Floater</span>
               </div>
               <div className="flex items-center gap-2">
+                <CornerDownRight
+                  className={cn(
+                    'h-3 w-3',
+                    displayColorFriendly ? 'text-teal-600' : 'text-slate-500'
+                  )}
+                />
                 <span className={cn(displayColorFriendly ? 'text-teal-600' : 'text-slate-600')}>
-                  →
+                  Sub
                 </span>
-                <span>Sub</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className={cn(displayColorFriendly ? 'text-slate-500' : 'text-slate-600')}>
-                  ×
+                <span
+                  className={cn(
+                    'line-through',
+                    displayColorFriendly ? 'text-slate-500' : 'text-slate-600'
+                  )}
+                >
+                  Absent
                 </span>
-                <span>Absent</span>
               </div>
             </div>
           </div>
@@ -692,6 +709,16 @@ export default function DailyScheduleReportPage() {
                             a =>
                               !a.is_substitute &&
                               !a.is_floater &&
+                              !absentTeacherIds.has(a.teacher_id) &&
+                              !a.is_flexible
+                          )
+                          .sort(sortByName)
+                        const flexTeachers = assignments
+                          .filter(
+                            a =>
+                              !a.is_substitute &&
+                              !a.is_floater &&
+                              a.is_flexible &&
                               !absentTeacherIds.has(a.teacher_id)
                           )
                           .sort(sortByName)
@@ -734,6 +761,34 @@ export default function DailyScheduleReportPage() {
                                 </div>
                               )}
 
+                              {flexTeachers.length > 0 && (
+                                <div>
+                                  <ul className="mt-1 space-y-1 text-[12px] font-medium text-slate-700">
+                                    {flexTeachers.map(flexTeacher => (
+                                      <li
+                                        key={flexTeacher.id}
+                                        className={cn(
+                                          displayColorFriendly ? 'text-blue-800' : 'text-slate-700'
+                                        )}
+                                      >
+                                        {!displayColorFriendly && (
+                                          <span className="text-slate-500">◦</span>
+                                        )}{' '}
+                                        {formatTeacherName(
+                                          {
+                                            teacher_name: flexTeacher.teacher_name,
+                                            teacher_first_name: flexTeacher.teacher_first_name,
+                                            teacher_last_name: flexTeacher.teacher_last_name,
+                                            teacher_display_name: flexTeacher.teacher_display_name,
+                                          },
+                                          teacherNameFormat
+                                        )}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
                               {floaters.length > 0 && (
                                 <div>
                                   <ul className="mt-1 space-y-1 text-[12px] font-medium text-slate-700">
@@ -746,15 +801,9 @@ export default function DailyScheduleReportPage() {
                                             : 'text-slate-700'
                                         )}
                                       >
-                                        <span
-                                          className={cn(
-                                            displayColorFriendly
-                                              ? 'text-purple-700'
-                                              : 'text-slate-500'
-                                          )}
-                                        >
-                                          ◇
-                                        </span>{' '}
+                                        {!displayColorFriendly && (
+                                          <span className="text-slate-500">↔</span>
+                                        )}{' '}
                                         {formatTeacherName(
                                           {
                                             teacher_name: floater.teacher_name,
@@ -778,26 +827,37 @@ export default function DailyScheduleReportPage() {
                                         substitutesByAbsentTeacher.get(absence.teacher_id) || []
                                       return (
                                         <li key={absence.teacher_id} className="space-y-1">
-                                          <div className={cn('text-slate-400')}>
-                                            <span className="mr-1">×</span>
-                                            {formatTeacherName(
-                                              {
-                                                teacher_name: absence.teacher_name,
-                                                teacher_first_name: absence.teacher_first_name,
-                                                teacher_last_name: absence.teacher_last_name,
-                                                teacher_display_name: absence.teacher_display_name,
-                                              },
-                                              teacherNameFormat
-                                            )}
+                                          <div className="text-slate-400">
+                                            <span className="line-through">
+                                              {formatTeacherName(
+                                                {
+                                                  teacher_name: absence.teacher_name,
+                                                  teacher_first_name: absence.teacher_first_name,
+                                                  teacher_last_name: absence.teacher_last_name,
+                                                  teacher_display_name:
+                                                    absence.teacher_display_name,
+                                                },
+                                                teacherNameFormat
+                                              )}
+                                            </span>
                                             {!absence.has_sub && subsForAbsence.length === 0 && (
-                                              <span className="text-slate-400"> (no sub)</span>
+                                              <span
+                                                className={cn(
+                                                  displayColorFriendly
+                                                    ? 'text-orange-600'
+                                                    : 'text-slate-400'
+                                                )}
+                                              >
+                                                {' '}
+                                                (no sub)
+                                              </span>
                                             )}
                                           </div>
                                           {subsForAbsence.map(sub => (
                                             <div
                                               key={sub.id}
                                               className={cn(
-                                                'ml-3 flex items-center gap-1',
+                                                'flex items-center gap-1',
                                                 displayColorFriendly
                                                   ? 'text-teal-600'
                                                   : 'text-slate-700'
@@ -807,12 +867,11 @@ export default function DailyScheduleReportPage() {
                                                 className={cn(
                                                   'h-3 w-3',
                                                   displayColorFriendly
-                                                    ? 'text-slate-400'
+                                                    ? 'text-teal-600'
                                                     : 'text-slate-500'
                                                 )}
                                               />
                                               <span>
-                                                →{' '}
                                                 {formatTeacherName(
                                                   {
                                                     teacher_name: sub.teacher_name,
