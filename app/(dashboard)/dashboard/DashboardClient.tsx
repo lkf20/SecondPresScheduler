@@ -35,6 +35,7 @@ import TimeOffCard from '@/components/shared/TimeOffCard'
 import { Loader2 } from 'lucide-react'
 import { useDashboard } from '@/lib/hooks/use-dashboard'
 import { useProfile } from '@/lib/hooks/use-profile'
+import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
 
 type Summary = {
@@ -223,6 +224,7 @@ export default function DashboardClient({
   // Use React Query to cache the profile/name
   const { data: profile, isLoading: isLoadingProfile } = useProfile()
   const greetingName = profile?.first_name?.trim() || null
+  const { format: displayNameFormat, isLoaded: isDisplayNameLoaded } = useDisplayNameFormat()
 
   // Calculate greeting on client side only to avoid hydration mismatch
   const [greetingTime, setGreetingTime] = useState<string | null>(null)
@@ -301,11 +303,17 @@ export default function DashboardClient({
       preset: coverageRange,
       startDate: currentStartDate,
       endDate: currentEndDate,
+      displayNameFormat,
     },
     shouldUseInitialData ? initialOverview : undefined
   )
 
   const router = useRouter()
+
+  useEffect(() => {
+    if (!isDisplayNameLoaded) return
+    refetch()
+  }, [displayNameFormat, isDisplayNameLoaded, refetch])
 
   // Manual refresh handler
   const handleRefresh = async () => {

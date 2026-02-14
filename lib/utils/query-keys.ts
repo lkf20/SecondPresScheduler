@@ -9,6 +9,7 @@ export interface DashboardQueryParams {
   preset: CoverageRangePreset
   startDate: string
   endDate: string
+  displayNameFormat?: import('@/lib/utils/staff-display-name').DisplayNameFormat
 }
 
 export interface TimeOffRequestsQueryParams {
