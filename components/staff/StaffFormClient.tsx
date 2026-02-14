@@ -13,6 +13,15 @@ import { Database } from '@/types/database'
 import type { DisplayNameFormat } from '@/lib/utils/staff-display-name'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
+import { useSchool } from '@/lib/contexts/SchoolContext'
+import {
+  invalidateDashboard,
+  invalidateDailySchedule,
+  invalidateSubFinderAbsences,
+  invalidateTimeOffRequests,
+  invalidateWeeklySchedule,
+} from '@/lib/utils/invalidation'
 
 interface StaffFormClientProps {
   staff: Database['public']['Tables']['staff']['Row'] & {
@@ -27,6 +36,8 @@ type RoleTypeLookup = Record<string, StaffRoleType>
 
 export default function StaffFormClient({ staff }: StaffFormClientProps) {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const schoolId = useSchool()
   const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
@@ -126,6 +137,13 @@ export default function StaffFormClient({ staff }: StaffFormClientProps) {
         throw new Error(errorData.error || 'Failed to update staff')
       }
 
+      await Promise.all([
+        invalidateWeeklySchedule(queryClient, schoolId),
+        invalidateDailySchedule(queryClient, schoolId),
+        invalidateDashboard(queryClient, schoolId),
+        invalidateTimeOffRequests(queryClient, schoolId),
+        invalidateSubFinderAbsences(queryClient, schoolId),
+      ])
       router.refresh()
       toast.success('Staff updated.')
     } catch (err: unknown) {

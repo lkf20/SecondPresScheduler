@@ -1,4 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
+import { getStaffDisplayName as formatDisplayName } from '@/lib/utils/staff-display-name'
+import type { DisplayNameFormat } from '@/lib/utils/staff-display-name'
 import { Database } from '@/types/database'
 
 type ClassGroupRow = Database['public']['Tables']['class_groups']['Row']
@@ -29,22 +31,42 @@ type SubAssignmentRowFromQuery = {
   teacher?: StaffLite | StaffLite[] | null
 }
 
-const getStaffDisplayName = (staff: StaffLite | StaffLite[] | null | undefined) => {
+const getStaffDisplayName = (
+  staff: StaffLite | StaffLite[] | null | undefined,
+  displayNameFormat: DisplayNameFormat
+) => {
   const staffItem = Array.isArray(staff) ? staff[0] : staff
   if (!staffItem) return 'Unknown'
   return (
-    staffItem.display_name ||
-    `${staffItem.first_name || ''} ${staffItem.last_name || ''}`.trim() ||
-    'Unknown'
+    formatDisplayName(
+      {
+        first_name: staffItem.first_name ?? '',
+        last_name: staffItem.last_name ?? '',
+        display_name: staffItem.display_name ?? null,
+      },
+      displayNameFormat
+    ) || 'Unknown'
   )
 }
 
-const getStaffNameParts = (staff: StaffLite | StaffLite[] | null | undefined) => {
+const getStaffNameParts = (
+  staff: StaffLite | StaffLite[] | null | undefined,
+  displayNameFormat: DisplayNameFormat
+) => {
   const staffItem = Array.isArray(staff) ? staff[0] : staff
   return {
     first_name: staffItem?.first_name ?? null,
     last_name: staffItem?.last_name ?? null,
-    display_name: staffItem?.display_name ?? null,
+    display_name: staffItem
+      ? formatDisplayName(
+          {
+            first_name: staffItem.first_name ?? '',
+            last_name: staffItem.last_name ?? '',
+            display_name: staffItem.display_name ?? null,
+          },
+          displayNameFormat
+        )
+      : null,
   }
 }
 
@@ -158,6 +180,23 @@ export async function getScheduleSnapshotData({
   endDateISO?: string
 }) {
   const supabase = await createClient()
+  const defaultDisplayNameFormat: DisplayNameFormat = 'first_last_initial'
+  let displayNameFormat: DisplayNameFormat = defaultDisplayNameFormat
+
+  try {
+    const { data: settingsData, error: settingsError } = await supabase
+      .from('schedule_settings')
+      .select('default_display_name_format')
+      .eq('school_id', schoolId)
+      .maybeSingle()
+
+    if (!settingsError && settingsData?.default_display_name_format) {
+      displayNameFormat = settingsData.default_display_name_format as DisplayNameFormat
+    }
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    console.warn('Error fetching schedule settings:', errorMessage)
+  }
 
   // Fetch time off shifts for the week to identify uncovered absences
   let timeOffShifts: Array<{
@@ -397,8 +436,8 @@ export async function getScheduleSnapshotData({
       } else if (subAssignmentsData) {
         // Map sub_assignments - day_of_week_id is already in the database
         subAssignments = subAssignmentsData.map((sa: SubAssignmentRowFromQuery) => {
-          const subParts = getStaffNameParts(sa.sub)
-          const teacherParts = getStaffNameParts(sa.teacher)
+          const subParts = getStaffNameParts(sa.sub, displayNameFormat)
+          const teacherParts = getStaffNameParts(sa.teacher, displayNameFormat)
           return {
             id: sa.id,
             date: sa.date,
@@ -407,11 +446,11 @@ export async function getScheduleSnapshotData({
             classroom_id: sa.classroom_id,
             sub_id: sa.sub_id,
             teacher_id: sa.teacher_id,
-            sub_name: getStaffDisplayName(sa.sub),
+            sub_name: getStaffDisplayName(sa.sub, displayNameFormat),
             sub_first_name: subParts.first_name,
             sub_last_name: subParts.last_name,
             sub_display_name: subParts.display_name,
-            teacher_name: getStaffDisplayName(sa.teacher),
+            teacher_name: getStaffDisplayName(sa.teacher, displayNameFormat),
             teacher_first_name: teacherParts.first_name,
             teacher_last_name: teacherParts.last_name,
             teacher_display_name: teacherParts.display_name,
@@ -514,20 +553,31 @@ export async function getScheduleSnapshotData({
           // Get teachers assigned to this slot
           // Teachers are now assigned to classrooms, not specific class groups.
           // All teachers assigned to this classroom/day/time are included.
-          const teachers = assignmentsForSlot.map(assignment => ({
-            id: assignment.id,
-            teacher_id: assignment.teacher_id,
-            teacher_name:
-              assignment.teacher?.display_name ||
-              `${assignment.teacher?.first_name || ''} ${assignment.teacher?.last_name || ''}`.trim() ||
-              'Unknown',
-            teacher_first_name: assignment.teacher?.first_name ?? null,
-            teacher_last_name: assignment.teacher?.last_name ?? null,
-            teacher_display_name: assignment.teacher?.display_name ?? null,
-            classroom_id: assignment.classroom_id,
-            classroom_name: assignment.classroom?.name || 'Unknown',
-            is_floater: assignment.is_floater || false,
-          }))
+          const teachers = assignmentsForSlot.map(assignment => {
+            const teacherInfo = assignment.teacher
+              ? {
+                  first_name: assignment.teacher.first_name ?? '',
+                  last_name: assignment.teacher.last_name ?? '',
+                  display_name: assignment.teacher.display_name ?? null,
+                }
+              : null
+
+            return {
+              id: assignment.id,
+              teacher_id: assignment.teacher_id,
+              teacher_name: teacherInfo
+                ? formatDisplayName(teacherInfo, displayNameFormat) || 'Unknown'
+                : 'Unknown',
+              teacher_first_name: assignment.teacher?.first_name ?? null,
+              teacher_last_name: assignment.teacher?.last_name ?? null,
+              teacher_display_name: teacherInfo
+                ? formatDisplayName(teacherInfo, displayNameFormat)
+                : null,
+              classroom_id: assignment.classroom_id,
+              classroom_name: assignment.classroom?.name || 'Unknown',
+              is_floater: assignment.is_floater || false,
+            }
+          })
 
           // Get enrollment from schedule_cell (enrollment is for the whole slot, not per class group)
           const enrollment = scheduleCell.enrollment_for_staffing ?? null
@@ -665,12 +715,25 @@ export async function getScheduleSnapshotData({
                   t.id,
                   {
                     name:
-                      t.display_name ||
-                      `${t.first_name || ''} ${t.last_name || ''}`.trim() ||
-                      'Unknown',
+                      formatDisplayName(
+                        {
+                          first_name: t.first_name ?? '',
+                          last_name: t.last_name ?? '',
+                          display_name: t.display_name ?? null,
+                        },
+                        displayNameFormat
+                      ) || 'Unknown',
                     first_name: t.first_name ?? null,
                     last_name: t.last_name ?? null,
-                    display_name: t.display_name ?? null,
+                    display_name:
+                      formatDisplayName(
+                        {
+                          first_name: t.first_name ?? '',
+                          last_name: t.last_name ?? '',
+                          display_name: t.display_name ?? null,
+                        },
+                        displayNameFormat
+                      ) || null,
                   },
                 ])
               )
