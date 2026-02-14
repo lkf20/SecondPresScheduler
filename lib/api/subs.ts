@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 type Staff = Database['public']['Tables']['staff']['Row']
 
@@ -11,8 +12,16 @@ export async function getSubs() {
 
   // Sort by display_name, falling back to first_name + last_name if display_name is null
   const sorted = (data as Staff[]).sort((a, b) => {
-    const nameA = a.display_name || `${a.first_name} ${a.last_name}` || ''
-    const nameB = b.display_name || `${b.first_name} ${b.last_name}` || ''
+    const nameA = getStaffDisplayName({
+      first_name: a.first_name ?? '',
+      last_name: a.last_name ?? '',
+      display_name: a.display_name ?? null,
+    })
+    const nameB = getStaffDisplayName({
+      first_name: b.first_name ?? '',
+      last_name: b.last_name ?? '',
+      display_name: b.display_name ?? null,
+    })
     return nameA.localeCompare(nameB)
   })
 

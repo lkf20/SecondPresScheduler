@@ -271,6 +271,12 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
     const timeSlotIds = [...new Set(relatedRows.map(row => row.time_slot_id))]
     return { ...header, time_slot_ids: timeSlotIds }
   })
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const hasUpcomingExceptions = enhancedHeaders.some(header => {
+    const endDate = new Date(`${header.end_date}T00:00:00`)
+    return endDate >= today
+  })
 
   return (
     <div className="space-y-6">
@@ -280,6 +286,17 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
           Check the boxes for time slots when this sub is regularly available. Unchecked =
           unavailable.
         </p>
+        {hasUpcomingExceptions && (
+          <Alert
+            variant="default"
+            className="mb-4 border-yellow-500 bg-yellow-50 text-yellow-800 [&_svg]:text-yellow-800"
+          >
+            <AlertTriangle className="h-4 w-4" style={{ color: 'rgb(133, 77, 14)' }} />
+            <AlertDescription className="text-yellow-800">
+              This staff member has upcoming availability exceptions. Please see below.
+            </AlertDescription>
+          </Alert>
+        )}
         <SubAvailabilityGrid
           subId={subId}
           weeklyAvailability={availabilityData.weekly}
@@ -328,6 +345,7 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
           timeSlots={timeSlots}
           onAddException={handleAddException}
           onDeleteException={handleDeleteException}
+          defaultExpanded={hasUpcomingExceptions}
         />
       </div>
     </div>

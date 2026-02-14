@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import type { Resolver, SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -18,6 +18,8 @@ import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { Database } from '@/types/database'
+import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 import {
   invalidateDashboard,
@@ -69,6 +71,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     const router = useRouter()
     const queryClient = useQueryClient()
     const schoolId = useSchool()
+    const { format: displayNameFormat } = useDisplayNameFormat()
     const [error, setError] = useState<string | null>(null)
     const [teachers, setTeachers] = useState<Staff[]>([])
     const [teacherQuery, setTeacherQuery] = useState('')
@@ -104,15 +107,26 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     } | null>(null)
     const [showAssignmentDetails, setShowAssignmentDetails] = useState(false)
     const [assignmentHandling, setAssignmentHandling] = useState<'unassign' | 'keep'>('unassign')
+    const getTeacherDisplayName = useCallback(
+      (teacher: Staff) =>
+        getStaffDisplayName(
+          {
+            first_name: teacher.first_name ?? '',
+            last_name: teacher.last_name ?? '',
+            display_name: teacher.display_name ?? null,
+          },
+          displayNameFormat
+        ),
+      [displayNameFormat]
+    )
     const filteredTeachers = useMemo(() => {
       const query = teacherQuery.trim().toLowerCase()
       if (!query) return teachers
       return teachers.filter(teacher => {
-        const label =
-          teacher.display_name || `${teacher.first_name ?? ''} ${teacher.last_name ?? ''}`.trim()
+        const label = getTeacherDisplayName(teacher)
         return label.toLowerCase().includes(query)
       })
-    }, [teacherQuery, teachers])
+    }, [teacherQuery, teachers, getTeacherDisplayName])
     const draftKey = timeOffRequestId ? `time-off:edit:${timeOffRequestId}` : 'time-off:new'
     const initialFormStateRef = useRef<{
       teacher_id: string
@@ -145,14 +159,14 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         .then(r => r.json())
         .then(data => {
           const sorted = (data as Staff[]).sort((a, b) => {
-            const nameA = a.display_name || `${a.first_name} ${a.last_name}`.trim() || ''
-            const nameB = b.display_name || `${b.first_name} ${b.last_name}`.trim() || ''
+            const nameA = getTeacherDisplayName(a) || ''
+            const nameB = getTeacherDisplayName(b) || ''
             return nameA.localeCompare(nameB)
           })
           setTeachers(sorted)
         })
         .catch(console.error)
-    }, [])
+    }, [getTeacherDisplayName])
 
     const {
       register,
@@ -413,8 +427,8 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       if (!teacherId) return ''
       const teacher = teachers.find(item => item.id === teacherId)
       if (!teacher) return ''
-      return teacher.display_name || `${teacher.first_name ?? ''} ${teacher.last_name ?? ''}`.trim()
-    }, [teacherId, teachers])
+      return getTeacherDisplayName(teacher)
+    }, [teacherId, teachers, getTeacherDisplayName])
     const allShiftsRecorded =
       conflictSummary.totalScheduled > 0 &&
       conflictSummary.conflictCount === conflictSummary.totalScheduled
@@ -613,9 +627,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
 
         // Get teacher name for toast
         const teacher = teachers.find(t => t.id === data.teacher_id)
-        const teacherName = teacher
-          ? teacher.display_name || `${teacher.first_name} ${teacher.last_name}`.trim()
-          : 'Teacher'
+        const teacherName = teacher ? getTeacherDisplayName(teacher) : 'Teacher'
 
         // Show warning if shifts were excluded
         if (responseData.warning) {
@@ -846,9 +858,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                     {isTeacherSearchOpen && (
                       <div className="border-t border-slate-100 max-h-40 overflow-y-auto px-2 py-1">
                         {filteredTeachers.map(teacher => {
-                          const label =
-                            teacher.display_name ||
-                            `${teacher.first_name ?? ''} ${teacher.last_name ?? ''}`.trim()
+                          const label = getTeacherDisplayName(teacher)
                           const isSelected = teacher.id === teacherId
                           return (
                             <button

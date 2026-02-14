@@ -1,9 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
+import type { DisplayNameFormat } from '@/lib/utils/staff-display-name'
 
 export interface ScheduleSettings {
   id: string
   school_id: string
   selected_day_ids: string[]
+  default_display_name_format: DisplayNameFormat
   created_at: string
   updated_at: string
 }
@@ -23,6 +25,16 @@ const normalizeSelectedDayIds = (value: unknown): string[] => {
     }
   }
   return []
+}
+
+const normalizeDisplayNameFormat = (value: unknown) => {
+  const allowedFormats = new Set([
+    'first_last_initial',
+    'first_initial_last',
+    'first_last',
+    'first_name',
+  ])
+  return typeof value === 'string' && allowedFormats.has(value) ? value : 'first_last_initial'
 }
 
 export async function getScheduleSettings(schoolId: string): Promise<ScheduleSettings | null> {
@@ -55,12 +67,14 @@ export async function getScheduleSettings(schoolId: string): Promise<ScheduleSet
   return {
     ...data,
     selected_day_ids: selectedDayIds,
+    default_display_name_format: normalizeDisplayNameFormat(data.default_display_name_format),
   } as ScheduleSettings
 }
 
 export async function updateScheduleSettings(
   schoolId: string,
-  selectedDayIds: string[]
+  selectedDayIds: string[],
+  defaultDisplayNameFormat?: string
 ): Promise<ScheduleSettings> {
   const supabase = await createClient()
 
@@ -73,6 +87,9 @@ export async function updateScheduleSettings(
       .from('schedule_settings')
       .update({
         selected_day_ids: selectedDayIds,
+        ...(defaultDisplayNameFormat
+          ? { default_display_name_format: defaultDisplayNameFormat }
+          : {}),
         updated_at: new Date().toISOString(),
       })
       .eq('id', existing.id)
@@ -83,6 +100,7 @@ export async function updateScheduleSettings(
     return {
       ...data,
       selected_day_ids: normalizeSelectedDayIds(data.selected_day_ids),
+      default_display_name_format: normalizeDisplayNameFormat(data.default_display_name_format),
     } as ScheduleSettings
   } else {
     // Create new
@@ -91,6 +109,9 @@ export async function updateScheduleSettings(
       .insert({
         school_id: schoolId,
         selected_day_ids: selectedDayIds,
+        ...(defaultDisplayNameFormat
+          ? { default_display_name_format: defaultDisplayNameFormat }
+          : {}),
       })
       .select()
       .single()
@@ -99,6 +120,7 @@ export async function updateScheduleSettings(
     return {
       ...data,
       selected_day_ids: normalizeSelectedDayIds(data.selected_day_ids),
+      default_display_name_format: normalizeDisplayNameFormat(data.default_display_name_format),
     } as ScheduleSettings
   }
 }

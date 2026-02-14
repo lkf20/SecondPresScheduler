@@ -14,6 +14,8 @@ import {
 } from '@/components/ui/select'
 import { X, CheckCircle2, AlertTriangle, XCircle, ChevronDown, Search } from 'lucide-react'
 import { Database } from '@/types/database'
+import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 type Staff = Database['public']['Tables']['staff']['Row']
 
@@ -47,6 +49,7 @@ export default function TeacherMultiSelect({
   )
   const dropdownRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const { format: displayNameFormat } = useDisplayNameFormat()
 
   useEffect(() => {
     fetch('/api/teachers')
@@ -64,13 +67,34 @@ export default function TeacherMultiSelect({
 
   const filteredTeachers = teachers
     .filter(teacher => {
-      const name = teacher.display_name || `${teacher.first_name} ${teacher.last_name}`
+      const name = getStaffDisplayName(
+        {
+          first_name: teacher.first_name ?? '',
+          last_name: teacher.last_name ?? '',
+          display_name: teacher.display_name ?? null,
+        },
+        displayNameFormat
+      )
       return name.toLowerCase().includes(searchQuery.toLowerCase())
     })
     .sort((a, b) => {
       // Sort by display_name first, then first_name if no display_name
-      const nameA = a.display_name || a.first_name || ''
-      const nameB = b.display_name || b.first_name || ''
+      const nameA = getStaffDisplayName(
+        {
+          first_name: a.first_name ?? '',
+          last_name: a.last_name ?? '',
+          display_name: a.display_name ?? null,
+        },
+        displayNameFormat
+      )
+      const nameB = getStaffDisplayName(
+        {
+          first_name: b.first_name ?? '',
+          last_name: b.last_name ?? '',
+          display_name: b.display_name ?? null,
+        },
+        displayNameFormat
+      )
       return nameA.localeCompare(nameB)
     })
 
@@ -90,7 +114,14 @@ export default function TeacherMultiSelect({
         const existing = selectedTeachers.find(st => (st.teacher_id || st.id) === t.id)
         return {
           id: '', // Will be set when saved
-          name: t.display_name || `${t.first_name} ${t.last_name}`,
+          name: getStaffDisplayName(
+            {
+              first_name: t.first_name ?? '',
+              last_name: t.last_name ?? '',
+              display_name: t.display_name ?? null,
+            },
+            displayNameFormat
+          ),
           teacher_id: t.id,
           is_floater: existing?.is_floater ?? false,
         }
@@ -115,18 +146,36 @@ export default function TeacherMultiSelect({
           .filter(t => selectedIds.has(t.id))
           .sort((a, b) => {
             // Sort by display_name first, then first_name if no display_name
-            const nameA = a.display_name || a.first_name || ''
-            const nameB = b.display_name || b.first_name || ''
+            const nameA = getStaffDisplayName(
+              {
+                first_name: a.first_name ?? '',
+                last_name: a.last_name ?? '',
+                display_name: a.display_name ?? null,
+              },
+              displayNameFormat
+            )
+            const nameB = getStaffDisplayName(
+              {
+                first_name: b.first_name ?? '',
+                last_name: b.last_name ?? '',
+                display_name: b.display_name ?? null,
+              },
+              displayNameFormat
+            )
             return nameA.localeCompare(nameB)
           })
       : [...selectedTeachers].sort((a, b) => a.name.localeCompare(b.name))
 
   const getTeacherLabel = (teacher: Staff | Teacher) => {
     if ('name' in teacher && teacher.name) return teacher.name
-    const displayName = (teacher as Staff).display_name
-    const firstName = (teacher as Staff).first_name || ''
-    const lastName = (teacher as Staff).last_name || ''
-    return displayName || `${firstName} ${lastName}`.trim()
+    return getStaffDisplayName(
+      {
+        first_name: (teacher as Staff).first_name ?? '',
+        last_name: (teacher as Staff).last_name ?? '',
+        display_name: (teacher as Staff).display_name ?? null,
+      },
+      displayNameFormat
+    )
   }
   const assignedCount = selectedTeachersList.length
 
@@ -222,8 +271,14 @@ export default function TeacherMultiSelect({
                 <div className="p-2 space-y-1">
                   {filteredTeachers.map(teacher => {
                     const isSelected = selectedIds.has(teacher.id)
-                    const name =
-                      teacher.display_name || `${teacher.first_name} ${teacher.last_name}`
+                    const name = getStaffDisplayName(
+                      {
+                        first_name: teacher.first_name ?? '',
+                        last_name: teacher.last_name ?? '',
+                        display_name: teacher.display_name ?? null,
+                      },
+                      displayNameFormat
+                    )
                     return (
                       <div
                         key={teacher.id}

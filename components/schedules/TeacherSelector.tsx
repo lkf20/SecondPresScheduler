@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { X } from 'lucide-react'
 import { Database } from '@/types/database'
+import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 type Staff = Database['public']['Tables']['staff']['Row']
 
@@ -33,6 +35,7 @@ export default function TeacherSelector({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     new Set(selectedTeachers.map(t => t.teacher_id || t.id))
   )
+  const { format: displayNameFormat } = useDisplayNameFormat()
 
   useEffect(() => {
     fetch('/api/teachers')
@@ -44,7 +47,14 @@ export default function TeacherSelector({
   }, [])
 
   const filteredTeachers = teachers.filter(teacher => {
-    const name = teacher.display_name || `${teacher.first_name} ${teacher.last_name}`
+    const name = getStaffDisplayName(
+      {
+        first_name: teacher.first_name ?? '',
+        last_name: teacher.last_name ?? '',
+        display_name: teacher.display_name ?? null,
+      },
+      displayNameFormat
+    )
     return name.toLowerCase().includes(searchQuery.toLowerCase())
   })
 
@@ -61,7 +71,14 @@ export default function TeacherSelector({
       .filter(t => newSelected.has(t.id))
       .map(t => ({
         id: '', // Will be set when saved
-        name: t.display_name || `${t.first_name} ${t.last_name}`,
+        name: getStaffDisplayName(
+          {
+            first_name: t.first_name ?? '',
+            last_name: t.last_name ?? '',
+            display_name: t.display_name ?? null,
+          },
+          displayNameFormat
+        ),
         teacher_id: t.id,
       }))
     onTeachersChange(selected)
@@ -83,7 +100,16 @@ export default function TeacherSelector({
               key={teacher.id}
               className="flex items-center gap-1 bg-primary/10 text-primary rounded px-2 py-1 text-sm"
             >
-              <span>{teacher.display_name || `${teacher.first_name} ${teacher.last_name}`}</span>
+              <span>
+                {getStaffDisplayName(
+                  {
+                    first_name: teacher.first_name ?? '',
+                    last_name: teacher.last_name ?? '',
+                    display_name: teacher.display_name ?? null,
+                  },
+                  displayNameFormat
+                )}
+              </span>
               <button
                 onClick={() => handleRemove(teacher.id)}
                 className="hover:bg-primary/20 rounded"
@@ -111,7 +137,14 @@ export default function TeacherSelector({
           <div className="p-2 space-y-1">
             {filteredTeachers.map(teacher => {
               const isSelected = selectedIds.has(teacher.id)
-              const name = teacher.display_name || `${teacher.first_name} ${teacher.last_name}`
+              const name = getStaffDisplayName(
+                {
+                  first_name: teacher.first_name ?? '',
+                  last_name: teacher.last_name ?? '',
+                  display_name: teacher.display_name ?? null,
+                },
+                displayNameFormat
+              )
               return (
                 <div
                   key={teacher.id}

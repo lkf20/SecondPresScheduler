@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 export interface Column<T> {
   key: string
@@ -32,6 +33,7 @@ interface DataTableProps<T> {
   onRowClick?: (row: T) => void
   className?: string
   emptyMessage?: string
+  paginate?: boolean
 }
 
 export default function DataTable<T extends Record<string, unknown>>({
@@ -42,6 +44,7 @@ export default function DataTable<T extends Record<string, unknown>>({
   onRowClick,
   className,
   emptyMessage = 'No data available',
+  paginate = true,
 }: DataTableProps<T>) {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -100,12 +103,10 @@ export default function DataTable<T extends Record<string, unknown>>({
       })
     : filteredData
 
-  // Paginate data
   const totalPages = Math.ceil(sortedData.length / itemsPerPage)
-  const paginatedData = sortedData.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  )
+  const paginatedData = paginate
+    ? sortedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+    : sortedData
 
   const handleSort = (key: string) => {
     const newDirection = sortKey === key && sortDirection === 'asc' ? 'desc' : 'asc'
@@ -223,7 +224,12 @@ export default function DataTable<T extends Record<string, unknown>>({
                     if (column.key === 'display_name' && !cellContent) {
                       const firstName = row['first_name'] || ''
                       const lastName = row['last_name'] || ''
-                      cellContent = `${firstName} ${lastName}`.trim() || '—'
+                      cellContent =
+                        getStaffDisplayName({
+                          first_name: String(firstName),
+                          last_name: String(lastName),
+                          display_name: null,
+                        }) || '—'
                     }
 
                     // Handle null/undefined values
@@ -250,7 +256,7 @@ export default function DataTable<T extends Record<string, unknown>>({
         </Table>
       </div>
 
-      {totalPages > 1 && (
+      {paginate && totalPages > 1 && (
         <div className="flex items-center justify-between">
           <div className="text-sm text-muted-foreground">
             Showing {(currentPage - 1) * itemsPerPage + 1} to{' '}
