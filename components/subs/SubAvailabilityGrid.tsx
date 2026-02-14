@@ -194,14 +194,8 @@ export default function SubAvailabilityGrid({
                         <Checkbox
                           checked={available}
                           onCheckedChange={() => handleToggle(day.id, slot.id)}
-                          className={cn(
-                            available && 'bg-primary',
-                            hasExcept && 'opacity-75 ring-2 ring-dashed ring-yellow-500'
-                          )}
+                          className={cn(available && 'bg-primary', hasExcept && 'opacity-75')}
                         />
-                        {hasExcept && exception && (
-                          <div className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-yellow-500" />
-                        )}
                       </div>
                     </div>
                   </TableCell>
