@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
@@ -34,6 +34,7 @@ interface SubAvailabilityExceptionsProps {
     time_slot_ids: string[]
   }) => Promise<void>
   onDeleteException: (headerId: string) => Promise<void>
+  defaultExpanded?: boolean
 }
 
 export default function SubAvailabilityExceptions({
@@ -41,9 +42,12 @@ export default function SubAvailabilityExceptions({
   timeSlots,
   onAddException,
   onDeleteException,
+  defaultExpanded = false,
 }: SubAvailabilityExceptionsProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded)
   const [isAdding, setIsAdding] = useState(false)
+  const [showPast, setShowPast] = useState(false)
+  const [isPastExpanded, setIsPastExpanded] = useState(false)
   const [newException, setNewException] = useState({
     start_date: '',
     end_date: '',
@@ -51,18 +55,24 @@ export default function SubAvailabilityExceptions({
     time_slot_ids: [] as string[],
   })
 
+  useEffect(() => {
+    if (!isExpanded && isAdding) {
+      setIsAdding(false)
+    }
+  }, [isExpanded, isAdding])
+
   const handleAddException = async () => {
-    if (
-      !newException.start_date ||
-      !newException.end_date ||
-      newException.time_slot_ids.length === 0
-    ) {
-      alert('Please fill in all fields and select at least one time slot')
+    if (!newException.start_date || newException.time_slot_ids.length === 0) {
+      alert('Please fill in all required fields and select at least one time slot')
       return
     }
 
     try {
-      await onAddException(newException)
+      const endDate = newException.end_date || newException.start_date
+      await onAddException({
+        ...newException,
+        end_date: endDate,
+      })
       setNewException({
         start_date: '',
         end_date: '',
@@ -88,6 +98,15 @@ export default function SubAvailabilityExceptions({
     return start === end ? startDate : `${startDate} - ${endDate}`
   }
 
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const isPastException = (header: ExceptionHeader) => {
+    const endDate = new Date(`${header.end_date}T00:00:00`)
+    return endDate < today
+  }
+  const upcomingHeaders = exceptionHeaders.filter(header => !isPastException(header))
+  const pastHeaders = exceptionHeaders.filter(isPastException)
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -99,18 +118,40 @@ export default function SubAvailabilityExceptions({
         >
           {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           <span>One-off Exceptions</span>
-          {exceptionHeaders.length > 0 && (
+          {upcomingHeaders.length > 0 && (
             <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">
-              {exceptionHeaders.length}
+              {upcomingHeaders.length}
             </span>
           )}
         </Button>
-        {isExpanded && (
-          <Button type="button" size="sm" onClick={() => setIsAdding(true)} disabled={isAdding}>
+        <div className="flex items-center gap-4">
+          {isExpanded && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="show-past-exceptions"
+                checked={showPast}
+                onCheckedChange={checked => setShowPast(checked === true)}
+              />
+              <Label htmlFor="show-past-exceptions" className="font-normal cursor-pointer">
+                Show past exceptions
+              </Label>
+            </div>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => {
+              if (!isExpanded) {
+                setIsExpanded(true)
+              }
+              setIsAdding(true)
+            }}
+            disabled={isAdding}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Add Exception
           </Button>
-        )}
+        </div>
       </div>
 
       {isExpanded && (
@@ -123,11 +164,22 @@ export default function SubAvailabilityExceptions({
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="start_date">Start Date</Label>
+                    <Label htmlFor="start_date">
+                      Start Date <span className="text-destructive">*</span>
+                    </Label>
                     <DatePickerInput
                       id="start_date"
                       value={newException.start_date}
-                      onChange={value => setNewException({ ...newException, start_date: value })}
+                      onChange={value => {
+                        setNewException({ ...newException, start_date: value })
+                        if (typeof window !== 'undefined') {
+                          window.requestAnimationFrame(() => {
+                            const endDateInput = document.getElementById('end_date')
+                            endDateInput?.focus()
+                            endDateInput?.click()
+                          })
+                        }
+                      }}
                       placeholder="Select start date"
                       className="mt-1"
                     />
@@ -138,6 +190,7 @@ export default function SubAvailabilityExceptions({
                       id="end_date"
                       value={newException.end_date}
                       onChange={value => setNewException({ ...newException, end_date: value })}
+                      openToDate={newException.start_date}
                       placeholder="Select end date"
                       allowClear
                       closeOnSelect
@@ -147,7 +200,9 @@ export default function SubAvailabilityExceptions({
                 </div>
 
                 <div>
-                  <Label>Type</Label>
+                  <Label>
+                    Type <span className="text-destructive">*</span>
+                  </Label>
                   <RadioGroup
                     value={newException.available ? 'available' : 'unavailable'}
                     onValueChange={value =>
@@ -171,7 +226,9 @@ export default function SubAvailabilityExceptions({
                 </div>
 
                 <div>
-                  <Label>Affected Shifts</Label>
+                  <Label>
+                    Affected Shifts <span className="text-destructive">*</span>
+                  </Label>
                   <div className="flex gap-4 mt-2">
                     {timeSlots.map(slot => (
                       <div key={slot.id} className="flex items-center space-x-2">
@@ -218,7 +275,7 @@ export default function SubAvailabilityExceptions({
             </Card>
           )}
 
-          {exceptionHeaders.map(header => (
+          {upcomingHeaders.map(header => (
             <Card key={header.id}>
               <CardContent className="pt-6">
                 <div className="flex items-start justify-between">
@@ -264,10 +321,84 @@ export default function SubAvailabilityExceptions({
             </Card>
           ))}
 
-          {exceptionHeaders.length === 0 && !isAdding && (
+          {upcomingHeaders.length === 0 && pastHeaders.length === 0 && !isAdding && (
             <p className="text-sm text-muted-foreground text-center py-4">
               No exceptions added yet. Click &quot;Add Exception&quot; to create one.
             </p>
+          )}
+
+          {showPast && pastHeaders.length > 0 && (
+            <div className="pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setIsPastExpanded(!isPastExpanded)}
+                className="flex items-center gap-2"
+              >
+                {isPastExpanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+                <span>Past</span>
+                <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">
+                  {pastHeaders.length}
+                </span>
+              </Button>
+
+              {isPastExpanded && (
+                <div className="space-y-3 mt-2">
+                  {pastHeaders.map(header => (
+                    <Card key={header.id}>
+                      <CardContent className="pt-6">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">
+                                {formatDateRange(header.start_date, header.end_date)}
+                              </span>
+                              <span
+                                className={`text-xs px-2 py-0.5 rounded ${
+                                  header.available
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-red-100 text-red-800'
+                                }`}
+                              >
+                                {header.available ? 'Available' : 'Unavailable'}
+                              </span>
+                            </div>
+                            {header.time_slot_ids && header.time_slot_ids.length > 0 && (
+                              <div className="flex gap-1 flex-wrap">
+                                {header.time_slot_ids.map(slotId => {
+                                  const slot = timeSlots.find(s => s.id === slotId)
+                                  return (
+                                    <span
+                                      key={slotId}
+                                      className="text-xs bg-muted px-2 py-0.5 rounded"
+                                    >
+                                      {slot?.code || slotId}
+                                    </span>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onDeleteException(header.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

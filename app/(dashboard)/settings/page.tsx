@@ -1,20 +1,14 @@
 import Link from 'next/link'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { BookOpen, Building2, Clock, Users, UserCheck, CalendarCheck } from 'lucide-react'
+import { BookOpen, Building2, Clock, Users, CalendarCheck } from 'lucide-react'
 import { getHeaderClasses } from '@/lib/utils/colors'
 
 const settingsCategories = [
   {
-    name: 'Teachers',
-    description: 'Manage teacher profiles and assignments',
-    href: '/teachers',
+    name: 'Staff',
+    description: 'Manage staff profiles, roles, and availability',
+    href: '/staff',
     icon: Users,
-  },
-  {
-    name: 'Subs',
-    description: 'Manage substitute availability and preferences',
-    href: '/subs',
-    icon: UserCheck,
   },
   {
     name: 'Class Groups',

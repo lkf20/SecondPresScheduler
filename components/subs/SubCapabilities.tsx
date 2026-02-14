@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 interface SubCapabilitiesProps {
   subId: string
@@ -67,11 +66,9 @@ export default function SubCapabilities({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Capabilities</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className="space-y-4">
+      <h3 className="text-base font-semibold text-slate-900">Capabilities</h3>
+      <div className="rounded-lg border bg-white p-4 space-y-4">
         <div className="space-y-3">
           <div className="flex items-center space-x-2">
             <Checkbox
@@ -112,20 +109,20 @@ export default function SubCapabilities({
             </Label>
           </div>
         </div>
+      </div>
 
-        <div>
-          <Label htmlFor="capabilities_notes" className="text-sm">
-            Notes (optional)
-          </Label>
-          <Textarea
-            id="capabilities_notes"
-            value={localCapabilities.capabilities_notes}
-            onChange={e => handleNotesChange(e.target.value)}
-            className="mt-2 min-h-[80px]"
-            placeholder="Add any additional notes about capabilities..."
-          />
-        </div>
-      </CardContent>
-    </Card>
+      <div>
+        <Label htmlFor="capabilities_notes" className="text-sm">
+          Notes (optional)
+        </Label>
+        <Textarea
+          id="capabilities_notes"
+          value={localCapabilities.capabilities_notes}
+          onChange={e => handleNotesChange(e.target.value)}
+          className="mt-2 min-h-[80px]"
+          placeholder="Any additional notes about preferences or qualifications"
+        />
+      </div>
+    </div>
   )
 }

@@ -24,6 +24,15 @@ export function invalidateWeeklySchedule(queryClient: QueryClient, schoolId: str
 }
 
 /**
+ * Invalidate all daily schedule queries for a school
+ */
+export function invalidateDailySchedule(queryClient: QueryClient, schoolId: string) {
+  return queryClient.invalidateQueries({
+    queryKey: ['dailySchedule', schoolId],
+  })
+}
+
+/**
  * Invalidate time off requests queries for a school
  */
 export function invalidateTimeOffRequests(queryClient: QueryClient, schoolId: string) {

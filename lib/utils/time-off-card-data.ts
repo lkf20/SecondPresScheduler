@@ -1,5 +1,6 @@
 import { parseLocalDate } from './date'
 import { MONTH_NAMES } from './date-format'
+import { getStaffDisplayName, type DisplayNameFormat } from './staff-display-name'
 
 /**
  * Shared utility for transforming time off request data into a consistent format
@@ -106,6 +107,10 @@ export interface TransformOptions {
     dayOfWeekId: string | null,
     timeSlotId: string
   ) => string | null
+  /**
+   * Display name format for staff names
+   */
+  displayNameFormat?: DisplayNameFormat
 }
 
 /**
@@ -127,6 +132,7 @@ export function transformTimeOffCardData(
     },
     getClassroomForShift,
     getClassNameForShift,
+    displayNameFormat,
   } = options
 
   // Build assignment map: key = `${date}|${time_slot_id}` -> { hasFull, hasPartial, sub }
@@ -154,10 +160,14 @@ export function transformTimeOffCardData(
     // Get sub name if available
     if (assignment.sub) {
       existing.subName =
-        assignment.sub.display_name ||
-        (assignment.sub.first_name && assignment.sub.last_name
-          ? `${assignment.sub.first_name} ${assignment.sub.last_name}`
-          : null)
+        getStaffDisplayName(
+          {
+            first_name: assignment.sub.first_name ?? '',
+            last_name: assignment.sub.last_name ?? '',
+            display_name: assignment.sub.display_name ?? null,
+          },
+          displayNameFormat
+        ) || null
     }
 
     assignmentMap.set(key, existing)
@@ -235,10 +245,17 @@ export function transformTimeOffCardData(
 
   // Get teacher name
   const teacherName =
-    request.teacher?.display_name ||
-    (request.teacher?.first_name && request.teacher?.last_name
-      ? `${request.teacher.first_name} ${request.teacher.last_name}`
-      : request.teacher?.first_name || 'Unknown Teacher')
+    getStaffDisplayName(
+      {
+        first_name: request.teacher?.first_name ?? '',
+        last_name: request.teacher?.last_name ?? '',
+        display_name: request.teacher?.display_name ?? null,
+      },
+      displayNameFormat
+    ) ||
+    request.teacher?.first_name ||
+    request.teacher?.last_name ||
+    'Unknown Teacher'
 
   return {
     id: request.id,

@@ -6,6 +6,8 @@ import { useSubRecommendations } from '@/lib/hooks/use-sub-recommendations'
 import type { RecommendedCombination } from '@/lib/utils/sub-combination'
 import type { SubFinderAssignmentStatus } from '@/lib/sub-finder/types'
 import type { SubRecommendationsQueryParams } from '@/lib/utils/query-keys'
+import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 export type Mode = 'existing' | 'manual'
 
 export interface Absence {
@@ -142,6 +144,7 @@ export function useSubFinderData({
   const [includeFlexibleStaff, setIncludeFlexibleStaff] = useState(true)
   const [includeOnlyRecommended, setIncludeOnlyRecommended] = useState(false)
   const [teachers, setTeachers] = useState<Teacher[]>([])
+  const { format: displayNameFormat } = useDisplayNameFormat()
 
   // Use React Query for absences
   const {
@@ -246,14 +249,19 @@ export function useSubFinderData({
         | undefined,
       fallback = 'Unknown'
     ) => {
-      const name = (
-        person?.display_name ||
-        person?.name ||
-        `${person?.first_name ?? ''} ${person?.last_name ?? ''}`
-      ).trim()
+      if (!person) return fallback
+      if (person.name) return person.name.trim() || fallback
+      const name = getStaffDisplayName(
+        {
+          first_name: person.first_name ?? '',
+          last_name: person.last_name ?? '',
+          display_name: person.display_name ?? null,
+        },
+        displayNameFormat
+      )
       return name || fallback
     },
-    []
+    [displayNameFormat]
   )
 
   const applySubResults = useCallback(

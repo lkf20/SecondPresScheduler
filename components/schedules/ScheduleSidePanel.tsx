@@ -39,6 +39,8 @@ import {
   getPanelHeaderBackgroundClasses,
   panelBackgrounds,
 } from '@/lib/utils/colors'
+import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 interface Teacher {
   id: string
@@ -135,6 +137,7 @@ export default function ScheduleSidePanel({
   const [notes, setNotes] = useState<string | null>(null)
   const [selectedTeachers, setSelectedTeachers] = useState<Teacher[]>([])
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(false)
+  const { format: displayNameFormat } = useDisplayNameFormat()
   const [allowedClassGroupIds, setAllowedClassGroupIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -606,9 +609,14 @@ export default function ScheduleSidePanel({
         const teachers: Teacher[] = filtered.map(schedule => ({
           id: schedule.id,
           name:
-            schedule.teacher?.display_name ||
-            `${schedule.teacher?.first_name || ''} ${schedule.teacher?.last_name || ''}`.trim() ||
-            'Unknown',
+            getStaffDisplayName(
+              {
+                first_name: schedule.teacher?.first_name || '',
+                last_name: schedule.teacher?.last_name || '',
+                display_name: schedule.teacher?.display_name ?? null,
+              },
+              displayNameFormat
+            ) || 'Unknown',
           teacher_id: schedule.teacher_id,
           is_floater: schedule.is_floater ?? false,
         }))
@@ -661,7 +669,7 @@ export default function ScheduleSidePanel({
         setIsLoadingTeachers(false)
         setSelectedTeachers([])
       })
-  }, [isOpen, classroomId, dayId, timeSlotId, classGroupIds, isLoadingTeachers])
+  }, [isOpen, classroomId, dayId, timeSlotId, classGroupIds, isLoadingTeachers, displayNameFormat])
 
   // Determine if cell has data (current state)
   const hasData = !!(classGroupIds.length > 0 || enrollment !== null || selectedTeachers.length > 0)

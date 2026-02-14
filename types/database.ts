@@ -615,6 +615,7 @@ export type Database = {
       schedule_settings: {
         Row: {
           created_at: string | null
+          default_display_name_format: string
           id: string
           school_id: string
           selected_day_ids: Json
@@ -622,6 +623,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          default_display_name_format?: string
           id?: string
           school_id: string
           selected_day_ids?: Json
@@ -629,6 +631,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          default_display_name_format?: string
           id?: string
           school_id?: string
           selected_day_ids?: Json

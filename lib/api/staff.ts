@@ -1,0 +1,134 @@
+import { createClient } from '@/lib/supabase/server'
+import { Database } from '@/types/database'
+import { setStaffRoleAssignments } from '@/lib/api/teachers'
+
+type Staff = Database['public']['Tables']['staff']['Row']
+type StaffRoleType = Database['public']['Tables']['staff_role_types']['Row']
+type StaffRoleAssignment = Database['public']['Tables']['staff_role_type_assignments']['Row']
+
+export type StaffWithRole = Staff & {
+  staff_role_type_assignments?: Array<
+    StaffRoleAssignment & { staff_role_types?: StaffRoleType | null }
+  >
+}
+
+export async function getStaff() {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('staff')
+    .select(
+      `
+      *,
+      staff_role_type_assignments (
+        role_type_id,
+        staff_role_types (*)
+      )
+    `
+    )
+    .order('last_name', { ascending: true })
+
+  if (error) throw error
+  return data as StaffWithRole[]
+}
+
+export async function getStaffById(id: string) {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('staff')
+    .select(
+      `
+      *,
+      staff_role_type_assignments (
+        role_type_id,
+        staff_role_types (*)
+      )
+    `
+    )
+    .eq('id', id)
+    .single()
+
+  if (error) throw error
+  const role_type_ids =
+    data?.staff_role_type_assignments?.map(
+      (assignment: { role_type_id: string }) => assignment.role_type_id
+    ) || []
+  const role_type_codes =
+    data?.staff_role_type_assignments
+      ?.map(
+        (assignment: { staff_role_types?: StaffRoleType | null }) =>
+          assignment.staff_role_types?.code
+      )
+      .filter(Boolean) || []
+  return { ...(data as Staff), role_type_ids, role_type_codes }
+}
+
+export async function createStaff(staff: {
+  id?: string
+  first_name: string
+  last_name: string
+  display_name?: string
+  phone?: string
+  email?: string
+  role_type_ids?: string[]
+  is_teacher: boolean
+  is_sub?: boolean
+  active?: boolean
+  school_id?: string
+}) {
+  const supabase = await createClient()
+
+  const { id, role_type_ids, ...staffData } = staff
+  const staffId = id && id.trim() !== '' ? id : crypto.randomUUID()
+
+  const insertData: Partial<Staff> & { id: string } = {
+    ...staffData,
+    id: staffId,
+    email: staff.email && staff.email.trim() !== '' ? staff.email : undefined,
+    is_sub: staff.is_sub ?? false,
+    is_teacher: staff.is_teacher,
+    school_id: staff.school_id || '00000000-0000-0000-0000-000000000001',
+  }
+
+  const { data, error } = await supabase.from('staff').insert(insertData).select().single()
+
+  if (error) throw error
+
+  const roleTypeIds = role_type_ids && role_type_ids.length > 0 ? role_type_ids : []
+
+  if (roleTypeIds.length > 0) {
+    await setStaffRoleAssignments(supabase, data.id, roleTypeIds, insertData.school_id!)
+  }
+
+  return data as Staff
+}
+
+export async function updateStaff(
+  id: string,
+  updates: Partial<Staff> & { role_type_ids?: string[] }
+) {
+  const supabase = await createClient()
+  const { role_type_ids, ...staffUpdates } = updates
+  const { data, error } = await supabase
+    .from('staff')
+    .update(staffUpdates)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+
+  const roleTypeIds = role_type_ids && role_type_ids.length > 0 ? role_type_ids : []
+
+  if (role_type_ids) {
+    await setStaffRoleAssignments(supabase, id, roleTypeIds, data.school_id!)
+  }
+
+  return data as Staff
+}
+
+export async function deleteStaff(id: string) {
+  const supabase = await createClient()
+  const { error } = await supabase.from('staff').delete().eq('id', id)
+
+  if (error) throw error
+}
