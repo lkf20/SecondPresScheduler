@@ -9,8 +9,8 @@ import {
   FileText,
   Settings,
   CalendarOff,
-  ChevronLeft,
-  ChevronRight,
+  Pin,
+  PinOff,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -29,51 +29,63 @@ export default function Sidebar() {
   const pathname = usePathname()
   const { theme } = useTheme()
   const isAccented = theme === 'accented'
-  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isPinned, setIsPinned] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
+  const [suppressHover, setSuppressHover] = useState(false)
+  const isExpanded = isPinned || isHovered
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const stored = window.sessionStorage.getItem('sidebarCollapsed')
+    const stored = window.sessionStorage.getItem('sidebarPinned')
     if (stored !== null) {
-      setIsCollapsed(stored === 'true')
+      setIsPinned(stored === 'true')
     }
   }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const width = isCollapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-width)'
-    document.documentElement.style.setProperty('--sidebar-current-width', width)
-    window.sessionStorage.setItem('sidebarCollapsed', String(isCollapsed))
-  }, [isCollapsed])
+    const layoutWidth = isPinned ? 'var(--sidebar-width)' : 'var(--sidebar-collapsed-width)'
+    const visualWidth = isExpanded ? 'var(--sidebar-width)' : 'var(--sidebar-collapsed-width)'
+    document.documentElement.style.setProperty('--sidebar-layout-width', layoutWidth)
+    document.documentElement.style.setProperty('--sidebar-visual-width', visualWidth)
+    window.sessionStorage.setItem('sidebarPinned', String(isPinned))
+  }, [isPinned, isExpanded])
 
   return (
     <aside
       className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:pt-16 md:z-40"
-      style={{ width: 'var(--sidebar-current-width)' }}
+      style={{ width: 'var(--sidebar-visual-width)' }}
+      onMouseEnter={() => {
+        if (suppressHover) return
+        setIsHovered(true)
+      }}
+      onMouseLeave={() => {
+        setIsHovered(false)
+        setSuppressHover(false)
+      }}
     >
       <div
         className={cn(
-          'flex-1 flex flex-col min-h-0 border-r transition-colors',
-          isAccented ? 'bg-sidebar-bg border-sidebar-hover' : 'bg-background border-border'
+          'flex-1 flex flex-col min-h-0 border-r transition-[width,colors,box-shadow] duration-200',
+          isAccented ? 'bg-sidebar-bg border-sidebar-hover' : 'bg-background border-border',
+          !isPinned && isExpanded && 'shadow-[6px_0_18px_rgba(15,23,42,0.12)]'
         )}
       >
         <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
-          <div className={cn('px-2', isCollapsed ? 'flex justify-center' : 'flex justify-end')}>
-            <button
-              type="button"
-              aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              className={cn(
-                'mb-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
-                isAccented && 'hover:bg-sidebar-hover hover:text-sidebar-foreground'
-              )}
-              onClick={() => setIsCollapsed(prev => !prev)}
-            >
-              {isCollapsed ? (
-                <ChevronRight className="h-4 w-4" />
-              ) : (
-                <ChevronLeft className="h-4 w-4" />
-              )}
-            </button>
+          <div className={cn('px-2', 'flex justify-start min-h-[44px]')}>
+            {isExpanded && (
+              <button
+                type="button"
+                aria-label={isPinned ? 'Unpin sidebar' : 'Pin sidebar'}
+                className={cn(
+                  'mb-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
+                  isAccented && 'hover:bg-sidebar-hover hover:text-sidebar-foreground'
+                )}
+                onClick={() => setIsPinned(prev => !prev)}
+              >
+                {isPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+              </button>
+            )}
           </div>
           <nav className="flex-1 px-2 space-y-1">
             {navigation.map(item => {
@@ -83,9 +95,15 @@ export default function Sidebar() {
                   key={item.name}
                   href={item.href}
                   prefetch={true}
+                  onClick={() => {
+                    if (!isPinned) {
+                      setIsHovered(false)
+                      setSuppressHover(true)
+                    }
+                  }}
                   className={cn(
                     'group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                    isCollapsed && 'justify-center px-2',
+                    !isExpanded && 'justify-center px-2',
                     isAccented
                       ? isActive
                         ? 'bg-sidebar-active text-sidebar-active-foreground'
@@ -98,7 +116,7 @@ export default function Sidebar() {
                   <item.icon
                     className={cn(
                       'h-5 w-5 flex-shrink-0',
-                      !isCollapsed && 'mr-3',
+                      isExpanded && 'mr-3',
                       isAccented
                         ? isActive
                           ? 'text-sidebar-active-foreground'
@@ -108,7 +126,7 @@ export default function Sidebar() {
                           : 'text-muted-foreground'
                     )}
                   />
-                  {!isCollapsed && item.name}
+                  {isExpanded && item.name}
                 </Link>
               )
             })}

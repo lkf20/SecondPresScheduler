@@ -4,6 +4,7 @@ import { getUserSchoolId } from '@/lib/utils/auth'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { parseLocalDate } from '@/lib/utils/date'
 import { MONTH_NAMES } from '@/lib/utils/date-format'
+import { getStaffDisplayName, type DisplayNameFormat } from '@/lib/utils/staff-display-name'
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,6 +32,24 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createClient()
+
+    const defaultDisplayNameFormat: DisplayNameFormat = 'first_last_initial'
+    let displayNameFormat: DisplayNameFormat = defaultDisplayNameFormat
+
+    try {
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('schedule_settings')
+        .select('default_display_name_format')
+        .eq('school_id', schoolId)
+        .maybeSingle()
+
+      if (!settingsError && settingsData?.default_display_name_format) {
+        displayNameFormat = settingsData.default_display_name_format as DisplayNameFormat
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      console.warn('Error fetching schedule settings:', errorMessage)
+    }
 
     // Get coverage requests in date range
     const { data: coverageRequests, error: coverageRequestsError } = await supabase
@@ -336,11 +355,9 @@ export async function GET(request: NextRequest) {
           }
         }
         const teacher = request.teacher as any
-        const teacherName =
-          teacher?.display_name ||
-          (teacher?.first_name && teacher?.last_name
-            ? `${teacher.first_name} ${teacher.last_name}`
-            : 'Unknown Teacher')
+        const teacherName = teacher
+          ? getStaffDisplayName(teacher, displayNameFormat) || 'Unknown Teacher'
+          : 'Unknown Teacher'
 
         // Get reason and notes from time_off_request if it exists
         const timeOffRequest =
@@ -583,15 +600,13 @@ export async function GET(request: NextRequest) {
       const dayOfWeek = sa.day_of_week as any
       const timeSlot = sa.time_slot as any
 
-      const subName =
-        sub?.display_name ||
-        (sub?.first_name && sub?.last_name ? `${sub.first_name} ${sub.last_name}` : 'Unknown Sub')
+      const subName = sub
+        ? getStaffDisplayName(sub, displayNameFormat) || 'Unknown Sub'
+        : 'Unknown Sub'
 
-      const teacherName =
-        teacher?.display_name ||
-        (teacher?.first_name && teacher?.last_name
-          ? `${teacher.first_name} ${teacher.last_name}`
-          : 'Unknown Teacher')
+      const teacherName = teacher
+        ? getStaffDisplayName(teacher, displayNameFormat) || 'Unknown Teacher'
+        : 'Unknown Teacher'
 
       return {
         id: sa.id,
