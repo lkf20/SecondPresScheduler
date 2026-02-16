@@ -47,14 +47,15 @@ function formatDescription(row: ActivityRow) {
   const details = row.details || {}
 
   if (row.category === 'time_off') {
-    if (row.action === 'create') return 'Created a time off request'
-    if (row.action === 'cancel') return 'Cancelled a time off request'
+    const teacherName = details.teacher_name ? ` for ${details.teacher_name}` : ''
+    if (row.action === 'create') return `Created time off request${teacherName}`
+    if (row.action === 'cancel') return `Cancelled time off request${teacherName}`
     if (row.action === 'status_change') {
       const before = details.before?.status ? `from ${details.before.status} ` : ''
       const after = details.after?.status ? `to ${details.after.status}` : ''
-      return `Changed time off status ${before}${after}`.trim()
+      return `Updated time off request${teacherName} ${before}${after}`.trim()
     }
-    return 'Updated a time off request'
+    return `Updated time off request${teacherName}`.trim()
   }
 
   if (row.category === 'sub_assignment') {
@@ -102,12 +103,14 @@ export function ActivityFeed({ className }: { className?: string }) {
       const response = await fetch(`/api/activity?${params.toString()}`)
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}))
+        const detailText =
+          payload?.details?.message || payload?.details?.hint || payload?.details?.code || null
         const message =
           payload?.error ||
           (response.status === 403
             ? 'You do not have access to Activity Log for this school.'
             : `Failed to fetch activity (${response.status})`)
-        throw new Error(message)
+        throw new Error(detailText ? `${message} (${detailText})` : message)
       }
 
       const payload = await response.json()
@@ -233,7 +236,6 @@ export function ActivityFeed({ className }: { className?: string }) {
                     <span className="rounded bg-slate-100 px-1.5 py-0.5 uppercase">
                       {row.category}
                     </span>
-                    <span>{row.entity_type}</span>
                     {viewHref ? (
                       <Link href={viewHref} className="ml-auto text-slate-700 underline">
                         View

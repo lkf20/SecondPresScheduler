@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 
+const isDev = process.env.NODE_ENV !== 'production'
+
 type CursorPayload = {
   createdAt: string
   id: string
@@ -81,7 +83,24 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('[activity] query failed', error)
-      return NextResponse.json({ error: 'Failed to fetch activity feed' }, { status: 500 })
+      const isPermissionError = error.code === '42501'
+      return NextResponse.json(
+        {
+          error: isPermissionError
+            ? 'You do not have access to the Activity Log.'
+            : 'Failed to fetch activity feed',
+          ...(isDev
+            ? {
+                details: {
+                  code: error.code,
+                  message: error.message,
+                  hint: error.hint,
+                },
+              }
+            : {}),
+        },
+        { status: isPermissionError ? 403 : 500 }
+      )
     }
 
     const records = (rows || []) as any[]
@@ -181,6 +200,12 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('[activity] unexpected error', error)
-    return NextResponse.json({ error: 'Failed to fetch activity feed' }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: 'Failed to fetch activity feed',
+        ...(isDev && error instanceof Error ? { details: { message: error.message } } : {}),
+      },
+      { status: 500 }
+    )
   }
 }

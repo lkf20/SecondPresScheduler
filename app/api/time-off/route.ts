@@ -10,6 +10,8 @@ import { getUserSchoolId } from '@/lib/utils/auth'
 import { formatDateISOInTimeZone } from '@/lib/utils/date'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
 import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
+import { createClient } from '@/lib/supabase/server'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 // Helper function to format date as "Mon Jan 20"
 function formatExcludedDate(dateStr: string, timeZone: string): string {
@@ -245,6 +247,14 @@ export async function POST(request: NextRequest) {
     revalidatePath('/reports')
 
     const { actorUserId, actorDisplayName } = await getAuditActorContext()
+    const supabase = await createClient()
+    const { data: teacher } = await supabase
+      .from('staff')
+      .select('first_name, last_name, display_name')
+      .eq('id', requestData.teacher_id)
+      .maybeSingle()
+    const teacherName = teacher ? getStaffDisplayName(teacher) : null
+
     await logAuditEvent({
       schoolId,
       actorUserId,
@@ -256,6 +266,7 @@ export async function POST(request: NextRequest) {
       details: {
         changed_fields: ['status', 'start_date', 'end_date', 'teacher_id', 'shift_selection_mode'],
         teacher_id: requestData.teacher_id,
+        teacher_name: teacherName,
         status,
         start_date: requestData.start_date,
         end_date: effectiveEndDate,

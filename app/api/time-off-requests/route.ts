@@ -5,6 +5,8 @@ import { getTimeOffShifts, type TimeOffShiftWithDetails } from '@/lib/api/time-o
 import { transformTimeOffCardData, type TimeOffCardData } from '@/lib/utils/time-off-card-data'
 import { createErrorResponse } from '@/lib/utils/errors'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * Unified API endpoint for time off requests
  *
