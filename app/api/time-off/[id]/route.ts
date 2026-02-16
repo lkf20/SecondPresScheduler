@@ -14,9 +14,9 @@ import {
   getTeacherTimeOffShifts,
 } from '@/lib/api/time-off-shifts'
 import { getUserSchoolId } from '@/lib/utils/auth'
-import { parseLocalDate } from '@/lib/utils/date'
-import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
+import { formatDateISOInTimeZone } from '@/lib/utils/date'
 import { createClient } from '@/lib/supabase/server'
+import { getScheduleSettings } from '@/lib/api/schedule-settings'
 import {
   canTransitionTimeOffStatus,
   formatTransitionError,
@@ -25,17 +25,14 @@ import {
 import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 
 // Helper function to format date as "Mon Jan 20"
-function formatExcludedDate(dateStr: string): string {
+function formatExcludedDate(dateStr: string, timeZone: string): string {
   if (!dateStr) return ''
   try {
-    const date = parseLocalDate(dateStr)
-    if (isNaN(date.getTime())) return dateStr // Return original if invalid
-    const dayNames = DAY_NAMES
-    const monthNames = MONTH_NAMES
-    const dayAbbr = dayNames[date.getDay()]
-    const monthAbbr = monthNames[date.getMonth()]
-    const day = date.getDate()
-    return `${dayAbbr} ${monthAbbr} ${day}`
+    return formatDateISOInTimeZone(dateStr, timeZone, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    })
   } catch (error) {
     console.error('Error formatting date:', dateStr, error)
     return dateStr // Return original if formatting fails
@@ -60,6 +57,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const body = await request.json()
     const { shifts, ...requestData } = body
     const existingRequest = await getTimeOffRequestById(id)
+    const sessionSchoolId = await getUserSchoolId()
+    const settingsSchoolId = existingRequest.school_id || sessionSchoolId
+    const scheduleSettings = settingsSchoolId ? await getScheduleSettings(settingsSchoolId) : null
+    const timeZone = scheduleSettings?.time_zone || 'UTC'
     const nextStatus = (requestData.status || existingRequest.status || 'active') as TimeOffStatus
 
     if (
@@ -93,7 +94,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const scheduledShifts = await getTeacherScheduledShifts(
         requestData.teacher_id,
         requestData.start_date,
-        effectiveEndDate
+        effectiveEndDate,
+        timeZone
       )
       requestedShifts = scheduledShifts.map(shift => ({
         date: shift.date,
@@ -115,7 +117,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     let warning: string | null = null
 
     // Update the time off request
-    const sessionSchoolId = await getUserSchoolId()
     const updatedRequest = await updateTimeOffRequest(id, {
       ...requestData,
       status,
@@ -208,7 +209,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           const scheduledShifts = await getTeacherScheduledShifts(
             updatedRequest.teacher_id,
             updatedRequest.start_date,
-            effectiveEndDate
+            effectiveEndDate,
+            timeZone
           )
 
           const excluded = scheduledShifts.filter(shift => {
@@ -244,7 +246,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             )
               .map(date => {
                 try {
-                  return formatExcludedDate(date)
+                  return formatExcludedDate(date, timeZone)
                 } catch (err) {
                   console.error('Error formatting excluded date:', date, err)
                   return null
@@ -273,7 +275,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           const scheduledShifts = await getTeacherScheduledShifts(
             updatedRequest.teacher_id,
             updatedRequest.start_date,
-            effectiveEndDate
+            effectiveEndDate,
+            timeZone
           )
           shiftsToCreate = scheduledShifts.map(shift => ({
             date: shift.date,

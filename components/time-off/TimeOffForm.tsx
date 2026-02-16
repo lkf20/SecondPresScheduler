@@ -55,6 +55,11 @@ interface TimeOffFormProps {
   onHasUnsavedChanges?: (hasChanges: boolean) => void
   clearDraftOnMount?: boolean // Force clear draft when component mounts
   timeOffRequestId?: string | null // ID of time off request to edit
+  initialStartDate?: string
+  initialEndDate?: string
+  initialTeacherId?: string
+  initialSelectedShifts?: Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
+  hidePageHeader?: boolean
 }
 
 const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
@@ -65,6 +70,11 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       onHasUnsavedChanges,
       clearDraftOnMount = false,
       timeOffRequestId = null,
+      initialStartDate,
+      initialEndDate,
+      initialTeacherId,
+      initialSelectedShifts,
+      hidePageHeader = false,
     },
     ref
   ) => {
@@ -184,6 +194,23 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         shift_selection_mode: 'all_scheduled',
       },
     })
+
+    useEffect(() => {
+      if (timeOffRequestId) return
+      if (initialStartDate) {
+        setValue('start_date', initialStartDate, { shouldValidate: true })
+      }
+      if (initialEndDate) {
+        setValue('end_date', initialEndDate, { shouldValidate: true })
+      }
+      if (initialTeacherId) {
+        setValue('teacher_id', initialTeacherId, { shouldValidate: true })
+      }
+      if (initialSelectedShifts && initialSelectedShifts.length > 0) {
+        setSelectedShifts(initialSelectedShifts)
+        setValue('shift_selection_mode', 'select_shifts', { shouldValidate: true })
+      }
+    }, [initialStartDate, initialEndDate, initialTeacherId, setValue, timeOffRequestId])
 
     // Load existing time off request data when editing (after useForm is initialized)
     useEffect(() => {
