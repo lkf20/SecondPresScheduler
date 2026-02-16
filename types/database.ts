@@ -619,6 +619,7 @@ export type Database = {
           id: string
           school_id: string
           selected_day_ids: Json
+          time_zone: string
           updated_at: string | null
         }
         Insert: {
@@ -627,6 +628,7 @@ export type Database = {
           id?: string
           school_id: string
           selected_day_ids?: Json
+          time_zone?: string
           updated_at?: string | null
         }
         Update: {
@@ -635,6 +637,7 @@ export type Database = {
           id?: string
           school_id?: string
           selected_day_ids?: Json
+          time_zone?: string
           updated_at?: string | null
         }
         Relationships: [

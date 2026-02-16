@@ -7,21 +7,18 @@ import {
   getTeacherTimeOffShifts,
 } from '@/lib/api/time-off-shifts'
 import { getUserSchoolId } from '@/lib/utils/auth'
-import { parseLocalDate } from '@/lib/utils/date'
-import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
+import { formatDateISOInTimeZone } from '@/lib/utils/date'
+import { getScheduleSettings } from '@/lib/api/schedule-settings'
 
 // Helper function to format date as "Mon Jan 20"
-function formatExcludedDate(dateStr: string): string {
+function formatExcludedDate(dateStr: string, timeZone: string): string {
   if (!dateStr) return ''
   try {
-    const date = parseLocalDate(dateStr)
-    if (isNaN(date.getTime())) return dateStr // Return original if invalid
-    const dayNames = DAY_NAMES
-    const monthNames = MONTH_NAMES
-    const dayAbbr = dayNames[date.getDay()]
-    const monthAbbr = monthNames[date.getMonth()]
-    const day = date.getDate()
-    return `${dayAbbr} ${monthAbbr} ${day}`
+    return formatDateISOInTimeZone(dateStr, timeZone, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    })
   } catch (error) {
     console.error('Error formatting date:', dateStr, error)
     return dateStr // Return original if formatting fails
@@ -74,6 +71,8 @@ export async function POST(request: NextRequest) {
     const { shifts, ...requestData } = body
     const status = requestData.status || 'active'
     const effectiveEndDate = requestData.end_date || requestData.start_date
+    const scheduleSettings = await getScheduleSettings(schoolId)
+    const timeZone = scheduleSettings?.time_zone || 'UTC'
 
     const normalizeDate = (dateStr: string) => {
       if (!dateStr) return ''
@@ -92,7 +91,8 @@ export async function POST(request: NextRequest) {
       const scheduledShifts = await getTeacherScheduledShifts(
         requestData.teacher_id,
         requestData.start_date,
-        effectiveEndDate
+        effectiveEndDate,
+        timeZone
       )
       requestedShifts = scheduledShifts.map(shift => ({
         date: shift.date,
@@ -144,7 +144,8 @@ export async function POST(request: NextRequest) {
         const scheduledShifts = await getTeacherScheduledShifts(
           requestData.teacher_id,
           requestData.start_date,
-          effectiveEndDate
+          effectiveEndDate,
+          timeZone
         )
 
         const excluded = scheduledShifts.filter(shift => {
@@ -180,7 +181,7 @@ export async function POST(request: NextRequest) {
           )
             .map(date => {
               try {
-                return formatExcludedDate(date)
+                return formatExcludedDate(date, timeZone)
               } catch (err) {
                 console.error('Error formatting excluded date:', date, err)
                 return null
@@ -209,7 +210,8 @@ export async function POST(request: NextRequest) {
         const scheduledShifts = await getTeacherScheduledShifts(
           requestData.teacher_id,
           requestData.start_date,
-          effectiveEndDate
+          effectiveEndDate,
+          timeZone
         )
         shiftsToCreate = scheduledShifts.map(shift => ({
           date: shift.date,

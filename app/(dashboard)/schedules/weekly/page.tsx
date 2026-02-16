@@ -610,11 +610,13 @@ export default function WeeklySchedulePage() {
           <WeeklyScheduleGridNew
             data={filteredData}
             selectedDayIds={filters?.selectedDayIds ?? selectedDayIds}
+            weekStartISO={weekStartISO}
             layout={filters?.layout ?? 'days-x-classrooms'}
             onRefresh={handleRefresh}
             onFilterPanelOpenChange={setFilterPanelOpen}
             filterPanelOpen={filterPanelOpen}
-            allowCardClick={false}
+            allowCardClick
+            readOnly
             displayModeCounts={displayModeCounts}
             displayMode={filters?.displayMode ?? 'all-scheduled-staff'}
             onDisplayModeChange={mode => {

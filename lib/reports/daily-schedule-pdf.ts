@@ -1,4 +1,5 @@
 import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
+import { formatDateISOInTimeZone } from '@/lib/utils/date'
 
 type PdfOptions = {
   showAbsencesAndSubs: boolean
@@ -152,15 +153,16 @@ export function buildDailySchedulePdfHtml({
   generatedAt,
   data,
   options,
+  timeZone,
 }: {
   dateISO: string
   generatedAt: string
   data: WeeklyScheduleDataByClassroom[]
   options: PdfOptions
+  timeZone: string
 }) {
   const timeSlots = buildTimeSlots(data)
-  const date = new Date(dateISO + 'T00:00:00')
-  const title = date.toLocaleDateString('en-US', {
+  const title = formatDateISOInTimeZone(dateISO, timeZone, {
     weekday: 'long',
     month: 'long',
     day: 'numeric',

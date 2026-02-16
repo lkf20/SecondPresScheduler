@@ -1,12 +1,17 @@
 'use client'
 
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import TimeOffForm from '@/components/time-off/TimeOffForm'
 
 export default function NewTimeOffPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const initialStartDate = searchParams.get('start_date') || undefined
+  const initialEndDate = searchParams.get('end_date') || undefined
+  const initialTeacherId = searchParams.get('teacher_id') || undefined
 
   const handleSuccess = (teacherName: string, startDate: string, endDate: string) => {
     // Format date range for toast
@@ -47,7 +52,12 @@ export default function NewTimeOffPage() {
 
       <div className="max-w-2xl">
         <div className="rounded-lg bg-gray-50 border border-gray-200 p-6">
-          <TimeOffForm onSuccess={handleSuccess} />
+          <TimeOffForm
+            onSuccess={handleSuccess}
+            initialStartDate={initialStartDate}
+            initialEndDate={initialEndDate}
+            initialTeacherId={initialTeacherId}
+          />
         </div>
       </div>
     </div>

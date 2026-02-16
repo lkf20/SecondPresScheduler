@@ -10,6 +10,8 @@ import {
   buildDailyScheduleFilename,
   buildDailySchedulePdfHtml,
 } from '@/lib/reports/daily-schedule-pdf'
+import { getScheduleSettings } from '@/lib/api/schedule-settings'
+import { expandDateRangeWithTimeZone } from '@/lib/utils/date'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -45,8 +47,9 @@ const parseTeacherNameFormat = (value: string | null) => {
   return 'default'
 }
 
-const formatGeneratedAt = (date: Date) =>
+const formatGeneratedAt = (date: Date, timeZone: string) =>
   new Intl.DateTimeFormat('en-US', {
+    timeZone,
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -80,7 +83,16 @@ export async function GET(request: Request) {
     const layout = parseLayout(searchParams.get('layout'))
     const teacherNameFormat = parseTeacherNameFormat(searchParams.get('teacherNameFormat'))
 
-    const dayNumber = date.getDay()
+    const scheduleSettings = await getScheduleSettings(schoolId)
+    const timeZone = scheduleSettings?.time_zone || 'UTC'
+    const expanded = expandDateRangeWithTimeZone(dateParam, dateParam, timeZone)
+    const dayNumber = expanded[0]?.day_number
+    if (!dayNumber) {
+      return NextResponse.json(
+        { error: 'Unable to resolve day of week for date.' },
+        { status: 500 }
+      )
+    }
     const supabase = await createClient()
     const dayNumberCandidates = dayNumber === 0 ? [0, 7] : [dayNumber]
     const { data: daysData, error: daysError } = await supabase
@@ -105,7 +117,7 @@ export async function GET(request: Request) {
 
     const html = buildDailySchedulePdfHtml({
       dateISO: dateParam,
-      generatedAt: formatGeneratedAt(new Date()),
+      generatedAt: formatGeneratedAt(new Date(), timeZone),
       data,
       options: {
         showAbsencesAndSubs,
@@ -113,6 +125,7 @@ export async function GET(request: Request) {
         layout,
         teacherNameFormat,
       },
+      timeZone,
     })
 
     const resolveExecutablePath = () => {
