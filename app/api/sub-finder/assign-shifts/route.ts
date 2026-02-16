@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createErrorResponse, getErrorMessage } from '@/lib/utils/errors'
-import { createAuditLog } from '@/lib/api/audit-logs'
+import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 import { revalidatePath } from 'next/cache'
 
 // See docs/data-lifecycle.md: sub_assignments lifecycle
@@ -106,6 +106,7 @@ export async function POST(request: NextRequest) {
 
     // Create sub_assignments for each selected shift
     const requestSchoolId = coverageRequest.school_id || '00000000-0000-0000-0000-000000000001'
+    const { actorUserId, actorDisplayName } = await getAuditActorContext()
     const assignments = coverageRequestShifts.map((shift: any) => {
       const fallbackKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
       const resolvedClassroomId = shift.classroom_id || fallbackClassroomMap.get(fallbackKey)
@@ -170,11 +171,16 @@ export async function POST(request: NextRequest) {
       if (shiftOverrides) {
         for (const override of shiftOverrides) {
           if (override.override_availability) {
-            await createAuditLog({
-              action: 'override_availability',
-              entity_type: 'sub_contact_shift_override',
-              entity_id: override.coverage_request_shift_id,
+            await logAuditEvent({
+              schoolId: requestSchoolId,
+              actorUserId,
+              actorDisplayName,
+              action: 'assign',
+              category: 'coverage',
+              entityType: 'sub_contact_shift_override',
+              entityId: override.coverage_request_shift_id,
               details: {
+                changed_fields: ['override_availability'],
                 coverage_request_id: coverage_request_id,
                 sub_id: sub_id,
                 coverage_request_shift_id: override.coverage_request_shift_id,
@@ -228,6 +234,23 @@ export async function POST(request: NextRequest) {
     revalidatePath('/schedules/weekly')
     revalidatePath('/sub-finder')
     revalidatePath('/reports')
+
+    await logAuditEvent({
+      schoolId: requestSchoolId,
+      actorUserId,
+      actorDisplayName,
+      action: 'assign',
+      category: 'sub_assignment',
+      entityType: 'coverage_request',
+      entityId: coverage_request_id,
+      details: {
+        changed_fields: ['sub_assignments'],
+        sub_id,
+        teacher_id: teacherId,
+        assignment_ids: (createdAssignments || []).map((assignment: any) => assignment.id),
+        shift_ids: selected_shift_ids,
+      },
+    })
 
     return NextResponse.json({
       success: true,

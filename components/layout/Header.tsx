@@ -1,10 +1,11 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { CalendarPlus, LogOut, Printer, UserPlus, UserSearch } from 'lucide-react'
+import { CalendarPlus, History, LogOut, Printer, UserPlus, UserSearch } from 'lucide-react'
 import {
   Sheet,
   SheetContent,
@@ -32,6 +33,7 @@ import { Input } from '@/components/ui/input'
 import { Database } from '@/types/database'
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
+import { ActivityFeed } from '@/components/activity/ActivityFeed'
 
 type Staff = Database['public']['Tables']['staff']['Row']
 
@@ -57,6 +59,7 @@ export default function Header({ userEmail }: HeaderProps) {
   } = usePanelManager()
   const [isFindSubPopoverOpen, setIsFindSubPopoverOpen] = useState(false)
   const [isAssignSubPanelOpen, setIsAssignSubPanelOpen] = useState(false)
+  const [isActivitySheetOpen, setIsActivitySheetOpen] = useState(false)
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('')
   const [teachers, setTeachers] = useState<Staff[]>([])
   const [teacherSearch, setTeacherSearch] = useState('')
@@ -390,6 +393,17 @@ export default function Header({ userEmail }: HeaderProps) {
             <LogOut className="h-4 w-4 mr-2" />
             Logout
           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            type="button"
+            onClick={() => setIsActivitySheetOpen(true)}
+            aria-label="Open activity"
+            title="Activity"
+            className="rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900"
+          >
+            <History className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
@@ -458,6 +472,44 @@ export default function Header({ userEmail }: HeaderProps) {
           }, 100)
         }}
       />
+      <Sheet open={isActivitySheetOpen} onOpenChange={setIsActivitySheetOpen}>
+        <SheetContent
+          side="right"
+          showOverlay={false}
+          showCloseButton={false}
+          className={`w-full sm:max-w-2xl h-screen flex flex-col p-0 ${getPanelBackgroundClasses()}`}
+        >
+          <div className={`flex-1 overflow-y-auto px-6 py-6 ${getPanelBackgroundClasses()}`}>
+            <SheetHeader className="mb-6 pt-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <SheetTitle className="text-3xl font-bold tracking-tight text-slate-900">
+                    Activity
+                  </SheetTitle>
+                  <SheetDescription>Track recent changes across your school.</SheetDescription>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href="/activity" onClick={() => setIsActivitySheetOpen(false)}>
+                      Open Full Page
+                    </Link>
+                  </Button>
+                  <SheetClose asChild>
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-100 focus:outline-none"
+                      aria-label="Close"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </SheetClose>
+                </div>
+              </div>
+            </SheetHeader>
+            <ActivityFeed className="min-h-[calc(100vh-170px)]" />
+          </div>
+        </SheetContent>
+      </Sheet>
     </header>
   )
 }

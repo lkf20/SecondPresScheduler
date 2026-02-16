@@ -22,6 +22,7 @@ import {
   formatTransitionError,
   type TimeOffStatus,
 } from '@/lib/lifecycle/status-transitions'
+import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 
 // Helper function to format date as "Mon Jan 20"
 function formatExcludedDate(dateStr: string): string {
@@ -327,6 +328,41 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     revalidatePath('/sub-finder')
     revalidatePath('/reports')
 
+    const { actorUserId, actorDisplayName } = await getAuditActorContext()
+    if (updatedRequest.school_id) {
+      await logAuditEvent({
+        schoolId: updatedRequest.school_id,
+        actorUserId,
+        actorDisplayName,
+        action: existingRequest.status === status ? 'update' : 'status_change',
+        category: 'time_off',
+        entityType: 'time_off_request',
+        entityId: id,
+        details: {
+          changed_fields: [
+            'status',
+            'start_date',
+            'end_date',
+            'reason',
+            'notes',
+            ...(shifts !== undefined ? ['shifts'] : []),
+          ],
+          before: {
+            status: existingRequest.status,
+            start_date: existingRequest.start_date,
+            end_date: existingRequest.end_date,
+          },
+          after: {
+            status,
+            start_date: updatedRequest.start_date,
+            end_date: updatedRequest.end_date,
+          },
+          shifts_created: shiftsToCreate.length,
+          shifts_excluded: excludedShiftCount,
+        },
+      })
+    }
+
     return NextResponse.json({
       ...updatedRequest,
       warning,
@@ -406,6 +442,26 @@ export async function DELETE(
     revalidatePath('/schedules/weekly')
     revalidatePath('/sub-finder')
     revalidatePath('/reports')
+
+    const schoolId = await getUserSchoolId()
+    const { actorUserId, actorDisplayName } = await getAuditActorContext()
+    if (schoolId) {
+      await logAuditEvent({
+        schoolId,
+        actorUserId,
+        actorDisplayName,
+        action: 'cancel',
+        category: 'time_off',
+        entityType: 'time_off_request',
+        entityId: id,
+        details: {
+          changed_fields: ['status', 'sub_assignments'],
+          keepAssignmentsAsExtraCoverage,
+          assignmentIdsToKeep: assignmentIdsToKeep || null,
+          cancellation_result: result,
+        },
+      })
+    }
 
     // Return the cancellation result
     return NextResponse.json({

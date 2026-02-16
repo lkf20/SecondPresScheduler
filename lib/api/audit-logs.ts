@@ -1,5 +1,5 @@
-import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId, getCurrentUserId } from '@/lib/utils/auth'
+import { logAuditEvent } from '@/lib/audit/logAuditEvent'
 
 interface AuditLogEntry {
   action: string
@@ -8,12 +8,21 @@ interface AuditLogEntry {
   details?: Record<string, unknown>
 }
 
+function normalizeAuditAction(action: string) {
+  const normalized = action.toLowerCase()
+  if (normalized.includes('create')) return 'create' as const
+  if (normalized.includes('delete') || normalized.includes('remove')) return 'delete' as const
+  if (normalized.includes('cancel')) return 'cancel' as const
+  if (normalized.includes('assign')) return 'assign' as const
+  if (normalized.includes('unassign')) return 'unassign' as const
+  if (normalized.includes('status')) return 'status_change' as const
+  return 'update' as const
+}
+
 /**
  * Create an audit log entry
  */
 export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
-  const supabase = await createClient()
-
   const schoolId = await getUserSchoolId()
   const userId = await getCurrentUserId()
 
@@ -22,18 +31,18 @@ export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
     return
   }
 
-  const { error } = await supabase.from('audit_log').insert({
-    school_id: schoolId,
-    actor_user_id: userId,
-    action: entry.action,
-    entity_type: entry.entity_type,
-    entity_id: entry.entity_id || null,
-    details: entry.details || null,
+  await logAuditEvent({
+    schoolId,
+    actorUserId: userId,
+    action: normalizeAuditAction(entry.action),
+    category: 'unknown',
+    entityType: entry.entity_type,
+    entityId: entry.entity_id || null,
+    details: {
+      legacy_action: entry.action,
+      ...(entry.details || {}),
+    },
   })
-
-  if (error) {
-    console.error('Error creating audit log:', error)
-  }
 }
 
 /**

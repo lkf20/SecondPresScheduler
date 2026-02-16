@@ -9,6 +9,7 @@ import {
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { parseLocalDate } from '@/lib/utils/date'
 import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
+import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 
 // Helper function to format date as "Mon Jan 20"
 function formatExcludedDate(dateStr: string): string {
@@ -240,6 +241,26 @@ export async function POST(request: NextRequest) {
     revalidatePath('/schedules/weekly')
     revalidatePath('/sub-finder')
     revalidatePath('/reports')
+
+    const { actorUserId, actorDisplayName } = await getAuditActorContext()
+    await logAuditEvent({
+      schoolId,
+      actorUserId,
+      actorDisplayName,
+      action: 'create',
+      category: 'time_off',
+      entityType: 'time_off_request',
+      entityId: createdRequest.id,
+      details: {
+        changed_fields: ['status', 'start_date', 'end_date', 'teacher_id', 'shift_selection_mode'],
+        teacher_id: requestData.teacher_id,
+        status,
+        start_date: requestData.start_date,
+        end_date: effectiveEndDate,
+        shifts_created: shiftsToCreate.length,
+        shifts_excluded: excludedShiftCount,
+      },
+    })
 
     // Return the created request with optional warning
     return NextResponse.json(
