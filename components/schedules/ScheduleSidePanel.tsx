@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { ChevronDown, ChevronUp, CornerDownRight, Pencil, Plus } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import {
   Sheet,
   SheetContent,
@@ -17,8 +19,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import DatePickerInput from '@/components/ui/date-picker-input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import TimeOffForm from '@/components/time-off/TimeOffForm'
 import SlotStatusToggle from './SlotStatusToggle'
 import ClassGroupMultiSelect from './ClassGroupMultiSelect'
 import EnrollmentInput from './EnrollmentInput'
@@ -28,6 +34,7 @@ import UnsavedChangesDialog from './UnsavedChangesDialog'
 import ConflictBanner, { type Conflict, type ConflictResolution } from './ConflictBanner'
 import type { ScheduleCellWithDetails } from '@/lib/api/schedule-cells'
 import type { WeeklyScheduleData } from '@/lib/api/weekly-schedule'
+import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import type {
   TimeSlot,
   ClassGroup,
@@ -41,6 +48,7 @@ import {
 } from '@/lib/utils/colors'
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
+import { parseLocalDate } from '@/lib/utils/date'
 
 interface Teacher {
   id: string
@@ -54,6 +62,13 @@ type ClassGroupWithMeta = ClassGroup & {
 }
 
 type SelectedCellData = WeeklyScheduleData & {
+  absences?: Array<{
+    teacher_id: string
+    teacher_name: string
+    has_sub: boolean
+    is_partial: boolean
+    time_off_request_id?: string | null
+  }>
   schedule_cell:
     | (Partial<ScheduleCellWithDetails> & {
         id: string
@@ -76,9 +91,12 @@ interface ScheduleSidePanelProps {
   timeSlotEndTime: string | null
   classroomId: string
   classroomName: string
+  classroomColor?: string | null
   selectedDayIds: string[] // Days that are in the weekly schedule
   selectedCellData?: SelectedCellData // Full cell data from the grid
   onSave?: () => void
+  weekStartISO?: string
+  readOnly?: boolean
 }
 
 const mapAssignmentsToTeachers = (assignments?: WeeklyScheduleData['assignments']): Teacher[] => {
@@ -118,9 +136,12 @@ export default function ScheduleSidePanel({
   timeSlotEndTime,
   classroomId,
   classroomName,
+  classroomColor = null,
   selectedDayIds,
   selectedCellData,
   onSave,
+  weekStartISO,
+  readOnly = false,
 }: ScheduleSidePanelProps) {
   const [cell, setCell] = useState<
     | (Partial<ScheduleCellWithDetails> & {
@@ -150,10 +171,56 @@ export default function ScheduleSidePanel({
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const [classGroups, setClassGroups] = useState<ClassGroupWithMeta[]>([])
   const [allAvailableClassGroups, setAllAvailableClassGroups] = useState<ClassGroupWithMeta[]>([])
+  const [classrooms, setClassrooms] = useState<ClassroomWithAllowedClasses[]>([])
   const [conflicts, setConflicts] = useState<Conflict[]>([])
   const [conflictResolutions, setConflictResolutions] = useState<Map<string, ConflictResolution>>(
     new Map()
   )
+  const router = useRouter()
+  const [flexStartDate, setFlexStartDate] = useState<string>('')
+  const [flexEndDate, setFlexEndDate] = useState<string>('')
+  const [flexClassroomIds, setFlexClassroomIds] = useState<string[]>([classroomId])
+  const [flexTimeSlotIds, setFlexTimeSlotIds] = useState<string[]>([timeSlotId])
+  const [flexSaving, setFlexSaving] = useState(false)
+  const [flexError, setFlexError] = useState<string | null>(null)
+  const [panelMode, setPanelMode] = useState<'cell' | 'timeOff' | 'editCell' | 'flex'>('cell')
+  const [timeOffTeacherId, setTimeOffTeacherId] = useState<string | null>(null)
+  const [timeOffTeacherName, setTimeOffTeacherName] = useState<string | null>(null)
+  const [showBaselineEditDialog, setShowBaselineEditDialog] = useState(false)
+  const [showClassGroupEditDialog, setShowClassGroupEditDialog] = useState(false)
+  const [flexAvailability, setFlexAvailability] = useState<
+    Array<{ id: string; name: string; availableShiftKeys: string[] }>
+  >([])
+  const [flexShiftMetrics, setFlexShiftMetrics] = useState<
+    Array<{
+      date: string
+      time_slot_id: string
+      time_slot_code: string
+      classroom_id: string
+      classroom_name: string
+      required_staff: number | null
+      preferred_staff: number | null
+      scheduled_staff: number
+      status: 'below_required' | 'below_preferred' | 'ok'
+    }>
+  >([])
+  const [flexDayOptions, setFlexDayOptions] = useState<
+    Array<{ id: string; name: string; short_name: string; day_number: number }>
+  >([])
+  const [flexAvailabilityLoading, setFlexAvailabilityLoading] = useState(false)
+  const [flexAvailabilityError, setFlexAvailabilityError] = useState<string | null>(null)
+  const [expandedFlexStaffId, setExpandedFlexStaffId] = useState<string | null>(null)
+  const [flexAssignModes, setFlexAssignModes] = useState<Record<string, 'all' | 'custom'>>({})
+  const [flexSelectedShiftKeys, setFlexSelectedShiftKeys] = useState<Record<string, string[]>>({})
+  const [flexApplyThisDayOnly, setFlexApplyThisDayOnly] = useState(true)
+  const [flexApplyMultipleDays, setFlexApplyMultipleDays] = useState(false)
+  const [flexApplyDayNames, setFlexApplyDayNames] = useState<Set<string>>(
+    new Set([dayName.toLowerCase()])
+  )
+  const [isStaffingTargetsExpanded, setIsStaffingTargetsExpanded] = useState(false)
+  const [isFullyAvailableExpanded, setIsFullyAvailableExpanded] = useState(true)
+  const [isPartiallyAvailableExpanded, setIsPartiallyAvailableExpanded] = useState(true)
+  const [isNotAvailableExpanded, setIsNotAvailableExpanded] = useState(false)
   // Track the original cell state when first loaded to determine if it was empty
   const originalCellStateRef = useRef<{ isActive: boolean; hasData: boolean } | null>(null)
   // Track if we've loaded initial data to prevent useEffect from clearing classGroups prematurely
@@ -199,6 +266,250 @@ export default function ScheduleSidePanel({
   // Format time range for header
   const timeRange =
     timeSlotStartTime && timeSlotEndTime ? `${timeSlotStartTime}–${timeSlotEndTime}` : ''
+
+  const formatLocalDate = (date: Date) => {
+    const year = date.getFullYear()
+    const month = `${date.getMonth() + 1}`.padStart(2, '0')
+    const day = `${date.getDate()}`.padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  const addDays = (date: Date, days: number) => {
+    const next = new Date(date.getTime())
+    next.setDate(next.getDate() + days)
+    return next
+  }
+
+  const openTimeOffPanel = (teacherId: string, teacherName?: string | null) => {
+    setTimeOffTeacherId(teacherId)
+    setTimeOffTeacherName(teacherName ?? null)
+    setPanelMode('timeOff')
+  }
+
+  useEffect(() => {
+    if (!isOpen) return
+    setPanelMode('cell')
+    setTimeOffTeacherId(null)
+    setTimeOffTeacherName(null)
+    setShowBaselineEditDialog(false)
+    setShowClassGroupEditDialog(false)
+    setExpandedFlexStaffId(null)
+    setFlexAvailabilityError(null)
+    setIsStaffingTargetsExpanded(false)
+    setIsFullyAvailableExpanded(true)
+    setIsPartiallyAvailableExpanded(true)
+    setIsNotAvailableExpanded(false)
+    setFlexApplyThisDayOnly(true)
+    setFlexApplyMultipleDays(false)
+    setFlexApplyDayNames(new Set([dayName.toLowerCase()]))
+  }, [isOpen, classroomId, dayId, timeSlotId])
+
+  useEffect(() => {
+    if (panelMode !== 'flex') return
+    setFlexEndDate(prev => prev || flexStartDate || '')
+    setIsStaffingTargetsExpanded(false)
+    setIsFullyAvailableExpanded(true)
+    setIsPartiallyAvailableExpanded(true)
+    setIsNotAvailableExpanded(false)
+    setFlexApplyThisDayOnly(true)
+    setFlexApplyMultipleDays(false)
+    setFlexApplyDayNames(new Set([dayName.toLowerCase()]))
+  }, [panelMode, flexStartDate, dayName])
+
+  const dayNameDate = useMemo(() => {
+    if (!weekStartISO) return ''
+    const base = parseLocalDate(weekStartISO)
+    const dayNumber = selectedCellData?.day_number
+    const offset = dayNumber ? Math.max(0, dayNumber - 1) : 0
+    const target = addDays(base, offset)
+    const year = target.getFullYear()
+    const month = `${target.getMonth() + 1}`.padStart(2, '0')
+    const day = `${target.getDate()}`.padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }, [weekStartISO, selectedCellData?.day_number])
+
+  const dayNameDateLabel = useMemo(() => {
+    if (!dayNameDate) return ''
+    const date = parseLocalDate(dayNameDate)
+    if (Number.isNaN(date.getTime())) return ''
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  }, [dayNameDate])
+
+  const flexShiftOptions = useMemo(() => {
+    if (!flexStartDate || !flexEndDate || flexTimeSlotIds.length === 0) return []
+    const start = parseLocalDate(flexStartDate)
+    const end = parseLocalDate(flexEndDate)
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return []
+    const slotsById = new Map(timeSlots.map(slot => [slot.id, slot.code]))
+    const shifts: Array<{ key: string; date: string; time_slot_id: string; label: string }> = []
+    const dayNameDateParsed = dayNameDate ? parseLocalDate(dayNameDate) : null
+    const cursor = new Date(start.getTime())
+    while (cursor <= end) {
+      const dateStr = formatLocalDate(cursor)
+      const dayNameForDate = cursor.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
+      const shouldIncludeDay =
+        (flexApplyThisDayOnly &&
+          !!dayNameDateParsed &&
+          cursor.getDay() === dayNameDateParsed.getDay()) ||
+        (flexApplyMultipleDays && flexApplyDayNames.has(dayNameForDate))
+      if (shouldIncludeDay) {
+        const dayLabel = cursor.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+        })
+        flexTimeSlotIds.forEach(timeSlotId => {
+          const slotCode = slotsById.get(timeSlotId) || ''
+          shifts.push({
+            key: `${dateStr}|${timeSlotId}`,
+            date: dateStr,
+            time_slot_id: timeSlotId,
+            label: `${dayLabel} • ${slotCode}`,
+          })
+        })
+      }
+      cursor.setDate(cursor.getDate() + 1)
+    }
+    return shifts
+  }, [
+    flexStartDate,
+    flexEndDate,
+    flexTimeSlotIds,
+    timeSlots,
+    flexApplyThisDayOnly,
+    flexApplyMultipleDays,
+    flexApplyDayNames,
+    dayNameDate,
+  ])
+
+  const totalFlexShiftCount = useMemo(() => {
+    return flexShiftOptions.length * Math.max(1, flexClassroomIds.length)
+  }, [flexShiftOptions.length, flexClassroomIds.length])
+
+  const missingSelectedFlexDays = useMemo(() => {
+    if (!flexApplyMultipleDays || flexApplyDayNames.size === 0) return []
+    if (!flexStartDate || !flexEndDate) return Array.from(flexApplyDayNames)
+    const start = parseLocalDate(flexStartDate)
+    const end = parseLocalDate(flexEndDate)
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+      return Array.from(flexApplyDayNames)
+    }
+    const availableDays = new Set<string>()
+    const cursor = new Date(start.getTime())
+    while (cursor <= end) {
+      availableDays.add(cursor.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase())
+      cursor.setDate(cursor.getDate() + 1)
+    }
+    return Array.from(flexApplyDayNames).filter(day => !availableDays.has(day))
+  }, [flexApplyMultipleDays, flexApplyDayNames, flexStartDate, flexEndDate])
+
+  const hasInvalidFlexDayRange = missingSelectedFlexDays.length > 0
+
+  const filteredFlexShiftMetrics = useMemo(() => {
+    if (flexShiftMetrics.length === 0) return []
+    const allowedKeys = new Set(flexShiftOptions.map(option => option.key))
+    return flexShiftMetrics.filter(metric =>
+      allowedKeys.has(`${metric.date}|${metric.time_slot_id}`)
+    )
+  }, [flexShiftMetrics, flexShiftOptions])
+
+  const flexBelowRequiredCount = useMemo(
+    () => filteredFlexShiftMetrics.filter(metric => metric.status === 'below_required').length,
+    [filteredFlexShiftMetrics]
+  )
+
+  const flexBelowPreferredCount = useMemo(
+    () => filteredFlexShiftMetrics.filter(metric => metric.status === 'below_preferred').length,
+    [filteredFlexShiftMetrics]
+  )
+
+  const flexStaffWithCounts = useMemo(() => {
+    const totalCount = flexShiftOptions.length
+    return flexAvailability
+      .map(staff => ({
+        ...staff,
+        availableCount: staff.availableShiftKeys.length,
+        totalCount,
+      }))
+      .sort((a, b) => b.availableCount - a.availableCount)
+  }, [flexAvailability, flexShiftOptions.length])
+
+  useEffect(() => {
+    if (!isOpen) return
+    const baseDate = weekStartISO ? parseLocalDate(weekStartISO) : new Date()
+    const startISO = formatLocalDate(baseDate)
+    setFlexStartDate(startISO)
+    setFlexEndDate(startISO)
+    setFlexClassroomIds([classroomId])
+    setFlexTimeSlotIds([timeSlotId])
+  }, [isOpen, weekStartISO, classroomId, timeSlotId])
+
+  useEffect(() => {
+    if (!flexStartDate) return
+    if (!flexEndDate) {
+      setFlexEndDate(flexStartDate)
+      return
+    }
+    const start = parseLocalDate(flexStartDate)
+    const end = parseLocalDate(flexEndDate)
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end < start) {
+      setFlexEndDate(flexStartDate)
+    }
+  }, [flexStartDate, flexEndDate])
+
+  useEffect(() => {
+    if (!isOpen || panelMode !== 'flex') return
+    if (!flexStartDate || !flexEndDate || flexTimeSlotIds.length === 0) return
+    let cancelled = false
+
+    const loadFlexAvailability = async () => {
+      try {
+        setFlexAvailabilityLoading(true)
+        setFlexAvailabilityError(null)
+        const response = await fetch('/api/staffing-events/flex/availability', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            start_date: flexStartDate,
+            end_date: flexEndDate,
+            time_slot_ids: flexTimeSlotIds,
+            classroom_ids: flexClassroomIds,
+          }),
+        })
+        const data = await response.json()
+        if (!response.ok) {
+          throw new Error(data?.error || 'Failed to load flex availability.')
+        }
+        if (!cancelled) {
+          setFlexAvailability(Array.isArray(data?.staff) ? data.staff : [])
+          setFlexShiftMetrics(Array.isArray(data?.shift_metrics) ? data.shift_metrics : [])
+          if (Array.isArray(data?.day_options)) {
+            setFlexDayOptions(data.day_options)
+            if (data.day_options.length > 0 && flexApplyDayNames.size === 0) {
+              setFlexApplyDayNames(new Set([String(data.day_options[0].name || '').toLowerCase()]))
+            }
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setFlexAvailability([])
+          setFlexShiftMetrics([])
+          setFlexAvailabilityError(
+            error instanceof Error ? error.message : 'Failed to load flex availability.'
+          )
+        }
+      } finally {
+        if (!cancelled) {
+          setFlexAvailabilityLoading(false)
+        }
+      }
+    }
+
+    loadFlexAvailability()
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, panelMode, flexStartDate, flexEndDate, flexTimeSlotIds, flexClassroomIds])
 
   const normalizeClassGroup = useCallback(
     (cg: {
@@ -349,6 +660,7 @@ export default function ScheduleSidePanel({
     fetch('/api/classrooms')
       .then(r => r.json())
       .then((data: ClassroomWithAllowedClasses[]) => {
+        setClassrooms(Array.isArray(data) ? data : [])
         const classroom = data.find(c => c.id === classroomId)
         if (classroom && classroom.allowed_classes) {
           const ids = classroom.allowed_classes
@@ -709,6 +1021,76 @@ export default function ScheduleSidePanel({
       setShowUnsavedDialog(true)
     } else {
       onClose()
+    }
+  }
+
+  const handleCreateFlexAssignment = async (staffId: string, shiftKeys: string[]) => {
+    setFlexError(null)
+    if (!staffId) {
+      setFlexError('Select a flex staff member.')
+      return
+    }
+    if (!flexStartDate || !flexEndDate) {
+      setFlexError('Select a start and end date.')
+      return
+    }
+    if (flexClassroomIds.length === 0) {
+      setFlexError('Select at least one classroom.')
+      return
+    }
+    if (flexTimeSlotIds.length === 0) {
+      setFlexError('Select at least one time slot.')
+      return
+    }
+    if (shiftKeys.length === 0) {
+      setFlexError('Select at least one shift to assign.')
+      return
+    }
+    setFlexSaving(true)
+    try {
+      const shifts = shiftKeys.flatMap(key => {
+        const [date, timeSlotId] = key.split('|')
+        return flexClassroomIds.map(classroomId => ({
+          date,
+          time_slot_id: timeSlotId,
+          classroom_id: classroomId,
+        }))
+      })
+      const response = await fetch('/api/staffing-events/flex', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          staff_id: staffId,
+          start_date: flexStartDate,
+          end_date: flexEndDate,
+          classroom_ids: flexClassroomIds,
+          time_slot_ids: flexTimeSlotIds,
+          shifts,
+        }),
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to add flex coverage.')
+      }
+      onSave?.()
+    } catch (error) {
+      setFlexError(error instanceof Error ? error.message : 'Failed to add flex coverage.')
+    } finally {
+      setFlexSaving(false)
+    }
+  }
+
+  const handleCancelFlexAssignment = async (eventId?: string) => {
+    if (!eventId) return
+    try {
+      const response = await fetch(`/api/staffing-events/${eventId}/cancel`, { method: 'POST' })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to remove flex coverage.')
+      }
+      onSave?.()
+    } catch (error) {
+      setFlexError(error instanceof Error ? error.message : 'Failed to remove flex coverage.')
     }
   }
 
@@ -1098,6 +1480,28 @@ export default function ScheduleSidePanel({
         })
       : null
 
+  const flexAssignments =
+    selectedCellData?.assignments?.filter(assignment => assignment.is_flexible) ?? []
+  const absenceForCell =
+    selectedCellData?.absences?.find(
+      (absence: {
+        teacher_id: string
+        teacher_name: string
+        has_sub: boolean
+        is_partial: boolean
+        time_off_request_id?: string | null
+      }) => absence.time_off_request_id
+    ) ?? null
+  const primaryTeacher =
+    selectedCellData?.assignments?.find(
+      assignment => !assignment.is_substitute && !assignment.is_flexible
+    ) ?? null
+  const findSubLink = absenceForCell?.time_off_request_id
+    ? `/sub-finder?absence_id=${absenceForCell.time_off_request_id}`
+    : primaryTeacher?.teacher_id
+      ? `/sub-finder?teacher_id=${primaryTeacher.teacher_id}`
+      : '/sub-finder'
+
   // Debug logging
   useEffect(() => {
     log('[ScheduleSidePanel] Render - classGroups:', classGroups)
@@ -1129,9 +1533,14 @@ export default function ScheduleSidePanel({
           >
             <SheetHeader>
               <SheetTitle>
-                {classroomName} • {dayName} • {timeSlotCode} {timeRange && `(${timeRange})`}
+                {classroomName} • {dayName} • {timeSlotCode}
+                {dayNameDateLabel ? ` • ${dayNameDateLabel}` : ''} {timeRange && `(${timeRange})`}
               </SheetTitle>
-              <SheetDescription>Configure schedule cell settings and assignments</SheetDescription>
+              <SheetDescription>
+                {readOnly
+                  ? 'View schedule details and take quick actions'
+                  : 'Configure schedule cell settings and assignments'}
+              </SheetDescription>
             </SheetHeader>
           </div>
 
@@ -1142,253 +1551,993 @@ export default function ScheduleSidePanel({
               </div>
             ) : (
               <div className="mt-6 space-y-10">
-                {/* Section A: Slot Status */}
-                <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-1">
-                  <SlotStatusToggle
-                    isActive={isActive}
-                    onToggle={newActive => {
-                      if (isActive && !newActive) {
-                        // Show confirmation when deactivating
-                        setShowDeactivateDialog(true)
-                      } else {
-                        setIsActive(newActive)
-                      }
-                    }}
-                  />
-                  <div className="mt-0">
-                    {isActive ? (
-                      <p className="text-xs text-muted-foreground italic whitespace-nowrap">
-                        This slot requires staffing and will be validated
+                {panelMode === 'timeOff' && (
+                  <div className="space-y-6 pb-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-slate-400">
+                          Time Off Request
+                        </p>
+                        <h2 className="text-xl font-semibold text-slate-900">
+                          {timeOffTeacherName || 'Add Time Off'}
+                        </h2>
+                      </div>
+                      <Button type="button" variant="outline" onClick={() => setPanelMode('cell')}>
+                        Back
+                      </Button>
+                    </div>
+                    <TimeOffForm
+                      key={timeOffTeacherId || 'time-off'}
+                      onCancel={() => setPanelMode('cell')}
+                      onSuccess={() => {
+                        setPanelMode('cell')
+                        onSave?.()
+                      }}
+                      hidePageHeader
+                      initialTeacherId={timeOffTeacherId || undefined}
+                      initialStartDate={dayNameDate}
+                      initialEndDate={dayNameDate}
+                      initialSelectedShifts={[
+                        {
+                          date: dayNameDate,
+                          day_of_week_id: dayId,
+                          time_slot_id: timeSlotId,
+                        },
+                      ]}
+                    />
+                  </div>
+                )}
+                {panelMode === 'flex' && (
+                  <div className="space-y-6 pb-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-slate-400">
+                          Flex Coverage
+                        </p>
+                        <h2 className="text-xl font-semibold text-slate-900">Add Flex Staff</h2>
+                      </div>
+                      <Button type="button" variant="outline" onClick={() => setPanelMode('cell')}>
+                        Back
+                      </Button>
+                    </div>
+
+                    <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="flex_start_date">
+                            Start date <span className="text-amber-600">*</span>
+                          </Label>
+                          <DatePickerInput
+                            id="flex_start_date"
+                            value={flexStartDate}
+                            onChange={setFlexStartDate}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="flex_end_date">
+                            End date <span className="text-amber-600">*</span>
+                          </Label>
+                          <DatePickerInput
+                            id="flex_end_date"
+                            value={flexEndDate}
+                            onChange={setFlexEndDate}
+                            openToDate={flexStartDate}
+                            className={
+                              hasInvalidFlexDayRange
+                                ? '!border-amber-300 focus-visible:!ring-amber-200'
+                                : undefined
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        {classrooms.filter(room => flexClassroomIds.includes(room.id)).length >
+                        0 ? (
+                          classrooms
+                            .filter(room => flexClassroomIds.includes(room.id))
+                            .map(room => (
+                              <span
+                                key={room.id}
+                                className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700"
+                                style={getClassroomPillStyle(room.color ?? null)}
+                              >
+                                {room.name}
+                              </span>
+                            ))
+                        ) : (
+                          <span
+                            className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700"
+                            style={getClassroomPillStyle(classroomColor)}
+                          >
+                            {classroomName || 'Selected classroom'}
+                          </span>
+                        )}
+                        {timeSlots
+                          .filter(slot => flexTimeSlotIds.includes(slot.id))
+                          .map(slot => (
+                            <span
+                              key={slot.id}
+                              className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700"
+                            >
+                              {slot.code}
+                            </span>
+                          ))}
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label>Apply to</Label>
+                        <RadioGroup
+                          value={flexApplyMultipleDays ? 'multiple' : 'single'}
+                          onValueChange={value => {
+                            if (value === 'multiple') {
+                              setFlexApplyMultipleDays(true)
+                              setFlexApplyThisDayOnly(false)
+                              setFlexApplyDayNames(new Set([dayName.toLowerCase()]))
+                            } else {
+                              setFlexApplyThisDayOnly(true)
+                              setFlexApplyMultipleDays(false)
+                              setFlexApplyDayNames(new Set([dayName.toLowerCase()]))
+                            }
+                          }}
+                          className="gap-2"
+                        >
+                          <label className="flex items-center gap-2 text-sm">
+                            <RadioGroupItem value="single" id="flex-apply-single" />
+                            {dayName.endsWith('s') ? `${dayName} only` : `${dayName}s only`}
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <RadioGroupItem value="multiple" id="flex-apply-multiple" />
+                            Multiple days of the week
+                          </label>
+                        </RadioGroup>
+
+                        {flexApplyMultipleDays && (
+                          <>
+                            <div className="mt-2 ml-6 flex flex-wrap gap-3 text-sm">
+                              {(flexDayOptions.length > 0
+                                ? flexDayOptions
+                                : [
+                                    { name: 'Monday', short_name: 'Mon' },
+                                    { name: 'Tuesday', short_name: 'Tue' },
+                                    { name: 'Wednesday', short_name: 'Wed' },
+                                    { name: 'Thursday', short_name: 'Thu' },
+                                    { name: 'Friday', short_name: 'Fri' },
+                                  ]
+                              ).map(option => {
+                                const label = option.name
+                                const shortLabel = option.short_name || option.name.slice(0, 3)
+                                const key = label.toLowerCase()
+                                return (
+                                  <label key={label} className="flex items-center gap-2">
+                                    <Checkbox
+                                      checked={flexApplyDayNames.has(key)}
+                                      onCheckedChange={checked => {
+                                        setFlexApplyDayNames(prev => {
+                                          const next = new Set(prev)
+                                          if (checked) {
+                                            next.add(key)
+                                          } else {
+                                            next.delete(key)
+                                          }
+                                          return next
+                                        })
+                                      }}
+                                    />
+                                    {shortLabel}
+                                  </label>
+                                )
+                              })}
+                            </div>
+                            {hasInvalidFlexDayRange && (
+                              <p className="ml-6 text-xs text-amber-700">
+                                Multiple days selected. Please choose a date range that contains
+                                these days.
+                              </p>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-1">
+                      <p className="text-sm font-medium text-slate-900">
+                        {totalFlexShiftCount} {totalFlexShiftCount === 1 ? 'shift' : 'shifts'}{' '}
+                        selected
                       </p>
+                      <p className="text-xs text-slate-500">
+                        Below preferred: {flexBelowPreferredCount}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Below required: {flexBelowRequiredCount}
+                      </p>
+                      {filteredFlexShiftMetrics.length > 0 && (
+                        <div className="pt-4">
+                          <div className="rounded-md border border-slate-200 bg-white">
+                            <button
+                              type="button"
+                              className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left"
+                              onClick={() => setIsStaffingTargetsExpanded(prev => !prev)}
+                            >
+                              <span className="text-xs uppercase tracking-wide text-slate-500">
+                                Staffing targets
+                              </span>
+                              {isStaffingTargetsExpanded ? (
+                                <ChevronUp className="h-4 w-4 text-slate-500" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4 text-slate-500" />
+                              )}
+                            </button>
+                            {isStaffingTargetsExpanded && (
+                              <div className="border-t border-slate-100 p-2">
+                                {filteredFlexShiftMetrics.map((metric, index) => (
+                                  <div
+                                    key={`${metric.date}-${metric.time_slot_id}-${metric.classroom_id}`}
+                                    className={`flex items-center justify-between rounded-md px-3 py-2 text-sm ${
+                                      index > 0 ? 'border-t border-slate-100' : ''
+                                    }`}
+                                  >
+                                    <div>
+                                      <p className="font-medium text-slate-900">
+                                        {new Date(`${metric.date}T00:00:00`).toLocaleDateString(
+                                          'en-US',
+                                          { weekday: 'short', month: 'short', day: 'numeric' }
+                                        )}{' '}
+                                        • {metric.time_slot_code}
+                                      </p>
+                                      {metric.classroom_name && (
+                                        <p className="text-xs text-slate-500">
+                                          {metric.classroom_name}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <div className="text-right text-xs text-slate-500">
+                                      <p>
+                                        Preferred:{' '}
+                                        {metric.preferred_staff ?? metric.required_staff ?? '—'}
+                                      </p>
+                                      <p>Scheduled: {metric.scheduled_staff}</p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {flexAvailabilityError && (
+                      <p className="text-sm text-destructive">{flexAvailabilityError}</p>
+                    )}
+                    {flexError && <p className="text-sm text-destructive">{flexError}</p>}
+
+                    {flexAvailabilityLoading ? (
+                      <div className="text-sm text-muted-foreground">Loading flex staff...</div>
+                    ) : flexStaffWithCounts.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No flex staff found.</p>
                     ) : (
-                      <p className="text-xs text-muted-foreground italic whitespace-nowrap">
-                        Inactive slots are ignored for staffing and substitutes
-                      </p>
+                      <div className="space-y-6">
+                        {[
+                          {
+                            key: 'fully',
+                            title: 'Fully available',
+                            items: flexStaffWithCounts.filter(
+                              staff =>
+                                staff.totalCount > 0 && staff.availableCount === staff.totalCount
+                            ),
+                          },
+                          {
+                            key: 'partial',
+                            title: 'Partially available',
+                            items: flexStaffWithCounts.filter(
+                              staff =>
+                                staff.availableCount > 0 && staff.availableCount < staff.totalCount
+                            ),
+                          },
+                          {
+                            key: 'not',
+                            title: 'Not available',
+                            items: flexStaffWithCounts.filter(staff => staff.availableCount === 0),
+                          },
+                        ].map(section =>
+                          section.items.length > 0 ? (
+                            <div key={section.title} className="space-y-3">
+                              {section.key === 'fully' ||
+                              section.key === 'partial' ||
+                              section.key === 'not' ? (
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center justify-between text-left"
+                                  onClick={() =>
+                                    section.key === 'fully'
+                                      ? setIsFullyAvailableExpanded(prev => !prev)
+                                      : section.key === 'partial'
+                                        ? setIsPartiallyAvailableExpanded(prev => !prev)
+                                        : setIsNotAvailableExpanded(prev => !prev)
+                                  }
+                                >
+                                  <span className="text-xs uppercase tracking-wide text-slate-400">
+                                    {section.title}
+                                  </span>
+                                  {(
+                                    section.key === 'fully'
+                                      ? isFullyAvailableExpanded
+                                      : section.key === 'partial'
+                                        ? isPartiallyAvailableExpanded
+                                        : isNotAvailableExpanded
+                                  ) ? (
+                                    <ChevronUp className="h-4 w-4 text-slate-500" />
+                                  ) : (
+                                    <ChevronDown className="h-4 w-4 text-slate-500" />
+                                  )}
+                                </button>
+                              ) : (
+                                <p className="text-xs uppercase tracking-wide text-slate-400">
+                                  {section.title}
+                                </p>
+                              )}
+                              <div
+                                className={`space-y-3 ${
+                                  section.key === 'fully' && !isFullyAvailableExpanded
+                                    ? 'hidden'
+                                    : ''
+                                } ${
+                                  section.key === 'partial' && !isPartiallyAvailableExpanded
+                                    ? 'hidden'
+                                    : ''
+                                } ${
+                                  section.key === 'not' && !isNotAvailableExpanded ? 'hidden' : ''
+                                }`}
+                              >
+                                {section.items.map(staff => {
+                                  const isExpanded = expandedFlexStaffId === staff.id
+                                  const assignMode = flexAssignModes[staff.id] || 'all'
+                                  const availableSet = new Set(staff.availableShiftKeys)
+                                  const selectedKeys = flexSelectedShiftKeys[staff.id] || []
+                                  return (
+                                    <div
+                                      key={staff.id}
+                                      className="rounded-lg border border-slate-200 bg-white p-4"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <div>
+                                          <p className="text-sm font-medium text-slate-900">
+                                            {staff.name}
+                                          </p>
+                                          <p className="text-xs text-slate-500">
+                                            Available for {staff.availableCount}/{staff.totalCount}{' '}
+                                            shifts
+                                          </p>
+                                        </div>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          className="border bg-white hover:bg-teal-50"
+                                          style={{ borderColor: '#0f766e', color: '#0f766e' }}
+                                          onClick={() => {
+                                            setFlexError(null)
+                                            setExpandedFlexStaffId(prev =>
+                                              prev === staff.id ? null : staff.id
+                                            )
+                                            setFlexAssignModes(prev => ({
+                                              ...prev,
+                                              [staff.id]: prev[staff.id] || 'all',
+                                            }))
+                                            setFlexSelectedShiftKeys(prev => ({
+                                              ...prev,
+                                              [staff.id]:
+                                                prev[staff.id] || staff.availableShiftKeys,
+                                            }))
+                                          }}
+                                        >
+                                          Assign
+                                        </Button>
+                                      </div>
+
+                                      {isExpanded && (
+                                        <div className="mt-4 space-y-3 rounded-md border border-slate-100 bg-slate-50 p-3">
+                                          <p className="text-xs uppercase tracking-wide text-slate-400">
+                                            Assign to
+                                          </p>
+                                          <div className="space-y-2">
+                                            <label className="flex items-center gap-2 text-sm">
+                                              <input
+                                                type="radio"
+                                                name={`assign-${staff.id}`}
+                                                checked={assignMode === 'all'}
+                                                onChange={() =>
+                                                  setFlexAssignModes(prev => ({
+                                                    ...prev,
+                                                    [staff.id]: 'all',
+                                                  }))
+                                                }
+                                              />
+                                              All available shifts
+                                            </label>
+                                            <label className="flex items-center gap-2 text-sm">
+                                              <input
+                                                type="radio"
+                                                name={`assign-${staff.id}`}
+                                                checked={assignMode === 'custom'}
+                                                onChange={() =>
+                                                  setFlexAssignModes(prev => ({
+                                                    ...prev,
+                                                    [staff.id]: 'custom',
+                                                  }))
+                                                }
+                                              />
+                                              Select specific shifts
+                                            </label>
+                                          </div>
+
+                                          {assignMode === 'custom' && (
+                                            <div className="space-y-2">
+                                              {flexShiftOptions.map(shift => {
+                                                const disabled = !availableSet.has(shift.key)
+                                                const checked = selectedKeys.includes(shift.key)
+                                                return (
+                                                  <label
+                                                    key={shift.key}
+                                                    className={`flex items-center gap-2 text-sm ${
+                                                      disabled ? 'text-slate-300' : 'text-slate-700'
+                                                    }`}
+                                                  >
+                                                    <Checkbox
+                                                      checked={checked}
+                                                      disabled={disabled}
+                                                      onCheckedChange={value => {
+                                                        setFlexSelectedShiftKeys(prev => {
+                                                          const current = new Set(
+                                                            prev[staff.id] || []
+                                                          )
+                                                          if (value) {
+                                                            current.add(shift.key)
+                                                          } else {
+                                                            current.delete(shift.key)
+                                                          }
+                                                          return {
+                                                            ...prev,
+                                                            [staff.id]: Array.from(current),
+                                                          }
+                                                        })
+                                                      }}
+                                                    />
+                                                    {shift.label}
+                                                  </label>
+                                                )
+                                              })}
+                                            </div>
+                                          )}
+
+                                          <div className="flex justify-end">
+                                            <Button
+                                              type="button"
+                                              size="sm"
+                                              variant="outline"
+                                              className="border bg-white hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-0"
+                                              style={{ borderColor: '#0f766e', color: '#0f766e' }}
+                                              disabled={flexSaving || hasInvalidFlexDayRange}
+                                              onClick={() => {
+                                                const keys =
+                                                  assignMode === 'all'
+                                                    ? staff.availableShiftKeys
+                                                    : selectedKeys
+                                                handleCreateFlexAssignment(staff.id, keys)
+                                              }}
+                                            >
+                                              {flexSaving ? 'Assigning...' : 'Assign'}
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ) : null
+                        )}
+                      </div>
                     )}
                   </div>
-                </div>
-
-                {/* Section B: Class Group Selection */}
-                <div
-                  className={`rounded-lg bg-white border border-gray-200 p-6 space-y-2 ${fieldsDisabled ? 'opacity-60' : ''}`}
-                >
-                  <ClassGroupMultiSelect
-                    selectedClassGroupIds={classGroupIds}
-                    onSelectionChange={newClassGroupIds => {
-                      // Preserve teachers whenever class groups change (added or removed) if we have existing teachers
-                      // This prevents teachers from disappearing when class groups are modified
-                      const hasExistingTeachers = selectedTeachersRef.current.length > 0
-                      const classGroupsChanged =
-                        JSON.stringify([...classGroupIds].sort()) !==
-                        JSON.stringify([...newClassGroupIds].sort())
-                      const shouldPreserve = hasExistingTeachers && classGroupsChanged
-
-                      log('[ScheduleSidePanel] Class groups changed', {
-                        previous: classGroupIds,
-                        new: newClassGroupIds,
-                        hasExistingTeachers,
-                        classGroupsChanged,
-                        shouldPreserve,
-                        currentTeachersCount: selectedTeachers.length,
-                        currentTeachersRefCount: selectedTeachersRef.current.length,
-                        currentTeachers: selectedTeachers.map(t => t.name),
-                        currentTeachersFromRef: selectedTeachersRef.current.map(t => t.name),
-                      })
-
-                      preserveTeachersRef.current = shouldPreserve
-                      log(
-                        '[ScheduleSidePanel] Set preserveTeachersRef to:',
-                        shouldPreserve,
-                        'with',
-                        selectedTeachersRef.current.length,
-                        'teachers in ref'
-                      )
-                      previousClassGroupIdsRef.current = classGroupIds
-                      setClassGroupIds(newClassGroupIds)
-                    }}
-                    allowedClassGroupIds={
-                      allowedClassGroupIds.length > 0 ? allowedClassGroupIds : undefined
-                    }
-                    disabled={fieldsDisabled}
-                    existingClassGroups={classGroups as ClassGroup[]}
-                  />
-                  <div className="pt-2 pb-3 border-b border-gray-200"></div>
-                  {isActive && classGroupIds.length === 0 && (
-                    <p className="text-sm text-yellow-600">
-                      At least one class group is required when slot is active
-                    </p>
-                  )}
-
-                  {/* Age and Ratios Display */}
-                  {classGroups.length > 0 && classGroupForRatio && (
-                    <div className="space-y-2 text-sm pt-1">
-                      {/* Age Range (from lowest min_age) */}
-                      <div className="flex items-center gap-2">
-                        <div className="text-muted-foreground">Age (lowest):</div>
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                          {classGroupForRatio.min_age !== null &&
-                          classGroupForRatio.max_age !== null
-                            ? `${classGroupForRatio.min_age}–${classGroupForRatio.max_age} years`
-                            : classGroupForRatio.min_age !== null
-                              ? `${classGroupForRatio.min_age}+ years`
-                              : classGroupForRatio.max_age !== null
-                                ? `Up to ${classGroupForRatio.max_age} years`
-                                : 'Not specified'}
-                        </span>
+                )}
+                {panelMode === 'cell' && readOnly && (
+                  <div className="space-y-6">
+                    <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-slate-900">Absences & Subs</h3>
                       </div>
+                      {selectedCellData?.absences && selectedCellData.absences.length > 0 ? (
+                        <div className="space-y-4">
+                          {selectedCellData.absences.map(
+                            (absence: {
+                              teacher_id: string
+                              teacher_name: string
+                              has_sub: boolean
+                              is_partial: boolean
+                              time_off_request_id?: string | null
+                            }) => {
+                              const subsForAbsence =
+                                selectedCellData.assignments?.filter(
+                                  assignment =>
+                                    assignment.is_substitute &&
+                                    assignment.absent_teacher_id === absence.teacher_id
+                                ) ?? []
+                              return (
+                                <div key={absence.teacher_id} className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium text-slate-900">
+                                      {absence.teacher_name}
+                                    </span>
+                                    <div className="flex items-center gap-4">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => router.push('/time-off')}
+                                      >
+                                        Edit Time Off
+                                      </Button>
+                                      {!absence.has_sub && (
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          onClick={() => router.push(findSubLink)}
+                                        >
+                                          Find Sub
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {subsForAbsence.length > 0 && (
+                                    <div className="space-y-2">
+                                      {subsForAbsence.map(sub => (
+                                        <div
+                                          key={sub.id}
+                                          className="flex items-center justify-between rounded-md border border-teal-100 bg-teal-50 px-3 py-2"
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            <CornerDownRight className="h-4 w-4 text-slate-400" />
+                                            <span className="text-sm text-teal-700">
+                                              {sub.teacher_name}
+                                            </span>
+                                          </div>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => router.push(findSubLink)}
+                                          >
+                                            Change Sub
+                                          </Button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            }
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No absences for this slot.</p>
+                      )}
+                    </div>
 
-                      {/* Ratios (from lowest min_age class group) */}
-                      <div className="flex items-center gap-2">
-                        <div className="text-muted-foreground">Ratios:</div>
-                        <div className="flex flex-wrap gap-2">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                            Required 1:{classGroupForRatio.required_ratio}
+                    <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-slate-900">Flex Staff</h3>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="!bg-teal-500 !text-white hover:!bg-teal-600 focus-visible:outline-none focus-visible:ring-0"
+                          onClick={() => setPanelMode('flex')}
+                        >
+                          <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Flex Staff
+                        </Button>
+                      </div>
+                      {flexAssignments.length > 0 ? (
+                        <div className="space-y-2">
+                          {flexAssignments.map(assignment => (
+                            <div
+                              key={assignment.id}
+                              className="flex items-center justify-between rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2"
+                            >
+                              <span className="text-sm text-emerald-700">
+                                {assignment.teacher_name}
+                              </span>
+                              <div className="flex items-center gap-4">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setPanelMode('flex')
+                                  }}
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="!bg-teal-500 !text-white hover:!bg-teal-600 focus-visible:outline-none focus-visible:ring-0"
+                                  onClick={() =>
+                                    openTimeOffPanel(assignment.teacher_id, assignment.teacher_name)
+                                  }
+                                >
+                                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                  Add Time Off
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No flex staff assigned.</p>
+                      )}
+                    </div>
+
+                    <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-slate-900">Permanent Staff</h3>
+                      </div>
+                      {displayTeachers.length > 0 ? (
+                        <div className="space-y-2">
+                          {displayTeachers
+                            .filter(teacher => !teacher.is_floater)
+                            .map(teacher => (
+                              <div
+                                key={teacher.teacher_id ?? teacher.id}
+                                className="flex items-center justify-between rounded-md border border-blue-100 bg-blue-50 px-3 py-2"
+                              >
+                                <span className="text-sm text-blue-800">{teacher.name}</span>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="default"
+                                  className="!bg-teal-500 !text-white hover:!bg-teal-600 focus-visible:outline-none focus-visible:ring-0"
+                                  onClick={() =>
+                                    openTimeOffPanel(teacher.teacher_id ?? teacher.id, teacher.name)
+                                  }
+                                >
+                                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                  Add Time Off
+                                </Button>
+                              </div>
+                            ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          No permanent staff assigned.
+                        </p>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto px-0 text-sm text-slate-500 hover:text-slate-700"
+                        onClick={() => setShowBaselineEditDialog(true)}
+                      >
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                        Edit permanent staff
+                      </Button>
+                    </div>
+
+                    <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-slate-900">
+                          Class Groups & Enrollment
+                        </h3>
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-muted-foreground">Class groups:</span>
+                          {classGroups.length > 0 ? (
+                            classGroups.map(group => (
+                              <span
+                                key={group.id}
+                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700"
+                              >
+                                {group.name}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-muted-foreground">None</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">Enrollment:</span>
+                          <span className="font-medium text-slate-900">
+                            {enrollmentForCalculation ?? '—'}
                           </span>
-                          {classGroupForRatio.preferred_ratio && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                              Preferred 1:{classGroupForRatio.preferred_ratio}
-                            </span>
-                          )}
                         </div>
                       </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto px-0 text-sm text-slate-500 hover:text-slate-700"
+                        onClick={() => setShowClassGroupEditDialog(true)}
+                      >
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                        Edit class groups & enrollment
+                      </Button>
                     </div>
-                  )}
-                </div>
-
-                {/* Section C: Enrollment */}
-                <div
-                  className={`rounded-lg bg-white border border-gray-200 p-6 space-y-2 ${fieldsDisabled ? 'opacity-60' : ''}`}
-                >
-                  <EnrollmentInput
-                    value={enrollment}
-                    onChange={setEnrollment}
-                    disabled={fieldsDisabled}
-                  />
-                  <div className="pt-2 pb-3 border-b border-gray-200"></div>
-
-                  {/* Required Teachers Preview */}
-                  {classGroupForRatio && enrollment !== null && enrollment > 0 && (
-                    <div className="text-sm pt-1">
-                      <div className="flex items-center gap-2">
-                        <div className="text-muted-foreground">Based on enrollment:</div>
-                        <div className="flex flex-wrap gap-2">
-                          {requiredTeachers !== undefined && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                              Required: {requiredTeachers} Teacher
-                              {requiredTeachers !== 1 ? 's' : ''}
-                            </span>
-                          )}
-                          {preferredTeachers !== undefined && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                              Preferred: {preferredTeachers} Teacher
-                              {preferredTeachers !== 1 ? 's' : ''}
-                            </span>
-                          )}
+                  </div>
+                )}
+                {(panelMode === 'editCell' || !readOnly) && (
+                  <>
+                    {readOnly && panelMode === 'editCell' && (
+                      <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-5 py-4">
+                        <div className="space-y-1">
+                          <p className="text-xs uppercase tracking-wide text-slate-400">
+                            Baseline Assignment
+                          </p>
+                          <h2 className="text-lg font-semibold text-slate-900">
+                            Edit Permanent Staff
+                          </h2>
+                          <p className="text-xs text-slate-500">
+                            Changes apply to all {dayName} {timeSlotCode} slots.
+                          </p>
                         </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setPanelMode('cell')}
+                        >
+                          Back
+                        </Button>
+                      </div>
+                    )}
+                    {/* Section A: Slot Status */}
+                    <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-1">
+                      <SlotStatusToggle
+                        isActive={isActive}
+                        onToggle={newActive => {
+                          if (isActive && !newActive) {
+                            // Show confirmation when deactivating
+                            setShowDeactivateDialog(true)
+                          } else {
+                            setIsActive(newActive)
+                          }
+                        }}
+                      />
+                      <div className="mt-0">
+                        {isActive ? (
+                          <p className="text-xs text-muted-foreground italic whitespace-nowrap">
+                            This slot requires staffing and will be validated
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground italic whitespace-nowrap">
+                            Inactive slots are ignored for staffing and substitutes
+                          </p>
+                        )}
                       </div>
                     </div>
-                  )}
-                </div>
 
-                {/* Section E: Assigned Teachers */}
-                <div
-                  className={`rounded-lg bg-white border-l-4 border-l-primary/40 border border-gray-200 p-6 space-y-2 ${fieldsDisabled ? 'opacity-60' : ''}`}
-                >
-                  <Label className="text-base font-medium text-foreground block mb-6">
-                    Assigned Teachers
-                  </Label>
-                  {isLoadingTeachers && displayTeachers.length === 0 && (
-                    <div className="text-sm text-muted-foreground mb-3">
-                      Loading assigned teachers…
+                    {/* Section B: Class Group Selection */}
+                    <div
+                      className={`rounded-lg bg-white border border-gray-200 p-6 space-y-2 ${fieldsDisabled ? 'opacity-60' : ''}`}
+                    >
+                      <ClassGroupMultiSelect
+                        selectedClassGroupIds={classGroupIds}
+                        onSelectionChange={newClassGroupIds => {
+                          // Preserve teachers whenever class groups change (added or removed) if we have existing teachers
+                          // This prevents teachers from disappearing when class groups are modified
+                          const hasExistingTeachers = selectedTeachersRef.current.length > 0
+                          const classGroupsChanged =
+                            JSON.stringify([...classGroupIds].sort()) !==
+                            JSON.stringify([...newClassGroupIds].sort())
+                          const shouldPreserve = hasExistingTeachers && classGroupsChanged
+
+                          log('[ScheduleSidePanel] Class groups changed', {
+                            previous: classGroupIds,
+                            new: newClassGroupIds,
+                            hasExistingTeachers,
+                            classGroupsChanged,
+                            shouldPreserve,
+                            currentTeachersCount: selectedTeachers.length,
+                            currentTeachersRefCount: selectedTeachersRef.current.length,
+                            currentTeachers: selectedTeachers.map(t => t.name),
+                            currentTeachersFromRef: selectedTeachersRef.current.map(t => t.name),
+                          })
+
+                          preserveTeachersRef.current = shouldPreserve
+                          log(
+                            '[ScheduleSidePanel] Set preserveTeachersRef to:',
+                            shouldPreserve,
+                            'with',
+                            selectedTeachersRef.current.length,
+                            'teachers in ref'
+                          )
+                          previousClassGroupIdsRef.current = classGroupIds
+                          setClassGroupIds(newClassGroupIds)
+                        }}
+                        allowedClassGroupIds={
+                          allowedClassGroupIds.length > 0 ? allowedClassGroupIds : undefined
+                        }
+                        disabled={fieldsDisabled}
+                        existingClassGroups={classGroups as ClassGroup[]}
+                      />
+                      <div className="pt-2 pb-3 border-b border-gray-200"></div>
+                      {isActive && classGroupIds.length === 0 && (
+                        <p className="text-sm text-yellow-600">
+                          At least one class group is required when slot is active
+                        </p>
+                      )}
+
+                      {/* Age and Ratios Display */}
+                      {classGroups.length > 0 && classGroupForRatio && (
+                        <div className="space-y-2 text-sm pt-1">
+                          {/* Age Range (from lowest min_age) */}
+                          <div className="flex items-center gap-2">
+                            <div className="text-muted-foreground">Age (lowest):</div>
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                              {classGroupForRatio.min_age !== null &&
+                              classGroupForRatio.max_age !== null
+                                ? `${classGroupForRatio.min_age}–${classGroupForRatio.max_age} years`
+                                : classGroupForRatio.min_age !== null
+                                  ? `${classGroupForRatio.min_age}+ years`
+                                  : classGroupForRatio.max_age !== null
+                                    ? `Up to ${classGroupForRatio.max_age} years`
+                                    : 'Not specified'}
+                            </span>
+                          </div>
+
+                          {/* Ratios (from lowest min_age class group) */}
+                          <div className="flex items-center gap-2">
+                            <div className="text-muted-foreground">Ratios:</div>
+                            <div className="flex flex-wrap gap-2">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                Required 1:{classGroupForRatio.required_ratio}
+                              </span>
+                              {classGroupForRatio.preferred_ratio && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                  Preferred 1:{classGroupForRatio.preferred_ratio}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  <TeacherMultiSelect
-                    selectedTeachers={displayTeachers}
-                    onTeachersChange={teachers => setSelectedTeachers(teachers)}
-                    requiredCount={classGroupIds.length > 0 ? requiredTeachers : undefined}
-                    preferredCount={classGroupIds.length > 0 ? preferredTeachers : undefined}
-                    disabled={fieldsDisabled}
-                  />
 
-                  {/* Warning message when teachers are assigned but no class groups */}
-                  {classGroupIds.length === 0 && displayTeachers.length > 0 && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-md p-3 mt-4">
-                      <p className="text-sm text-amber-800">
-                        Teachers are assigned. Add class groups to filter by qualifications and
-                        calculate staffing requirements.
-                      </p>
+                    {/* Section C: Enrollment */}
+                    <div
+                      className={`rounded-lg bg-white border border-gray-200 p-6 space-y-2 ${fieldsDisabled ? 'opacity-60' : ''}`}
+                    >
+                      <EnrollmentInput
+                        value={enrollment}
+                        onChange={setEnrollment}
+                        disabled={fieldsDisabled}
+                      />
+                      <div className="pt-2 pb-3 border-b border-gray-200"></div>
+
+                      {/* Required Teachers Preview */}
+                      {classGroupForRatio && enrollment !== null && enrollment > 0 && (
+                        <div className="text-sm pt-1">
+                          <div className="flex items-center gap-2">
+                            <div className="text-muted-foreground">Based on enrollment:</div>
+                            <div className="flex flex-wrap gap-2">
+                              {requiredTeachers !== undefined && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                  Required: {requiredTeachers} Teacher
+                                  {requiredTeachers !== 1 ? 's' : ''}
+                                </span>
+                              )}
+                              {preferredTeachers !== undefined && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                  Preferred: {preferredTeachers} Teacher
+                                  {preferredTeachers !== 1 ? 's' : ''}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
 
-                  {/* Conflict Banner */}
-                  {conflicts.length > 0 && (
-                    <div className="mt-4">
-                      <ConflictBanner
-                        conflicts={conflicts}
-                        onResolution={handleConflictResolution}
-                        onApply={handleApplyConflictResolutions}
-                        onCancel={handleCancelConflictResolution}
+                    {/* Section E: Assigned Teachers */}
+                    <div
+                      className={`rounded-lg bg-white border-l-4 border-l-primary/40 border border-gray-200 p-6 space-y-2 ${fieldsDisabled ? 'opacity-60' : ''}`}
+                    >
+                      <Label className="text-base font-medium text-foreground block mb-6">
+                        Assigned Teachers
+                      </Label>
+                      {isLoadingTeachers && displayTeachers.length === 0 && (
+                        <div className="text-sm text-muted-foreground mb-3">
+                          Loading assigned teachers…
+                        </div>
+                      )}
+                      <TeacherMultiSelect
+                        selectedTeachers={displayTeachers}
+                        onTeachersChange={teachers => setSelectedTeachers(teachers)}
+                        requiredCount={classGroupIds.length > 0 ? requiredTeachers : undefined}
+                        preferredCount={classGroupIds.length > 0 ? preferredTeachers : undefined}
+                        disabled={fieldsDisabled}
+                      />
+
+                      {/* Warning message when teachers are assigned but no class groups */}
+                      {classGroupIds.length === 0 && displayTeachers.length > 0 && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-md p-3 mt-4">
+                          <p className="text-sm text-amber-800">
+                            Teachers are assigned. Add class groups to filter by qualifications and
+                            calculate staffing requirements.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Conflict Banner */}
+                      {conflicts.length > 0 && (
+                        <div className="mt-4">
+                          <ConflictBanner
+                            conflicts={conflicts}
+                            onResolution={handleConflictResolution}
+                            onApply={handleApplyConflictResolutions}
+                            onCancel={handleCancelConflictResolution}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Section F: Notes */}
+                    <div
+                      className={`rounded-lg bg-white border border-gray-200 p-6 space-y-2 ${fieldsDisabled ? 'opacity-60' : ''}`}
+                    >
+                      <Label
+                        htmlFor="notes"
+                        className="text-base font-medium text-foreground block mb-6"
+                      >
+                        Notes
+                      </Label>
+                      <Textarea
+                        id="notes"
+                        value={notes || ''}
+                        onChange={e => setNotes(e.target.value || null)}
+                        placeholder="Add notes for baseline planning..."
+                        disabled={fieldsDisabled}
+                        rows={3}
                       />
                     </div>
-                  )}
-                </div>
 
-                {/* Section F: Notes */}
-                <div
-                  className={`rounded-lg bg-white border border-gray-200 p-6 space-y-2 ${fieldsDisabled ? 'opacity-60' : ''}`}
-                >
-                  <Label
-                    htmlFor="notes"
-                    className="text-base font-medium text-foreground block mb-6"
-                  >
-                    Notes
-                  </Label>
-                  <Textarea
-                    id="notes"
-                    value={notes || ''}
-                    onChange={e => setNotes(e.target.value || null)}
-                    placeholder="Add notes for baseline planning..."
-                    disabled={fieldsDisabled}
-                    rows={3}
-                  />
-                </div>
+                    {/* Section G: Apply Changes To */}
+                    <div className="rounded-lg bg-blue-50/30 border-l-4 border-l-blue-500 border border-gray-200 p-6 mt-16">
+                      <MultiDayApplySelector
+                        currentDayId={dayId}
+                        currentDayName={dayName}
+                        currentTimeSlotCode={timeSlotCode}
+                        currentTimeSlotId={timeSlotId}
+                        currentClassroomName={classroomName}
+                        selectedDayIds={selectedDayIds}
+                        timeSlots={timeSlots}
+                        onApplyScopeChange={handleApplyScopeChange}
+                      />
+                    </div>
 
-                {/* Section G: Apply Changes To */}
-                <div className="rounded-lg bg-blue-50/30 border-l-4 border-l-blue-500 border border-gray-200 p-6 mt-16">
-                  <MultiDayApplySelector
-                    currentDayId={dayId}
-                    currentDayName={dayName}
-                    currentTimeSlotCode={timeSlotCode}
-                    currentTimeSlotId={timeSlotId}
-                    currentClassroomName={classroomName}
-                    selectedDayIds={selectedDayIds}
-                    timeSlots={timeSlots}
-                    onApplyScopeChange={handleApplyScopeChange}
-                  />
-                </div>
-
-                {/* Footer Actions */}
-                <div className="space-y-2 pt-4 pb-6 border-t">
-                  {/* Warning if below required staffing */}
-                  {isActive &&
-                    classGroups.length > 0 &&
-                    enrollment !== null &&
-                    enrollment > 0 &&
-                    requiredTeachers !== undefined &&
-                    selectedTeachers.length < requiredTeachers && (
-                      <p className="text-xs text-muted-foreground italic text-right">
-                        This slot will be saved below required staffing
-                      </p>
-                    )}
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={handleClose} disabled={saving}>
-                      Cancel
-                    </Button>
-                    <Button onClick={handleSave} disabled={saving}>
-                      {saving ? 'Saving...' : 'Save'}
-                    </Button>
-                  </div>
-                </div>
+                    {/* Footer Actions */}
+                    <div className="space-y-2 pt-4 pb-6 border-t">
+                      {/* Warning if below required staffing */}
+                      {isActive &&
+                        classGroups.length > 0 &&
+                        enrollment !== null &&
+                        enrollment > 0 &&
+                        requiredTeachers !== undefined &&
+                        selectedTeachers.length < requiredTeachers && (
+                          <p className="text-xs text-muted-foreground italic text-right">
+                            This slot will be saved below required staffing
+                          </p>
+                        )}
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={handleClose} disabled={saving}>
+                          Cancel
+                        </Button>
+                        <Button onClick={handleSave} disabled={saving}>
+                          {saving ? 'Saving...' : 'Save'}
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -1427,6 +2576,54 @@ export default function ScheduleSidePanel({
               }}
             >
               Deactivate slot
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showBaselineEditDialog} onOpenChange={setShowBaselineEditDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit baseline assignment?</DialogTitle>
+            <DialogDescription>
+              Changes apply to all {dayName} {timeSlotCode} slots, not just{' '}
+              {dayNameDateLabel || 'this date'}.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBaselineEditDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setShowBaselineEditDialog(false)
+                setPanelMode('editCell')
+              }}
+            >
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showClassGroupEditDialog} onOpenChange={setShowClassGroupEditDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit class groups & enrollment?</DialogTitle>
+            <DialogDescription>
+              Changes apply to all {dayName} {timeSlotCode} slots, not just{' '}
+              {dayNameDateLabel || 'this date'}.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowClassGroupEditDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setShowClassGroupEditDialog(false)
+                setPanelMode('editCell')
+              }}
+            >
+              Continue
             </Button>
           </DialogFooter>
         </DialogContent>

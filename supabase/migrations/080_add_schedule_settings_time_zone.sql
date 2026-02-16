@@ -1,0 +1,2 @@
+ALTER TABLE schedule_settings
+  ADD COLUMN IF NOT EXISTS time_zone TEXT NOT NULL DEFAULT 'UTC';

@@ -390,7 +390,10 @@ export default function ScheduleCell({
                   'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold w-fit '
                 let title: string | undefined = undefined
 
-                if (assignment.is_floater) {
+                if (assignment.is_flexible) {
+                  className += 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  title = 'Flex assignment'
+                } else if (assignment.is_floater) {
                   className +=
                     'bg-purple-100 text-purple-800 border border-purple-300 border-dashed'
                   title = 'Floater assignment'

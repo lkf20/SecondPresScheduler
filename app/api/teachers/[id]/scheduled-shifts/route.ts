@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getTeacherScheduledShifts } from '@/lib/api/time-off-shifts'
+import { getUserSchoolId } from '@/lib/utils/auth'
+import { getScheduleSettings } from '@/lib/api/schedule-settings'
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -17,7 +19,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       )
     }
 
-    const shifts = await getTeacherScheduledShifts(id, startDate, endDate)
+    const schoolId = await getUserSchoolId()
+    const scheduleSettings = schoolId ? await getScheduleSettings(schoolId) : null
+    const timeZone = scheduleSettings?.time_zone || 'UTC'
+    const shifts = await getTeacherScheduledShifts(id, startDate, endDate, timeZone)
     console.log('[API /teachers/[id]/scheduled-shifts] Returning shifts:', shifts.length)
     return NextResponse.json(shifts)
   } catch (error: any) {

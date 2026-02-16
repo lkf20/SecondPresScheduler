@@ -13,7 +13,11 @@ export async function GET() {
     }
     const settings = await getScheduleSettings(schoolId)
     return NextResponse.json(
-      settings || { selected_day_ids: [], default_display_name_format: 'first_last_initial' }
+      settings || {
+        selected_day_ids: [],
+        default_display_name_format: 'first_last_initial',
+        time_zone: 'UTC',
+      }
     )
   } catch (error: any) {
     console.error('Error fetching schedule settings:', error)
@@ -31,7 +35,7 @@ export async function PUT(request: NextRequest) {
       )
     }
     const body = await request.json()
-    const { selected_day_ids, default_display_name_format } = body
+    const { selected_day_ids, default_display_name_format, time_zone } = body
 
     if (!Array.isArray(selected_day_ids)) {
       return NextResponse.json({ error: 'selected_day_ids must be an array' }, { status: 400 })
@@ -49,7 +53,8 @@ export async function PUT(request: NextRequest) {
     const settings = await updateScheduleSettings(
       schoolId,
       selected_day_ids,
-      default_display_name_format
+      default_display_name_format,
+      time_zone
     )
     return NextResponse.json(settings)
   } catch (error: any) {

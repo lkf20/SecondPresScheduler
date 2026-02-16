@@ -6,7 +6,12 @@ import { Database } from '@/types/database'
 type ClassGroupRow = Database['public']['Tables']['class_groups']['Row']
 type ScheduleCellRow = Database['public']['Tables']['schedule_cells']['Row']
 type StaffRow = Database['public']['Tables']['staff']['Row']
-type StaffLite = Pick<StaffRow, 'id' | 'first_name' | 'last_name' | 'display_name'>
+type StaffLite = {
+  id: string
+  first_name: string | null
+  last_name: string | null
+  display_name: string | null
+}
 type TimeOffRequestRow = Database['public']['Tables']['time_off_requests']['Row']
 type TimeOffShiftRowFromQuery = {
   id: string
@@ -99,6 +104,20 @@ type WeeklySubAssignment = {
   class_name: string | null
 }
 
+type StaffingEventShift = {
+  id: string
+  staffing_event_id: string
+  date: string
+  day_of_week_id: string | null
+  time_slot_id: string
+  classroom_id: string
+  staff_id: string
+  staff_name: string
+  staff_first_name?: string | null
+  staff_last_name?: string | null
+  staff_display_name?: string | null
+}
+
 export interface WeeklyScheduleData {
   day_of_week_id: string
   day_name: string
@@ -115,6 +134,7 @@ export interface WeeklyScheduleData {
     teacher_last_name?: string | null
     teacher_display_name?: string | null
     is_flexible?: boolean
+    staffing_event_id?: string
     class_group_id?: string // Optional: teachers are assigned to classrooms, not specific class groups
     class_name?: string // Optional: teachers are assigned to classrooms, not specific class groups
     classroom_id: string
@@ -253,6 +273,64 @@ export async function getScheduleSnapshotData({
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err)
       console.warn('Error fetching time_off_shifts:', errorMessage)
+    }
+  }
+
+  // Fetch flex staffing events for the selected date range (if provided)
+  let flexAssignments: StaffingEventShift[] = []
+  if (hasDateRange && startDateISO && endDateISO) {
+    try {
+      const { data: flexData, error: flexError } = await supabase
+        .from('staffing_event_shifts')
+        .select(
+          `
+          id,
+          staffing_event_id,
+          date,
+          day_of_week_id,
+          time_slot_id,
+          classroom_id,
+          staff_id,
+          staff:staff!staffing_event_shifts_staff_id_fkey(id, first_name, last_name, display_name)
+        `
+        )
+        .eq('school_id', schoolId)
+        .eq('status', 'active')
+        .gte('date', startDateISO)
+        .lte('date', endDateISO)
+
+      if (flexError) {
+        console.warn('Error fetching staffing_event_shifts:', flexError.message)
+      } else if (flexData) {
+        flexAssignments = flexData.map(row => {
+          const staffRecord = Array.isArray(row.staff) ? row.staff[0] : row.staff
+          const normalizedStaff: StaffLite | null = staffRecord
+            ? {
+                id: String(staffRecord.id),
+                first_name: staffRecord.first_name ?? null,
+                last_name: staffRecord.last_name ?? null,
+                display_name: staffRecord.display_name ?? null,
+              }
+            : null
+          const staffParts = getStaffNameParts(normalizedStaff, displayNameFormat)
+          return {
+            id: row.id,
+            staffing_event_id: row.staffing_event_id,
+            date: row.date,
+            day_of_week_id: row.day_of_week_id,
+            time_slot_id: row.time_slot_id,
+            classroom_id: row.classroom_id,
+            staff_id: row.staff_id,
+            staff_name: getStaffDisplayName(normalizedStaff, displayNameFormat),
+            staff_first_name: staffParts.first_name,
+            staff_last_name: staffParts.last_name,
+            staff_display_name: staffParts.display_name,
+          }
+        })
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      console.warn('Error fetching staffing_event_shifts:', errorMessage)
     }
   }
 
@@ -644,6 +722,19 @@ export async function getScheduleSnapshotData({
                   new Map(subsForSlot.map(sub => [getSubAssignmentKey(sub), sub])).values()
                 )
               : []
+          const flexForSlot =
+            hasDateRange && day.id
+              ? flexAssignments.filter(
+                  shift =>
+                    shift.day_of_week_id === day.id &&
+                    shift.time_slot_id === timeSlot.id &&
+                    shift.classroom_id === classroom.id
+                )
+              : []
+          const uniqueFlexForSlot =
+            flexForSlot.length > 0
+              ? Array.from(new Map(flexForSlot.map(shift => [shift.staff_id, shift])).values())
+              : []
 
           // Track unique absent teachers from sub_assignments (covered absences)
           const absentTeachers = new Map<
@@ -702,7 +793,32 @@ export async function getScheduleSnapshotData({
                 enrollment: enrollment ?? 0,
                 required_teachers: undefined,
                 preferred_teachers: undefined,
-                assigned_count: teachers.length + uniqueSubsForSlot.length,
+                assigned_count:
+                  teachers.length + uniqueSubsForSlot.length + uniqueFlexForSlot.length,
+              })
+            }
+          }
+
+          if (hasDateRange && day.id) {
+            for (const flex of uniqueFlexForSlot) {
+              assignments.push({
+                id: flex.id,
+                teacher_id: flex.staff_id,
+                teacher_name: flex.staff_name,
+                teacher_first_name: flex.staff_first_name ?? null,
+                teacher_last_name: flex.staff_last_name ?? null,
+                teacher_display_name: flex.staff_display_name ?? null,
+                staffing_event_id: flex.staffing_event_id,
+                classroom_id: flex.classroom_id,
+                classroom_name: classroom.name,
+                is_flexible: true,
+                is_floater: false,
+                is_substitute: false,
+                enrollment: enrollment ?? 0,
+                required_teachers: undefined,
+                preferred_teachers: undefined,
+                assigned_count:
+                  teachers.length + uniqueSubsForSlot.length + uniqueFlexForSlot.length,
               })
             }
           }

@@ -10,6 +10,7 @@ import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 interface WeeklyScheduleGridNewProps {
   data: WeeklyScheduleDataByClassroom[]
   selectedDayIds: string[]
+  weekStartISO?: string
   layout: 'classrooms-x-days' | 'days-x-classrooms'
   onRefresh?: () => void
   onFilterPanelOpenChange?: (open: boolean) => void
@@ -48,6 +49,7 @@ interface WeeklyScheduleGridNewProps {
   slotCounts?: { shown: number; total: number } // Slot counts for display
   showLegendSubstitutes?: boolean
   showFilterChips?: boolean
+  readOnly?: boolean
 }
 
 type WeeklyScheduleCellData = WeeklyScheduleData & {
@@ -121,6 +123,7 @@ function generateClassroomsXDaysGridTemplate(
 export default function WeeklyScheduleGridNew({
   data,
   selectedDayIds,
+  weekStartISO,
   layout,
   onRefresh,
   onFilterPanelOpenChange,
@@ -133,6 +136,7 @@ export default function WeeklyScheduleGridNew({
   slotCounts,
   showLegendSubstitutes = true,
   showFilterChips = true,
+  readOnly = false,
 }: WeeklyScheduleGridNewProps) {
   const [selectedCell, setSelectedCell] = useState<{
     dayId: string
@@ -144,6 +148,7 @@ export default function WeeklyScheduleGridNew({
     timeSlotEndTime: string | null
     classroomId: string
     classroomName: string
+    classroomColor: string | null
   } | null>(null)
   const [selectedCellSnapshot, setSelectedCellSnapshot] = useState<{
     day_of_week_id: string
@@ -365,6 +370,7 @@ export default function WeeklyScheduleGridNew({
       timeSlotEndTime: timeSlotMeta?.default_end_time || null,
       classroomId: classroom.classroom_id,
       classroomName: classroom.classroom_name,
+      classroomColor: classroom.classroom_color ?? null,
     })
     hasAppliedInitialSelection.current = true
   }, [initialSelectedCell, data, timeSlots])
@@ -427,6 +433,7 @@ export default function WeeklyScheduleGridNew({
       timeSlotEndTime: timeSlot?.default_end_time || null,
       classroomId,
       classroomName,
+      classroomColor: data.find(c => c.classroom_id === classroomId)?.classroom_color ?? null,
     })
     setSelectedCellSnapshot(
       buildSelectedCellData({
@@ -598,6 +605,11 @@ export default function WeeklyScheduleGridNew({
                     Absent
                   </span>
                 </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Flex
+                  </span>
+                </div>
               </>
             )}
             <div className="flex items-center gap-2">
@@ -670,7 +682,7 @@ export default function WeeklyScheduleGridNew({
           >
             {/* Header Row - Time Column Header */}
             <div
-              className="sticky top-0 z-30 text-center pt-2 pb-0.5"
+              className="sticky top-0 z-20 text-center pt-2 pb-0.5"
               style={{
                 position: 'sticky',
                 top: 0,
@@ -679,7 +691,7 @@ export default function WeeklyScheduleGridNew({
                 gridColumn: 1,
                 gridRow: 1,
                 minWidth: '120px', // Match the column width
-                zIndex: 50, // Higher than classroom headers (z-40) to stay on top when scrolling
+                zIndex: 20, // Keep below sidebar when expanded
               }}
             ></div>
             {data.map((classroom, index) => {
@@ -687,7 +699,7 @@ export default function WeeklyScheduleGridNew({
               return (
                 <div
                   key={classroom.classroom_id}
-                  className="sticky top-0 z-40 text-center pt-2 pb-0.5"
+                  className="sticky top-0 z-20 text-center pt-2 pb-0.5"
                   style={{
                     backgroundColor: 'white',
                     gridColumn: index + 2,
@@ -763,7 +775,7 @@ export default function WeeklyScheduleGridNew({
                       position: 'sticky',
                       top: '30px',
                       left: 0,
-                      zIndex: 50,
+                      zIndex: 20,
                       backgroundColor: '#f9fafb',
                       borderTop: '1px solid #e5e7eb',
                       borderLeft: '1px solid #e5e7eb',
@@ -890,9 +902,12 @@ export default function WeeklyScheduleGridNew({
             timeSlotEndTime={selectedCell.timeSlotEndTime}
             classroomId={selectedCell.classroomId}
             classroomName={selectedCell.classroomName}
+            classroomColor={selectedCell.classroomColor}
             selectedDayIds={selectedDayIds}
             selectedCellData={selectedCellData}
             onSave={handleSave}
+            weekStartISO={weekStartISO}
+            readOnly={readOnly}
           />
         )}
       </>
@@ -929,6 +944,11 @@ export default function WeeklyScheduleGridNew({
                 <div className="flex items-center gap-2">
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
                     Absent
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Flex
                   </span>
                 </div>
               </>
@@ -1017,7 +1037,7 @@ export default function WeeklyScheduleGridNew({
             {filteredDays.map((day, dayIndex) => (
               <div
                 key={`day-header-${day.id}`}
-                className="sticky top-0 z-30 text-center pt-2 pb-0.5"
+                className="sticky top-0 z-20 text-center pt-2 pb-0.5"
                 style={{
                   backgroundColor: dayIndex % 2 === 0 ? 'white' : '#f3f4f6',
                   gridColumn: `${dayIndex * timeSlots.length + 2} / ${(dayIndex + 1) * timeSlots.length + 2}`,
@@ -1046,7 +1066,7 @@ export default function WeeklyScheduleGridNew({
               timeSlots.map((slot, slotIndex) => (
                 <div
                   key={`time-header-${day.id}-${slot.id}`}
-                  className="sticky z-30 text-center pt-2 pb-3"
+                  className="sticky z-20 text-center pt-2 pb-3"
                   style={{
                     backgroundColor: 'white',
                     gridColumn: dayIndex * timeSlots.length + slotIndex + 2,
@@ -1242,6 +1262,7 @@ export default function WeeklyScheduleGridNew({
             timeSlotEndTime={selectedCell.timeSlotEndTime}
             classroomId={selectedCell.classroomId}
             classroomName={selectedCell.classroomName}
+            classroomColor={selectedCell.classroomColor}
             selectedDayIds={selectedDayIds}
             selectedCellData={selectedCellData}
             onSave={handleSave}

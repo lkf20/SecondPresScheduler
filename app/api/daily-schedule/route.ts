@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getScheduleSnapshotData } from '@/lib/api/weekly-schedule'
 import { getUserSchoolId } from '@/lib/utils/auth'
+import { getScheduleSettings } from '@/lib/api/schedule-settings'
+import { expandDateRangeWithTimeZone } from '@/lib/utils/date'
 
 const parseDateParam = (value: string | null) => {
   if (!value) return null
@@ -32,7 +34,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Missing or invalid date parameter.' }, { status: 400 })
     }
 
-    const dayNumber = date.getDay()
+    const scheduleSettings = await getScheduleSettings(schoolId)
+    const timeZone = scheduleSettings?.time_zone || 'UTC'
+    const expanded = expandDateRangeWithTimeZone(dateParam, dateParam, timeZone)
+    const dayNumber = expanded[0]?.day_number
+    if (!dayNumber) {
+      return NextResponse.json(
+        { error: 'Unable to resolve day of week for date.' },
+        { status: 500 }
+      )
+    }
     const supabase = await createClient()
     const dayNumberCandidates = dayNumber === 0 ? [0, 7] : [dayNumber]
     const { data: daysData, error: daysError } = await supabase

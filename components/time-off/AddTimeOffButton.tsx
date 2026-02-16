@@ -29,11 +29,21 @@ import { getPanelBackgroundClasses } from '@/lib/utils/colors'
 interface AddTimeOffButtonProps {
   timeOffRequestId?: string | null
   onClose?: () => void
+  initialTeacherId?: string
+  initialStartDate?: string
+  initialEndDate?: string
+  initialSelectedShifts?: Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
+  renderTrigger?: (props: { onClick: () => void }) => React.ReactNode
 }
 
 export default function AddTimeOffButton({
   timeOffRequestId = null,
   onClose,
+  initialTeacherId,
+  initialStartDate,
+  initialEndDate,
+  initialSelectedShifts,
+  renderTrigger,
 }: AddTimeOffButtonProps = {}) {
   const router = useRouter()
   // Initialize sheet as open if timeOffRequestId is provided (edit mode)
@@ -235,10 +245,14 @@ export default function AddTimeOffButton({
   // Normal "Add Time Off" button behavior
   return (
     <>
-      <Button onClick={handleOpenSheet}>
-        <Plus className="h-4 w-4 mr-2" />
-        Add Time Off
-      </Button>
+      {renderTrigger ? (
+        renderTrigger({ onClick: handleOpenSheet })
+      ) : (
+        <Button onClick={handleOpenSheet}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Time Off
+        </Button>
+      )}
 
       <Sheet open={isTimeOffSheetOpen} onOpenChange={handleCloseSheet}>
         <SheetContent
@@ -278,6 +292,10 @@ export default function AddTimeOffButton({
               onHasUnsavedChanges={setHasUnsavedChanges}
               clearDraftOnMount={clearDraftOnMount}
               timeOffRequestId={timeOffRequestId}
+              initialTeacherId={initialTeacherId}
+              initialStartDate={initialStartDate}
+              initialEndDate={initialEndDate}
+              initialSelectedShifts={initialSelectedShifts}
             />
           </div>
         </SheetContent>

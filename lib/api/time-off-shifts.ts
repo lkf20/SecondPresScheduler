@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
+import { expandDateRangeWithTimeZone } from '@/lib/utils/date'
 
 type TimeOffShift = Database['public']['Tables']['time_off_shifts']['Row']
 type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
@@ -117,7 +118,8 @@ export async function deleteTimeOffShifts(requestId: string) {
 export async function getTeacherScheduledShifts(
   teacherId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  timeZone: string = 'UTC'
 ) {
   const supabase = await createClient()
 
@@ -249,7 +251,6 @@ export async function getTeacherScheduledShifts(
   )
 
   // Generate all dates in the range (inclusive of both start and end dates)
-  // Work directly with date strings to avoid timezone issues
   const result: Array<{
     date: string
     day_of_week_id: string
@@ -260,70 +261,29 @@ export async function getTeacherScheduledShifts(
     time_slot_name: string | null
   }> = []
 
-  // Parse date string to get components
-  const parseDateStr = (dateStr: string) => {
-    const [year, month, day] = dateStr.split('-').map(Number)
-    return { year, month, day }
-  }
-
-  // Get day of week from a date string
-  // JavaScript getDay(): 0=Sunday, 1=Monday, ..., 6=Saturday
-  // Database day_number: 1=Monday, 2=Tuesday, ..., 6=Saturday, 7=Sunday
-  // Convert JavaScript day to database day_number
-  const getDayOfWeek = (dateStr: string) => {
-    const { year, month, day } = parseDateStr(dateStr)
-    // Create date in local timezone, month is 0-indexed
-    const date = new Date(year, month - 1, day)
-    const jsDay = date.getDay() // 0=Sunday, 1=Monday, ..., 6=Saturday
-    // Convert to database format: Sunday (0) -> 7, Monday (1) -> 1, etc.
-    return jsDay === 0 ? 7 : jsDay
-  }
-
-  // Compare date strings (YYYY-MM-DD format allows string comparison)
-  const compareDates = (date1: string, date2: string) => {
-    if (date1 < date2) return -1
-    if (date1 > date2) return 1
-    return 0
-  }
-
-  // Iterate through all dates from start to end (inclusive)
-  let currentDateStr = startDate
-  let dateCount = 0
-
+  const expandedDates = expandDateRangeWithTimeZone(startDate, endDate, timeZone)
   console.log('[getTeacherScheduledShifts] Starting date iteration from', startDate, 'to', endDate)
 
-  while (compareDates(currentDateStr, endDate) <= 0) {
-    dateCount++
-    const dayNumber = getDayOfWeek(currentDateStr)
-    const shiftsForDay = scheduleByDayNumber.get(dayNumber)
-
+  expandedDates.forEach((entry, index) => {
+    const shiftsForDay = scheduleByDayNumber.get(entry.day_number)
     console.log(
-      `[getTeacherScheduledShifts] Date ${dateCount}: ${currentDateStr}, JS day: ${new Date(parseDateStr(currentDateStr).year, parseDateStr(currentDateStr).month - 1, parseDateStr(currentDateStr).day).getDay()}, DB day_number: ${dayNumber}, Found shifts: ${shiftsForDay?.length || 0}`
+      `[getTeacherScheduledShifts] Date ${index + 1}: ${entry.date}, day_number: ${entry.day_number}, Found shifts: ${shiftsForDay?.length || 0}`
     )
 
-    // Only include dates where teacher has scheduled shifts
     if (shiftsForDay && shiftsForDay.length > 0) {
       shiftsForDay.forEach(shift => {
         result.push({
-          date: currentDateStr,
+          date: entry.date,
           day_of_week_id: shift.day_of_week_id,
-          day_name: shift.days_of_week?.name || '',
-          day_number: dayNumber,
+          day_name: shift.days_of_week?.name || entry.day_name || '',
+          day_number: entry.day_number,
           time_slot_id: shift.time_slot_id,
           time_slot_code: shift.time_slots?.code || '',
           time_slot_name: shift.time_slots?.name || null,
         })
       })
     }
-
-    // Move to next day by incrementing the date string
-    const { year, month, day } = parseDateStr(currentDateStr)
-    const nextDate = new Date(year, month - 1, day + 1)
-    const nextYear = nextDate.getFullYear()
-    const nextMonth = String(nextDate.getMonth() + 1).padStart(2, '0')
-    const nextDay = String(nextDate.getDate()).padStart(2, '0')
-    currentDateStr = `${nextYear}-${nextMonth}-${nextDay}`
-  }
+  })
 
   console.log('[getTeacherScheduledShifts] Final result count:', result.length)
   console.log('[getTeacherScheduledShifts] Final result:', result)
