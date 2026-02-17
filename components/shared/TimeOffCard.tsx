@@ -284,9 +284,6 @@ export default function TimeOffCard({
                     {classroom.name}
                   </span>
                 ))}
-                {classrooms.length > 1 && (
-                  <span className="text-[11px] text-slate-500">(varies by shift)</span>
-                )}
               </>
             ) : (
               !hasShiftsDropdown && (
