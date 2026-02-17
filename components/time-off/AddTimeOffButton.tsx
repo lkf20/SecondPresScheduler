@@ -53,6 +53,7 @@ export default function AddTimeOffButton({
   const [clearDraftOnMount, setClearDraftOnMount] = useState(!timeOffRequestId)
   const [editingRequestId, setEditingRequestId] = useState<string | null>(timeOffRequestId || null)
   const timeOffFormRef = useRef<{ reset: () => void }>(null)
+  const skipUnsavedPromptRef = useRef(false)
   const {
     activePanel,
     savePreviousPanel,
@@ -74,6 +75,25 @@ export default function AddTimeOffButton({
     }
   }, [timeOffRequestId])
 
+  const closeSheetWithoutPrompt = () => {
+    skipUnsavedPromptRef.current = true
+    setShowUnsavedDialog(false)
+    setHasUnsavedChanges(false)
+    setIsTimeOffSheetOpen(false)
+    setClearDraftOnMount(false)
+    setEditingRequestId(null)
+    setActivePanel(null)
+    setTimeout(() => {
+      restorePreviousPanel()
+    }, 100)
+    if (onClose) {
+      onClose()
+    }
+    setTimeout(() => {
+      skipUnsavedPromptRef.current = false
+    }, 0)
+  }
+
   const handleTimeOffSuccess = (teacherName: string, startDate: string, endDate: string) => {
     // Format date range for toast
     const formatDateForToast = (dateStr: string) => {
@@ -88,29 +108,22 @@ export default function AddTimeOffButton({
         ? startDateFormatted
         : `${startDateFormatted}-${endDateFormatted}`
 
-    // Reset unsaved changes flag
-    setHasUnsavedChanges(false)
-
-    // Reset editing state
-    setEditingRequestId(null)
-
-    // Close the sheet
-    setIsTimeOffSheetOpen(false)
-
     // Show toast
     const action = editingRequestId ? 'updated' : 'added'
     toast.success(`Time off ${action} for ${teacherName} (${dateRange})`)
 
+    closeSheetWithoutPrompt()
+
     // Refresh the current page to update data
     router.refresh()
-
-    // Call onClose callback if provided
-    if (onClose) {
-      onClose()
-    }
   }
 
   const handleCloseSheet = (open: boolean) => {
+    if (!open && skipUnsavedPromptRef.current) {
+      setIsTimeOffSheetOpen(false)
+      return
+    }
+
     if (!open && hasUnsavedChanges) {
       // Prevent closing and show warning dialog
       setShowUnsavedDialog(true)
@@ -118,16 +131,7 @@ export default function AddTimeOffButton({
       setIsTimeOffSheetOpen(true)
     } else if (!open) {
       // No unsaved changes, close normally
-      setIsTimeOffSheetOpen(false)
-      setClearDraftOnMount(false) // Reset flag for next open
-      setEditingRequestId(null) // Reset editing state
-      setActivePanel(null)
-      setTimeout(() => {
-        restorePreviousPanel()
-      }, 100)
-      if (onClose) {
-        onClose()
-      }
+      closeSheetWithoutPrompt()
     } else {
       setIsTimeOffSheetOpen(open)
     }
@@ -138,18 +142,7 @@ export default function AddTimeOffButton({
     if (timeOffFormRef.current) {
       timeOffFormRef.current.reset()
     }
-    setHasUnsavedChanges(false)
-    setShowUnsavedDialog(false)
-    // Close the sheet
-    setIsTimeOffSheetOpen(false)
-    setEditingRequestId(null) // Reset editing state
-    setActivePanel(null)
-    setTimeout(() => {
-      restorePreviousPanel()
-    }, 100)
-    if (onClose) {
-      onClose()
-    }
+    closeSheetWithoutPrompt()
   }
 
   const handleKeepEditing = () => {

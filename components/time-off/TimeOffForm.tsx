@@ -1134,7 +1134,15 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                 <Button type="button" variant="outline" onClick={saveDraft} tabIndex={12}>
                   Save as Draft
                 </Button>
-                <Button type="submit" disabled={isSubmitting || allShiftsRecorded} tabIndex={13}>
+                <Button
+                  type="submit"
+                  disabled={
+                    isSubmitting ||
+                    allShiftsRecorded ||
+                    (Boolean(timeOffRequestId) && !hasUnsavedChanges)
+                  }
+                  tabIndex={13}
+                >
                   {isSubmitting
                     ? timeOffRequestId
                       ? 'Updating...'
