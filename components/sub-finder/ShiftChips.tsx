@@ -24,6 +24,8 @@ interface ShiftChipsProps {
     date: string
     time_slot_code: string
     status: 'assigned' | 'available' | 'unavailable'
+    assignment_owner?: 'this_sub' | 'other_sub'
+    assigned_sub_name?: string | null
     reason?: string
     classroom_name?: string | null
     class_name?: string | null
@@ -74,6 +76,8 @@ export default function ShiftChips({
     date: string
     time_slot_code: string
     status: 'assigned' | 'available' | 'unavailable'
+    assignment_owner?: 'this_sub' | 'other_sub'
+    assigned_sub_name?: string | null
     reason?: string // Reason for unavailable shifts
     classroom_name?: string | null
     class_name?: string | null
@@ -88,6 +92,7 @@ export default function ShiftChips({
       date: shift.date,
       time_slot_code: shift.time_slot_code,
       status: 'assigned',
+      assignment_owner: 'this_sub',
       classroom_name: shift.classroom_name || null,
       class_name: shift.class_name || null,
     })
@@ -153,9 +158,11 @@ export default function ShiftChips({
                 : classroomName
               : classGroupName || 'Classroom unavailable'
             const status = isDeclined ? 'declined' : shift.status
-            const baseColorValues = shiftStatusColorValues[status]
+            const twoToneStatus =
+              status === 'unavailable' || status === 'declined' ? 'unavailable' : 'available'
+            const baseColorValues = shiftStatusColorValues[twoToneStatus]
             const colorValues =
-              softAvailableStyle && status === 'available'
+              softAvailableStyle && twoToneStatus === 'available'
                 ? {
                     ...baseColorValues,
                     bg: 'rgb(246, 253, 251)', // softer than teal-50
@@ -185,6 +192,16 @@ export default function ShiftChips({
                     <Check className="h-3 w-3" style={{ color: colorValues.text }} />
                   )}
                   {shiftLabel}
+                  {shift.assignment_owner === 'this_sub' && (
+                    <span className="inline-flex items-center rounded-sm bg-white/70 px-1 text-[10px] font-medium text-teal-700">
+                      ✓
+                    </span>
+                  )}
+                  {shift.assignment_owner === 'other_sub' && (
+                    <span className="inline-flex items-center rounded-sm bg-white/70 px-1 text-[10px] font-medium text-slate-600">
+                      {shift.assigned_sub_name || 'Other sub'}
+                    </span>
+                  )}
                 </span>
               </Badge>
             )
@@ -201,6 +218,14 @@ export default function ShiftChips({
                     {shift.status === 'unavailable' && shift.reason && (
                       <div className="text-muted-foreground">{shift.reason}</div>
                     )}
+                    {shift.assignment_owner === 'this_sub' && (
+                      <div className="text-muted-foreground">Assigned to this sub</div>
+                    )}
+                    {shift.assignment_owner === 'other_sub' && (
+                      <div className="text-muted-foreground">
+                        Assigned to {shift.assigned_sub_name || 'another sub'}
+                      </div>
+                    )}
                   </div>
                 </TooltipContent>
               </Tooltip>
@@ -213,25 +238,13 @@ export default function ShiftChips({
               <div
                 className="w-3 h-3 rounded"
                 style={{
-                  backgroundColor: shiftStatusColorValues.assigned.bg,
-                  borderWidth: '1px',
-                  borderStyle: 'solid',
-                  borderColor: shiftStatusColorValues.assigned.border,
-                }}
-              />
-              <span>Assigned</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div
-                className="w-3 h-3 rounded"
-                style={{
                   backgroundColor: shiftStatusColorValues.available.bg,
                   borderWidth: '1px',
                   borderStyle: 'solid',
                   borderColor: shiftStatusColorValues.available.border,
                 }}
               />
-              <span>Available</span>
+              <span>Can cover</span>
             </div>
             <div className="flex items-center gap-1.5">
               <div
@@ -243,7 +256,19 @@ export default function ShiftChips({
                   borderColor: shiftStatusColorValues.unavailable.border,
                 }}
               />
-              <span>Unavailable</span>
+              <span>Cannot cover</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center rounded-sm bg-slate-100 px-1 text-[10px] font-medium text-teal-700">
+                ✓
+              </span>
+              <span>Assigned to this sub</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center rounded-sm bg-slate-100 px-1 text-[10px] font-medium text-slate-600">
+                Other sub
+              </span>
+              <span>Assigned elsewhere</span>
             </div>
           </div>
         )}

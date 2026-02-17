@@ -113,41 +113,24 @@ export default function SubFinderCard({
   const [noteDraft, setNoteDraft] = useState(notes || '')
   const [isSavingNote, setIsSavingNote] = useState(false)
   const coveredSegments = Math.min(shiftsCovered, totalShifts)
-  // Build map of assigned/available/unavailable shifts for "View all shifts" section
-  const allShiftsStatusMap = new Map<string, 'assigned' | 'available' | 'unavailable'>()
-  if (
-    allShifts &&
-    allShifts.length > 0 &&
-    (allCanCover.length > 0 || allCannotCover.length > 0 || allAssigned.length > 0)
-  ) {
-    allAssigned.forEach(shift => {
-      const key = `${shift.date}|${shift.time_slot_code}`
-      allShiftsStatusMap.set(key, 'assigned')
-    })
-    // Add can cover shifts
-    allCanCover.forEach(shift => {
-      const key = `${shift.date}|${shift.time_slot_code}`
-      if (!allShiftsStatusMap.has(key)) {
-        allShiftsStatusMap.set(key, 'available')
-      }
-    })
-
-    // Add cannot cover shifts
-    allCannotCover.forEach(shift => {
-      const key = `${shift.date}|${shift.time_slot_code}`
-      // Only set if not already marked as available
-      if (!allShiftsStatusMap.has(key)) {
-        allShiftsStatusMap.set(key, 'unavailable')
-      }
-    })
-  }
+  const thisSubAssignedKeys = new Set(
+    allAssigned.map(shift => `${shift.date}|${shift.time_slot_code}`)
+  )
+  const thisSubCanCoverKeys = new Set(
+    allCanCover.map(shift => `${shift.date}|${shift.time_slot_code}`)
+  )
+  const thisSubCannotCoverReason = new Map(
+    allCannotCover.map(shift => [
+      `${shift.date}|${shift.time_slot_code}`,
+      shift.reason ?? undefined,
+    ])
+  )
 
   const renderCoverageBar = () => {
     if (isDeclined) {
       return <p className="text-xs text-muted-foreground">Declined all shifts</p>
     }
     const softSegmentColors = {
-      assigned: 'rgb(191, 219, 254)', // blue-200
       available: 'rgb(186, 225, 210)', // soft mint-green with slight blue tone
       unavailable: 'rgb(229, 231, 235)', // gray-200
     } as const
@@ -189,11 +172,9 @@ export default function SubFinderCard({
                       ? index < coveredSegments
                         ? softSegmentColors.available
                         : softSegmentColors.unavailable
-                      : status === 'assigned'
-                        ? softSegmentColors.assigned
-                        : status === 'available'
-                          ? softSegmentColors.available
-                          : softSegmentColors.unavailable
+                      : status === 'available' || status === 'assigned'
+                        ? softSegmentColors.available
+                        : softSegmentColors.unavailable
                   return (
                     <div
                       key={`segment-${index}`}
@@ -276,7 +257,7 @@ export default function SubFinderCard({
     <Card
       id={id}
       className={cn(
-        'group/subcard border border-slate-200 hover:shadow-md transition-shadow',
+        'group/subcard border border-slate-200 transition-all hover:shadow-md hover:scale-[1.01]',
         highlighted && 'ring-2 ring-blue-500 ring-offset-2 animate-pulse',
         className
       )}
@@ -509,8 +490,7 @@ export default function SubFinderCard({
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="hover:bg-primary/10 -mr-2"
-                  style={{ color: '#115E59' }}
+                  className="text-teal-700 hover:bg-transparent hover:text-teal-800 -mr-2"
                   onClick={event => {
                     event.stopPropagation()
                     onContact?.()
@@ -531,8 +511,7 @@ export default function SubFinderCard({
               <Button
                 size="sm"
                 variant="ghost"
-                className="hover:bg-primary/10 -mr-2"
-                style={{ color: '#115E59' }}
+                className="text-teal-700 hover:bg-transparent hover:text-teal-800 -mr-2"
                 onClick={event => {
                   event.stopPropagation()
                   onContact?.()
@@ -553,23 +532,29 @@ export default function SubFinderCard({
                 cannotCover={allCannotCover}
                 shifts={allShifts.map(shift => {
                   const key = `${shift.date}|${shift.time_slot_code}`
-                  const status = allShiftsStatusMap.get(key) || 'unavailable'
+                  const canCoverThisSub =
+                    thisSubAssignedKeys.has(key) || thisSubCanCoverKeys.has(key)
+                  const assignedToThisSub = thisSubAssignedKeys.has(key)
+                  const assignedToOtherSub = shift.status !== 'uncovered' && !assignedToThisSub
                   return {
                     date: shift.date,
                     time_slot_code: shift.time_slot_code,
-                    status:
-                      status === 'assigned'
-                        ? 'assigned'
-                        : status === 'available'
-                          ? 'available'
-                          : 'unavailable',
+                    status: canCoverThisSub ? 'available' : 'unavailable',
+                    assignment_owner: assignedToThisSub
+                      ? ('this_sub' as const)
+                      : assignedToOtherSub
+                        ? ('other_sub' as const)
+                        : undefined,
+                    assigned_sub_name: assignedToOtherSub ? shift.sub_name || null : null,
+                    reason: thisSubCannotCoverReason.get(key),
                     classroom_name: shift.classroom_name || null,
                     class_name: shift.class_name || null,
                   }
                 })}
                 isDeclined={isDeclined}
-                recommendedShifts={canCover}
+                recommendedShifts={[]}
                 softAvailableStyle={softChipColors}
+                showLegend
               />
             </div>
           )}

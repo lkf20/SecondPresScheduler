@@ -61,10 +61,10 @@ export type CoverageType = 'covered' | 'partial' | 'uncovered'
  */
 export const coverageColorValues = {
   covered: {
-    bg: 'rgb(239, 246, 255)', // blue-50
-    border: 'rgb(96, 165, 250)', // blue-400
-    text: 'rgb(29, 78, 216)', // blue-700
-    icon: 'rgb(37, 99, 235)', // blue-600
+    bg: 'rgb(246, 253, 251)', // very light green/teal tint
+    border: 'rgb(196, 234, 226)', // slightly darker border
+    text: 'rgb(15, 118, 110)', // teal-700
+    icon: 'rgb(13, 148, 136)', // teal-600
   },
   partial: {
     bg: 'rgb(254, 252, 232)', // yellow-50
@@ -73,19 +73,19 @@ export const coverageColorValues = {
     icon: 'rgb(202, 138, 4)', // yellow-600
   },
   uncovered: {
-    bg: 'rgb(255, 247, 237)', // orange-50
-    border: 'rgb(251, 146, 60)', // orange-400
-    text: 'rgb(194, 65, 12)', // orange-700
+    bg: 'rgb(243, 244, 246)', // gray-100
+    border: 'rgb(209, 213, 219)', // gray-300
+    text: 'rgb(234, 88, 12)', // orange-600
     icon: 'rgb(234, 88, 12)', // orange-600
   },
 } as const
 
 export const coverageColors = {
   covered: {
-    bg: 'bg-blue-50',
-    border: 'border-blue-400',
-    text: 'text-blue-700',
-    icon: 'text-blue-600',
+    bg: 'bg-teal-50',
+    border: 'border-teal-300',
+    text: 'text-teal-700',
+    icon: 'text-teal-600',
   },
   partial: {
     bg: 'bg-yellow-50',
@@ -94,9 +94,9 @@ export const coverageColors = {
     icon: 'text-yellow-600',
   },
   uncovered: {
-    bg: 'bg-orange-50',
-    border: 'border-orange-400',
-    text: 'text-orange-700',
+    bg: 'bg-gray-100',
+    border: 'border-gray-300',
+    text: 'text-orange-600',
     icon: 'text-orange-600',
   },
 } as const

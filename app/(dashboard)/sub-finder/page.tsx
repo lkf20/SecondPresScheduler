@@ -2492,43 +2492,35 @@ export default function SubFinderPage() {
         </Dialog>
 
         {isContactPanelOpen && selectedAbsence && selectedSub && (
-          <>
-            <div className="fixed inset-0 z-40 bg-black/80" />
-            <div
-              className="fixed inset-y-0 right-0 z-50 border-l bg-white shadow-xl"
-              style={{ width: '540px', maxWidth: 'calc(100vw - 64px)' }}
-            >
-              <ContactSubPanel
-                isOpen={isContactPanelOpen}
-                onClose={closeContactPanel}
-                sub={selectedSub as RecommendedSub}
-                absence={selectedAbsence}
-                variant="inline"
-                initialContactData={
-                  selectedSub && selectedAbsence
-                    ? contactDataCache.get(getCacheKey(selectedSub.id, selectedAbsence.id))
-                    : undefined
-                }
-                onAssignmentComplete={async () => {
-                  if (selectedAbsence) {
-                    setContactDataCache(prev => {
-                      const next = new Map(prev)
-                      for (const [key] of next) {
-                        if (key.endsWith(`-${selectedAbsence.id}`)) {
-                          next.delete(key)
-                        }
-                      }
-                      return next
-                    })
+          <ContactSubPanel
+            isOpen={isContactPanelOpen}
+            onClose={closeContactPanel}
+            sub={selectedSub as RecommendedSub}
+            absence={selectedAbsence}
+            variant="sheet"
+            initialContactData={
+              selectedSub && selectedAbsence
+                ? contactDataCache.get(getCacheKey(selectedSub.id, selectedAbsence.id))
+                : undefined
+            }
+            onAssignmentComplete={async () => {
+              if (selectedAbsence) {
+                setContactDataCache(prev => {
+                  const next = new Map(prev)
+                  for (const [key] of next) {
+                    if (key.endsWith(`-${selectedAbsence.id}`)) {
+                      next.delete(key)
+                    }
                   }
-                  await fetchAbsences()
-                  if (selectedAbsence) {
-                    await runFinderForAbsence(selectedAbsence)
-                  }
-                }}
-              />
-            </div>
-          </>
+                  return next
+                })
+              }
+              await fetchAbsences()
+              if (selectedAbsence) {
+                await runFinderForAbsence(selectedAbsence)
+              }
+            }}
+          />
         )}
       </div>
     </div>
