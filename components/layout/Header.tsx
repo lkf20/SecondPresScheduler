@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -489,11 +488,6 @@ export default function Header({ userEmail }: HeaderProps) {
                   <SheetDescription>Track recent changes across your school.</SheetDescription>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link href="/activity" onClick={() => setIsActivitySheetOpen(false)}>
-                      Open Full Page
-                    </Link>
-                  </Button>
                   <SheetClose asChild>
                     <button
                       type="button"

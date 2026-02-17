@@ -81,11 +81,15 @@ function getEntityHref(row: ActivityRow) {
 }
 
 export function ActivityFeed({ className }: { className?: string }) {
+  const makeCacheKey = (category: string, actorId: string) => `${category}::${actorId || 'all'}`
   const [rows, setRows] = useState<ActivityRow[]>([])
   const [actors, setActors] = useState<ActorOption[]>([])
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [selectedActor, setSelectedActor] = useState('')
   const [cursor, setCursor] = useState<string | null>(null)
+  const [queryCache, setQueryCache] = useState<
+    Record<string, { rows: ActivityRow[]; actors: ActorOption[]; cursor: string | null }>
+  >({})
   const [isInitialLoading, setIsInitialLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -118,22 +122,45 @@ export function ActivityFeed({ className }: { className?: string }) {
       const nextActors = (payload.actors || []) as ActorOption[]
       const nextCursor = (payload.nextCursor || null) as string | null
 
-      setRows(current => (append ? [...current, ...nextRows] : nextRows))
-      if (!append) {
-        setActors(nextActors)
-      }
-      setErrorMessage(null)
-      setCursor(nextCursor)
+      return { nextRows, nextActors, nextCursor }
     },
     [cursor, selectedActor, selectedCategory]
   )
 
   useEffect(() => {
     let isActive = true
+    const cacheKey = makeCacheKey(selectedCategory, selectedActor)
+    const cached = queryCache[cacheKey]
+
+    if (cached) {
+      setRows(cached.rows)
+      setActors(cached.actors)
+      setCursor(cached.cursor)
+      setErrorMessage(null)
+      setIsInitialLoading(false)
+      return () => {
+        isActive = false
+      }
+    }
+
     setIsInitialLoading(true)
-    setCursor(null)
 
     fetchRows(false)
+      .then(({ nextRows, nextActors, nextCursor }) => {
+        if (!isActive) return
+        setRows(nextRows)
+        setActors(nextActors)
+        setCursor(nextCursor)
+        setErrorMessage(null)
+        setQueryCache(current => ({
+          ...current,
+          [cacheKey]: {
+            rows: nextRows,
+            actors: nextActors,
+            cursor: nextCursor,
+          },
+        }))
+      })
       .catch(error => {
         console.error('[activity-ui] failed to load feed', error)
         if (isActive) {
@@ -149,7 +176,7 @@ export function ActivityFeed({ className }: { className?: string }) {
     return () => {
       isActive = false
     }
-  }, [selectedCategory, selectedActor, fetchRows])
+  }, [selectedCategory, selectedActor, fetchRows, queryCache])
 
   const emptyStateLabel = useMemo(() => {
     if (selectedCategory !== 'all' || selectedActor) {
@@ -258,7 +285,20 @@ export function ActivityFeed({ className }: { className?: string }) {
             if (!cursor || isLoadingMore) return
             setIsLoadingMore(true)
             try {
-              await fetchRows(true)
+              const { nextRows, nextActors, nextCursor } = await fetchRows(true)
+              const mergedRows = [...rows, ...nextRows]
+              setRows(mergedRows)
+              setActors(nextActors)
+              setCursor(nextCursor)
+              const cacheKey = makeCacheKey(selectedCategory, selectedActor)
+              setQueryCache(current => ({
+                ...current,
+                [cacheKey]: {
+                  rows: mergedRows,
+                  actors: nextActors,
+                  cursor: nextCursor,
+                },
+              }))
             } catch (error) {
               console.error('[activity-ui] failed to load more', error)
             } finally {
