@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import SubFinderCard from '@/components/sub-finder/SubFinderCard'
 import type { SubCandidate } from '@/components/sub-finder/hooks/useSubFinderData'
 import type { SubFinderShift } from '@/lib/sub-finder/types'
@@ -524,6 +524,7 @@ export default function RecommendedSubsList({
         id={`sub-card-${sub.id}`}
         name={sub.name}
         phone={sub.phone}
+        email={sub.email ?? null}
         shiftsCovered={remainingCoveredCount}
         totalShifts={
           derived.hasAssignedShifts
@@ -659,10 +660,22 @@ export default function RecommendedSubsList({
       : 'More filters'
 
   const toggleFilter = (key: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [key]: true,
+    }))
     setActiveFilter(prev => (prev === key ? null : key))
   }
 
   const showSection = (key: string) => (activeFilter ? activeFilter === key : true)
+
+  useEffect(() => {
+    if (!activeFilter) return
+    setExpandedSections(prev => ({
+      ...prev,
+      [activeFilter]: true,
+    }))
+  }, [activeFilter])
 
   if (renderFiltersOnly && (loading || subs.length === 0 || !showAllSubs || !groupedSubs)) {
     return null
@@ -743,7 +756,6 @@ export default function RecommendedSubsList({
                     <Button
                       type="button"
                       variant="ghost"
-                      onClick={event => event.preventDefault()}
                       className={cn(
                         'h-auto rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                         activeMoreFilter || activeFilter === null
@@ -783,7 +795,13 @@ export default function RecommendedSubsList({
                           <button
                             key={filter.key}
                             type="button"
-                            onClick={() => setActiveFilter(filter.key)}
+                            onClick={() => {
+                              setExpandedSections(prev => ({
+                                ...prev,
+                                [filter.key]: true,
+                              }))
+                              setActiveFilter(filter.key)
+                            }}
                             className={cn(
                               'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',
                               isActive
@@ -824,12 +842,10 @@ export default function RecommendedSubsList({
                   )}
                 {showSection('unavailable') &&
                   renderSection('unavailable', 'Unavailable', groupedSubs.unavailable)}
-                {showSection('declined') && groupedSubs.declined.length > 0 && (
+                {showSection('declined') && (
                   <>
                     <div className="border-t border-slate-200" />
-                    <div className="opacity-70">
-                      {renderSection('declined', 'Declined', groupedSubs.declined)}
-                    </div>
+                    {renderSection('declined', 'Declined', groupedSubs.declined)}
                   </>
                 )}
               </div>

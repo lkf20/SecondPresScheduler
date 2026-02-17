@@ -12,6 +12,7 @@ import {
   Clock,
   HelpCircle,
   Phone,
+  PhoneOff,
   XCircle,
 } from 'lucide-react'
 import ShiftChips from '@/components/sub-finder/ShiftChips'
@@ -40,6 +41,7 @@ interface SubFinderCardProps {
   id?: string
   name: string
   phone: string | null
+  email?: string | null
   shiftsCovered: number
   totalShifts: number
   useRemainingLabel?: boolean
@@ -80,6 +82,7 @@ export default function SubFinderCard({
   id,
   name,
   phone,
+  email = null,
   shiftsCovered,
   totalShifts,
   useRemainingLabel = false,
@@ -229,6 +232,23 @@ export default function SubFinderCard({
     resolvedResponseStatus === 'pending' ||
     resolvedResponseStatus === 'confirmed' ||
     resolvedResponseStatus === 'declined_all'
+  const statusBadge = isAssigned
+    ? {
+        label: 'Assigned',
+        icon: CheckCircle,
+        className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+      }
+    : isContacted
+      ? {
+          label: 'Contacted',
+          icon: Phone,
+          className: 'border-sky-200 bg-sky-50 text-sky-700',
+        }
+      : {
+          label: 'Not contacted',
+          icon: PhoneOff,
+          className: 'border-slate-200 bg-slate-100 text-slate-500',
+        }
 
   useEffect(() => {
     setNoteDraft(notes || '')
@@ -256,7 +276,7 @@ export default function SubFinderCard({
     <Card
       id={id}
       className={cn(
-        'border border-slate-200 hover:shadow-md transition-shadow',
+        'group/subcard border border-slate-200 hover:shadow-md transition-shadow',
         highlighted && 'ring-2 ring-blue-500 ring-offset-2 animate-pulse',
         className
       )}
@@ -282,6 +302,8 @@ export default function SubFinderCard({
             <SubCardHeader
               name={name}
               phone={phone}
+              email={email}
+              statusBadge={condensedStatus ? statusBadge : null}
               shiftsCovered={shiftsCovered}
               totalShifts={totalShifts}
               isDeclined={isDeclined}
@@ -308,37 +330,6 @@ export default function SubFinderCard({
               SHOW_DEBUG_BORDERS && 'border border-amber-400'
             )}
           >
-            {condensedStatus && (
-              <div className="mt-0 flex items-center gap-1.5 text-xs leading-snug text-slate-600">
-                <span className="inline-flex items-center gap-1">
-                  {isAssigned ? (
-                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
-                  ) : (
-                    <XCircle className="h-3.5 w-3.5 text-slate-400" />
-                  )}
-                  <span>{isAssigned ? 'Assigned' : 'Unassigned'}</span>
-                </span>
-                <span>·</span>
-                <span className="inline-flex items-center gap-1">
-                  <Phone
-                    className={cn(
-                      'h-3.5 w-3.5',
-                      isContacted ? 'text-emerald-600' : 'text-slate-400'
-                    )}
-                  />
-                  <span>{isContacted ? 'Contacted' : 'Not contacted'}</span>
-                </span>
-                {shouldShowResponseStatus && (
-                  <>
-                    <span>·</span>
-                    <span className="inline-flex items-center gap-1 text-slate-600">
-                      <responseMeta.icon className="h-3.5 w-3.5" />
-                      <span>{responseMeta.label}</span>
-                    </span>
-                  </>
-                )}
-              </div>
-            )}
             {recommendedShiftCount !== undefined && recommendedShiftCount > 0 ? (
               <>
                 <p
@@ -491,7 +482,7 @@ export default function SubFinderCard({
           (allCanCover.length > 0 || allCannotCover.length > 0) && (
             <div
               className={cn(
-                'mb-0 flex items-center justify-between gap-4 border-t border-slate-200',
+                'mb-0 flex items-center justify-between gap-4',
                 condensedStatus ? '-mt-2 pt-0.5' : '-mt-1 pt-1',
                 SHOW_DEBUG_BORDERS && 'border border-lime-500'
               )}
@@ -503,14 +494,16 @@ export default function SubFinderCard({
                   event.stopPropagation()
                   setIsAllShiftsExpanded(!isAllShiftsExpanded)
                 }}
-                className="flex items-center gap-2 p-2 hover:underline hover:bg-transparent hover:text-slate-700 text-sm font-medium text-slate-700 justify-start"
+                className="flex items-center gap-1.5 p-2 hover:bg-transparent hover:text-slate-700 text-sm font-medium text-slate-700 justify-start"
               >
-                <span>View all shifts</span>
-                {isAllShiftsExpanded ? (
-                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                )}
+                <span className="text-slate-400">Shifts</span>
+                <span className="inline-flex items-center">
+                  {isAllShiftsExpanded ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </span>
               </Button>
               {onContact && (
                 <Button

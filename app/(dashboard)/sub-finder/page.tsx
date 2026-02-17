@@ -140,6 +140,7 @@ export default function SubFinderPage() {
   const [manualTeacherSearch, setManualTeacherSearch] = useState('')
   const [isManualTeacherSearchOpen, setIsManualTeacherSearchOpen] = useState(false)
   const subSearchRef = useRef<HTMLDivElement | null>(null)
+  const rightPanelRef = useRef<HTMLDivElement | null>(null)
   const manualEndDateRef = useRef<HTMLButtonElement | null>(null)
   const [endDateCorrected, setEndDateCorrected] = useState(false)
   const correctionTimeoutRef = useRef<number | null>(null)
@@ -809,6 +810,25 @@ export default function SubFinderPage() {
     }
   }, [closeRightPanel, closeContactPanel, isContactPanelOpen, isRightPanelOpen])
 
+  useEffect(() => {
+    if (!isRightPanelOpen || isContactPanelOpen || removeDialogShift) return
+    if (typeof window !== 'undefined' && window.innerWidth < 768) return
+
+    const handleClickOutsideRightPanel = (event: MouseEvent) => {
+      const target = event.target as Node | null
+      if (!target) return
+      const targetElement = target as HTMLElement
+      if (targetElement.closest('[data-radix-popper-content-wrapper]')) return
+      if (rightPanelRef.current?.contains(target)) return
+      closeRightPanel()
+    }
+
+    document.addEventListener('mousedown', handleClickOutsideRightPanel)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutsideRightPanel)
+    }
+  }, [closeRightPanel, isRightPanelOpen, isContactPanelOpen, removeDialogShift])
+
   // Handle panel restoration when Add Time Off closes
   useEffect(() => {
     if (
@@ -1211,7 +1231,7 @@ export default function SubFinderPage() {
       >
         <div
           className={cn(
-            'sticky top-0 z-10 border-b border-slate-200 bg-slate-100 flex flex-col',
+            'sticky top-6 z-10 border-b border-slate-200 bg-slate-100 flex flex-col',
             railCollapsed ? 'px-2 pt-6 pb-3 items-center' : 'px-6 pt-10 pb-4'
           )}
         >
@@ -1539,12 +1559,6 @@ export default function SubFinderPage() {
             />
           </div>
         )}
-        {isRightPanelOpen && !railCollapsed && (
-          <div
-            className="pointer-events-none absolute inset-0 z-20"
-            style={{ backgroundColor: 'rgba(15, 23, 42, 0.12)' }}
-          />
-        )}
       </div>
     )
   }
@@ -1861,6 +1875,7 @@ export default function SubFinderPage() {
           width: isLeftRailCollapsed ? '3.5rem' : '26rem',
           minWidth: isLeftRailCollapsed ? '3.5rem' : '26rem',
           maxWidth: isLeftRailCollapsed ? '3.5rem' : '26rem',
+          filter: isRightPanelOpen && !isContactPanelOpen ? 'brightness(0.9)' : undefined,
         }}
       >
         {renderLeftRail(isLeftRailCollapsed, true)}
@@ -1874,6 +1889,9 @@ export default function SubFinderPage() {
             SHOW_MIDDLE_COLUMN_DEBUG_BORDERS &&
               'outline outline-4 outline-red-500/90 outline-offset-[-4px] bg-red-50/20'
           )}
+          style={{
+            filter: isRightPanelOpen && !isContactPanelOpen ? 'brightness(0.9)' : undefined,
+          }}
         >
           {SHOW_MIDDLE_COLUMN_DEBUG_BORDERS && (
             <div className="pointer-events-none absolute left-2 top-2 z-50 rounded bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">
@@ -1896,7 +1914,7 @@ export default function SubFinderPage() {
             {selectedAbsence && (
               <>
                 <div
-                  className="border-b border-slate-200 bg-white"
+                  className="mt-6 border-b border-slate-200 bg-white"
                   style={middleColumnContentStyle}
                 >
                   <div className="pt-10 pb-0">
@@ -2181,17 +2199,12 @@ export default function SubFinderPage() {
 
             {/* Middle column content ends above */}
           </div>
-          {isRightPanelOpen && (
-            <div
-              className="pointer-events-none absolute inset-0 z-20"
-              style={{ backgroundColor: 'rgba(15, 23, 42, 0.12)' }}
-            />
-          )}
         </div>
 
         {/* Right Column */}
         {isRightPanelOpen && (
           <div
+            ref={rightPanelRef}
             className={cn(
               'shrink-0 flex-none border-l bg-white transition-all h-full overflow-hidden',
               SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-rose-500'
@@ -2205,9 +2218,19 @@ export default function SubFinderPage() {
                   SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-orange-500'
                 )}
               >
+                <div className="shrink-0 flex justify-end px-8 pt-4">
+                  <button
+                    type="button"
+                    onClick={closeRightPanel}
+                    aria-label="Close"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
                 <div
                   className={cn(
-                    'shrink-0 border-b border-slate-200 bg-white px-8 pt-6 pb-4 shadow-[0_1px_0_rgba(15,23,42,0.04)]',
+                    'mt-0 shrink-0 border-b border-slate-200 bg-white px-8 pt-3 pb-4 shadow-[0_1px_0_rgba(15,23,42,0.04)]',
                     SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-blue-500'
                   )}
                 >
@@ -2272,14 +2295,6 @@ export default function SubFinderPage() {
                         </div>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={closeRightPanel}
-                      aria-label="Close"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
                   </div>
 
                   <div
