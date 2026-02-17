@@ -153,7 +153,7 @@ export function useSubFinderData({
     isFetching: isFetchingAbsences,
     refetch: refetchAbsences,
   } = useSubFinderAbsences(
-    { includePartiallyCovered },
+    { includePartiallyCovered, includeFullyCovered: true },
     skipInitialFetch ? undefined : [] // Don't provide initial data if skipping fetch
   )
 

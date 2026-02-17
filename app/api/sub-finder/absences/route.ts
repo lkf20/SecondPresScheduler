@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams
     const includePartiallyCovered = searchParams.get('include_partially_covered') === 'true'
+    const includeFullyCovered = searchParams.get('include_fully_covered') === 'true'
 
     const supabase = await createClient()
 
@@ -365,14 +366,20 @@ export async function GET(request: NextRequest) {
         return true
       }
 
-      // If includePartiallyCovered is false, only show uncovered
+      // If includePartiallyCovered is false, only show uncovered by default,
+      // but optionally include fully covered absences.
       if (!includePartiallyCovered) {
-        const included = absence.shifts.uncovered > 0
+        const included =
+          absence.shifts.uncovered > 0 || (includeFullyCovered && absence.shifts.fully_covered > 0)
         return included
       }
 
-      // If includePartiallyCovered is true, show uncovered or partially covered
-      const included = absence.shifts.uncovered > 0 || absence.shifts.partially_covered > 0
+      // If includePartiallyCovered is true, show uncovered or partially covered.
+      // Optionally include fully covered absences for left-rail visibility.
+      const included =
+        absence.shifts.uncovered > 0 ||
+        absence.shifts.partially_covered > 0 ||
+        (includeFullyCovered && absence.shifts.fully_covered > 0)
       return included
     })
 

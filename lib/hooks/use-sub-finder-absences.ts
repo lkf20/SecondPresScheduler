@@ -50,6 +50,9 @@ async function fetchSubFinderAbsences(
   if (params?.includePartiallyCovered) {
     searchParams.set('include_partially_covered', 'true')
   }
+  if (params?.includeFullyCovered) {
+    searchParams.set('include_fully_covered', 'true')
+  }
 
   const url = `/api/sub-finder/absences${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
   const response = await fetch(url)

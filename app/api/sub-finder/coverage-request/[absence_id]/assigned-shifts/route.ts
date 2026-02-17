@@ -48,6 +48,7 @@ export async function GET(
       .from('coverage_request_shifts')
       .select('date, time_slot_id, time_slots:time_slot_id(code)')
       .eq('coverage_request_id', coverageRequestId)
+      .eq('status', 'active')
 
     if (shiftsError) {
       console.error('Error fetching coverage_request_shifts:', shiftsError)
@@ -84,6 +85,7 @@ export async function GET(
       )
       .eq('teacher_id', coverageRequest.teacher_id)
       .eq('assignment_type', 'Substitute Shift')
+      .eq('status', 'active')
 
     if (assignmentsError) {
       console.error('Error fetching sub_assignments:', assignmentsError)

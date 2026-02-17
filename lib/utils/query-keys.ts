@@ -21,6 +21,7 @@ export interface TimeOffRequestsQueryParams {
 
 export interface SubFinderAbsencesQueryParams {
   includePartiallyCovered?: boolean
+  includeFullyCovered?: boolean
 }
 
 export interface SubRecommendationsQueryParams {

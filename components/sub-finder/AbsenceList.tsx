@@ -1,7 +1,8 @@
 'use client'
 
+import { useEffect, useMemo, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, ChevronDown } from 'lucide-react'
 import TimeOffCard from '@/components/shared/TimeOffCard'
 import type { ClassroomBadge } from '@/components/shared/TimeOffCard'
 
@@ -52,6 +53,83 @@ export default function AbsenceList({
   onFindSubs,
   loading,
 }: AbsenceListProps) {
+  const [showNeedsCoverage, setShowNeedsCoverage] = useState(true)
+  const [showFullyCovered, setShowFullyCovered] = useState(false)
+
+  const { openAbsences, fullyCoveredAbsences } = useMemo(() => {
+    const open: Absence[] = []
+    const fullyCovered: Absence[] = []
+
+    absences.forEach(absence => {
+      const isFullyCovered =
+        absence.shifts.total > 0 &&
+        absence.shifts.uncovered === 0 &&
+        absence.shifts.partially_covered === 0 &&
+        absence.shifts.fully_covered > 0
+      if (isFullyCovered) {
+        fullyCovered.push(absence)
+      } else {
+        open.push(absence)
+      }
+    })
+
+    return { openAbsences: open, fullyCoveredAbsences: fullyCovered }
+  }, [absences])
+
+  useEffect(() => {
+    if (selectedAbsence && openAbsences.some(absence => absence.id === selectedAbsence.id)) {
+      setShowNeedsCoverage(true)
+    }
+  }, [openAbsences, selectedAbsence])
+
+  useEffect(() => {
+    if (
+      selectedAbsence &&
+      fullyCoveredAbsences.some(absence => absence.id === selectedAbsence.id)
+    ) {
+      setShowFullyCovered(true)
+    }
+  }, [fullyCoveredAbsences, selectedAbsence])
+
+  const renderAbsenceCard = (absence: Absence) => {
+    const { uncovered, partially_covered, fully_covered } = absence.shifts
+    const isSelected = selectedAbsence?.id === absence.id
+
+    const classrooms: ClassroomBadge[] =
+      absence.classrooms ||
+      Array.from(
+        new Set(
+          absence.shifts.shift_details
+            .map(shift => shift.classroom_name)
+            .filter((name): name is string => Boolean(name))
+        )
+      ).map(name => ({ id: name, name, color: null }))
+
+    return (
+      <TimeOffCard
+        key={absence.id}
+        id={absence.id}
+        teacherName={absence.teacher_name}
+        startDate={absence.start_date}
+        endDate={absence.end_date}
+        reason={absence.reason}
+        classrooms={classrooms}
+        variant="sub-finder"
+        covered={fully_covered}
+        uncovered={uncovered}
+        partial={partially_covered}
+        isSelected={isSelected}
+        onSelect={() => {
+          onSelectAbsence(absence)
+          onFindSubs(absence)
+        }}
+        onFindSubs={() => onFindSubs(absence)}
+        loading={loading}
+        notes={absence.notes || null}
+      />
+    )
+  }
+
   if (loading && absences.length === 0) {
     return (
       <div className="p-4 space-y-3">
@@ -82,45 +160,41 @@ export default function AbsenceList({
 
   return (
     <div className="p-4 space-y-3">
-      {absences.map(absence => {
-        const { uncovered, partially_covered, fully_covered } = absence.shifts
-        const isSelected = selectedAbsence?.id === absence.id
+      {openAbsences.length > 0 && (
+        <div className="pt-1">
+          <button
+            type="button"
+            className="w-full flex items-center justify-between px-1 py-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+            onClick={() => setShowNeedsCoverage(prev => !prev)}
+          >
+            <span>Needs Coverage ({openAbsences.length})</span>
+            <ChevronDown
+              className={`h-4 w-4 text-slate-500 transition-transform ${showNeedsCoverage ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {showNeedsCoverage && (
+            <div className="space-y-3 mt-2">{openAbsences.map(renderAbsenceCard)}</div>
+          )}
+        </div>
+      )}
 
-        // Map classrooms from absence.classrooms or derive from shift_details
-        const classrooms: ClassroomBadge[] =
-          absence.classrooms ||
-          Array.from(
-            new Set(
-              absence.shifts.shift_details
-                .map(shift => shift.classroom_name)
-                .filter((name): name is string => Boolean(name))
-            )
-          ).map(name => ({ id: name, name, color: null }))
-
-        return (
-          <TimeOffCard
-            key={absence.id}
-            id={absence.id}
-            teacherName={absence.teacher_name}
-            startDate={absence.start_date}
-            endDate={absence.end_date}
-            reason={absence.reason}
-            classrooms={classrooms}
-            variant="sub-finder"
-            covered={fully_covered}
-            uncovered={uncovered}
-            partial={partially_covered}
-            isSelected={isSelected}
-            onSelect={() => {
-              onSelectAbsence(absence)
-              onFindSubs(absence)
-            }}
-            onFindSubs={() => onFindSubs(absence)}
-            loading={loading}
-            notes={absence.notes || null}
-          />
-        )
-      })}
+      {fullyCoveredAbsences.length > 0 && (
+        <div className="pt-2">
+          <button
+            type="button"
+            className="w-full flex items-center justify-between px-1 py-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+            onClick={() => setShowFullyCovered(prev => !prev)}
+          >
+            <span>Fully Covered ({fullyCoveredAbsences.length})</span>
+            <ChevronDown
+              className={`h-4 w-4 text-slate-500 transition-transform ${showFullyCovered ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {showFullyCovered && (
+            <div className="space-y-3 mt-3">{fullyCoveredAbsences.map(renderAbsenceCard)}</div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

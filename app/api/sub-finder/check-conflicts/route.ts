@@ -114,6 +114,8 @@ export async function POST(request: NextRequest) {
         'date, time_slot_id, teacher_id, classroom_id, staff:teacher_id(first_name, last_name, display_name)'
       )
       .eq('sub_id', sub_id)
+      .eq('status', 'active')
+      .eq('assignment_type', 'Substitute Shift')
       .gte('date', startDate)
       .lte('date', endDate)
 
