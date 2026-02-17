@@ -97,6 +97,7 @@ export default function SubFinderPage() {
   const [removingScope, setRemovingScope] = useState<'single' | 'all_for_absence' | null>(null)
   const [isAllSubsOpen, setIsAllSubsOpen] = useState(false)
   const [selectedSubIds, setSelectedSubIds] = useState<string[]>([])
+  const [rightPanelActiveFilter, setRightPanelActiveFilter] = useState<string | null>('available')
   const [isTeacherSearchOpen, setIsTeacherSearchOpen] = useState(false)
   const { setActivePanel, previousPanel, restorePreviousPanel, registerPanelCloseHandler } =
     usePanelManager()
@@ -1710,7 +1711,7 @@ export default function SubFinderPage() {
               <div className="rounded-lg border border-slate-200 bg-slate-100">
                 <div className="flex items-center justify-between border-b px-4 py-3">
                   <div className="space-y-1">
-                    <div className="text-base font-semibold text-slate-900">
+                    <div className="text-lg font-semibold text-slate-900">
                       Subs for {selectedAbsence.teacher_name}
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
@@ -1841,6 +1842,9 @@ export default function SubFinderPage() {
                     highlightedSubId={highlightedSubId}
                     includePastShifts={includePastShifts}
                     selectedShift={selectedShift}
+                    activeFilter={rightPanelActiveFilter}
+                    onActiveFilterChange={setRightPanelActiveFilter}
+                    hideFilterControls
                   />
                 </div>
               </div>
@@ -2189,7 +2193,7 @@ export default function SubFinderPage() {
         {isRightPanelOpen && (
           <div
             className={cn(
-              'shrink-0 flex-none border-l bg-white transition-all h-full overflow-y-auto',
+              'shrink-0 flex-none border-l bg-white transition-all h-full overflow-hidden',
               SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-rose-500'
             )}
             style={{ width: '540px' }}
@@ -2197,185 +2201,211 @@ export default function SubFinderPage() {
             {selectedAbsence ? (
               <div
                 className={cn(
-                  'py-6 px-8 space-y-4',
+                  'h-full flex flex-col',
                   SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-orange-500'
                 )}
               >
                 <div
                   className={cn(
-                    'mb-4 flex items-start justify-between border-b border-slate-200 pb-3',
+                    'shrink-0 border-b border-slate-200 bg-white px-8 pt-6 pb-4 shadow-[0_1px_0_rgba(15,23,42,0.04)]',
                     SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-blue-500'
                   )}
                 >
-                  <div className="flex flex-col gap-1">
-                    {selectedShift ? (
-                      <>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-base font-semibold text-slate-900">
-                            {`Subs for ${formatShortDate(selectedShift.date)} • ${selectedShift.time_slot_code}`}
-                          </span>
-                          {selectedShift.classroom_name ? (
-                            <span
-                              className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
-                              style={getClassroomPillStyle(selectedShift.classroom_color ?? null)}
-                            >
-                              {selectedShift.classroom_name}
+                  <div className="flex items-start justify-between">
+                    <div className="flex flex-col gap-1">
+                      {selectedShift ? (
+                        <>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-base font-semibold text-slate-900">
+                              {`Subs for ${formatShortDate(selectedShift.date)} • ${selectedShift.time_slot_code}`}
                             </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              Classroom unavailable
-                            </span>
-                          )}
-                        </div>
-                        {ENABLE_SHIFT_FOCUS_MODE && (
-                          <p className="text-sm text-slate-600">
-                            {selectedShiftMatchCount} can cover this shift · {allSubs.length} total
-                            subs
-                          </p>
-                        )}
-                      </>
-                    ) : (
-                      <div className="flex flex-col gap-1">
-                        <div className="text-base font-semibold text-slate-900">
-                          Subs for {selectedAbsence.teacher_name}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                          <span>
-                            {formatAbsenceDateRange(
-                              selectedAbsence.start_date,
-                              selectedAbsence.end_date
+                            {selectedShift.classroom_name ? (
+                              <span
+                                className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                                style={getClassroomPillStyle(selectedShift.classroom_color ?? null)}
+                              >
+                                {selectedShift.classroom_name}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                Classroom unavailable
+                              </span>
                             )}
-                          </span>
-                          {selectedClassrooms.length > 0 ? (
-                            <span className="flex flex-wrap items-center gap-1.5">
-                              {selectedClassrooms.map(classroom => (
-                                <span
-                                  key={classroom.id || classroom.name}
-                                  className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
-                                  style={getClassroomPillStyle(classroom.color)}
-                                >
-                                  {classroom.name}
-                                </span>
-                              ))}
+                          </div>
+                          {ENABLE_SHIFT_FOCUS_MODE && (
+                            <p className="text-sm text-slate-600">
+                              {selectedShiftMatchCount} can cover this shift · {allSubs.length}{' '}
+                              total subs
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          <div className="text-lg font-semibold text-slate-900">
+                            Subs for {selectedAbsence.teacher_name}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                            <span>
+                              {formatAbsenceDateRange(
+                                selectedAbsence.start_date,
+                                selectedAbsence.end_date
+                              )}
                             </span>
+                            {selectedClassrooms.length > 0 ? (
+                              <span className="flex flex-wrap items-center gap-1.5">
+                                {selectedClassrooms.map(classroom => (
+                                  <span
+                                    key={classroom.id || classroom.name}
+                                    className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                                    style={getClassroomPillStyle(classroom.color)}
+                                  >
+                                    {classroom.name}
+                                  </span>
+                                ))}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                Classroom unavailable
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={closeRightPanel}
+                      aria-label="Close"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div
+                    className={cn(
+                      'pt-3 space-y-2',
+                      SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-purple-500'
+                    )}
+                  >
+                    <div
+                      ref={subSearchRef}
+                      className={cn(
+                        'rounded-md border border-slate-200 bg-white',
+                        SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-emerald-500'
+                      )}
+                    >
+                      <div className="p-1.5">
+                        <Input
+                          placeholder="Search substitutes..."
+                          value={subSearch}
+                          onChange={event => setSubSearch(event.target.value)}
+                          onFocus={() => setIsSubSearchOpen(true)}
+                          className="h-7 border-0  text-sm focus-visible:ring-0"
+                        />
+                      </div>
+                      {isSubSearchOpen && (
+                        <div className="max-h-60 overflow-y-auto p-2">
+                          {filteredSubsForSearch.length === 0 ? (
+                            <div className="p-2 text-xs text-muted-foreground">No matches</div>
                           ) : (
-                            <span className="text-xs text-muted-foreground">
-                              Classroom unavailable
-                            </span>
+                            <div className="space-y-1">
+                              {filteredSubsForSearch.map(sub => {
+                                const name = getDisplayName(sub)
+                                const canCover = selectedShift
+                                  ? (sub.can_cover?.some(
+                                      shift =>
+                                        shift.date === selectedShift.date &&
+                                        shift.time_slot_code === selectedShift.time_slot_code
+                                    ) ?? false)
+                                  : (sub.shifts_covered ?? 0) > 0 ||
+                                    (sub.can_cover?.length ?? 0) > 0
+                                return (
+                                  <button
+                                    key={sub.id}
+                                    type="button"
+                                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
+                                    onClick={() => {
+                                      if (!canCover && includeOnlyRecommended) {
+                                        setIncludeOnlyRecommended(false)
+                                        applySubResults(allSubs, {
+                                          useOnlyRecommended: false,
+                                        })
+                                        toast(
+                                          'Turning off “Include only recommended subs” to show this selection.'
+                                        )
+                                        setTimeout(() => scrollToSubCard(sub.id), 50)
+                                      } else {
+                                        scrollToSubCard(sub.id)
+                                      }
+                                      setSelectedSubIds(prev =>
+                                        prev.includes(sub.id) ? prev : [...prev, sub.id]
+                                      )
+                                      setSubSearch('')
+                                      setIsSubSearchOpen(false)
+                                    }}
+                                  >
+                                    <span
+                                      className={`h-2 w-2 rounded-full ${canCover ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                    />
+                                    <span>{name.trim()}</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
                           )}
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={closeRightPanel}
-                    aria-label="Close"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+
+                  {selectedSubChips.length > 0 && (
+                    <div className="pt-2 flex flex-wrap gap-2">
+                      {selectedSubChips.map(chip => (
+                        <span
+                          key={chip.id}
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700"
+                        >
+                          {chip.name}
+                          <button
+                            type="button"
+                            className="text-slate-400 hover:text-slate-600"
+                            aria-label={`Remove ${chip.name}`}
+                            onClick={() =>
+                              setSelectedSubIds(prev => prev.filter(id => id !== chip.id))
+                            }
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="pt-4">
+                    <RecommendedSubsList
+                      subs={rightPanelSubs}
+                      loading={loading}
+                      absence={absenceForUI ?? selectedAbsence}
+                      shiftDetails={shiftDetails}
+                      showAllSubs
+                      hideHeader
+                      includePastShifts={includePastShifts}
+                      selectedShift={selectedShift}
+                      activeFilter={rightPanelActiveFilter}
+                      onActiveFilterChange={setRightPanelActiveFilter}
+                      renderFiltersOnly
+                      className="space-y-0"
+                    />
+                  </div>
                 </div>
 
                 <div
                   className={cn(
-                    'pt-6 space-y-2',
-                    SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-purple-500'
+                    'min-h-0 flex-1 overflow-y-auto px-8 pb-6',
+                    SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-cyan-500'
                   )}
                 >
-                  <div
-                    ref={subSearchRef}
-                    className={cn(
-                      'rounded-md border border-slate-200 bg-white',
-                      SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-emerald-500'
-                    )}
-                  >
-                    <div className="p-1.5">
-                      <Input
-                        placeholder="Search substitutes..."
-                        value={subSearch}
-                        onChange={event => setSubSearch(event.target.value)}
-                        onFocus={() => setIsSubSearchOpen(true)}
-                        className="h-7 border-0  text-sm focus-visible:ring-0"
-                      />
-                    </div>
-                    {isSubSearchOpen && (
-                      <div className="max-h-60 overflow-y-auto p-2">
-                        {filteredSubsForSearch.length === 0 ? (
-                          <div className="p-2 text-xs text-muted-foreground">No matches</div>
-                        ) : (
-                          <div className="space-y-1">
-                            {filteredSubsForSearch.map(sub => {
-                              const name = getDisplayName(sub)
-                              const canCover = selectedShift
-                                ? (sub.can_cover?.some(
-                                    shift =>
-                                      shift.date === selectedShift.date &&
-                                      shift.time_slot_code === selectedShift.time_slot_code
-                                  ) ?? false)
-                                : (sub.shifts_covered ?? 0) > 0 || (sub.can_cover?.length ?? 0) > 0
-                              return (
-                                <button
-                                  key={sub.id}
-                                  type="button"
-                                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
-                                  onClick={() => {
-                                    if (!canCover && includeOnlyRecommended) {
-                                      setIncludeOnlyRecommended(false)
-                                      applySubResults(allSubs, {
-                                        useOnlyRecommended: false,
-                                      })
-                                      toast(
-                                        'Turning off “Include only recommended subs” to show this selection.'
-                                      )
-                                      setTimeout(() => scrollToSubCard(sub.id), 50)
-                                    } else {
-                                      scrollToSubCard(sub.id)
-                                    }
-                                    setSelectedSubIds(prev =>
-                                      prev.includes(sub.id) ? prev : [...prev, sub.id]
-                                    )
-                                    setSubSearch('')
-                                    setIsSubSearchOpen(false)
-                                  }}
-                                >
-                                  <span
-                                    className={`h-2 w-2 rounded-full ${canCover ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                                  />
-                                  <span>{name.trim()}</span>
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {selectedSubChips.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedSubChips.map(chip => (
-                      <span
-                        key={chip.id}
-                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700"
-                      >
-                        {chip.name}
-                        <button
-                          type="button"
-                          className="text-slate-400 hover:text-slate-600"
-                          aria-label={`Remove ${chip.name}`}
-                          onClick={() =>
-                            setSelectedSubIds(prev => prev.filter(id => id !== chip.id))
-                          }
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div className={cn(SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-cyan-500')}>
                   <RecommendedSubsList
                     subs={rightPanelSubs}
                     loading={loading}
@@ -2388,6 +2418,10 @@ export default function SubFinderPage() {
                     highlightedSubId={highlightedSubId}
                     includePastShifts={includePastShifts}
                     selectedShift={selectedShift}
+                    stickyControls
+                    activeFilter={rightPanelActiveFilter}
+                    onActiveFilterChange={setRightPanelActiveFilter}
+                    hideFilterControls
                   />
                 </div>
               </div>

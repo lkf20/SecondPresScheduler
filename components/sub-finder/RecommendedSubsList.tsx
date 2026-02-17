@@ -1,7 +1,7 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
@@ -31,6 +31,12 @@ interface RecommendedSubsListProps {
   highlightedSubId?: string | null
   includePastShifts?: boolean
   selectedShift?: SubFinderShift | null
+  stickyControls?: boolean
+  activeFilter?: string | null
+  onActiveFilterChange?: (filter: string | null) => void
+  renderFiltersOnly?: boolean
+  hideFilterControls?: boolean
+  className?: string
 }
 
 export default function RecommendedSubsList({
@@ -45,6 +51,12 @@ export default function RecommendedSubsList({
   highlightedSubId = null,
   includePastShifts = false,
   selectedShift = null,
+  stickyControls = false,
+  activeFilter: controlledActiveFilter,
+  onActiveFilterChange,
+  renderFiltersOnly = false,
+  hideFilterControls = false,
+  className,
 }: RecommendedSubsListProps) {
   const [expandedSections, setExpandedSections] = useState({
     assigned: false,
@@ -625,7 +637,20 @@ export default function RecommendedSubsList({
       filter.key === 'availableLimited' || filter.key === 'unavailable' || filter.key === 'declined'
   )
 
-  const [activeFilter, setActiveFilter] = useState<string | null>('available')
+  const [internalActiveFilter, setInternalActiveFilter] = useState<string | null>('available')
+  const activeFilter =
+    controlledActiveFilter === undefined ? internalActiveFilter : controlledActiveFilter
+  const setActiveFilter = useCallback(
+    (nextFilter: string | null | ((prev: string | null) => string | null)) => {
+      const resolvedNext =
+        typeof nextFilter === 'function' ? nextFilter(activeFilter ?? null) : (nextFilter ?? null)
+      if (controlledActiveFilter === undefined) {
+        setInternalActiveFilter(resolvedNext)
+      }
+      onActiveFilterChange?.(resolvedNext)
+    },
+    [activeFilter, controlledActiveFilter, onActiveFilterChange]
+  )
   const activeMoreFilter = moreFilters.find(filter => filter.key === activeFilter) ?? null
   const moreFilterLabel = activeMoreFilter
     ? `${activeMoreFilter.label} (${sectionCounts[activeMoreFilter.key]})`
@@ -638,6 +663,10 @@ export default function RecommendedSubsList({
   }
 
   const showSection = (key: string) => (activeFilter ? activeFilter === key : true)
+
+  if (renderFiltersOnly && (loading || subs.length === 0 || !showAllSubs || !groupedSubs)) {
+    return null
+  }
 
   if (loading) {
     return (
@@ -665,7 +694,7 @@ export default function RecommendedSubsList({
 
   return (
     <TooltipProvider>
-      <div className="space-y-4">
+      <div className={cn('space-y-4', className)}>
         {/* Conditionally render header only if not hidden */}
         {!hideHeader && (
           <div className="mb-4">
@@ -685,74 +714,126 @@ export default function RecommendedSubsList({
         )}
 
         {showAllSubs && groupedSubs ? (
-          <div className="space-y-4">
-            <div className="mt-2 flex flex-wrap gap-2 pb-3">
-              {primaryFilters.map(filter => (
-                <Button
-                  key={filter.key}
-                  type="button"
-                  variant="ghost"
-                  onClick={() => toggleFilter(filter.key)}
-                  className={cn(
-                    'rounded-full border px-3 py-1 text-xs font-medium h-auto',
-                    activeFilter === filter.key
-                      ? 'border-button-fill bg-button-fill text-button-fill-foreground hover:bg-button-fill/90'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-white'
-                  )}
-                >
-                  {filter.label} ({sectionCounts[filter.key]})
-                </Button>
-              ))}
-              <Select
-                value={activeMoreFilter?.key ?? 'all'}
-                onValueChange={value => {
-                  setActiveFilter(value === 'all' ? null : value)
-                }}
-              >
-                <SelectTrigger
-                  className={cn(
-                    'h-auto w-[210px] rounded-full border px-4 py-1 text-xs font-medium',
-                    activeMoreFilter || activeFilter === null
-                      ? 'border-button-fill bg-button-fill text-button-fill-foreground'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                  )}
-                >
-                  <span className="truncate">{moreFilterLabel}</span>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All ({allCount})</SelectItem>
-                  {moreFilters.map(filter => (
-                    <SelectItem key={filter.key} value={filter.key}>
-                      {filter.label} ({sectionCounts[filter.key]})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              {showSection('assigned') &&
-                renderSection('assigned', 'Assigned', groupedSubs.assigned)}
-              {showSection('contacted') &&
-                renderSection('contacted', 'Contacted', groupedSubs.contacted)}
-              {showSection('available') &&
-                renderSection('available', 'Available', groupedSubs.available)}
-              {showSection('availableLimited') &&
-                renderSection(
-                  'availableLimited',
-                  'Available (with limitations)',
-                  groupedSubs.availableLimited
+          <div className={cn('space-y-4', stickyControls && 'bg-white')}>
+            {!hideFilterControls && (
+              <div
+                className={cn(
+                  'relative w-full flex flex-wrap gap-2',
+                  stickyControls ? 'sticky top-0 z-40 bg-white px-0 pt-10 pb-3' : 'mt-2 pb-3'
                 )}
-              {showSection('unavailable') &&
-                renderSection('unavailable', 'Unavailable', groupedSubs.unavailable)}
-              {showSection('declined') && groupedSubs.declined.length > 0 && (
-                <>
-                  <div className="border-t border-slate-200" />
-                  <div className="opacity-70">
-                    {renderSection('declined', 'Declined', groupedSubs.declined)}
-                  </div>
-                </>
-              )}
-            </div>
+              >
+                {primaryFilters.map(filter => (
+                  <Button
+                    key={filter.key}
+                    type="button"
+                    variant="ghost"
+                    onClick={() => toggleFilter(filter.key)}
+                    className={cn(
+                      'h-auto rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                      activeFilter === filter.key
+                        ? 'border-slate-900 bg-slate-900 text-white'
+                        : 'border-slate-400 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                    )}
+                  >
+                    {filter.label} ({sectionCounts[filter.key]})
+                  </Button>
+                ))}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={event => event.preventDefault()}
+                      className={cn(
+                        'h-auto rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                        activeMoreFilter || activeFilter === null
+                          ? 'border-slate-900 bg-slate-900 text-white'
+                          : 'border-slate-400 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                      )}
+                    >
+                      {moreFilterLabel}
+                      <ChevronDown className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56 p-2" align="start">
+                    <div className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => setActiveFilter(null)}
+                        className={cn(
+                          'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',
+                          activeFilter === null
+                            ? 'bg-slate-900 text-white'
+                            : 'text-slate-700 hover:bg-slate-100'
+                        )}
+                      >
+                        <span>All</span>
+                        <span
+                          className={cn(
+                            'text-xs',
+                            activeFilter === null ? 'text-white/90' : 'text-slate-500'
+                          )}
+                        >
+                          {allCount}
+                        </span>
+                      </button>
+                      {moreFilters.map(filter => {
+                        const isActive = activeFilter === filter.key
+                        return (
+                          <button
+                            key={filter.key}
+                            type="button"
+                            onClick={() => setActiveFilter(filter.key)}
+                            className={cn(
+                              'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',
+                              isActive
+                                ? 'bg-slate-900 text-white'
+                                : 'text-slate-700 hover:bg-slate-100'
+                            )}
+                          >
+                            <span>{filter.label}</span>
+                            <span
+                              className={cn(
+                                'text-xs',
+                                isActive ? 'text-white/90' : 'text-slate-500'
+                              )}
+                            >
+                              {sectionCounts[filter.key]}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+            {!renderFiltersOnly && (
+              <div className={cn(hideFilterControls && 'pt-3')}>
+                {showSection('assigned') &&
+                  renderSection('assigned', 'Assigned', groupedSubs.assigned)}
+                {showSection('contacted') &&
+                  renderSection('contacted', 'Contacted', groupedSubs.contacted)}
+                {showSection('available') &&
+                  renderSection('available', 'Available', groupedSubs.available)}
+                {showSection('availableLimited') &&
+                  renderSection(
+                    'availableLimited',
+                    'Available (with limitations)',
+                    groupedSubs.availableLimited
+                  )}
+                {showSection('unavailable') &&
+                  renderSection('unavailable', 'Unavailable', groupedSubs.unavailable)}
+                {showSection('declined') && groupedSubs.declined.length > 0 && (
+                  <>
+                    <div className="border-t border-slate-200" />
+                    <div className="opacity-70">
+                      {renderSection('declined', 'Declined', groupedSubs.declined)}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <>
