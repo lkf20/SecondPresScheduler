@@ -187,6 +187,7 @@ export default function RecommendedCombination({
               allCannotCover={visibleCannotCoverAll}
               allAssigned={visibleAssignedAll}
               coverageSegments={coverageSegments}
+              useStatusBadgeOnly
             />
           )
         })}

@@ -74,6 +74,7 @@ interface SubFinderCardProps {
   softChipColors?: boolean
   condensedStatus?: boolean // Experimental: single-line status summary
   showPrimaryShiftChips?: boolean // Experimental: hide inline chips, show only "View all shifts"
+  useStatusBadgeOnly?: boolean // Show compact status badge by name instead of right status stack
 }
 
 const SHOW_DEBUG_BORDERS = false
@@ -108,6 +109,7 @@ export default function SubFinderCard({
   softChipColors = true,
   condensedStatus = false,
   showPrimaryShiftChips = true,
+  useStatusBadgeOnly = false,
 }: SubFinderCardProps) {
   const [isAllShiftsExpanded, setIsAllShiftsExpanded] = useState(false)
   const [noteDraft, setNoteDraft] = useState(notes || '')
@@ -230,6 +232,8 @@ export default function SubFinderCard({
           icon: PhoneOff,
           className: 'border-slate-200 bg-slate-100 text-slate-500',
         }
+  const showCompactStatusBadge = condensedStatus || useStatusBadgeOnly
+  const isCompactLayout = condensedStatus || useStatusBadgeOnly
 
   useEffect(() => {
     setNoteDraft(notes || '')
@@ -267,7 +271,7 @@ export default function SubFinderCard({
       <CardContent
         className={cn(
           'px-4 flex flex-col',
-          condensedStatus ? 'pt-2.5 pb-0.5 gap-0.5' : 'pt-4 pb-1.5 gap-2',
+          isCompactLayout ? 'pt-2.5 pb-0.5 gap-0.5' : 'pt-4 pb-1.5 gap-2',
           SHOW_DEBUG_BORDERS && 'border border-fuchsia-400'
         )}
       >
@@ -284,12 +288,12 @@ export default function SubFinderCard({
               name={name}
               phone={phone}
               email={email}
-              statusBadge={condensedStatus ? statusBadge : null}
+              statusBadge={showCompactStatusBadge ? statusBadge : null}
               shiftsCovered={shiftsCovered}
               totalShifts={totalShifts}
               isDeclined={isDeclined}
               showCoverage={false}
-              compactSpacing={condensedStatus}
+              compactSpacing={isCompactLayout}
             />
           </div>
           <div className={cn('ml-auto shrink-0', SHOW_DEBUG_BORDERS && 'border border-teal-400')}>
@@ -300,14 +304,14 @@ export default function SubFinderCard({
         <div
           className={cn(
             'flex w-full items-start justify-between gap-4',
-            condensedStatus && '-mt-1.5',
+            isCompactLayout && '-mt-1.5',
             SHOW_DEBUG_BORDERS && 'border border-violet-400'
           )}
         >
           <div
             className={cn(
               'min-w-0 flex-1 pr-2',
-              condensedStatus ? 'pb-1' : 'pb-4',
+              isCompactLayout ? 'pb-2' : 'pb-4',
               SHOW_DEBUG_BORDERS && 'border border-amber-400'
             )}
           >
@@ -316,7 +320,7 @@ export default function SubFinderCard({
                 <p
                   className={cn(
                     'text-muted-foreground',
-                    condensedStatus ? 'text-xs mb-1' : 'text-sm mb-2'
+                    isCompactLayout ? 'mt-1 text-xs mb-1' : 'mt-1 text-sm mb-2'
                   )}
                 >
                   Recommended: {recommendedShiftCount} shift
@@ -334,7 +338,7 @@ export default function SubFinderCard({
                         assigned={assigned}
                         shifts={shiftChips}
                         isDeclined={isDeclined}
-                        recommendedShifts={canCover}
+                        recommendedShifts={[]}
                         softAvailableStyle={softChipColors}
                       />
                     </div>
@@ -387,7 +391,7 @@ export default function SubFinderCard({
               </div>
             )}
           </div>
-          {!condensedStatus && (
+          {!showCompactStatusBadge && (
             <div
               className={cn(
                 'ml-auto flex flex-col items-end gap-2 shrink-0',
@@ -438,7 +442,7 @@ export default function SubFinderCard({
           <div
             className={cn(
               'w-full',
-              condensedStatus ? 'mt-2' : 'mt-0',
+              isCompactLayout ? 'mt-1' : 'mt-0',
               SHOW_DEBUG_BORDERS && 'border border-red-400'
             )}
           >
@@ -450,7 +454,7 @@ export default function SubFinderCard({
               placeholder="Add note..."
               className={cn(
                 'w-full resize-none rounded-md border border-transparent bg-transparent px-1 text-sm text-slate-600 placeholder:text-slate-400 focus:border-slate-200 focus:bg-white focus:outline-none',
-                condensedStatus ? 'py-0 leading-tight' : 'py-0.5'
+                isCompactLayout ? 'py-0 leading-tight' : 'py-0.5'
               )}
             />
             {isSavingNote && <div className="px-1 text-xs text-slate-400">Saving...</div>}
@@ -464,7 +468,7 @@ export default function SubFinderCard({
             <div
               className={cn(
                 'mb-0 flex items-center justify-between gap-4',
-                condensedStatus ? '-mt-2 pt-0.5' : '-mt-1 pt-1',
+                isCompactLayout ? '-mt-2 pt-0.5' : '-mt-1 pt-1',
                 SHOW_DEBUG_BORDERS && 'border border-lime-500'
               )}
             >
@@ -526,7 +530,12 @@ export default function SubFinderCard({
           allShifts.length > 0 &&
           (allCanCover.length > 0 || allCannotCover.length > 0) &&
           isAllShiftsExpanded && (
-            <div className={cn('mb-4 mt-0', SHOW_DEBUG_BORDERS && 'border border-orange-400')}>
+            <div
+              className={cn(
+                'mb-4 mt-1 border-t border-slate-200 pt-2',
+                SHOW_DEBUG_BORDERS && 'border border-orange-400'
+              )}
+            >
               <ShiftChips
                 canCover={allCanCover}
                 cannotCover={allCannotCover}

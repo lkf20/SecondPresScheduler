@@ -58,6 +58,7 @@ export default function RecommendedSubsList({
   hideFilterControls = false,
   className,
 }: RecommendedSubsListProps) {
+  const [isMoreFiltersOpen, setIsMoreFiltersOpen] = useState(false)
   const [expandedSections, setExpandedSections] = useState({
     assigned: false,
     contacted: false,
@@ -751,7 +752,7 @@ export default function RecommendedSubsList({
                     {filter.label} ({sectionCounts[filter.key]})
                   </Button>
                 ))}
-                <Popover>
+                <Popover open={isMoreFiltersOpen} onOpenChange={setIsMoreFiltersOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       type="button"
@@ -771,7 +772,10 @@ export default function RecommendedSubsList({
                     <div className="space-y-1">
                       <button
                         type="button"
-                        onClick={() => setActiveFilter(null)}
+                        onClick={() => {
+                          setActiveFilter(null)
+                          setIsMoreFiltersOpen(false)
+                        }}
                         className={cn(
                           'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',
                           activeFilter === null
@@ -801,6 +805,7 @@ export default function RecommendedSubsList({
                                 [filter.key]: true,
                               }))
                               setActiveFilter(filter.key)
+                              setIsMoreFiltersOpen(false)
                             }}
                             className={cn(
                               'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',

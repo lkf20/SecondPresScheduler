@@ -10,6 +10,7 @@ type UnassignRequestBody = {
   sub_id?: string
   scope?: UnassignScope
   assignment_id?: string
+  coverage_request_shift_id?: string
 }
 
 export async function POST(request: NextRequest) {
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest) {
     const subId = body.sub_id
     const scope = body.scope
     const assignmentId = body.assignment_id
+    const coverageRequestShiftId = body.coverage_request_shift_id
 
     if (!absenceId || !subId || (scope !== 'single' && scope !== 'all_for_absence')) {
       return NextResponse.json(
@@ -38,9 +40,11 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    if (scope === 'single' && !assignmentId) {
+    if (scope === 'single' && !assignmentId && !coverageRequestShiftId) {
       return NextResponse.json(
-        { error: 'assignment_id is required for single removal.' },
+        {
+          error: 'assignment_id or coverage_request_shift_id is required for single removal.',
+        },
         { status: 400 }
       )
     }
@@ -111,7 +115,16 @@ export async function POST(request: NextRequest) {
     let targetDate: string | null = null
     let targetTimeSlotId: string | null = null
     if (scope === 'single') {
-      const target = matchingAssignments.find(assignment => assignment.id === assignmentId)
+      const target = matchingAssignments.find(assignment => {
+        if (assignmentId && assignment.id === assignmentId) return true
+        if (
+          coverageRequestShiftId &&
+          assignment.coverage_request_shift_id === coverageRequestShiftId
+        ) {
+          return true
+        }
+        return false
+      })
       if (!target) {
         return NextResponse.json(
           { error: 'That assignment is no longer active for this time off request.' },

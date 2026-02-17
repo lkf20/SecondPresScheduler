@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
@@ -9,10 +9,27 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Phone, Mail, AlertTriangle, ChevronDown, ChevronUp, X } from 'lucide-react'
+import {
+  Phone,
+  Mail,
+  AlertTriangle,
+  ArrowRightLeft,
+  ChevronDown,
+  ChevronUp,
+  X,
+  XCircle,
+} from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   getPanelBackgroundClasses,
   getPanelHeaderBackgroundClasses,
@@ -105,6 +122,7 @@ interface ContactSubPanelProps {
   variant?: 'sheet' | 'inline'
   initialContactData?: ContactData // Cached contact data from parent
   onAssignmentComplete?: () => void // Callback to refresh data after assignment
+  onChangeShift?: (shift: { date: string; time_slot_code: string }) => void
 }
 
 export default function ContactSubPanel({
@@ -115,6 +133,7 @@ export default function ContactSubPanel({
   variant = 'sheet',
   initialContactData,
   onAssignmentComplete,
+  onChangeShift,
 }: ContactSubPanelProps) {
   const router = useRouter()
   const assignSubShiftsMutation = useAssignSubShifts()
@@ -142,6 +161,133 @@ export default function ContactSubPanel({
   const [isPreviouslyAvailableExpanded, setIsPreviouslyAvailableExpanded] = useState(false)
   const [remainingShiftKeys, setRemainingShiftKeys] = useState<Set<string>>(new Set())
   const [remainingShiftCount, setRemainingShiftCount] = useState<number | null>(null)
+  const [removeDialogShift, setRemoveDialogShift] = useState<{
+    coverage_request_shift_id: string
+    date: string
+    day_name: string
+    time_slot_code: string
+  } | null>(null)
+  const [removingScope, setRemovingScope] = useState<'single' | 'all_for_absence' | null>(null)
+  const [timeSlotOrderByCode, setTimeSlotOrderByCode] = useState<Record<string, number>>({})
+  const sortedAssignedShifts = useMemo(() => {
+    return [...assignedShifts].sort((a, b) => {
+      const dateA = parseLocalDate(a.date).getTime()
+      const dateB = parseLocalDate(b.date).getTime()
+      if (dateA !== dateB) return dateA - dateB
+
+      const orderA = timeSlotOrderByCode[a.time_slot_code]
+      const orderB = timeSlotOrderByCode[b.time_slot_code]
+      if (orderA !== undefined && orderB !== undefined && orderA !== orderB) {
+        return orderA - orderB
+      }
+      if (orderA !== undefined && orderB === undefined) return -1
+      if (orderA === undefined && orderB !== undefined) return 1
+      return a.time_slot_code.localeCompare(b.time_slot_code)
+    })
+  }, [assignedShifts, timeSlotOrderByCode])
+  useEffect(() => {
+    if (!isOpen) return
+    let isCancelled = false
+
+    const fetchTimeSlotOrder = async () => {
+      try {
+        const response = await fetch('/api/timeslots')
+        if (!response.ok) return
+        const rows = (await response.json()) as Array<{
+          code?: string | null
+          display_order?: number | null
+        }>
+        if (isCancelled) return
+        const orderMap: Record<string, number> = {}
+        rows.forEach(row => {
+          if (!row.code || row.display_order == null) return
+          orderMap[row.code] = row.display_order
+        })
+        setTimeSlotOrderByCode(orderMap)
+      } catch {
+        // Non-blocking: fallback sort remains code-based if timeslots request fails.
+      }
+    }
+
+    fetchTimeSlotOrder()
+    return () => {
+      isCancelled = true
+    }
+  }, [isOpen])
+
+  const refreshRemainingShifts = async () => {
+    if (!absence) return
+    const refreshResponse = await fetch(
+      `/api/sub-finder/coverage-request/${absence.id}/assigned-shifts`
+    )
+    if (!refreshResponse.ok) return
+    const refreshData = await refreshResponse.json()
+    const refreshedRemainingKeys = new Set<string>(
+      Array.isArray(refreshData.remaining_shift_keys) ? refreshData.remaining_shift_keys : []
+    )
+    setRemainingShiftKeys(refreshedRemainingKeys)
+    setRemainingShiftCount(
+      typeof refreshData.remaining_shift_count === 'number'
+        ? refreshData.remaining_shift_count
+        : null
+    )
+  }
+
+  const handleRemoveAssignedShift = async (scope: 'single' | 'all_for_absence') => {
+    if (!absence || !sub) return
+    if (scope === 'single' && !removeDialogShift?.coverage_request_shift_id) return
+
+    try {
+      setRemovingScope(scope)
+      const response = await fetch('/api/sub-finder/unassign-shifts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          absence_id: absence.id,
+          sub_id: sub.id,
+          scope,
+          coverage_request_shift_id:
+            scope === 'single' ? removeDialogShift?.coverage_request_shift_id : undefined,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({ error: 'Failed to remove sub.' }))
+        throw new Error(errorBody.error || 'Failed to remove sub.')
+      }
+
+      if (scope === 'single' && removeDialogShift) {
+        setAssignedShifts(prev =>
+          prev.filter(
+            shift => shift.coverage_request_shift_id !== removeDialogShift.coverage_request_shift_id
+          )
+        )
+      } else {
+        setAssignedShifts([])
+      }
+
+      setRemoveDialogShift(null)
+      await refreshRemainingShifts()
+      if (onAssignmentComplete) await onAssignmentComplete()
+      router.refresh()
+
+      toast.success(
+        scope === 'single'
+          ? `Removed ${sub.name} from this shift.`
+          : `Removed ${sub.name} from all shifts for this request.`
+      )
+    } catch (error) {
+      console.error('Error removing assigned shift(s):', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to remove sub assignment.')
+    } finally {
+      setRemovingScope(null)
+    }
+  }
+
+  const handleChangeAssignedShift = (shift: { date: string; time_slot_code: string }) => {
+    onChangeShift?.(shift)
+    onClose()
+  }
 
   const applyShiftSelections = (data: ContactData) => {
     if (data.response_status === 'declined_all') {
@@ -182,18 +328,12 @@ export default function ContactSubPanel({
   }, [sub?.assigned_shifts])
 
   // Initialize selectedShifts to all can_cover shifts immediately when sub changes
-  // But don't select if response_status is declined_all
+  // Default to no preselected shifts; only use explicit saved selections when provided.
   useEffect(() => {
     if (sub?.can_cover) {
-      // If responseStatus is already 'declined_all', don't select any shifts
-      if (responseStatus === 'declined_all') {
-        setSelectedShifts(new Set())
-        return
-      }
-      const shiftKeys = sub.can_cover.map(shift => `${shift.date}|${shift.time_slot_code}`)
-      setSelectedShifts(new Set(shiftKeys))
+      setSelectedShifts(new Set())
     }
-  }, [sub?.can_cover, responseStatus])
+  }, [sub?.can_cover])
 
   // Clear all shifts when responseStatus changes to 'declined_all'
   useEffect(() => {
@@ -764,21 +904,7 @@ export default function ContactSubPanel({
 
       // Refresh remaining shifts to update remaining shifts calculation
       if (coverageRequestId && absence) {
-        const refreshResponse = await fetch(
-          `/api/sub-finder/coverage-request/${absence.id}/assigned-shifts`
-        )
-        if (refreshResponse.ok) {
-          const refreshData = await refreshResponse.json()
-          const refreshedRemainingKeys = new Set<string>(
-            Array.isArray(refreshData.remaining_shift_keys) ? refreshData.remaining_shift_keys : []
-          )
-          setRemainingShiftKeys(refreshedRemainingKeys)
-          setRemainingShiftCount(
-            typeof refreshData.remaining_shift_count === 'number'
-              ? refreshData.remaining_shift_count
-              : null
-          )
-        }
+        await refreshRemainingShifts()
       }
 
       // Don't close - keep panel open so user can see the updated status
@@ -1189,37 +1315,64 @@ export default function ContactSubPanel({
               {assignedShifts.length > 0 && (
                 <div className="space-y-2">
                   <Label className="text-sm font-medium block">Assigned to this sub</Label>
-                  <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3 bg-gray-50">
-                    {assignedShifts.map((shift, idx) => {
-                      return (
-                        <div
-                          key={idx}
-                          className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md bg-white"
-                        >
-                          <Checkbox id={`assigned-shift-${idx}`} checked={true} disabled={true} />
-                          <Label
-                            htmlFor={`assigned-shift-${idx}`}
-                            className="flex-1 cursor-pointer font-normal"
-                          >
-                            <Badge
-                              variant="outline"
-                              className="text-xs"
-                              style={
-                                {
-                                  backgroundColor: shiftStatusColorValues.assigned.bg,
-                                  borderWidth: '1px',
-                                  borderStyle: 'solid',
-                                  borderColor: shiftStatusColorValues.assigned.border,
-                                  color: shiftStatusColorValues.assigned.text,
-                                } as React.CSSProperties
-                              }
-                            >
-                              {formatShiftLabel(shift.date, shift.time_slot_code)}
-                            </Badge>
-                          </Label>
-                        </div>
-                      )
-                    })}
+                  <div className="space-y-2 border rounded-md p-3 bg-gray-50">
+                    {sortedAssignedShifts.map(shift => (
+                      <div
+                        key={shift.coverage_request_shift_id}
+                        className="flex items-center justify-between gap-2 rounded-md bg-white p-2"
+                      >
+                        <ShiftChips
+                          canCover={[]}
+                          cannotCover={[]}
+                          shifts={[
+                            {
+                              date: shift.date,
+                              time_slot_code: shift.time_slot_code,
+                              status: 'assigned' as const,
+                              assignment_owner: 'this_sub' as const,
+                            },
+                          ]}
+                          softAvailableStyle
+                        />
+                        <TooltipProvider>
+                          <div className="flex items-center gap-1">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  aria-label={`Remove ${sub.name} from ${formatShiftLabel(shift.date, shift.time_slot_code)}`}
+                                  onClick={() => setRemoveDialogShift(shift)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
+                                  style={{ color: '#9f1239', backgroundColor: '#fff7f8' }}
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>Remove sub</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  aria-label={`Change sub for ${formatShiftLabel(shift.date, shift.time_slot_code)}`}
+                                  onClick={() =>
+                                    handleChangeAssignedShift({
+                                      date: shift.date,
+                                      time_slot_code: shift.time_slot_code,
+                                    })
+                                  }
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200"
+                                  style={{ backgroundColor: '#f5fbfa' }}
+                                >
+                                  <ArrowRightLeft className="h-4 w-4" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>Change sub</TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </TooltipProvider>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -1282,21 +1435,21 @@ export default function ContactSubPanel({
                                           htmlFor={`shift-${idx}`}
                                           className="flex-1 font-normal cursor-not-allowed"
                                         >
-                                          <Badge
-                                            variant="outline"
-                                            className="text-xs"
-                                            style={
+                                          <ShiftChips
+                                            canCover={[]}
+                                            cannotCover={[]}
+                                            shifts={[
                                               {
-                                                backgroundColor: 'rgb(243, 244, 246)', // gray-100
-                                                borderWidth: '1px',
-                                                borderStyle: 'solid',
-                                                borderColor: 'rgb(209, 213, 219)', // gray-300
-                                                color: 'rgb(75, 85, 99)', // gray-600
-                                              } as React.CSSProperties
-                                            }
-                                          >
-                                            {formatShiftLabel(shift.date, shift.time_slot_code)}
-                                          </Badge>
+                                                date: shift.date,
+                                                time_slot_code: shift.time_slot_code,
+                                                status: 'available' as const,
+                                                class_name: shift.class_name ?? null,
+                                                classroom_name: shift.classroom_name ?? null,
+                                              },
+                                            ]}
+                                            isDeclined
+                                            softAvailableStyle
+                                          />
                                           {shift.class_name && (
                                             <Badge
                                               variant="outline"
@@ -1346,37 +1499,38 @@ export default function ContactSubPanel({
                                       htmlFor={`shift-${idx}`}
                                       className="flex-1 cursor-pointer font-normal"
                                     >
-                                      <Badge
-                                        variant="outline"
-                                        className="text-xs"
-                                        style={
-                                          {
-                                            backgroundColor: shiftStatusColorValues.available.bg,
-                                            borderWidth: '1px',
-                                            borderStyle: 'solid',
-                                            borderColor: shiftStatusColorValues.available.border,
-                                            color: shiftStatusColorValues.available.text,
-                                          } as React.CSSProperties
-                                        }
-                                      >
-                                        {formatShiftLabel(shift.date, shift.time_slot_code)}
-                                      </Badge>
-                                      {shift.classroom_name && (
-                                        <span
-                                          className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ml-2"
-                                          style={
+                                      <div className="inline-flex flex-wrap items-center gap-2">
+                                        <ShiftChips
+                                          canCover={[]}
+                                          cannotCover={[]}
+                                          shifts={[
                                             {
-                                              ...getClassroomPillStyle(
-                                                shift.classroom_color || null
-                                              ),
-                                              borderWidth: '1px',
-                                              borderStyle: 'solid',
-                                            } as React.CSSProperties
-                                          }
-                                        >
-                                          {shift.classroom_name}
-                                        </span>
-                                      )}
+                                              date: shift.date,
+                                              time_slot_code: shift.time_slot_code,
+                                              status: 'available' as const,
+                                              class_name: shift.class_name ?? null,
+                                              classroom_name: shift.classroom_name ?? null,
+                                            },
+                                          ]}
+                                          softAvailableStyle
+                                        />
+                                        {shift.classroom_name && (
+                                          <span
+                                            className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                                            style={
+                                              {
+                                                ...getClassroomPillStyle(
+                                                  shift.classroom_color || null
+                                                ),
+                                                borderWidth: '1px',
+                                                borderStyle: 'solid',
+                                              } as React.CSSProperties
+                                            }
+                                          >
+                                            {shift.classroom_name}
+                                          </span>
+                                        )}
+                                      </div>
                                     </Label>
                                   </div>
                                 )
@@ -1480,6 +1634,53 @@ export default function ContactSubPanel({
               )}
             </div>
           )}
+
+          <Dialog
+            open={Boolean(removeDialogShift)}
+            onOpenChange={open => {
+              if (!open && !removingScope) {
+                setRemoveDialogShift(null)
+              }
+            }}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Remove sub assignment?</DialogTitle>
+                <DialogDescription>
+                  {assignedShifts.length > 1
+                    ? `Would you like to remove ${sub.name} from only this shift, or from all shifts for ${absence.teacher_name} on this request?`
+                    : `Are you sure you want to remove ${sub.name} from this shift?`}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setRemoveDialogShift(null)}
+                  disabled={Boolean(removingScope)}
+                >
+                  Cancel
+                </Button>
+                {assignedShifts.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleRemoveAssignedShift('all_for_absence')}
+                    disabled={Boolean(removingScope)}
+                  >
+                    {removingScope === 'all_for_absence' ? 'Removing...' : 'All shifts'}
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  onClick={() => handleRemoveAssignedShift('single')}
+                  disabled={Boolean(removingScope)}
+                >
+                  {removingScope === 'single' ? 'Removing...' : 'This shift only'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Action Buttons */}
           <div className="flex flex-col gap-2 pt-4 pb-6 border-t">

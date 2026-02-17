@@ -409,20 +409,11 @@ export default function SubFinderPage() {
     [moreShiftFilters, shiftFilters]
   )
   const toggleShiftFilter = useCallback((key: string) => {
-    setShiftFilters(prev => {
-      if (key === 'all') return ['all']
-      const next = new Set(prev.filter(item => item !== 'all'))
-      if (next.has(key)) {
-        next.delete(key)
-      } else {
-        next.add(key)
-      }
-      return next.size === 0 ? ['all'] : Array.from(next)
-    })
+    setShiftFilters([key])
   }, [])
   const filteredShiftDetails = useMemo(() => {
-    if (shiftFilters.includes('all')) return sortedVisibleShifts
-    const active = new Set(shiftFilters)
+    const activeFilter = shiftFilters[0] || 'all'
+    if (activeFilter === 'all') return sortedVisibleShifts
     return sortedVisibleShifts.filter(shift => {
       const shiftKey = `${shift.date}|${shift.time_slot_code}`
       const contactedCount = contactedAvailableSubCountByShift.get(shiftKey) || 0
@@ -434,7 +425,7 @@ export default function SubFinderPage() {
         ['declined', (responseCounts?.declined || 0) > 0],
         ['pending', (responseCounts?.pending || 0) > 0],
       ]
-      return matches.some(([key, isMatch]) => isMatch && active.has(key))
+      return matches.some(([key, isMatch]) => key === activeFilter && isMatch)
     })
   }, [contactedAvailableSubCountByShift, responseCountsByShift, shiftFilters, sortedVisibleShifts])
   const coverageSummaryLine = useMemo(() => {
@@ -2498,6 +2489,17 @@ export default function SubFinderPage() {
             sub={selectedSub as RecommendedSub}
             absence={selectedAbsence}
             variant="sheet"
+            onChangeShift={shift => {
+              const match = selectedAbsence.shifts.shift_details.find(
+                detail =>
+                  detail.date === shift.date && detail.time_slot_code === shift.time_slot_code
+              )
+              if (match) {
+                handleSelectShift(match)
+                return
+              }
+              toast.error('Unable to locate that shift. Try refreshing and retrying.')
+            }}
             initialContactData={
               selectedSub && selectedAbsence
                 ? contactDataCache.get(getCacheKey(selectedSub.id, selectedAbsence.id))
