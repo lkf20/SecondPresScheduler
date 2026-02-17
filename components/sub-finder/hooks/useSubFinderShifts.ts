@@ -29,6 +29,8 @@ export function useSubFinderShifts(
       classroom_color: shift.classroom_color ?? null,
       status: shift.status,
       sub_name: shift.sub_name ?? null,
+      sub_id: shift.sub_id ?? null,
+      assignment_id: shift.assignment_id ?? null,
       is_partial: shift.is_partial ?? false,
       assignment_status: shift.assignment_status ?? null,
     }))

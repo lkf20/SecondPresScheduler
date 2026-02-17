@@ -31,6 +31,7 @@ interface ShiftChipsProps {
   showLegend?: boolean // Whether to show the color legend
   isDeclined?: boolean // If true, all chips will be gray
   recommendedShifts?: Shift[] // Optional list of recommended shifts (for showing checkmarks)
+  softAvailableStyle?: boolean // If true, use lower-saturation available chip colors
 }
 
 // Format shift label as "Mon AM • Feb 9"
@@ -58,6 +59,7 @@ export default function ShiftChips({
   showLegend = false,
   isDeclined = false,
   recommendedShifts = [],
+  softAvailableStyle = true,
 }: ShiftChipsProps) {
   if (
     canCover.length === 0 &&
@@ -151,7 +153,16 @@ export default function ShiftChips({
                 : classroomName
               : classGroupName || 'Classroom unavailable'
             const status = isDeclined ? 'declined' : shift.status
-            const colorValues = shiftStatusColorValues[status]
+            const baseColorValues = shiftStatusColorValues[status]
+            const colorValues =
+              softAvailableStyle && status === 'available'
+                ? {
+                    ...baseColorValues,
+                    bg: 'rgb(246, 253, 251)', // softer than teal-50
+                    border: 'rgb(196, 234, 226)', // softer teal border
+                    text: 'rgb(15, 118, 110)', // teal-700
+                  }
+                : baseColorValues
             const shiftKey = `${shift.date}|${shift.time_slot_code}`
             const isRecommended = recommendedShiftKeys.has(shiftKey)
             const badge = (

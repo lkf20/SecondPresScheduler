@@ -3,7 +3,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Users, CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
+import {
+  Users,
+  CheckCircle2,
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  ArrowRight,
+} from 'lucide-react'
 import type { RecommendedCombination as RecommendedCombinationType } from '@/lib/utils/sub-combination'
 import type { SubCandidate, Absence } from '@/components/sub-finder/hooks/useSubFinderData'
 import SubFinderCard from '@/components/sub-finder/SubFinderCard'
@@ -66,36 +73,47 @@ export default function RecommendedCombination({
     <Card className="mb-6 border border-amber-100 bg-amber-50/40 border-l-4 border-l-amber-400 shadow-md">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <Users className="h-5 w-5 text-primary" />
             <CardTitle className="text-lg">
               {isSingleSub ? 'Recommended Sub' : 'Recommended Combination'}
             </CardTitle>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <div className="flex items-center gap-1.5">
+            <span className="h-4 w-px bg-slate-300" aria-hidden="true" />
+            <div className="flex items-center gap-1.5 text-sm">
               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
               <span className="text-muted-foreground">
                 {currentCombination.totalShiftsCovered} of {currentCombination.totalShiftsNeeded}{' '}
                 shifts covered
               </span>
             </div>
-            {currentCombination.totalConflicts > 0 && (
-              <div className="flex items-center gap-1.5">
-                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                <span className="text-amber-700">
-                  {currentCombination.totalConflicts} conflict
-                  {currentCombination.totalConflicts !== 1 ? 's' : ''}
-                </span>
-              </div>
-            )}
           </div>
+          {onShowAllSubs && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onShowAllSubs}
+              className="px-0 text-slate-700 hover:bg-transparent hover:text-slate-900"
+            >
+              Show all subs <ArrowRight className="ml-1 h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
-        <p className="text-sm text-muted-foreground mt-1">
-          Best combination using {currentCombination.subs.length} sub
-          {currentCombination.subs.length !== 1 ? 's' : ''} to cover{' '}
-          {currentCombination.coveragePercent}% of shifts
-        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-3 text-sm">
+          <span className="text-muted-foreground">
+            Best combination using {currentCombination.subs.length} sub
+            {currentCombination.subs.length !== 1 ? 's' : ''} to cover{' '}
+            {currentCombination.coveragePercent}% of shifts
+          </span>
+          {currentCombination.totalConflicts > 0 && (
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <span className="text-amber-700">
+                {currentCombination.totalConflicts} conflict
+                {currentCombination.totalConflicts !== 1 ? 's' : ''}
+              </span>
+            </div>
+          )}
+        </div>
       </CardHeader>
       <div className="space-y-4 px-6 pb-6">
         {currentCombination.subs.map(assignment => {
@@ -173,9 +191,8 @@ export default function RecommendedCombination({
           )
         })}
       </div>
-      {(totalCombinations > 1 || onShowAllSubs) && (
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center px-6 pb-5">
-          <div />
+      {totalCombinations > 1 && (
+        <div className="flex items-center justify-center px-6 pb-5">
           {totalCombinations > 1 && (
             <div className="flex items-center justify-center gap-3">
               <button
@@ -211,13 +228,6 @@ export default function RecommendedCombination({
               </button>
             </div>
           )}
-          <div className="flex justify-end">
-            {onShowAllSubs && (
-              <Button size="sm" variant="outline" onClick={onShowAllSubs}>
-                Show all subs
-              </Button>
-            )}
-          </div>
         </div>
       )}
     </Card>

@@ -10,6 +10,7 @@ interface SubCardHeaderProps {
   totalShifts: number
   isDeclined?: boolean
   showCoverage?: boolean
+  compactSpacing?: boolean
 }
 
 export default function SubCardHeader({
@@ -19,11 +20,18 @@ export default function SubCardHeader({
   totalShifts,
   isDeclined = false,
   showCoverage = true,
+  compactSpacing = false,
 }: SubCardHeaderProps) {
   const coveredSegments = Math.min(shiftsCovered, totalShifts)
 
   return (
-    <div className="flex items-start justify-between mb-3">
+    <div
+      className={
+        compactSpacing
+          ? 'flex items-start justify-between mb-1'
+          : 'flex items-start justify-between mb-3'
+      }
+    >
       <div className="flex-1">
         <div className="flex items-center gap-2 mb-0.5 flex-wrap">
           <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />

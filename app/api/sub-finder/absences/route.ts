@@ -9,6 +9,7 @@ import { getUserSchoolId } from '@/lib/utils/auth'
 
 export async function GET(request: NextRequest) {
   try {
+    const isDev = process.env.NODE_ENV !== 'production'
     // Require schoolId from session
     const schoolId = await getUserSchoolId()
     if (!schoolId) {
@@ -116,6 +117,7 @@ export async function GET(request: NextRequest) {
                   })
                 }
                 assignmentMap.set(shiftKey, {
+                  id: assignment.id,
                   date: shiftDate,
                   time_slot_id: shiftTimeSlotId,
                   is_partial: assignment.is_partial,
@@ -136,7 +138,7 @@ export async function GET(request: NextRequest) {
           const { data: subAssignments } = await supabase
             .from('sub_assignments')
             .select(
-              'id, coverage_request_shift_id, date, time_slot_id, is_partial, assignment_type, sub:staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name)'
+              'id, coverage_request_shift_id, date, time_slot_id, is_partial, assignment_type, sub:staff!sub_assignments_sub_id_fkey(id, first_name, last_name, display_name)'
             )
             .eq('teacher_id', request.teacher_id)
             .eq('status', 'active') // Only active assignments
@@ -159,7 +161,20 @@ export async function GET(request: NextRequest) {
               }
             }
             if (!assignmentMap.has(shiftKey)) {
+              if (isDev && timeOffShiftKeys.has(shiftKey)) {
+                console.warn(
+                  '[Sub Finder Absences Debug] Using teacher/date fallback assignment for coverage',
+                  {
+                    request_id: request.id,
+                    coverage_request_id: coverageRequestId,
+                    assignment_id: assignment.id,
+                    shift_key: shiftKey,
+                    has_coverage_request_shift_id: Boolean(assignment.coverage_request_shift_id),
+                  }
+                )
+              }
               assignmentMap.set(shiftKey, {
+                id: assignment.id,
                 date: shiftDate,
                 time_slot_id: shiftTimeSlotId,
                 is_partial: assignment.is_partial,
@@ -236,6 +251,7 @@ export async function GET(request: NextRequest) {
             time_slot: shift.time_slot,
           })),
           assignments.map(assignment => ({
+            id: assignment.id,
             date: assignment.date,
             time_slot_id: assignment.time_slot_id,
             is_partial: assignment.is_partial,
@@ -309,6 +325,8 @@ export async function GET(request: NextRequest) {
               ? 'partially_covered'
               : 'uncovered',
         sub_name: detail.sub_name || null,
+        sub_id: detail.sub_id || null,
+        assignment_id: detail.assignment_id || null,
         is_partial: detail.is_partial || false,
       }))
 

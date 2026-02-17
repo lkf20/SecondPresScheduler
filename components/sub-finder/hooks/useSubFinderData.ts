@@ -37,6 +37,8 @@ export interface Absence {
       classroom_color?: string | null
       status: 'uncovered' | 'partially_covered' | 'fully_covered'
       sub_name?: string | null
+      sub_id?: string | null
+      assignment_id?: string | null
       is_partial?: boolean
       assignment_status?: SubFinderAssignmentStatus | null
     }>
@@ -50,6 +52,8 @@ export interface Absence {
       classroom_color?: string | null
       status: 'uncovered' | 'partially_covered' | 'fully_covered'
       sub_name?: string | null
+      sub_id?: string | null
+      assignment_id?: string | null
       is_partial?: boolean
       assignment_status?: SubFinderAssignmentStatus | null
     }>
@@ -112,6 +116,7 @@ export interface SubCandidate {
   }>
   notes?: string | null
   response_status?: string | null
+  is_contacted?: boolean
   is_flexible_staff?: boolean
   is_sub?: boolean
   [key: string]: unknown
@@ -196,6 +201,8 @@ export function useSubFinderData({
                 ? 'fully_covered'
                 : 'uncovered',
           sub_name: detail.sub_name || detail.assigned_sub?.name || null,
+          sub_id: detail.sub_id || null,
+          assignment_id: detail.assignment_id || null,
           is_partial: detail.status === 'partial' || detail.status === 'partially_covered',
           assignment_status: normalizeAssignmentStatus(detail.assignment_status),
         })),
@@ -309,8 +316,9 @@ export function useSubFinderData({
 
   // Fetch absences using React Query - just trigger refetch
   const fetchAbsences = useCallback(async () => {
-    await refetchAbsences()
-  }, [refetchAbsences])
+    const result = await refetchAbsences()
+    return (result.data || []).map(mapAbsence)
+  }, [refetchAbsences, mapAbsence])
 
   const handleFindSubs = useCallback(
     async (absence: Absence) => {

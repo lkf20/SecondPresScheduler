@@ -116,20 +116,22 @@ export default function CoverageSummary({
             const getSegmentColor = () => {
               switch (segment.status) {
                 case 'fully_covered':
-                  return 'bg-blue-200' // Use darker shade for progress bar
+                  return 'rgb(186, 225, 210)' // green-blue tone used in sub card coverage bars
                 case 'partially_covered':
-                  return 'bg-yellow-200' // Use darker shade for progress bar
+                  return 'rgb(200, 232, 219)' // lighter green-blue for partial
                 case 'uncovered':
-                  return 'bg-orange-200' // Use darker shade for progress bar
+                  return 'rgb(229, 231, 235)' // same as SubFinderCard unavailable
               }
             }
 
             return (
               <div
                 key={segment.id}
-                className={`h-full ${getSegmentColor()} rounded`}
+                className="h-full rounded border"
                 style={{
                   width: '14px', // 14px (between 12-16px)
+                  backgroundColor: getSegmentColor(),
+                  borderColor: getSegmentColor(),
                 }}
               />
             )

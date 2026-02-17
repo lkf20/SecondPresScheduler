@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -69,7 +69,12 @@ interface SubFinderCardProps {
   allCanCover?: Shift[] // All shifts this sub can cover
   allCannotCover?: Shift[] // All shifts this sub cannot cover
   allAssigned?: Shift[] // All shifts this sub is assigned to
+  softChipColors?: boolean
+  condensedStatus?: boolean // Experimental: single-line status summary
+  showPrimaryShiftChips?: boolean // Experimental: hide inline chips, show only "View all shifts"
 }
+
+const SHOW_DEBUG_BORDERS = false
 
 export default function SubFinderCard({
   id,
@@ -97,12 +102,13 @@ export default function SubFinderCard({
   allCanCover = [],
   allCannotCover = [],
   allAssigned = [],
+  softChipColors = true,
+  condensedStatus = false,
+  showPrimaryShiftChips = true,
 }: SubFinderCardProps) {
   const [isAllShiftsExpanded, setIsAllShiftsExpanded] = useState(false)
-  const [isNoteExpanded, setIsNoteExpanded] = useState(false)
-  const [isEditingNote, setIsEditingNote] = useState(false)
   const [noteDraft, setNoteDraft] = useState(notes || '')
-  const noteTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const [isSavingNote, setIsSavingNote] = useState(false)
   const coveredSegments = Math.min(shiftsCovered, totalShifts)
   // Build map of assigned/available/unavailable shifts for "View all shifts" section
   const allShiftsStatusMap = new Map<string, 'assigned' | 'available' | 'unavailable'>()
@@ -137,6 +143,11 @@ export default function SubFinderCard({
     if (isDeclined) {
       return <p className="text-xs text-muted-foreground">Declined all shifts</p>
     }
+    const softSegmentColors = {
+      assigned: 'rgb(191, 219, 254)', // blue-200
+      available: 'rgb(186, 225, 210)', // soft mint-green with slight blue tone
+      unavailable: 'rgb(229, 231, 235)', // gray-200
+    } as const
     const normalizedSegments = coverageSegments?.length
       ? ([
           ...coverageSegments.slice(0, totalShifts),
@@ -170,20 +181,24 @@ export default function SubFinderCard({
             ) : (
               (orderedSegments ?? Array.from({ length: totalShifts }).map(() => 'available')).map(
                 (status, index) => {
-                  const colors =
+                  const segmentColor =
                     orderedSegments === null
                       ? index < coveredSegments
-                        ? shiftStatusColorValues.available
-                        : shiftStatusColorValues.unavailable
-                      : shiftStatusColorValues[status]
+                        ? softSegmentColors.available
+                        : softSegmentColors.unavailable
+                      : status === 'assigned'
+                        ? softSegmentColors.assigned
+                        : status === 'available'
+                          ? softSegmentColors.available
+                          : softSegmentColors.unavailable
                   return (
                     <div
                       key={`segment-${index}`}
                       className="h-full rounded border"
                       style={{
                         width: '14px',
-                        backgroundColor: colors.border,
-                        borderColor: colors.border,
+                        backgroundColor: segmentColor,
+                        borderColor: segmentColor,
                       }}
                     />
                   )
@@ -209,18 +224,33 @@ export default function SubFinderCard({
         : resolvedResponseStatus === 'declined_all'
           ? { label: 'Declined', icon: XCircle, className: 'text-rose-600' }
           : { label: 'No response yet', icon: HelpCircle, className: 'text-slate-500' }
+  const shouldShowResponseStatus =
+    isContacted ||
+    resolvedResponseStatus === 'pending' ||
+    resolvedResponseStatus === 'confirmed' ||
+    resolvedResponseStatus === 'declined_all'
 
   useEffect(() => {
-    if (!isEditingNote) {
+    setNoteDraft(notes || '')
+  }, [notes])
+
+  const handleNoteBlur = async () => {
+    if (!onSaveNote) return
+    const next = noteDraft.trim()
+    const normalizedNext = next.length > 0 ? next : null
+    const normalizedCurrent = notes?.trim() ? notes.trim() : null
+    if (normalizedNext === normalizedCurrent) return
+
+    try {
+      setIsSavingNote(true)
+      await onSaveNote(normalizedNext)
+    } catch (error) {
+      console.error('Failed to save sub note', error)
       setNoteDraft(notes || '')
+    } finally {
+      setIsSavingNote(false)
     }
-  }, [notes, isEditingNote])
-
-  useEffect(() => {
-    if (isEditingNote) {
-      noteTextareaRef.current?.focus()
-    }
-  }, [isEditingNote])
+  }
 
   return (
     <Card
@@ -233,9 +263,22 @@ export default function SubFinderCard({
       role={undefined}
       tabIndex={undefined}
     >
-      <CardContent className="pt-4 px-4 pb-1.5 flex flex-col gap-2">
-        <div className="flex w-full items-start justify-between gap-4">
-          <div className="min-w-0 flex-1 pr-2">
+      <CardContent
+        className={cn(
+          'px-4 flex flex-col',
+          condensedStatus ? 'pt-2.5 pb-0.5 gap-0.5' : 'pt-4 pb-1.5 gap-2',
+          SHOW_DEBUG_BORDERS && 'border border-fuchsia-400'
+        )}
+      >
+        <div
+          className={cn(
+            'flex w-full items-start justify-between gap-4',
+            SHOW_DEBUG_BORDERS && 'border border-blue-400'
+          )}
+        >
+          <div
+            className={cn('min-w-0 flex-1 pr-2', SHOW_DEBUG_BORDERS && 'border border-cyan-400')}
+          >
             <SubCardHeader
               name={name}
               phone={phone}
@@ -243,36 +286,90 @@ export default function SubFinderCard({
               totalShifts={totalShifts}
               isDeclined={isDeclined}
               showCoverage={false}
+              compactSpacing={condensedStatus}
             />
           </div>
-          <div className="ml-auto shrink-0">{renderCoverageBar()}</div>
+          <div className={cn('ml-auto shrink-0', SHOW_DEBUG_BORDERS && 'border border-teal-400')}>
+            {renderCoverageBar()}
+          </div>
         </div>
 
-        <div className="flex w-full items-start justify-between gap-4">
-          <div className="min-w-0 flex-1 pr-2 pb-4">
+        <div
+          className={cn(
+            'flex w-full items-start justify-between gap-4',
+            condensedStatus && '-mt-1.5',
+            SHOW_DEBUG_BORDERS && 'border border-violet-400'
+          )}
+        >
+          <div
+            className={cn(
+              'min-w-0 flex-1 pr-2',
+              condensedStatus ? 'pb-1' : 'pb-4',
+              SHOW_DEBUG_BORDERS && 'border border-amber-400'
+            )}
+          >
+            {condensedStatus && (
+              <div className="mt-0 flex items-center gap-1.5 text-xs leading-snug text-slate-600">
+                <span className="inline-flex items-center gap-1">
+                  {isAssigned ? (
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                  ) : (
+                    <XCircle className="h-3.5 w-3.5 text-slate-400" />
+                  )}
+                  <span>{isAssigned ? 'Assigned' : 'Unassigned'}</span>
+                </span>
+                <span>·</span>
+                <span className="inline-flex items-center gap-1">
+                  <Phone
+                    className={cn(
+                      'h-3.5 w-3.5',
+                      isContacted ? 'text-emerald-600' : 'text-slate-400'
+                    )}
+                  />
+                  <span>{isContacted ? 'Contacted' : 'Not contacted'}</span>
+                </span>
+                {shouldShowResponseStatus && (
+                  <>
+                    <span>·</span>
+                    <span className="inline-flex items-center gap-1 text-slate-600">
+                      <responseMeta.icon className="h-3.5 w-3.5" />
+                      <span>{responseMeta.label}</span>
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
             {recommendedShiftCount !== undefined && recommendedShiftCount > 0 ? (
               <>
-                <p className="text-sm text-muted-foreground mb-2">
+                <p
+                  className={cn(
+                    'text-muted-foreground',
+                    condensedStatus ? 'text-xs mb-1' : 'text-sm mb-2'
+                  )}
+                >
                   Recommended: {recommendedShiftCount} shift
                   {recommendedShiftCount !== 1 ? 's' : ''}
                 </p>
-                {(canCover.length > 0 ||
-                  cannotCover.length > 0 ||
-                  assigned.length > 0 ||
-                  (shiftChips?.length ?? 0) > 0) && (
-                  <div className="w-full">
-                    <ShiftChips
-                      canCover={canCover}
-                      cannotCover={cannotCover}
-                      assigned={assigned}
-                      shifts={shiftChips}
-                      isDeclined={isDeclined}
-                      recommendedShifts={canCover}
-                    />
-                  </div>
-                )}
+                {showPrimaryShiftChips &&
+                  (canCover.length > 0 ||
+                    cannotCover.length > 0 ||
+                    assigned.length > 0 ||
+                    (shiftChips?.length ?? 0) > 0) && (
+                    <div className="w-full">
+                      <ShiftChips
+                        canCover={canCover}
+                        cannotCover={cannotCover}
+                        assigned={assigned}
+                        shifts={shiftChips}
+                        isDeclined={isDeclined}
+                        recommendedShifts={canCover}
+                        softAvailableStyle={softChipColors}
+                      />
+                    </div>
+                  )}
               </>
             ) : (
+              showPrimaryShiftChips &&
               (canCover.length > 0 ||
                 cannotCover.length > 0 ||
                 assigned.length > 0 ||
@@ -284,6 +381,7 @@ export default function SubFinderCard({
                   shifts={shiftChips}
                   isDeclined={isDeclined}
                   recommendedShifts={canCover}
+                  softAvailableStyle={softChipColors}
                 />
               )
             )}
@@ -317,146 +415,73 @@ export default function SubFinderCard({
               </div>
             )}
           </div>
-          <div className="ml-auto flex flex-col items-end gap-2 shrink-0 pb-4">
+          {!condensedStatus && (
             <div
               className={cn(
-                'flex flex-col items-start gap-2 border-l-4 pl-2 text-sm leading-5 text-slate-600',
-                responseMeta.className === 'text-emerald-600'
-                  ? 'border-emerald-500'
-                  : responseMeta.className === 'text-amber-600'
-                    ? 'border-amber-500'
-                    : responseMeta.className === 'text-rose-600'
-                      ? 'border-rose-500'
-                      : 'border-slate-300'
+                'ml-auto flex flex-col items-end gap-2 shrink-0',
+                condensedStatus ? 'pb-2' : 'pb-4'
               )}
             >
-              <div className="flex items-center gap-2">
-                {isAssigned ? (
-                  <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
-                ) : (
-                  <XCircle className="h-3.5 w-3.5 text-slate-400" />
+              <div
+                className={cn(
+                  'flex flex-col items-start gap-2 border-l-4 pl-2 text-sm leading-5 text-slate-600',
+                  responseMeta.className === 'text-emerald-600'
+                    ? 'border-emerald-500'
+                    : responseMeta.className === 'text-amber-600'
+                      ? 'border-amber-500'
+                      : responseMeta.className === 'text-rose-600'
+                        ? 'border-rose-500'
+                        : 'border-slate-300'
                 )}
-                <span>{isAssigned ? 'Assigned' : 'Unassigned'}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Phone
-                  className={cn('h-3.5 w-3.5', isContacted ? 'text-emerald-600' : 'text-slate-400')}
-                />
-                <span>{isContacted ? 'Contacted' : 'Not contacted'}</span>
-              </div>
-              <div className={cn('flex items-center gap-2', responseMeta.className)}>
-                <responseMeta.icon className="h-3.5 w-3.5" />
-                <span>{responseMeta.label}</span>
+              >
+                <div className="flex items-center gap-2">
+                  {isAssigned ? (
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                  ) : (
+                    <XCircle className="h-3.5 w-3.5 text-slate-400" />
+                  )}
+                  <span>{isAssigned ? 'Assigned' : 'Unassigned'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone
+                    className={cn(
+                      'h-3.5 w-3.5',
+                      isContacted ? 'text-emerald-600' : 'text-slate-400'
+                    )}
+                  />
+                  <span>{isContacted ? 'Contacted' : 'Not contacted'}</span>
+                </div>
+                {shouldShowResponseStatus && (
+                  <div className={cn('flex items-center gap-2', responseMeta.className)}>
+                    <responseMeta.icon className="h-3.5 w-3.5" />
+                    <span>{responseMeta.label}</span>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {(notes || isEditingNote || onSaveNote) && (
-          <div className="w-full">
-            <div className="flex w-full items-center justify-between rounded-md px-[3px] py-1 text-left text-sm font-medium text-slate-700 hover:bg-slate-100">
-              {notes || isEditingNote ? (
-                <button
-                  type="button"
-                  onClick={event => {
-                    event.stopPropagation()
-                    setIsNoteExpanded(prev => !prev)
-                  }}
-                  className="flex items-center gap-1"
-                >
-                  <span>Notes</span>
-                  {isNoteExpanded ? (
-                    <ChevronUp className="h-4 w-4 text-slate-400" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-slate-400" />
-                  )}
-                </button>
-              ) : null}
-              {onSaveNote && !notes && !isEditingNote && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="pl-0"
-                  onClick={event => {
-                    event.stopPropagation()
-                    setNoteDraft(notes || '')
-                    setIsNoteExpanded(true)
-                    setIsEditingNote(true)
-                  }}
-                >
-                  + Add note
-                </Button>
-              )}
-            </div>
-            {isNoteExpanded && (
-              <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                {isEditingNote ? (
-                  <div className="space-y-2">
-                    <textarea
-                      ref={noteTextareaRef}
-                      value={noteDraft}
-                      onChange={event => setNoteDraft(event.target.value)}
-                      rows={3}
-                      className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700"
-                    />
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={event => {
-                          event.stopPropagation()
-                          setNoteDraft(notes || '')
-                          setIsEditingNote(false)
-                          setIsNoteExpanded(false)
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={async event => {
-                          event.stopPropagation()
-                          const next = noteDraft.trim()
-                          try {
-                            await onSaveNote?.(next.length > 0 ? next : null)
-                          } catch (error) {
-                            console.error('Failed to save sub note', error)
-                          } finally {
-                            setIsEditingNote(false)
-                          }
-                        }}
-                      >
-                        Save
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {notes ? <p>{notes}</p> : <p className="text-slate-500">No notes yet.</p>}
-                    {onSaveNote && (
-                      <div className="flex justify-end">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={event => {
-                            event.stopPropagation()
-                            setNoteDraft(notes || '')
-                            setIsNoteExpanded(true)
-                            setIsEditingNote(true)
-                          }}
-                        >
-                          {notes ? 'Edit' : 'Add note'}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+        {onSaveNote && (
+          <div
+            className={cn(
+              'w-full',
+              condensedStatus ? 'mt-2' : 'mt-0',
+              SHOW_DEBUG_BORDERS && 'border border-red-400'
             )}
+          >
+            <textarea
+              value={noteDraft}
+              onChange={event => setNoteDraft(event.target.value)}
+              onBlur={handleNoteBlur}
+              rows={1}
+              placeholder="Add note..."
+              className={cn(
+                'w-full resize-none rounded-md border border-transparent bg-transparent px-1 text-sm text-slate-600 placeholder:text-slate-400 focus:border-slate-200 focus:bg-white focus:outline-none',
+                condensedStatus ? 'py-0 leading-tight' : 'py-0.5'
+              )}
+            />
+            {isSavingNote && <div className="px-1 text-xs text-slate-400">Saving...</div>}
           </div>
         )}
 
@@ -464,7 +489,13 @@ export default function SubFinderCard({
         {allShifts &&
           allShifts.length > 0 &&
           (allCanCover.length > 0 || allCannotCover.length > 0) && (
-            <div className="mb-0 -mt-1 flex items-center justify-between gap-4 border-t border-slate-200 pt-1">
+            <div
+              className={cn(
+                'mb-0 flex items-center justify-between gap-4 border-t border-slate-200',
+                condensedStatus ? '-mt-2 pt-0.5' : '-mt-1 pt-1',
+                SHOW_DEBUG_BORDERS && 'border border-lime-500'
+              )}
+            >
               <Button
                 type="button"
                 variant="ghost"
@@ -523,7 +554,7 @@ export default function SubFinderCard({
           allShifts.length > 0 &&
           (allCanCover.length > 0 || allCannotCover.length > 0) &&
           isAllShiftsExpanded && (
-            <div className="mb-4 mt-0">
+            <div className={cn('mb-4 mt-0', SHOW_DEBUG_BORDERS && 'border border-orange-400')}>
               <ShiftChips
                 canCover={allCanCover}
                 cannotCover={allCannotCover}
@@ -545,6 +576,7 @@ export default function SubFinderCard({
                 })}
                 isDeclined={isDeclined}
                 recommendedShifts={canCover}
+                softAvailableStyle={softChipColors}
               />
             </div>
           )}

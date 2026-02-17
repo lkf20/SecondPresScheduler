@@ -1,6 +1,7 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
@@ -9,6 +10,7 @@ import type { SubCandidate } from '@/components/sub-finder/hooks/useSubFinderDat
 import type { SubFinderShift } from '@/lib/sub-finder/types'
 import { filterVisibleShifts, getShiftKey } from '@/lib/sub-finder/shift-helpers'
 import { formatAbsenceDateRange } from '@/lib/utils/date-format'
+import { cn } from '@/lib/utils'
 
 type RecommendedSub = SubCandidate
 
@@ -45,12 +47,12 @@ export default function RecommendedSubsList({
   selectedShift = null,
 }: RecommendedSubsListProps) {
   const [expandedSections, setExpandedSections] = useState({
-    assigned: true,
-    contacted: true,
+    assigned: false,
+    contacted: false,
     available: true,
-    availableLimited: true,
-    unavailable: true,
-    declined: true,
+    availableLimited: false,
+    unavailable: false,
+    declined: false,
   })
 
   const formatDateRange = () => formatAbsenceDateRange(absence.start_date, absence.end_date)
@@ -537,6 +539,9 @@ export default function RecommendedSubsList({
         allCanCover={visibleCanCover}
         allCannotCover={visibleCannotCover}
         allAssigned={visibleAssigned}
+        softChipColors={showAllSubs}
+        condensedStatus={showAllSubs}
+        showPrimaryShiftChips={!showAllSubs}
       />
     )
   }
@@ -612,8 +617,21 @@ export default function RecommendedSubsList({
     { key: 'unavailable', label: 'Unavailable' },
     { key: 'declined', label: 'Declined' },
   ] as const
+  const primaryFilters = sectionFilters.filter(
+    filter => filter.key === 'available' || filter.key === 'contacted' || filter.key === 'assigned'
+  )
+  const moreFilters = sectionFilters.filter(
+    filter =>
+      filter.key === 'availableLimited' || filter.key === 'unavailable' || filter.key === 'declined'
+  )
 
-  const [activeFilter, setActiveFilter] = useState<string | null>(null)
+  const [activeFilter, setActiveFilter] = useState<string | null>('available')
+  const activeMoreFilter = moreFilters.find(filter => filter.key === activeFilter) ?? null
+  const moreFilterLabel = activeMoreFilter
+    ? `${activeMoreFilter.label} (${sectionCounts[activeMoreFilter.key]})`
+    : activeFilter === null
+      ? `All (${allCount})`
+      : 'More filters'
 
   const toggleFilter = (key: string) => {
     setActiveFilter(prev => (prev === key ? null : key))
@@ -668,28 +686,48 @@ export default function RecommendedSubsList({
 
         {showAllSubs && groupedSubs ? (
           <div className="space-y-4">
-            <div className="mt-2 flex flex-wrap gap-2 border-b border-slate-200 pb-3">
-              <Button
-                type="button"
-                variant={activeFilter === null ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setActiveFilter(null)}
-                className="h-7 px-2 text-xs"
-              >
-                All ({allCount})
-              </Button>
-              {sectionFilters.map(filter => (
+            <div className="mt-2 flex flex-wrap gap-2 pb-3">
+              {primaryFilters.map(filter => (
                 <Button
                   key={filter.key}
                   type="button"
-                  variant={activeFilter === filter.key ? 'default' : 'outline'}
-                  size="sm"
+                  variant="ghost"
                   onClick={() => toggleFilter(filter.key)}
-                  className="h-7 px-2 text-xs"
+                  className={cn(
+                    'rounded-full border px-3 py-1 text-xs font-medium h-auto',
+                    activeFilter === filter.key
+                      ? 'border-button-fill bg-button-fill text-button-fill-foreground hover:bg-button-fill/90'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-white'
+                  )}
                 >
                   {filter.label} ({sectionCounts[filter.key]})
                 </Button>
               ))}
+              <Select
+                value={activeMoreFilter?.key ?? 'all'}
+                onValueChange={value => {
+                  setActiveFilter(value === 'all' ? null : value)
+                }}
+              >
+                <SelectTrigger
+                  className={cn(
+                    'h-auto w-[210px] rounded-full border px-4 py-1 text-xs font-medium',
+                    activeMoreFilter || activeFilter === null
+                      ? 'border-button-fill bg-button-fill text-button-fill-foreground'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                  )}
+                >
+                  <span className="truncate">{moreFilterLabel}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All ({allCount})</SelectItem>
+                  {moreFilters.map(filter => (
+                    <SelectItem key={filter.key} value={filter.key}>
+                      {filter.label} ({sectionCounts[filter.key]})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               {showSection('assigned') &&

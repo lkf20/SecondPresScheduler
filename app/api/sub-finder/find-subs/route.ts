@@ -34,6 +34,7 @@ interface SubMatch {
   shifts_covered: number
   total_shifts: number
   is_flexible_staff: boolean
+  is_contacted: boolean
   response_status: 'none' | 'pending' | 'confirmed' | 'declined_all' | null
   notes: string | null
   can_cover: Array<{
@@ -605,11 +606,12 @@ export async function POST(request: NextRequest) {
           // Get response_status from substitute_contacts if coverage request exists
           let responseStatus: string | null = null
           let contactNotes: string | null = null
+          let isContacted = false
           if (coverageRequestId) {
             try {
               const { data: contact } = await supabase
                 .from('substitute_contacts')
-                .select('response_status, notes')
+                .select('response_status, notes, is_contacted')
                 .eq('coverage_request_id', coverageRequestId)
                 .eq('sub_id', sub.id)
                 .single()
@@ -617,6 +619,7 @@ export async function POST(request: NextRequest) {
               if (contact) {
                 responseStatus = contact.response_status
                 contactNotes = contact.notes ?? null
+                isContacted = contact.is_contacted === true
               }
             } catch {
               // Contact doesn't exist yet, which is fine
@@ -641,6 +644,7 @@ export async function POST(request: NextRequest) {
             qualification_total: qualificationTotal,
             can_change_diapers: subCapabilities.can_change_diapers,
             can_lift_children: subCapabilities.can_lift_children,
+            is_contacted: isContacted,
             response_status: responseStatus,
             is_flexible_staff: isFlexibleStaff,
             notes: contactNotes,

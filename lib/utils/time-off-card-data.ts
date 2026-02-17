@@ -36,6 +36,8 @@ export type TimeOffCardData = {
     classroom_name?: string | null
     classroom_color?: string | null
     sub_name?: string | null
+    sub_id?: string | null
+    assignment_id?: string | null
     is_partial?: boolean
   }>
 }
@@ -64,11 +66,13 @@ export interface ShiftInput {
 }
 
 export interface AssignmentInput {
+  id?: string
   date: string
   time_slot_id: string
   is_partial?: boolean | null
   assignment_type?: string | null
   sub?: {
+    id?: string | null
     first_name?: string | null
     last_name?: string | null
     display_name?: string | null
@@ -138,7 +142,13 @@ export function transformTimeOffCardData(
   // Build assignment map: key = `${date}|${time_slot_id}` -> { hasFull, hasPartial, sub }
   const assignmentMap = new Map<
     string,
-    { hasFull: boolean; hasPartial: boolean; subName: string | null }
+    {
+      hasFull: boolean
+      hasPartial: boolean
+      subName: string | null
+      subId: string | null
+      assignmentId: string | null
+    }
   >()
 
   assignments.forEach(assignment => {
@@ -147,6 +157,8 @@ export function transformTimeOffCardData(
       hasFull: false,
       hasPartial: false,
       subName: null,
+      subId: null,
+      assignmentId: null,
     }
 
     const isPartial = assignment.is_partial || assignment.assignment_type === 'Partial Sub Shift'
@@ -168,7 +180,9 @@ export function transformTimeOffCardData(
           },
           displayNameFormat
         ) || null
+      existing.subId = assignment.sub.id ?? null
     }
+    existing.assignmentId = assignment.id ?? null
 
     assignmentMap.set(key, existing)
   })
@@ -224,6 +238,8 @@ export function transformTimeOffCardData(
         classroom_name: classroom?.name || undefined,
         classroom_color: classroom?.color || undefined,
         sub_name: assignment?.subName || undefined,
+        sub_id: assignment?.subId || undefined,
+        assignment_id: assignment?.assignmentId || undefined,
         is_partial: assignment?.hasPartial && !assignment?.hasFull,
       })
     } else {
