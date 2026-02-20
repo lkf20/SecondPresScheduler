@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { ChevronDown, ChevronUp, CornerDownRight, Pencil, Plus } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronUp, CornerDownRight, Pencil, Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import {
   Sheet,
@@ -45,16 +45,27 @@ import {
   getPanelBackgroundClasses,
   getPanelHeaderBackgroundClasses,
   panelBackgrounds,
+  staffingColorValues,
 } from '@/lib/utils/colors'
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 import { parseLocalDate } from '@/lib/utils/date'
+import { toast } from 'sonner'
 
 interface Teacher {
   id: string
   name: string
   teacher_id?: string
   is_floater?: boolean
+}
+
+type FlexRemovalScope = 'single_shift' | 'weekday' | 'all_shifts'
+
+type FlexRemovalContext = {
+  start_date: string
+  end_date: string
+  weekdays: string[]
+  matching_shift_count: number
 }
 
 type ClassGroupWithMeta = ClassGroup & {
@@ -94,7 +105,7 @@ interface ScheduleSidePanelProps {
   classroomColor?: string | null
   selectedDayIds: string[] // Days that are in the weekly schedule
   selectedCellData?: SelectedCellData // Full cell data from the grid
-  onSave?: () => void
+  onSave?: () => void | Promise<void>
   weekStartISO?: string
   readOnly?: boolean
 }
@@ -123,6 +134,14 @@ const log = (...args: unknown[]) => {
   if (debug) {
     console.log(...args)
   }
+}
+
+const formatFlexWeekdayList = (days: string[]) => {
+  if (days.length === 0) return ''
+  const pluralized = days.map(day => (day.endsWith('s') ? day : `${day}s`))
+  if (pluralized.length === 1) return pluralized[0]
+  if (pluralized.length === 2) return `${pluralized[0]} and ${pluralized[1]}`
+  return `${pluralized.slice(0, -1).join(', ')}, and ${pluralized[pluralized.length - 1]}`
 }
 
 export default function ScheduleSidePanel({
@@ -188,6 +207,14 @@ export default function ScheduleSidePanel({
   const [timeOffTeacherName, setTimeOffTeacherName] = useState<string | null>(null)
   const [showBaselineEditDialog, setShowBaselineEditDialog] = useState(false)
   const [showClassGroupEditDialog, setShowClassGroupEditDialog] = useState(false)
+  const [showRemoveFlexDialog, setShowRemoveFlexDialog] = useState(false)
+  const [flexRemoveTarget, setFlexRemoveTarget] = useState<
+    WeeklyScheduleData['assignments'][number] | null
+  >(null)
+  const [flexRemoveContext, setFlexRemoveContext] = useState<FlexRemovalContext | null>(null)
+  const [flexRemoveLoading, setFlexRemoveLoading] = useState(false)
+  const [flexRemoveSubmitting, setFlexRemoveSubmitting] = useState(false)
+  const [flexRemoveScope, setFlexRemoveScope] = useState<FlexRemovalScope>('single_shift')
   const [flexAvailability, setFlexAvailability] = useState<
     Array<{ id: string; name: string; availableShiftKeys: string[] }>
   >([])
@@ -405,6 +432,57 @@ export default function ScheduleSidePanel({
 
   const hasInvalidFlexDayRange = missingSelectedFlexDays.length > 0
 
+  const flexRangeDayOptions = useMemo(() => {
+    if (!flexStartDate || !flexEndDate) return []
+    const start = parseLocalDate(flexStartDate)
+    const end = parseLocalDate(flexEndDate)
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return []
+
+    const allowedDays =
+      flexDayOptions.length > 0
+        ? new Set(flexDayOptions.map(option => option.name.toLowerCase()))
+        : null
+    const dayNumberMap = new Map(
+      flexDayOptions.map(option => [option.name.toLowerCase(), option.day_number])
+    )
+    const shortNameMap = new Map(
+      flexDayOptions.map(option => [option.name.toLowerCase(), option.short_name])
+    )
+    const fallbackDayNumber: Record<string, number> = {
+      monday: 1,
+      tuesday: 2,
+      wednesday: 3,
+      thursday: 4,
+      friday: 5,
+      saturday: 6,
+      sunday: 7,
+    }
+
+    const seen = new Set<string>()
+    const options: Array<{ id: string; name: string; short_name: string; day_number: number }> = []
+    const cursor = new Date(start.getTime())
+    while (cursor <= end) {
+      const fullName = cursor.toLocaleDateString('en-US', { weekday: 'long' })
+      const key = fullName.toLowerCase()
+      if ((!allowedDays || allowedDays.has(key)) && !seen.has(key)) {
+        seen.add(key)
+        options.push({
+          id: key,
+          name: fullName,
+          short_name: shortNameMap.get(key) || fullName.slice(0, 3),
+          day_number: dayNumberMap.get(key) ?? fallbackDayNumber[key] ?? 99,
+        })
+      }
+      cursor.setDate(cursor.getDate() + 1)
+    }
+
+    return options.sort((a, b) => a.day_number - b.day_number)
+  }, [flexStartDate, flexEndDate, flexDayOptions])
+
+  const showFlexApplySection = flexRangeDayOptions.length > 1
+  const maxFlexSelectableDayCount = flexDayOptions.length > 0 ? flexDayOptions.length : 5
+  const showExpandDateRangeHint = flexRangeDayOptions.length < maxFlexSelectableDayCount
+
   const filteredFlexShiftMetrics = useMemo(() => {
     if (flexShiftMetrics.length === 0) return []
     const allowedKeys = new Set(flexShiftOptions.map(option => option.key))
@@ -424,15 +502,46 @@ export default function ScheduleSidePanel({
   )
 
   const flexStaffWithCounts = useMemo(() => {
+    const selectedShiftKeys = new Set(flexShiftOptions.map(option => option.key))
     const totalCount = flexShiftOptions.length
     return flexAvailability
-      .map(staff => ({
-        ...staff,
-        availableCount: staff.availableShiftKeys.length,
-        totalCount,
-      }))
+      .map(staff => {
+        const availableShiftKeys = staff.availableShiftKeys.filter(key =>
+          selectedShiftKeys.has(key)
+        )
+        return {
+          ...staff,
+          availableShiftKeys,
+          availableCount: availableShiftKeys.length,
+          totalCount,
+        }
+      })
       .sort((a, b) => b.availableCount - a.availableCount)
-  }, [flexAvailability, flexShiftOptions.length])
+  }, [flexAvailability, flexShiftOptions])
+
+  useEffect(() => {
+    if (flexRangeDayOptions.length === 0) return
+
+    const validDayKeys = new Set(flexRangeDayOptions.map(option => option.name.toLowerCase()))
+
+    setFlexApplyDayNames(prev => {
+      const next = new Set(Array.from(prev).filter(day => validDayKeys.has(day)))
+      if (next.size === 0) {
+        next.add(flexRangeDayOptions[0].name.toLowerCase())
+      }
+
+      const sameSize = next.size === prev.size
+      if (sameSize && Array.from(next).every(day => prev.has(day))) {
+        return prev
+      }
+      return next
+    })
+
+    if (flexRangeDayOptions.length === 1) {
+      setFlexApplyThisDayOnly(false)
+      setFlexApplyMultipleDays(true)
+    }
+  }, [flexRangeDayOptions])
 
   useEffect(() => {
     if (!isOpen) return
@@ -1072,7 +1181,23 @@ export default function ScheduleSidePanel({
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || 'Failed to add flex coverage.')
       }
-      onSave?.()
+      try {
+        await onSave?.()
+      } catch (refreshError) {
+        console.error('Failed to refresh after flex assignment:', refreshError)
+      }
+      const assignedStaffName =
+        flexAvailability.find(staff => staff.id === staffId)?.name || 'Staff member'
+      const assignedClassroomNames = classrooms
+        .filter(room => flexClassroomIds.includes(room.id))
+        .map(room => room.name)
+      const assignedClassroomLabel =
+        assignedClassroomNames.length > 0
+          ? assignedClassroomNames.join(', ')
+          : classroomName || 'selected classroom'
+      setExpandedFlexStaffId(null)
+      setPanelMode('cell')
+      toast.success(`${assignedStaffName} assigned as flex staff to ${assignedClassroomLabel}`)
     } catch (error) {
       setFlexError(error instanceof Error ? error.message : 'Failed to add flex coverage.')
     } finally {
@@ -1088,9 +1213,107 @@ export default function ScheduleSidePanel({
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || 'Failed to remove flex coverage.')
       }
-      onSave?.()
+      try {
+        await onSave?.()
+      } catch (refreshError) {
+        console.error('Failed to refresh after flex removal:', refreshError)
+      }
     } catch (error) {
       setFlexError(error instanceof Error ? error.message : 'Failed to remove flex coverage.')
+    }
+  }
+
+  const handleOpenRemoveFlexDialog = async (
+    assignment: WeeklyScheduleData['assignments'][number]
+  ) => {
+    if (!assignment.staffing_event_id) {
+      toast.error('Unable to remove this flex assignment. Missing event id.')
+      return
+    }
+
+    setFlexRemoveTarget(assignment)
+    setFlexRemoveScope('single_shift')
+    setFlexRemoveContext(null)
+    setShowRemoveFlexDialog(true)
+    setFlexRemoveLoading(true)
+
+    try {
+      const params = new URLSearchParams({
+        event_id: assignment.staffing_event_id,
+        classroom_id: classroomId,
+        time_slot_id: timeSlotId,
+      })
+      const response = await fetch(`/api/staffing-events/flex/remove?${params.toString()}`)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to load flex assignment details.')
+      }
+      const data = await response.json()
+      setFlexRemoveContext({
+        start_date: data?.start_date || '',
+        end_date: data?.end_date || '',
+        weekdays: Array.isArray(data?.weekdays) ? data.weekdays : [],
+        matching_shift_count: Number(data?.matching_shift_count || 0),
+      })
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to load flex assignment details.'
+      )
+    } finally {
+      setFlexRemoveLoading(false)
+    }
+  }
+
+  const handleConfirmRemoveFlex = async () => {
+    if (!flexRemoveTarget?.staffing_event_id) return
+    setFlexRemoveSubmitting(true)
+    setFlexError(null)
+
+    try {
+      const effectiveScope: FlexRemovalScope =
+        flexRemoveContext && flexRemoveContext.matching_shift_count <= 1
+          ? 'single_shift'
+          : flexRemoveScope
+      const response = await fetch('/api/staffing-events/flex/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event_id: flexRemoveTarget.staffing_event_id,
+          scope: effectiveScope,
+          date: dayNameDate,
+          day_of_week_id: dayId,
+          classroom_id: classroomId,
+          time_slot_id: timeSlotId,
+        }),
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to remove flex assignment.')
+      }
+
+      try {
+        await onSave?.()
+      } catch (refreshError) {
+        console.error('Failed to refresh after scoped flex removal:', refreshError)
+      }
+
+      const teacherName = flexRemoveTarget.teacher_name || 'Staff member'
+      const scopeLabel =
+        effectiveScope === 'single_shift'
+          ? 'this shift'
+          : effectiveScope === 'weekday'
+            ? `all ${dayName} shifts`
+            : 'all shifts'
+      toast.success(`${teacherName} removed from ${scopeLabel}`)
+      setShowRemoveFlexDialog(false)
+      setFlexRemoveTarget(null)
+      setFlexRemoveContext(null)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to remove flex assignment.'
+      toast.error(message)
+      setFlexError(message)
+    } finally {
+      setFlexRemoveSubmitting(false)
     }
   }
 
@@ -1183,9 +1406,25 @@ export default function ScheduleSidePanel({
 
       log(
         '[ScheduleSidePanel] Starting save - selectedTeachers:',
-        selectedTeachers.map(t => ({ name: t.name, teacher_id: t.teacher_id }))
+        selectedTeachers.map(t => ({
+          name: t.name,
+          teacher_id: t.teacher_id,
+          is_floater: t.is_floater ?? false,
+        }))
       )
       log('[ScheduleSidePanel] classGroupIds:', classGroupIds)
+      if (classroomName === 'Toddler A Room' && dayName === 'Monday' && timeSlotCode === 'AC') {
+        console.log('[ScheduleSidePanel][FloaterDebug][SaveInput]', {
+          classroom: classroomName,
+          day: dayName,
+          time_slot: timeSlotCode,
+          selected_teachers: selectedTeachers.map(t => ({
+            name: t.name,
+            teacher_id: t.teacher_id,
+            is_floater: t.is_floater ?? false,
+          })),
+        })
+      }
 
       for (const updateDayId of daysToUpdate) {
         for (const updateTimeSlotId of timeSlotsToUpdate) {
@@ -1307,6 +1546,19 @@ export default function ScheduleSidePanel({
               } else {
                 // Teacher already has a schedule - update floater status if needed
                 if (teacherScheduleForThisSlot.is_floater !== (teacher.is_floater ?? false)) {
+                  if (
+                    classroomName === 'Toddler A Room' &&
+                    dayName === 'Monday' &&
+                    timeSlotCode === 'AC'
+                  ) {
+                    console.log('[ScheduleSidePanel][FloaterDebug][UpdateRequest]', {
+                      teacher_name: teacher.name,
+                      teacher_id: teacher.teacher_id,
+                      schedule_id: teacherScheduleForThisSlot.id,
+                      before_is_floater: teacherScheduleForThisSlot.is_floater ?? false,
+                      after_is_floater: teacher.is_floater ?? false,
+                    })
+                  }
                   createPromises.push(
                     fetch(`/api/teacher-schedules/${teacherScheduleForThisSlot.id}`, {
                       method: 'PUT',
@@ -1323,6 +1575,24 @@ export default function ScheduleSidePanel({
                         throw new Error(
                           `Failed to update teacher schedule: ${errorData.error || updateResponse.statusText}`
                         )
+                      }
+                      const updatedSchedule = await updateResponse.json().catch(() => null)
+                      if (!updatedSchedule?.id) {
+                        throw new Error(
+                          `Failed to update teacher schedule ${teacherScheduleForThisSlot.id}: empty response`
+                        )
+                      }
+                      if (
+                        classroomName === 'Toddler A Room' &&
+                        dayName === 'Monday' &&
+                        timeSlotCode === 'AC'
+                      ) {
+                        console.log('[ScheduleSidePanel][FloaterDebug][UpdateResponse]', {
+                          teacher_name: teacher.name,
+                          teacher_id: teacher.teacher_id,
+                          schedule_id: teacherScheduleForThisSlot.id,
+                          response_is_floater: updatedSchedule.is_floater ?? false,
+                        })
                       }
                     })
                   )
@@ -1354,11 +1624,24 @@ export default function ScheduleSidePanel({
       teachersLoadedRef.current = false
 
       if (onSave) {
-        onSave()
+        await Promise.resolve(onSave())
+      }
+
+      // When launched from the read-only weekly cell panel, return to that panel after baseline save.
+      if (readOnly && panelMode === 'editCell') {
+        // Preserve the just-saved teacher/floater state in the read-only cell view
+        // so we don't momentarily fall back to stale assignment snapshot data.
+        const cacheKey = `${classroomId}|${dayId}|${timeSlotId}`
+        teacherCacheRef.current.set(cacheKey, selectedTeachers)
+        teachersLoadedRef.current = true
+        toast.success('Baseline schedule saved')
+        setPanelMode('cell')
+        return
       }
 
       // Wait a bit more for refresh to start, then close
       await new Promise(resolve => setTimeout(resolve, 200))
+      toast.success('Schedule saved')
       onClose()
     } catch (error) {
       console.error('Error saving schedule cell:', error)
@@ -1482,6 +1765,24 @@ export default function ScheduleSidePanel({
 
   const flexAssignments =
     selectedCellData?.assignments?.filter(assignment => assignment.is_flexible) ?? []
+  const sortedAbsences = [...(selectedCellData?.absences ?? [])].sort((a, b) =>
+    (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown')
+  )
+  const sortedPermanentAssignments = [
+    ...(selectedCellData?.assignments?.filter(
+      assignment => !assignment.is_substitute && !assignment.is_flexible && !assignment.is_floater
+    ) ?? []),
+  ].sort((a, b) => (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown'))
+  const sortedFlexAssignments = [
+    ...(selectedCellData?.assignments?.filter(
+      assignment => !assignment.is_substitute && assignment.is_flexible && !assignment.is_floater
+    ) ?? []),
+  ].sort((a, b) => (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown'))
+  const sortedFloaterAssignments = [
+    ...(selectedCellData?.assignments?.filter(
+      assignment => !assignment.is_substitute && assignment.is_floater
+    ) ?? []),
+  ].sort((a, b) => (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown'))
   const absenceForCell =
     selectedCellData?.absences?.find(
       (absence: {
@@ -1522,6 +1823,55 @@ export default function ScheduleSidePanel({
       ? Math.ceil(enrollmentForCalculation / classGroupForRatio.preferred_ratio)
       : undefined
 
+  const scheduledStaffCount = useMemo(() => {
+    if (readOnly) {
+      const assignments = selectedCellData?.assignments || []
+      const uniqueAssignmentKeys = new Set<string>()
+      assignments.forEach(assignment => {
+        const key = assignment.id
+          ? `${assignment.id}`
+          : `${assignment.teacher_id}|${assignment.is_substitute ? 'sub' : 'staff'}|${
+              assignment.classroom_id
+            }`
+        uniqueAssignmentKeys.add(key)
+      })
+      return uniqueAssignmentKeys.size
+    }
+    return selectedTeachers.length
+  }, [readOnly, selectedCellData?.assignments, selectedTeachers.length])
+
+  const staffingSummary = useMemo(() => {
+    const required = requiredTeachers ?? null
+    const preferred = preferredTeachers ?? null
+    const scheduled = scheduledStaffCount
+
+    if (required !== null && scheduled < required) {
+      return {
+        status: 'below_required' as const,
+        label: `Below Required by ${required - scheduled}`,
+      }
+    }
+
+    if (preferred !== null && scheduled < preferred) {
+      return {
+        status: 'below_preferred' as const,
+        label: `Below Preferred by ${preferred - scheduled}`,
+      }
+    }
+
+    if (required !== null || preferred !== null) {
+      return {
+        status: 'adequate' as const,
+        label: 'On Target',
+      }
+    }
+
+    return {
+      status: null,
+      label: 'No staffing target',
+    }
+  }, [requiredTeachers, preferredTeachers, scheduledStaffCount])
+
   return (
     <>
       <Sheet open={isOpen} onOpenChange={handleClose}>
@@ -1541,6 +1891,49 @@ export default function ScheduleSidePanel({
                   ? 'View schedule details and take quick actions'
                   : 'Configure schedule cell settings and assignments'}
               </SheetDescription>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                {staffingSummary.status && (
+                  <span
+                    className="inline-flex items-center rounded-full px-2.5 py-0.5 font-semibold"
+                    style={
+                      staffingSummary.status === 'below_required'
+                        ? {
+                            backgroundColor: staffingColorValues.below_required.bg,
+                            borderStyle: 'solid',
+                            borderWidth: '1px',
+                            borderColor: staffingColorValues.below_required.border,
+                            color: staffingColorValues.below_required.text,
+                          }
+                        : staffingSummary.status === 'below_preferred'
+                          ? {
+                              backgroundColor: staffingColorValues.below_preferred.bg,
+                              borderStyle: 'solid',
+                              borderWidth: '1px',
+                              borderColor: staffingColorValues.below_preferred.border,
+                              color: staffingColorValues.below_preferred.text,
+                            }
+                          : {
+                              backgroundColor: 'rgb(220, 252, 231)', // green-100
+                              borderStyle: 'solid',
+                              borderWidth: '1px',
+                              borderColor: 'rgb(34, 197, 94)', // green-500
+                              color: 'rgb(22, 101, 52)', // green-800
+                            }
+                    }
+                  >
+                    {staffingSummary.label}
+                  </span>
+                )}
+                {!staffingSummary.status && (
+                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 font-semibold text-slate-600">
+                    {staffingSummary.label}
+                  </span>
+                )}
+                <span className="text-slate-600">
+                  Required: {requiredTeachers ?? '—'} • Preferred: {preferredTeachers ?? '—'} •
+                  Scheduled: {scheduledStaffCount}
+                </span>
+              </div>
             </SheetHeader>
           </div>
 
@@ -1621,6 +2014,7 @@ export default function ScheduleSidePanel({
                             id="flex_end_date"
                             value={flexEndDate}
                             onChange={setFlexEndDate}
+                            closeOnSelect
                             openToDate={flexStartDate}
                             className={
                               hasInvalidFlexDayRange
@@ -1665,79 +2059,80 @@ export default function ScheduleSidePanel({
                           ))}
                       </div>
 
-                      <div className="space-y-3">
-                        <Label>Apply to</Label>
-                        <RadioGroup
-                          value={flexApplyMultipleDays ? 'multiple' : 'single'}
-                          onValueChange={value => {
-                            if (value === 'multiple') {
-                              setFlexApplyMultipleDays(true)
-                              setFlexApplyThisDayOnly(false)
-                              setFlexApplyDayNames(new Set([dayName.toLowerCase()]))
-                            } else {
-                              setFlexApplyThisDayOnly(true)
-                              setFlexApplyMultipleDays(false)
-                              setFlexApplyDayNames(new Set([dayName.toLowerCase()]))
-                            }
-                          }}
-                          className="gap-2"
-                        >
-                          <label className="flex items-center gap-2 text-sm">
-                            <RadioGroupItem value="single" id="flex-apply-single" />
-                            {dayName.endsWith('s') ? `${dayName} only` : `${dayName}s only`}
-                          </label>
-                          <label className="flex items-center gap-2 text-sm">
-                            <RadioGroupItem value="multiple" id="flex-apply-multiple" />
-                            Multiple days of the week
-                          </label>
-                        </RadioGroup>
-
-                        {flexApplyMultipleDays && (
-                          <>
-                            <div className="mt-2 ml-6 flex flex-wrap gap-3 text-sm">
-                              {(flexDayOptions.length > 0
-                                ? flexDayOptions
-                                : [
-                                    { name: 'Monday', short_name: 'Mon' },
-                                    { name: 'Tuesday', short_name: 'Tue' },
-                                    { name: 'Wednesday', short_name: 'Wed' },
-                                    { name: 'Thursday', short_name: 'Thu' },
-                                    { name: 'Friday', short_name: 'Fri' },
-                                  ]
-                              ).map(option => {
-                                const label = option.name
-                                const shortLabel = option.short_name || option.name.slice(0, 3)
-                                const key = label.toLowerCase()
-                                return (
-                                  <label key={label} className="flex items-center gap-2">
-                                    <Checkbox
-                                      checked={flexApplyDayNames.has(key)}
-                                      onCheckedChange={checked => {
-                                        setFlexApplyDayNames(prev => {
-                                          const next = new Set(prev)
-                                          if (checked) {
-                                            next.add(key)
-                                          } else {
-                                            next.delete(key)
-                                          }
-                                          return next
-                                        })
-                                      }}
-                                    />
-                                    {shortLabel}
-                                  </label>
+                      {showFlexApplySection && (
+                        <div className="space-y-3">
+                          <Label>Apply to</Label>
+                          <RadioGroup
+                            value={flexApplyMultipleDays ? 'multiple' : 'single'}
+                            onValueChange={value => {
+                              if (value === 'multiple') {
+                                setFlexApplyMultipleDays(true)
+                                setFlexApplyThisDayOnly(false)
+                                const firstRangeDay = flexRangeDayOptions[0]?.name.toLowerCase()
+                                setFlexApplyDayNames(
+                                  firstRangeDay ? new Set([firstRangeDay]) : new Set()
                                 )
-                              })}
-                            </div>
-                            {hasInvalidFlexDayRange && (
-                              <p className="ml-6 text-xs text-amber-700">
-                                Multiple days selected. Please choose a date range that contains
-                                these days.
-                              </p>
-                            )}
-                          </>
-                        )}
-                      </div>
+                              } else {
+                                setFlexApplyThisDayOnly(true)
+                                setFlexApplyMultipleDays(false)
+                                setFlexApplyDayNames(new Set([dayName.toLowerCase()]))
+                              }
+                            }}
+                            className="gap-2"
+                          >
+                            <label className="flex items-center gap-2 text-sm">
+                              <RadioGroupItem value="single" id="flex-apply-single" />
+                              {dayName.endsWith('s') ? `${dayName} only` : `${dayName}s only`}
+                            </label>
+                            <label className="flex items-center gap-2 text-sm">
+                              <RadioGroupItem value="multiple" id="flex-apply-multiple" />
+                              Multiple days of the week
+                            </label>
+                          </RadioGroup>
+
+                          {flexApplyMultipleDays && (
+                            <>
+                              <div className="mt-2 ml-6 flex flex-wrap gap-3 text-sm">
+                                {flexRangeDayOptions.map(option => {
+                                  const label = option.name
+                                  const shortLabel = option.short_name || option.name.slice(0, 3)
+                                  const key = label.toLowerCase()
+                                  return (
+                                    <label key={label} className="flex items-center gap-2">
+                                      <Checkbox
+                                        checked={flexApplyDayNames.has(key)}
+                                        onCheckedChange={checked => {
+                                          setFlexApplyDayNames(prev => {
+                                            const next = new Set(prev)
+                                            if (checked) {
+                                              next.add(key)
+                                            } else {
+                                              next.delete(key)
+                                            }
+                                            return next
+                                          })
+                                        }}
+                                      />
+                                      {shortLabel}
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                              {showExpandDateRangeHint && (
+                                <p className="ml-6 text-xs text-slate-500">
+                                  To apply to more days, please select a later End date.
+                                </p>
+                              )}
+                              {hasInvalidFlexDayRange && (
+                                <p className="ml-6 text-xs text-amber-700">
+                                  Multiple days selected. Please choose a date range that contains
+                                  these days.
+                                </p>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-1">
@@ -1745,12 +2140,31 @@ export default function ScheduleSidePanel({
                         {totalFlexShiftCount} {totalFlexShiftCount === 1 ? 'shift' : 'shifts'}{' '}
                         selected
                       </p>
-                      <p className="text-xs text-slate-500">
-                        Below preferred: {flexBelowPreferredCount}
+                      <p className="flex items-center gap-1.5 text-xs text-slate-500">
+                        Below preferred:{' '}
+                        {flexAvailabilityLoading
+                          ? '—'
+                          : `${flexBelowPreferredCount} ${
+                              flexBelowPreferredCount === 1 ? 'shift' : 'shifts'
+                            }`}
+                        {!flexAvailabilityLoading && flexBelowPreferredCount > 0 && (
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                        )}
                       </p>
-                      <p className="text-xs text-slate-500">
-                        Below required: {flexBelowRequiredCount}
+                      <p className="flex items-center gap-1.5 text-xs text-slate-500">
+                        Below required:{' '}
+                        {flexAvailabilityLoading
+                          ? '—'
+                          : `${flexBelowRequiredCount} ${
+                              flexBelowRequiredCount === 1 ? 'shift' : 'shifts'
+                            }`}
+                        {!flexAvailabilityLoading && flexBelowRequiredCount > 0 && (
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                        )}
                       </p>
+                      {flexAvailabilityLoading && (
+                        <p className="text-xs text-slate-400">Loading staffing targets...</p>
+                      )}
                       {filteredFlexShiftMetrics.length > 0 && (
                         <div className="pt-4">
                           <div className="rounded-md border border-slate-200 bg-white">
@@ -1791,12 +2205,46 @@ export default function ScheduleSidePanel({
                                         </p>
                                       )}
                                     </div>
-                                    <div className="text-right text-xs text-slate-500">
+                                    <div className="pt-1 text-right text-xs text-slate-500 space-y-2">
+                                      {metric.status !== 'ok' && (
+                                        <span
+                                          className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap"
+                                          style={{
+                                            backgroundColor:
+                                              metric.status === 'below_required'
+                                                ? staffingColorValues.below_required.bg
+                                                : staffingColorValues.below_preferred.bg,
+                                            borderStyle: 'solid',
+                                            borderWidth: '1px',
+                                            borderColor:
+                                              metric.status === 'below_required'
+                                                ? staffingColorValues.below_required.border
+                                                : staffingColorValues.below_preferred.border,
+                                            color:
+                                              metric.status === 'below_required'
+                                                ? staffingColorValues.below_required.text
+                                                : staffingColorValues.below_preferred.text,
+                                          }}
+                                        >
+                                          {metric.status === 'below_required'
+                                            ? `Below Required by ${Math.max(
+                                                0,
+                                                (metric.required_staff ?? 0) -
+                                                  metric.scheduled_staff
+                                              )}`
+                                            : `Below Preferred by ${Math.max(
+                                                0,
+                                                (metric.preferred_staff ??
+                                                  metric.required_staff ??
+                                                  0) - metric.scheduled_staff
+                                              )}`}
+                                        </span>
+                                      )}
                                       <p>
-                                        Preferred:{' '}
-                                        {metric.preferred_staff ?? metric.required_staff ?? '—'}
+                                        Required: {metric.required_staff ?? '—'} • Preferred:{' '}
+                                        {metric.preferred_staff ?? metric.required_staff ?? '—'} •
+                                        Scheduled: {metric.scheduled_staff}
                                       </p>
-                                      <p>Scheduled: {metric.scheduled_staff}</p>
                                     </div>
                                   </div>
                                 ))}
@@ -1813,7 +2261,47 @@ export default function ScheduleSidePanel({
                     {flexError && <p className="text-sm text-destructive">{flexError}</p>}
 
                     {flexAvailabilityLoading ? (
-                      <div className="text-sm text-muted-foreground">Loading flex staff...</div>
+                      <div className="space-y-3">
+                        <p className="text-sm text-muted-foreground">Loading flex staff...</p>
+                        {[1, 2, 3].map(i => (
+                          <div
+                            key={`flex-loading-${i}`}
+                            className="rounded-lg border border-slate-200 bg-white p-4"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="space-y-2">
+                                <div
+                                  className="rounded animate-pulse"
+                                  style={{
+                                    backgroundColor: '#e5e7eb',
+                                    height: '16px',
+                                    width: '144px',
+                                    display: 'block',
+                                  }}
+                                />
+                                <div
+                                  className="rounded animate-pulse"
+                                  style={{
+                                    backgroundColor: '#e5e7eb',
+                                    height: '12px',
+                                    width: '192px',
+                                    display: 'block',
+                                  }}
+                                />
+                              </div>
+                              <div
+                                className="rounded-md animate-pulse"
+                                style={{
+                                  backgroundColor: '#e5e7eb',
+                                  height: '32px',
+                                  width: '80px',
+                                  display: 'block',
+                                }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     ) : flexStaffWithCounts.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No flex staff found.</p>
                     ) : (
@@ -1858,7 +2346,9 @@ export default function ScheduleSidePanel({
                                   }
                                 >
                                   <span className="text-xs uppercase tracking-wide text-slate-400">
-                                    {section.title}
+                                    {section.key === 'fully' || section.key === 'not'
+                                      ? `${section.title} (${section.items.length})`
+                                      : section.title}
                                   </span>
                                   {(
                                     section.key === 'fully'
@@ -1945,6 +2435,8 @@ export default function ScheduleSidePanel({
                                             <label className="flex items-center gap-2 text-sm">
                                               <input
                                                 type="radio"
+                                                className="h-4 w-4"
+                                                style={{ accentColor: '#0f766e' }}
                                                 name={`assign-${staff.id}`}
                                                 checked={assignMode === 'all'}
                                                 onChange={() =>
@@ -1959,6 +2451,8 @@ export default function ScheduleSidePanel({
                                             <label className="flex items-center gap-2 text-sm">
                                               <input
                                                 type="radio"
+                                                className="h-4 w-4"
+                                                style={{ accentColor: '#0f766e' }}
                                                 name={`assign-${staff.id}`}
                                                 checked={assignMode === 'custom'}
                                                 onChange={() =>
@@ -2049,9 +2543,9 @@ export default function ScheduleSidePanel({
                       <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold text-slate-900">Absences & Subs</h3>
                       </div>
-                      {selectedCellData?.absences && selectedCellData.absences.length > 0 ? (
+                      {sortedAbsences.length > 0 ? (
                         <div className="space-y-4">
-                          {selectedCellData.absences.map(
+                          {sortedAbsences.map(
                             (absence: {
                               teacher_id: string
                               teacher_name: string
@@ -2060,7 +2554,7 @@ export default function ScheduleSidePanel({
                               time_off_request_id?: string | null
                             }) => {
                               const subsForAbsence =
-                                selectedCellData.assignments?.filter(
+                                selectedCellData?.assignments?.filter(
                                   assignment =>
                                     assignment.is_substitute &&
                                     assignment.absent_teacher_id === absence.teacher_id
@@ -2128,85 +2622,41 @@ export default function ScheduleSidePanel({
 
                     <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-semibold text-slate-900">Flex Staff</h3>
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="!bg-teal-500 !text-white hover:!bg-teal-600 focus-visible:outline-none focus-visible:ring-0"
-                          onClick={() => setPanelMode('flex')}
-                        >
-                          <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Flex Staff
-                        </Button>
-                      </div>
-                      {flexAssignments.length > 0 ? (
-                        <div className="space-y-2">
-                          {flexAssignments.map(assignment => (
-                            <div
-                              key={assignment.id}
-                              className="flex items-center justify-between rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2"
-                            >
-                              <span className="text-sm text-emerald-700">
-                                {assignment.teacher_name}
-                              </span>
-                              <div className="flex items-center gap-4">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setPanelMode('flex')
-                                  }}
-                                >
-                                  Edit
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  className="!bg-teal-500 !text-white hover:!bg-teal-600 focus-visible:outline-none focus-visible:ring-0"
-                                  onClick={() =>
-                                    openTimeOffPanel(assignment.teacher_id, assignment.teacher_name)
-                                  }
-                                >
-                                  <Plus className="mr-1.5 h-3.5 w-3.5" />
-                                  Add Time Off
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">No flex staff assigned.</p>
-                      )}
-                    </div>
-
-                    <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
-                      <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold text-slate-900">Permanent Staff</h3>
                       </div>
-                      {displayTeachers.length > 0 ? (
+                      {sortedPermanentAssignments.length > 0 ? (
                         <div className="space-y-2">
-                          {displayTeachers
-                            .filter(teacher => !teacher.is_floater)
-                            .map(teacher => (
-                              <div
-                                key={teacher.teacher_id ?? teacher.id}
-                                className="flex items-center justify-between rounded-md border border-blue-100 bg-blue-50 px-3 py-2"
+                          {sortedPermanentAssignments.map(assignment => (
+                            <div
+                              key={assignment.id}
+                              className="flex items-center justify-between rounded-md border border-blue-300 bg-blue-100 px-3 py-2"
+                              style={{ borderColor: '#93c5fd' }}
+                            >
+                              <span className="text-sm font-semibold text-blue-800">
+                                {assignment.teacher_name}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="h-8 gap-1.5 rounded-md border-0 bg-white px-3 font-medium text-teal-700 shadow-none hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
+                                style={{
+                                  appearance: 'none',
+                                  WebkitAppearance: 'none',
+                                  border: '0',
+                                  boxShadow: 'none',
+                                }}
+                                onClick={() =>
+                                  openTimeOffPanel(
+                                    assignment.teacher_id,
+                                    assignment.teacher_name || 'Unknown'
+                                  )
+                                }
                               >
-                                <span className="text-sm text-blue-800">{teacher.name}</span>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="default"
-                                  className="!bg-teal-500 !text-white hover:!bg-teal-600 focus-visible:outline-none focus-visible:ring-0"
-                                  onClick={() =>
-                                    openTimeOffPanel(teacher.teacher_id ?? teacher.id, teacher.name)
-                                  }
-                                >
-                                  <Plus className="mr-1.5 h-3.5 w-3.5" />
-                                  Add Time Off
-                                </Button>
-                              </div>
-                            ))}
+                                <Plus className="h-3.5 w-3.5" />
+                                Add Time Off
+                              </Button>
+                            </div>
+                          ))}
                         </div>
                       ) : (
                         <p className="text-sm text-muted-foreground">
@@ -2222,6 +2672,101 @@ export default function ScheduleSidePanel({
                         <Pencil className="mr-1.5 h-3.5 w-3.5" />
                         Edit permanent staff
                       </Button>
+                    </div>
+
+                    <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-slate-900">Flex Staff</h3>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-9 rounded-md px-3.5 shadow-sm hover:opacity-95 focus-visible:outline-none focus-visible:ring-0"
+                          style={{ backgroundColor: '#14b8a6', color: '#ffffff' }}
+                          onClick={() => setPanelMode('flex')}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Add Flex Staff
+                        </Button>
+                      </div>
+                      {sortedFlexAssignments.length > 0 ? (
+                        <div className="space-y-2">
+                          {sortedFlexAssignments.map(assignment => (
+                            <div
+                              key={assignment.id}
+                              className="flex items-center justify-between rounded-md border border-blue-500 border-dashed bg-blue-50 px-3 py-2"
+                              style={{ borderColor: '#3b82f6' }}
+                            >
+                              <span className="text-sm font-semibold text-blue-800">
+                                {assignment.teacher_name}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  className="h-8 px-2.5 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                  onClick={() => {
+                                    void handleOpenRemoveFlexDialog(assignment)
+                                  }}
+                                >
+                                  Remove
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  className="h-8 gap-1.5 rounded-md bg-white px-3 font-medium text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
+                                  onClick={() =>
+                                    openTimeOffPanel(
+                                      assignment.teacher_id,
+                                      assignment.teacher_name || 'Unknown'
+                                    )
+                                  }
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                  Add Time Off
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No flex staff assigned.</p>
+                      )}
+                    </div>
+
+                    <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-slate-900">Floaters</h3>
+                      </div>
+                      {sortedFloaterAssignments.length > 0 ? (
+                        <div className="space-y-2">
+                          {sortedFloaterAssignments.map(assignment => (
+                            <div
+                              key={assignment.id}
+                              className="flex items-center justify-between rounded-md border border-purple-300 border-dashed bg-purple-100 px-3 py-2"
+                            >
+                              <span className="text-sm font-semibold text-purple-800">
+                                {assignment.teacher_name}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="h-8 gap-1.5 rounded-md bg-white px-3 font-medium text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
+                                onClick={() =>
+                                  openTimeOffPanel(
+                                    assignment.teacher_id,
+                                    assignment.teacher_name || 'Unknown'
+                                  )
+                                }
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                                Add Time Off
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No floaters assigned.</p>
+                      )}
                     </div>
 
                     <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
@@ -2624,6 +3169,115 @@ export default function ScheduleSidePanel({
               }}
             >
               Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={showRemoveFlexDialog}
+        onOpenChange={open => {
+          setShowRemoveFlexDialog(open)
+          if (!open) {
+            setFlexRemoveTarget(null)
+            setFlexRemoveContext(null)
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove flex assignment?</DialogTitle>
+            <DialogDescription className="space-y-3">
+              <p className="text-base text-slate-700">
+                {(() => {
+                  const teacherName = flexRemoveTarget?.teacher_name || 'this staff member'
+                  const isSingleShift = (flexRemoveContext?.matching_shift_count || 0) <= 1
+                  const weekdayText = formatFlexWeekdayList(flexRemoveContext?.weekdays || [])
+                  const singleWeekday = flexRemoveContext?.weekdays?.[0] || ''
+                  const startLabel = flexRemoveContext?.start_date
+                    ? parseLocalDate(flexRemoveContext.start_date).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })
+                    : 'selected start date'
+                  const endLabel = flexRemoveContext?.end_date
+                    ? parseLocalDate(flexRemoveContext.end_date).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })
+                    : 'selected end date'
+
+                  if (isSingleShift && startLabel === endLabel && singleWeekday) {
+                    return `${teacherName} is assigned as flex staff to ${classroomName} on ${singleWeekday}, ${startLabel}.`
+                  }
+
+                  if (weekdayText) {
+                    return `${teacherName} is assigned as flex staff to ${classroomName} on ${weekdayText} from ${startLabel} to ${endLabel}.`
+                  }
+                  return `${teacherName} is assigned as flex staff to ${classroomName}.`
+                })()}
+              </p>
+              {(flexRemoveContext?.matching_shift_count || 0) > 1 && (
+                <p>
+                  {`Would you like to remove ${flexRemoveTarget?.teacher_name || 'this staff member'} from:`}
+                </p>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {flexRemoveLoading ? (
+            <p className="text-sm text-muted-foreground">Loading assignment details...</p>
+          ) : (
+            <>
+              {(() => {
+                const isSingleShift = (flexRemoveContext?.matching_shift_count || 0) <= 1
+                const hasMultipleWeekdays = (flexRemoveContext?.weekdays?.length || 0) > 1
+
+                if (isSingleShift) {
+                  return null
+                }
+
+                return (
+                  <RadioGroup
+                    value={flexRemoveScope}
+                    onValueChange={value => setFlexRemoveScope(value as FlexRemovalScope)}
+                    className="gap-3"
+                  >
+                    <label className="flex items-center gap-2 text-sm">
+                      <RadioGroupItem value="single_shift" id="flex-remove-single" />
+                      This shift only
+                    </label>
+                    {hasMultipleWeekdays && (
+                      <label className="flex items-center gap-2 text-sm">
+                        <RadioGroupItem value="weekday" id="flex-remove-weekday" />
+                        All {dayName} shifts
+                      </label>
+                    )}
+                    <label className="flex items-center gap-2 text-sm text-red-700">
+                      <RadioGroupItem value="all_shifts" id="flex-remove-all" />
+                      All shifts
+                    </label>
+                  </RadioGroup>
+                )
+              })()}
+            </>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowRemoveFlexDialog(false)
+              }}
+              disabled={flexRemoveSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                void handleConfirmRemoveFlex()
+              }}
+              disabled={flexRemoveLoading || flexRemoveSubmitting || !flexRemoveTarget}
+            >
+              {flexRemoveSubmitting ? 'Removing...' : 'Remove'}
             </Button>
           </DialogFooter>
         </DialogContent>

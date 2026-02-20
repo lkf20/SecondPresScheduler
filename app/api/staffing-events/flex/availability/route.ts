@@ -100,10 +100,18 @@ export async function POST(request: NextRequest) {
 
     const flexStaff =
       (staffRows || []).filter((member: any) =>
-        (member.staff_role_type_assignments || []).some(
-          (assignment: any) => assignment.staff_role_types?.code === 'FLEXIBLE'
-        )
+        (member.staff_role_type_assignments || []).some((assignment: any) => {
+          const roleType = assignment?.staff_role_types
+          const roleCode = Array.isArray(roleType) ? roleType[0]?.code : roleType?.code
+          return roleCode === 'FLEXIBLE'
+        })
       ) ?? []
+
+    console.log('[FlexAvailability] staff counts', {
+      schoolId,
+      total_staff_rows: (staffRows || []).length,
+      flex_staff_rows: flexStaff.length,
+    })
 
     const flexIds = flexStaff.map((staff: any) => staff.id)
     if (flexIds.length === 0) {
@@ -413,16 +421,18 @@ export async function POST(request: NextRequest) {
           (subCountByKey.get(dateKey) || 0) +
           (flexCountByKey.get(dateKey) || 0)
         let status: 'below_required' | 'below_preferred' | 'ok' = 'ok'
-        if (staffing?.required_staff !== null && staffing?.required_staff !== undefined) {
-          if (scheduledStaff < (staffing.required_staff || 0)) {
-            status = 'below_required'
-          } else if (
-            staffing.preferred_staff !== null &&
-            staffing.preferred_staff !== undefined &&
-            scheduledStaff < staffing.preferred_staff
-          ) {
-            status = 'below_preferred'
-          }
+        if (
+          staffing?.required_staff !== null &&
+          staffing?.required_staff !== undefined &&
+          scheduledStaff < staffing.required_staff
+        ) {
+          status = 'below_required'
+        } else if (
+          staffing?.preferred_staff !== null &&
+          staffing?.preferred_staff !== undefined &&
+          scheduledStaff < staffing.preferred_staff
+        ) {
+          status = 'below_preferred'
         }
         return {
           date: shift.date,
