@@ -14,6 +14,8 @@ import {
   getTimeOffShifts,
   deleteTimeOffShifts,
   createTimeOffShifts,
+  getTeacherScheduledShifts,
+  getTeacherTimeOffShifts,
 } from '@/lib/api/time-off-shifts'
 import { updateTimeOffRequest } from '@/lib/api/time-off'
 import { revalidatePath } from 'next/cache'
@@ -189,6 +191,113 @@ describe('PUT /api/time-off/[id] integration', () => {
     ])
     expect(revalidatePath).toHaveBeenCalledWith('/time-off')
     expect(json.id).toBe('timeoff-1')
+
+    process.env.NODE_ENV = previousNodeEnv
+  })
+
+  it('PUT all_scheduled mode excludes conflicting shifts and returns warning metadata', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+
+    const timeOffRequestsTable = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({
+        data: {
+          coverage_request_id: 'coverage-1',
+          start_date: '2026-02-20',
+          end_date: '2026-02-21',
+        },
+        error: null,
+      }),
+    }
+
+    const coverageRequestsTable = {
+      update: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      single: jest
+        .fn()
+        .mockResolvedValueOnce({
+          data: { start_date: '2026-02-20', end_date: '2026-02-21' },
+          error: null,
+        })
+        .mockResolvedValueOnce({
+          data: null,
+          error: null,
+        }),
+    }
+
+    const coverageRequestShiftsTable = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({
+        data: [{ date: '2026-02-21' }, { date: '2026-02-22' }],
+        error: null,
+      }),
+    }
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'time_off_requests') return timeOffRequestsTable
+      if (table === 'coverage_requests') return coverageRequestsTable
+      if (table === 'coverage_request_shifts') return coverageRequestShiftsTable
+      return { select: jest.fn().mockReturnThis(), eq: jest.fn().mockResolvedValue({ data: null }) }
+    })
+    ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
+      id: 'timeoff-1',
+      school_id: 'school-1',
+      status: 'active',
+      start_date: '2026-02-20',
+      end_date: '2026-02-21',
+      teacher_id: 'teacher-1',
+      shift_selection_mode: 'all_scheduled',
+    })
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
+    ;(canTransitionTimeOffStatus as jest.Mock).mockReturnValue(true)
+    ;(updateTimeOffRequest as jest.Mock).mockResolvedValue({
+      id: 'timeoff-1',
+      school_id: 'school-1',
+      status: 'active',
+      start_date: '2026-02-20',
+      end_date: '2026-02-21',
+      teacher_id: 'teacher-1',
+      shift_selection_mode: 'all_scheduled',
+    })
+    ;(getTeacherScheduledShifts as jest.Mock).mockResolvedValue([
+      { date: '2026-02-20', day_of_week_id: 'day-1', time_slot_id: 'slot-1' },
+      { date: '2026-02-21', day_of_week_id: 'day-2', time_slot_id: 'slot-2' },
+    ])
+    ;(getTeacherTimeOffShifts as jest.Mock).mockResolvedValue([
+      { date: '2026-02-20', time_slot_id: 'slot-1' },
+    ])
+
+    const request = createJsonRequest('http://localhost:3000/api/time-off/timeoff-1', 'PUT', {
+      status: 'active',
+      teacher_id: 'teacher-1',
+      start_date: '2026-02-20',
+      end_date: '2026-02-21',
+      shift_selection_mode: 'all_scheduled',
+    })
+
+    const response = await PUT(request as any, { params: Promise.resolve({ id: 'timeoff-1' }) })
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(deleteTimeOffShifts).toHaveBeenCalledWith('timeoff-1')
+    expect(createTimeOffShifts).toHaveBeenCalledWith('timeoff-1', [
+      {
+        date: '2026-02-21',
+        day_of_week_id: 'day-2',
+        time_slot_id: 'slot-2',
+        is_partial: false,
+        start_time: null,
+        end_time: null,
+      },
+    ])
+    expect(json.excludedShiftCount).toBe(1)
+    expect(json.warning).toMatch(/already has time off recorded/i)
+    expect(json.warning).toMatch(/will not be recorded/i)
+    expect(revalidatePath).toHaveBeenCalledWith('/time-off')
 
     process.env.NODE_ENV = previousNodeEnv
   })
