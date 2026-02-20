@@ -21,7 +21,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const body = await request.json()
     const schedule = await updateTeacherSchedule(id, body)
     if (!schedule) {
-      return NextResponse.json({ updated: false }, { status: 200 })
+      return NextResponse.json(
+        { error: 'Teacher schedule not found or not permitted for update' },
+        { status: 404 }
+      )
     }
     return NextResponse.json(schedule)
   } catch (error: any) {

@@ -12,7 +12,7 @@ interface WeeklyScheduleGridNewProps {
   selectedDayIds: string[]
   weekStartISO?: string
   layout: 'classrooms-x-days' | 'days-x-classrooms'
-  onRefresh?: () => void
+  onRefresh?: () => void | Promise<void>
   onFilterPanelOpenChange?: (open: boolean) => void
   filterPanelOpen?: boolean
   initialSelectedCell?: {
@@ -444,10 +444,13 @@ export default function WeeklyScheduleGridNew({
     )
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    // Clear snapshot so selected cell reads from refreshed query data.
+    setSelectedCellSnapshot(undefined)
+
     // Trigger refresh
     if (onRefresh) {
-      onRefresh()
+      await Promise.resolve(onRefresh())
     }
   }
 
@@ -584,8 +587,19 @@ export default function WeeklyScheduleGridNew({
               <span className="font-semibold text-gray-700">Key:</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+              <span
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300"
+                style={{ borderColor: '#93c5fd' }}
+              >
                 Teacher
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-500 border-dashed"
+                style={{ borderColor: '#3b82f6' }}
+              >
+                Flex Teacher
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -603,11 +617,6 @@ export default function WeeklyScheduleGridNew({
                 <div className="flex items-center gap-2">
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
                     Absent
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Flex
                   </span>
                 </div>
               </>
@@ -925,8 +934,19 @@ export default function WeeklyScheduleGridNew({
               <span className="font-semibold text-gray-700">Key:</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+              <span
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300"
+                style={{ borderColor: '#93c5fd' }}
+              >
                 Teacher
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-500 border-dashed"
+                style={{ borderColor: '#3b82f6' }}
+              >
+                Flex Teacher
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -944,11 +964,6 @@ export default function WeeklyScheduleGridNew({
                 <div className="flex items-center gap-2">
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
                     Absent
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Flex
                   </span>
                 </div>
               </>
