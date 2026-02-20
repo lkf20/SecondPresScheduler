@@ -1,7 +1,7 @@
 'use client'
 
-import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState, useMemo } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -53,10 +53,12 @@ type TimeOffApiItem = {
 
 export default function TimeOffListClient({ view: initialView }: { view: string }) {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const editParam = searchParams.get('edit')
   const [view, setView] = useState(initialView ?? 'active')
   const [editingRequestId, setEditingRequestId] = useState<string | null>(editParam || null)
+  const closingEditRef = useRef(false)
   // Default to all coverage filters selected
   const [coverageFilters, setCoverageFilters] = useState<Set<string>>(
     new Set(['covered', 'needs_coverage', 'partially_covered'])
@@ -81,7 +83,22 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
   // Transform API response to match component's expected format
   const allRequests: TimeOffRow[] = useMemo(() => {
     const apiData = (timeOffData?.data || []) as TimeOffApiItem[]
-    return apiData.map(item => {
+    console.log(
+      '[TimeOffList Debug] raw API totals',
+      apiData.map(item => ({
+        id: item.id,
+        teacher_name: item.teacher_name,
+        start_date: item.start_date,
+        end_date: item.end_date ?? null,
+        status: item.status,
+        coverage_status: item.coverage_status,
+        total: item.total,
+        covered: item.covered,
+        partial: item.partial,
+        uncovered: item.uncovered,
+      }))
+    )
+    const mapped: TimeOffRow[] = apiData.map(item => {
       // Calculate shifts_display from total
       const total = item.total || 0
       const shifts_display = `${total} shift${total !== 1 ? 's' : ''}`
@@ -111,6 +128,22 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
         notes: item.notes,
       }
     })
+    console.log(
+      '[TimeOffList Debug] mapped rows',
+      mapped.map(row => ({
+        id: row.id,
+        teacher_name: row.teacher_name,
+        start_date: row.start_date,
+        end_date: row.end_date,
+        status: row.status,
+        shifts_display: row.shifts_display,
+        coverage_total: row.coverage_total,
+        coverage_covered: row.coverage_covered,
+        coverage_partial: row.coverage_partial,
+        coverage_uncovered: row.coverage_uncovered,
+      }))
+    )
+    return mapped
   }, [timeOffData])
 
   // Transform and categorize requests
@@ -142,19 +175,20 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
   }, [allRequests])
 
   const handleEdit = (id: string) => {
+    closingEditRef.current = false
     setEditingRequestId(id)
-    const url = new URL(window.location.href)
-    url.searchParams.set('edit', id)
-    window.history.replaceState({}, '', url)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('edit', id)
+    router.replace(`${pathname}?${params.toString()}`)
   }
 
   const handleEditClose = () => {
+    closingEditRef.current = true
     setEditingRequestId(null)
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href)
-      url.searchParams.delete('edit')
-      window.history.replaceState({}, '', url)
-    }
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('edit')
+    const next = params.toString()
+    router.replace(next ? `${pathname}?${next}` : pathname)
   }
 
   useEffect(() => {
@@ -164,7 +198,19 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
   // Handle edit query parameter
   useEffect(() => {
     const editParam = searchParams.get('edit')
-    if (editParam && editParam !== editingRequestId) {
+    if (!editParam) {
+      closingEditRef.current = false
+      if (editingRequestId !== null) {
+        setEditingRequestId(null)
+      }
+      return
+    }
+
+    if (closingEditRef.current) {
+      return
+    }
+
+    if (editParam !== editingRequestId) {
       setEditingRequestId(editParam)
     }
   }, [searchParams, editingRequestId])
@@ -350,7 +396,17 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
         totalShifts={totalShifts}
         shiftDetails={row.shift_details}
         notes={row.notes || null}
-        onEdit={() => handleEdit(row.id)}
+        onEdit={() => {
+          console.log('[TimeOffList Debug] opening row', {
+            id: row.id,
+            teacher_name: row.teacher_name,
+            start_date: row.start_date,
+            end_date: row.end_date,
+            shifts_display: row.shifts_display,
+            coverage_total: row.coverage_total,
+          })
+          handleEdit(row.id)
+        }}
       />
     )
   }

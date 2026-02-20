@@ -5,6 +5,8 @@ import { getTimeOffShifts, type TimeOffShiftWithDetails } from '@/lib/api/time-o
 import { transformTimeOffCardData, type TimeOffCardData } from '@/lib/utils/time-off-card-data'
 import { createErrorResponse } from '@/lib/utils/errors'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * Unified API endpoint for time off requests
  *
@@ -129,6 +131,16 @@ export async function GET(request: NextRequest) {
         } catch (error) {
           console.error(`Error fetching shifts for time off request ${request.id}:`, error)
           shifts = []
+        }
+
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[TimeOff Requests Debug]', {
+            requestId: request.id,
+            teacherId: request.teacher_id,
+            startDate: request.start_date,
+            endDate: request.end_date || request.start_date,
+            shiftCount: shifts.length,
+          })
         }
 
         // Get assignments if needed

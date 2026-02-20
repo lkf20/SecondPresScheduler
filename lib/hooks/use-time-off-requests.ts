@@ -47,7 +47,7 @@ async function fetchTimeOffRequests(
   }
 
   const url = `/api/time-off-requests${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
-  const response = await fetch(url)
+  const response = await fetch(url, { cache: 'no-store' })
 
   if (!response.ok) {
     const error = await response

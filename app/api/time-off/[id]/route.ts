@@ -84,23 +84,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     let requestedShifts: Array<{ date: string; time_slot_id: string }> = []
-    if (Array.isArray(shifts) && shifts.length > 0) {
-      requestedShifts = shifts.map((shift: any) => ({
-        date: shift.date,
-        time_slot_id: shift.time_slot_id,
-      }))
-    } else if (requestData.shift_selection_mode === 'all_scheduled') {
-      const scheduledShifts = await getTeacherScheduledShifts(
-        requestData.teacher_id,
-        requestData.start_date,
-        effectiveEndDate,
-        timeZone
-      )
-      requestedShifts = scheduledShifts.map(shift => ({
-        date: shift.date,
-        time_slot_id: shift.time_slot_id,
-      }))
-    }
 
     // Filter out conflicting shifts (but still allow the request to be updated)
     let shiftsToCreate: Array<{
@@ -121,6 +104,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       status,
       school_id: existingRequest.school_id || sessionSchoolId || undefined,
     })
+
+    const effectiveTeacherId = updatedRequest.teacher_id || existingRequest.teacher_id
+    const effectiveStartDate = updatedRequest.start_date || existingRequest.start_date
+    const effectiveRequestEndDate =
+      updatedRequest.end_date ||
+      updatedRequest.start_date ||
+      existingRequest.end_date ||
+      existingRequest.start_date
+    const effectiveShiftSelectionMode =
+      requestData.shift_selection_mode ||
+      updatedRequest.shift_selection_mode ||
+      existingRequest.shift_selection_mode ||
+      'all_scheduled'
 
     // Update the corresponding coverage_request's dates to match the time_off_request
     const supabase = await createClient()
@@ -172,15 +168,35 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Handle shifts
-    if (shifts !== undefined) {
+    // Rebuild shifts when explicit shifts are provided OR when using all_scheduled mode
+    // so date/teacher edits correctly refresh the generated shift set.
+    if (shifts !== undefined || effectiveShiftSelectionMode === 'all_scheduled') {
       // Delete existing shifts
       await deleteTimeOffShifts(id)
 
+      if (Array.isArray(shifts) && shifts.length > 0) {
+        requestedShifts = shifts.map((shift: any) => ({
+          date: shift.date,
+          time_slot_id: shift.time_slot_id,
+        }))
+      } else if (effectiveShiftSelectionMode === 'all_scheduled') {
+        const scheduledShifts = await getTeacherScheduledShifts(
+          effectiveTeacherId,
+          effectiveStartDate,
+          effectiveRequestEndDate,
+          timeZone
+        )
+        requestedShifts = scheduledShifts.map(shift => ({
+          date: shift.date,
+          time_slot_id: shift.time_slot_id,
+        }))
+      }
+
       if (requestedShifts.length > 0 && status !== 'draft') {
         const existingShifts = await getTeacherTimeOffShifts(
-          requestData.teacher_id,
-          requestData.start_date,
-          effectiveEndDate,
+          effectiveTeacherId,
+          effectiveStartDate,
+          effectiveRequestEndDate,
           id // Exclude current request
         )
         const existingShiftKeys = new Set(
@@ -203,12 +219,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             return !existingShiftKeys.has(shiftKey)
           })
           excludedShiftCount = excludedShifts.length
-        } else if (requestData.shift_selection_mode === 'all_scheduled') {
+        } else if (effectiveShiftSelectionMode === 'all_scheduled') {
           // If "all_scheduled" mode, fetch all scheduled shifts and filter out conflicts
           const scheduledShifts = await getTeacherScheduledShifts(
-            updatedRequest.teacher_id,
-            updatedRequest.start_date,
-            effectiveEndDate,
+            effectiveTeacherId,
+            effectiveStartDate,
+            effectiveRequestEndDate,
             timeZone
           )
 
@@ -270,11 +286,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         // No conflicts to check, use all requested shifts
         if (Array.isArray(shifts) && shifts.length > 0) {
           shiftsToCreate = shifts
-        } else if (requestData.shift_selection_mode === 'all_scheduled') {
+        } else if (effectiveShiftSelectionMode === 'all_scheduled') {
           const scheduledShifts = await getTeacherScheduledShifts(
-            updatedRequest.teacher_id,
-            updatedRequest.start_date,
-            effectiveEndDate,
+            effectiveTeacherId,
+            effectiveStartDate,
+            effectiveRequestEndDate,
             timeZone
           )
           shiftsToCreate = scheduledShifts.map(shift => ({
@@ -291,6 +307,27 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       // Create shifts (only non-conflicting ones)
       if (shiftsToCreate.length > 0) {
         await createTimeOffShifts(id, shiftsToCreate)
+      }
+
+      if (process.env.NODE_ENV !== 'production') {
+        const { count: persistedShiftCount, error: shiftCountError } = await supabase
+          .from('time_off_shifts')
+          .select('id', { count: 'exact', head: true })
+          .eq('time_off_request_id', id)
+
+        if (shiftCountError) {
+          console.error('[TimeOff Update Debug] Failed to count persisted shifts:', shiftCountError)
+        } else {
+          console.log('[TimeOff Update Debug]', {
+            requestId: id,
+            mode: effectiveShiftSelectionMode,
+            requestedShifts: requestedShifts.length,
+            shiftsToCreate: shiftsToCreate.length,
+            persistedShiftCount: persistedShiftCount ?? 0,
+            startDate: effectiveStartDate,
+            endDate: effectiveRequestEndDate,
+          })
+        }
       }
 
       // After shifts are created/updated, recalculate coverage_request dates from actual shifts
@@ -417,6 +454,9 @@ export async function DELETE(
     })
   } catch (error: any) {
     console.error('Error cancelling time off request:', error)
+    if (error?.message === 'Time off request is already cancelled') {
+      return NextResponse.json({ error: error.message }, { status: 409 })
+    }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
