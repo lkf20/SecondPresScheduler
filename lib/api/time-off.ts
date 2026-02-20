@@ -97,12 +97,18 @@ export async function updateTimeOffRequest(id: string, updates: Partial<TimeOffR
 
 export async function deleteTimeOffRequest(id: string) {
   const supabase = await createClient()
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('time_off_requests')
     .update({ status: 'cancelled' })
+    .neq('status', 'cancelled')
     .eq('id', id)
+    .select('id')
+    .maybeSingle()
 
   if (error) throw error
+  if (!data) {
+    throw new Error('Time off request is already cancelled')
+  }
 }
 
 /**
@@ -151,6 +157,9 @@ export async function cancelTimeOffRequest(
   if (requestError) throw requestError
   if (!timeOffRequest) {
     throw new Error('Time off request not found')
+  }
+  if (timeOffRequest.status === 'cancelled') {
+    throw new Error('Time off request is already cancelled')
   }
 
   if (

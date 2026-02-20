@@ -402,6 +402,27 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         await createTimeOffShifts(id, shiftsToCreate)
       }
 
+      if (process.env.NODE_ENV !== 'production') {
+        const { count: persistedShiftCount, error: shiftCountError } = await supabase
+          .from('time_off_shifts')
+          .select('id', { count: 'exact', head: true })
+          .eq('time_off_request_id', id)
+
+        if (shiftCountError) {
+          console.error('[TimeOff Update Debug] Failed to count persisted shifts:', shiftCountError)
+        } else {
+          console.log('[TimeOff Update Debug]', {
+            requestId: id,
+            mode: effectiveShiftSelectionMode,
+            requestedShifts: requestedShifts.length,
+            shiftsToCreate: shiftsToCreate.length,
+            persistedShiftCount: persistedShiftCount ?? 0,
+            startDate: effectiveStartDate,
+            endDate: effectiveRequestEndDate,
+          })
+        }
+      }
+
       // After shifts are created/updated, recalculate coverage_request dates from actual shifts
       // This ensures the dates match the actual shift dates (MIN and MAX)
       if (timeOffRequestWithCoverage?.coverage_request_id) {
@@ -637,6 +658,9 @@ export async function DELETE(
     })
   } catch (error: any) {
     console.error('Error cancelling time off request:', error)
+    if (error?.message === 'Time off request is already cancelled') {
+      return NextResponse.json({ error: error.message }, { status: 409 })
+    }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

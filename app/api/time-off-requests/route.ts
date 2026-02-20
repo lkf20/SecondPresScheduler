@@ -133,6 +133,16 @@ export async function GET(request: NextRequest) {
           shifts = []
         }
 
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[TimeOff Requests Debug]', {
+            requestId: request.id,
+            teacherId: request.teacher_id,
+            startDate: request.start_date,
+            endDate: request.end_date || request.start_date,
+            shiftCount: shifts.length,
+          })
+        }
+
         // Get assignments if needed
         let assignments: any[] = []
         if (includeAssignments && shifts.length > 0) {

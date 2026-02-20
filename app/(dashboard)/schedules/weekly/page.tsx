@@ -199,11 +199,17 @@ export default function WeeklySchedulePage() {
   }, [filters])
 
   // Handle refresh - invalidate React Query cache
-  const handleRefresh = () => {
-    if (schoolId) {
-      invalidateWeeklySchedule(queryClient, schoolId)
-      queryClient.invalidateQueries({ queryKey: ['scheduleSettings', schoolId] })
-    }
+  const handleRefresh = async () => {
+    if (!schoolId) return
+
+    await invalidateWeeklySchedule(queryClient, schoolId)
+    await queryClient.invalidateQueries({ queryKey: ['scheduleSettings', schoolId] })
+
+    // Force immediate refetch so grid updates right after save actions.
+    await queryClient.refetchQueries({
+      queryKey: ['weeklySchedule', schoolId],
+      type: 'active',
+    })
   }
 
   // Apply filters to data

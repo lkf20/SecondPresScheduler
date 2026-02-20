@@ -22,6 +22,7 @@ Issues that need to be fixed.
 - [ ] Investigate Sub Finder intermittently showing "No recommended subs found" after navigating away and back (repro: Kim B. Jan 19-23)
 - [ ] Time Off cancel flow: ensure coverage_requests + shifts are re-opened when time_off_requests go back to active; add cancel dialog when subs exist to choose remove vs keep (keep => extra_coverage)
 - [ ] Investigate Time Off cancel UI bug: side panel can get stuck open and repeatedly prompt "discard changes" after canceling a request; fix close/reset panel state flow
+- [ ] Time Off cancel flow: prevent cancelling the same time off request twice and ensure Activity Log does not record duplicate cancel entries
 
 ---
 
