@@ -1,26 +1,28 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Phone,
+  PhoneOff,
+  CheckCircle,
+  Clock,
+  HelpCircle,
   Mail,
   AlertTriangle,
   ArrowRightLeft,
-  ChevronDown,
-  ChevronUp,
   X,
   XCircle,
 } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
+import CoverageSummary from '@/components/sub-finder/CoverageSummary'
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
   Dialog,
@@ -34,14 +36,65 @@ import {
   getPanelBackgroundClasses,
   getPanelHeaderBackgroundClasses,
   panelBackgrounds,
-  shiftStatusColorValues,
 } from '@/lib/utils/colors'
-import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
 import { toast } from 'sonner'
 import { useAssignSubShifts } from '@/lib/hooks/use-sub-assignment-mutations'
 
-type ResponseStatus = 'none' | 'pending' | 'confirmed' | 'declined_all'
+type ResponseStatus = 'none' | 'pending' | 'confirmed' | 'declined_all' | 'declined'
+type ContactStatus =
+  | 'not_contacted'
+  | 'pending'
+  | 'awaiting_response'
+  | 'confirmed'
+  | 'declined_all'
+
+const normalizeResponseStatus = (value: string | null | undefined): ResponseStatus => {
+  if (value === 'declined') return 'declined_all'
+  if (
+    value === 'none' ||
+    value === 'pending' ||
+    value === 'confirmed' ||
+    value === 'declined_all'
+  ) {
+    return value
+  }
+  return 'none'
+}
+
+const deriveContactStatus = (
+  isContacted: boolean,
+  responseStatus: string | null | undefined,
+  explicitContactStatus?: string | null
+): ContactStatus => {
+  const normalizedResponse = normalizeResponseStatus(responseStatus)
+  if (explicitContactStatus === 'not_contacted') return 'not_contacted'
+  if (explicitContactStatus === 'pending') return 'pending'
+  if (explicitContactStatus === 'awaiting_response') return 'pending'
+  if (explicitContactStatus === 'confirmed') return 'confirmed'
+  if (explicitContactStatus === 'declined_all') return 'declined_all'
+
+  if (!isContacted) return 'not_contacted'
+  if (normalizedResponse === 'confirmed') return 'confirmed'
+  if (normalizedResponse === 'declined_all') return 'declined_all'
+  return 'pending'
+}
+
+const mapContactStatusToLegacy = (status: ContactStatus) => {
+  switch (status) {
+    case 'not_contacted':
+      return { is_contacted: false, response_status: 'none' as ResponseStatus }
+    case 'awaiting_response':
+    case 'pending':
+      return { is_contacted: true, response_status: 'pending' as ResponseStatus }
+    case 'confirmed':
+      return { is_contacted: true, response_status: 'confirmed' as ResponseStatus }
+    case 'declined_all':
+      return { is_contacted: true, response_status: 'declined_all' as ResponseStatus }
+    default:
+      return { is_contacted: false, response_status: 'none' as ResponseStatus }
+  }
+}
 
 type ShiftOverride = {
   coverage_request_shift_id?: string | null
@@ -99,6 +152,18 @@ interface Absence {
   teacher_name: string
   start_date: string
   end_date: string | null
+  shifts?: {
+    shift_details?: Array<{
+      date: string
+      day_name?: string
+      time_slot_code: string
+      status?: 'uncovered' | 'partially_covered' | 'fully_covered'
+      sub_name?: string | null
+      sub_id?: string | null
+      classroom_name?: string | null
+      class_name?: string | null
+    }>
+  }
 }
 
 interface ContactData {
@@ -106,6 +171,7 @@ interface ContactData {
   is_contacted: boolean
   contacted_at: string | null
   response_status: ResponseStatus
+  contact_status?: ContactStatus | null
   notes: string | null
   shift_overrides?: ShiftOverride[]
   coverage_request_id?: string
@@ -136,12 +202,11 @@ export default function ContactSubPanel({
   onChangeShift,
 }: ContactSubPanelProps) {
   const router = useRouter()
+  const contactSummaryRef = useRef<HTMLDivElement | null>(null)
   const assignSubShiftsMutation = useAssignSubShifts()
   const [isContacted, setIsContacted] = useState(false)
   const [contactedAt, setContactedAt] = useState<string | null>(null)
-  const [responseStatus, setResponseStatus] = useState<
-    'none' | 'pending' | 'confirmed' | 'declined_all'
-  >('none')
+  const [responseStatus, setResponseStatus] = useState<ResponseStatus>('none')
   const [notes, setNotes] = useState('')
   const [selectedShifts, setSelectedShifts] = useState<Set<string>>(new Set())
   const [assignedShifts, setAssignedShifts] = useState<
@@ -158,7 +223,6 @@ export default function ContactSubPanel({
   const [contactId, setContactId] = useState<string | null>(null)
   const [overriddenShiftIds, setOverriddenShiftIds] = useState<Set<string>>(new Set())
   const [isSubInactive, setIsSubInactive] = useState(false)
-  const [isPreviouslyAvailableExpanded, setIsPreviouslyAvailableExpanded] = useState(false)
   const [remainingShiftKeys, setRemainingShiftKeys] = useState<Set<string>>(new Set())
   const [remainingShiftCount, setRemainingShiftCount] = useState<number | null>(null)
   const [removeDialogShift, setRemoveDialogShift] = useState<{
@@ -168,23 +232,28 @@ export default function ContactSubPanel({
     time_slot_code: string
   } | null>(null)
   const [removingScope, setRemovingScope] = useState<'single' | 'all_for_absence' | null>(null)
+  const [showAssignConfirmDialog, setShowAssignConfirmDialog] = useState(false)
+  const [showConfirmedNeedsAssignmentDialog, setShowConfirmedNeedsAssignmentDialog] =
+    useState(false)
+  const [changeDialogShift, setChangeDialogShift] = useState<{
+    date: string
+    time_slot_code: string
+    fromSubName?: string | null
+    toSubName?: string | null
+  } | null>(null)
   const [timeSlotOrderByCode, setTimeSlotOrderByCode] = useState<Record<string, number>>({})
-  const sortedAssignedShifts = useMemo(() => {
-    return [...assignedShifts].sort((a, b) => {
-      const dateA = parseLocalDate(a.date).getTime()
-      const dateB = parseLocalDate(b.date).getTime()
-      if (dateA !== dateB) return dateA - dateB
-
-      const orderA = timeSlotOrderByCode[a.time_slot_code]
-      const orderB = timeSlotOrderByCode[b.time_slot_code]
-      if (orderA !== undefined && orderB !== undefined && orderA !== orderB) {
-        return orderA - orderB
-      }
-      if (orderA !== undefined && orderB === undefined) return -1
-      if (orderA === undefined && orderB !== undefined) return 1
-      return a.time_slot_code.localeCompare(b.time_slot_code)
-    })
-  }, [assignedShifts, timeSlotOrderByCode])
+  const applyContactStatusChange = (nextStatus: ContactStatus) => {
+    const mapped = mapContactStatusToLegacy(nextStatus)
+    setIsContacted(mapped.is_contacted)
+    setResponseStatus(mapped.response_status)
+    if (mapped.is_contacted && !contactedAt) {
+      setContactedAt(new Date().toISOString())
+    }
+    if (nextStatus === 'declined_all') {
+      setSelectedShifts(new Set())
+      setOverriddenShiftIds(new Set())
+    }
+  }
   useEffect(() => {
     if (!isOpen) return
     let isCancelled = false
@@ -297,25 +366,22 @@ export default function ContactSubPanel({
     }
 
     if (Array.isArray(data.selected_shift_keys) || Array.isArray(data.override_shift_keys)) {
-      setSelectedShifts(new Set(data.selected_shift_keys || []))
+      // Start unchecked by default; director explicitly selects shifts each session.
+      setSelectedShifts(new Set())
       setOverriddenShiftIds(new Set(data.override_shift_keys || []))
       return
     }
 
     if (data.shift_overrides && data.shift_overrides.length > 0) {
-      const selected = new Set<string>()
       const overridden = new Set<string>()
       data.shift_overrides.forEach((override: ShiftOverride) => {
         if (!override.shift) return
         const key = `${override.shift.date}|${override.shift.time_slot?.code || ''}`
-        if (override.selected) {
-          selected.add(key)
-        }
         if (override.override_availability) {
           overridden.add(key)
         }
       })
-      setSelectedShifts(selected)
+      setSelectedShifts(new Set())
       setOverriddenShiftIds(overridden)
     }
   }
@@ -353,7 +419,7 @@ export default function ContactSubPanel({
       setContactId(initialContactData.id)
       setIsContacted(initialContactData.is_contacted ?? false)
       setContactedAt(initialContactData.contacted_at)
-      setResponseStatus(initialContactData.response_status || 'none')
+      setResponseStatus(normalizeResponseStatus(initialContactData.response_status))
       setNotes(initialContactData.notes || '')
       setCoverageRequestId(initialContactData.coverage_request_id || null)
 
@@ -419,7 +485,7 @@ export default function ContactSubPanel({
             setContactId(contactData.id)
             setIsContacted(contactData.is_contacted ?? false)
             setContactedAt(contactData.contacted_at)
-            setResponseStatus(contactData.response_status || 'none')
+            setResponseStatus(normalizeResponseStatus(contactData.response_status))
             setNotes(contactData.notes || '')
 
             applyShiftSelections(contactData)
@@ -484,18 +550,10 @@ export default function ContactSubPanel({
       setContactId(null)
       setOverriddenShiftIds(new Set())
       setIsSubInactive(false)
-      setIsPreviouslyAvailableExpanded(false)
       setRemainingShiftKeys(new Set())
       setRemainingShiftCount(null)
     }
   }, [isOpen])
-
-  // Reset collapsed state when response status changes from declined_all
-  useEffect(() => {
-    if (responseStatus !== 'declined_all') {
-      setIsPreviouslyAvailableExpanded(false)
-    }
-  }, [responseStatus])
 
   // Format date for display
   const formatDate = (dateString: string) => {
@@ -702,6 +760,12 @@ export default function ContactSubPanel({
       console.error('Coverage request ID not available')
       return
     }
+    const hasAssignedToThisSub = assignedShifts.length > 0
+    const hasSelectedShifts = selectedShifts.size > 0
+    if (responseStatus === 'confirmed' && !hasSelectedShifts && !hasAssignedToThisSub) {
+      setShowConfirmedNeedsAssignmentDialog(true)
+      return
+    }
 
     setLoading(true)
     try {
@@ -723,11 +787,13 @@ export default function ContactSubPanel({
       }
 
       // Update contact with response_status, is_contacted, notes, and shift overrides
+      const nextContactStatus = deriveContactStatus(isContacted, responseStatus)
       const updateResponse = await fetch('/api/sub-finder/substitute-contacts', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: currentContactId,
+          contact_status: nextContactStatus,
           response_status: responseStatus,
           is_contacted: isContacted,
           notes: notes || null,
@@ -748,7 +814,7 @@ export default function ContactSubPanel({
         if (updatedContactData.contacted_at) {
           setContactedAt(updatedContactData.contacted_at)
         }
-        setResponseStatus(updatedContactData.response_status || 'none')
+        setResponseStatus(normalizeResponseStatus(updatedContactData.response_status))
       }
 
       // Refresh parent data to update the main page
@@ -800,7 +866,10 @@ export default function ContactSubPanel({
 
   const warnings = calculateWarnings()
 
-  const handleAssignShifts = async () => {
+  const handleAssignShifts = async (options?: {
+    responseStatusOverride?: ResponseStatus
+    isContactedOverride?: boolean
+  }) => {
     if (!coverageRequestId || selectedShifts.size === 0) {
       console.error('Cannot assign: missing coverage request or no shifts selected')
       return
@@ -808,6 +877,9 @@ export default function ContactSubPanel({
 
     setLoading(true)
     try {
+      const effectiveResponseStatus = options?.responseStatusOverride ?? responseStatus
+      const effectiveIsContacted = options?.isContactedOverride ?? isContacted
+
       // First, save the contact with status and notes
       let currentContactId = contactId
       if (!currentContactId) {
@@ -832,8 +904,9 @@ export default function ContactSubPanel({
 
       const updatePayload = {
         id: currentContactId,
-        response_status: responseStatus,
-        is_contacted: isContacted,
+        contact_status: deriveContactStatus(effectiveIsContacted, effectiveResponseStatus),
+        response_status: effectiveResponseStatus,
+        is_contacted: effectiveIsContacted,
         notes: notes || null,
         shift_overrides: resolvedOverrides.shift_overrides,
         selected_shift_keys: Array.from(selectedShifts),
@@ -893,6 +966,12 @@ export default function ContactSubPanel({
       if (assignData.assigned_shifts) {
         setAssignedShifts(assignData.assigned_shifts)
       }
+      if (options?.responseStatusOverride) {
+        setResponseStatus(options.responseStatusOverride)
+      }
+      if (options?.isContactedOverride !== undefined) {
+        setIsContacted(options.isContactedOverride)
+      }
 
       // Refresh parent data (absences and recommended subs)
       if (onAssignmentComplete) {
@@ -906,6 +985,8 @@ export default function ContactSubPanel({
       if (coverageRequestId && absence) {
         await refreshRemainingShifts()
       }
+
+      setShowAssignConfirmDialog(false)
 
       // Don't close - keep panel open so user can see the updated status
     } catch (error) {
@@ -927,9 +1008,8 @@ export default function ContactSubPanel({
   }
 
   const handleChangeToConfirmed = () => {
-    // Change response status to confirmed
-    setResponseStatus('confirmed')
-    // Selected shifts remain selected, buttons will revert to default for confirmed
+    // Selected shifts remain selected, buttons revert to confirmed state.
+    applyContactStatusChange('confirmed')
   }
 
   const handleMarkAsDeclinedSave = async () => {
@@ -966,8 +1046,9 @@ export default function ContactSubPanel({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id: currentContactId,
+            contact_status: 'declined_all' as ContactStatus,
             response_status: 'declined_all',
-            is_contacted: isContacted,
+            is_contacted: true,
             notes: notes || null,
             shift_overrides: shiftOverrides,
             selected_shift_keys: [],
@@ -986,7 +1067,7 @@ export default function ContactSubPanel({
           if (updatedContactData.contacted_at) {
             setContactedAt(updatedContactData.contacted_at)
           }
-          setResponseStatus(updatedContactData.response_status || 'none')
+          setResponseStatus(normalizeResponseStatus(updatedContactData.response_status))
         }
 
         // Refresh parent data
@@ -1018,7 +1099,23 @@ export default function ContactSubPanel({
     }
   }
 
+  const shouldWarnBeforeAssign =
+    !isContacted || responseStatus === 'none' || responseStatus === 'pending'
+
+  const handleAssignButtonClick = async () => {
+    if (shouldWarnBeforeAssign) {
+      setShowAssignConfirmDialog(true)
+      return
+    }
+    await handleAssignShifts()
+  }
+
   const selectedShiftsCount = selectedShifts.size
+  const isConfirmedContact = responseStatus === 'confirmed'
+  const hasAssignedToThisSub = assignedShifts.length > 0
+  const showConfirmedNoShiftWarning =
+    responseStatus === 'confirmed' && selectedShiftsCount === 0 && !hasAssignedToThisSub
+  const hasPendingAssignmentChanges = selectedShiftsCount > 0
 
   const derivedShiftKeys = (() => {
     if (remainingShiftKeys.size > 0) return remainingShiftKeys
@@ -1055,9 +1152,223 @@ export default function ContactSubPanel({
         ? sub.remaining_shift_count
         : sub.total_shifts
   const remainingShiftsCovered = remainingCanCover.length
+  const requestShiftDetails = (() => {
+    const details = absence.shifts?.shift_details || []
+    return [...details].sort((a, b) => {
+      const dateA = parseLocalDate(a.date).getTime()
+      const dateB = parseLocalDate(b.date).getTime()
+      if (dateA !== dateB) return dateA - dateB
+      const orderA = timeSlotOrderByCode[a.time_slot_code]
+      const orderB = timeSlotOrderByCode[b.time_slot_code]
+      if (orderA !== undefined && orderB !== undefined && orderA !== orderB) {
+        return orderA - orderB
+      }
+      if (orderA !== undefined && orderB === undefined) return -1
+      if (orderA === undefined && orderB !== undefined) return 1
+      return a.time_slot_code.localeCompare(b.time_slot_code)
+    })
+  })()
+  const requestTotalShifts = requestShiftDetails.length || remainingShifts
+  const requestAssignedCount = requestShiftDetails.length
+    ? requestShiftDetails.filter(shift => shift.status !== 'uncovered').length
+    : assignedShifts.length
+  const requestUncoveredCount = Math.max(0, requestTotalShifts - requestAssignedCount)
+  const assignedShiftByKey = (() => {
+    const map = new Map<string, (typeof assignedShifts)[number]>()
+    assignedShifts.forEach(shift => {
+      map.set(`${shift.date}|${shift.time_slot_code}`, shift)
+    })
+    return map
+  })()
+  const canCoverShiftKeys = (() => {
+    return new Set((sub.can_cover || []).map(shift => `${shift.date}|${shift.time_slot_code}`))
+  })()
+  const cannotCoverReasonByKey = (() => {
+    const map = new Map<string, string>()
+    ;(sub.cannot_cover || []).forEach(shift => {
+      map.set(`${shift.date}|${shift.time_slot_code}`, shift.reason)
+    })
+    return map
+  })()
+  const actionableShifts = (() => {
+    const shiftMap = new Map<
+      string,
+      {
+        date: string
+        time_slot_code: string
+        classroom_name?: string | null
+        class_name?: string | null
+        sub_name?: string | null
+        sub_id?: string | null
+        status?: 'uncovered' | 'partially_covered' | 'fully_covered'
+      }
+    >()
+
+    requestShiftDetails.forEach(shift => {
+      shiftMap.set(`${shift.date}|${shift.time_slot_code}`, shift)
+    })
+    ;(sub.can_cover || []).forEach(shift => {
+      const key = `${shift.date}|${shift.time_slot_code}`
+      if (!shiftMap.has(key)) {
+        shiftMap.set(key, {
+          date: shift.date,
+          time_slot_code: shift.time_slot_code,
+          classroom_name: shift.classroom_name ?? null,
+          class_name: shift.class_name ?? null,
+          status: 'uncovered',
+        })
+      }
+    })
+    ;(sub.cannot_cover || []).forEach(shift => {
+      const key = `${shift.date}|${shift.time_slot_code}`
+      if (!shiftMap.has(key)) {
+        shiftMap.set(key, {
+          date: shift.date,
+          time_slot_code: shift.time_slot_code,
+          status: 'uncovered',
+        })
+      }
+    })
+
+    assignedShifts.forEach(shift => {
+      const key = `${shift.date}|${shift.time_slot_code}`
+      if (!shiftMap.has(key)) {
+        shiftMap.set(key, {
+          date: shift.date,
+          time_slot_code: shift.time_slot_code,
+          status: 'fully_covered',
+          sub_name: sub.name,
+          sub_id: sub.id,
+        })
+      }
+    })
+
+    return Array.from(shiftMap.values()).sort((a, b) => {
+      const dateA = parseLocalDate(a.date).getTime()
+      const dateB = parseLocalDate(b.date).getTime()
+      if (dateA !== dateB) return dateA - dateB
+      const orderA = timeSlotOrderByCode[a.time_slot_code]
+      const orderB = timeSlotOrderByCode[b.time_slot_code]
+      if (orderA !== undefined && orderB !== undefined && orderA !== orderB) {
+        return orderA - orderB
+      }
+      if (orderA !== undefined && orderB === undefined) return -1
+      if (orderA === undefined && orderB !== undefined) return 1
+      return a.time_slot_code.localeCompare(b.time_slot_code)
+    })
+  })()
+  const requestCoverageSummaryLine = (() => {
+    return `${requestUncoveredCount} of ${requestTotalShifts} upcoming shifts need coverage`
+  })()
+
+  const getCannotCoverMeta = (reason: string | null) => {
+    const normalized = (reason || '').toLowerCase()
+    if (normalized.includes('scheduled to teach')) {
+      return {
+        category: 'schedule_conflict',
+        label: 'Scheduled elsewhere',
+        detail: 'This sub is already scheduled to teach at this time.',
+        canOverride: false,
+      }
+    }
+    if (normalized.includes('already assigned as sub')) {
+      const inMatch = reason?.match(/already assigned as sub in (.+)$/i)
+      const conflictClassroom = inMatch?.[1]?.trim()
+      return {
+        category: 'sub_conflict',
+        label: conflictClassroom ? `Assigned in ${conflictClassroom}` : 'Sub assignment conflict',
+        detail: conflictClassroom
+          ? `This sub is already assigned in ${conflictClassroom} at this time.`
+          : 'This sub is already assigned to another coverage shift at this time.',
+        canOverride: false,
+      }
+    }
+    if (normalized.includes('has time off')) {
+      return {
+        category: 'time_off',
+        label: 'Has time off',
+        detail: 'This sub has time off for this shift.',
+        canOverride: false,
+      }
+    }
+    if (normalized.includes('marked as unavailable')) {
+      return {
+        category: 'unavailable',
+        label: 'Marked unavailable',
+        detail: 'Availability can be overridden for this shift.',
+        canOverride: true,
+      }
+    }
+    if (normalized.includes('not qualified')) {
+      return {
+        category: 'qualification',
+        label: 'Qualification mismatch',
+        detail: 'Qualifications can be overridden if needed.',
+        canOverride: true,
+      }
+    }
+    return {
+      category: 'other',
+      label: reason || 'Not available',
+      detail: null,
+      canOverride: false,
+    }
+  }
 
   // Check if declined_all is selected and any shifts are selected
   const isDeclinedWithShiftsSelected = responseStatus === 'declined_all' && selectedShiftsCount > 0
+  const currentContactStatus = deriveContactStatus(isContacted, responseStatus)
+  const statusBadge = (() => {
+    const normalizedStatus = String(responseStatus || 'none').toLowerCase()
+    if (normalizedStatus.includes('confirm')) {
+      return {
+        label: 'Contacted · Confirmed',
+        icon: CheckCircle,
+        className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+        style: undefined as React.CSSProperties | undefined,
+      }
+    }
+    if (normalizedStatus.includes('pending')) {
+      return {
+        label: 'Pending',
+        icon: Clock,
+        className: 'border-amber-200 bg-amber-50 text-amber-700',
+        style: undefined as React.CSSProperties | undefined,
+      }
+    }
+    if (normalizedStatus.includes('declined')) {
+      return {
+        label: 'Contacted · Declined',
+        icon: XCircle,
+        className: '',
+        style: {
+          backgroundColor: 'rgb(255, 241, 242)', // rose-50
+          borderColor: 'rgb(253, 164, 175)', // rose-300
+          color: 'rgb(190, 24, 93)', // rose-700
+        } as React.CSSProperties,
+      }
+    }
+    if (!isContacted) {
+      return {
+        label: 'Not contacted',
+        icon: PhoneOff,
+        className: 'border-slate-200 bg-slate-100 text-slate-600',
+        style: undefined as React.CSSProperties | undefined,
+      }
+    }
+    return {
+      label: 'Pending',
+      icon: HelpCircle,
+      className: 'border-sky-200 bg-sky-50 text-sky-700',
+      style: undefined as React.CSSProperties | undefined,
+    }
+  })()
+  const scrollToContactSummary = () => {
+    contactSummaryRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    })
+  }
 
   const panelBody = (
     <>
@@ -1077,6 +1388,10 @@ export default function ContactSubPanel({
           <SheetClose asChild>
             <button
               type="button"
+              onClick={event => {
+                event.preventDefault()
+                onClose()
+              }}
               className="absolute right-6 top-6 inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:text-slate-700 hover:bg-white"
             >
               <X className="h-4 w-4" />
@@ -1087,6 +1402,18 @@ export default function ContactSubPanel({
         {isInline ? (
           <div className="text-left">
             <div className="text-2xl font-semibold text-slate-900 mb-1">{sub.name}</div>
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={scrollToContactSummary}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${statusBadge.className}`}
+                style={statusBadge.style}
+                aria-label="Jump to contact summary"
+              >
+                <statusBadge.icon className="h-3.5 w-3.5" />
+                <span>{statusBadge.label}</span>
+              </button>
+            </div>
             <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
               {sub.phone && (
                 <span className="flex items-center gap-1.5">
@@ -1111,6 +1438,18 @@ export default function ContactSubPanel({
         ) : (
           <SheetHeader className="text-left">
             <SheetTitle className="text-2xl mb-1">{sub.name}</SheetTitle>
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={scrollToContactSummary}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${statusBadge.className}`}
+                style={statusBadge.style}
+                aria-label="Jump to contact summary"
+              >
+                <statusBadge.icon className="h-3.5 w-3.5" />
+                <span>{statusBadge.label}</span>
+              </button>
+            </div>
             <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
               {sub.phone && (
                 <span className="flex items-center gap-1.5">
@@ -1136,7 +1475,7 @@ export default function ContactSubPanel({
       </div>
 
       <div className="px-6">
-        <div className="mt-6 space-y-10">
+        <div className="mt-6 flex flex-col gap-10">
           {/* Declined Message */}
           {responseStatus === 'declined_all' && (
             <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
@@ -1146,40 +1485,47 @@ export default function ContactSubPanel({
             </div>
           )}
 
-          {/* Coverage Summary */}
+          {/* Request Summary */}
           <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-2">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium">Coverage Summary</h3>
+              <h3 className="text-sm font-medium">Request summary</h3>
               <span className="text-sm text-muted-foreground">
-                {responseStatus === 'declined_all'
-                  ? 'Declined all shifts'
-                  : `${remainingShiftsCovered} of ${remainingShifts} shifts`}
+                {remainingShiftsCovered} of {remainingShifts} remaining shift
+                {remainingShifts === 1 ? '' : 's'}
               </span>
             </div>
-            {remainingCanCover.length > 0 || assignedShifts.length > 0 ? (
-              <TooltipProvider>
-                <ShiftChips
-                  canCover={remainingCanCover}
-                  cannotCover={[]}
-                  assigned={[]}
-                  showLegend={true}
-                  isDeclined={responseStatus === 'declined_all'}
+            <div className="space-y-2 border-t pt-3">
+              {requestShiftDetails.length > 0 ? (
+                <CoverageSummary
+                  variant="compact"
+                  headerText={requestCoverageSummaryLine}
+                  shifts={{
+                    total: requestTotalShifts,
+                    uncovered: requestUncoveredCount,
+                    partially_covered: requestShiftDetails.filter(
+                      shift => shift.status === 'partially_covered'
+                    ).length,
+                    fully_covered: requestShiftDetails.filter(
+                      shift => shift.status === 'fully_covered'
+                    ).length,
+                    shift_details: requestShiftDetails.map((shift, index) => ({
+                      id: `${shift.date}-${shift.time_slot_code}-${index}`,
+                      date: shift.date,
+                      day_name: shift.day_name || '',
+                      time_slot_code: shift.time_slot_code,
+                      status: shift.status || 'uncovered',
+                      sub_name: shift.sub_name || null,
+                      is_partial: shift.status === 'partially_covered',
+                    })),
+                  }}
                 />
-              </TooltipProvider>
-            ) : (
-              <p className="text-sm text-muted-foreground">No shifts available</p>
-            )}
-            {/* Status */}
-            <div className="space-y-2 border-t pt-[5px]">
-              <Label className="text-sm font-medium mb-2 block pt-2">Status</Label>
-              {assignedShifts.length > 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Assigned to {assignedShifts.length} shift
-                  {assignedShifts.length !== 1 ? 's' : ''}
-                </p>
-              ) : (
-                <p className="text-sm text-muted-foreground">Not Assigned</p>
-              )}
+              ) : null}
+              <p className="text-sm text-muted-foreground">
+                This sub is available for{' '}
+                <span className="font-semibold">{remainingShiftsCovered}</span> of{' '}
+                <span className="font-semibold">{remainingShifts}</span> remaining shift
+                {remainingShifts === 1 ? '' : 's'}.
+              </p>
             </div>
           </div>
 
@@ -1199,8 +1545,12 @@ export default function ContactSubPanel({
           )}
 
           {/* Contact Summary & Notes */}
-          <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-6">
-            <h3 className="text-sm font-medium mb-4">Contact Summary</h3>
+          <div
+            ref={contactSummaryRef}
+            className="order-2 mt-6 rounded-lg bg-white border border-gray-200 p-6 space-y-6"
+            style={{ order: 20 }}
+          >
+            <h3 className="text-sm font-medium mb-4">Contact Status</h3>
             {fetching ? (
               <div className="flex items-center justify-center py-8">
                 <div className="text-center">
@@ -1211,79 +1561,53 @@ export default function ContactSubPanel({
             ) : (
               <>
                 <div className="space-y-4">
-                  {/* Contacted Checkbox */}
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="is_contacted"
-                        checked={isContacted}
-                        onCheckedChange={checked => {
-                          setIsContacted(checked === true)
-                          // Set contacted_at immediately if checking and it's null
-                          if (checked === true && !contactedAt) {
-                            setContactedAt(new Date().toISOString())
-                          }
-                        }}
-                      />
-                      <Label htmlFor="is_contacted" className="text-sm font-medium cursor-pointer">
-                        Contacted
-                      </Label>
-                    </div>
-                    {isContacted && contactedAt && (
-                      <p className="text-xs text-muted-foreground ml-6">
-                        Contact status updated {formatContactedTimestamp(contactedAt)}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Response Status */}
-                  <div className="space-y-2 border-t pt-[5px] mt-[30px]">
-                    <Label className="text-sm font-medium mb-3 block pt-2">Response</Label>
+                  {/* Contact Status */}
+                  <div className="space-y-2 pt-[5px] mt-[30px]">
                     <RadioGroup
-                      value={responseStatus}
-                      onValueChange={(value: ResponseStatus) => {
-                        setResponseStatus(value)
-                        // If "Declined All" is selected, uncheck all shifts
-                        if (value === 'declined_all') {
-                          setSelectedShifts(new Set())
-                          // Also clear any overridden shifts
-                          setOverriddenShiftIds(new Set())
-                        }
-                      }}
+                      value={currentContactStatus}
+                      onValueChange={(value: ContactStatus) => applyContactStatusChange(value)}
                     >
                       <div className="space-y-2">
                         <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="none" id="response_none" />
-                          <Label htmlFor="response_none" className="font-normal cursor-pointer">
-                            No response yet
+                          <RadioGroupItem value="not_contacted" id="contact_not_contacted" />
+                          <Label
+                            htmlFor="contact_not_contacted"
+                            className="font-normal cursor-pointer"
+                          >
+                            Not contacted
                           </Label>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="pending" id="response_pending" />
-                          <Label htmlFor="response_pending" className="font-normal cursor-pointer">
+                          <RadioGroupItem value="pending" id="contact_pending" />
+                          <Label htmlFor="contact_pending" className="font-normal cursor-pointer">
                             Pending
                           </Label>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="confirmed" id="response_confirmed" />
-                          <Label
-                            htmlFor="response_confirmed"
-                            className="font-normal cursor-pointer"
-                          >
-                            Confirmed (some or all)
+                          <RadioGroupItem value="confirmed" id="contact_confirmed" />
+                          <Label htmlFor="contact_confirmed" className="font-normal cursor-pointer">
+                            Confirmed (some or all shifts)
                           </Label>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="declined_all" id="response_declined_all" />
-                          <Label
-                            htmlFor="response_declined_all"
-                            className="font-normal cursor-pointer"
-                          >
-                            Declined all
-                          </Label>
+                        <div className="mt-3 pt-2">
+                          <div className="mb-2 w-1/3 border-t border-slate-200" />
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="declined_all" id="contact_declined_all" />
+                            <Label
+                              htmlFor="contact_declined_all"
+                              className={`font-normal cursor-pointer ${currentContactStatus === 'declined_all' ? 'text-rose-700' : 'text-slate-900'}`}
+                            >
+                              Declined all
+                            </Label>
+                          </div>
                         </div>
                       </div>
                     </RadioGroup>
+                    {currentContactStatus !== 'not_contacted' && contactedAt && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Contact status updated {formatContactedTimestamp(contactedAt)}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -1304,61 +1628,164 @@ export default function ContactSubPanel({
             )}
           </div>
 
-          {/* Shift Assignments - Combined Section */}
-          {(assignedShifts.length > 0 ||
-            (sub.can_cover && sub.can_cover.length > 0) ||
-            (sub.cannot_cover && sub.cannot_cover.length > 0)) && (
-            <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-6">
-              <h3 className="text-sm font-medium">Shift Assignments</h3>
+          {/* Shift Assignments */}
+          {actionableShifts.length > 0 && (
+            <div
+              className="order-1 mt-6 rounded-lg bg-white border border-gray-200 p-6 space-y-6"
+              style={{ order: 10 }}
+            >
+              <h3 className="text-sm font-medium">Shift assignments</h3>
+              <div className="space-y-2">
+                {actionableShifts.map(shift => {
+                  const shiftKey = `${shift.date}|${shift.time_slot_code}`
+                  const assignedToThisSub = assignedShiftByKey.get(shiftKey)
+                  const assignedElsewhere = !assignedToThisSub && Boolean(shift.sub_name)
+                  const canCoverThisShift =
+                    canCoverShiftKeys.has(shiftKey) || Boolean(assignedToThisSub)
+                  const isOverridden = overriddenShiftIds.has(shiftKey)
+                  const isSelected = selectedShifts.has(shiftKey)
+                  const cannotCoverReason =
+                    cannotCoverReasonByKey.get(shiftKey) ||
+                    (!canCoverThisShift ? 'Unavailable for this shift' : null)
+                  const canAssignFromCheckbox =
+                    !assignedToThisSub &&
+                    !assignedElsewhere &&
+                    (canCoverThisShift || isOverridden) &&
+                    !isSubInactive &&
+                    responseStatus !== 'declined_all'
+                  const canSwapToThisSub =
+                    assignedElsewhere &&
+                    (canCoverThisShift || isOverridden) &&
+                    !isSubInactive &&
+                    responseStatus !== 'declined_all'
+                  const needsOverride =
+                    !assignedToThisSub && !assignedElsewhere && !canCoverThisShift
+                  const cannotCoverMeta = getCannotCoverMeta(cannotCoverReason || null)
+                  const canOverrideThisRow = cannotCoverMeta.canOverride
+                  const rowLeftBorderColor = canAssignFromCheckbox
+                    ? 'rgb(110, 231, 183)' // emerald-300
+                    : needsOverride
+                      ? 'rgb(203, 213, 225)' // slate-300
+                      : 'rgb(226, 232, 240)' // slate-200
 
-              {/* Shifts Assigned to This Sub */}
-              {assignedShifts.length > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium block">Assigned to this sub</Label>
-                  <div className="space-y-2 border rounded-md p-3 bg-gray-50">
-                    {sortedAssignedShifts.map(shift => (
-                      <div
-                        key={shift.coverage_request_shift_id}
-                        className="flex items-center justify-between gap-2 rounded-md bg-white p-2"
-                      >
-                        <ShiftChips
-                          canCover={[]}
-                          cannotCover={[]}
-                          shifts={[
-                            {
-                              date: shift.date,
-                              time_slot_code: shift.time_slot_code,
-                              status: 'assigned' as const,
-                              assignment_owner: 'this_sub' as const,
-                            },
-                          ]}
-                          softAvailableStyle
-                        />
-                        <TooltipProvider>
-                          <div className="flex items-center gap-1">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  aria-label={`Remove ${sub.name} from ${formatShiftLabel(shift.date, shift.time_slot_code)}`}
-                                  onClick={() => setRemoveDialogShift(shift)}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
-                                  style={{ color: '#9f1239', backgroundColor: '#fff7f8' }}
-                                >
-                                  <XCircle className="h-4 w-4" />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent>Remove sub</TooltipContent>
-                            </Tooltip>
+                  return (
+                    <div
+                      key={shiftKey}
+                      className="flex items-center gap-2 rounded-md border border-l-4 border-slate-200 bg-slate-50 px-2 py-2"
+                      style={{ borderLeftColor: rowLeftBorderColor }}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="inline-flex flex-wrap items-center gap-2">
+                          <ShiftChips
+                            canCover={[]}
+                            cannotCover={[]}
+                            shifts={[
+                              {
+                                date: shift.date,
+                                time_slot_code: shift.time_slot_code,
+                                status:
+                                  canCoverThisShift || isOverridden ? 'available' : 'unavailable',
+                                assignment_owner: assignedToThisSub ? 'this_sub' : undefined,
+                                assigned_sub_name: null,
+                                classroom_name: shift.classroom_name ?? null,
+                                class_name: shift.class_name ?? null,
+                              },
+                            ]}
+                            softAvailableStyle
+                          />
+                        </div>
+                        {assignedToThisSub ? (
+                          <p
+                            className="mt-1 text-xs text-emerald-700"
+                            style={{ marginLeft: '10px' }}
+                          >
+                            Assigned to this sub
+                          </p>
+                        ) : assignedElsewhere ? (
+                          <div
+                            className="mt-1 flex items-center gap-2 overflow-x-auto whitespace-nowrap"
+                            style={{ marginLeft: '10px' }}
+                          >
+                            <p className="text-xs text-slate-600">Assigned to {shift.sub_name}</p>
+                            <span
+                              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                                canSwapToThisSub
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                  : 'border-slate-300 bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              {canSwapToThisSub
+                                ? 'Available to swap'
+                                : 'Unavailable for this shift'}
+                            </span>
+                            {!canSwapToThisSub && (
+                              <span className="inline-flex items-center rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">
+                                {cannotCoverMeta.label}
+                              </span>
+                            )}
+                          </div>
+                        ) : cannotCoverReason && !isOverridden ? (
+                          <p className="mt-1 text-xs text-slate-500" style={{ marginLeft: '10px' }}>
+                            {cannotCoverReason}
+                          </p>
+                        ) : (
+                          <p className="mt-1 text-xs text-teal-700" style={{ marginLeft: '10px' }}>
+                            Can assign this sub
+                          </p>
+                        )}
+                      </div>
+                      <TooltipProvider>
+                        <div className="flex items-center gap-1">
+                          {assignedToThisSub && (
+                            <>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    aria-label={`Remove ${sub.name} from ${formatShiftLabel(shift.date, shift.time_slot_code)}`}
+                                    onClick={() => setRemoveDialogShift(assignedToThisSub)}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
+                                    style={{ color: '#9f1239', backgroundColor: '#fff7f8' }}
+                                  >
+                                    <XCircle className="h-4 w-4" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>Remove sub</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    aria-label={`Change sub for ${formatShiftLabel(shift.date, shift.time_slot_code)}`}
+                                    onClick={() =>
+                                      setChangeDialogShift({
+                                        date: shift.date,
+                                        time_slot_code: shift.time_slot_code,
+                                        fromSubName: sub.name,
+                                      })
+                                    }
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200"
+                                    style={{ backgroundColor: '#f5fbfa' }}
+                                  >
+                                    <ArrowRightLeft className="h-4 w-4" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>Change sub</TooltipContent>
+                              </Tooltip>
+                            </>
+                          )}
+                          {!assignedToThisSub && assignedElsewhere && canSwapToThisSub && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button
                                   type="button"
                                   aria-label={`Change sub for ${formatShiftLabel(shift.date, shift.time_slot_code)}`}
                                   onClick={() =>
-                                    handleChangeAssignedShift({
+                                    setChangeDialogShift({
                                       date: shift.date,
                                       time_slot_code: shift.time_slot_code,
+                                      fromSubName: shift.sub_name || null,
+                                      toSubName: sub.name,
                                     })
                                   }
                                   className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200"
@@ -1367,271 +1794,70 @@ export default function ContactSubPanel({
                                   <ArrowRightLeft className="h-4 w-4" />
                                 </button>
                               </TooltipTrigger>
-                              <TooltipContent>Change sub</TooltipContent>
+                              <TooltipContent>Swap to this sub</TooltipContent>
                             </Tooltip>
-                          </div>
-                        </TooltipProvider>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Available & Not Assigned */}
-              {remainingCanCover.length > 0 &&
-                (() => {
-                  // Use the already filtered remaining shifts
-                  const availableShifts = remainingCanCover
-
-                  if (availableShifts.length === 0) return null
-
-                  const isDeclined = responseStatus === 'declined_all'
-
-                  return (
-                    <>
-                      {assignedShifts.length > 0 && <div className="border-t pt-4" />}
-                      <div className="space-y-2">
-                        {isDeclined ? (
-                          <>
-                            <Button
-                              variant="ghost"
-                              onClick={() =>
-                                setIsPreviouslyAvailableExpanded(!isPreviouslyAvailableExpanded)
-                              }
-                              className="w-full flex items-center justify-between p-2 h-auto hover:bg-gray-100"
-                            >
-                              <div className="flex flex-col items-start">
-                                <Label className="text-sm font-medium block">
-                                  Previously available ({availableShifts.length})
-                                </Label>
-                                <span className="text-xs text-muted-foreground mt-0.5">
-                                  (assignment disabled while declined)
-                                </span>
-                              </div>
-                              {isPreviouslyAvailableExpanded ? (
-                                <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                              ) : (
-                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                              )}
-                            </Button>
-                            {isPreviouslyAvailableExpanded && (
-                              <div className="space-y-2 border rounded-md p-3 bg-gray-50">
-                                <p className="text-xs text-muted-foreground mb-2">
-                                  Change response to re-enable these shifts
-                                </p>
-                                <div className="space-y-2 max-h-64 overflow-y-auto">
-                                  {availableShifts.map((shift, idx) => {
-                                    return (
-                                      <div
-                                        key={idx}
-                                        className="flex items-center space-x-2 p-2 rounded-md bg-white opacity-60"
-                                      >
-                                        <Checkbox
-                                          id={`shift-${idx}`}
-                                          checked={false}
-                                          disabled={true}
-                                        />
-                                        <Label
-                                          htmlFor={`shift-${idx}`}
-                                          className="flex-1 font-normal cursor-not-allowed"
-                                        >
-                                          <ShiftChips
-                                            canCover={[]}
-                                            cannotCover={[]}
-                                            shifts={[
-                                              {
-                                                date: shift.date,
-                                                time_slot_code: shift.time_slot_code,
-                                                status: 'available' as const,
-                                                class_name: shift.class_name ?? null,
-                                                classroom_name: shift.classroom_name ?? null,
-                                              },
-                                            ]}
-                                            isDeclined
-                                            softAvailableStyle
-                                          />
-                                          {shift.class_name && (
-                                            <Badge
-                                              variant="outline"
-                                              className="text-xs ml-2"
-                                              style={
-                                                {
-                                                  backgroundColor: 'rgb(243, 244, 246)', // gray-100
-                                                  borderWidth: '1px',
-                                                  borderStyle: 'solid',
-                                                  borderColor: 'rgb(209, 213, 219)', // gray-300
-                                                  color: 'rgb(75, 85, 99)', // gray-600
-                                                } as React.CSSProperties
-                                              }
-                                            >
-                                              {shift.class_name}
-                                            </Badge>
-                                          )}
-                                        </Label>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              </div>
+                          )}
+                          {!assignedToThisSub &&
+                            assignedElsewhere &&
+                            !canSwapToThisSub &&
+                            canOverrideThisRow && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleToggleOverride(shiftKey)}
+                                disabled={isSubInactive || responseStatus === 'declined_all'}
+                              >
+                                {isOverridden ? 'Override on' : 'Override'}
+                              </Button>
                             )}
-                          </>
-                        ) : (
-                          <>
-                            <Label className="text-sm font-medium block">
-                              Available & not assigned
-                            </Label>
-                            <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-3 bg-gray-50">
-                              {availableShifts.map((shift, idx) => {
-                                const shiftKey = `${shift.date}|${shift.time_slot_code}`
-                                const isSelected = selectedShifts.has(shiftKey)
-
-                                return (
-                                  <div
-                                    key={idx}
-                                    className="flex items-center space-x-2 p-2 hover:bg-muted rounded-md bg-white"
-                                  >
-                                    <Checkbox
-                                      id={`shift-${idx}`}
-                                      checked={isSelected}
-                                      onCheckedChange={() => handleShiftToggle(shiftKey, true)}
-                                    />
-                                    <Label
-                                      htmlFor={`shift-${idx}`}
-                                      className="flex-1 cursor-pointer font-normal"
-                                    >
-                                      <div className="inline-flex flex-wrap items-center gap-2">
-                                        <ShiftChips
-                                          canCover={[]}
-                                          cannotCover={[]}
-                                          shifts={[
-                                            {
-                                              date: shift.date,
-                                              time_slot_code: shift.time_slot_code,
-                                              status: 'available' as const,
-                                              class_name: shift.class_name ?? null,
-                                              classroom_name: shift.classroom_name ?? null,
-                                            },
-                                          ]}
-                                          softAvailableStyle
-                                        />
-                                        {shift.classroom_name && (
-                                          <span
-                                            className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
-                                            style={
-                                              {
-                                                ...getClassroomPillStyle(
-                                                  shift.classroom_color || null
-                                                ),
-                                                borderWidth: '1px',
-                                                borderStyle: 'solid',
-                                              } as React.CSSProperties
-                                            }
-                                          >
-                                            {shift.classroom_name}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </Label>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </>
-                  )
-                })()}
-
-              {/* Unavailable Shifts (can override) */}
-              {sub.cannot_cover && sub.cannot_cover.length > 0 && (
-                <>
-                  {(assignedShifts.length > 0 || (sub.can_cover && sub.can_cover.length > 0)) && (
-                    <div className="border-t pt-4" />
-                  )}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium">Unavailable (can override)</Label>
-                    </div>
-                    <div className="space-y-2">
-                      {sub.cannot_cover.map((shift, idx) => {
-                        const shiftKey = `${shift.date}|${shift.time_slot_code}`
-                        const isOverridden = overriddenShiftIds.has(shiftKey)
-                        const isSelected = selectedShifts.has(shiftKey)
-                        const canSelect =
-                          isOverridden && !isSubInactive && responseStatus !== 'declined_all'
-
-                        return (
-                          <div
-                            key={idx}
-                            className={`flex items-center gap-3 p-3 rounded-lg border ${
-                              isOverridden
-                                ? 'bg-amber-50 border-amber-200'
-                                : 'bg-gray-50 border-gray-200'
-                            }`}
-                          >
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={() => handleShiftToggle(shiftKey, false)}
-                              disabled={!canSelect}
-                            />
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs"
-                                  style={
-                                    {
-                                      backgroundColor: 'rgb(243, 244, 246)', // gray-100
-                                      borderWidth: '1px',
-                                      borderStyle: 'solid',
-                                      borderColor: 'rgb(209, 213, 219)', // gray-300
-                                      color: 'rgb(55, 65, 81)', // gray-700
-                                    } as React.CSSProperties
-                                  }
-                                >
-                                  {formatShiftLabel(shift.date, shift.time_slot_code)}
-                                </Badge>
-                                <span className="text-xs text-muted-foreground">
-                                  {shift.reason}
-                                </span>
-                                {isOverridden && (
-                                  <>
-                                    <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs"
-                                      style={
-                                        {
-                                          backgroundColor: 'rgb(254, 243, 199)', // amber-100
-                                          borderWidth: '1px',
-                                          borderStyle: 'solid',
-                                          borderColor: 'rgb(252, 211, 77)', // amber-300
-                                          color: 'rgb(146, 64, 14)', // amber-800
-                                        } as React.CSSProperties
-                                      }
-                                    >
-                                      Override
-                                    </Badge>
-                                  </>
-                                )}
-                              </div>
-                            </div>
+                          {!assignedToThisSub &&
+                            assignedElsewhere &&
+                            !canSwapToThisSub &&
+                            !canOverrideThisRow && (
+                              <span className="text-xs text-slate-500 px-1">Cannot override</span>
+                            )}
+                          {!assignedToThisSub && !assignedElsewhere && cannotCoverReason && (
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleToggleOverride(shiftKey)}
-                              disabled={isSubInactive || responseStatus === 'declined_all'}
+                              disabled={
+                                isSubInactive ||
+                                responseStatus === 'declined_all' ||
+                                !canOverrideThisRow
+                              }
                             >
-                              Override
+                              {isOverridden
+                                ? 'Override on'
+                                : canOverrideThisRow
+                                  ? 'Override'
+                                  : 'Locked'}
                             </Button>
-                          </div>
-                        )
-                      })}
+                          )}
+                          {!assignedToThisSub && !assignedElsewhere && (
+                            <label
+                              className={`inline-flex items-center gap-2 pl-1 text-sm ${
+                                canAssignFromCheckbox
+                                  ? 'cursor-pointer text-teal-700'
+                                  : 'cursor-not-allowed text-slate-400'
+                              }`}
+                            >
+                              <span className="font-semibold">Assign</span>
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() =>
+                                  handleShiftToggle(shiftKey, canCoverThisShift || isOverridden)
+                                }
+                                disabled={!canAssignFromCheckbox}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </TooltipProvider>
                     </div>
-                  </div>
-                </>
-              )}
+                  )
+                })}
+              </div>
             </div>
           )}
 
@@ -1651,6 +1877,11 @@ export default function ContactSubPanel({
                     ? `Would you like to remove ${sub.name} from only this shift, or from all shifts for ${absence.teacher_name} on this request?`
                     : `Are you sure you want to remove ${sub.name} from this shift?`}
                 </DialogDescription>
+                {isConfirmedContact && (
+                  <p className="text-sm text-amber-700 mt-2">
+                    This sub is marked confirmed. Removing will reopen this shift.
+                  </p>
+                )}
               </DialogHeader>
               <DialogFooter>
                 <Button
@@ -1682,8 +1913,117 @@ export default function ContactSubPanel({
             </DialogContent>
           </Dialog>
 
+          <Dialog
+            open={Boolean(changeDialogShift)}
+            onOpenChange={open => {
+              if (!open) {
+                setChangeDialogShift(null)
+              }
+            }}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Change assigned sub?</DialogTitle>
+                <DialogDescription>
+                  {changeDialogShift?.fromSubName && changeDialogShift?.toSubName
+                    ? `This will unassign ${changeDialogShift.fromSubName} and assign ${changeDialogShift.toSubName} for ${formatShiftLabel(changeDialogShift.date, changeDialogShift.time_slot_code)}.`
+                    : `This will unassign ${sub.name} from ${
+                        changeDialogShift
+                          ? formatShiftLabel(
+                              changeDialogShift.date,
+                              changeDialogShift.time_slot_code
+                            )
+                          : 'this shift'
+                      } and lets you assign a different sub.`}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setChangeDialogShift(null)}
+                  disabled={loading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (!changeDialogShift) return
+                    handleChangeAssignedShift(changeDialogShift)
+                    setChangeDialogShift(null)
+                  }}
+                  disabled={loading}
+                >
+                  Continue
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog
+            open={showAssignConfirmDialog}
+            onOpenChange={open => {
+              if (!loading) setShowAssignConfirmDialog(open)
+            }}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Assign without confirmation?</DialogTitle>
+                <DialogDescription>
+                  You have not marked this sub as confirmed. Do you want to continue anyway?
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowAssignConfirmDialog(false)}
+                  disabled={loading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={async () => {
+                    await handleAssignShifts({
+                      responseStatusOverride: 'confirmed',
+                      isContactedOverride: true,
+                    })
+                  }}
+                  disabled={loading}
+                >
+                  Mark confirmed and assign
+                </Button>
+                <Button type="button" onClick={() => handleAssignShifts()} disabled={loading}>
+                  Assign without confirming
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog
+            open={showConfirmedNeedsAssignmentDialog}
+            onOpenChange={setShowConfirmedNeedsAssignmentDialog}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Assignment required</DialogTitle>
+                <DialogDescription>
+                  {`${sub.name} is marked as confirmed. Please assign at least one shift or change their response to Pending or Declined.`}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button type="button" onClick={() => setShowConfirmedNeedsAssignmentDialog(false)}>
+                  OK
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
           {/* Action Buttons */}
-          <div className="flex flex-col gap-2 pt-4 pb-6 border-t">
+          <div className="mt-6 flex flex-col gap-2 pt-4 pb-6 border-t" style={{ order: 100 }}>
             {isDeclinedWithShiftsSelected ? (
               <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 mb-2">
                 <p className="text-sm text-amber-800">⚠️ Conflicting selections</p>
@@ -1702,6 +2042,19 @@ export default function ContactSubPanel({
               <div className="rounded-lg bg-gray-100 border border-gray-300 p-3 mb-2">
                 <p className="text-sm text-gray-700">
                   This sub is inactive. Assignment is disabled.
+                </p>
+              </div>
+            )}
+            {responseStatus !== 'declined_all' && !hasPendingAssignmentChanges && (
+              <p className="text-xs text-slate-500 mb-1">
+                No pending assignment changes. Select a shift to enable Assign.
+              </p>
+            )}
+            {showConfirmedNoShiftWarning && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 mb-2">
+                <p className="text-sm text-amber-800">
+                  This sub is marked as confirmed. Please assign at least one shift or mark this sub
+                  as Pending.
                 </p>
               </div>
             )}
@@ -1752,7 +2105,14 @@ export default function ContactSubPanel({
                     variant="outline"
                     className="flex-1"
                     onClick={handleSave}
-                    disabled={loading || fetching || !coverageRequestId}
+                    disabled={
+                      loading ||
+                      fetching ||
+                      !coverageRequestId ||
+                      (responseStatus === 'confirmed' &&
+                        selectedShiftsCount === 0 &&
+                        !hasAssignedToThisSub)
+                    }
                   >
                     Save
                   </Button>
@@ -1764,7 +2124,7 @@ export default function ContactSubPanel({
                     onClick={
                       responseStatus === 'declined_all' && selectedShiftsCount === 0
                         ? handleMarkAsDeclinedSave
-                        : handleAssignShifts
+                        : handleAssignButtonClick
                     }
                     disabled={
                       loading ||
@@ -1792,7 +2152,7 @@ export default function ContactSubPanel({
   }
 
   return (
-    <Sheet open={isOpen} onOpenChange={onClose}>
+    <Sheet open={isOpen} onOpenChange={open => !open && onClose()}>
       <SheetContent
         showCloseButton={false}
         className={`w-full sm:max-w-2xl overflow-y-auto p-0 ${getPanelBackgroundClasses()}`}

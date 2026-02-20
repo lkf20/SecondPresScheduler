@@ -3,6 +3,7 @@ interface Sub {
   name: string
   phone: string | null
   coverage_percent: number
+  response_status?: string | null
   shifts_covered?: number
   total_shifts?: number
   can_cover: Array<{
@@ -267,8 +268,10 @@ function buildCombinationFromSubs(
 }
 
 export function findTopCombinations(subs: Sub[], limit = 5): RecommendedCombination[] {
-  // Filter to only subs with coverage_percent > 0
-  const eligibleSubs = subs.filter(sub => sub.coverage_percent > 0)
+  // Filter to only subs with coverage_percent > 0 and not declined for this request.
+  const eligibleSubs = subs.filter(
+    sub => sub.coverage_percent > 0 && sub.response_status !== 'declined_all'
+  )
 
   if (eligibleSubs.length === 0) {
     return []

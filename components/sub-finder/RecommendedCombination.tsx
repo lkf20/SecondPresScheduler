@@ -188,6 +188,7 @@ export default function RecommendedCombination({
               allAssigned={visibleAssignedAll}
               coverageSegments={coverageSegments}
               useStatusBadgeOnly
+              showPrimaryShiftChips={false}
             />
           )
         })}

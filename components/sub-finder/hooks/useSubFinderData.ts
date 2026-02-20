@@ -116,6 +116,7 @@ export interface SubCandidate {
   }>
   notes?: string | null
   response_status?: string | null
+  contact_status?: string | null
   is_contacted?: boolean
   is_flexible_staff?: boolean
   is_sub?: boolean

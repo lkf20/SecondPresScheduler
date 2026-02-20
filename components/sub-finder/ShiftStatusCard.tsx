@@ -5,12 +5,14 @@ import {
   CheckCircle,
   AlertTriangle,
   HelpCircle,
+  Phone,
+  PhoneOff,
   XCircle,
   ArrowRightLeft,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
-import { shiftStatusColorValues } from '@/lib/utils/colors'
+import { coverageColorValues, shiftStatusColorValues } from '@/lib/utils/colors'
 import type { SubFinderShift } from '@/lib/sub-finder/types'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -34,34 +36,72 @@ function formatShiftLabel(shift: SubFinderShift) {
 
 function getCoverageStatus(shift: SubFinderShift) {
   if (shift.status === 'uncovered') {
-    return { label: 'Uncovered', icon: AlertTriangle, className: 'text-amber-600' }
+    return {
+      label: 'Uncovered',
+      icon: AlertTriangle,
+      className: '',
+      iconStyle: { color: coverageColorValues.uncovered.icon } as React.CSSProperties,
+    }
   }
-  return { label: 'Covered', icon: CheckCircle, className: 'text-emerald-600' }
+  return {
+    label: 'Covered',
+    icon: CheckCircle,
+    className: 'text-emerald-600',
+    iconStyle: undefined as React.CSSProperties | undefined,
+  }
 }
 
 function getContactStatus(contactedAvailableSubCount: number) {
   if (contactedAvailableSubCount > 0) {
     return {
       label: `${contactedAvailableSubCount} Sub${contactedAvailableSubCount === 1 ? '' : 's'} contacted`,
-      icon: CheckCircle,
-      className: 'text-emerald-600',
+      icon: Phone,
+      className: 'text-slate-500',
     }
   }
-  return { label: 'No subs contacted', icon: HelpCircle, className: 'text-slate-500' }
+  return { label: 'No subs contacted', icon: PhoneOff, className: 'text-slate-500' }
 }
 
-function getAssignmentStatus(shift: SubFinderShift) {
-  // TODO: Wire to actual assignment status once available in shift view model.
+function getAssignmentStatus(shift: SubFinderShift, responseSummary?: string | null) {
+  const normalizedSummary = (responseSummary || '').toLowerCase()
+  if (normalizedSummary.includes('declined')) {
+    return {
+      label: 'Declined',
+      icon: XCircle,
+      className: '',
+      iconStyle: { color: 'rgb(190, 24, 93)' } as React.CSSProperties, // rose-700
+    }
+  }
+  if (normalizedSummary.includes('confirmed')) {
+    return {
+      label: 'Confirmed',
+      icon: CheckCircle,
+      className: 'text-emerald-600',
+      iconStyle: undefined as React.CSSProperties | undefined,
+    }
+  }
+  if (normalizedSummary.includes('pending')) {
+    return {
+      label: 'Pending',
+      icon: AlertTriangle,
+      className: 'text-amber-600',
+      iconStyle: undefined as React.CSSProperties | undefined,
+    }
+  }
   if (shift.status === 'fully_covered') {
-    return { label: 'Confirmed', icon: CheckCircle, className: 'text-emerald-600' }
+    return {
+      label: 'Confirmed',
+      icon: CheckCircle,
+      className: 'text-emerald-600',
+      iconStyle: undefined as React.CSSProperties | undefined,
+    }
   }
-  if (shift.status === 'partially_covered') {
-    return { label: 'Pending', icon: AlertTriangle, className: 'text-amber-600' }
+  return {
+    label: 'No response',
+    icon: HelpCircle,
+    className: 'text-slate-500',
+    iconStyle: undefined as React.CSSProperties | undefined,
   }
-  if (shift.status === 'uncovered') {
-    return { label: 'No response', icon: HelpCircle, className: 'text-slate-500' }
-  }
-  return { label: 'Declined', icon: XCircle, className: 'text-red-600' }
 }
 
 export default function ShiftStatusCard({
@@ -75,7 +115,7 @@ export default function ShiftStatusCard({
 }: ShiftStatusCardProps) {
   const coverage = getCoverageStatus(shift)
   const contact = getContactStatus(contactedAvailableSubCount)
-  const assignment = getAssignmentStatus(shift)
+  const assignment = getAssignmentStatus(shift, responseSummary)
   const classroomStyle = getClassroomPillStyle(shift.classroom_color ?? null)
   const hasConfirmedSub = Boolean(shift.sub_name) && shift.status === 'fully_covered'
   const hasAssignedSub = Boolean(shift.sub_name) && Boolean(shift.sub_id)
@@ -84,11 +124,13 @@ export default function ShiftStatusCard({
   const statusBorderColor = isCovered
     ? shiftStatusColorValues.available.border
     : shiftStatusColorValues.unavailable.border
+  const statusIconCircleClass =
+    'inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-slate-50'
 
   return (
     <div
       className={cn(
-        'flex w-full max-w-none self-stretch min-w-0 items-start justify-between gap-6 rounded-lg border border-l-4 border-slate-300 bg-white px-4 py-3 shadow-sm transition-all hover:shadow-md hover:scale-[1.01]',
+        'flex w-full max-w-none self-stretch min-w-0 items-start justify-between gap-6 rounded-lg border border-l-4 border-slate-200 bg-white px-4 py-3 shadow-sm transition-all hover:shadow-md hover:scale-[1.01]',
         isCovered && 'opacity-80',
         onSelectShift && 'cursor-pointer'
       )}
@@ -122,7 +164,7 @@ export default function ShiftStatusCard({
         <div className="mt-1 text-sm text-slate-600">Absence: {teacherName}</div>
       </div>
 
-      <div className="flex flex-col gap-1 text-xs text-slate-700 min-w-[210px] justify-center self-center">
+      <div className="flex flex-col gap-1 text-sm text-slate-700 min-w-[210px] justify-center self-center">
         {hasAssignedSub ? (
           <div className="mt-2">
             <div className="flex items-center justify-between gap-3">
@@ -179,27 +221,46 @@ export default function ShiftStatusCard({
         ) : hasConfirmedSub ? (
           <>
             <div className="flex items-center gap-2">
-              <coverage.icon className={`h-4 w-4 ${coverage.className}`} />
+              <span className={statusIconCircleClass}>
+                <coverage.icon
+                  className={`h-3.5 w-3.5 ${coverage.className}`}
+                  style={coverage.iconStyle}
+                />
+              </span>
               <span>{coverage.label}</span>
             </div>
             <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-emerald-600" />
+              <span className={statusIconCircleClass}>
+                <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+              </span>
               <span>{shift.sub_name}</span>
             </div>
           </>
         ) : (
           <>
             <div className="flex items-center gap-2">
-              <coverage.icon className={`h-4 w-4 ${coverage.className}`} />
+              <span className={statusIconCircleClass}>
+                <coverage.icon
+                  className={`h-3.5 w-3.5 ${coverage.className}`}
+                  style={coverage.iconStyle}
+                />
+              </span>
               <span>{coverage.label}</span>
             </div>
             <div className="flex items-center gap-2">
-              <contact.icon className={`h-4 w-4 ${contact.className}`} />
+              <span className={statusIconCircleClass}>
+                <contact.icon className={`h-3.5 w-3.5 ${contact.className}`} />
+              </span>
               <span>{contact.label}</span>
             </div>
-            {responseSummary && (
+            {responseSummary && contactedAvailableSubCount > 0 && (
               <div className="flex items-center gap-2">
-                <assignment.icon className={`h-4 w-4 ${assignment.className}`} />
+                <span className={statusIconCircleClass}>
+                  <assignment.icon
+                    className={`h-3.5 w-3.5 ${assignment.className}`}
+                    style={assignment.iconStyle}
+                  />
+                </span>
                 <span className="leading-snug">{responseSummary}</span>
               </div>
             )}

@@ -94,7 +94,9 @@ export default function SubFinderPage() {
   const [isMiddleShiftListExpanded, setIsMiddleShiftListExpanded] = useState(false)
   const [showRecommendedWhenShiftSelected, setShowRecommendedWhenShiftSelected] = useState(false)
   const [removeDialogShift, setRemoveDialogShift] = useState<SubFinderShift | null>(null)
+  const [changeDialogShift, setChangeDialogShift] = useState<SubFinderShift | null>(null)
   const [removingScope, setRemovingScope] = useState<'single' | 'all_for_absence' | null>(null)
+  const [removeDialogIsConfirmed, setRemoveDialogIsConfirmed] = useState(false)
   const [isAllSubsOpen, setIsAllSubsOpen] = useState(false)
   const [selectedSubIds, setSelectedSubIds] = useState<string[]>([])
   const [rightPanelActiveFilter, setRightPanelActiveFilter] = useState<string | null>('available')
@@ -108,6 +110,13 @@ export default function SubFinderPage() {
   type ContactDataCacheEntry = {
     id: string
     is_contacted: boolean
+    contact_status?:
+      | 'not_contacted'
+      | 'pending'
+      | 'awaiting_response'
+      | 'confirmed'
+      | 'declined_all'
+      | null
     contacted_at: string | null
     response_status: 'none' | 'pending' | 'confirmed' | 'declined_all'
     notes: string | null
@@ -685,10 +694,77 @@ export default function SubFinderPage() {
     setRemoveDialogShift(shift)
   }, [])
 
+  const handleOpenChangeDialog = useCallback((shift: SubFinderShift) => {
+    setChangeDialogShift(shift)
+  }, [])
+
+  const handleCloseChangeDialog = useCallback(() => {
+    setChangeDialogShift(null)
+  }, [])
+
+  const handleConfirmChangeSub = useCallback(() => {
+    if (!changeDialogShift) return
+    handleSelectShift(changeDialogShift)
+    setChangeDialogShift(null)
+  }, [changeDialogShift, handleSelectShift])
+
   const handleCloseRemoveDialog = useCallback(() => {
     if (removingScope) return
     setRemoveDialogShift(null)
+    setRemoveDialogIsConfirmed(false)
   }, [removingScope])
+
+  useEffect(() => {
+    let isCancelled = false
+    const resolveRemoveDialogStatus = async () => {
+      if (
+        !removeDialogShift?.sub_id ||
+        !selectedAbsence ||
+        selectedAbsence.id.startsWith('manual-')
+      ) {
+        setRemoveDialogIsConfirmed(false)
+        return
+      }
+
+      const cacheKey = getCacheKey(removeDialogShift.sub_id, selectedAbsence.id)
+      const cached = contactDataCache.get(cacheKey)
+      if (cached) {
+        setRemoveDialogIsConfirmed(cached.response_status === 'confirmed')
+        return
+      }
+
+      try {
+        const coverageResponse = await fetch(
+          `/api/sub-finder/coverage-request/${selectedAbsence.id}`
+        )
+        if (!coverageResponse.ok) return
+        const coverageData = await coverageResponse.json()
+        const contactResponse = await fetch(
+          `/api/sub-finder/substitute-contacts?coverage_request_id=${coverageData.coverage_request_id}&sub_id=${removeDialogShift.sub_id}`
+        )
+        if (!contactResponse.ok) return
+        const contactData = await contactResponse.json()
+        if (isCancelled) return
+        const nextEntry = {
+          ...contactData,
+          coverage_request_id: coverageData.coverage_request_id,
+        } as ContactDataCacheEntry
+        setContactDataCache(prev => {
+          const next = new Map(prev)
+          next.set(cacheKey, nextEntry)
+          return next
+        })
+        setRemoveDialogIsConfirmed(nextEntry.response_status === 'confirmed')
+      } catch {
+        if (!isCancelled) setRemoveDialogIsConfirmed(false)
+      }
+    }
+
+    resolveRemoveDialogStatus()
+    return () => {
+      isCancelled = true
+    }
+  }, [contactDataCache, removeDialogShift?.sub_id, selectedAbsence])
 
   const handleRemoveSubAssignment = useCallback(
     async (scope: 'single' | 'all_for_absence') => {
@@ -802,7 +878,7 @@ export default function SubFinderPage() {
   }, [closeRightPanel, closeContactPanel, isContactPanelOpen, isRightPanelOpen])
 
   useEffect(() => {
-    if (!isRightPanelOpen || isContactPanelOpen || removeDialogShift) return
+    if (!isRightPanelOpen || isContactPanelOpen || removeDialogShift || changeDialogShift) return
     if (typeof window !== 'undefined' && window.innerWidth < 768) return
 
     const handleClickOutsideRightPanel = (event: MouseEvent) => {
@@ -818,7 +894,7 @@ export default function SubFinderPage() {
     return () => {
       document.removeEventListener('mousedown', handleClickOutsideRightPanel)
     }
-  }, [closeRightPanel, isRightPanelOpen, isContactPanelOpen, removeDialogShift])
+  }, [closeRightPanel, isRightPanelOpen, isContactPanelOpen, removeDialogShift, changeDialogShift])
 
   // Handle panel restoration when Add Time Off closes
   useEffect(() => {
@@ -1211,12 +1287,12 @@ export default function SubFinderPage() {
   ])
 
   const renderLeftRail = (railCollapsed: boolean, allowCollapse: boolean) => {
-    const railWidth = railCollapsed ? '3.5rem' : '26rem'
+    const railWidth = railCollapsed ? '4.25rem' : '26rem'
     return (
       <div
         className={cn(
           'relative flex-none border-r border-slate-200 bg-slate-100 shadow-[2px_0_6px_rgba(0,0,0,0.03)] flex flex-col overflow-y-auto transition-all h-full',
-          railCollapsed ? 'w-14' : 'w-[26rem]'
+          railCollapsed ? 'w-[4.25rem]' : 'w-[26rem]'
         )}
         style={{ width: railWidth, minWidth: railWidth, maxWidth: railWidth }}
       >
@@ -1666,7 +1742,7 @@ export default function SubFinderPage() {
                           'No response'
                         }
                         onSelectShift={handleSelectShift}
-                        onChangeSub={handleSelectShift}
+                        onChangeSub={handleOpenChangeDialog}
                         onRemoveSub={handleOpenRemoveDialog}
                       />
                     ))
@@ -1863,9 +1939,9 @@ export default function SubFinderPage() {
       <div
         className="hidden md:flex h-full"
         style={{
-          width: isLeftRailCollapsed ? '3.5rem' : '26rem',
-          minWidth: isLeftRailCollapsed ? '3.5rem' : '26rem',
-          maxWidth: isLeftRailCollapsed ? '3.5rem' : '26rem',
+          width: isLeftRailCollapsed ? '4.25rem' : '26rem',
+          minWidth: isLeftRailCollapsed ? '4.25rem' : '26rem',
+          maxWidth: isLeftRailCollapsed ? '4.25rem' : '26rem',
           filter: isRightPanelOpen && !isContactPanelOpen ? 'brightness(0.9)' : undefined,
         }}
       >
@@ -2174,7 +2250,7 @@ export default function SubFinderPage() {
                             'No response'
                           }
                           onSelectShift={handleSelectShift}
-                          onChangeSub={handleSelectShift}
+                          onChangeSub={handleOpenChangeDialog}
                           onRemoveSub={handleOpenRemoveDialog}
                         />
                       ))
@@ -2451,6 +2527,11 @@ export default function SubFinderPage() {
                   ? `Would you like to remove ${removeDialogSubName} from only this shift, or from all shifts for ${removeDialogTeacherName} on this request?`
                   : `Are you sure you want to remove ${removeDialogSubName} from this shift?`}
               </DialogDescription>
+              {removeDialogIsConfirmed && (
+                <p className="text-sm text-amber-700 mt-2">
+                  This sub is marked confirmed. Removing will reopen this shift.
+                </p>
+              )}
             </DialogHeader>
             <DialogFooter>
               <Button
@@ -2477,6 +2558,34 @@ export default function SubFinderPage() {
                 disabled={Boolean(removingScope)}
               >
                 {removingScope === 'single' ? 'Removing...' : 'This shift only'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={Boolean(changeDialogShift)}
+          onOpenChange={open => {
+            if (!open) {
+              handleCloseChangeDialog()
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Change assigned sub?</DialogTitle>
+              <DialogDescription>
+                {changeDialogShift?.sub_name && selectedSub?.name
+                  ? `This will unassign ${changeDialogShift.sub_name} and assign ${selectedSub.name}. Continue?`
+                  : `This will unassign ${changeDialogShift?.sub_name || 'the current sub'} and lets you assign a different sub. Continue?`}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={handleCloseChangeDialog}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={handleConfirmChangeSub}>
+                Continue
               </Button>
             </DialogFooter>
           </DialogContent>

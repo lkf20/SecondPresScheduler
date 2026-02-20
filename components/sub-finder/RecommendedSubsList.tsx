@@ -14,6 +14,24 @@ import { cn } from '@/lib/utils'
 
 type RecommendedSub = SubCandidate
 
+const getUnifiedContactStatus = (sub: RecommendedSub) => {
+  const explicit = (sub as any).contact_status as string | null | undefined
+  if (
+    explicit === 'not_contacted' ||
+    explicit === 'pending' ||
+    explicit === 'awaiting_response' ||
+    explicit === 'confirmed' ||
+    explicit === 'declined_all'
+  ) {
+    return explicit
+  }
+
+  if (sub.response_status === 'declined_all') return 'declined_all'
+  if (sub.response_status === 'confirmed') return 'confirmed'
+  if (sub.response_status === 'pending' || sub.is_contacted === true) return 'pending'
+  return 'not_contacted'
+}
+
 interface RecommendedSubsListProps {
   subs: SubCandidate[]
   loading: boolean
@@ -186,7 +204,7 @@ export default function RecommendedSubsList({
       )
     }
 
-    const isDeclined = (sub: RecommendedSub) => sub.response_status === 'declined_all'
+    const isDeclined = (sub: RecommendedSub) => getUnifiedContactStatus(sub) === 'declined_all'
 
     const processedSubs = subs.map(sub => {
       let shiftsCovered = 0
@@ -248,12 +266,10 @@ export default function RecommendedSubsList({
       )
       const isAssigned = (sub.assigned_shifts?.length ?? 0) > 0
       const isAvailable = coveragePercent > 0
-      const isDeclined = sub.response_status === 'declined_all'
+      const isDeclined = getUnifiedContactStatus(sub) === 'declined_all'
       const isPartiallyAvailable = false // TODO: detect partial-shift availability once data is available
-      const isContacted =
-        sub.response_status === 'pending' ||
-        sub.response_status === 'confirmed' ||
-        sub.is_contacted === true
+      const unifiedStatus = getUnifiedContactStatus(sub)
+      const isContacted = unifiedStatus === 'pending' || unifiedStatus === 'confirmed'
       const isAvailableMissingReqs = isAvailable && hasQualificationGap
       const isAvailableLimited =
         isAvailableMissingReqs || isPartiallyAvailable || (isAvailable && isFlexibleStaff)
@@ -261,7 +277,7 @@ export default function RecommendedSubsList({
         ? (sub.assigned_shifts || []).some(
             shift => `${shift.date}|${shift.time_slot_code}` === selectedShiftKey
           )
-        : isAssigned
+        : false
       const isAvailableForSelected = selectedShiftKey
         ? (sub.can_cover || []).some(
             shift => `${shift.date}|${shift.time_slot_code}` === selectedShiftKey
@@ -283,7 +299,7 @@ export default function RecommendedSubsList({
         : coveragePercent === 0 && !isDeclined
 
       if (isDeclined) return 'declined'
-      if (isAssignedForSelected) return 'assigned'
+      if (isAssigned) return 'assigned'
       if (isContacted) return 'contacted'
       if (isAvailableLimitedForSelected) return 'availableLimited'
       if (isAvailableForSelected) return 'available'
@@ -511,6 +527,7 @@ export default function RecommendedSubsList({
           .filter(shift => derived.remainingShiftKeys.has(`${shift.date}|${shift.time_slot_code}`))
           .map(shift => shift.status)
       : filteredShiftChips.map(shift => shift.status)
+    const unifiedStatus = getUnifiedContactStatus(sub)
     const remainingCoveredCount = derived.hasAssignedShifts
       ? filteredShiftChips.filter(
           shift =>
@@ -539,13 +556,17 @@ export default function RecommendedSubsList({
         shiftChips={filteredShiftChips}
         coverageSegments={coverageSegments}
         notes={sub.notes}
-        isDeclined={sub.response_status === 'declined_all'}
-        isContacted={
-          sub.response_status === 'pending' ||
-          sub.response_status === 'confirmed' ||
-          sub.is_contacted === true
+        isDeclined={unifiedStatus === 'declined_all'}
+        isContacted={unifiedStatus === 'pending' || unifiedStatus === 'confirmed'}
+        responseStatus={
+          unifiedStatus === 'confirmed'
+            ? 'confirmed'
+            : unifiedStatus === 'declined_all'
+              ? 'declined_all'
+              : unifiedStatus === 'pending' || unifiedStatus === 'awaiting_response'
+                ? 'pending'
+                : 'none'
         }
-        responseStatus={sub.response_status ?? null}
         onSaveNote={onSaveNote ? next => onSaveNote(sub, next) : undefined}
         highlighted={highlightedSubId === sub.id}
         onContact={() => onContactSub?.(sub)}
@@ -842,7 +863,7 @@ export default function RecommendedSubsList({
                 {showSection('availableLimited') &&
                   renderSection(
                     'availableLimited',
-                    'Available (with limitations)',
+                    'Available with limitations',
                     groupedSubs.availableLimited
                   )}
                 {showSection('unavailable') &&

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createErrorResponse, getErrorMessage } from '@/lib/utils/errors'
 import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 import { revalidatePath } from 'next/cache'
+import { getUserSchoolId } from '@/lib/utils/auth'
 
 // See docs/data-lifecycle.md: sub_assignments lifecycle
 /**
@@ -31,6 +32,13 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient()
+    const schoolId = await getUserSchoolId()
+    if (!schoolId) {
+      return createErrorResponse(
+        'User profile not found or missing school_id. Please ensure your profile is set up.',
+        403
+      )
+    }
 
     const reconcileCoverageRequestCounters = async (coverageRequestId: string) => {
       const [
@@ -106,10 +114,31 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Coverage request not found', 404)
     }
 
+    if (coverageRequest.school_id && coverageRequest.school_id !== schoolId) {
+      return createErrorResponse('You do not have access to this coverage request.', 403)
+    }
+
     // Get teacher_id directly from coverage_request (it's stored there)
     const teacherId = (coverageRequest as any).teacher_id
     if (!teacherId) {
       return createErrorResponse('Teacher ID not found in coverage request', 404)
+    }
+    const requestSchoolId = coverageRequest.school_id || schoolId
+
+    const { data: subRecord, error: subError } = await supabase
+      .from('staff')
+      .select('id, school_id')
+      .eq('id', sub_id)
+      .single()
+
+    if (subError || !subRecord) {
+      return createErrorResponse('Sub not found', 404)
+    }
+    if (subRecord.school_id !== requestSchoolId) {
+      return createErrorResponse(
+        'School mismatch: this sub cannot be assigned to this coverage request.',
+        403
+      )
     }
 
     const uniqueSelectedShiftIds = Array.from(
@@ -184,6 +213,68 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (
+      coverageRequest.request_type === 'time_off' &&
+      typeof coverageRequest.source_request_id === 'string'
+    ) {
+      const { data: sourceRequestShifts, error: sourceShiftsError } = await supabase
+        .from('time_off_shifts')
+        .select('date, time_slot_id')
+        .eq('time_off_request_id', coverageRequest.source_request_id)
+
+      if (sourceShiftsError) {
+        return createErrorResponse('Failed to validate source time-off shifts', 500)
+      }
+
+      const sourceShiftKeys = new Set(
+        (sourceRequestShifts || []).map((shift: any) => `${shift.date}|${shift.time_slot_id}`)
+      )
+      const includesCancelledShift = assignableCoverageRequestShifts.some((shift: any) => {
+        const key = `${shift.date}|${shift.time_slot_id}`
+        return !sourceShiftKeys.has(key)
+      })
+
+      if (includesCancelledShift) {
+        return createErrorResponse(
+          'One or more selected shifts are no longer active for this time off request.',
+          409
+        )
+      }
+    }
+
+    const selectedDates = Array.from(
+      new Set(assignableCoverageRequestShifts.map((shift: any) => shift.date).filter(Boolean))
+    )
+    const selectedTimeSlotIds = Array.from(
+      new Set(
+        assignableCoverageRequestShifts.map((shift: any) => shift.time_slot_id).filter(Boolean)
+      )
+    )
+    const selectedShiftKeys = new Set(
+      assignableCoverageRequestShifts.map((shift: any) => `${shift.date}|${shift.time_slot_id}`)
+    )
+    const { data: subScheduleCollisions, error: subCollisionError } = await supabase
+      .from('sub_assignments')
+      .select('id, date, time_slot_id, is_partial')
+      .eq('sub_id', sub_id)
+      .eq('status', 'active')
+      .in('date', selectedDates)
+      .in('time_slot_id', selectedTimeSlotIds)
+
+    if (subCollisionError) {
+      return createErrorResponse('Failed to validate sub scheduling conflicts', 500)
+    }
+
+    const hasSubCollision = (subScheduleCollisions || []).some((assignment: any) =>
+      selectedShiftKeys.has(`${assignment.date}|${assignment.time_slot_id}`)
+    )
+    if (hasSubCollision) {
+      return createErrorResponse(
+        'Double booking prevented: this sub already has an active assignment for one or more selected shifts.',
+        409
+      )
+    }
+
     const shiftsNeedingClassroom = assignableCoverageRequestShifts.filter(
       (shift: any) => !shift.classroom_id
     )
@@ -207,7 +298,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Create sub_assignments for each selected shift
-    const requestSchoolId = coverageRequest.school_id || '00000000-0000-0000-0000-000000000001'
     const { actorUserId, actorDisplayName } = await getAuditActorContext()
     const assignments = assignableCoverageRequestShifts.map((shift: any) => {
       const fallbackKey = `${shift.day_of_week_id}|${shift.time_slot_id}`

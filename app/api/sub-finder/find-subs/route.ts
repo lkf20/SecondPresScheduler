@@ -35,6 +35,7 @@ interface SubMatch {
   total_shifts: number
   is_flexible_staff: boolean
   is_contacted: boolean
+  contact_status: 'not_contacted' | 'pending' | 'awaiting_response' | 'confirmed' | 'declined_all'
   response_status: 'none' | 'pending' | 'confirmed' | 'declined_all' | null
   notes: string | null
   can_cover: Array<{
@@ -318,8 +319,10 @@ export async function POST(request: NextRequest) {
           teacher_id,
           date,
           time_slot_id,
+          classroom_id,
           time_slots:time_slots(code),
-          days_of_week:day_of_week_id(name)
+          days_of_week:day_of_week_id(name),
+          classrooms:classroom_id(name)
         `
         )
         .in('sub_id', subIds)
@@ -497,7 +500,10 @@ export async function POST(request: NextRequest) {
             classroom_name?: string | null
           }> = []
           const assignedShiftKeySet = new Set<string>()
-          const externalSubAssignmentConflictSet = new Set<string>()
+          const externalSubAssignmentConflictsByKey = new Map<
+            string,
+            { classroom_name: string | null }
+          >()
 
           const subActiveAssignments = activeSubAssignmentsBySub.get(sub.id) || []
           subActiveAssignments.forEach((assignment: any) => {
@@ -513,7 +519,11 @@ export async function POST(request: NextRequest) {
                 classroom_name: matchingShift.classroom_name || null,
               })
             } else {
-              externalSubAssignmentConflictSet.add(key)
+              if (!externalSubAssignmentConflictsByKey.has(key)) {
+                externalSubAssignmentConflictsByKey.set(key, {
+                  classroom_name: assignment.classrooms?.name || null,
+                })
+              }
             }
           })
 
@@ -532,7 +542,7 @@ export async function POST(request: NextRequest) {
             // Check for time off conflicts
             const hasTimeOffConflict = timeOffConflicts.has(conflictKey)
             const hasExternalSubAssignmentConflict =
-              externalSubAssignmentConflictSet.has(conflictKey)
+              externalSubAssignmentConflictsByKey.has(conflictKey)
 
             // Check qualifications (if class_group_id is known)
             let isQualified = true
@@ -572,7 +582,10 @@ export async function POST(request: NextRequest) {
               } else if (hasScheduleConflict) {
                 reason = 'Scheduled to teach'
               } else if (hasExternalSubAssignmentConflict) {
-                reason = 'Already assigned as sub'
+                const externalConflict = externalSubAssignmentConflictsByKey.get(conflictKey)
+                reason = externalConflict?.classroom_name
+                  ? `Already assigned as sub in ${externalConflict.classroom_name}`
+                  : 'Already assigned as sub at this time'
               } else if (hasTimeOffConflict) {
                 reason = 'Has time off'
               } else if (!isQualified) {
@@ -605,19 +618,34 @@ export async function POST(request: NextRequest) {
 
           // Get response_status from substitute_contacts if coverage request exists
           let responseStatus: string | null = null
+          let contactStatus:
+            | 'not_contacted'
+            | 'pending'
+            | 'awaiting_response'
+            | 'confirmed'
+            | 'declined_all'
+            | null = null
           let contactNotes: string | null = null
           let isContacted = false
           if (coverageRequestId) {
             try {
               const { data: contact } = await supabase
                 .from('substitute_contacts')
-                .select('response_status, notes, is_contacted')
+                .select('contact_status, response_status, notes, is_contacted')
                 .eq('coverage_request_id', coverageRequestId)
                 .eq('sub_id', sub.id)
                 .single()
 
               if (contact) {
                 responseStatus = contact.response_status
+                contactStatus =
+                  contact.contact_status === 'not_contacted' ||
+                  contact.contact_status === 'pending' ||
+                  contact.contact_status === 'awaiting_response' ||
+                  contact.contact_status === 'confirmed' ||
+                  contact.contact_status === 'declined_all'
+                    ? contact.contact_status
+                    : null
                 contactNotes = contact.notes ?? null
                 isContacted = contact.is_contacted === true
               }
@@ -648,6 +676,15 @@ export async function POST(request: NextRequest) {
             response_status: responseStatus,
             is_flexible_staff: isFlexibleStaff,
             notes: contactNotes,
+            contact_status:
+              contactStatus ||
+              (responseStatus === 'confirmed'
+                ? 'confirmed'
+                : responseStatus === 'declined_all'
+                  ? 'declined_all'
+                  : isContacted
+                    ? 'pending'
+                    : 'not_contacted'),
           }
         } catch (error) {
           console.error(`Error evaluating sub ${sub.id}:`, error)

@@ -40,19 +40,38 @@ export async function GET(request: NextRequest) {
 /**
  * PUT /api/sub-finder/substitute-contacts
  * Update a substitute contact
- * Body: { id, response_status?, is_contacted?, notes?, shift_overrides? }
+ * Body: { id, contact_status?, response_status?, is_contacted?, notes?, shift_overrides? }
  */
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
-    const { id, response_status, is_contacted, notes, shift_overrides, selected_shift_keys } = body
+    const {
+      id,
+      contact_status,
+      response_status,
+      is_contacted,
+      notes,
+      shift_overrides,
+      selected_shift_keys,
+    } = body
 
     if (!id) {
       return createErrorResponse('Missing required parameter: id', 400)
     }
 
     // Update contact
-    const updates: { response_status?: any; is_contacted?: boolean; notes?: string | null } = {}
+    const updates: {
+      contact_status?:
+        | 'not_contacted'
+        | 'pending'
+        | 'awaiting_response'
+        | 'confirmed'
+        | 'declined_all'
+      response_status?: any
+      is_contacted?: boolean
+      notes?: string | null
+    } = {}
+    if (contact_status !== undefined) updates.contact_status = contact_status
     if (response_status !== undefined) updates.response_status = response_status
     if (is_contacted !== undefined) updates.is_contacted = is_contacted
     if (notes !== undefined) updates.notes = notes
@@ -61,7 +80,7 @@ export async function PUT(request: NextRequest) {
 
     // If decline_all and selected_shift_keys provided, enforce no selected shifts
     if (
-      response_status === 'declined_all' &&
+      (contact_status === 'declined_all' || response_status === 'declined_all') &&
       Array.isArray(selected_shift_keys) &&
       selected_shift_keys.length > 0
     ) {

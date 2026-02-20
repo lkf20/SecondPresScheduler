@@ -2,7 +2,6 @@
 
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
-import { Check } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 import { shiftStatusColorValues } from '@/lib/utils/colors'
 import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
@@ -142,6 +141,15 @@ export default function ShiftChips({
   const recommendedShiftKeys = new Set(
     recommendedShifts.map(shift => `${shift.date}|${shift.time_slot_code}`)
   )
+  const legendAvailableColors = softAvailableStyle
+    ? {
+        bg: 'rgb(246, 253, 251)',
+        border: 'rgb(196, 234, 226)',
+      }
+    : {
+        bg: shiftStatusColorValues.available.bg,
+        border: shiftStatusColorValues.available.border,
+      }
 
   return (
     <TooltipProvider>
@@ -189,7 +197,10 @@ export default function ShiftChips({
               >
                 <span className="inline-flex items-center gap-1.5">
                   {isRecommended && (
-                    <Check className="h-3 w-3" style={{ color: colorValues.text }} />
+                    <span
+                      className="inline-flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full border border-amber-500 bg-amber-300"
+                      aria-hidden="true"
+                    />
                   )}
                   {shiftLabel}
                   {shift.assignment_owner === 'this_sub' && (
@@ -238,10 +249,10 @@ export default function ShiftChips({
               <div
                 className="w-3 h-3 rounded"
                 style={{
-                  backgroundColor: shiftStatusColorValues.available.bg,
+                  backgroundColor: legendAvailableColors.bg,
                   borderWidth: '1px',
                   borderStyle: 'solid',
-                  borderColor: shiftStatusColorValues.available.border,
+                  borderColor: legendAvailableColors.border,
                 }}
               />
               <span>Can cover</span>
@@ -269,6 +280,13 @@ export default function ShiftChips({
                 Other sub
               </span>
               <span>Assigned elsewhere</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span
+                className="inline-flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full border border-amber-500 bg-amber-300"
+                aria-hidden="true"
+              />
+              <span>Recommended</span>
             </div>
           </div>
         )}

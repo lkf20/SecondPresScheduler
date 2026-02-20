@@ -194,7 +194,8 @@ export default function SubFinderCard({
           </div>
         </div>
         <p className="text-xs text-teal-600">
-          {shiftsCovered} of {totalShifts} {useRemainingLabel ? 'remaining shifts' : 'shifts'}
+          Available for {shiftsCovered} of {totalShifts}{' '}
+          {useRemainingLabel ? 'remaining shifts' : 'shifts'}
         </p>
       </div>
     )
@@ -234,6 +235,19 @@ export default function SubFinderCard({
         }
   const showCompactStatusBadge = condensedStatus || useStatusBadgeOnly
   const isCompactLayout = condensedStatus || useStatusBadgeOnly
+  const hasRecommendedSubset = recommendedShiftCount !== undefined && recommendedShiftCount > 0
+  const recommendedLeadText = hasRecommendedSubset
+    ? `Recommended for ${recommendedShiftCount} shift${recommendedShiftCount === 1 ? '' : 's'}`
+    : null
+  const recommendedTrailingText = hasRecommendedSubset
+    ? `Available for ${shiftsCovered} of ${totalShifts} ${useRemainingLabel ? 'remaining shifts' : 'shifts'}`
+    : null
+  const declinedCardStyle = isDeclined
+    ? ({
+        backgroundColor: 'rgb(241, 245, 249)', // slate-100
+        borderColor: 'rgb(203, 213, 225)', // slate-300
+      } as React.CSSProperties)
+    : undefined
 
   useEffect(() => {
     setNoteDraft(notes || '')
@@ -262,9 +276,11 @@ export default function SubFinderCard({
       id={id}
       className={cn(
         'group/subcard border border-slate-200 transition-all hover:shadow-md hover:scale-[1.01]',
+        isDeclined && 'border-slate-300',
         highlighted && 'ring-2 ring-blue-500 ring-offset-2 animate-pulse',
         className
       )}
+      style={declinedCardStyle}
       role={undefined}
       tabIndex={undefined}
     >
@@ -320,11 +336,11 @@ export default function SubFinderCard({
                 <p
                   className={cn(
                     'text-muted-foreground',
-                    isCompactLayout ? 'mt-1 text-xs mb-1' : 'mt-1 text-sm mb-2'
+                    isCompactLayout ? 'mt-1 text-sm mb-1' : 'mt-1 text-base mb-2'
                   )}
                 >
-                  Recommended: {recommendedShiftCount} shift
-                  {recommendedShiftCount !== 1 ? 's' : ''}
+                  <span className="font-semibold text-slate-700">{recommendedLeadText}</span>
+                  <span> · {recommendedTrailingText}</span>
                 </p>
                 {showPrimaryShiftChips &&
                   (canCover.length > 0 ||
@@ -536,6 +552,11 @@ export default function SubFinderCard({
                 SHOW_DEBUG_BORDERS && 'border border-orange-400'
               )}
             >
+              {hasRecommendedSubset && (
+                <p className="mb-2 text-xs text-slate-500">
+                  Recommended shifts are marked with an amber dot.
+                </p>
+              )}
               <ShiftChips
                 canCover={allCanCover}
                 cannotCover={allCannotCover}
@@ -561,7 +582,7 @@ export default function SubFinderCard({
                   }
                 })}
                 isDeclined={isDeclined}
-                recommendedShifts={[]}
+                recommendedShifts={hasRecommendedSubset ? canCover : []}
                 softAvailableStyle={softChipColors}
                 showLegend
               />

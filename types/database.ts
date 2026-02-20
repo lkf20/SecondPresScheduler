@@ -1225,6 +1225,7 @@ export type Database = {
       substitute_contacts: {
         Row: {
           assigned_at: string | null
+          contact_status: string | null
           contacted_at: string | null
           coverage_request_id: string
           created_at: string
@@ -1243,6 +1244,7 @@ export type Database = {
         }
         Insert: {
           assigned_at?: string | null
+          contact_status?: string | null
           contacted_at?: string | null
           coverage_request_id: string
           created_at?: string
@@ -1261,6 +1263,7 @@ export type Database = {
         }
         Update: {
           assigned_at?: string | null
+          contact_status?: string | null
           contacted_at?: string | null
           coverage_request_id?: string
           created_at?: string
