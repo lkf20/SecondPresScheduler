@@ -1,8 +1,12 @@
 /** @jest-environment node */
 
-import { GET, PUT } from '@/app/api/time-off/[id]/route'
+import { DELETE, GET, PUT } from '@/app/api/time-off/[id]/route'
 import { createJsonRequest } from '@/tests/helpers/api'
-import { getTimeOffRequestById } from '@/lib/api/time-off'
+import {
+  cancelTimeOffRequest,
+  getActiveSubAssignmentsForTimeOffRequest,
+  getTimeOffRequestById,
+} from '@/lib/api/time-off'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
 import { canTransitionTimeOffStatus } from '@/lib/lifecycle/status-transitions'
@@ -79,6 +83,17 @@ describe('PUT /api/time-off/[id] integration', () => {
     expect(response.status).toBe(200)
     expect(json.id).toBe('timeoff-1')
     expect(json.shifts).toHaveLength(1)
+  })
+
+  it('GET returns 404 when request lookup fails', async () => {
+    ;(getTimeOffRequestById as jest.Mock).mockRejectedValue(new Error('missing'))
+
+    const request = createJsonRequest('http://localhost:3000/api/time-off/missing', 'GET')
+    const response = await GET(request as any, { params: Promise.resolve({ id: 'missing' }) })
+    const json = await response.json()
+
+    expect(response.status).toBe(404)
+    expect(json.error).toMatch(/missing/i)
   })
 
   it('returns 400 when status transition is not allowed', async () => {
@@ -176,5 +191,93 @@ describe('PUT /api/time-off/[id] integration', () => {
     expect(json.id).toBe('timeoff-1')
 
     process.env.NODE_ENV = previousNodeEnv
+  })
+
+  it('DELETE returns assignment summary when action is not provided', async () => {
+    ;(getActiveSubAssignmentsForTimeOffRequest as jest.Mock).mockResolvedValue([
+      {
+        id: 'assignment-1',
+        coverage_request_shift: {
+          date: '2026-02-10',
+          days_of_week: { name: 'Monday' },
+          time_slots: { code: 'EM' },
+          classrooms: { name: 'Infant Room' },
+        },
+        sub: {
+          display_name: 'Sally A.',
+        },
+      },
+    ])
+    ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
+      id: 'timeoff-1',
+      teacher: { display_name: 'Bella W.' },
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/time-off/timeoff-1', 'DELETE', {})
+    const response = await DELETE(request as any, { params: Promise.resolve({ id: 'timeoff-1' }) })
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json).toMatchObject({
+      hasAssignments: true,
+      assignmentCount: 1,
+      teacherName: 'Bella W.',
+    })
+    expect(json.assignments[0].display).toMatch(/Sally A\./)
+  })
+
+  it('DELETE cancels request and revalidates when action is provided', async () => {
+    ;(getActiveSubAssignmentsForTimeOffRequest as jest.Mock).mockResolvedValue([])
+    ;(cancelTimeOffRequest as jest.Mock).mockResolvedValue({
+      cancelled: true,
+      removedAssignments: 0,
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/time-off/timeoff-1', 'DELETE', {
+      action: 'cancel',
+      keepAssignmentsAsExtraCoverage: true,
+      assignmentIdsToKeep: ['assignment-1'],
+    })
+
+    const response = await DELETE(request as any, { params: Promise.resolve({ id: 'timeoff-1' }) })
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(cancelTimeOffRequest).toHaveBeenCalledWith('timeoff-1', {
+      keepAssignmentsAsExtraCoverage: true,
+      assignmentIdsToKeep: ['assignment-1'],
+    })
+    expect(revalidatePath).toHaveBeenCalledWith('/time-off')
+    expect(json.success).toBe(true)
+  })
+
+  it('DELETE returns 409 when already cancelled', async () => {
+    ;(getActiveSubAssignmentsForTimeOffRequest as jest.Mock).mockResolvedValue([])
+    ;(cancelTimeOffRequest as jest.Mock).mockRejectedValue(
+      new Error('Time off request is already cancelled')
+    )
+
+    const request = createJsonRequest('http://localhost:3000/api/time-off/timeoff-1', 'DELETE', {
+      action: 'cancel',
+    })
+    const response = await DELETE(request as any, { params: Promise.resolve({ id: 'timeoff-1' }) })
+    const json = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(json.error).toMatch(/already cancelled/i)
+  })
+
+  it('DELETE returns 500 for unexpected cancellation errors', async () => {
+    ;(getActiveSubAssignmentsForTimeOffRequest as jest.Mock).mockResolvedValue([])
+    ;(cancelTimeOffRequest as jest.Mock).mockRejectedValue(new Error('db failure'))
+
+    const request = createJsonRequest('http://localhost:3000/api/time-off/timeoff-1', 'DELETE', {
+      action: 'cancel',
+    })
+    const response = await DELETE(request as any, { params: Promise.resolve({ id: 'timeoff-1' }) })
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/db failure/i)
   })
 })

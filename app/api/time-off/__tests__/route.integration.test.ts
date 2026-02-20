@@ -4,7 +4,11 @@ import { GET, POST } from '@/app/api/time-off/route'
 import { createJsonRequest } from '@/tests/helpers/api'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getTimeOffRequests, createTimeOffRequest } from '@/lib/api/time-off'
-import { createTimeOffShifts, getTeacherTimeOffShifts } from '@/lib/api/time-off-shifts'
+import {
+  createTimeOffShifts,
+  getTeacherScheduledShifts,
+  getTeacherTimeOffShifts,
+} from '@/lib/api/time-off-shifts'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
 import { revalidatePath } from 'next/cache'
 
@@ -85,6 +89,18 @@ describe('GET /api/time-off integration', () => {
     expect(json).toEqual([{ id: 'request-1', teacher_id: 'teacher-1' }])
   })
 
+  it('GET returns 500 when request fetch fails', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getTimeOffRequests as jest.Mock).mockRejectedValue(new Error('fetch failed'))
+
+    const request = createJsonRequest('http://localhost:3000/api/time-off', 'GET')
+    const response = await GET(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/fetch failed/i)
+  })
+
   it('POST creates request + shifts and returns 201', async () => {
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
@@ -130,5 +146,89 @@ describe('GET /api/time-off integration', () => {
     ])
     expect(revalidatePath).toHaveBeenCalledWith('/time-off')
     expect(json.id).toBe('request-1')
+  })
+
+  it('POST all_scheduled mode filters conflicts and returns warning metadata', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
+    ;(getTeacherScheduledShifts as jest.Mock).mockResolvedValue([
+      { date: '2026-02-10', day_of_week_id: 'day-1', time_slot_id: 'slot-1' },
+      { date: '2026-02-10', day_of_week_id: 'day-1', time_slot_id: 'slot-2' },
+    ])
+    ;(getTeacherTimeOffShifts as jest.Mock).mockResolvedValue([
+      { date: '2026-02-10', time_slot_id: 'slot-1' },
+    ])
+    ;(createTimeOffRequest as jest.Mock).mockResolvedValue({
+      id: 'request-2',
+      teacher_id: 'teacher-1',
+      start_date: '2026-02-10',
+      end_date: '2026-02-10',
+      status: 'active',
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/time-off', 'POST', {
+      teacher_id: 'teacher-1',
+      start_date: '2026-02-10',
+      end_date: '2026-02-10',
+      shift_selection_mode: 'all_scheduled',
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(createTimeOffShifts).toHaveBeenCalledWith('request-2', [
+      {
+        date: '2026-02-10',
+        day_of_week_id: 'day-1',
+        time_slot_id: 'slot-2',
+        is_partial: false,
+        start_time: null,
+        end_time: null,
+      },
+    ])
+    expect(json.excludedShiftCount).toBe(1)
+    expect(json.warning).toMatch(/already has time off recorded/i)
+  })
+
+  it('POST draft mode skips conflict filtering and still creates shifts', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
+    ;(createTimeOffRequest as jest.Mock).mockResolvedValue({
+      id: 'request-3',
+      teacher_id: 'teacher-1',
+      start_date: '2026-02-10',
+      end_date: '2026-02-10',
+      status: 'draft',
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/time-off', 'POST', {
+      teacher_id: 'teacher-1',
+      status: 'draft',
+      start_date: '2026-02-10',
+      end_date: '2026-02-10',
+      shift_selection_mode: 'select_shifts',
+      shifts: [
+        {
+          date: '2026-02-10',
+          day_of_week_id: 'day-1',
+          time_slot_id: 'slot-1',
+        },
+      ],
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(createTimeOffShifts).toHaveBeenCalledWith('request-3', [
+      {
+        date: '2026-02-10',
+        day_of_week_id: 'day-1',
+        time_slot_id: 'slot-1',
+      },
+    ])
+    expect(json.warning).toBeNull()
+    expect(json.excludedShiftCount).toBe(0)
   })
 })

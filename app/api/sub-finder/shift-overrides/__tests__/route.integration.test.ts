@@ -71,4 +71,29 @@ describe('POST /api/sub-finder/shift-overrides integration', () => {
     expect(json.selected_shift_ids).toEqual(['shift-available', 'shift-unavailable'])
     expect(json.shift_overrides).toHaveLength(2)
   })
+
+  it('returns 500 when shift lookup fails', async () => {
+    mockEq.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'query failed' },
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/shift-overrides',
+      'POST',
+      {
+        coverage_request_id: 'coverage-1',
+        selected_shift_keys: [],
+        override_shift_keys: [],
+        available_shift_keys: [],
+        unavailable_shift_keys: [],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/query failed/i)
+  })
 })
