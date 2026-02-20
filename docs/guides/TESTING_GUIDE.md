@@ -67,6 +67,10 @@ Seed file:
 - Keep smoke suite small and stable
 - Use `@smoke` tags for PR-gated subset
 - Full suite runs nightly
+- Protected-flow smoke specs (Time Off/Sub Finder) require:
+  - `E2E_TEST_EMAIL`
+  - `E2E_TEST_PASSWORD`
+- If those credentials are not set, protected smoke specs are skipped and login smoke still runs
 
 ## Scripts
 
