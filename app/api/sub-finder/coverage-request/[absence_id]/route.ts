@@ -16,7 +16,7 @@ export async function GET(
     const { absence_id } = await params
 
     if (!absence_id) {
-      return createErrorResponse('Missing absence_id', 'Missing absence_id', 400)
+      return createErrorResponse('Missing absence_id', 400)
     }
 
     const supabase = await createClient()
