@@ -91,4 +91,89 @@ describe('ContactSubPanel', () => {
     expect(screen.getByText(/texted in morning/i)).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: /contacted/i })).toBeChecked()
   })
+
+  it('returns null when closed and no sub is selected', () => {
+    const { container } = render(
+      <ContactSubPanel
+        isOpen={false}
+        onClose={jest.fn()}
+        sub={null}
+        absence={null}
+        variant="inline"
+      />
+    )
+
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('shows inactive warning when sub lookup returns inactive', async () => {
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+
+      if (url.includes('/api/sub-finder/coverage-request/')) {
+        return {
+          ok: true,
+          json: async () => ({ coverage_request_id: 'coverage-1' }),
+        } as Response
+      }
+
+      if (url.includes('/api/subs/')) {
+        return {
+          ok: true,
+          json: async () => ({ active: false }),
+        } as Response
+      }
+
+      if (url.includes('/api/sub-finder/substitute-contacts')) {
+        return {
+          ok: true,
+          json: async () => null,
+        } as Response
+      }
+
+      return {
+        ok: false,
+        json: async () => ({}),
+      } as Response
+    }) as jest.Mock
+
+    render(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        variant="inline"
+        sub={{
+          id: 'sub-1',
+          name: 'Sally A.',
+          phone: '555-111-2222',
+          email: 'sally@example.com',
+          coverage_percent: 100,
+          shifts_covered: 1,
+          total_shifts: 1,
+          can_cover: [
+            {
+              date: '2026-02-09',
+              day_name: 'Monday',
+              time_slot_code: 'EM',
+              class_name: 'Infant',
+            },
+          ],
+          cannot_cover: [],
+          assigned_shifts: [],
+        }}
+        absence={{
+          id: 'absence-1',
+          teacher_name: 'Teacher One',
+          start_date: '2026-02-09',
+          end_date: '2026-02-09',
+        }}
+      />
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/this sub is inactive\. assignment is disabled\./i)
+      ).toBeInTheDocument()
+    })
+  })
 })

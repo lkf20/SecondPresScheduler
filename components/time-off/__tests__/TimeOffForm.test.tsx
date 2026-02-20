@@ -41,7 +41,58 @@ jest.mock('@/lib/utils/invalidation', () => ({
 }))
 
 jest.mock('@/components/time-off/ShiftSelectionTable', () => {
-  const MockShiftSelectionTable = () => <div data-testid="shift-selection-table" />
+  const MockShiftSelectionTable = ({
+    onShiftsChange,
+    onConflictSummaryChange,
+    onConflictRequestsChange,
+  }: {
+    onShiftsChange?: (
+      shifts: Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
+    ) => void
+    onConflictSummaryChange?: (summary: { conflictCount: number; totalScheduled: number }) => void
+    onConflictRequestsChange?: (
+      requests: Array<{
+        id: string
+        start_date: string
+        end_date: string | null
+        reason: string | null
+      }>
+    ) => void
+  }) => (
+    <div data-testid="shift-selection-table">
+      <button
+        type="button"
+        onClick={() =>
+          onShiftsChange?.([
+            { date: '2026-02-09', day_of_week_id: 'day-1', time_slot_id: 'slot-1' },
+          ])
+        }
+      >
+        Mock Select Shift
+      </button>
+      <button
+        type="button"
+        onClick={() => onConflictSummaryChange?.({ conflictCount: 1, totalScheduled: 1 })}
+      >
+        Mock Conflict Summary
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onConflictRequestsChange?.([
+            {
+              id: 'request-1',
+              start_date: '2026-02-09',
+              end_date: '2026-02-09',
+              reason: 'Vacation',
+            },
+          ])
+        }
+      >
+        Mock Conflict Requests
+      </button>
+    </div>
+  )
   MockShiftSelectionTable.displayName = 'MockShiftSelectionTable'
   return MockShiftSelectionTable
 })
@@ -148,5 +199,57 @@ describe('TimeOffForm', () => {
     )
     expect(submitCall).toBeDefined()
     expect(submitCall?.[1]).toMatchObject({ method: 'POST' })
+  })
+
+  it('shows shift selection validation when create is clicked with no selected shifts', async () => {
+    const user = userEvent.setup()
+    renderWithQueryClient(<TimeOffForm />)
+
+    const teacherInput = screen.getByPlaceholderText(/select a teacher/i)
+    await user.click(teacherInput)
+    await user.click(await screen.findByRole('button', { name: /bella wilbanks/i }))
+
+    fireEvent.change(screen.getByTestId('time-off-start-date'), { target: { value: '2026-02-09' } })
+    await user.click(screen.getByRole('radio', { name: /select shifts/i }))
+    await user.click(screen.getByRole('button', { name: /^create$/i }))
+
+    const messages = await screen.findAllByText(/select at least one shift\./i)
+    expect(messages.length).toBeGreaterThan(0)
+  })
+
+  it('saves draft and navigates back to time off list', async () => {
+    const user = userEvent.setup()
+    renderWithQueryClient(<TimeOffForm />)
+
+    const teacherInput = screen.getByPlaceholderText(/select a teacher/i)
+    await user.click(teacherInput)
+    await user.click(await screen.findByRole('button', { name: /bella wilbanks/i }))
+    fireEvent.change(screen.getByTestId('time-off-start-date'), { target: { value: '2026-02-09' } })
+
+    await user.click(screen.getByRole('button', { name: /save as draft/i }))
+
+    await waitFor(() => {
+      expect(mockToastSuccess).toHaveBeenCalledWith('Draft saved')
+      expect(mockPush).toHaveBeenCalledWith('/time-off')
+      expect(mockRefresh).toHaveBeenCalled()
+    })
+  })
+
+  it('blocks submission when all selected shifts are already recorded', async () => {
+    const user = userEvent.setup()
+    renderWithQueryClient(<TimeOffForm />)
+
+    const teacherInput = screen.getByPlaceholderText(/select a teacher/i)
+    await user.click(teacherInput)
+    await user.click(await screen.findByRole('button', { name: /bella wilbanks/i }))
+    fireEvent.change(screen.getByTestId('time-off-start-date'), { target: { value: '2026-02-09' } })
+
+    await user.click(screen.getByRole('radio', { name: /select shifts/i }))
+    await user.click(screen.getByRole('button', { name: /mock conflict summary/i }))
+    await user.click(screen.getByRole('button', { name: /^create$/i }))
+
+    expect(
+      await screen.findByText(/all selected shifts already have time off recorded/i)
+    ).toBeInTheDocument()
   })
 })
