@@ -22,6 +22,35 @@ const customJestConfig = {
     '!**/node_modules/**',
     '!**/.next/**',
   ],
+  coverageThreshold:
+    process.env.ENFORCE_PHASE1_COVERAGE === 'true'
+      ? {
+          './app/api/time-off/**/*.ts': {
+            branches: 60,
+            functions: 70,
+            lines: 70,
+            statements: 70,
+          },
+          './app/api/sub-finder/**/*.ts': {
+            branches: 60,
+            functions: 70,
+            lines: 70,
+            statements: 70,
+          },
+          './components/time-off/**/*.tsx': {
+            branches: 60,
+            functions: 70,
+            lines: 70,
+            statements: 70,
+          },
+          './components/sub-finder/**/*.tsx': {
+            branches: 60,
+            functions: 70,
+            lines: 70,
+            statements: 70,
+          },
+        }
+      : undefined,
 }
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
