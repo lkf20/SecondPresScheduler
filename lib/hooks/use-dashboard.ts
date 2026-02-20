@@ -61,7 +61,10 @@ type DashboardOverview = {
 }
 
 async function fetchDashboard(params: DashboardQueryParams): Promise<DashboardOverview> {
-  const url = `/api/dashboard/overview?start_date=${params.startDate}&end_date=${params.endDate}`
+  const displayNameParam = params.displayNameFormat
+    ? `&display_name_format=${encodeURIComponent(params.displayNameFormat)}`
+    : ''
+  const url = `/api/dashboard/overview?start_date=${params.startDate}&end_date=${params.endDate}${displayNameParam}`
   const response = await fetch(url)
 
   if (!response.ok) {
