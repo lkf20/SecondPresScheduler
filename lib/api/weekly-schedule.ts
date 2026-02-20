@@ -693,6 +693,39 @@ export async function getScheduleSnapshotData({
             }
           })
 
+          // Targeted debug logging for floater investigation.
+          // Slot: Toddler A Room / Monday / AC / Bella W.
+          const isDebugSlot =
+            classroom.name === 'Toddler A Room' && day.name === 'Monday' && timeSlot.code === 'AC'
+          if (isDebugSlot) {
+            const rawSchedules = assignmentsForSlot.map(assignment => ({
+              teacher_id: assignment.teacher_id,
+              teacher_name: assignment.teacher
+                ? formatDisplayName(
+                    {
+                      first_name: assignment.teacher.first_name ?? '',
+                      last_name: assignment.teacher.last_name ?? '',
+                      display_name: assignment.teacher.display_name ?? null,
+                    },
+                    displayNameFormat
+                  )
+                : 'Unknown',
+              is_floater: assignment.is_floater ?? false,
+            }))
+
+            const mappedBella = teachers.filter(t =>
+              (t.teacher_name || '').toLowerCase().includes('bella')
+            )
+
+            console.log('[WeeklySchedule][FloaterDebug]', {
+              classroom: classroom.name,
+              day: day.name,
+              time_slot: timeSlot.code,
+              raw_schedules: rawSchedules,
+              mapped_bella: mappedBella,
+            })
+          }
+
           // Get enrollment from schedule_cell (enrollment is for the whole slot, not per class group)
           const enrollment = scheduleCell.enrollment_for_staffing ?? null
 

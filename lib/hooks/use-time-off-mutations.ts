@@ -152,6 +152,10 @@ export function useCancelTimeOffRequest() {
       toast.success('Time off request cancelled')
     },
     onError: (error: Error) => {
+      if (error.message === 'Time off request is already cancelled') {
+        toast.info('This time off request was already cancelled.')
+        return
+      }
       toast.error(`Failed to cancel time off request: ${error.message}`)
     },
   })

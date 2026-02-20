@@ -91,23 +91,15 @@ export default function AddTimeOffButton({
     // Reset unsaved changes flag
     setHasUnsavedChanges(false)
 
-    // Reset editing state
-    setEditingRequestId(null)
-
-    // Close the sheet
-    setIsTimeOffSheetOpen(false)
-
     // Show toast
     const action = editingRequestId ? 'updated' : 'added'
     toast.success(`Time off ${action} for ${teacherName} (${dateRange})`)
 
+    // Use the unified close path so URL/query + panel state are always cleaned up.
+    handleCloseSheet(false)
+
     // Refresh the current page to update data
     router.refresh()
-
-    // Call onClose callback if provided
-    if (onClose) {
-      onClose()
-    }
   }
 
   const handleCloseSheet = (open: boolean) => {

@@ -101,6 +101,9 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     const [isLoadingRequest, setIsLoadingRequest] = useState(false)
     const [showCancelDialog, setShowCancelDialog] = useState(false)
     const [isCancelling, setIsCancelling] = useState(false)
+    const [currentRequestStatus, setCurrentRequestStatus] = useState<
+      'draft' | 'active' | 'cancelled' | null
+    >(null)
     const [assignmentData, setAssignmentData] = useState<{
       hasAssignments: boolean
       assignmentCount: number
@@ -225,6 +228,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
           return r.json()
         })
         .then(requestData => {
+          setCurrentRequestStatus(requestData.status || null)
           // Populate form with existing data
           reset({
             teacher_id: requestData.teacher_id || '',
@@ -746,6 +750,10 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
 
     const handleCancelClick = async () => {
       if (!timeOffRequestId) return
+      if (currentRequestStatus === 'cancelled') {
+        toast.info('This time off request was already cancelled.')
+        return
+      }
 
       // First, check for assignments
       try {
@@ -773,7 +781,12 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
           setShowCancelDialog(true)
         }
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : 'Failed to check assignments')
+        const message = err instanceof Error ? err.message : 'Failed to check assignments'
+        if (message === 'Time off request is already cancelled') {
+          toast.info('This time off request was already cancelled.')
+        } else {
+          setError(message)
+        }
       }
     }
 
@@ -815,6 +828,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
 
         // Show success toast
         const result = await response.json()
+        setCurrentRequestStatus('cancelled')
         if (result.assignmentsKept > 0) {
           toast.success(
             `Time off request cancelled. ${result.assignmentsKept} assignment${result.assignmentsKept !== 1 ? 's' : ''} kept as extra coverage.`
@@ -829,7 +843,18 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         }
         router.refresh()
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : 'Failed to cancel time off request')
+        const message = err instanceof Error ? err.message : 'Failed to cancel time off request'
+        if (message === 'Time off request is already cancelled') {
+          toast.info('This time off request was already cancelled.')
+          setIsCancelling(false)
+          setShowCancelDialog(false)
+          if (onCancel) {
+            onCancel()
+          }
+          router.refresh()
+          return
+        }
+        setError(message)
         setIsCancelling(false)
         setShowCancelDialog(false)
       }
@@ -1117,9 +1142,12 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                     type="button"
                     variant="destructive"
                     onClick={handleCancelClick}
+                    disabled={isCancelling || currentRequestStatus === 'cancelled'}
                     tabIndex={14}
                   >
-                    Cancel Time Off Request
+                    {currentRequestStatus === 'cancelled'
+                      ? 'Already Cancelled'
+                      : 'Cancel Time Off Request'}
                   </Button>
                 )}
               </div>
@@ -1134,7 +1162,15 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                 <Button type="button" variant="outline" onClick={saveDraft} tabIndex={12}>
                   Save as Draft
                 </Button>
-                <Button type="submit" disabled={isSubmitting || allShiftsRecorded} tabIndex={13}>
+                <Button
+                  type="submit"
+                  disabled={
+                    isSubmitting ||
+                    allShiftsRecorded ||
+                    (Boolean(timeOffRequestId) && !hasUnsavedChanges)
+                  }
+                  tabIndex={13}
+                >
                   {isSubmitting
                     ? timeOffRequestId
                       ? 'Updating...'

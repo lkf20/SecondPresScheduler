@@ -50,6 +50,27 @@ export default function ScheduleCell({
   const isInactive = scheduleCell && !scheduleCell.is_active
   const isActive = scheduleCell?.is_active ?? false
 
+  // Targeted client-side debug for floater rendering issue.
+  if (
+    data?.classroom_name === 'Toddler A Room' &&
+    data?.day_name === 'Monday' &&
+    data?.time_slot_code === 'AC'
+  ) {
+    const bellaAssignments =
+      data?.assignments?.filter(a => (a.teacher_name || '').toLowerCase().includes('bella')) || []
+    console.log('[ScheduleCell][FloaterDebug]', {
+      classroom: data.classroom_name,
+      day: data.day_name,
+      time_slot: data.time_slot_code,
+      bella_assignments: bellaAssignments.map(a => ({
+        teacher_name: a.teacher_name,
+        is_floater: a.is_floater ?? false,
+        is_flexible: a.is_flexible ?? false,
+        is_substitute: a.is_substitute ?? false,
+      })),
+    })
+  }
+
   // Get class group names from schedule_cell (comma-separated)
   const classGroupNames =
     scheduleCell?.class_groups && scheduleCell.class_groups.length > 0
@@ -252,18 +273,21 @@ export default function ScheduleCell({
               }
             })
 
-            // Get non-substitute assignments (regular teachers and floaters) - only if showing them
+            // Get non-substitute assignments (teachers/flex/floaters) - only if showing them
             // IMPORTANT: Exclude teachers who are absent (they're already shown as absent)
-            const regularAssignments =
+            const nonSubstituteAssignments =
               showRegularTeachers || showFloaters
                 ? filteredAssignments.filter(
                     a => !a.is_substitute && !absentTeacherIds.has(a.teacher_id)
                   )
                 : []
-            const regularTeachers = showRegularTeachers
-              ? regularAssignments.filter(a => !a.is_floater)
+            const teachers = showRegularTeachers
+              ? nonSubstituteAssignments.filter(a => !a.is_floater && !a.is_flexible)
               : []
-            const floaters = showFloaters ? regularAssignments.filter(a => a.is_floater) : []
+            const flexTeachers = showRegularTeachers
+              ? nonSubstituteAssignments.filter(a => !a.is_floater && a.is_flexible)
+              : []
+            const floaters = showFloaters ? nonSubstituteAssignments.filter(a => a.is_floater) : []
 
             // Sort absences alphabetically by teacher name
             const sortedAbsences = [...absences].sort((a, b) =>
@@ -271,16 +295,19 @@ export default function ScheduleCell({
             )
 
             // Sort each group alphabetically by display name
-            const sortedRegular = regularTeachers.sort((a, b) =>
+            const sortedTeachers = [...teachers].sort((a, b) =>
               (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown')
             )
-            const sortedFloaters = floaters.sort((a, b) =>
+            const sortedFlexTeachers = [...flexTeachers].sort((a, b) =>
+              (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown')
+            )
+            const sortedFloaters = [...floaters].sort((a, b) =>
               (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown')
             )
 
-            // Build display order: absent teachers (with their substitutes) first, then regular, then floaters
+            // Build display order: absent (with their substitutes), then teachers, flex teachers, and floaters
             const displayGroups: Array<{
-              type: 'absent' | 'regular' | 'floater'
+              type: 'absent' | 'teacher' | 'flexTeacher' | 'floater'
               absence?: (typeof absences)[0]
               assignment?: (typeof filteredAssignments)[0]
               substitutes: typeof substitutes
@@ -297,12 +324,23 @@ export default function ScheduleCell({
               })
             })
 
-            // Add regular teachers (with empty substitutes array) - only if showing regular teachers
+            // Add teachers (with empty substitutes array) - only if showing regular teachers
             if (showRegularTeachers) {
-              sortedRegular.forEach(teacher => {
+              sortedTeachers.forEach(teacher => {
                 displayGroups.push({
-                  type: 'regular',
+                  type: 'teacher',
                   assignment: teacher,
+                  substitutes: [],
+                })
+              })
+            }
+
+            // Add flex teachers (with empty substitutes array) - only if showing regular teachers
+            if (showRegularTeachers) {
+              sortedFlexTeachers.forEach(flexTeacher => {
+                displayGroups.push({
+                  type: 'flexTeacher',
+                  assignment: flexTeacher,
                   substitutes: [],
                 })
               })
@@ -390,15 +428,15 @@ export default function ScheduleCell({
                   'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold w-fit '
                 let title: string | undefined = undefined
 
-                if (assignment.is_flexible) {
-                  className += 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  title = 'Flex assignment'
-                } else if (assignment.is_floater) {
+                if (assignment.is_floater) {
                   className +=
                     'bg-purple-100 text-purple-800 border border-purple-300 border-dashed'
                   title = 'Floater assignment'
+                } else if (assignment.is_flexible) {
+                  className += 'bg-blue-50 text-blue-800 border border-blue-500 border-dashed'
+                  title = 'Flex assignment'
                 } else {
-                  className += 'bg-blue-100 text-blue-800'
+                  className += 'bg-blue-100 text-blue-800 border border-blue-300'
                 }
 
                 const chip = (
@@ -406,6 +444,13 @@ export default function ScheduleCell({
                     key={assignment.id || assignment.teacher_id}
                     className={className}
                     title={title}
+                    style={
+                      assignment.is_flexible
+                        ? { borderColor: '#3b82f6' }
+                        : !assignment.is_floater
+                          ? { borderColor: '#93c5fd' }
+                          : undefined
+                    }
                   >
                     {assignment.teacher_name || 'Unknown'}
                   </span>
