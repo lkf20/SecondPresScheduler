@@ -169,7 +169,10 @@ export default function TimeOffCard({
               </div>
             </div>
             {uncovered > 0 && partial === 0 && (
-              <AlertTriangle className="h-5 w-5 text-orange-600 flex-shrink-0" />
+              <AlertTriangle
+                className="h-4 w-4 flex-shrink-0"
+                style={{ color: 'rgb(249, 115, 22)' }}
+              />
             )}
             {partial > 0 && <PieChart className="h-5 w-5 text-yellow-600 flex-shrink-0" />}
             {uncovered === 0 && partial === 0 && covered > 0 && (
@@ -178,28 +181,26 @@ export default function TimeOffCard({
           </div>
 
           <div className="mt-3 border-t border-slate-200 pt-3">
-            {/* Coverage badges in middle */}
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                {covered > 0 && <CoverageBadge type="covered" count={covered} />}
-                {partial > 0 && <CoverageBadge type="partial" count={partial} />}
-              </div>
-              <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="flex items-stretch justify-between gap-3">
+              <div className="flex flex-col items-start gap-2">
                 {uncovered > 0 && <CoverageBadge type="uncovered" count={uncovered} />}
+                <div className="flex flex-wrap items-center justify-start gap-2">
+                  {covered > 0 && <CoverageBadge type="covered" count={covered} />}
+                  {partial > 0 && <CoverageBadge type="partial" count={partial} />}
+                </div>
+              </div>
+              <div className="flex items-end">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-teal-700 hover:bg-transparent hover:text-teal-800"
+                  onClick={handleFindSubsClick}
+                  disabled={loading}
+                >
+                  Find Subs →
+                </Button>
               </div>
             </div>
-          </div>
-
-          <div className="mt-3 flex justify-end">
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-teal-700 text-teal-700 hover:bg-teal-700 hover:text-white hover:border-teal-700"
-              onClick={handleFindSubsClick}
-              disabled={loading}
-            >
-              Find Subs →
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -284,9 +285,6 @@ export default function TimeOffCard({
                     {classroom.name}
                   </span>
                 ))}
-                {classrooms.length > 1 && (
-                  <span className="text-[11px] text-slate-500">(varies by shift)</span>
-                )}
               </>
             ) : (
               !hasShiftsDropdown && (

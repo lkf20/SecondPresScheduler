@@ -32,6 +32,7 @@ yarn-error.log*
 .env.local.staging
 .env.supabase.staging
 .env.supabase.prod
+.env.supabase.production
 
 # vercel
 .vercel

@@ -21,8 +21,9 @@ const formatISO = (date: Date) => {
   return `${year}-${month}-${day}`
 }
 
-const formatDisplay = (date: Date) =>
+const formatDisplay = (date: Date, includeWeekday = false) =>
   new Intl.DateTimeFormat('en-US', {
+    weekday: includeWeekday ? 'long' : undefined,
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -38,6 +39,7 @@ interface DatePickerInputProps {
   tabIndex?: number
   closeOnSelect?: boolean
   openToDate?: string
+  includeWeekdayInDisplay?: boolean
 }
 
 const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
@@ -52,6 +54,7 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
       tabIndex,
       closeOnSelect = false,
       openToDate,
+      includeWeekdayInDisplay = false,
     },
     ref
   ) => {
@@ -128,7 +131,7 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
             )}
           >
             <span className={cn(!value && 'text-muted-foreground')}>
-              {selectedDate ? formatDisplay(selectedDate) : placeholder}
+              {selectedDate ? formatDisplay(selectedDate, includeWeekdayInDisplay) : placeholder}
             </span>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </button>

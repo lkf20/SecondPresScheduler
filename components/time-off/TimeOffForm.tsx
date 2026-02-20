@@ -948,6 +948,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                   <DatePickerInput
                     id="time-off-start-date"
                     value={startDate || ''}
+                    includeWeekdayInDisplay={Boolean(timeOffRequestId)}
                     onChange={value => {
                       setValue('start_date', value, { shouldValidate: true, shouldDirty: true })
                       if (value) focusEndDate()
@@ -967,6 +968,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                   <DatePickerInput
                     id="time-off-end-date"
                     value={endDate || ''}
+                    includeWeekdayInDisplay={Boolean(timeOffRequestId)}
                     openToDate={startDate || ''}
                     onChange={value =>
                       setValue('end_date', value, { shouldValidate: true, shouldDirty: true })

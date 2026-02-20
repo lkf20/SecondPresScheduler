@@ -83,21 +83,6 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
   // Transform API response to match component's expected format
   const allRequests: TimeOffRow[] = useMemo(() => {
     const apiData = (timeOffData?.data || []) as TimeOffApiItem[]
-    console.log(
-      '[TimeOffList Debug] raw API totals',
-      apiData.map(item => ({
-        id: item.id,
-        teacher_name: item.teacher_name,
-        start_date: item.start_date,
-        end_date: item.end_date ?? null,
-        status: item.status,
-        coverage_status: item.coverage_status,
-        total: item.total,
-        covered: item.covered,
-        partial: item.partial,
-        uncovered: item.uncovered,
-      }))
-    )
     const mapped: TimeOffRow[] = apiData.map(item => {
       // Calculate shifts_display from total
       const total = item.total || 0
@@ -128,21 +113,6 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
         notes: item.notes,
       }
     })
-    console.log(
-      '[TimeOffList Debug] mapped rows',
-      mapped.map(row => ({
-        id: row.id,
-        teacher_name: row.teacher_name,
-        start_date: row.start_date,
-        end_date: row.end_date,
-        status: row.status,
-        shifts_display: row.shifts_display,
-        coverage_total: row.coverage_total,
-        coverage_covered: row.coverage_covered,
-        coverage_partial: row.coverage_partial,
-        coverage_uncovered: row.coverage_uncovered,
-      }))
-    )
     return mapped
   }, [timeOffData])
 

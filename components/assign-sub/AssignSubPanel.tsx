@@ -413,22 +413,18 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
     })
   }, [subQualifications, teacherClasses])
 
-  // Default shift selection: checked if has_time_off AND sub is available
+  // Keep explicit user control of shift selection.
+  // Auto-selecting on every shifts update can silently re-select extra shifts.
   useEffect(() => {
     if (!subId || shifts.length === 0) {
       setSelectedShiftIds(new Set())
       return
     }
-
-    // For now, default to selecting shifts with time off
-    // TODO: Add availability check
-    const defaultSelected = new Set<string>()
-    shifts.forEach(shift => {
-      if (shift.has_time_off) {
-        defaultSelected.add(shift.id)
-      }
+    setSelectedShiftIds(new Set())
+    console.log('[AssignSubPanel Debug] cleared selected shifts on load', {
+      totalShifts: shifts.length,
+      selectedCount: 0,
     })
-    setSelectedShiftIds(defaultSelected)
   }, [subId, shifts])
 
   // Calculate summary stats
@@ -473,6 +469,20 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
       // First, create time off requests for shifts without time off if checkbox is checked
       const selectedShifts = shifts.filter(s => selectedShiftIds.has(s.id))
       const shiftsWithoutTimeOff = selectedShifts.filter(s => !s.has_time_off)
+      console.log('[AssignSubPanel Debug] submit payload', {
+        coverageRequestId,
+        subId,
+        selectedShiftIds: Array.from(selectedShiftIds),
+        selectedShiftCount: selectedShifts.length,
+        selectedShifts: selectedShifts.map(shift => ({
+          id: shift.id,
+          date: shift.date,
+          time_slot_id: shift.time_slot_id,
+          time_slot_code: shift.time_slot_code,
+          has_time_off: shift.has_time_off,
+          status: shift.status ?? 'available',
+        })),
+      })
 
       if (createTimeOffForMissing && shiftsWithoutTimeOff.length > 0 && teacherId) {
         // Create time off request
@@ -529,15 +539,21 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
         const errorData = await assignResponse.json().catch(() => ({ error: 'Unknown error' }))
         throw new Error(errorData.error || 'Failed to assign shifts')
       }
+      const assignResult = await assignResponse.json()
+      console.log('[AssignSubPanel Debug] assign response', assignResult)
 
       const sub = subs.find(s => s.id === subId)
       const teacher = teachers.find(t => t.id === teacherId)
       const subName = getDisplayName(sub)
       const teacherName = getDisplayName(teacher)
-      const shiftCount = selectedShiftIds.size
+      const requestedShiftCount = selectedShiftIds.size
+      const assignedShiftCount = assignResult?.assignments_created ?? requestedShiftCount
+      const skippedShiftCount = Math.max(0, requestedShiftCount - assignedShiftCount)
 
       toast.success(
-        `Assigned ${subName} to ${shiftCount} shift${shiftCount !== 1 ? 's' : ''} for ${teacherName}${
+        `Assigned ${subName} to ${assignedShiftCount} shift${assignedShiftCount !== 1 ? 's' : ''} for ${teacherName}${
+          skippedShiftCount > 0 ? ` (${skippedShiftCount} already assigned and skipped).` : ''
+        }${
           createTimeOffForMissing && shiftsWithoutTimeOff.length > 0
             ? `. Time off request created for ${shiftsWithoutTimeOff.length} shift${shiftsWithoutTimeOff.length !== 1 ? 's' : ''}.`
             : ''
@@ -726,6 +742,10 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
                 <div className="space-y-2 border rounded-lg p-4 bg-white">
                   {shifts.map(shift => {
                     const isSelected = selectedShiftIds.has(shift.id)
+                    const isConflictShift =
+                      shift.status === 'unavailable' ||
+                      shift.status === 'conflict_teaching' ||
+                      shift.status === 'conflict_sub'
                     return (
                       <div
                         key={shift.id}
@@ -735,6 +755,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
                           id={`shift-${shift.id}`}
                           checked={isSelected}
                           onCheckedChange={() => handleShiftToggle(shift.id)}
+                          disabled={isConflictShift}
                           className="mt-1"
                         />
                         <div className="flex-1 space-y-1">

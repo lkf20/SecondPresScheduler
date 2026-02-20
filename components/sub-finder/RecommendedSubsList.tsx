@@ -1,16 +1,36 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import SubFinderCard from '@/components/sub-finder/SubFinderCard'
 import type { SubCandidate } from '@/components/sub-finder/hooks/useSubFinderData'
 import type { SubFinderShift } from '@/lib/sub-finder/types'
 import { filterVisibleShifts, getShiftKey } from '@/lib/sub-finder/shift-helpers'
 import { formatAbsenceDateRange } from '@/lib/utils/date-format'
+import { cn } from '@/lib/utils'
 
 type RecommendedSub = SubCandidate
+
+const getUnifiedContactStatus = (sub: RecommendedSub) => {
+  const explicit = (sub as any).contact_status as string | null | undefined
+  if (
+    explicit === 'not_contacted' ||
+    explicit === 'pending' ||
+    explicit === 'awaiting_response' ||
+    explicit === 'confirmed' ||
+    explicit === 'declined_all'
+  ) {
+    return explicit
+  }
+
+  if (sub.response_status === 'declined_all') return 'declined_all'
+  if (sub.response_status === 'confirmed') return 'confirmed'
+  if (sub.response_status === 'pending' || sub.is_contacted === true) return 'pending'
+  return 'not_contacted'
+}
 
 interface RecommendedSubsListProps {
   subs: SubCandidate[]
@@ -29,6 +49,12 @@ interface RecommendedSubsListProps {
   highlightedSubId?: string | null
   includePastShifts?: boolean
   selectedShift?: SubFinderShift | null
+  stickyControls?: boolean
+  activeFilter?: string | null
+  onActiveFilterChange?: (filter: string | null) => void
+  renderFiltersOnly?: boolean
+  hideFilterControls?: boolean
+  className?: string
 }
 
 export default function RecommendedSubsList({
@@ -43,14 +69,21 @@ export default function RecommendedSubsList({
   highlightedSubId = null,
   includePastShifts = false,
   selectedShift = null,
+  stickyControls = false,
+  activeFilter: controlledActiveFilter,
+  onActiveFilterChange,
+  renderFiltersOnly = false,
+  hideFilterControls = false,
+  className,
 }: RecommendedSubsListProps) {
+  const [isMoreFiltersOpen, setIsMoreFiltersOpen] = useState(false)
   const [expandedSections, setExpandedSections] = useState({
-    assigned: true,
-    contacted: true,
+    assigned: false,
+    contacted: false,
     available: true,
-    availableLimited: true,
-    unavailable: true,
-    declined: true,
+    availableLimited: false,
+    unavailable: false,
+    declined: false,
   })
 
   const formatDateRange = () => formatAbsenceDateRange(absence.start_date, absence.end_date)
@@ -171,7 +204,7 @@ export default function RecommendedSubsList({
       )
     }
 
-    const isDeclined = (sub: RecommendedSub) => sub.response_status === 'declined_all'
+    const isDeclined = (sub: RecommendedSub) => getUnifiedContactStatus(sub) === 'declined_all'
 
     const processedSubs = subs.map(sub => {
       let shiftsCovered = 0
@@ -233,12 +266,10 @@ export default function RecommendedSubsList({
       )
       const isAssigned = (sub.assigned_shifts?.length ?? 0) > 0
       const isAvailable = coveragePercent > 0
-      const isDeclined = sub.response_status === 'declined_all'
+      const isDeclined = getUnifiedContactStatus(sub) === 'declined_all'
       const isPartiallyAvailable = false // TODO: detect partial-shift availability once data is available
-      const isContacted =
-        sub.response_status === 'pending' ||
-        sub.response_status === 'confirmed' ||
-        sub.is_contacted === true
+      const unifiedStatus = getUnifiedContactStatus(sub)
+      const isContacted = unifiedStatus === 'pending' || unifiedStatus === 'confirmed'
       const isAvailableMissingReqs = isAvailable && hasQualificationGap
       const isAvailableLimited =
         isAvailableMissingReqs || isPartiallyAvailable || (isAvailable && isFlexibleStaff)
@@ -246,7 +277,7 @@ export default function RecommendedSubsList({
         ? (sub.assigned_shifts || []).some(
             shift => `${shift.date}|${shift.time_slot_code}` === selectedShiftKey
           )
-        : isAssigned
+        : false
       const isAvailableForSelected = selectedShiftKey
         ? (sub.can_cover || []).some(
             shift => `${shift.date}|${shift.time_slot_code}` === selectedShiftKey
@@ -268,7 +299,7 @@ export default function RecommendedSubsList({
         : coveragePercent === 0 && !isDeclined
 
       if (isDeclined) return 'declined'
-      if (isAssignedForSelected) return 'assigned'
+      if (isAssigned) return 'assigned'
       if (isContacted) return 'contacted'
       if (isAvailableLimitedForSelected) return 'availableLimited'
       if (isAvailableForSelected) return 'available'
@@ -496,6 +527,7 @@ export default function RecommendedSubsList({
           .filter(shift => derived.remainingShiftKeys.has(`${shift.date}|${shift.time_slot_code}`))
           .map(shift => shift.status)
       : filteredShiftChips.map(shift => shift.status)
+    const unifiedStatus = getUnifiedContactStatus(sub)
     const remainingCoveredCount = derived.hasAssignedShifts
       ? filteredShiftChips.filter(
           shift =>
@@ -510,6 +542,7 @@ export default function RecommendedSubsList({
         id={`sub-card-${sub.id}`}
         name={sub.name}
         phone={sub.phone}
+        email={sub.email ?? null}
         shiftsCovered={remainingCoveredCount}
         totalShifts={
           derived.hasAssignedShifts
@@ -523,13 +556,17 @@ export default function RecommendedSubsList({
         shiftChips={filteredShiftChips}
         coverageSegments={coverageSegments}
         notes={sub.notes}
-        isDeclined={sub.response_status === 'declined_all'}
-        isContacted={
-          sub.response_status === 'pending' ||
-          sub.response_status === 'confirmed' ||
-          sub.is_contacted === true
+        isDeclined={unifiedStatus === 'declined_all'}
+        isContacted={unifiedStatus === 'pending' || unifiedStatus === 'confirmed'}
+        responseStatus={
+          unifiedStatus === 'confirmed'
+            ? 'confirmed'
+            : unifiedStatus === 'declined_all'
+              ? 'declined_all'
+              : unifiedStatus === 'pending' || unifiedStatus === 'awaiting_response'
+                ? 'pending'
+                : 'none'
         }
-        responseStatus={sub.response_status ?? null}
         onSaveNote={onSaveNote ? next => onSaveNote(sub, next) : undefined}
         highlighted={highlightedSubId === sub.id}
         onContact={() => onContactSub?.(sub)}
@@ -537,6 +574,9 @@ export default function RecommendedSubsList({
         allCanCover={visibleCanCover}
         allCannotCover={visibleCannotCover}
         allAssigned={visibleAssigned}
+        softChipColors={showAllSubs}
+        condensedStatus={showAllSubs}
+        showPrimaryShiftChips={!showAllSubs}
       />
     )
   }
@@ -612,14 +652,56 @@ export default function RecommendedSubsList({
     { key: 'unavailable', label: 'Unavailable' },
     { key: 'declined', label: 'Declined' },
   ] as const
+  const primaryFilters = sectionFilters.filter(
+    filter => filter.key === 'available' || filter.key === 'contacted' || filter.key === 'assigned'
+  )
+  const moreFilters = sectionFilters.filter(
+    filter =>
+      filter.key === 'availableLimited' || filter.key === 'unavailable' || filter.key === 'declined'
+  )
 
-  const [activeFilter, setActiveFilter] = useState<string | null>(null)
+  const [internalActiveFilter, setInternalActiveFilter] = useState<string | null>('available')
+  const activeFilter =
+    controlledActiveFilter === undefined ? internalActiveFilter : controlledActiveFilter
+  const setActiveFilter = useCallback(
+    (nextFilter: string | null | ((prev: string | null) => string | null)) => {
+      const resolvedNext =
+        typeof nextFilter === 'function' ? nextFilter(activeFilter ?? null) : (nextFilter ?? null)
+      if (controlledActiveFilter === undefined) {
+        setInternalActiveFilter(resolvedNext)
+      }
+      onActiveFilterChange?.(resolvedNext)
+    },
+    [activeFilter, controlledActiveFilter, onActiveFilterChange]
+  )
+  const activeMoreFilter = moreFilters.find(filter => filter.key === activeFilter) ?? null
+  const moreFilterLabel = activeMoreFilter
+    ? `${activeMoreFilter.label} (${sectionCounts[activeMoreFilter.key]})`
+    : activeFilter === null
+      ? `All (${allCount})`
+      : 'More filters'
 
   const toggleFilter = (key: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [key]: true,
+    }))
     setActiveFilter(prev => (prev === key ? null : key))
   }
 
   const showSection = (key: string) => (activeFilter ? activeFilter === key : true)
+
+  useEffect(() => {
+    if (!activeFilter) return
+    setExpandedSections(prev => ({
+      ...prev,
+      [activeFilter]: true,
+    }))
+  }, [activeFilter])
+
+  if (renderFiltersOnly && (loading || subs.length === 0 || !showAllSubs || !groupedSubs)) {
+    return null
+  }
 
   if (loading) {
     return (
@@ -647,7 +729,7 @@ export default function RecommendedSubsList({
 
   return (
     <TooltipProvider>
-      <div className="space-y-4">
+      <div className={cn('space-y-4', className)}>
         {/* Conditionally render header only if not hidden */}
         {!hideHeader && (
           <div className="mb-4">
@@ -667,54 +749,133 @@ export default function RecommendedSubsList({
         )}
 
         {showAllSubs && groupedSubs ? (
-          <div className="space-y-4">
-            <div className="mt-2 flex flex-wrap gap-2 border-b border-slate-200 pb-3">
-              <Button
-                type="button"
-                variant={activeFilter === null ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setActiveFilter(null)}
-                className="h-7 px-2 text-xs"
-              >
-                All ({allCount})
-              </Button>
-              {sectionFilters.map(filter => (
-                <Button
-                  key={filter.key}
-                  type="button"
-                  variant={activeFilter === filter.key ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => toggleFilter(filter.key)}
-                  className="h-7 px-2 text-xs"
-                >
-                  {filter.label} ({sectionCounts[filter.key]})
-                </Button>
-              ))}
-            </div>
-            <div>
-              {showSection('assigned') &&
-                renderSection('assigned', 'Assigned', groupedSubs.assigned)}
-              {showSection('contacted') &&
-                renderSection('contacted', 'Contacted', groupedSubs.contacted)}
-              {showSection('available') &&
-                renderSection('available', 'Available', groupedSubs.available)}
-              {showSection('availableLimited') &&
-                renderSection(
-                  'availableLimited',
-                  'Available (with limitations)',
-                  groupedSubs.availableLimited
+          <div className={cn('space-y-4', stickyControls && 'bg-white')}>
+            {!hideFilterControls && (
+              <div
+                className={cn(
+                  'relative w-full flex flex-wrap gap-2',
+                  stickyControls ? 'sticky top-0 z-40 bg-white px-0 pt-10 pb-3' : 'mt-2 pb-3'
                 )}
-              {showSection('unavailable') &&
-                renderSection('unavailable', 'Unavailable', groupedSubs.unavailable)}
-              {showSection('declined') && groupedSubs.declined.length > 0 && (
-                <>
-                  <div className="border-t border-slate-200" />
-                  <div className="opacity-70">
+              >
+                {primaryFilters.map(filter => (
+                  <Button
+                    key={filter.key}
+                    type="button"
+                    variant="ghost"
+                    onClick={() => toggleFilter(filter.key)}
+                    className={cn(
+                      'h-auto rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                      activeFilter === filter.key
+                        ? 'border-slate-900 bg-slate-900 text-white'
+                        : 'border-slate-400 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                    )}
+                  >
+                    {filter.label} ({sectionCounts[filter.key]})
+                  </Button>
+                ))}
+                <Popover open={isMoreFiltersOpen} onOpenChange={setIsMoreFiltersOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className={cn(
+                        'h-auto rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                        activeMoreFilter || activeFilter === null
+                          ? 'border-slate-900 bg-slate-900 text-white'
+                          : 'border-slate-400 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                      )}
+                    >
+                      {moreFilterLabel}
+                      <ChevronDown className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56 p-2" align="start">
+                    <div className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveFilter(null)
+                          setIsMoreFiltersOpen(false)
+                        }}
+                        className={cn(
+                          'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',
+                          activeFilter === null
+                            ? 'bg-slate-900 text-white'
+                            : 'text-slate-700 hover:bg-slate-100'
+                        )}
+                      >
+                        <span>All</span>
+                        <span
+                          className={cn(
+                            'text-xs',
+                            activeFilter === null ? 'text-white/90' : 'text-slate-500'
+                          )}
+                        >
+                          {allCount}
+                        </span>
+                      </button>
+                      {moreFilters.map(filter => {
+                        const isActive = activeFilter === filter.key
+                        return (
+                          <button
+                            key={filter.key}
+                            type="button"
+                            onClick={() => {
+                              setExpandedSections(prev => ({
+                                ...prev,
+                                [filter.key]: true,
+                              }))
+                              setActiveFilter(filter.key)
+                              setIsMoreFiltersOpen(false)
+                            }}
+                            className={cn(
+                              'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',
+                              isActive
+                                ? 'bg-slate-900 text-white'
+                                : 'text-slate-700 hover:bg-slate-100'
+                            )}
+                          >
+                            <span>{filter.label}</span>
+                            <span
+                              className={cn(
+                                'text-xs',
+                                isActive ? 'text-white/90' : 'text-slate-500'
+                              )}
+                            >
+                              {sectionCounts[filter.key]}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+            {!renderFiltersOnly && (
+              <div className={cn(hideFilterControls && 'pt-3')}>
+                {showSection('assigned') &&
+                  renderSection('assigned', 'Assigned', groupedSubs.assigned)}
+                {showSection('contacted') &&
+                  renderSection('contacted', 'Contacted', groupedSubs.contacted)}
+                {showSection('available') &&
+                  renderSection('available', 'Available', groupedSubs.available)}
+                {showSection('availableLimited') &&
+                  renderSection(
+                    'availableLimited',
+                    'Available with limitations',
+                    groupedSubs.availableLimited
+                  )}
+                {showSection('unavailable') &&
+                  renderSection('unavailable', 'Unavailable', groupedSubs.unavailable)}
+                {showSection('declined') && (
+                  <>
+                    <div className="border-t border-slate-200" />
                     {renderSection('declined', 'Declined', groupedSubs.declined)}
-                  </div>
-                </>
-              )}
-            </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <>

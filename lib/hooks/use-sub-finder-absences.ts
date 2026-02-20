@@ -30,6 +30,8 @@ export type SubFinderAbsence = {
       id?: string
       status: 'covered' | 'partial' | 'fully_covered' | 'partially_covered' | 'uncovered'
       sub_name?: string | null
+      sub_id?: string | null
+      assignment_id?: string | null
       assignment_status?: 'pending' | 'confirmed' | 'declined' | 'no_response' | 'none' | null
       assigned_sub?: {
         name: string
@@ -49,6 +51,9 @@ async function fetchSubFinderAbsences(
   const searchParams = new URLSearchParams()
   if (params?.includePartiallyCovered) {
     searchParams.set('include_partially_covered', 'true')
+  }
+  if (params?.includeFullyCovered) {
+    searchParams.set('include_fully_covered', 'true')
   }
 
   const url = `/api/sub-finder/absences${searchParams.toString() ? `?${searchParams.toString()}` : ''}`

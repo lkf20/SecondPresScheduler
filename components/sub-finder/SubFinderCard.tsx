@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,6 +12,7 @@ import {
   Clock,
   HelpCircle,
   Phone,
+  PhoneOff,
   XCircle,
 } from 'lucide-react'
 import ShiftChips from '@/components/sub-finder/ShiftChips'
@@ -40,6 +41,7 @@ interface SubFinderCardProps {
   id?: string
   name: string
   phone: string | null
+  email?: string | null
   shiftsCovered: number
   totalShifts: number
   useRemainingLabel?: boolean
@@ -69,12 +71,19 @@ interface SubFinderCardProps {
   allCanCover?: Shift[] // All shifts this sub can cover
   allCannotCover?: Shift[] // All shifts this sub cannot cover
   allAssigned?: Shift[] // All shifts this sub is assigned to
+  softChipColors?: boolean
+  condensedStatus?: boolean // Experimental: single-line status summary
+  showPrimaryShiftChips?: boolean // Experimental: hide inline chips, show only "View all shifts"
+  useStatusBadgeOnly?: boolean // Show compact status badge by name instead of right status stack
 }
+
+const SHOW_DEBUG_BORDERS = false
 
 export default function SubFinderCard({
   id,
   name,
   phone,
+  email = null,
   shiftsCovered,
   totalShifts,
   useRemainingLabel = false,
@@ -97,46 +106,36 @@ export default function SubFinderCard({
   allCanCover = [],
   allCannotCover = [],
   allAssigned = [],
+  softChipColors = true,
+  condensedStatus = false,
+  showPrimaryShiftChips = true,
+  useStatusBadgeOnly = false,
 }: SubFinderCardProps) {
   const [isAllShiftsExpanded, setIsAllShiftsExpanded] = useState(false)
-  const [isNoteExpanded, setIsNoteExpanded] = useState(false)
-  const [isEditingNote, setIsEditingNote] = useState(false)
   const [noteDraft, setNoteDraft] = useState(notes || '')
-  const noteTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const [isSavingNote, setIsSavingNote] = useState(false)
   const coveredSegments = Math.min(shiftsCovered, totalShifts)
-  // Build map of assigned/available/unavailable shifts for "View all shifts" section
-  const allShiftsStatusMap = new Map<string, 'assigned' | 'available' | 'unavailable'>()
-  if (
-    allShifts &&
-    allShifts.length > 0 &&
-    (allCanCover.length > 0 || allCannotCover.length > 0 || allAssigned.length > 0)
-  ) {
-    allAssigned.forEach(shift => {
-      const key = `${shift.date}|${shift.time_slot_code}`
-      allShiftsStatusMap.set(key, 'assigned')
-    })
-    // Add can cover shifts
-    allCanCover.forEach(shift => {
-      const key = `${shift.date}|${shift.time_slot_code}`
-      if (!allShiftsStatusMap.has(key)) {
-        allShiftsStatusMap.set(key, 'available')
-      }
-    })
-
-    // Add cannot cover shifts
-    allCannotCover.forEach(shift => {
-      const key = `${shift.date}|${shift.time_slot_code}`
-      // Only set if not already marked as available
-      if (!allShiftsStatusMap.has(key)) {
-        allShiftsStatusMap.set(key, 'unavailable')
-      }
-    })
-  }
+  const thisSubAssignedKeys = new Set(
+    allAssigned.map(shift => `${shift.date}|${shift.time_slot_code}`)
+  )
+  const thisSubCanCoverKeys = new Set(
+    allCanCover.map(shift => `${shift.date}|${shift.time_slot_code}`)
+  )
+  const thisSubCannotCoverReason = new Map(
+    allCannotCover.map(shift => [
+      `${shift.date}|${shift.time_slot_code}`,
+      shift.reason ?? undefined,
+    ])
+  )
 
   const renderCoverageBar = () => {
     if (isDeclined) {
       return <p className="text-xs text-muted-foreground">Declined all shifts</p>
     }
+    const softSegmentColors = {
+      available: 'rgb(186, 225, 210)', // soft mint-green with slight blue tone
+      unavailable: 'rgb(229, 231, 235)', // gray-200
+    } as const
     const normalizedSegments = coverageSegments?.length
       ? ([
           ...coverageSegments.slice(0, totalShifts),
@@ -170,20 +169,22 @@ export default function SubFinderCard({
             ) : (
               (orderedSegments ?? Array.from({ length: totalShifts }).map(() => 'available')).map(
                 (status, index) => {
-                  const colors =
+                  const segmentColor =
                     orderedSegments === null
                       ? index < coveredSegments
-                        ? shiftStatusColorValues.available
-                        : shiftStatusColorValues.unavailable
-                      : shiftStatusColorValues[status]
+                        ? softSegmentColors.available
+                        : softSegmentColors.unavailable
+                      : status === 'available' || status === 'assigned'
+                        ? softSegmentColors.available
+                        : softSegmentColors.unavailable
                   return (
                     <div
                       key={`segment-${index}`}
                       className="h-full rounded border"
                       style={{
                         width: '14px',
-                        backgroundColor: colors.border,
-                        borderColor: colors.border,
+                        backgroundColor: segmentColor,
+                        borderColor: segmentColor,
                       }}
                     />
                   )
@@ -193,7 +194,8 @@ export default function SubFinderCard({
           </div>
         </div>
         <p className="text-xs text-teal-600">
-          {shiftsCovered} of {totalShifts} {useRemainingLabel ? 'remaining shifts' : 'shifts'}
+          Available for {shiftsCovered} of {totalShifts}{' '}
+          {useRemainingLabel ? 'remaining shifts' : 'shifts'}
         </p>
       </div>
     )
@@ -209,70 +211,157 @@ export default function SubFinderCard({
         : resolvedResponseStatus === 'declined_all'
           ? { label: 'Declined', icon: XCircle, className: 'text-rose-600' }
           : { label: 'No response yet', icon: HelpCircle, className: 'text-slate-500' }
+  const shouldShowResponseStatus =
+    isContacted ||
+    resolvedResponseStatus === 'pending' ||
+    resolvedResponseStatus === 'confirmed' ||
+    resolvedResponseStatus === 'declined_all'
+  const statusBadge = isAssigned
+    ? {
+        label: 'Assigned',
+        icon: CheckCircle,
+        className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+      }
+    : isContacted
+      ? {
+          label: 'Contacted',
+          icon: Phone,
+          className: 'border-sky-200 bg-sky-50 text-sky-700',
+        }
+      : {
+          label: 'Not contacted',
+          icon: PhoneOff,
+          className: 'border-slate-200 bg-slate-100 text-slate-500',
+        }
+  const showCompactStatusBadge = condensedStatus || useStatusBadgeOnly
+  const isCompactLayout = condensedStatus || useStatusBadgeOnly
+  const hasRecommendedSubset = recommendedShiftCount !== undefined && recommendedShiftCount > 0
+  const recommendedLeadText = hasRecommendedSubset
+    ? `Recommended for ${recommendedShiftCount} shift${recommendedShiftCount === 1 ? '' : 's'}`
+    : null
+  const recommendedTrailingText = hasRecommendedSubset
+    ? `Available for ${shiftsCovered} of ${totalShifts} ${useRemainingLabel ? 'remaining shifts' : 'shifts'}`
+    : null
+  const declinedCardStyle = isDeclined
+    ? ({
+        backgroundColor: 'rgb(241, 245, 249)', // slate-100
+        borderColor: 'rgb(203, 213, 225)', // slate-300
+      } as React.CSSProperties)
+    : undefined
 
   useEffect(() => {
-    if (!isEditingNote) {
+    setNoteDraft(notes || '')
+  }, [notes])
+
+  const handleNoteBlur = async () => {
+    if (!onSaveNote) return
+    const next = noteDraft.trim()
+    const normalizedNext = next.length > 0 ? next : null
+    const normalizedCurrent = notes?.trim() ? notes.trim() : null
+    if (normalizedNext === normalizedCurrent) return
+
+    try {
+      setIsSavingNote(true)
+      await onSaveNote(normalizedNext)
+    } catch (error) {
+      console.error('Failed to save sub note', error)
       setNoteDraft(notes || '')
+    } finally {
+      setIsSavingNote(false)
     }
-  }, [notes, isEditingNote])
-
-  useEffect(() => {
-    if (isEditingNote) {
-      noteTextareaRef.current?.focus()
-    }
-  }, [isEditingNote])
+  }
 
   return (
     <Card
       id={id}
       className={cn(
-        'border border-slate-200 hover:shadow-md transition-shadow',
+        'group/subcard border border-slate-200 transition-all hover:shadow-md hover:scale-[1.01]',
+        isDeclined && 'border-slate-300',
         highlighted && 'ring-2 ring-blue-500 ring-offset-2 animate-pulse',
         className
       )}
+      style={declinedCardStyle}
       role={undefined}
       tabIndex={undefined}
     >
-      <CardContent className="pt-4 px-4 pb-1.5 flex flex-col gap-2">
-        <div className="flex w-full items-start justify-between gap-4">
-          <div className="min-w-0 flex-1 pr-2">
+      <CardContent
+        className={cn(
+          'px-4 flex flex-col',
+          isCompactLayout ? 'pt-2.5 pb-0.5 gap-0.5' : 'pt-4 pb-1.5 gap-2',
+          SHOW_DEBUG_BORDERS && 'border border-fuchsia-400'
+        )}
+      >
+        <div
+          className={cn(
+            'flex w-full items-start justify-between gap-4',
+            SHOW_DEBUG_BORDERS && 'border border-blue-400'
+          )}
+        >
+          <div
+            className={cn('min-w-0 flex-1 pr-2', SHOW_DEBUG_BORDERS && 'border border-cyan-400')}
+          >
             <SubCardHeader
               name={name}
               phone={phone}
+              email={email}
+              statusBadge={showCompactStatusBadge ? statusBadge : null}
               shiftsCovered={shiftsCovered}
               totalShifts={totalShifts}
               isDeclined={isDeclined}
               showCoverage={false}
+              compactSpacing={isCompactLayout}
             />
           </div>
-          <div className="ml-auto shrink-0">{renderCoverageBar()}</div>
+          <div className={cn('ml-auto shrink-0', SHOW_DEBUG_BORDERS && 'border border-teal-400')}>
+            {renderCoverageBar()}
+          </div>
         </div>
 
-        <div className="flex w-full items-start justify-between gap-4">
-          <div className="min-w-0 flex-1 pr-2 pb-4">
+        <div
+          className={cn(
+            'flex w-full items-start justify-between gap-4',
+            isCompactLayout && '-mt-1.5',
+            SHOW_DEBUG_BORDERS && 'border border-violet-400'
+          )}
+        >
+          <div
+            className={cn(
+              'min-w-0 flex-1 pr-2',
+              isCompactLayout ? 'pb-2' : 'pb-4',
+              SHOW_DEBUG_BORDERS && 'border border-amber-400'
+            )}
+          >
             {recommendedShiftCount !== undefined && recommendedShiftCount > 0 ? (
               <>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Recommended: {recommendedShiftCount} shift
-                  {recommendedShiftCount !== 1 ? 's' : ''}
+                <p
+                  className={cn(
+                    'text-muted-foreground',
+                    isCompactLayout ? 'mt-1 text-sm mb-1' : 'mt-1 text-base mb-2'
+                  )}
+                >
+                  <span className="font-semibold text-slate-700">{recommendedLeadText}</span>
+                  <span> · {recommendedTrailingText}</span>
                 </p>
-                {(canCover.length > 0 ||
-                  cannotCover.length > 0 ||
-                  assigned.length > 0 ||
-                  (shiftChips?.length ?? 0) > 0) && (
-                  <div className="w-full">
-                    <ShiftChips
-                      canCover={canCover}
-                      cannotCover={cannotCover}
-                      assigned={assigned}
-                      shifts={shiftChips}
-                      isDeclined={isDeclined}
-                      recommendedShifts={canCover}
-                    />
-                  </div>
-                )}
+                {showPrimaryShiftChips &&
+                  (canCover.length > 0 ||
+                    cannotCover.length > 0 ||
+                    assigned.length > 0 ||
+                    (shiftChips?.length ?? 0) > 0) && (
+                    <div className="w-full">
+                      <ShiftChips
+                        canCover={canCover}
+                        cannotCover={cannotCover}
+                        assigned={assigned}
+                        shifts={shiftChips}
+                        isDeclined={isDeclined}
+                        recommendedShifts={[]}
+                        softAvailableStyle={softChipColors}
+                      />
+                    </div>
+                  )}
               </>
             ) : (
+              showPrimaryShiftChips &&
               (canCover.length > 0 ||
                 cannotCover.length > 0 ||
                 assigned.length > 0 ||
@@ -284,6 +373,7 @@ export default function SubFinderCard({
                   shifts={shiftChips}
                   isDeclined={isDeclined}
                   recommendedShifts={canCover}
+                  softAvailableStyle={softChipColors}
                 />
               )
             )}
@@ -317,146 +407,73 @@ export default function SubFinderCard({
               </div>
             )}
           </div>
-          <div className="ml-auto flex flex-col items-end gap-2 shrink-0 pb-4">
+          {!showCompactStatusBadge && (
             <div
               className={cn(
-                'flex flex-col items-start gap-2 border-l-4 pl-2 text-sm leading-5 text-slate-600',
-                responseMeta.className === 'text-emerald-600'
-                  ? 'border-emerald-500'
-                  : responseMeta.className === 'text-amber-600'
-                    ? 'border-amber-500'
-                    : responseMeta.className === 'text-rose-600'
-                      ? 'border-rose-500'
-                      : 'border-slate-300'
+                'ml-auto flex flex-col items-end gap-2 shrink-0',
+                condensedStatus ? 'pb-2' : 'pb-4'
               )}
             >
-              <div className="flex items-center gap-2">
-                {isAssigned ? (
-                  <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
-                ) : (
-                  <XCircle className="h-3.5 w-3.5 text-slate-400" />
+              <div
+                className={cn(
+                  'flex flex-col items-start gap-2 border-l-4 pl-2 text-sm leading-5 text-slate-600',
+                  responseMeta.className === 'text-emerald-600'
+                    ? 'border-emerald-500'
+                    : responseMeta.className === 'text-amber-600'
+                      ? 'border-amber-500'
+                      : responseMeta.className === 'text-rose-600'
+                        ? 'border-rose-500'
+                        : 'border-slate-300'
                 )}
-                <span>{isAssigned ? 'Assigned' : 'Unassigned'}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Phone
-                  className={cn('h-3.5 w-3.5', isContacted ? 'text-emerald-600' : 'text-slate-400')}
-                />
-                <span>{isContacted ? 'Contacted' : 'Not contacted'}</span>
-              </div>
-              <div className={cn('flex items-center gap-2', responseMeta.className)}>
-                <responseMeta.icon className="h-3.5 w-3.5" />
-                <span>{responseMeta.label}</span>
+              >
+                <div className="flex items-center gap-2">
+                  {isAssigned ? (
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                  ) : (
+                    <XCircle className="h-3.5 w-3.5 text-slate-400" />
+                  )}
+                  <span>{isAssigned ? 'Assigned' : 'Unassigned'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone
+                    className={cn(
+                      'h-3.5 w-3.5',
+                      isContacted ? 'text-emerald-600' : 'text-slate-400'
+                    )}
+                  />
+                  <span>{isContacted ? 'Contacted' : 'Not contacted'}</span>
+                </div>
+                {shouldShowResponseStatus && (
+                  <div className={cn('flex items-center gap-2', responseMeta.className)}>
+                    <responseMeta.icon className="h-3.5 w-3.5" />
+                    <span>{responseMeta.label}</span>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {(notes || isEditingNote || onSaveNote) && (
-          <div className="w-full">
-            <div className="flex w-full items-center justify-between rounded-md px-[3px] py-1 text-left text-sm font-medium text-slate-700 hover:bg-slate-100">
-              {notes || isEditingNote ? (
-                <button
-                  type="button"
-                  onClick={event => {
-                    event.stopPropagation()
-                    setIsNoteExpanded(prev => !prev)
-                  }}
-                  className="flex items-center gap-1"
-                >
-                  <span>Notes</span>
-                  {isNoteExpanded ? (
-                    <ChevronUp className="h-4 w-4 text-slate-400" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-slate-400" />
-                  )}
-                </button>
-              ) : null}
-              {onSaveNote && !notes && !isEditingNote && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="pl-0"
-                  onClick={event => {
-                    event.stopPropagation()
-                    setNoteDraft(notes || '')
-                    setIsNoteExpanded(true)
-                    setIsEditingNote(true)
-                  }}
-                >
-                  + Add note
-                </Button>
-              )}
-            </div>
-            {isNoteExpanded && (
-              <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                {isEditingNote ? (
-                  <div className="space-y-2">
-                    <textarea
-                      ref={noteTextareaRef}
-                      value={noteDraft}
-                      onChange={event => setNoteDraft(event.target.value)}
-                      rows={3}
-                      className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700"
-                    />
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={event => {
-                          event.stopPropagation()
-                          setNoteDraft(notes || '')
-                          setIsEditingNote(false)
-                          setIsNoteExpanded(false)
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={async event => {
-                          event.stopPropagation()
-                          const next = noteDraft.trim()
-                          try {
-                            await onSaveNote?.(next.length > 0 ? next : null)
-                          } catch (error) {
-                            console.error('Failed to save sub note', error)
-                          } finally {
-                            setIsEditingNote(false)
-                          }
-                        }}
-                      >
-                        Save
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {notes ? <p>{notes}</p> : <p className="text-slate-500">No notes yet.</p>}
-                    {onSaveNote && (
-                      <div className="flex justify-end">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={event => {
-                            event.stopPropagation()
-                            setNoteDraft(notes || '')
-                            setIsNoteExpanded(true)
-                            setIsEditingNote(true)
-                          }}
-                        >
-                          {notes ? 'Edit' : 'Add note'}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+        {onSaveNote && (
+          <div
+            className={cn(
+              'w-full',
+              isCompactLayout ? 'mt-1' : 'mt-0',
+              SHOW_DEBUG_BORDERS && 'border border-red-400'
             )}
+          >
+            <textarea
+              value={noteDraft}
+              onChange={event => setNoteDraft(event.target.value)}
+              onBlur={handleNoteBlur}
+              rows={1}
+              placeholder="Add note..."
+              className={cn(
+                'w-full resize-none rounded-md border border-transparent bg-transparent px-1 text-sm text-slate-600 placeholder:text-slate-400 focus:border-slate-200 focus:bg-white focus:outline-none',
+                isCompactLayout ? 'py-0 leading-tight' : 'py-0.5'
+              )}
+            />
+            {isSavingNote && <div className="px-1 text-xs text-slate-400">Saving...</div>}
           </div>
         )}
 
@@ -464,7 +481,13 @@ export default function SubFinderCard({
         {allShifts &&
           allShifts.length > 0 &&
           (allCanCover.length > 0 || allCannotCover.length > 0) && (
-            <div className="mb-0 -mt-1 flex items-center justify-between gap-4 border-t border-slate-200 pt-1">
+            <div
+              className={cn(
+                'mb-0 flex items-center justify-between gap-4',
+                isCompactLayout ? '-mt-2 pt-0.5' : '-mt-1 pt-1',
+                SHOW_DEBUG_BORDERS && 'border border-lime-500'
+              )}
+            >
               <Button
                 type="button"
                 variant="ghost"
@@ -472,21 +495,22 @@ export default function SubFinderCard({
                   event.stopPropagation()
                   setIsAllShiftsExpanded(!isAllShiftsExpanded)
                 }}
-                className="flex items-center gap-2 p-2 hover:underline hover:bg-transparent hover:text-slate-700 text-sm font-medium text-slate-700 justify-start"
+                className="flex items-center gap-1.5 p-2 hover:bg-transparent hover:text-slate-700 text-sm font-medium text-slate-700 justify-start"
               >
-                <span>View all shifts</span>
-                {isAllShiftsExpanded ? (
-                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                )}
+                <span className="text-slate-400">Shifts</span>
+                <span className="inline-flex items-center">
+                  {isAllShiftsExpanded ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </span>
               </Button>
               {onContact && (
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="hover:bg-primary/10 -mr-2"
-                  style={{ color: '#115E59' }}
+                  className="text-teal-700 hover:bg-transparent hover:text-teal-800 -mr-2"
                   onClick={event => {
                     event.stopPropagation()
                     onContact?.()
@@ -507,8 +531,7 @@ export default function SubFinderCard({
               <Button
                 size="sm"
                 variant="ghost"
-                className="hover:bg-primary/10 -mr-2"
-                style={{ color: '#115E59' }}
+                className="text-teal-700 hover:bg-transparent hover:text-teal-800 -mr-2"
                 onClick={event => {
                   event.stopPropagation()
                   onContact?.()
@@ -523,28 +546,45 @@ export default function SubFinderCard({
           allShifts.length > 0 &&
           (allCanCover.length > 0 || allCannotCover.length > 0) &&
           isAllShiftsExpanded && (
-            <div className="mb-4 mt-0">
+            <div
+              className={cn(
+                'mb-4 mt-1 border-t border-slate-200 pt-2',
+                SHOW_DEBUG_BORDERS && 'border border-orange-400'
+              )}
+            >
+              {hasRecommendedSubset && (
+                <p className="mb-2 text-xs text-slate-500">
+                  Recommended shifts are marked with an amber dot.
+                </p>
+              )}
               <ShiftChips
                 canCover={allCanCover}
                 cannotCover={allCannotCover}
                 shifts={allShifts.map(shift => {
                   const key = `${shift.date}|${shift.time_slot_code}`
-                  const status = allShiftsStatusMap.get(key) || 'unavailable'
+                  const canCoverThisSub =
+                    thisSubAssignedKeys.has(key) || thisSubCanCoverKeys.has(key)
+                  const assignedToThisSub = thisSubAssignedKeys.has(key)
+                  const assignedToOtherSub = shift.status !== 'uncovered' && !assignedToThisSub
                   return {
                     date: shift.date,
                     time_slot_code: shift.time_slot_code,
-                    status:
-                      status === 'assigned'
-                        ? 'assigned'
-                        : status === 'available'
-                          ? 'available'
-                          : 'unavailable',
+                    status: canCoverThisSub ? 'available' : 'unavailable',
+                    assignment_owner: assignedToThisSub
+                      ? ('this_sub' as const)
+                      : assignedToOtherSub
+                        ? ('other_sub' as const)
+                        : undefined,
+                    assigned_sub_name: assignedToOtherSub ? shift.sub_name || null : null,
+                    reason: thisSubCannotCoverReason.get(key),
                     classroom_name: shift.classroom_name || null,
                     class_name: shift.class_name || null,
                   }
                 })}
                 isDeclined={isDeclined}
-                recommendedShifts={canCover}
+                recommendedShifts={hasRecommendedSubset ? canCover : []}
+                softAvailableStyle={softChipColors}
+                showLegend
               />
             </div>
           )}

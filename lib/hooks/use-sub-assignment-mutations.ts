@@ -64,8 +64,18 @@ export function useAssignSubShifts() {
       ])
 
       const subName = data?.sub_name || 'Sub'
-      const shiftCount = variables.selected_shift_ids.length
-      toast.success(`Assigned ${subName} to ${shiftCount} shift${shiftCount !== 1 ? 's' : ''}`)
+      const requestedShiftCount = variables.selected_shift_ids.length
+      const assignedShiftCount =
+        typeof data?.assignments_created === 'number'
+          ? data.assignments_created
+          : requestedShiftCount
+      const skippedShiftCount = Math.max(0, requestedShiftCount - assignedShiftCount)
+
+      toast.success(
+        `Assigned ${subName} to ${assignedShiftCount} shift${assignedShiftCount !== 1 ? 's' : ''}${
+          skippedShiftCount > 0 ? ` (${skippedShiftCount} already assigned and skipped)` : ''
+        }`
+      )
     },
     onError: (error: Error, variables, context) => {
       // Rollback on error

@@ -1,6 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 
 export type ResponseStatus = 'none' | 'pending' | 'confirmed' | 'declined_all'
+export type ContactStatus =
+  | 'not_contacted'
+  | 'pending'
+  | 'awaiting_response'
+  | 'confirmed'
+  | 'declined_all'
 
 export interface SubstituteContact {
   id: string
@@ -8,6 +14,7 @@ export interface SubstituteContact {
   sub_id: string
   response_status: ResponseStatus
   is_contacted: boolean
+  contact_status?: ContactStatus | null
   contacted_at: string | null
   notes: string | null
   created_by: string | null
@@ -117,6 +124,7 @@ export async function getOrCreateSubstituteContact(
       sub_id: subId,
       response_status: 'none',
       is_contacted: false,
+      contact_status: 'not_contacted',
       school_id: schoolId,
     })
     .select()
@@ -289,6 +297,7 @@ export async function updateSubstituteContact(
   updates: {
     response_status?: ResponseStatus
     is_contacted?: boolean
+    contact_status?: ContactStatus
     notes?: string | null
   }
 ): Promise<SubstituteContact> {
@@ -305,14 +314,36 @@ export async function updateSubstituteContact(
     updated_at: string
     contacted_at?: string | null
   } = {
-    ...updates,
+    response_status: updates.response_status,
+    is_contacted: updates.is_contacted,
+    notes: updates.notes,
     updated_at: new Date().toISOString(),
   }
 
+  // Normalize unified contact_status into legacy fields for backward compatibility.
+  if (updates.contact_status) {
+    if (updates.contact_status === 'not_contacted') {
+      updateData.is_contacted = false
+      updateData.response_status = 'none'
+    } else if (
+      updates.contact_status === 'awaiting_response' ||
+      updates.contact_status === 'pending'
+    ) {
+      updateData.contact_status = 'awaiting_response'
+      updateData.is_contacted = true
+      updateData.response_status = 'pending'
+    } else if (updates.contact_status === 'confirmed') {
+      updateData.is_contacted = true
+      updateData.response_status = 'confirmed'
+    } else if (updates.contact_status === 'declined_all') {
+      updateData.is_contacted = true
+      updateData.response_status = 'declined_all'
+    }
+  }
+
   // Handle is_contacted: set contacted_at only if it's null when checking
-  if (updates.is_contacted !== undefined) {
-    updateData.is_contacted = updates.is_contacted
-    if (updates.is_contacted && !current?.contacted_at) {
+  if (updateData.is_contacted !== undefined) {
+    if (updateData.is_contacted && !current?.contacted_at) {
       updateData.contacted_at = new Date().toISOString()
     }
     // If unchecking, don't clear contacted_at (preserve history)

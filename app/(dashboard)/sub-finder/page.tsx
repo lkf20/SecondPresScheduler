@@ -6,8 +6,16 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { ChevronDown, ChevronLeft, RefreshCw, Search, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronUp, RefreshCw, Search, X } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import AbsenceList from '@/components/sub-finder/AbsenceList'
 import RecommendedSubsList from '@/components/sub-finder/RecommendedSubsList'
 import type { RecommendedSub } from '@/components/sub-finder/ContactSubPanel'
@@ -34,6 +42,10 @@ import { useSubFinderShifts } from '@/components/sub-finder/hooks/useSubFinderSh
 import type { SubFinderShift } from '@/lib/sub-finder/types'
 
 export default function SubFinderPage() {
+  const ENABLE_SHIFT_FOCUS_MODE = true
+  const ENABLE_COLLAPSE_RECOMMENDED_ON_SHIFT = true
+  const SHOW_MIDDLE_COLUMN_DEBUG_BORDERS = false
+  const SHOW_RIGHT_PANEL_DEBUG_BORDERS = false
   const router = useRouter()
   const searchParams = useSearchParams()
   const requestedAbsenceId = searchParams.get('absence_id')
@@ -79,8 +91,15 @@ export default function SubFinderPage() {
   const [selectedSub, setSelectedSub] = useState<SubCandidate | null>(null)
   const [isContactPanelOpen, setIsContactPanelOpen] = useState(false)
   const [selectedShift, setSelectedShift] = useState<SubFinderShift | null>(null)
+  const [isMiddleShiftListExpanded, setIsMiddleShiftListExpanded] = useState(false)
+  const [showRecommendedWhenShiftSelected, setShowRecommendedWhenShiftSelected] = useState(false)
+  const [removeDialogShift, setRemoveDialogShift] = useState<SubFinderShift | null>(null)
+  const [changeDialogShift, setChangeDialogShift] = useState<SubFinderShift | null>(null)
+  const [removingScope, setRemovingScope] = useState<'single' | 'all_for_absence' | null>(null)
+  const [removeDialogIsConfirmed, setRemoveDialogIsConfirmed] = useState(false)
   const [isAllSubsOpen, setIsAllSubsOpen] = useState(false)
   const [selectedSubIds, setSelectedSubIds] = useState<string[]>([])
+  const [rightPanelActiveFilter, setRightPanelActiveFilter] = useState<string | null>('available')
   const [isTeacherSearchOpen, setIsTeacherSearchOpen] = useState(false)
   const { setActivePanel, previousPanel, restorePreviousPanel, registerPanelCloseHandler } =
     usePanelManager()
@@ -91,6 +110,13 @@ export default function SubFinderPage() {
   type ContactDataCacheEntry = {
     id: string
     is_contacted: boolean
+    contact_status?:
+      | 'not_contacted'
+      | 'pending'
+      | 'awaiting_response'
+      | 'confirmed'
+      | 'declined_all'
+      | null
     contacted_at: string | null
     response_status: 'none' | 'pending' | 'confirmed' | 'declined_all'
     notes: string | null
@@ -123,10 +149,21 @@ export default function SubFinderPage() {
   const [manualTeacherSearch, setManualTeacherSearch] = useState('')
   const [isManualTeacherSearchOpen, setIsManualTeacherSearchOpen] = useState(false)
   const subSearchRef = useRef<HTMLDivElement | null>(null)
+  const rightPanelRef = useRef<HTMLDivElement | null>(null)
   const manualEndDateRef = useRef<HTMLButtonElement | null>(null)
   const [endDateCorrected, setEndDateCorrected] = useState(false)
   const correctionTimeoutRef = useRef<number | null>(null)
   const isFlexibleStaffChangeUserInitiatedRef = useRef(false)
+
+  useEffect(() => {
+    if (!selectedShift) {
+      setShowRecommendedWhenShiftSelected(false)
+    }
+  }, [selectedShift])
+
+  useEffect(() => {
+    setIsMiddleShiftListExpanded(false)
+  }, [selectedAbsence?.id])
   const isRestoringStateRef = useRef(false) // Track if we're restoring state to avoid saving during restoration
   const hasRestoredStateRef = useRef(false) // Track if we've completed initial state restoration
   const displayRecommendedCombinations = useMemo(() => {
@@ -214,6 +251,75 @@ export default function SubFinderPage() {
     if (!visibleShiftSummary) return visibleShiftDetails
     return visibleShiftSummary.shift_details_sorted ?? visibleShiftDetails
   }, [visibleShiftDetails, visibleShiftSummary])
+  const contactedAvailableSubCountByShift = useMemo(() => {
+    const countMap = new Map<string, number>()
+    allSubs.forEach(sub => {
+      const isContactedForAbsence =
+        sub.is_contacted === true ||
+        sub.response_status === 'pending' ||
+        sub.response_status === 'confirmed' ||
+        sub.response_status === 'declined_all'
+      if (!isContactedForAbsence) return
+      ;(sub.can_cover || []).forEach(shift => {
+        const key = `${shift.date}|${shift.time_slot_code}`
+        countMap.set(key, (countMap.get(key) || 0) + 1)
+      })
+    })
+    return countMap
+  }, [allSubs])
+  const responseCountsByShift = useMemo(() => {
+    const countsByShift = new Map<
+      string,
+      {
+        available: number
+        pending: number
+        declined: number
+        confirmed: number
+        noResponse: number
+      }
+    >()
+    allSubs.forEach(sub => {
+      ;(sub.can_cover || []).forEach(shift => {
+        const key = `${shift.date}|${shift.time_slot_code}`
+        const entry = countsByShift.get(key) || {
+          available: 0,
+          pending: 0,
+          declined: 0,
+          confirmed: 0,
+          noResponse: 0,
+        }
+        entry.available += 1
+        if (sub.response_status === 'pending') {
+          entry.pending += 1
+        } else if (sub.response_status === 'declined_all') {
+          entry.declined += 1
+        } else if (sub.response_status === 'confirmed') {
+          entry.confirmed += 1
+        } else {
+          entry.noResponse += 1
+        }
+        countsByShift.set(key, entry)
+      })
+    })
+    return countsByShift
+  }, [allSubs])
+  const responseSummaryByShift = useMemo(() => {
+    const summaryMap = new Map<string, string>()
+    responseCountsByShift.forEach((counts, key) => {
+      const parts: string[] = []
+      if (counts.pending > 0) {
+        parts.push(`${counts.pending} Sub${counts.pending === 1 ? '' : 's'} pending`)
+      }
+      if (counts.declined > 0) {
+        parts.push(`${counts.declined} Sub${counts.declined === 1 ? '' : 's'} declined`)
+      }
+      if (counts.confirmed > 0) {
+        parts.push(`${counts.confirmed} Sub${counts.confirmed === 1 ? '' : 's'} confirmed`)
+      }
+      summaryMap.set(key, parts.length > 0 ? parts.join(', ') : 'No response')
+    })
+    return summaryMap
+  }, [responseCountsByShift])
   const shiftFilterCounts = useMemo(() => {
     const counts = {
       all: sortedVisibleShifts.length,
@@ -229,26 +335,50 @@ export default function SubFinderPage() {
       } else {
         counts.needs_coverage += 1
       }
-      if (!shift.sub_name) {
+      const shiftKey = `${shift.date}|${shift.time_slot_code}`
+      const contactedCount = contactedAvailableSubCountByShift.get(shiftKey) || 0
+      const responseCounts = responseCountsByShift.get(shiftKey)
+      if (contactedCount === 0) {
         counts.not_contacted += 1
       }
-      if (shift.assignment_status === 'declined') {
+      if ((responseCounts?.declined || 0) > 0) {
         counts.declined += 1
       }
-      if (shift.assignment_status === 'pending') {
+      if ((responseCounts?.pending || 0) > 0) {
         counts.pending += 1
       }
     })
     return counts
-  }, [sortedVisibleShifts])
+  }, [contactedAvailableSubCountByShift, responseCountsByShift, sortedVisibleShifts])
 
   const rightPanelSubs = useMemo(() => {
-    if (selectedSubIds.length > 0) {
-      return allSubs.filter(sub => selectedSubIds.includes(sub.id))
+    const baseSubs =
+      selectedSubIds.length > 0 ? allSubs.filter(sub => selectedSubIds.includes(sub.id)) : allSubs
+
+    if (!ENABLE_SHIFT_FOCUS_MODE || !selectedShift) {
+      return baseSubs
     }
-    // Always show all subs in the right panel; availability is handled downstream.
-    return allSubs
-  }, [allSubs, selectedSubIds])
+
+    const selectedShiftKey = `${selectedShift.date}|${selectedShift.time_slot_code}`
+    return baseSubs.filter(sub => {
+      const hasMatchingCanCover = (sub.can_cover || []).some(
+        shift => `${shift.date}|${shift.time_slot_code}` === selectedShiftKey
+      )
+      const hasMatchingAssignedShift = (sub.assigned_shifts || []).some(
+        shift => `${shift.date}|${shift.time_slot_code}` === selectedShiftKey
+      )
+      return hasMatchingCanCover || hasMatchingAssignedShift
+    })
+  }, [ENABLE_SHIFT_FOCUS_MODE, allSubs, selectedShift, selectedSubIds])
+  const selectedShiftMatchCount = useMemo(() => {
+    if (!selectedShift) return 0
+    const selectedShiftKey = `${selectedShift.date}|${selectedShift.time_slot_code}`
+    return allSubs.filter(sub =>
+      (sub.can_cover || []).some(
+        shift => `${shift.date}|${shift.time_slot_code}` === selectedShiftKey
+      )
+    ).length
+  }, [allSubs, selectedShift])
 
   const selectedSubChips = useMemo(() => {
     if (selectedSubIds.length === 0) return []
@@ -270,32 +400,43 @@ export default function SubFinderPage() {
     ],
     [shiftFilterCounts]
   )
+  const primaryShiftFilters = useMemo(
+    () =>
+      shiftFilterOptions.filter(
+        option =>
+          option.key === 'all' || option.key === 'needs_coverage' || option.key === 'not_contacted'
+      ),
+    [shiftFilterOptions]
+  )
+  const moreShiftFilters = useMemo(
+    () =>
+      shiftFilterOptions.filter(option => ['declined', 'pending', 'covered'].includes(option.key)),
+    [shiftFilterOptions]
+  )
+  const hasActiveMoreShiftFilter = useMemo(
+    () => moreShiftFilters.some(option => shiftFilters.includes(option.key)),
+    [moreShiftFilters, shiftFilters]
+  )
   const toggleShiftFilter = useCallback((key: string) => {
-    setShiftFilters(prev => {
-      if (key === 'all') return ['all']
-      const next = new Set(prev.filter(item => item !== 'all'))
-      if (next.has(key)) {
-        next.delete(key)
-      } else {
-        next.add(key)
-      }
-      return next.size === 0 ? ['all'] : Array.from(next)
-    })
+    setShiftFilters([key])
   }, [])
   const filteredShiftDetails = useMemo(() => {
-    if (shiftFilters.includes('all')) return sortedVisibleShifts
-    const active = new Set(shiftFilters)
+    const activeFilter = shiftFilters[0] || 'all'
+    if (activeFilter === 'all') return sortedVisibleShifts
     return sortedVisibleShifts.filter(shift => {
+      const shiftKey = `${shift.date}|${shift.time_slot_code}`
+      const contactedCount = contactedAvailableSubCountByShift.get(shiftKey) || 0
+      const responseCounts = responseCountsByShift.get(shiftKey)
       const matches: Array<[string, boolean]> = [
         ['needs_coverage', shift.status !== 'fully_covered'],
         ['covered', shift.status === 'fully_covered'],
-        ['not_contacted', !shift.sub_name],
-        ['declined', shift.assignment_status === 'declined'],
-        ['pending', shift.assignment_status === 'pending'],
+        ['not_contacted', contactedCount === 0],
+        ['declined', (responseCounts?.declined || 0) > 0],
+        ['pending', (responseCounts?.pending || 0) > 0],
       ]
-      return matches.some(([key, isMatch]) => isMatch && active.has(key))
+      return matches.some(([key, isMatch]) => key === activeFilter && isMatch)
     })
-  }, [shiftFilters, sortedVisibleShifts])
+  }, [contactedAvailableSubCountByShift, responseCountsByShift, shiftFilters, sortedVisibleShifts])
   const coverageSummaryLine = useMemo(() => {
     if (!visibleShiftSummary) return null
     const remaining =
@@ -321,7 +462,37 @@ export default function SubFinderPage() {
     }
   }, [selectedAbsence, visibleShiftDetails, visibleShiftSummary])
   const showPastShiftsBanner = Boolean(selectedAbsence && pastShiftCount > 0)
+  const subCoverageCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    shiftDetails.forEach(shift => {
+      if (!shift.sub_id) return
+      counts.set(shift.sub_id, (counts.get(shift.sub_id) || 0) + 1)
+    })
+    return counts
+  }, [shiftDetails])
+  const removeDialogSubName = removeDialogShift?.sub_name || 'this sub'
+  const removeDialogTeacherName = selectedAbsence?.teacher_name || 'this teacher'
+  const removeDialogHasMultiple =
+    Boolean(removeDialogShift?.sub_id) &&
+    (subCoverageCounts.get(removeDialogShift?.sub_id || '') || 0) > 1
   const isRightPanelOpen = Boolean(selectedSub || selectedShift || isAllSubsOpen)
+  const middleColumnContentStyle = isRightPanelOpen
+    ? {
+        maxWidth: '640px',
+        marginLeft: 'auto',
+        marginRight: 'auto',
+        paddingLeft: '24px',
+        paddingRight: '24px',
+        boxSizing: 'border-box' as const,
+      }
+    : {
+        maxWidth: '840px',
+        marginLeft: 'auto',
+        marginRight: 'auto',
+        paddingLeft: '16px',
+        paddingRight: '16px',
+        boxSizing: 'border-box' as const,
+      }
   const sortedSubs = useMemo(() => {
     return [...allSubs].sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)))
   }, [allSubs, getDisplayName])
@@ -445,7 +616,6 @@ export default function SubFinderPage() {
     setSelectedSub(sub)
     setIsContactPanelOpen(true)
     setSelectedShift(null)
-    setIsAllSubsOpen(true)
     setMobileView('assign')
 
     // Prefetch contact data in background if we have an absence
@@ -520,6 +690,157 @@ export default function SubFinderPage() {
     setMobileView('assign')
   }, [])
 
+  const handleOpenRemoveDialog = useCallback((shift: SubFinderShift) => {
+    setRemoveDialogShift(shift)
+  }, [])
+
+  const handleOpenChangeDialog = useCallback((shift: SubFinderShift) => {
+    setChangeDialogShift(shift)
+  }, [])
+
+  const handleCloseChangeDialog = useCallback(() => {
+    setChangeDialogShift(null)
+  }, [])
+
+  const handleConfirmChangeSub = useCallback(() => {
+    if (!changeDialogShift) return
+    handleSelectShift(changeDialogShift)
+    setChangeDialogShift(null)
+  }, [changeDialogShift, handleSelectShift])
+
+  const handleCloseRemoveDialog = useCallback(() => {
+    if (removingScope) return
+    setRemoveDialogShift(null)
+    setRemoveDialogIsConfirmed(false)
+  }, [removingScope])
+
+  useEffect(() => {
+    let isCancelled = false
+    const resolveRemoveDialogStatus = async () => {
+      if (
+        !removeDialogShift?.sub_id ||
+        !selectedAbsence ||
+        selectedAbsence.id.startsWith('manual-')
+      ) {
+        setRemoveDialogIsConfirmed(false)
+        return
+      }
+
+      const cacheKey = getCacheKey(removeDialogShift.sub_id, selectedAbsence.id)
+      const cached = contactDataCache.get(cacheKey)
+      if (cached) {
+        setRemoveDialogIsConfirmed(cached.response_status === 'confirmed')
+        return
+      }
+
+      try {
+        const coverageResponse = await fetch(
+          `/api/sub-finder/coverage-request/${selectedAbsence.id}`
+        )
+        if (!coverageResponse.ok) return
+        const coverageData = await coverageResponse.json()
+        const contactResponse = await fetch(
+          `/api/sub-finder/substitute-contacts?coverage_request_id=${coverageData.coverage_request_id}&sub_id=${removeDialogShift.sub_id}`
+        )
+        if (!contactResponse.ok) return
+        const contactData = await contactResponse.json()
+        if (isCancelled) return
+        const nextEntry = {
+          ...contactData,
+          coverage_request_id: coverageData.coverage_request_id,
+        } as ContactDataCacheEntry
+        setContactDataCache(prev => {
+          const next = new Map(prev)
+          next.set(cacheKey, nextEntry)
+          return next
+        })
+        setRemoveDialogIsConfirmed(nextEntry.response_status === 'confirmed')
+      } catch {
+        if (!isCancelled) setRemoveDialogIsConfirmed(false)
+      }
+    }
+
+    resolveRemoveDialogStatus()
+    return () => {
+      isCancelled = true
+    }
+  }, [contactDataCache, removeDialogShift?.sub_id, selectedAbsence])
+
+  const handleRemoveSubAssignment = useCallback(
+    async (scope: 'single' | 'all_for_absence') => {
+      if (!selectedAbsence || !removeDialogShift?.sub_id) return
+      if (scope === 'single' && !removeDialogShift.assignment_id) {
+        toast.error('Unable to remove this assignment. Try refreshing the page.')
+        return
+      }
+
+      try {
+        setRemovingScope(scope)
+        const response = await fetch('/api/sub-finder/unassign-shifts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            absence_id: selectedAbsence.id,
+            sub_id: removeDialogShift.sub_id,
+            scope,
+            assignment_id: scope === 'single' ? removeDialogShift.assignment_id : undefined,
+          }),
+        })
+
+        if (!response.ok) {
+          const errorBody = await response
+            .json()
+            .catch(() => ({ error: 'Failed to remove sub assignment.' }))
+          throw new Error(errorBody.error || 'Failed to remove sub assignment.')
+        }
+        const result = await response.json().catch(() => ({ removed_count: 0 }))
+
+        const removedSubName = removeDialogShift.sub_name || 'the sub'
+        const removedCount = result.removed_count || 0
+        const remainingOnShift = result.remaining_active_on_target_shift
+        if (scope === 'single' && typeof remainingOnShift === 'number' && remainingOnShift > 0) {
+          toast.success(
+            `Removed ${removedSubName} from this assignment (${removedCount}). ${remainingOnShift} active assignment${remainingOnShift === 1 ? '' : 's'} still remain on this shift.`
+          )
+        } else {
+          toast.success(
+            scope === 'single'
+              ? `Removed ${removedSubName} from this shift (${removedCount} assignment${removedCount === 1 ? '' : 's'}).`
+              : `Removed ${removedSubName} from all shifts for this request (${removedCount} assignment${removedCount === 1 ? '' : 's'}).`
+          )
+        }
+
+        setContactDataCache(prev => {
+          const next = new Map(prev)
+          for (const [key] of next) {
+            if (key.endsWith(`-${selectedAbsence.id}`)) {
+              next.delete(key)
+            }
+          }
+          return next
+        })
+
+        const refreshedAbsences = await fetchAbsences()
+        const refreshedSelectedAbsence = refreshedAbsences.find(
+          absence => absence.id === selectedAbsence.id
+        )
+        if (refreshedSelectedAbsence) {
+          setSelectedAbsence(refreshedSelectedAbsence)
+          await runFinderForAbsence(refreshedSelectedAbsence)
+        } else {
+          await runFinderForAbsence(selectedAbsence)
+        }
+        setRemoveDialogShift(null)
+      } catch (error) {
+        console.error('Failed to remove sub assignment(s):', error)
+        toast.error(error instanceof Error ? error.message : 'Failed to remove sub assignment.')
+      } finally {
+        setRemovingScope(null)
+      }
+    },
+    [fetchAbsences, removeDialogShift, runFinderForAbsence, selectedAbsence]
+  )
+
   const openAllSubsPanel = useCallback(() => {
     setIsAllSubsOpen(true)
     setSelectedShift(null)
@@ -555,6 +876,25 @@ export default function SubFinderPage() {
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [closeRightPanel, closeContactPanel, isContactPanelOpen, isRightPanelOpen])
+
+  useEffect(() => {
+    if (!isRightPanelOpen || isContactPanelOpen || removeDialogShift || changeDialogShift) return
+    if (typeof window !== 'undefined' && window.innerWidth < 768) return
+
+    const handleClickOutsideRightPanel = (event: MouseEvent) => {
+      const target = event.target as Node | null
+      if (!target) return
+      const targetElement = target as HTMLElement
+      if (targetElement.closest('[data-radix-popper-content-wrapper]')) return
+      if (rightPanelRef.current?.contains(target)) return
+      closeRightPanel()
+    }
+
+    document.addEventListener('mousedown', handleClickOutsideRightPanel)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutsideRightPanel)
+    }
+  }, [closeRightPanel, isRightPanelOpen, isContactPanelOpen, removeDialogShift, changeDialogShift])
 
   // Handle panel restoration when Add Time Off closes
   useEffect(() => {
@@ -947,18 +1287,19 @@ export default function SubFinderPage() {
   ])
 
   const renderLeftRail = (railCollapsed: boolean, allowCollapse: boolean) => {
+    const railWidth = railCollapsed ? '4.25rem' : '26rem'
     return (
       <div
         className={cn(
-          'border-r border-slate-200 bg-slate-100 shadow-[2px_0_6px_rgba(0,0,0,0.03)] flex flex-col overflow-y-auto transition-all h-full',
-          railCollapsed ? 'w-14' : 'w-80',
-          isRightPanelOpen && !railCollapsed && 'opacity-85'
+          'relative flex-none border-r border-slate-200 bg-slate-100 shadow-[2px_0_6px_rgba(0,0,0,0.03)] flex flex-col overflow-y-auto transition-all h-full',
+          railCollapsed ? 'w-[4.25rem]' : 'w-[26rem]'
         )}
+        style={{ width: railWidth, minWidth: railWidth, maxWidth: railWidth }}
       >
         <div
           className={cn(
-            'sticky top-0 z-10 border-b border-slate-200 bg-slate-100 flex flex-col',
-            railCollapsed ? 'px-2 pt-6 pb-3 items-center' : 'px-3 pt-10 pb-4'
+            'sticky top-6 z-10 border-b border-slate-200 bg-slate-100 flex flex-col',
+            railCollapsed ? 'px-2 pt-6 pb-3 items-center' : 'px-6 pt-10 pb-4'
           )}
         >
           <div
@@ -1146,7 +1487,7 @@ export default function SubFinderPage() {
 
               {/* Manual Coverage Form (for manual mode) */}
               {mode === 'manual' && (
-                <div className="space-y-2">
+                <div className="mt-3 space-y-2">
                   <div>
                     <Label className="text-sm">Teacher</Label>
                     <div className="mt-1">
@@ -1275,7 +1616,7 @@ export default function SubFinderPage() {
 
         {/* Absences List */}
         {!railCollapsed && mode === 'existing' && (
-          <div className="flex-1">
+          <div className="flex-1 px-6 pb-4">
             <AbsenceList
               absences={filteredAbsences}
               selectedAbsence={selectedAbsence}
@@ -1328,25 +1669,36 @@ export default function SubFinderPage() {
             <div className="px-4">
               {selectedAbsence && (
                 <div className="py-4 flex flex-col gap-6 w-full">
-                  {loading
-                    ? renderRecommendedPlaceholder()
-                    : displayRecommendedCombinations.length > 0 && (
-                        <div className="mt-2">
-                          <RecommendedCombination
-                            combinations={displayRecommendedCombinations}
-                            onContactSub={handleCombinationContact}
-                            totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
-                            useRemainingLabel={
-                              (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
-                              (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
-                            }
-                            allSubs={allSubs}
-                            allShifts={visibleShiftDetails}
-                            includePastShifts={includePastShifts}
-                            onShowAllSubs={openAllSubsPanel}
-                          />
-                        </div>
-                      )}
+                  {ENABLE_COLLAPSE_RECOMMENDED_ON_SHIFT &&
+                  selectedShift &&
+                  !showRecommendedWhenShiftSelected ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowRecommendedWhenShiftSelected(true)}
+                      className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-amber-100 bg-amber-50/40 px-4 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-50"
+                    >
+                      <span>Show recommended subs</span>
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
+                  ) : loading ? (
+                    renderRecommendedPlaceholder()
+                  ) : displayRecommendedCombinations.length > 0 ? (
+                    <div className="mt-2">
+                      <RecommendedCombination
+                        combinations={displayRecommendedCombinations}
+                        onContactSub={handleCombinationContact}
+                        totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
+                        useRemainingLabel={
+                          (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
+                          (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
+                        }
+                        allSubs={allSubs}
+                        allShifts={visibleShiftDetails}
+                        includePastShifts={includePastShifts}
+                        onShowAllSubs={openAllSubsPanel}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               )}
               {selectedAbsence && (
@@ -1357,8 +1709,8 @@ export default function SubFinderPage() {
                         const isActive = shiftFilters.includes(option.key)
                         return (
                           <button
-                            key={option.key}
                             type="button"
+                            key={option.key}
                             onClick={() => toggleShiftFilter(option.key)}
                             className={cn(
                               'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
@@ -1380,7 +1732,18 @@ export default function SubFinderPage() {
                         key={shift.id}
                         shift={shift}
                         teacherName={selectedAbsence.teacher_name}
+                        contactedAvailableSubCount={
+                          contactedAvailableSubCountByShift.get(
+                            `${shift.date}|${shift.time_slot_code}`
+                          ) || 0
+                        }
+                        responseSummary={
+                          responseSummaryByShift.get(`${shift.date}|${shift.time_slot_code}`) ||
+                          'No response'
+                        }
                         onSelectShift={handleSelectShift}
+                        onChangeSub={handleOpenChangeDialog}
+                        onRemoveSub={handleOpenRemoveDialog}
                       />
                     ))
                   ) : (
@@ -1429,7 +1792,7 @@ export default function SubFinderPage() {
               <div className="rounded-lg border border-slate-200 bg-slate-100">
                 <div className="flex items-center justify-between border-b px-4 py-3">
                   <div className="space-y-1">
-                    <div className="text-base font-semibold text-slate-900">
+                    <div className="text-lg font-semibold text-slate-900">
                       Subs for {selectedAbsence.teacher_name}
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
@@ -1479,15 +1842,17 @@ export default function SubFinderPage() {
                     </Button>
 
                     <div className="flex-1 space-y-2">
-                      <Label className="text-sm font-medium">Search subs</Label>
-                      <div ref={subSearchRef} className="rounded-md bg-white">
-                        <div className="p-2">
+                      <div
+                        ref={subSearchRef}
+                        className="mt-4 rounded-md border border-slate-200 bg-white"
+                      >
+                        <div className="p-1.5">
                           <Input
                             placeholder="Search substitutes..."
                             value={subSearch}
                             onChange={event => setSubSearch(event.target.value)}
                             onFocus={() => setIsSubSearchOpen(true)}
-                            className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
+                            className="h-7 border-0 bg-slate-50 text-sm focus-visible:ring-0"
                           />
                         </div>
                         {isSubSearchOpen && (
@@ -1558,6 +1923,9 @@ export default function SubFinderPage() {
                     highlightedSubId={highlightedSubId}
                     includePastShifts={includePastShifts}
                     selectedShift={selectedShift}
+                    activeFilter={rightPanelActiveFilter}
+                    onActiveFilterChange={setRightPanelActiveFilter}
+                    hideFilterControls
                   />
                 </div>
               </div>
@@ -1568,21 +1936,54 @@ export default function SubFinderPage() {
         )}
       </div>
 
-      <div className="hidden md:flex h-full">{renderLeftRail(isLeftRailCollapsed, true)}</div>
+      <div
+        className="hidden md:flex h-full"
+        style={{
+          width: isLeftRailCollapsed ? '4.25rem' : '26rem',
+          minWidth: isLeftRailCollapsed ? '4.25rem' : '26rem',
+          maxWidth: isLeftRailCollapsed ? '4.25rem' : '26rem',
+          filter: isRightPanelOpen && !isContactPanelOpen ? 'brightness(0.9)' : undefined,
+        }}
+      >
+        {renderLeftRail(isLeftRailCollapsed, true)}
+      </div>
 
-      <div className="hidden md:flex flex-1 flex-col md:flex-row">
+      <div className="hidden md:flex flex-1 flex-col md:flex-row items-stretch">
         {/* Middle Column */}
         <div
           className={cn(
-            'flex-1 border-x bg-white transition-opacity h-full overflow-y-auto',
-            isRightPanelOpen && 'opacity-95'
+            'relative flex-1 min-w-0 border-x bg-white transition-opacity h-full overflow-y-auto',
+            SHOW_MIDDLE_COLUMN_DEBUG_BORDERS &&
+              'outline outline-4 outline-red-500/90 outline-offset-[-4px] bg-red-50/20'
           )}
+          style={{
+            filter: isRightPanelOpen && !isContactPanelOpen ? 'brightness(0.9)' : undefined,
+          }}
         >
-          <div className="w-full max-w-[1000px] px-6 md:px-8">
+          {SHOW_MIDDLE_COLUMN_DEBUG_BORDERS && (
+            <div className="pointer-events-none absolute left-2 top-2 z-50 rounded bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">
+              OUTER
+            </div>
+          )}
+          <div
+            className={cn(
+              'relative w-full max-w-[1000px] px-8 md:px-10 lg:px-12',
+              SHOW_MIDDLE_COLUMN_DEBUG_BORDERS &&
+                'outline outline-4 outline-blue-500/90 outline-offset-[-4px] bg-blue-50/20'
+            )}
+          >
+            {SHOW_MIDDLE_COLUMN_DEBUG_BORDERS && (
+              <div className="pointer-events-none absolute left-2 top-2 z-50 rounded bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                INNER
+              </div>
+            )}
             {/* Fixed Header Bar */}
             {selectedAbsence && (
               <>
-                <div className="border-b border-slate-200 bg-white">
+                <div
+                  className="mt-6 border-b border-slate-200 bg-white"
+                  style={middleColumnContentStyle}
+                >
                   <div className="pt-10 pb-0">
                     {/* Header Row */}
                     <div className="mb-5">
@@ -1671,94 +2072,194 @@ export default function SubFinderPage() {
             )}
 
             {selectedAbsence && (
-              <div className="py-6 flex flex-col gap-6 w-full">
-                {loading
-                  ? renderRecommendedPlaceholder()
-                  : displayRecommendedCombinations.length > 0 && (
-                      <div className="mt-2">
-                        <RecommendedCombination
-                          combinations={displayRecommendedCombinations}
-                          onContactSub={handleCombinationContact}
-                          totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
-                          useRemainingLabel={
-                            (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
-                            (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
-                          }
-                          allSubs={allSubs}
-                          allShifts={visibleShiftDetails}
-                          includePastShifts={includePastShifts}
-                          onShowAllSubs={openAllSubsPanel}
-                        />
-                      </div>
-                    )}
+              <div
+                className={cn(
+                  'relative w-full py-6 flex flex-col gap-6',
+                  SHOW_MIDDLE_COLUMN_DEBUG_BORDERS && 'border-2 border-emerald-500 bg-emerald-50/10'
+                )}
+                style={middleColumnContentStyle}
+              >
+                {SHOW_MIDDLE_COLUMN_DEBUG_BORDERS && (
+                  <div className="pointer-events-none absolute right-2 top-2 z-50 rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                    CONTENT
+                  </div>
+                )}
+                {ENABLE_COLLAPSE_RECOMMENDED_ON_SHIFT &&
+                selectedShift &&
+                !showRecommendedWhenShiftSelected ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowRecommendedWhenShiftSelected(true)}
+                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-amber-100 bg-amber-50/40 px-4 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-50"
+                  >
+                    <span>Show recommended subs</span>
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                ) : loading ? (
+                  renderRecommendedPlaceholder()
+                ) : displayRecommendedCombinations.length > 0 ? (
+                  <div className="mt-2">
+                    <RecommendedCombination
+                      combinations={displayRecommendedCombinations}
+                      onContactSub={handleCombinationContact}
+                      totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
+                      useRemainingLabel={
+                        (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
+                        (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
+                      }
+                      allSubs={allSubs}
+                      allShifts={visibleShiftDetails}
+                      includePastShifts={includePastShifts}
+                      onShowAllSubs={openAllSubsPanel}
+                    />
+                  </div>
+                ) : null}
 
-                <div className="flex flex-col gap-2">
-                  <div className="hidden md:flex flex-wrap gap-2 md:flex-row md:items-center">
-                    {shiftFilterOptions.map(option => {
-                      const isActive = shiftFilters.includes(option.key)
-                      return (
-                        <button
-                          key={option.key}
-                          type="button"
-                          onClick={() => toggleShiftFilter(option.key)}
-                          className={cn(
-                            'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                            isActive
-                              ? 'border-slate-900 bg-slate-900 text-white'
-                              : 'border-slate-400 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                          )}
-                        >
-                          {option.label} ({option.count})
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <div className="md:hidden">
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" size="sm" className="w-full justify-between">
-                          Filters ({shiftFilters.length})
-                          <ChevronDown className="h-4 w-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-72" align="start">
-                        <div className="space-y-2">
-                          {shiftFilterOptions.map(option => {
-                            const isActive = shiftFilters.includes(option.key)
-                            return (
-                              <button
-                                key={option.key}
-                                type="button"
-                                onClick={() => toggleShiftFilter(option.key)}
-                                className={cn(
-                                  'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',
-                                  isActive ? 'bg-slate-900 text-white' : 'hover:bg-slate-100'
-                                )}
-                              >
-                                <span>{option.label}</span>
-                                <span className="text-xs text-slate-500">{option.count}</span>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+                <div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsMiddleShiftListExpanded(prev => !prev)}
+                    className="inline-flex items-center gap-2 rounded-full border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    {isMiddleShiftListExpanded ? 'Hide shifts' : 'Show all shifts'}
+                    {isMiddleShiftListExpanded ? (
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
                 </div>
 
-                {filteredShiftDetails.length > 0 ? (
-                  filteredShiftDetails.map(shift => (
-                    <ShiftStatusCard
-                      key={shift.id}
-                      shift={shift}
-                      teacherName={selectedAbsence.teacher_name}
-                      onSelectShift={handleSelectShift}
-                    />
-                  ))
-                ) : (
-                  <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">
-                    No shifts to display.
-                  </div>
+                {isMiddleShiftListExpanded && (
+                  <>
+                    <div className="flex flex-col gap-2">
+                      <div className="hidden md:flex flex-wrap gap-2 md:flex-row md:items-center">
+                        {primaryShiftFilters.map(option => {
+                          const isActive = shiftFilters.includes(option.key)
+                          return (
+                            <button
+                              key={option.key}
+                              type="button"
+                              onClick={() => toggleShiftFilter(option.key)}
+                              className={cn(
+                                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                                isActive
+                                  ? 'border-slate-900 bg-slate-900 text-white'
+                                  : 'border-slate-400 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                              )}
+                            >
+                              {option.label} ({option.count})
+                            </button>
+                          )
+                        })}
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              className={cn(
+                                'h-auto rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                                hasActiveMoreShiftFilter
+                                  ? 'border-slate-900 bg-slate-900 text-white'
+                                  : 'border-slate-400 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                              )}
+                            >
+                              More filters
+                              <ChevronDown className="ml-1 h-3.5 w-3.5" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-56 p-2" align="start">
+                            <div className="space-y-1">
+                              {moreShiftFilters.map(option => {
+                                const isActive = shiftFilters.includes(option.key)
+                                return (
+                                  <button
+                                    key={option.key}
+                                    type="button"
+                                    onClick={() => toggleShiftFilter(option.key)}
+                                    className={cn(
+                                      'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',
+                                      isActive
+                                        ? 'bg-slate-900 text-white'
+                                        : 'text-slate-700 hover:bg-slate-100'
+                                    )}
+                                  >
+                                    <span>{option.label}</span>
+                                    <span
+                                      className={cn(
+                                        'text-xs',
+                                        isActive ? 'text-white/90' : 'text-slate-500'
+                                      )}
+                                    >
+                                      {option.count}
+                                    </span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div className="md:hidden">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" size="sm" className="w-full justify-between">
+                              Filters ({shiftFilters.length})
+                              <ChevronDown className="h-4 w-4" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-72" align="start">
+                            <div className="space-y-2">
+                              {shiftFilterOptions.map(option => {
+                                const isActive = shiftFilters.includes(option.key)
+                                return (
+                                  <button
+                                    key={option.key}
+                                    type="button"
+                                    onClick={() => toggleShiftFilter(option.key)}
+                                    className={cn(
+                                      'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',
+                                      isActive ? 'bg-slate-900 text-white' : 'hover:bg-slate-100'
+                                    )}
+                                  >
+                                    <span>{option.label}</span>
+                                    <span className="text-xs text-slate-500">{option.count}</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </div>
+
+                    {filteredShiftDetails.length > 0 ? (
+                      filteredShiftDetails.map(shift => (
+                        <ShiftStatusCard
+                          key={shift.id}
+                          shift={shift}
+                          teacherName={selectedAbsence.teacher_name}
+                          contactedAvailableSubCount={
+                            contactedAvailableSubCountByShift.get(
+                              `${shift.date}|${shift.time_slot_code}`
+                            ) || 0
+                          }
+                          responseSummary={
+                            responseSummaryByShift.get(`${shift.date}|${shift.time_slot_code}`) ||
+                            'No response'
+                          }
+                          onSelectShift={handleSelectShift}
+                          onChangeSub={handleOpenChangeDialog}
+                          onRemoveSub={handleOpenRemoveDialog}
+                        />
+                      ))
+                    ) : (
+                      <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">
+                        No shifts to display.
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -1769,64 +2270,22 @@ export default function SubFinderPage() {
 
         {/* Right Column */}
         {isRightPanelOpen && (
-          <div className="w-full md:flex-[0_0_400px] md:max-w-[400px] border-l bg-gray-50 transition-all h-full overflow-y-auto">
+          <div
+            ref={rightPanelRef}
+            className={cn(
+              'shrink-0 flex-none border-l bg-white transition-all h-full overflow-hidden',
+              SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-rose-500'
+            )}
+            style={{ width: '540px' }}
+          >
             {selectedAbsence ? (
-              <div className="p-6 space-y-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex flex-col gap-1">
-                    {selectedShift ? (
-                      <>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-base font-semibold text-slate-900">
-                            {`Subs for ${formatShortDate(selectedShift.date)} • ${selectedShift.time_slot_code}`}
-                          </span>
-                          {selectedShift.classroom_name ? (
-                            <span
-                              className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
-                              style={getClassroomPillStyle(selectedShift.classroom_color ?? null)}
-                            >
-                              {selectedShift.classroom_name}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              Classroom unavailable
-                            </span>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex flex-col gap-1">
-                        <div className="text-base font-semibold text-slate-900">
-                          Subs for {selectedAbsence.teacher_name}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                          <span>
-                            {formatAbsenceDateRange(
-                              selectedAbsence.start_date,
-                              selectedAbsence.end_date
-                            )}
-                          </span>
-                          {selectedClassrooms.length > 0 ? (
-                            <span className="flex flex-wrap items-center gap-1.5">
-                              {selectedClassrooms.map(classroom => (
-                                <span
-                                  key={classroom.id || classroom.name}
-                                  className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
-                                  style={getClassroomPillStyle(classroom.color)}
-                                >
-                                  {classroom.name}
-                                </span>
-                              ))}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              Classroom unavailable
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+              <div
+                className={cn(
+                  'h-full flex flex-col',
+                  SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-orange-500'
+                )}
+              >
+                <div className="shrink-0 flex justify-end px-8 pt-4">
                   <button
                     type="button"
                     onClick={closeRightPanel}
@@ -1836,98 +2295,199 @@ export default function SubFinderPage() {
                     <X className="h-4 w-4" />
                   </button>
                 </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Search subs</Label>
-                  <div ref={subSearchRef} className="rounded-md bg-white">
-                    <div className="p-2">
-                      <Input
-                        placeholder="Search substitutes..."
-                        value={subSearch}
-                        onChange={event => setSubSearch(event.target.value)}
-                        onFocus={() => setIsSubSearchOpen(true)}
-                        className="h-8 border-0  text-sm focus-visible:ring-0"
-                      />
-                    </div>
-                    {isSubSearchOpen && (
-                      <div className="max-h-60 overflow-y-auto p-2">
-                        {filteredSubsForSearch.length === 0 ? (
-                          <div className="p-2 text-xs text-muted-foreground">No matches</div>
-                        ) : (
-                          <div className="space-y-1">
-                            {filteredSubsForSearch.map(sub => {
-                              const name = getDisplayName(sub)
-                              const canCover = selectedShift
-                                ? (sub.can_cover?.some(
-                                    shift =>
-                                      shift.date === selectedShift.date &&
-                                      shift.time_slot_code === selectedShift.time_slot_code
-                                  ) ?? false)
-                                : (sub.shifts_covered ?? 0) > 0 || (sub.can_cover?.length ?? 0) > 0
-                              return (
-                                <button
-                                  key={sub.id}
-                                  type="button"
-                                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
-                                  onClick={() => {
-                                    if (!canCover && includeOnlyRecommended) {
-                                      setIncludeOnlyRecommended(false)
-                                      applySubResults(allSubs, {
-                                        useOnlyRecommended: false,
-                                      })
-                                      toast(
-                                        'Turning off “Include only recommended subs” to show this selection.'
-                                      )
-                                      setTimeout(() => scrollToSubCard(sub.id), 50)
-                                    } else {
-                                      scrollToSubCard(sub.id)
-                                    }
-                                    setSelectedSubIds(prev =>
-                                      prev.includes(sub.id) ? prev : [...prev, sub.id]
-                                    )
-                                    setSubSearch('')
-                                    setIsSubSearchOpen(false)
-                                  }}
-                                >
-                                  <span
-                                    className={`h-2 w-2 rounded-full ${canCover ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                                  />
-                                  <span>{name.trim()}</span>
-                                </button>
-                              )
-                            })}
+                <div
+                  className={cn(
+                    'mt-0 shrink-0 border-b border-slate-200 bg-white px-8 pt-3 pb-4 shadow-[0_1px_0_rgba(15,23,42,0.04)]',
+                    SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-blue-500'
+                  )}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex flex-col gap-1">
+                      {selectedShift ? (
+                        <>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-base font-semibold text-slate-900">
+                              {`Subs for ${formatShortDate(selectedShift.date)} • ${selectedShift.time_slot_code}`}
+                            </span>
+                            {selectedShift.classroom_name ? (
+                              <span
+                                className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                                style={getClassroomPillStyle(selectedShift.classroom_color ?? null)}
+                              >
+                                {selectedShift.classroom_name}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                Classroom unavailable
+                              </span>
+                            )}
                           </div>
-                        )}
-                      </div>
+                          {ENABLE_SHIFT_FOCUS_MODE && (
+                            <p className="text-sm text-slate-600">
+                              {selectedShiftMatchCount} can cover this shift · {allSubs.length}{' '}
+                              total subs
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          <div className="text-lg font-semibold text-slate-900">
+                            Subs for {selectedAbsence.teacher_name}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                            <span>
+                              {formatAbsenceDateRange(
+                                selectedAbsence.start_date,
+                                selectedAbsence.end_date
+                              )}
+                            </span>
+                            {selectedClassrooms.length > 0 ? (
+                              <span className="flex flex-wrap items-center gap-1.5">
+                                {selectedClassrooms.map(classroom => (
+                                  <span
+                                    key={classroom.id || classroom.name}
+                                    className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                                    style={getClassroomPillStyle(classroom.color)}
+                                  >
+                                    {classroom.name}
+                                  </span>
+                                ))}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                Classroom unavailable
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div
+                    className={cn(
+                      'pt-3 space-y-2',
+                      SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-purple-500'
                     )}
+                  >
+                    <div
+                      ref={subSearchRef}
+                      className={cn(
+                        'rounded-md border border-slate-200 bg-white',
+                        SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-emerald-500'
+                      )}
+                    >
+                      <div className="p-1.5">
+                        <Input
+                          placeholder="Search substitutes..."
+                          value={subSearch}
+                          onChange={event => setSubSearch(event.target.value)}
+                          onFocus={() => setIsSubSearchOpen(true)}
+                          className="h-7 border-0  text-sm focus-visible:ring-0"
+                        />
+                      </div>
+                      {isSubSearchOpen && (
+                        <div className="max-h-60 overflow-y-auto p-2">
+                          {filteredSubsForSearch.length === 0 ? (
+                            <div className="p-2 text-xs text-muted-foreground">No matches</div>
+                          ) : (
+                            <div className="space-y-1">
+                              {filteredSubsForSearch.map(sub => {
+                                const name = getDisplayName(sub)
+                                const canCover = selectedShift
+                                  ? (sub.can_cover?.some(
+                                      shift =>
+                                        shift.date === selectedShift.date &&
+                                        shift.time_slot_code === selectedShift.time_slot_code
+                                    ) ?? false)
+                                  : (sub.shifts_covered ?? 0) > 0 ||
+                                    (sub.can_cover?.length ?? 0) > 0
+                                return (
+                                  <button
+                                    key={sub.id}
+                                    type="button"
+                                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
+                                    onClick={() => {
+                                      if (!canCover && includeOnlyRecommended) {
+                                        setIncludeOnlyRecommended(false)
+                                        applySubResults(allSubs, {
+                                          useOnlyRecommended: false,
+                                        })
+                                        toast(
+                                          'Turning off “Include only recommended subs” to show this selection.'
+                                        )
+                                        setTimeout(() => scrollToSubCard(sub.id), 50)
+                                      } else {
+                                        scrollToSubCard(sub.id)
+                                      }
+                                      setSelectedSubIds(prev =>
+                                        prev.includes(sub.id) ? prev : [...prev, sub.id]
+                                      )
+                                      setSubSearch('')
+                                      setIsSubSearchOpen(false)
+                                    }}
+                                  >
+                                    <span
+                                      className={`h-2 w-2 rounded-full ${canCover ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                    />
+                                    <span>{name.trim()}</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {selectedSubChips.length > 0 && (
+                    <div className="pt-2 flex flex-wrap gap-2">
+                      {selectedSubChips.map(chip => (
+                        <span
+                          key={chip.id}
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700"
+                        >
+                          {chip.name}
+                          <button
+                            type="button"
+                            className="text-slate-400 hover:text-slate-600"
+                            aria-label={`Remove ${chip.name}`}
+                            onClick={() =>
+                              setSelectedSubIds(prev => prev.filter(id => id !== chip.id))
+                            }
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="pt-4">
+                    <RecommendedSubsList
+                      subs={rightPanelSubs}
+                      loading={loading}
+                      absence={absenceForUI ?? selectedAbsence}
+                      shiftDetails={shiftDetails}
+                      showAllSubs
+                      hideHeader
+                      includePastShifts={includePastShifts}
+                      selectedShift={selectedShift}
+                      activeFilter={rightPanelActiveFilter}
+                      onActiveFilterChange={setRightPanelActiveFilter}
+                      renderFiltersOnly
+                      className="space-y-0"
+                    />
                   </div>
                 </div>
 
-                {selectedSubChips.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedSubChips.map(chip => (
-                      <span
-                        key={chip.id}
-                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700"
-                      >
-                        {chip.name}
-                        <button
-                          type="button"
-                          className="text-slate-400 hover:text-slate-600"
-                          aria-label={`Remove ${chip.name}`}
-                          onClick={() =>
-                            setSelectedSubIds(prev => prev.filter(id => id !== chip.id))
-                          }
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div className="border-t border-slate-200" />
-
-                <div>
+                <div
+                  className={cn(
+                    'min-h-0 flex-1 overflow-y-auto px-8 pb-6',
+                    SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-cyan-500'
+                  )}
+                >
                   <RecommendedSubsList
                     subs={rightPanelSubs}
                     loading={loading}
@@ -1940,6 +2500,10 @@ export default function SubFinderPage() {
                     highlightedSubId={highlightedSubId}
                     includePastShifts={includePastShifts}
                     selectedShift={selectedShift}
+                    stickyControls
+                    activeFilter={rightPanelActiveFilter}
+                    onActiveFilterChange={setRightPanelActiveFilter}
+                    hideFilterControls
                   />
                 </div>
               </div>
@@ -1947,41 +2511,127 @@ export default function SubFinderPage() {
           </div>
         )}
 
+        <Dialog
+          open={Boolean(removeDialogShift)}
+          onOpenChange={open => {
+            if (!open) {
+              handleCloseRemoveDialog()
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Remove sub assignment?</DialogTitle>
+              <DialogDescription>
+                {removeDialogHasMultiple
+                  ? `Would you like to remove ${removeDialogSubName} from only this shift, or from all shifts for ${removeDialogTeacherName} on this request?`
+                  : `Are you sure you want to remove ${removeDialogSubName} from this shift?`}
+              </DialogDescription>
+              {removeDialogIsConfirmed && (
+                <p className="text-sm text-amber-700 mt-2">
+                  This sub is marked confirmed. Removing will reopen this shift.
+                </p>
+              )}
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCloseRemoveDialog}
+                disabled={Boolean(removingScope)}
+              >
+                Cancel
+              </Button>
+              {removeDialogHasMultiple && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleRemoveSubAssignment('all_for_absence')}
+                  disabled={Boolean(removingScope)}
+                >
+                  {removingScope === 'all_for_absence' ? 'Removing...' : 'All shifts'}
+                </Button>
+              )}
+              <Button
+                type="button"
+                onClick={() => handleRemoveSubAssignment('single')}
+                disabled={Boolean(removingScope)}
+              >
+                {removingScope === 'single' ? 'Removing...' : 'This shift only'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={Boolean(changeDialogShift)}
+          onOpenChange={open => {
+            if (!open) {
+              handleCloseChangeDialog()
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Change assigned sub?</DialogTitle>
+              <DialogDescription>
+                {changeDialogShift?.sub_name && selectedSub?.name
+                  ? `This will unassign ${changeDialogShift.sub_name} and assign ${selectedSub.name}. Continue?`
+                  : `This will unassign ${changeDialogShift?.sub_name || 'the current sub'} and lets you assign a different sub. Continue?`}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={handleCloseChangeDialog}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={handleConfirmChangeSub}>
+                Continue
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {isContactPanelOpen && selectedAbsence && selectedSub && (
-          <>
-            <div className="fixed inset-0 z-40 bg-slate-900/20" />
-            <div className="fixed inset-y-0 right-0 z-50 w-full max-w-[400px]">
-              <ContactSubPanel
-                isOpen={isContactPanelOpen}
-                onClose={closeContactPanel}
-                sub={selectedSub as RecommendedSub}
-                absence={selectedAbsence}
-                variant="inline"
-                initialContactData={
-                  selectedSub && selectedAbsence
-                    ? contactDataCache.get(getCacheKey(selectedSub.id, selectedAbsence.id))
-                    : undefined
-                }
-                onAssignmentComplete={async () => {
-                  if (selectedAbsence) {
-                    setContactDataCache(prev => {
-                      const next = new Map(prev)
-                      for (const [key] of next) {
-                        if (key.endsWith(`-${selectedAbsence.id}`)) {
-                          next.delete(key)
-                        }
-                      }
-                      return next
-                    })
+          <ContactSubPanel
+            isOpen={isContactPanelOpen}
+            onClose={closeContactPanel}
+            sub={selectedSub as RecommendedSub}
+            absence={selectedAbsence}
+            variant="sheet"
+            onChangeShift={shift => {
+              const match = selectedAbsence.shifts.shift_details.find(
+                detail =>
+                  detail.date === shift.date && detail.time_slot_code === shift.time_slot_code
+              )
+              if (match) {
+                handleSelectShift(match)
+                return
+              }
+              toast.error('Unable to locate that shift. Try refreshing and retrying.')
+            }}
+            initialContactData={
+              selectedSub && selectedAbsence
+                ? contactDataCache.get(getCacheKey(selectedSub.id, selectedAbsence.id))
+                : undefined
+            }
+            onAssignmentComplete={async () => {
+              if (selectedAbsence) {
+                setContactDataCache(prev => {
+                  const next = new Map(prev)
+                  for (const [key] of next) {
+                    if (key.endsWith(`-${selectedAbsence.id}`)) {
+                      next.delete(key)
+                    }
                   }
-                  await fetchAbsences()
-                  if (selectedAbsence) {
-                    await runFinderForAbsence(selectedAbsence)
-                  }
-                }}
-              />
-            </div>
-          </>
+                  return next
+                })
+              }
+              await fetchAbsences()
+              if (selectedAbsence) {
+                await runFinderForAbsence(selectedAbsence)
+              }
+            }}
+          />
         )}
       </div>
     </div>

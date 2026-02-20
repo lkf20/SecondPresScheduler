@@ -22,6 +22,8 @@ import {
   formatTransitionError,
   type TimeOffStatus,
 } from '@/lib/lifecycle/status-transitions'
+import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 // Helper function to format date as "Mon Jan 20"
 function formatExcludedDate(dateStr: string, timeZone: string): string {
@@ -96,6 +98,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }> = []
     let excludedShifts: Array<{ date: string }> = []
     let excludedShiftCount = 0
+    let removedShiftCount = 0
     let warning: string | null = null
 
     // Update the time off request
@@ -168,11 +171,79 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Handle shifts
-    // Rebuild shifts when explicit shifts are provided OR when using all_scheduled mode
-    // so date/teacher edits correctly refresh the generated shift set.
-    if (shifts !== undefined || effectiveShiftSelectionMode === 'all_scheduled') {
-      // Delete existing shifts
-      await deleteTimeOffShifts(id)
+    const shouldReplaceExplicitShifts = shifts !== undefined
+    const shouldSyncAllScheduled =
+      shifts === undefined && effectiveShiftSelectionMode === 'all_scheduled'
+
+    if (shouldReplaceExplicitShifts || shouldSyncAllScheduled) {
+      // For explicit shift mode, we fully replace existing shifts.
+      // For all_scheduled mode, we sync incrementally so we avoid counter constraint failures.
+      if (shouldReplaceExplicitShifts) {
+        await deleteTimeOffShifts(id)
+      }
+
+      let currentRequestShifts: Awaited<ReturnType<typeof getTimeOffShifts>> = []
+      let currentRequestShiftKeys = new Set<string>()
+      if (shouldSyncAllScheduled) {
+        currentRequestShifts = await getTimeOffShifts(id)
+        currentRequestShiftKeys = new Set(
+          currentRequestShifts.map(shift => `${normalizeDate(shift.date)}::${shift.time_slot_id}`)
+        )
+      }
+
+      const syncRemovedShifts = async (desiredShiftKeys: Set<string>) => {
+        if (!shouldSyncAllScheduled || currentRequestShifts.length === 0) {
+          return
+        }
+
+        const shiftsToRemove = currentRequestShifts.filter(
+          shift => !desiredShiftKeys.has(`${normalizeDate(shift.date)}::${shift.time_slot_id}`)
+        )
+
+        if (shiftsToRemove.length === 0) {
+          return
+        }
+
+        const shiftIdsToRemove = shiftsToRemove.map(shift => shift.id)
+
+        const { data: activeAssignments, error: assignmentsError } = await supabase
+          .from('sub_assignments')
+          .select('id')
+          .in('coverage_request_shift_id', shiftIdsToRemove)
+          .eq('status', 'active')
+
+        if (assignmentsError) {
+          throw assignmentsError
+        }
+
+        if (activeAssignments && activeAssignments.length > 0) {
+          const { error: cancelAssignmentsError } = await supabase
+            .from('sub_assignments')
+            .update({ status: 'cancelled' })
+            .in(
+              'id',
+              activeAssignments
+                .map(assignment => assignment.id)
+                .filter((value): value is string => Boolean(value))
+            )
+
+          if (cancelAssignmentsError) {
+            throw cancelAssignmentsError
+          }
+        }
+
+        const { error: removeShiftsError } = await supabase
+          .from('time_off_shifts')
+          .delete()
+          .eq('time_off_request_id', id)
+          .in('id', shiftIdsToRemove)
+
+        if (removeShiftsError) {
+          throw removeShiftsError
+        }
+
+        removedShiftCount = shiftsToRemove.length
+      }
 
       if (Array.isArray(shifts) && shifts.length > 0) {
         requestedShifts = shifts.map((shift: any) => ({
@@ -237,6 +308,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             date: shift.date,
           }))
 
+          const desiredShiftKeys = new Set(
+            scheduledShifts
+              .filter(shift => {
+                const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
+                return !existingShiftKeys.has(shiftKey)
+              })
+              .map(shift => `${normalizeDate(shift.date)}::${shift.time_slot_id}`)
+          )
+
+          await syncRemovedShifts(desiredShiftKeys)
+
           shiftsToCreate = scheduledShifts
             .map(shift => ({
               date: shift.date,
@@ -248,7 +330,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             }))
             .filter(shift => {
               const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
-              return !existingShiftKeys.has(shiftKey)
+              return !existingShiftKeys.has(shiftKey) && !currentRequestShiftKeys.has(shiftKey)
             })
           excludedShiftCount = excludedShifts.length
         }
@@ -293,14 +375,25 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             effectiveRequestEndDate,
             timeZone
           )
-          shiftsToCreate = scheduledShifts.map(shift => ({
-            date: shift.date,
-            day_of_week_id: shift.day_of_week_id,
-            time_slot_id: shift.time_slot_id,
-            is_partial: false,
-            start_time: null,
-            end_time: null,
-          }))
+
+          const desiredShiftKeys = new Set(
+            scheduledShifts.map(shift => `${normalizeDate(shift.date)}::${shift.time_slot_id}`)
+          )
+          await syncRemovedShifts(desiredShiftKeys)
+
+          shiftsToCreate = scheduledShifts
+            .map(shift => ({
+              date: shift.date,
+              day_of_week_id: shift.day_of_week_id,
+              time_slot_id: shift.time_slot_id,
+              is_partial: false,
+              start_time: null,
+              end_time: null,
+            }))
+            .filter(shift => {
+              const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
+              return !currentRequestShiftKeys.has(shiftKey)
+            })
         }
       }
 
@@ -366,6 +459,91 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     revalidatePath('/schedules/weekly')
     revalidatePath('/sub-finder')
     revalidatePath('/reports')
+
+    const normalizeText = (value: unknown) => {
+      if (value === null || value === undefined) return null
+      const text = String(value).trim()
+      return text.length > 0 ? text : null
+    }
+
+    const changedFields: string[] = []
+    if (existingRequest.status !== status) changedFields.push('status')
+    if (existingRequest.teacher_id !== updatedRequest.teacher_id) changedFields.push('teacher_id')
+    if (existingRequest.start_date !== updatedRequest.start_date) changedFields.push('start_date')
+    if ((existingRequest.end_date || null) !== (updatedRequest.end_date || null)) {
+      changedFields.push('end_date')
+    }
+    if (normalizeText(existingRequest.reason) !== normalizeText(updatedRequest.reason)) {
+      changedFields.push('reason')
+    }
+    if (normalizeText(existingRequest.notes) !== normalizeText(updatedRequest.notes)) {
+      changedFields.push('notes')
+    }
+    if ((existingRequest.shift_selection_mode || null) !== (effectiveShiftSelectionMode || null)) {
+      changedFields.push('shift_selection_mode')
+    }
+
+    const beforeShiftKeys = new Set(
+      (existingRequest.shifts || []).map(
+        shift => `${normalizeDate(shift.date)}::${shift.time_slot_id}`
+      )
+    )
+    const persistedShifts = await getTimeOffShifts(id)
+    const afterShiftKeys = new Set(
+      persistedShifts.map(shift => `${normalizeDate(shift.date)}::${shift.time_slot_id}`)
+    )
+    const shiftsChanged =
+      beforeShiftKeys.size !== afterShiftKeys.size ||
+      Array.from(beforeShiftKeys).some(key => !afterShiftKeys.has(key)) ||
+      Array.from(afterShiftKeys).some(key => !beforeShiftKeys.has(key))
+
+    if (shiftsChanged) {
+      changedFields.push('shifts')
+    }
+
+    const { actorUserId, actorDisplayName } = await getAuditActorContext()
+    const teacherName = existingRequest.teacher
+      ? getStaffDisplayName(existingRequest.teacher)
+      : null
+
+    if (updatedRequest.school_id && changedFields.length > 0) {
+      await logAuditEvent({
+        schoolId: updatedRequest.school_id,
+        actorUserId,
+        actorDisplayName,
+        action: existingRequest.status === status ? 'update' : 'status_change',
+        category: 'time_off',
+        entityType: 'time_off_request',
+        entityId: id,
+        details: {
+          changed_fields: changedFields,
+          before: {
+            status: existingRequest.status,
+            teacher_id: existingRequest.teacher_id,
+            start_date: existingRequest.start_date,
+            end_date: existingRequest.end_date,
+            reason: existingRequest.reason,
+            notes: existingRequest.notes,
+            shift_selection_mode: existingRequest.shift_selection_mode,
+            shift_count: existingRequest.shifts?.length || 0,
+          },
+          after: {
+            status,
+            teacher_id: updatedRequest.teacher_id,
+            start_date: updatedRequest.start_date,
+            end_date: updatedRequest.end_date,
+            reason: updatedRequest.reason,
+            notes: updatedRequest.notes,
+            shift_selection_mode: effectiveShiftSelectionMode,
+            shift_count: persistedShifts.length,
+          },
+          shifts_created: shiftsToCreate.length,
+          shifts_removed: removedShiftCount,
+          shifts_excluded: excludedShiftCount,
+          teacher_name: teacherName,
+        },
+      })
+    }
 
     return NextResponse.json({
       ...updatedRequest,
@@ -435,6 +613,8 @@ export async function DELETE(
       })
     }
 
+    const timeOffRequestBeforeCancel = await getTimeOffRequestById(id)
+
     // Perform cancellation
     const result = await cancelTimeOffRequest(id, {
       keepAssignmentsAsExtraCoverage,
@@ -446,6 +626,30 @@ export async function DELETE(
     revalidatePath('/schedules/weekly')
     revalidatePath('/sub-finder')
     revalidatePath('/reports')
+
+    const schoolId = await getUserSchoolId()
+    const { actorUserId, actorDisplayName } = await getAuditActorContext()
+    const teacherName = timeOffRequestBeforeCancel.teacher
+      ? getStaffDisplayName(timeOffRequestBeforeCancel.teacher)
+      : null
+    if (schoolId) {
+      await logAuditEvent({
+        schoolId,
+        actorUserId,
+        actorDisplayName,
+        action: 'cancel',
+        category: 'time_off',
+        entityType: 'time_off_request',
+        entityId: id,
+        details: {
+          changed_fields: ['status', 'sub_assignments'],
+          keepAssignmentsAsExtraCoverage,
+          assignmentIdsToKeep: assignmentIdsToKeep || null,
+          cancellation_result: result,
+          teacher_name: teacherName,
+        },
+      })
+    }
 
     // Return the cancellation result
     return NextResponse.json({

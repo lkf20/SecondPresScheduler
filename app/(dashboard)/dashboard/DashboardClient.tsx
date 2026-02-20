@@ -452,9 +452,7 @@ export default function DashboardClient({
   }, [overview.summary, belowRequiredClassrooms, belowPreferredClassrooms])
 
   const coverageCounts = useMemo(() => {
-    const needs = overview.coverage_requests.filter(
-      request => request.status === 'needs_coverage'
-    ).length
+    const needs = overview.coverage_requests.filter(request => request.status !== 'covered').length
     const covered = overview.coverage_requests.filter(
       request => request.status === 'covered'
     ).length
@@ -467,7 +465,7 @@ export default function DashboardClient({
 
   const filteredCoverageRequests = useMemo(() => {
     if (coverageFilter === 'needs') {
-      return overview.coverage_requests.filter(request => request.status === 'needs_coverage')
+      return overview.coverage_requests.filter(request => request.status !== 'covered')
     }
     if (coverageFilter === 'covered') {
       return overview.coverage_requests.filter(request => request.status === 'covered')

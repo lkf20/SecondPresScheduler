@@ -34,6 +34,8 @@ interface SubMatch {
   shifts_covered: number
   total_shifts: number
   is_flexible_staff: boolean
+  is_contacted: boolean
+  contact_status: 'not_contacted' | 'pending' | 'awaiting_response' | 'confirmed' | 'declined_all'
   response_status: 'none' | 'pending' | 'confirmed' | 'declined_all' | null
   notes: string | null
   can_cover: Array<{
@@ -254,6 +256,10 @@ export async function POST(request: NextRequest) {
         class_group_name: class_name,
       }
     })
+    const shiftsToCoverByDateTimeSlot = new Map<string, Shift>()
+    shiftsToCover.forEach(shift => {
+      shiftsToCoverByDateTimeSlot.set(`${shift.date}|${shift.time_slot_id}`, shift)
+    })
 
     const { data: roleTypes, error: roleTypesError } = await supabase
       .from('staff_role_types')
@@ -302,6 +308,44 @@ export async function POST(request: NextRequest) {
     // 4. Get date range for checking conflicts
     const startDate = timeOffRequest.start_date
     const endDate = timeOffRequest.end_date || timeOffRequest.start_date
+
+    const activeSubAssignmentsBySub = new Map<string, any[]>()
+    if (subIds.length > 0) {
+      const { data: activeSubAssignments, error: activeSubAssignmentsError } = await supabase
+        .from('sub_assignments')
+        .select(
+          `
+          sub_id,
+          teacher_id,
+          date,
+          time_slot_id,
+          classroom_id,
+          time_slots:time_slots(code),
+          days_of_week:day_of_week_id(name),
+          classrooms:classroom_id(name)
+        `
+        )
+        .in('sub_id', subIds)
+        .eq('status', 'active')
+        .eq('assignment_type', 'Substitute Shift')
+        .gte('date', startDate)
+        .lte('date', endDate)
+
+      if (activeSubAssignmentsError) {
+        console.error(
+          'Error loading active sub assignments for conflict check:',
+          activeSubAssignmentsError
+        )
+      } else {
+        ;(activeSubAssignments || []).forEach((assignment: any) => {
+          if (!assignment.sub_id) return
+          if (!activeSubAssignmentsBySub.has(assignment.sub_id)) {
+            activeSubAssignmentsBySub.set(assignment.sub_id, [])
+          }
+          activeSubAssignmentsBySub.get(assignment.sub_id)!.push(assignment)
+        })
+      }
+    }
 
     // 5. Get all time off requests in the date range for conflict checking
     const conflictingTimeOffRequests = await getTimeOffRequests({
@@ -449,6 +493,40 @@ export async function POST(request: NextRequest) {
           let qualificationMatches = 0
           let qualificationTotal = 0
 
+          const assignedShifts: Array<{
+            date: string
+            day_name: string
+            time_slot_code: string
+            classroom_name?: string | null
+          }> = []
+          const assignedShiftKeySet = new Set<string>()
+          const externalSubAssignmentConflictsByKey = new Map<
+            string,
+            { classroom_name: string | null }
+          >()
+
+          const subActiveAssignments = activeSubAssignmentsBySub.get(sub.id) || []
+          subActiveAssignments.forEach((assignment: any) => {
+            const key = `${assignment.date}|${assignment.time_slot_id}`
+            if (assignment.teacher_id === timeOffRequest.teacher_id) {
+              const matchingShift = shiftsToCoverByDateTimeSlot.get(key)
+              if (!matchingShift) return
+              assignedShiftKeySet.add(key)
+              assignedShifts.push({
+                date: assignment.date,
+                day_name: assignment.days_of_week?.name || matchingShift.day_name,
+                time_slot_code: assignment.time_slots?.code || matchingShift.time_slot_code,
+                classroom_name: matchingShift.classroom_name || null,
+              })
+            } else {
+              if (!externalSubAssignmentConflictsByKey.has(key)) {
+                externalSubAssignmentConflictsByKey.set(key, {
+                  classroom_name: assignment.classrooms?.name || null,
+                })
+              }
+            }
+          })
+
           shiftsToCover.forEach(shift => {
             const availabilityKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
             const conflictKey = `${shift.date}|${shift.time_slot_id}`
@@ -463,6 +541,8 @@ export async function POST(request: NextRequest) {
 
             // Check for time off conflicts
             const hasTimeOffConflict = timeOffConflicts.has(conflictKey)
+            const hasExternalSubAssignmentConflict =
+              externalSubAssignmentConflictsByKey.has(conflictKey)
 
             // Check qualifications (if class_group_id is known)
             let isQualified = true
@@ -475,7 +555,13 @@ export async function POST(request: NextRequest) {
               }
             }
 
-            if (isAvailable && !hasScheduleConflict && !hasTimeOffConflict && isQualified) {
+            if (
+              isAvailable &&
+              !hasScheduleConflict &&
+              !hasTimeOffConflict &&
+              !hasExternalSubAssignmentConflict &&
+              isQualified
+            ) {
               // Can cover this shift
               availableShifts++
               canCover.push({
@@ -495,6 +581,11 @@ export async function POST(request: NextRequest) {
                 reason = 'Marked as unavailable'
               } else if (hasScheduleConflict) {
                 reason = 'Scheduled to teach'
+              } else if (hasExternalSubAssignmentConflict) {
+                const externalConflict = externalSubAssignmentConflictsByKey.get(conflictKey)
+                reason = externalConflict?.classroom_name
+                  ? `Already assigned as sub in ${externalConflict.classroom_name}`
+                  : 'Already assigned as sub at this time'
               } else if (hasTimeOffConflict) {
                 reason = 'Has time off'
               } else if (!isQualified) {
@@ -518,61 +609,6 @@ export async function POST(request: NextRequest) {
             }
           })
 
-          // Check for existing assignments for this sub and coverage request
-          const assignedShifts: Array<{
-            date: string
-            day_name: string
-            time_slot_code: string
-            classroom_name?: string | null
-          }> = []
-
-          if (coverageRequestId) {
-            // Get teacher_id from coverage_request
-            const { data: coverageRequest } = await supabase
-              .from('coverage_requests')
-              .select('teacher_id')
-              .eq('id', coverageRequestId)
-              .single()
-
-            if (coverageRequest) {
-              // Get existing sub_assignments for this sub, teacher, and date range
-              const { data: existingAssignments } = await supabase
-                .from('sub_assignments')
-                .select(
-                  `
-                date,
-                time_slot_id,
-                time_slots:time_slots(code),
-                days_of_week:day_of_week_id(name)
-              `
-                )
-                .eq('sub_id', sub.id)
-                .eq('teacher_id', coverageRequest.teacher_id)
-                .gte('date', startDate)
-                .lte('date', endDate)
-                .eq('assignment_type', 'Substitute Shift')
-
-              if (existingAssignments) {
-                existingAssignments.forEach((assignment: any) => {
-                  // Check if this assignment covers one of the shifts we're looking for
-                  const matchingShift = shiftsToCover.find(
-                    s =>
-                      s.date === assignment.date && s.time_slot_code === assignment.time_slots?.code
-                  )
-
-                  if (matchingShift) {
-                    assignedShifts.push({
-                      date: assignment.date,
-                      day_name: assignment.days_of_week?.name || matchingShift.day_name,
-                      time_slot_code: assignment.time_slots?.code || matchingShift.time_slot_code,
-                      classroom_name: matchingShift.classroom_name || null,
-                    })
-                  }
-                })
-              }
-            }
-          }
-
           const coveragePercentage =
             shiftsToCover.length > 0
               ? Math.round((availableShifts / shiftsToCover.length) * 100)
@@ -582,19 +618,36 @@ export async function POST(request: NextRequest) {
 
           // Get response_status from substitute_contacts if coverage request exists
           let responseStatus: string | null = null
+          let contactStatus:
+            | 'not_contacted'
+            | 'pending'
+            | 'awaiting_response'
+            | 'confirmed'
+            | 'declined_all'
+            | null = null
           let contactNotes: string | null = null
+          let isContacted = false
           if (coverageRequestId) {
             try {
               const { data: contact } = await supabase
                 .from('substitute_contacts')
-                .select('response_status, notes')
+                .select('contact_status, response_status, notes, is_contacted')
                 .eq('coverage_request_id', coverageRequestId)
                 .eq('sub_id', sub.id)
                 .single()
 
               if (contact) {
                 responseStatus = contact.response_status
+                contactStatus =
+                  contact.contact_status === 'not_contacted' ||
+                  contact.contact_status === 'pending' ||
+                  contact.contact_status === 'awaiting_response' ||
+                  contact.contact_status === 'confirmed' ||
+                  contact.contact_status === 'declined_all'
+                    ? contact.contact_status
+                    : null
                 contactNotes = contact.notes ?? null
+                isContacted = contact.is_contacted === true
               }
             } catch {
               // Contact doesn't exist yet, which is fine
@@ -619,9 +672,19 @@ export async function POST(request: NextRequest) {
             qualification_total: qualificationTotal,
             can_change_diapers: subCapabilities.can_change_diapers,
             can_lift_children: subCapabilities.can_lift_children,
+            is_contacted: isContacted,
             response_status: responseStatus,
             is_flexible_staff: isFlexibleStaff,
             notes: contactNotes,
+            contact_status:
+              contactStatus ||
+              (responseStatus === 'confirmed'
+                ? 'confirmed'
+                : responseStatus === 'declined_all'
+                  ? 'declined_all'
+                  : isContacted
+                    ? 'pending'
+                    : 'not_contacted'),
           }
         } catch (error) {
           console.error(`Error evaluating sub ${sub.id}:`, error)
