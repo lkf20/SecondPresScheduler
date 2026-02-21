@@ -146,6 +146,49 @@ export const formatFlexWeekdayList = (days: string[]) => {
   return `${pluralized.slice(0, -1).join(', ')}, and ${pluralized[pluralized.length - 1]}`
 }
 
+export const buildFlexRemovalDialogCopy = ({
+  teacherName,
+  classroomName,
+  dayName,
+  context,
+}: {
+  teacherName: string
+  classroomName: string
+  dayName: string
+  context: FlexRemovalContext | null
+}) => {
+  const isSingleShift = (context?.matching_shift_count || 0) <= 1
+  const weekdayText = formatFlexWeekdayList(context?.weekdays || [])
+  const singleWeekday = context?.weekdays?.[0] || ''
+  const startLabel = context?.start_date
+    ? parseLocalDate(context.start_date).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      })
+    : 'selected start date'
+  const endLabel = context?.end_date
+    ? parseLocalDate(context.end_date).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      })
+    : 'selected end date'
+
+  let summary = `${teacherName} is assigned as flex staff to ${classroomName}.`
+  if (isSingleShift && startLabel === endLabel && singleWeekday) {
+    summary = `${teacherName} is assigned as flex staff to ${classroomName} on ${singleWeekday}, ${startLabel}.`
+  } else if (weekdayText) {
+    summary = `${teacherName} is assigned as flex staff to ${classroomName} on ${weekdayText} from ${startLabel} to ${endLabel}.`
+  }
+
+  return {
+    summary,
+    isSingleShift,
+    showPrompt: !isSingleShift,
+    showWeekdayOption: !isSingleShift && (context?.weekdays?.length || 0) > 1,
+    weekdayScopeLabel: `All ${dayName} shifts`,
+  }
+}
+
 export default function ScheduleSidePanel({
   isOpen,
   onClose,
@@ -3191,34 +3234,20 @@ export default function ScheduleSidePanel({
             <DialogDescription className="space-y-3">
               <p className="text-base text-slate-700">
                 {(() => {
-                  const teacherName = flexRemoveTarget?.teacher_name || 'this staff member'
-                  const isSingleShift = (flexRemoveContext?.matching_shift_count || 0) <= 1
-                  const weekdayText = formatFlexWeekdayList(flexRemoveContext?.weekdays || [])
-                  const singleWeekday = flexRemoveContext?.weekdays?.[0] || ''
-                  const startLabel = flexRemoveContext?.start_date
-                    ? parseLocalDate(flexRemoveContext.start_date).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })
-                    : 'selected start date'
-                  const endLabel = flexRemoveContext?.end_date
-                    ? parseLocalDate(flexRemoveContext.end_date).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })
-                    : 'selected end date'
-
-                  if (isSingleShift && startLabel === endLabel && singleWeekday) {
-                    return `${teacherName} is assigned as flex staff to ${classroomName} on ${singleWeekday}, ${startLabel}.`
-                  }
-
-                  if (weekdayText) {
-                    return `${teacherName} is assigned as flex staff to ${classroomName} on ${weekdayText} from ${startLabel} to ${endLabel}.`
-                  }
-                  return `${teacherName} is assigned as flex staff to ${classroomName}.`
+                  return buildFlexRemovalDialogCopy({
+                    teacherName: flexRemoveTarget?.teacher_name || 'this staff member',
+                    classroomName,
+                    dayName,
+                    context: flexRemoveContext,
+                  }).summary
                 })()}
               </p>
-              {(flexRemoveContext?.matching_shift_count || 0) > 1 && (
+              {buildFlexRemovalDialogCopy({
+                teacherName: flexRemoveTarget?.teacher_name || 'this staff member',
+                classroomName,
+                dayName,
+                context: flexRemoveContext,
+              }).showPrompt && (
                 <p>
                   {`Would you like to remove ${flexRemoveTarget?.teacher_name || 'this staff member'} from:`}
                 </p>
@@ -3230,10 +3259,14 @@ export default function ScheduleSidePanel({
           ) : (
             <>
               {(() => {
-                const isSingleShift = (flexRemoveContext?.matching_shift_count || 0) <= 1
-                const hasMultipleWeekdays = (flexRemoveContext?.weekdays?.length || 0) > 1
+                const removalCopy = buildFlexRemovalDialogCopy({
+                  teacherName: flexRemoveTarget?.teacher_name || 'this staff member',
+                  classroomName,
+                  dayName,
+                  context: flexRemoveContext,
+                })
 
-                if (isSingleShift) {
+                if (removalCopy.isSingleShift) {
                   return null
                 }
 
@@ -3247,10 +3280,10 @@ export default function ScheduleSidePanel({
                       <RadioGroupItem value="single_shift" id="flex-remove-single" />
                       This shift only
                     </label>
-                    {hasMultipleWeekdays && (
+                    {removalCopy.showWeekdayOption && (
                       <label className="flex items-center gap-2 text-sm">
                         <RadioGroupItem value="weekday" id="flex-remove-weekday" />
-                        All {dayName} shifts
+                        {removalCopy.weekdayScopeLabel}
                       </label>
                     )}
                     <label className="flex items-center gap-2 text-sm text-red-700">
