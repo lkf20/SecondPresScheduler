@@ -3,9 +3,26 @@ import userEvent from '@testing-library/user-event'
 import RecommendedCombination from '@/components/sub-finder/RecommendedCombination'
 
 jest.mock('@/components/sub-finder/SubFinderCard', () => {
-  const MockSubFinderCard = ({ name, onContact }: { name: string; onContact?: () => void }) => (
+  const MockSubFinderCard = ({
+    name,
+    onContact,
+    shiftsCovered,
+    totalShifts,
+    recommendedShiftCount,
+    coverageSegments,
+  }: {
+    name: string
+    onContact?: () => void
+    shiftsCovered?: number
+    totalShifts?: number
+    recommendedShiftCount?: number
+    coverageSegments?: string[]
+  }) => (
     <div>
       <p>{name}</p>
+      <p>{`Covered ${shiftsCovered ?? 0}/${totalShifts ?? 0}`}</p>
+      <p>{`Recommended ${recommendedShiftCount ?? 0}`}</p>
+      <p>{`Segments ${(coverageSegments || []).join(',')}`}</p>
       <button type="button" onClick={onContact}>
         Contact {name}
       </button>
@@ -113,5 +130,76 @@ describe('RecommendedCombination', () => {
 
     await user.click(screen.getByRole('button', { name: /show all subs/i }))
     expect(onShowAllSubs).toHaveBeenCalled()
+  })
+
+  it('uses remaining-label filtering, includes past shifts when requested, and renders conflicts', () => {
+    const combinations = [
+      {
+        subs: [
+          {
+            subId: 'sub-1',
+            subName: 'Sally A.',
+            phone: '555-1111',
+            shifts: [
+              {
+                date: '2020-02-10',
+                day_name: 'Monday',
+                time_slot_code: 'EM',
+                class_name: 'Infant A',
+              },
+            ],
+            shiftsCovered: 1,
+            totalShifts: 3,
+            coveragePercent: 33,
+            conflicts: {
+              missingDiaperChanging: 1,
+              missingLifting: 0,
+              missingQualifications: 0,
+              total: 1,
+            },
+          },
+        ],
+        totalShiftsCovered: 1,
+        totalShiftsNeeded: 3,
+        totalConflicts: 1,
+        coveragePercent: 33,
+      },
+    ]
+
+    render(
+      <RecommendedCombination
+        combinations={combinations as any}
+        onContactSub={jest.fn()}
+        totalShifts={3}
+        useRemainingLabel
+        includePastShifts
+        allSubs={
+          [
+            {
+              id: 'sub-1',
+              can_cover: [
+                { date: '2020-02-10', time_slot_code: 'EM' },
+                { date: '2020-02-10', time_slot_code: 'AM' },
+              ],
+              cannot_cover: [{ date: '2020-02-10', time_slot_code: 'PM', reason: 'Unavailable' }],
+              assigned_shifts: [{ date: '2020-02-10', time_slot_code: 'EM' }],
+            },
+          ] as any
+        }
+        allShifts={
+          [
+            { date: '2020-02-10', time_slot_code: 'EM', status: 'uncovered' },
+            { date: '2020-02-10', time_slot_code: 'AM', status: 'covered' },
+            { date: '2020-02-10', time_slot_code: 'PM', status: 'uncovered' },
+          ] as any
+        }
+      />
+    )
+
+    expect(screen.getByText(/1 conflict/i)).toBeInTheDocument()
+    expect(screen.getByText('Covered 1/2')).toBeInTheDocument()
+    expect(screen.getByText('Recommended 1')).toBeInTheDocument()
+    expect(screen.getByText(/Segments assigned,unavailable/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /show all subs/i })).not.toBeInTheDocument()
   })
 })

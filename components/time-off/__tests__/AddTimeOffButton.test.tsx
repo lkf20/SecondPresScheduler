@@ -139,4 +139,44 @@ describe('AddTimeOffButton', () => {
     jest.advanceTimersByTime(120)
     await waitFor(() => expect(mockRestorePreviousPanel).toHaveBeenCalled())
   })
+
+  it('renders edit mode without add trigger and supports discard flow', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+    const onClose = jest.fn()
+
+    render(<AddTimeOffButton timeOffRequestId="request-1" onClose={onClose} />)
+
+    expect(screen.queryByRole('button', { name: /add time off/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /edit time off request/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /mark dirty/i }))
+    await user.click(screen.getByRole('button', { name: /close sheet/i }))
+
+    expect(mockSetActivePanel).not.toHaveBeenCalledWith(null)
+
+    await user.click(screen.getByRole('button', { name: /discard changes/i }))
+
+    expect(mockFormReset).toHaveBeenCalled()
+    expect(mockSetActivePanel).toHaveBeenCalledWith(null)
+    jest.advanceTimersByTime(120)
+    await waitFor(() => expect(mockRestorePreviousPanel).toHaveBeenCalled())
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('uses custom renderTrigger when provided', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+    render(
+      <AddTimeOffButton
+        renderTrigger={({ onClick }) => (
+          <button type="button" onClick={onClick}>
+            Open Custom Trigger
+          </button>
+        )}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /open custom trigger/i }))
+    expect(mockSetActivePanel).toHaveBeenCalledWith('time-off')
+    expect(screen.getByRole('heading', { name: /add time off request/i })).toBeInTheDocument()
+  })
 })
