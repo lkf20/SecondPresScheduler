@@ -515,4 +515,141 @@ describe('TimeOffForm', () => {
       expect(mockToastInfo).toHaveBeenCalledWith('This time off request was already cancelled.')
     })
   })
+
+  it('submits selected shifts when initialized with preselected shifts', async () => {
+    const user = userEvent.setup()
+    const onSuccess = jest.fn()
+
+    renderWithQueryClient(
+      <TimeOffForm
+        onSuccess={onSuccess}
+        initialTeacherId="teacher-1"
+        initialStartDate="2026-02-09"
+        initialSelectedShifts={[
+          { date: '2026-02-09', day_of_week_id: 'day-1', time_slot_id: 'slot-1' },
+        ]}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() =>
+      expect(onSuccess).toHaveBeenCalledWith('Bella Wilbanks', '2026-02-09', '2026-02-09')
+    )
+
+    const submitCall = (global.fetch as jest.Mock).mock.calls.find(
+      call => call[0] === '/api/time-off'
+    )
+    expect(submitCall).toBeDefined()
+    const body = JSON.parse(String(submitCall?.[1]?.body))
+    expect(body.shift_selection_mode).toBe('select_shifts')
+    expect(body.shifts).toEqual([
+      { date: '2026-02-09', day_of_week_id: 'day-1', time_slot_id: 'slot-1' },
+    ])
+  })
+
+  it('shows past-date warning and auto-corrects end date when it is before start date', async () => {
+    renderWithQueryClient(<TimeOffForm />)
+
+    fireEvent.change(screen.getByTestId('time-off-start-date'), { target: { value: '2020-01-10' } })
+    fireEvent.change(screen.getByTestId('time-off-end-date'), { target: { value: '2020-01-09' } })
+
+    expect(
+      await screen.findByText(/you are recording time off for a past date/i)
+    ).toBeInTheDocument()
+    expect(
+      await screen.findByText(/end date was updated to match the start date/i)
+    ).toBeInTheDocument()
+    expect((screen.getByTestId('time-off-end-date') as HTMLInputElement).value).toBe('2020-01-10')
+  })
+
+  it('shows backend error when saving draft fails', async () => {
+    const user = userEvent.setup()
+    ;(global.fetch as jest.Mock).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/api/teachers') {
+        return {
+          ok: true,
+          json: async () => [teacher],
+        } as Response
+      }
+      if (url === '/api/time-off') {
+        return {
+          ok: false,
+          json: async () => ({ error: 'Draft save failed on server' }),
+        } as Response
+      }
+      return {
+        ok: false,
+        json: async () => ({ error: `Unhandled fetch URL in test: ${url}` }),
+      } as Response
+    })
+
+    renderWithQueryClient(<TimeOffForm />)
+
+    const teacherInput = screen.getByPlaceholderText(/select a teacher/i)
+    await user.click(teacherInput)
+    await user.click(await screen.findByRole('button', { name: /bella wilbanks/i }))
+    fireEvent.change(screen.getByTestId('time-off-start-date'), { target: { value: '2026-02-09' } })
+
+    await user.click(screen.getByRole('button', { name: /save as draft/i }))
+
+    expect(await screen.findByText(/draft save failed on server/i)).toBeInTheDocument()
+  })
+
+  it('handles already-cancelled response during cancel confirmation', async () => {
+    const user = userEvent.setup()
+    const onCancel = jest.fn()
+    ;(global.fetch as jest.Mock).mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        const method = init?.method || 'GET'
+
+        if (url === '/api/teachers') {
+          return { ok: true, json: async () => [teacher] } as Response
+        }
+        if (url === '/api/time-off/request-4' && method === 'GET') {
+          return {
+            ok: true,
+            json: async () => ({
+              id: 'request-4',
+              teacher_id: 'teacher-1',
+              start_date: '2026-02-09',
+              end_date: '2026-02-09',
+              status: 'active',
+              shift_selection_mode: 'all_scheduled',
+              shifts: [],
+            }),
+          } as Response
+        }
+        if (url === '/api/time-off/request-4' && method === 'DELETE' && init?.body === '{}') {
+          return {
+            ok: true,
+            json: async () => ({ hasAssignments: false, assignmentCount: 0 }),
+          } as Response
+        }
+        if (url === '/api/time-off/request-4' && method === 'DELETE') {
+          return {
+            ok: false,
+            json: async () => ({ error: 'Time off request is already cancelled' }),
+          } as Response
+        }
+        return {
+          ok: false,
+          json: async () => ({ error: `Unhandled fetch URL in test: ${url}` }),
+        } as Response
+      }
+    )
+
+    renderWithQueryClient(<TimeOffForm timeOffRequestId="request-4" onCancel={onCancel} />)
+
+    await user.click(await screen.findByRole('button', { name: /cancel time off request/i }))
+    await user.click(screen.getAllByRole('button', { name: /cancel time off/i })[0])
+
+    await waitFor(() => {
+      expect(mockToastInfo).toHaveBeenCalledWith('This time off request was already cancelled.')
+      expect(onCancel).toHaveBeenCalled()
+      expect(mockRefresh).toHaveBeenCalled()
+    })
+  })
 })
