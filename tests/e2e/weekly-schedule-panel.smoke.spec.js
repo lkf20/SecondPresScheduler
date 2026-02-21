@@ -69,8 +69,10 @@ const weeklyScheduleFixture = [
 
 async function mockWeeklyScheduleApis(page) {
   let removePostCalled = false
+  let weeklyScheduleRequestCount = 0
 
   await page.route('**/api/weekly-schedule**', async route => {
+    weeklyScheduleRequestCount += 1
     await route.fulfill(json(weeklyScheduleFixture))
   })
 
@@ -133,7 +135,32 @@ async function mockWeeklyScheduleApis(page) {
   })
 
   await page.route('**/api/teacher-schedules**', async route => {
+    if (route.request().method() === 'POST') {
+      await route.fulfill(json({ id: `ts-${Date.now()}` }))
+      return
+    }
     await route.fulfill(json([]))
+  })
+
+  await page.route('**/api/teacher-schedules/*', async route => {
+    const method = route.request().method()
+    if (method === 'DELETE') {
+      await route.fulfill({ status: 204, body: '' })
+      return
+    }
+    if (method === 'PUT') {
+      await route.fulfill(json({ id: 'updated-teacher-schedule', is_floater: false }))
+      return
+    }
+    await route.fallback()
+  })
+
+  await page.route('**/api/schedule-cells/bulk', async route => {
+    if (route.request().method() !== 'PUT') {
+      await route.fallback()
+      return
+    }
+    await route.fulfill(json({ success: true }))
   })
 
   await page.route('**/api/display-preferences**', async route => {
@@ -162,6 +189,7 @@ async function mockWeeklyScheduleApis(page) {
 
   return {
     wasRemovePosted: () => removePostCalled,
+    weeklyScheduleRequestCount: () => weeklyScheduleRequestCount,
   }
 }
 
@@ -213,4 +241,26 @@ test('weekly schedule flex removal scope flow @smoke', async ({ page }) => {
 
   await expect.poll(() => tracker.wasRemovePosted()).toBe(true)
   await expect(page.getByText(/removed from all shifts/i)).toBeVisible()
+})
+
+test('weekly schedule baseline save refreshes schedule data @smoke', async ({ page }) => {
+  test.skip(
+    !hasE2ECredentials(),
+    'Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD to run protected smoke flows.'
+  )
+
+  const tracker = await mockWeeklyScheduleApis(page)
+  await ensureAuthenticated(page, '/schedules/weekly')
+
+  await page.getByText('Bella W.').first().click()
+  await page.getByText('Edit permanent staff').click()
+  await page.getByRole('button', { name: /^continue$/i }).click()
+
+  await page
+    .getByRole('button', { name: /^save$/i })
+    .last()
+    .click()
+
+  await expect(page.getByText(/baseline schedule saved/i)).toBeVisible()
+  await expect.poll(() => tracker.weeklyScheduleRequestCount()).toBeGreaterThan(1)
 })
