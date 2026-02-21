@@ -223,4 +223,133 @@ describe('ScheduleCell', () => {
     expect(screen.queryByText('Absent A.')).not.toBeInTheDocument()
     expect(screen.queryByText('Sub A.')).not.toBeInTheDocument()
   })
+
+  it('shows red staffing status when assigned is below required', () => {
+    render(
+      <ScheduleCell
+        data={{
+          ...baseData,
+          schedule_cell: {
+            ...baseData.schedule_cell,
+            enrollment_for_staffing: 16, // required = ceil(16 / 8) = 2
+          },
+          assignments: [
+            {
+              id: 'teacher-1',
+              teacher_id: 'teacher-1',
+              teacher_name: 'Teacher A.',
+              classroom_id: 'class-1',
+              classroom_name: 'Infant Room',
+            },
+          ],
+        }}
+      />
+    )
+
+    expect(screen.getByText(/below required staffing by 1.0/i)).toBeInTheDocument()
+  })
+
+  it('shows amber staffing status when below preferred but meeting required', () => {
+    render(
+      <ScheduleCell
+        data={{
+          ...baseData,
+          schedule_cell: {
+            ...baseData.schedule_cell,
+            enrollment_for_staffing: 16, // required = 2, preferred = ceil(16 / 6) = 3
+          },
+          assignments: [
+            {
+              id: 'teacher-1',
+              teacher_id: 'teacher-1',
+              teacher_name: 'Teacher A.',
+              classroom_id: 'class-1',
+              classroom_name: 'Infant Room',
+            },
+            {
+              id: 'teacher-2',
+              teacher_id: 'teacher-2',
+              teacher_name: 'Teacher B.',
+              classroom_id: 'class-1',
+              classroom_name: 'Infant Room',
+            },
+          ],
+        }}
+      />
+    )
+
+    expect(screen.getByText(/below preferred staffing by 1.0/i)).toBeInTheDocument()
+  })
+
+  it('counts floater assignments fractionally in staffing status', () => {
+    render(
+      <ScheduleCell
+        data={{
+          ...baseData,
+          schedule_cell: {
+            ...baseData.schedule_cell,
+            enrollment_for_staffing: 16, // required = 2
+          },
+          assignments: [
+            {
+              id: 'teacher-1',
+              teacher_id: 'teacher-1',
+              teacher_name: 'Teacher A.',
+              classroom_id: 'class-1',
+              classroom_name: 'Infant Room',
+            },
+            {
+              id: 'floater-1',
+              teacher_id: 'floater-1',
+              teacher_name: 'Floater A.',
+              classroom_id: 'class-1',
+              classroom_name: 'Infant Room',
+              is_floater: true,
+            },
+          ],
+        }}
+      />
+    )
+
+    expect(screen.getByText(/below required staffing by 0.5/i)).toBeInTheDocument()
+  })
+
+  it('shows green staffing status when preferred target is met', () => {
+    render(
+      <ScheduleCell
+        data={{
+          ...baseData,
+          schedule_cell: {
+            ...baseData.schedule_cell,
+            enrollment_for_staffing: 16, // preferred = 3
+          },
+          assignments: [
+            {
+              id: 'teacher-1',
+              teacher_id: 'teacher-1',
+              teacher_name: 'Teacher A.',
+              classroom_id: 'class-1',
+              classroom_name: 'Infant Room',
+            },
+            {
+              id: 'teacher-2',
+              teacher_id: 'teacher-2',
+              teacher_name: 'Teacher B.',
+              classroom_id: 'class-1',
+              classroom_name: 'Infant Room',
+            },
+            {
+              id: 'teacher-3',
+              teacher_id: 'teacher-3',
+              teacher_name: 'Teacher C.',
+              classroom_id: 'class-1',
+              classroom_name: 'Infant Room',
+            },
+          ],
+        }}
+      />
+    )
+
+    expect(screen.getByText(/meets preferred staffing \(3.0 teachers\)/i)).toBeInTheDocument()
+  })
 })
