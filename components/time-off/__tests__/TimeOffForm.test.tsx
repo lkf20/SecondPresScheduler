@@ -338,4 +338,181 @@ describe('TimeOffForm', () => {
 
     expect(await screen.findByText(/teacher cannot be scheduled/i)).toBeInTheDocument()
   })
+
+  it('opens cancel dialog with assignments and supports keeping assignments', async () => {
+    const user = userEvent.setup()
+    const onCancel = jest.fn()
+    ;(global.fetch as jest.Mock).mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        const method = init?.method || 'GET'
+
+        if (url === '/api/teachers') {
+          return { ok: true, json: async () => [teacher] } as Response
+        }
+
+        if (url === '/api/time-off/request-1' && method === 'GET') {
+          return {
+            ok: true,
+            json: async () => ({
+              id: 'request-1',
+              teacher_id: 'teacher-1',
+              start_date: '2026-02-09',
+              end_date: '2026-02-09',
+              status: 'active',
+              shift_selection_mode: 'all_scheduled',
+              shifts: [],
+            }),
+          } as Response
+        }
+
+        if (url === '/api/time-off/request-1' && method === 'DELETE' && init?.body === '{}') {
+          return {
+            ok: true,
+            json: async () => ({
+              hasAssignments: true,
+              assignmentCount: 1,
+              assignments: [{ id: 'a1', display: 'Mon Feb 9 • EM • Sally A. • Infant' }],
+              teacherName: 'Bella W.',
+            }),
+          } as Response
+        }
+
+        if (url === '/api/time-off/request-1' && method === 'DELETE') {
+          return {
+            ok: true,
+            json: async () => ({ assignmentsKept: 1 }),
+          } as Response
+        }
+
+        return {
+          ok: false,
+          json: async () => ({ error: `Unhandled fetch URL in test: ${url}` }),
+        } as Response
+      }
+    )
+
+    renderWithQueryClient(<TimeOffForm timeOffRequestId="request-1" onCancel={onCancel} />)
+
+    expect(
+      await screen.findByRole('button', { name: /cancel time off request/i })
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /cancel time off request/i }))
+
+    expect(
+      await screen.findByText(/what would you like to do with this assignment/i)
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('radio', { name: /keep sub assignments as extra coverage/i }))
+    await user.click(screen.getAllByRole('button', { name: /cancel time off/i })[0])
+
+    await waitFor(() => {
+      expect(mockToastSuccess).toHaveBeenCalledWith(
+        expect.stringMatching(/kept as extra coverage/i)
+      )
+      expect(onCancel).toHaveBeenCalled()
+      expect(mockRefresh).toHaveBeenCalled()
+    })
+  })
+
+  it('shows no-assignment dialog and allows keeping request', async () => {
+    const user = userEvent.setup()
+    ;(global.fetch as jest.Mock).mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        const method = init?.method || 'GET'
+
+        if (url === '/api/teachers') {
+          return { ok: true, json: async () => [teacher] } as Response
+        }
+
+        if (url === '/api/time-off/request-2' && method === 'GET') {
+          return {
+            ok: true,
+            json: async () => ({
+              id: 'request-2',
+              teacher_id: 'teacher-1',
+              start_date: '2026-02-09',
+              end_date: '2026-02-09',
+              status: 'active',
+              shift_selection_mode: 'all_scheduled',
+              shifts: [],
+            }),
+          } as Response
+        }
+
+        if (url === '/api/time-off/request-2' && method === 'DELETE') {
+          return {
+            ok: true,
+            json: async () => ({ hasAssignments: false, assignmentCount: 0 }),
+          } as Response
+        }
+
+        return {
+          ok: false,
+          json: async () => ({ error: `Unhandled fetch URL in test: ${url}` }),
+        } as Response
+      }
+    )
+
+    renderWithQueryClient(<TimeOffForm timeOffRequestId="request-2" />)
+
+    await user.click(await screen.findByRole('button', { name: /cancel time off request/i }))
+    expect(
+      await screen.findByText(/are you sure you want to cancel this time off request/i)
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /keep request/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /keep request/i })).not.toBeInTheDocument()
+    })
+  })
+
+  it('shows info toast when cancel check reports already cancelled', async () => {
+    const user = userEvent.setup()
+    ;(global.fetch as jest.Mock).mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        const method = init?.method || 'GET'
+
+        if (url === '/api/teachers') {
+          return { ok: true, json: async () => [teacher] } as Response
+        }
+
+        if (url === '/api/time-off/request-3' && method === 'GET') {
+          return {
+            ok: true,
+            json: async () => ({
+              id: 'request-3',
+              teacher_id: 'teacher-1',
+              start_date: '2026-02-09',
+              end_date: '2026-02-09',
+              status: 'active',
+              shift_selection_mode: 'all_scheduled',
+              shifts: [],
+            }),
+          } as Response
+        }
+
+        if (url === '/api/time-off/request-3' && method === 'DELETE') {
+          return {
+            ok: false,
+            json: async () => ({ error: 'Time off request is already cancelled' }),
+          } as Response
+        }
+
+        return {
+          ok: false,
+          json: async () => ({ error: `Unhandled fetch URL in test: ${url}` }),
+        } as Response
+      }
+    )
+
+    renderWithQueryClient(<TimeOffForm timeOffRequestId="request-3" />)
+
+    await user.click(await screen.findByRole('button', { name: /cancel time off request/i }))
+    await waitFor(() => {
+      expect(mockToastInfo).toHaveBeenCalledWith('This time off request was already cancelled.')
+    })
+  })
 })
