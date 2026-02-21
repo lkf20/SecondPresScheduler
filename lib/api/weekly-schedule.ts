@@ -118,6 +118,53 @@ type StaffingEventShift = {
   staff_display_name?: string | null
 }
 
+type SubAssignmentKeyInput = Pick<
+  WeeklySubAssignment,
+  'date' | 'day_of_week_id' | 'time_slot_id' | 'classroom_id' | 'teacher_id' | 'sub_id'
+>
+
+export const buildSubAssignmentKey = (sub: SubAssignmentKeyInput): string =>
+  [
+    sub.date,
+    sub.day_of_week_id ?? 'null',
+    sub.time_slot_id,
+    sub.classroom_id,
+    sub.teacher_id,
+    sub.sub_id,
+  ].join('|')
+
+export const dedupeSubAssignmentsForSlot = (subsForSlot: WeeklySubAssignment[]) =>
+  Array.from(new Map(subsForSlot.map(sub => [buildSubAssignmentKey(sub), sub])).values())
+
+export const dedupeFlexAssignmentsForSlot = (flexForSlot: StaffingEventShift[]) =>
+  Array.from(new Map(flexForSlot.map(shift => [shift.staff_id, shift])).values())
+
+export const getTeachersAssignedToClassroom = ({
+  assignmentsForSlot,
+  uniqueSubsForSlot,
+  classroomId,
+}: {
+  assignmentsForSlot: Array<{ classroom_id: string; teacher_id: string }>
+  uniqueSubsForSlot: Array<{ teacher_id: string }>
+  classroomId: string
+}) => {
+  const teachersAssignedToThisClassroom = new Set<string>()
+
+  for (const assignment of assignmentsForSlot) {
+    if (assignment.classroom_id === classroomId && assignment.teacher_id) {
+      teachersAssignedToThisClassroom.add(assignment.teacher_id)
+    }
+  }
+
+  for (const sub of uniqueSubsForSlot) {
+    if (sub.teacher_id) {
+      teachersAssignedToThisClassroom.add(sub.teacher_id)
+    }
+  }
+
+  return teachersAssignedToThisClassroom
+}
+
 export interface WeeklyScheduleData {
   day_of_week_id: string
   day_name: string
@@ -509,17 +556,7 @@ export async function getScheduleSnapshotData({
   }
 
   // Fetch substitute assignments for the selected date range (if provided)
-  type SubAssignmentKey = string
   let subAssignments: WeeklySubAssignment[] = []
-  const getSubAssignmentKey = (sub: WeeklySubAssignment): SubAssignmentKey =>
-    [
-      sub.date,
-      sub.day_of_week_id ?? 'null',
-      sub.time_slot_id,
-      sub.classroom_id,
-      sub.teacher_id,
-      sub.sub_id,
-    ].join('|')
 
   if (hasDateRange && startDateISO && endDateISO) {
     try {
@@ -750,11 +787,7 @@ export async function getScheduleSnapshotData({
                 )
               : []
           const uniqueSubsForSlot =
-            subsForSlot.length > 0
-              ? Array.from(
-                  new Map(subsForSlot.map(sub => [getSubAssignmentKey(sub), sub])).values()
-                )
-              : []
+            subsForSlot.length > 0 ? dedupeSubAssignmentsForSlot(subsForSlot) : []
           const flexForSlot =
             hasDateRange && day.id
               ? flexAssignments.filter(
@@ -765,9 +798,7 @@ export async function getScheduleSnapshotData({
                 )
               : []
           const uniqueFlexForSlot =
-            flexForSlot.length > 0
-              ? Array.from(new Map(flexForSlot.map(shift => [shift.staff_id, shift])).values())
-              : []
+            flexForSlot.length > 0 ? dedupeFlexAssignmentsForSlot(flexForSlot) : []
 
           // Track unique absent teachers from sub_assignments (covered absences)
           const absentTeachers = new Map<
@@ -863,22 +894,11 @@ export async function getScheduleSnapshotData({
               tos => tos.day_of_week_id === day.id && tos.time_slot_id === timeSlot.id
             )
 
-            // First, identify which teachers are assigned to this classroom at this time
-            const teachersAssignedToThisClassroom = new Set<string>()
-
-            // Check permanent assignments
-            for (const assignment of assignmentsForSlot) {
-              if (assignment.classroom_id === classroom.id && assignment.teacher_id) {
-                teachersAssignedToThisClassroom.add(assignment.teacher_id)
-              }
-            }
-
-            // Check sub_assignments - the absent teacher is assigned here
-            for (const sub of uniqueSubsForSlot) {
-              if (sub.teacher_id) {
-                teachersAssignedToThisClassroom.add(sub.teacher_id)
-              }
-            }
+            const teachersAssignedToThisClassroom = getTeachersAssignedToClassroom({
+              assignmentsForSlot,
+              uniqueSubsForSlot,
+              classroomId: classroom.id,
+            })
 
             // Filter to only time_off_shifts for teachers assigned to this classroom
             const relevantTimeOffShifts = timeOffForSlot.filter(tos =>
