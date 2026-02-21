@@ -103,6 +103,97 @@ describe('POST /api/staffing-events/flex/availability integration', () => {
     expect(json.error).toMatch(/start_date must be before end_date/i)
   })
 
+  it('returns 400 when start_date or end_date is invalid', async () => {
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/availability',
+      'POST',
+      {
+        start_date: 'not-a-date',
+        end_date: '2026-03-02',
+        time_slot_ids: ['slot-1'],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(json.error).toMatch(/invalid start_date or end_date/i)
+  })
+
+  it('returns 500 when day lookup fails', async () => {
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'days_of_week') {
+          return {
+            select: jest.fn().mockResolvedValue({
+              data: null,
+              error: { message: 'day lookup failed' },
+            }),
+          }
+        }
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/availability',
+      'POST',
+      {
+        start_date: '2026-03-02',
+        end_date: '2026-03-02',
+        time_slot_ids: ['slot-1'],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/day lookup failed/i)
+  })
+
+  it('returns 500 when staff lookup fails', async () => {
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'days_of_week') {
+          return {
+            select: jest.fn().mockResolvedValue({
+              data: [{ id: 'day-mon', name: 'Monday', day_number: 1 }],
+              error: null,
+            }),
+          }
+        }
+        if (table === 'staff') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockResolvedValue({
+              data: null,
+              error: { message: 'staff lookup failed' },
+            }),
+          }
+        }
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/availability',
+      'POST',
+      {
+        start_date: '2026-03-02',
+        end_date: '2026-03-02',
+        time_slot_ids: ['slot-1'],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/staff lookup failed/i)
+  })
+
   it('returns empty payload when no flex staff exist for the school', async () => {
     ;(createClient as jest.Mock).mockResolvedValue({
       from: jest.fn((table: string) => {

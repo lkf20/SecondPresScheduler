@@ -180,6 +180,31 @@ describe('/api/staffing-events/flex/remove integration', () => {
     expect(json.error).toMatch(/flex assignment not found/i)
   })
 
+  it('GET returns 500 when weekday lookup fails', async () => {
+    buildSupabaseMock({
+      shiftSelectResults: [
+        {
+          data: [{ day_of_week_id: 'mon' }],
+          error: null,
+        },
+      ],
+      dayRowsResult: {
+        data: null,
+        error: { message: 'weekday lookup failed' },
+      },
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove?event_id=event-1',
+      'GET'
+    )
+    const response = await GET(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/weekday lookup failed/i)
+  })
+
   it('POST returns 400 when required fields are missing', async () => {
     const request = createJsonRequest(
       'http://localhost:3000/api/staffing-events/flex/remove',
@@ -362,5 +387,34 @@ describe('/api/staffing-events/flex/remove integration', () => {
     })
     expect(staffingEventUpdate).toHaveBeenCalledTimes(1)
     expect(staffingEventUpdate).toHaveBeenCalledWith({ status: 'cancelled' })
+  })
+
+  it('POST returns 500 when active-shift recount fails', async () => {
+    buildSupabaseMock({
+      shiftUpdateSelectResult: {
+        data: [{ id: 's1' }],
+        error: null,
+      },
+      shiftSelectResults: [
+        {
+          count: null,
+          error: { message: 'recount failed' },
+        },
+      ],
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove',
+      'POST',
+      {
+        event_id: 'event-1',
+        scope: 'all_shifts',
+      }
+    )
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/recount failed/i)
   })
 })
