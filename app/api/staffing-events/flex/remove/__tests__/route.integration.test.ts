@@ -180,6 +180,25 @@ describe('/api/staffing-events/flex/remove integration', () => {
     expect(json.error).toMatch(/flex assignment not found/i)
   })
 
+  it('GET returns 500 when event lookup fails', async () => {
+    buildSupabaseMock({
+      eventMaybeSingleResult: {
+        data: null,
+        error: { message: 'event lookup failed' },
+      },
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove?event_id=event-1',
+      'GET'
+    )
+    const response = await GET(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/event lookup failed/i)
+  })
+
   it('GET returns 500 when weekday lookup fails', async () => {
     buildSupabaseMock({
       shiftSelectResults: [
@@ -205,6 +224,27 @@ describe('/api/staffing-events/flex/remove integration', () => {
     expect(json.error).toMatch(/weekday lookup failed/i)
   })
 
+  it('GET returns 500 when shift lookup fails', async () => {
+    buildSupabaseMock({
+      shiftSelectResults: [
+        {
+          data: null,
+          error: { message: 'shift lookup failed' },
+        },
+      ],
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove?event_id=event-1',
+      'GET'
+    )
+    const response = await GET(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/shift lookup failed/i)
+  })
+
   it('POST returns 400 when required fields are missing', async () => {
     const request = createJsonRequest(
       'http://localhost:3000/api/staffing-events/flex/remove',
@@ -218,6 +258,24 @@ describe('/api/staffing-events/flex/remove integration', () => {
 
     expect(response.status).toBe(400)
     expect(json.error).toMatch(/event_id and scope are required/i)
+  })
+
+  it('POST returns 403 when school context is missing', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue(null)
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove',
+      'POST',
+      {
+        event_id: 'event-1',
+        scope: 'all_shifts',
+      }
+    )
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(403)
+    expect(json.error).toMatch(/missing school context/i)
   })
 
   it('POST validates scope-specific required fields', async () => {
@@ -291,6 +349,29 @@ describe('/api/staffing-events/flex/remove integration', () => {
     expect(json.error).toMatch(/flex assignment not found/i)
   })
 
+  it('POST returns 500 when event lookup fails', async () => {
+    buildSupabaseMock({
+      eventMaybeSingleResult: {
+        data: null,
+        error: { message: 'event lookup failed' },
+      },
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove',
+      'POST',
+      {
+        event_id: 'event-1',
+        scope: 'all_shifts',
+      }
+    )
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/event lookup failed/i)
+  })
+
   it('POST returns 404 when no matching active shifts are found', async () => {
     buildSupabaseMock({
       shiftUpdateSelectResult: {
@@ -315,6 +396,29 @@ describe('/api/staffing-events/flex/remove integration', () => {
 
     expect(response.status).toBe(404)
     expect(json.error).toMatch(/no matching active shifts/i)
+  })
+
+  it('POST returns 500 when shift cancellation update fails', async () => {
+    buildSupabaseMock({
+      shiftUpdateSelectResult: {
+        data: null,
+        error: { message: 'shift cancel failed' },
+      },
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove',
+      'POST',
+      {
+        event_id: 'event-1',
+        scope: 'all_shifts',
+      }
+    )
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/shift cancel failed/i)
   })
 
   it('POST removes matching shifts and keeps event active when shifts remain', async () => {
@@ -416,5 +520,37 @@ describe('/api/staffing-events/flex/remove integration', () => {
 
     expect(response.status).toBe(500)
     expect(json.error).toMatch(/recount failed/i)
+  })
+
+  it('POST returns 500 when parent event cancel fails', async () => {
+    buildSupabaseMock({
+      shiftUpdateSelectResult: {
+        data: [{ id: 's1' }],
+        error: null,
+      },
+      shiftSelectResults: [
+        {
+          count: 0,
+          error: null,
+        },
+      ],
+      eventUpdateResult: {
+        error: { message: 'event cancel failed' },
+      },
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove',
+      'POST',
+      {
+        event_id: 'event-1',
+        scope: 'all_shifts',
+      }
+    )
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/event cancel failed/i)
   })
 })
