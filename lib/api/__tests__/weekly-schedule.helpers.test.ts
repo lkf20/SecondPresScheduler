@@ -1,4 +1,4 @@
-import { getStaffDisplayName, getStaffNameParts } from '@/lib/api/weekly-schedule'
+import { getStaffDisplayName, getStaffNameParts, getWeekEndISO } from '@/lib/api/weekly-schedule'
 
 describe('weekly schedule helpers', () => {
   it('returns Unknown when staff is missing', () => {
@@ -38,5 +38,10 @@ describe('weekly schedule helpers', () => {
       last_name: 'Parks',
       display_name: 'Amy P.',
     })
+  })
+
+  it('calculates week end date from week start', () => {
+    expect(getWeekEndISO('2026-02-09')).toBe('2026-02-15')
+    expect(getWeekEndISO('2026-12-28')).toBe('2027-01-03')
   })
 })

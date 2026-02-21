@@ -1012,10 +1012,7 @@ export async function getWeeklyScheduleData(
     return getScheduleSnapshotData({ schoolId, selectedDayIds })
   }
 
-  const weekStart = new Date(weekStartISO + 'T00:00:00')
-  const weekEnd = new Date(weekStart)
-  weekEnd.setDate(weekEnd.getDate() + 6)
-  const weekEndISO = weekEnd.toISOString().split('T')[0]
+  const weekEndISO = getWeekEndISO(weekStartISO)
 
   return getScheduleSnapshotData({
     schoolId,
@@ -1023,4 +1020,11 @@ export async function getWeeklyScheduleData(
     startDateISO: weekStartISO,
     endDateISO: weekEndISO,
   })
+}
+
+export const getWeekEndISO = (weekStartISO: string) => {
+  const weekStart = new Date(weekStartISO + 'T00:00:00')
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekEnd.getDate() + 6)
+  return weekEnd.toISOString().split('T')[0]
 }
