@@ -448,7 +448,7 @@ export default function SubQualifications({
           value={capabilitiesState.capabilities_notes}
           onChange={e => handleCapabilitiesNotesChange(e.target.value)}
           className="mt-2 min-h-[80px]"
-          placeholder="Any additional notes about preferences or qualifications"
+          placeholder="Any additional notes"
         />
       </div>
     </div>
