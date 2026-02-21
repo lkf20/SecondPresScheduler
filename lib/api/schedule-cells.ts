@@ -243,8 +243,8 @@ export async function updateScheduleCell(
     .single()
 
   if (error) throw error
-  const schoolId =
-    data?.school_id || (await getUserSchoolId()) || '00000000-0000-0000-0000-000000000001'
+  const schoolId = data?.school_id || (await getUserSchoolId())
+  if (!schoolId) throw new Error('school_id is required to update schedule cell class groups')
 
   // Update class group associations if provided
   if (class_group_ids !== undefined) {

@@ -54,6 +54,9 @@ export async function createSub(sub: {
   school_id?: string
 }) {
   const supabase = await createClient()
+  if (!sub.school_id) {
+    throw new Error('school_id is required to create sub')
+  }
 
   // Exclude id from the insert if it's undefined or empty
   const { id, ...subData } = sub
@@ -66,7 +69,7 @@ export async function createSub(sub: {
     is_sub: true,
     is_teacher: sub.is_teacher ?? false, // Preserve is_teacher flag
     active: subData.active ?? true,
-    school_id: sub.school_id || '00000000-0000-0000-0000-000000000001',
+    school_id: sub.school_id,
   } as Partial<Staff> & { id: string }
 
   // Generate UUID if not provided

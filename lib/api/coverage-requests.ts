@@ -4,7 +4,7 @@ import { parseLocalDate } from '@/lib/utils/date'
 // See docs/data-lifecycle.md: coverage_requests lifecycle
 /**
  * Get school_id for a teacher
- * Tries profile first, then teacher_schedules, then defaults to the default school
+ * Tries profile first, then teacher_schedules.
  */
 async function getSchoolIdForTeacher(teacherId: string): Promise<string> {
   const supabase = await createClient()
@@ -32,14 +32,7 @@ async function getSchoolIdForTeacher(teacherId: string): Promise<string> {
     return schedules.school_id
   }
 
-  // Default to the default school
-  const { data: defaultSchool } = await supabase
-    .from('schools')
-    .select('id')
-    .eq('id', '00000000-0000-0000-0000-000000000001')
-    .single()
-
-  return defaultSchool?.id || '00000000-0000-0000-0000-000000000001'
+  throw new Error(`Unable to resolve school_id for teacher ${teacherId}`)
 }
 
 /**

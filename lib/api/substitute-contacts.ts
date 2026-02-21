@@ -114,7 +114,8 @@ export async function getOrCreateSubstituteContact(
     .single()
 
   if (coverageRequestError) throw coverageRequestError
-  const schoolId = coverageRequest?.school_id || '00000000-0000-0000-0000-000000000001'
+  const schoolId = coverageRequest?.school_id
+  if (!schoolId) throw new Error('school_id is required for substitute contacts')
 
   // Create new contact if it doesn't exist
   const { data: created, error: createError } = await supabase
@@ -383,7 +384,8 @@ export async function upsertShiftOverrides(
     .single()
 
   if (substituteContactError) throw substituteContactError
-  const schoolId = substituteContact?.school_id || '00000000-0000-0000-0000-000000000001'
+  const schoolId = substituteContact?.school_id
+  if (!schoolId) throw new Error('school_id is required for shift overrides')
 
   // Get all existing overrides for this contact
   const { data: existingOverrides } = await supabase

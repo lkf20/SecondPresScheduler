@@ -78,14 +78,7 @@ export async function GET(
         if (schedule?.school_id) {
           schoolId = schedule.school_id
         } else {
-          // Default to the default school
-          const { data: defaultSchool } = await supabase
-            .from('schools')
-            .select('id')
-            .eq('id', '00000000-0000-0000-0000-000000000001')
-            .single()
-
-          schoolId = defaultSchool?.id || '00000000-0000-0000-0000-000000000001'
+          return createErrorResponse('Unable to resolve school_id for this teacher', 400)
         }
       }
 

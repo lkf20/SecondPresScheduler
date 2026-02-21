@@ -71,6 +71,7 @@ export default function SubAvailabilityGrid({
   const [exceptionMap, setExceptionMap] = useState<Map<string, ExceptionRow>>(new Map())
   const [isSelectAllHovered, setIsSelectAllHovered] = useState(false)
   const [isDeselectAllHovered, setIsDeselectAllHovered] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   // Fetch days and time slots
   useEffect(() => {
@@ -83,24 +84,30 @@ export default function SubAvailabilityGrid({
     Promise.all([
       fetch('/api/days-of-week').then(r => r.json()),
       fetch('/api/timeslots').then(r => r.json()),
-    ]).then(([daysData, slotsData]) => {
-      // Filter to weekdays only (Monday-Friday, day_number 1-5)
-      const weekdays = daysData.filter((d: Day) => d.day_number >= 1 && d.day_number <= 5)
-      const sortedDays = weekdays.sort((a: Day, b: Day) => a.day_number - b.day_number)
-      // Sort time slots by display_order (from settings), then by code as fallback
-      const sortedSlots = slotsData.sort((a: TimeSlot, b: TimeSlot) => {
-        const orderA = a.display_order ?? 999
-        const orderB = b.display_order ?? 999
-        if (orderA !== orderB) {
-          return orderA - orderB
-        }
-        return (a.code || '').localeCompare(b.code || '')
+    ])
+      .then(([daysData, slotsData]) => {
+        setLoadError(null)
+        // Filter to weekdays only (Monday-Friday, day_number 1-5)
+        const weekdays = daysData.filter((d: Day) => d.day_number >= 1 && d.day_number <= 5)
+        const sortedDays = weekdays.sort((a: Day, b: Day) => a.day_number - b.day_number)
+        // Sort time slots by display_order (from settings), then by code as fallback
+        const sortedSlots = slotsData.sort((a: TimeSlot, b: TimeSlot) => {
+          const orderA = a.display_order ?? 999
+          const orderB = b.display_order ?? 999
+          if (orderA !== orderB) {
+            return orderA - orderB
+          }
+          return (a.code || '').localeCompare(b.code || '')
+        })
+        cachedAvailabilityDays = sortedDays
+        cachedAvailabilityTimeSlots = sortedSlots
+        setDays(sortedDays)
+        setTimeSlots(sortedSlots)
       })
-      cachedAvailabilityDays = sortedDays
-      cachedAvailabilityTimeSlots = sortedSlots
-      setDays(sortedDays)
-      setTimeSlots(sortedSlots)
-    })
+      .catch(error => {
+        console.error('Failed to load availability grid metadata:', error)
+        setLoadError('Failed to load availability grid.')
+      })
   }, [])
 
   // Initialize availability map from props
@@ -187,6 +194,10 @@ export default function SubAvailabilityGrid({
   }
   const hasAnySelected = Array.from(localAvailability.values()).some(value => value)
 
+  if (loadError) {
+    return <div className="rounded-md border p-4 text-center text-destructive">{loadError}</div>
+  }
+
   if (days.length === 0 || timeSlots.length === 0) {
     return (
       <div className="rounded-md border p-4 text-center text-muted-foreground">
@@ -238,7 +249,6 @@ export default function SubAvailabilityGrid({
               <TableCell className="h-12 px-4 py-0 font-medium align-middle">{day.name}</TableCell>
               {timeSlots.map(slot => {
                 const available = isAvailable(day.id, slot.id)
-                const exception = getException(day.id, slot.id)
                 const hasExcept = hasException(day.id, slot.id)
 
                 return (

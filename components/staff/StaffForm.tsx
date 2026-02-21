@@ -139,6 +139,7 @@ export default function StaffForm({
     [watchedRoleTypeIds]
   )
   const baselineForDirtyRef = useRef<StaffFormData>(normalizeStaffFormData(initialValues))
+  const duplicateCheckRequestIdRef = useRef(0)
   const currentForDirty = useMemo(
     () =>
       normalizeStaffFormData({
@@ -178,52 +179,59 @@ export default function StaffForm({
   useEffect(() => {
     if (staff) return
 
-    const checkDuplicate = async () => {
-      if (!firstName?.trim() && !lastName?.trim() && !email?.trim()) {
-        setDuplicateWarning(null)
-        setProceedWithDuplicate(false)
-        return
-      }
-
-      const timeoutId = setTimeout(async () => {
-        try {
-          const checkData = {
-            first_name: firstName?.trim() || '',
-            last_name: lastName?.trim() || '',
-            email: email?.trim() || null,
-          }
-
-          const response = await fetch('/api/teachers/check-duplicates', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              teachers: [checkData],
-            }),
-          })
-
-          if (response.ok) {
-            const data = await response.json()
-            if (data.duplicates && data.duplicates.length > 0) {
-              const dup = data.duplicates[0]
-              setDuplicateWarning({
-                message: `A staff member with this ${dup.matchType === 'email' ? 'email' : dup.matchType === 'name' ? 'name' : 'email and name'} already exists.`,
-                existingTeacher: dup.existingTeacher,
-              })
-              setProceedWithDuplicate(false)
-            } else {
-              setDuplicateWarning(null)
-              setProceedWithDuplicate(false)
-            }
-          }
-        } catch (error) {
-          console.error('Error checking duplicates:', error)
-        }
-      }, 500)
-
-      return () => clearTimeout(timeoutId)
+    if (!firstName?.trim() && !lastName?.trim() && !email?.trim()) {
+      setDuplicateWarning(null)
+      setProceedWithDuplicate(false)
+      return
     }
 
-    checkDuplicate()
+    let cancelled = false
+    const requestId = duplicateCheckRequestIdRef.current + 1
+    duplicateCheckRequestIdRef.current = requestId
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const checkData = {
+          first_name: firstName?.trim() || '',
+          last_name: lastName?.trim() || '',
+          email: email?.trim() || null,
+        }
+
+        const response = await fetch('/api/teachers/check-duplicates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            teachers: [checkData],
+          }),
+        })
+
+        if (!response.ok || cancelled || duplicateCheckRequestIdRef.current !== requestId) return
+
+        const data = await response.json()
+        if (cancelled || duplicateCheckRequestIdRef.current !== requestId) return
+
+        if (data.duplicates && data.duplicates.length > 0) {
+          const dup = data.duplicates[0]
+          setDuplicateWarning({
+            message: `A staff member with this ${dup.matchType === 'email' ? 'email' : dup.matchType === 'name' ? 'name' : 'email and name'} already exists.`,
+            existingTeacher: dup.existingTeacher,
+          })
+          setProceedWithDuplicate(false)
+        } else {
+          setDuplicateWarning(null)
+          setProceedWithDuplicate(false)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Error checking duplicates:', error)
+        }
+      }
+    }, 500)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
   }, [firstName, lastName, email, staff])
 
   useEffect(() => {

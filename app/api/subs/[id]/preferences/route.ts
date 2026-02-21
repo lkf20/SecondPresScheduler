@@ -39,7 +39,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       .single()
 
     if (subError) throw subError
-    const schoolId = subRow?.school_id || '00000000-0000-0000-0000-000000000001'
+    const schoolId = subRow?.school_id
+    if (!schoolId) {
+      return NextResponse.json(
+        { error: 'school_id is required for sub preferences' },
+        { status: 400 }
+      )
+    }
 
     // Delete existing preferences for this sub
     const { error: deleteError } = await supabase
