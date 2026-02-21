@@ -65,6 +65,8 @@ interface SubQualificationsProps {
   }) => void
 }
 
+let cachedQualificationDefinitions: QualificationDefinition[] | null = null
+
 export default function SubQualifications({
   qualifications,
   capabilities,
@@ -77,16 +79,24 @@ export default function SubQualifications({
     can_assist_with_toileting: capabilities.can_assist_with_toileting ?? false,
     capabilities_notes: capabilities.capabilities_notes || '',
   })
-  const [definitions, setDefinitions] = useState<QualificationDefinition[]>([])
+  const [definitions, setDefinitions] = useState<QualificationDefinition[]>(
+    () => cachedQualificationDefinitions || []
+  )
   const [selectedQualIds, setSelectedQualIds] = useState<Set<string>>(new Set())
   const [qualDetails, setQualDetails] = useState<Map<string, QualificationDetail>>(new Map())
 
   // Fetch qualification definitions
   useEffect(() => {
+    if (cachedQualificationDefinitions) {
+      setDefinitions(cachedQualificationDefinitions)
+      return
+    }
+
     fetch('/api/qualifications?active_only=true')
       .then(r => r.json())
       .then(data => {
-        setDefinitions(data)
+        cachedQualificationDefinitions = data as QualificationDefinition[]
+        setDefinitions(cachedQualificationDefinitions)
       })
       .catch(console.error)
   }, [])
@@ -207,13 +217,13 @@ export default function SubQualifications({
   }
 
   const handleCapabilitiesNotesChange = (notes: string) => {
-    setCapabilitiesState(prev => ({
-      ...prev,
-      capabilities_notes: notes,
-    }))
-    onCapabilitiesChange({
-      ...capabilitiesState,
-      capabilities_notes: notes,
+    setCapabilitiesState(prev => {
+      const next = {
+        ...prev,
+        capabilities_notes: notes,
+      }
+      onCapabilitiesChange(next)
+      return next
     })
   }
 
@@ -364,16 +374,27 @@ export default function SubQualifications({
                               <Label htmlFor={`expires-${def.id}`} className="text-xs">
                                 Expires on (optional)
                               </Label>
-                              <DatePickerInput
-                                id={`expires-${def.id}`}
-                                value={details.expires_on || ''}
-                                onChange={value =>
-                                  handleDetailChange(def.id, 'expires_on', value || null)
-                                }
-                                placeholder="Select date"
-                                allowClear
-                                className="h-8 rounded-md px-2 text-xs"
-                              />
+                              <div className="space-y-1.5">
+                                <DatePickerInput
+                                  id={`expires-${def.id}`}
+                                  value={details.expires_on || ''}
+                                  onChange={value =>
+                                    handleDetailChange(def.id, 'expires_on', value || null)
+                                  }
+                                  placeholder="Select date"
+                                  allowClear
+                                  className="h-8 rounded-md px-2 text-xs"
+                                />
+                                {details.expires_on && (
+                                  <button
+                                    type="button"
+                                    className="text-xs text-teal-700 hover:text-teal-800"
+                                    onClick={() => handleDetailChange(def.id, 'expires_on', null)}
+                                  >
+                                    Clear
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
 

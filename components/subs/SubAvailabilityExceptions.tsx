@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
@@ -35,6 +35,8 @@ interface SubAvailabilityExceptionsProps {
   }) => Promise<void>
   onDeleteException: (headerId: string) => Promise<void>
   defaultExpanded?: boolean
+  showAddButton?: boolean
+  startAddSignal?: number
 }
 
 export default function SubAvailabilityExceptions({
@@ -43,6 +45,8 @@ export default function SubAvailabilityExceptions({
   onAddException,
   onDeleteException,
   defaultExpanded = false,
+  showAddButton = true,
+  startAddSignal = 0,
 }: SubAvailabilityExceptionsProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
   const [isAdding, setIsAdding] = useState(false)
@@ -54,12 +58,20 @@ export default function SubAvailabilityExceptions({
     available: true,
     time_slot_ids: [] as string[],
   })
+  const lastStartAddSignalRef = useRef(startAddSignal)
 
   useEffect(() => {
     if (!isExpanded && isAdding) {
       setIsAdding(false)
     }
   }, [isExpanded, isAdding])
+
+  useEffect(() => {
+    if (startAddSignal <= lastStartAddSignalRef.current) return
+    setIsExpanded(true)
+    setIsAdding(true)
+    lastStartAddSignalRef.current = startAddSignal
+  }, [startAddSignal])
 
   const handleAddException = async () => {
     if (!newException.start_date || newException.time_slot_ids.length === 0) {
@@ -114,7 +126,7 @@ export default function SubAvailabilityExceptions({
           type="button"
           variant="ghost"
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 text-base"
         >
           {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           <span>One-off Exceptions</span>
@@ -137,20 +149,25 @@ export default function SubAvailabilityExceptions({
               </Label>
             </div>
           )}
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => {
-              if (!isExpanded) {
-                setIsExpanded(true)
-              }
-              setIsAdding(true)
-            }}
-            disabled={isAdding}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Exception
-          </Button>
+          {showAddButton && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="hover:!bg-teal-50"
+              style={{ borderColor: 'rgb(13 148 136)', color: 'rgb(15 118 110)' }}
+              onClick={() => {
+                if (!isExpanded) {
+                  setIsExpanded(true)
+                }
+                setIsAdding(true)
+              }}
+              disabled={isAdding}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Exception
+            </Button>
+          )}
         </div>
       </div>
 

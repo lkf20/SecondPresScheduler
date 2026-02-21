@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form'
 import type { Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -19,19 +19,29 @@ import {
   type DisplayNameFormat,
 } from '@/lib/utils/staff-display-name'
 
-const staffSchema = z.object({
-  first_name: z.string().min(1, 'First name is required'),
-  last_name: z.string().min(1, 'Last name is required'),
-  display_name: z.string().min(1, 'Display name is required'),
-  phone: z.string().optional(),
-  email: z
-    .union([z.string().email('Invalid email address'), z.literal('')])
-    .optional()
-    .transform(val => (val === '' ? undefined : val)),
-  role_type_ids: z.array(z.string()).min(1, 'At least one staff role is required'),
-  active: z.boolean().default(true),
-  is_sub: z.boolean().default(false),
-})
+const staffSchema = z
+  .object({
+    first_name: z.string().min(1, 'First name is required'),
+    last_name: z.string().min(1, 'Last name is required'),
+    display_name: z.string().min(1, 'Display name is required'),
+    phone: z.string().optional(),
+    email: z
+      .union([z.string().email('Invalid email address'), z.literal('')])
+      .optional()
+      .transform(val => (val === '' ? undefined : val)),
+    role_type_ids: z.array(z.string()),
+    active: z.boolean().default(true),
+    is_sub: z.boolean().default(false),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.is_sub && (!data.role_type_ids || data.role_type_ids.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['role_type_ids'],
+        message: 'Select at least one: Permanent, Flexible, or Substitute.',
+      })
+    }
+  })
 
 type Staff = Database['public']['Tables']['staff']['Row']
 type StaffWithRoleIds = Staff & { role_type_ids?: string[] }
@@ -44,21 +54,66 @@ interface StaffFormProps {
   onSubmit: (data: StaffFormData) => Promise<void>
   onCancel?: () => void
   defaultDisplayNameFormat?: DisplayNameFormat
+  roleTypes?: StaffRoleType[]
+  draftCacheKey?: string
+  onDirtyChange?: (dirty: boolean) => void
+  formId?: string
 }
+
+const staffFormDraftCache = new Map<string, StaffFormData>()
+const normalizeRoleTypeIds = (ids: string[] = []) => [...ids].sort((a, b) => a.localeCompare(b))
+const normalizeStaffFormData = (data: StaffFormData): StaffFormData => ({
+  first_name: data.first_name || '',
+  last_name: data.last_name || '',
+  display_name: data.display_name || '',
+  phone: data.phone || '',
+  email: data.email || '',
+  role_type_ids: normalizeRoleTypeIds(data.role_type_ids || []),
+  active: data.active ?? true,
+  is_sub: data.is_sub ?? false,
+})
 
 export default function StaffForm({
   staff,
   onSubmit,
   onCancel,
   defaultDisplayNameFormat = 'first_last_initial',
+  roleTypes: roleTypesProp = [],
+  draftCacheKey,
+  onDirtyChange,
+  formId,
 }: StaffFormProps) {
-  const [roleTypes, setRoleTypes] = useState<StaffRoleType[]>([])
-  const [loadingRoleTypes, setLoadingRoleTypes] = useState(true)
+  const [roleTypes, setRoleTypes] = useState<StaffRoleType[]>(roleTypesProp)
+  const [loadingRoleTypes, setLoadingRoleTypes] = useState(roleTypesProp.length === 0)
   const [duplicateWarning, setDuplicateWarning] = useState<{
     message: string
     existingTeacher: { first_name: string; last_name: string; email: string | null }
   } | null>(null)
   const [proceedWithDuplicate, setProceedWithDuplicate] = useState(false)
+  const cachedDraft = draftCacheKey ? staffFormDraftCache.get(draftCacheKey) : undefined
+  const initialValues: StaffFormData = cachedDraft
+    ? cachedDraft
+    : staff
+      ? {
+          first_name: staff.first_name,
+          last_name: staff.last_name,
+          display_name: staff.display_name || '',
+          phone: staff.phone || '',
+          email: staff.email || '',
+          role_type_ids: normalizeRoleTypeIds(staff.role_type_ids || []),
+          active: staff.active ?? true,
+          is_sub: staff.is_sub ?? false,
+        }
+      : {
+          first_name: '',
+          last_name: '',
+          display_name: '',
+          phone: '',
+          email: '',
+          role_type_ids: normalizeRoleTypeIds([]),
+          active: true,
+          is_sub: false,
+        }
 
   const {
     register,
@@ -68,30 +123,38 @@ export default function StaffForm({
     watch,
   } = useForm<StaffFormData>({
     resolver: zodResolver(staffSchema) as Resolver<StaffFormData>,
-    defaultValues: staff
-      ? {
-          first_name: staff.first_name,
-          last_name: staff.last_name,
-          display_name: staff.display_name || '',
-          phone: staff.phone || '',
-          email: staff.email || '',
-          role_type_ids: staff.role_type_ids || [],
-          active: staff.active ?? true,
-          is_sub: staff.is_sub ?? false,
-        }
-      : {
-          active: true,
-          is_sub: false,
-          role_type_ids: [],
-        },
+    defaultValues: initialValues,
   })
 
   const firstName = watch('first_name')
   const lastName = watch('last_name')
+  const active = watch('active')
+  const phone = watch('phone')
   const email = watch('email')
   const isSub = watch('is_sub')
   const displayName = watch('display_name')
-  const roleTypeIds = watch('role_type_ids') || []
+  const watchedRoleTypeIds = watch('role_type_ids')
+  const roleTypeIds = useMemo(
+    () => normalizeRoleTypeIds(watchedRoleTypeIds || []),
+    [watchedRoleTypeIds]
+  )
+  const baselineForDirtyRef = useRef<StaffFormData>(normalizeStaffFormData(initialValues))
+  const currentForDirty = useMemo(
+    () =>
+      normalizeStaffFormData({
+        first_name: firstName || '',
+        last_name: lastName || '',
+        display_name: displayName || '',
+        phone: phone || '',
+        email: email || '',
+        role_type_ids: roleTypeIds || [],
+        active: active ?? true,
+        is_sub: isSub ?? false,
+      }),
+    [firstName, lastName, displayName, phone, email, roleTypeIds, active, isSub]
+  )
+  const isFormDirty =
+    JSON.stringify(currentForDirty) !== JSON.stringify(baselineForDirtyRef.current)
   const [useDefaultDisplayName, setUseDefaultDisplayName] = useState(() => {
     if (!staff) return true
     const { isCustom } = computeDisplayName(staff, defaultDisplayNameFormat)
@@ -170,6 +233,12 @@ export default function StaffForm({
   }, [staff, defaultDisplayNameFormat])
 
   useEffect(() => {
+    if (roleTypesProp.length > 0) {
+      setRoleTypes(roleTypesProp)
+      setLoadingRoleTypes(false)
+      return
+    }
+
     async function fetchRoleTypes() {
       try {
         const response = await fetch('/api/staff-role-types')
@@ -184,17 +253,45 @@ export default function StaffForm({
       }
     }
     fetchRoleTypes()
-  }, [])
+  }, [roleTypesProp])
+
+  useEffect(() => {
+    if (!draftCacheKey) return
+    const subscription = watch(values => {
+      const nextDraft: StaffFormData = {
+        first_name: values.first_name || '',
+        last_name: values.last_name || '',
+        display_name: values.display_name || '',
+        phone: values.phone || '',
+        email: values.email || '',
+        role_type_ids: normalizeRoleTypeIds(
+          (values.role_type_ids || []).filter((id): id is string => typeof id === 'string')
+        ),
+        active: values.active ?? true,
+        is_sub: values.is_sub ?? false,
+      }
+      staffFormDraftCache.set(draftCacheKey, nextDraft)
+    })
+    return () => subscription.unsubscribe()
+  }, [draftCacheKey, watch])
+
+  useEffect(() => {
+    onDirtyChange?.(isFormDirty)
+  }, [isFormDirty, onDirtyChange])
 
   const handleFormSubmit = async (data: StaffFormData) => {
     if (duplicateWarning && !proceedWithDuplicate) {
       return
     }
     await onSubmit(data)
+    onDirtyChange?.(false)
+    if (draftCacheKey) {
+      staffFormDraftCache.delete(draftCacheKey)
+    }
   }
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
+    <form id={formId} onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <FormField label="First Name" error={errors.first_name?.message} required>
           <Input {...register('first_name')} />
@@ -257,7 +354,10 @@ export default function StaffForm({
                         const next = value
                           ? [...roleTypeIds, roleType.id]
                           : roleTypeIds.filter(id => id !== roleType.id)
-                        setValue('role_type_ids', next, { shouldValidate: true })
+                        setValue('role_type_ids', normalizeRoleTypeIds(next), {
+                          shouldValidate: true,
+                          shouldDirty: true,
+                        })
                       }}
                     />
                     <Label htmlFor={`role-${roleType.id}`} className="font-normal cursor-pointer">
@@ -270,7 +370,12 @@ export default function StaffForm({
                 <Checkbox
                   id="is_sub"
                   checked={isSub}
-                  onCheckedChange={checked => setValue('is_sub', checked === true)}
+                  onCheckedChange={checked =>
+                    setValue('is_sub', checked === true, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
                 />
                 <Label htmlFor="is_sub" className="font-normal cursor-pointer">
                   Substitute
@@ -318,7 +423,7 @@ export default function StaffForm({
             Cancel
           </Button>
         )}
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting || (Boolean(staff) && !isFormDirty)}>
           {isSubmitting ? 'Saving...' : staff ? 'Update' : 'Create'}
         </Button>
       </div>
