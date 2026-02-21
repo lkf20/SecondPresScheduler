@@ -259,6 +259,66 @@ export function extractDaysAndTimeSlots(
   return { days, timeSlots }
 }
 
+export function resolveTimeSlotPresentation({
+  timeSlots,
+  data,
+  timeSlotId,
+  fallbackName,
+}: {
+  timeSlots: Array<{
+    id: string
+    code: string
+    name: string | null
+    default_start_time: string | null
+    default_end_time: string | null
+  }>
+  data: WeeklyScheduleDataByClassroom[]
+  timeSlotId: string
+  fallbackName?: string
+}) {
+  const timeSlot = timeSlots.find(ts => ts.id === timeSlotId)
+  const timeSlotFromData = data
+    .flatMap(c => c.days)
+    .flatMap(d => d.time_slots)
+    .find(ts => ts.time_slot_id === timeSlotId)
+
+  const code = timeSlot?.code || timeSlotFromData?.time_slot_code || ''
+  const name = timeSlot?.name || timeSlotFromData?.time_slot_name || fallbackName || code
+  return {
+    code,
+    name: name || '',
+    startTime: timeSlot?.default_start_time || null,
+    endTime: timeSlot?.default_end_time || null,
+  }
+}
+
+export function buildSelectedCellSnapshot(
+  data: WeeklyScheduleDataByClassroom[],
+  cell: { dayId: string; classroomId: string; timeSlotId: string }
+) {
+  const classroom = data.find(c => c.classroom_id === cell.classroomId)
+  if (!classroom) return undefined
+
+  const day = classroom.days.find(d => d.day_of_week_id === cell.dayId)
+  if (!day) return undefined
+
+  const timeSlot = day.time_slots.find(ts => ts.time_slot_id === cell.timeSlotId)
+  if (!timeSlot) return undefined
+
+  return {
+    day_of_week_id: day.day_of_week_id,
+    day_name: day.day_name,
+    day_number: day.day_number,
+    time_slot_id: timeSlot.time_slot_id,
+    time_slot_code: timeSlot.time_slot_code,
+    time_slot_name: timeSlot.time_slot_name,
+    time_slot_display_order: timeSlot.time_slot_display_order,
+    assignments: timeSlot.assignments,
+    schedule_cell: timeSlot.schedule_cell || null,
+    absences: timeSlot.absences,
+  }
+}
+
 export default function WeeklyScheduleGridNew({
   data,
   selectedDayIds,
@@ -345,21 +405,20 @@ export default function WeeklyScheduleGridNew({
     if (!classroom) return
     const day = classroom.days.find(d => d.day_of_week_id === initialSelectedCell.dayId)
     if (!day) return
-    const timeSlotMeta = timeSlots.find(ts => ts.id === initialSelectedCell.timeSlotId)
-    const timeSlotFromData = day.time_slots.find(
-      ts => ts.time_slot_id === initialSelectedCell.timeSlotId
-    )
-    const timeSlotCode = timeSlotMeta?.code || timeSlotFromData?.time_slot_code || ''
-    const timeSlotName = timeSlotMeta?.name || timeSlotFromData?.time_slot_name || timeSlotCode
+    const timeSlotDetails = resolveTimeSlotPresentation({
+      timeSlots,
+      data,
+      timeSlotId: initialSelectedCell.timeSlotId,
+    })
 
     setSelectedCell({
       dayId: day.day_of_week_id,
       dayName: day.day_name,
       timeSlotId: initialSelectedCell.timeSlotId,
-      timeSlotName: timeSlotName || '',
-      timeSlotCode,
-      timeSlotStartTime: timeSlotMeta?.default_start_time || null,
-      timeSlotEndTime: timeSlotMeta?.default_end_time || null,
+      timeSlotName: timeSlotDetails.name,
+      timeSlotCode: timeSlotDetails.code,
+      timeSlotStartTime: timeSlotDetails.startTime,
+      timeSlotEndTime: timeSlotDetails.endTime,
       classroomId: classroom.classroom_id,
       classroomName: classroom.classroom_name,
       classroomColor: classroom.classroom_color ?? null,
@@ -368,29 +427,8 @@ export default function WeeklyScheduleGridNew({
   }, [initialSelectedCell, data, timeSlots])
 
   const buildSelectedCellData = useCallback(
-    (cell: { dayId: string; classroomId: string; timeSlotId: string }) => {
-      const classroom = data.find(c => c.classroom_id === cell.classroomId)
-      if (!classroom) return undefined
-
-      const day = classroom.days.find(d => d.day_of_week_id === cell.dayId)
-      if (!day) return undefined
-
-      const timeSlot = day.time_slots.find(ts => ts.time_slot_id === cell.timeSlotId)
-      if (!timeSlot) return undefined
-
-      return {
-        day_of_week_id: day.day_of_week_id,
-        day_name: day.day_name,
-        day_number: day.day_number,
-        time_slot_id: timeSlot.time_slot_id,
-        time_slot_code: timeSlot.time_slot_code,
-        time_slot_name: timeSlot.time_slot_name,
-        time_slot_display_order: timeSlot.time_slot_display_order,
-        assignments: timeSlot.assignments,
-        schedule_cell: timeSlot.schedule_cell || null,
-        absences: timeSlot.absences,
-      }
-    },
+    (cell: { dayId: string; classroomId: string; timeSlotId: string }) =>
+      buildSelectedCellSnapshot(data, cell),
     [data]
   )
 
@@ -407,22 +445,21 @@ export default function WeeklyScheduleGridNew({
       onFilterPanelOpenChange(false)
     }
 
-    // Find time slot details for code and time range
-    const timeSlot = timeSlots.find(ts => ts.id === timeSlotId)
-    // Also try to find from data structure
-    const timeSlotFromData = data
-      .flatMap(c => c.days)
-      .flatMap(d => d.time_slots)
-      .find(ts => ts.time_slot_id === timeSlotId)
+    const timeSlotDetails = resolveTimeSlotPresentation({
+      timeSlots,
+      data,
+      timeSlotId,
+      fallbackName: timeSlotName,
+    })
 
     setSelectedCell({
       dayId,
       dayName,
       timeSlotId,
       timeSlotName,
-      timeSlotCode: timeSlot?.code || timeSlotFromData?.time_slot_code || '',
-      timeSlotStartTime: timeSlot?.default_start_time || null,
-      timeSlotEndTime: timeSlot?.default_end_time || null,
+      timeSlotCode: timeSlotDetails.code,
+      timeSlotStartTime: timeSlotDetails.startTime,
+      timeSlotEndTime: timeSlotDetails.endTime,
       classroomId,
       classroomName,
       classroomColor: data.find(c => c.classroom_id === classroomId)?.classroom_color ?? null,

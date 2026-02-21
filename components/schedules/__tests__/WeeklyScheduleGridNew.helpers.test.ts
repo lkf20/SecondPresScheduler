@@ -1,9 +1,11 @@
 import {
+  buildSelectedCellSnapshot,
   calculateAssignmentCounts,
   extractDaysAndTimeSlots,
   generateClassroomsXDaysGridTemplate,
   generateDaysXClassroomsGridTemplate,
   hexToRgba,
+  resolveTimeSlotPresentation,
 } from '@/components/schedules/WeeklyScheduleGridNew'
 import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 
@@ -173,5 +175,121 @@ describe('WeeklyScheduleGridNew helpers', () => {
 
     expect(result.days.map(day => day.id)).toEqual(['day-mon', 'day-sun'])
     expect(result.timeSlots.map(slot => slot.id)).toEqual(['slot-1', 'slot-2'])
+  })
+
+  it('resolves time slot presentation from metadata with fallback to slot code', () => {
+    const data: WeeklyScheduleDataByClassroom[] = [
+      {
+        classroom_id: 'class-1',
+        classroom_name: 'Infant Room',
+        classroom_color: null,
+        days: [
+          {
+            day_of_week_id: 'day-mon',
+            day_name: 'Monday',
+            day_number: 1,
+            time_slots: [
+              {
+                time_slot_id: 'slot-1',
+                time_slot_code: 'EM',
+                time_slot_name: 'Early Morning',
+                time_slot_display_order: 1,
+                time_slot_start_time: null,
+                time_slot_end_time: null,
+                assignments: [],
+                schedule_cell: null,
+              },
+            ],
+          },
+        ],
+      },
+    ]
+
+    expect(
+      resolveTimeSlotPresentation({
+        timeSlots: [
+          {
+            id: 'slot-1',
+            code: 'EM',
+            name: null,
+            default_start_time: '07:30',
+            default_end_time: '09:30',
+            display_order: 1,
+          },
+        ],
+        data,
+        timeSlotId: 'slot-1',
+      })
+    ).toEqual({
+      code: 'EM',
+      name: 'Early Morning',
+      startTime: '07:30',
+      endTime: '09:30',
+    })
+  })
+
+  it('builds selected cell snapshot and returns undefined for missing cells', () => {
+    const data: WeeklyScheduleDataByClassroom[] = [
+      {
+        classroom_id: 'class-1',
+        classroom_name: 'Infant Room',
+        classroom_color: null,
+        days: [
+          {
+            day_of_week_id: 'day-mon',
+            day_name: 'Monday',
+            day_number: 1,
+            time_slots: [
+              {
+                time_slot_id: 'slot-1',
+                time_slot_code: 'EM',
+                time_slot_name: 'Early Morning',
+                time_slot_display_order: 1,
+                time_slot_start_time: null,
+                time_slot_end_time: null,
+                assignments: [
+                  {
+                    id: 'a-1',
+                    teacher_id: 'teacher-1',
+                    teacher_name: 'Teacher A',
+                    classroom_id: 'class-1',
+                    classroom_name: 'Infant Room',
+                  },
+                ],
+                absences: [],
+                schedule_cell: {
+                  id: 'cell-1',
+                  is_active: true,
+                  enrollment_for_staffing: 8,
+                  notes: null,
+                  class_groups: [],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ]
+
+    expect(
+      buildSelectedCellSnapshot(data, {
+        dayId: 'day-mon',
+        classroomId: 'class-1',
+        timeSlotId: 'slot-1',
+      })
+    ).toMatchObject({
+      day_of_week_id: 'day-mon',
+      time_slot_id: 'slot-1',
+      time_slot_code: 'EM',
+      assignments: [{ teacher_id: 'teacher-1' }],
+    })
+
+    expect(
+      buildSelectedCellSnapshot(data, {
+        dayId: 'day-tue',
+        classroomId: 'class-1',
+        timeSlotId: 'slot-1',
+      })
+    ).toBeUndefined()
   })
 })
