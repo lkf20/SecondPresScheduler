@@ -133,6 +133,49 @@ describe('POST /api/staffing-events/flex integration', () => {
     expect(json.error).toMatch(/no shifts matched/i)
   })
 
+  it('returns 500 when days_of_week lookup fails', async () => {
+    mockDaysSelect.mockResolvedValue({
+      data: null,
+      error: { message: 'days lookup failed' },
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
+      staff_id: 'staff-1',
+      start_date: '2026-03-02',
+      end_date: '2026-03-02',
+      classroom_ids: ['class-1'],
+      time_slot_ids: ['slot-1'],
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/days lookup failed/i)
+  })
+
+  it('returns 500 when staffing event creation fails', async () => {
+    mockEventSingle.mockResolvedValue({
+      data: null,
+      error: { message: 'insert failed' },
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
+      staff_id: 'staff-1',
+      start_date: '2026-03-02',
+      end_date: '2026-03-02',
+      classroom_ids: ['class-1'],
+      time_slot_ids: ['slot-1'],
+      day_of_week_ids: ['day-mon'],
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/insert failed/i)
+  })
+
   it('returns 409 when shift insert conflicts with existing assignment', async () => {
     mockShiftInsert.mockResolvedValue({
       error: { code: '23505', message: 'duplicate key value violates unique constraint' },
