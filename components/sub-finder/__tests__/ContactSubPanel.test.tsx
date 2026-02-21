@@ -26,6 +26,33 @@ jest.mock('@/lib/hooks/use-sub-assignment-mutations', () => ({
 }))
 
 describe('ContactSubPanel', () => {
+  const baseSub = {
+    id: 'sub-1',
+    name: 'Sally A.',
+    phone: '555-111-2222',
+    email: 'sally@example.com',
+    coverage_percent: 100,
+    shifts_covered: 1,
+    total_shifts: 1,
+    can_cover: [
+      {
+        date: '2026-02-09',
+        day_name: 'Monday',
+        time_slot_code: 'EM',
+        class_name: 'Infant',
+      },
+    ],
+    cannot_cover: [],
+    assigned_shifts: [],
+  } as const
+
+  const baseAbsence = {
+    id: 'absence-1',
+    teacher_name: 'Teacher One',
+    start_date: '2026-02-09',
+    end_date: '2026-02-09',
+  } as const
+
   beforeEach(() => {
     jest.clearAllMocks()
     global.fetch = jest.fn().mockResolvedValue({
@@ -733,6 +760,211 @@ describe('ContactSubPanel', () => {
     await waitFor(() => {
       expect(alertSpy).toHaveBeenCalledWith(
         expect.stringMatching(/error saving declined status: failed to get or create contact/i)
+      )
+    })
+  })
+
+  it('renders contextual warnings when selected shifts require unmet capabilities', async () => {
+    render(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        variant="inline"
+        sub={{
+          ...baseSub,
+          can_change_diapers: false,
+          can_lift_children: false,
+          can_cover: [
+            {
+              ...baseSub.can_cover[0],
+              diaper_changing_required: true,
+              lifting_children_required: true,
+            },
+          ],
+        }}
+        absence={baseAbsence}
+        initialContactData={{
+          id: 'contact-1',
+          is_contacted: true,
+          contacted_at: '2026-02-09T12:00:00.000Z',
+          response_status: 'confirmed',
+          notes: '',
+          coverage_request_id: 'coverage-1',
+          selected_shift_keys: ['2026-02-09|EM'],
+          override_shift_keys: [],
+        }}
+      />
+    )
+
+    expect(await screen.findByText(/important information/i)).toBeInTheDocument()
+    expect(screen.getByText(/diapering required/i)).toBeInTheDocument()
+    expect(screen.getByText(/lifting children required/i)).toBeInTheDocument()
+    expect(screen.getByText(/prefers not to lift children/i)).toBeInTheDocument()
+  })
+
+  it('allows selecting an unavailable shift after override and assigns it', async () => {
+    const user = userEvent.setup()
+    mockAssignMutateAsync.mockResolvedValueOnce({ assigned_shifts: [] })
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+
+      if (url.includes('/api/subs/')) {
+        return {
+          ok: true,
+          json: async () => ({ active: true }),
+        } as Response
+      }
+
+      if (url === '/api/sub-finder/shift-overrides' && init?.method === 'POST') {
+        return {
+          ok: true,
+          json: async () => ({
+            shift_overrides: [
+              {
+                coverage_request_shift_id: 'crs-2',
+                selected: true,
+                override_availability: true,
+              },
+            ],
+            selected_shift_ids: ['crs-2'],
+          }),
+        } as Response
+      }
+
+      if (url === '/api/sub-finder/substitute-contacts' && init?.method === 'PUT') {
+        return {
+          ok: true,
+          json: async () => ({ id: 'contact-1' }),
+        } as Response
+      }
+
+      if (url.includes('/assigned-shifts')) {
+        return {
+          ok: true,
+          json: async () => ({
+            remaining_shift_keys: [],
+            remaining_shift_count: 0,
+          }),
+        } as Response
+      }
+
+      return {
+        ok: true,
+        json: async () => ({}),
+      } as Response
+    }) as jest.Mock
+
+    render(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        variant="inline"
+        sub={{
+          ...baseSub,
+          can_cover: [],
+          cannot_cover: [
+            {
+              date: '2026-02-09',
+              day_name: 'Monday',
+              time_slot_code: 'EM',
+              reason: 'Has time off',
+            },
+          ],
+        }}
+        absence={baseAbsence}
+        initialContactData={{
+          id: 'contact-1',
+          is_contacted: true,
+          contacted_at: '2026-02-09T12:00:00.000Z',
+          response_status: 'confirmed',
+          notes: '',
+          coverage_request_id: 'coverage-1',
+          selected_shift_keys: [],
+          override_shift_keys: [],
+        }}
+      />
+    )
+
+    await user.click(await screen.findByRole('button', { name: /^override$/i }))
+
+    const [, unavailableShiftCheckbox] = screen.getAllByRole('checkbox')
+    expect(unavailableShiftCheckbox).toBeEnabled()
+    await user.click(unavailableShiftCheckbox)
+    await user.click(screen.getByRole('button', { name: /^assign$/i }))
+
+    await waitFor(() => {
+      expect(mockAssignMutateAsync).toHaveBeenCalledWith({
+        coverage_request_id: 'coverage-1',
+        sub_id: 'sub-1',
+        selected_shift_ids: ['crs-2'],
+      })
+    })
+  })
+
+  it('shows full-date contacted timestamp format for prior years', async () => {
+    render(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        variant="inline"
+        sub={baseSub}
+        absence={baseAbsence}
+        initialContactData={{
+          id: 'contact-1',
+          is_contacted: true,
+          contacted_at: '2024-01-05T12:00:00.000Z',
+          response_status: 'pending',
+          notes: '',
+          coverage_request_id: 'coverage-1',
+          selected_shift_keys: ['2026-02-09|EM'],
+          override_shift_keys: [],
+        }}
+      />
+    )
+
+    expect(await screen.findByText(/contact status updated/i)).toHaveTextContent(/2024 at/i)
+  })
+
+  it('logs coverage request fetch details when coverage lookup fails', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/sub-finder/coverage-request/')) {
+        return {
+          ok: false,
+          status: 500,
+          statusText: 'Internal Server Error',
+          url,
+          text: async () => 'coverage boom',
+        } as Response
+      }
+      if (url.includes('/api/subs/')) {
+        return {
+          ok: true,
+          json: async () => ({ active: true }),
+        } as Response
+      }
+      return {
+        ok: true,
+        json: async () => null,
+      } as Response
+    }) as jest.Mock
+
+    render(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        variant="inline"
+        sub={baseSub}
+        absence={baseAbsence}
+      />
+    )
+
+    await waitFor(() => {
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/failed to fetch coverage request/i)
       )
     })
   })
