@@ -353,26 +353,16 @@ export default function SubPreferencesSection({
         capabilities_notes: capabilitiesState.capabilities_notes.trim() || null,
       }
 
-      const preferencesResponse = await fetch(`/api/subs/${subId}/preferences`, {
+      const response = await fetch(`/api/subs/${subId}/preferences-bundle`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ class_group_ids: selectedClassIds }),
+        body: JSON.stringify({
+          class_group_ids: selectedClassIds,
+          qualifications: qualificationsPayload,
+          capabilities: capabilitiesPayload,
+        }),
       })
-      if (!preferencesResponse.ok) throw new Error('Failed to save preferences')
-
-      const qualificationsResponse = await fetch(`/api/subs/${subId}/qualifications`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qualifications: qualificationsPayload }),
-      })
-      if (!qualificationsResponse.ok) throw new Error('Failed to save qualifications')
-
-      const capabilitiesResponse = await fetch(`/api/subs/${subId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(capabilitiesPayload),
-      })
-      if (!capabilitiesResponse.ok) throw new Error('Failed to save capabilities')
+      if (!response.ok) throw new Error('Failed to save preferences')
 
       toast.success('Preferences saved.')
       const nextBaseline = currentSnapshot
