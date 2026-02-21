@@ -115,6 +115,19 @@ describe('/api/staffing-events/flex/remove integration', () => {
     expect(json.error).toMatch(/event_id is required/i)
   })
 
+  it('GET returns 403 when school context is missing', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue(null)
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove?event_id=event-1',
+      'GET'
+    )
+    const response = await GET(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(403)
+    expect(json.error).toMatch(/missing school context/i)
+  })
+
   it('GET returns context details and sorted weekdays', async () => {
     buildSupabaseMock({
       shiftSelectResults: [
@@ -161,6 +174,77 @@ describe('/api/staffing-events/flex/remove integration', () => {
 
     expect(response.status).toBe(400)
     expect(json.error).toMatch(/event_id and scope are required/i)
+  })
+
+  it('POST validates scope-specific required fields', async () => {
+    buildSupabaseMock()
+
+    const missingClassroomAndTime = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove',
+      'POST',
+      {
+        event_id: 'event-1',
+        scope: 'single_shift',
+        date: '2026-02-09',
+      }
+    )
+    const response1 = await POST(missingClassroomAndTime as any)
+    const json1 = await response1.json()
+    expect(response1.status).toBe(400)
+    expect(json1.error).toMatch(/classroom_id and time_slot_id are required/i)
+
+    const missingDate = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove',
+      'POST',
+      {
+        event_id: 'event-1',
+        scope: 'single_shift',
+        classroom_id: 'class-1',
+        time_slot_id: 'slot-1',
+      }
+    )
+    const response2 = await POST(missingDate as any)
+    const json2 = await response2.json()
+    expect(response2.status).toBe(400)
+    expect(json2.error).toMatch(/date is required for single_shift/i)
+
+    const missingDayOfWeek = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove',
+      'POST',
+      {
+        event_id: 'event-1',
+        scope: 'weekday',
+        classroom_id: 'class-1',
+        time_slot_id: 'slot-1',
+      }
+    )
+    const response3 = await POST(missingDayOfWeek as any)
+    const json3 = await response3.json()
+    expect(response3.status).toBe(400)
+    expect(json3.error).toMatch(/day_of_week_id is required for weekday scope/i)
+  })
+
+  it('POST returns 404 when the flex event does not exist', async () => {
+    buildSupabaseMock({
+      eventMaybeSingleResult: {
+        data: null,
+        error: null,
+      },
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove',
+      'POST',
+      {
+        event_id: 'missing-event',
+        scope: 'all_shifts',
+      }
+    )
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(404)
+    expect(json.error).toMatch(/flex assignment not found/i)
   })
 
   it('POST returns 404 when no matching active shifts are found', async () => {
