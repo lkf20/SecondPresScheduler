@@ -110,7 +110,9 @@ interface ScheduleSidePanelProps {
   readOnly?: boolean
 }
 
-const mapAssignmentsToTeachers = (assignments?: WeeklyScheduleData['assignments']): Teacher[] => {
+export const mapAssignmentsToTeachers = (
+  assignments?: WeeklyScheduleData['assignments']
+): Teacher[] => {
   if (!assignments) return []
   const seen = new Set<string>()
   return assignments
@@ -136,7 +138,7 @@ const log = (...args: unknown[]) => {
   }
 }
 
-const formatFlexWeekdayList = (days: string[]) => {
+export const formatFlexWeekdayList = (days: string[]) => {
   if (days.length === 0) return ''
   const pluralized = days.map(day => (day.endsWith('s') ? day : `${day}s`))
   if (pluralized.length === 1) return pluralized[0]
