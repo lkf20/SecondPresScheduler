@@ -152,6 +152,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
     ;(canTransitionTimeOffStatus as jest.Mock).mockReturnValue(true)
+    ;(getTeacherTimeOffShifts as jest.Mock).mockResolvedValue([])
     ;(updateTimeOffRequest as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
@@ -254,6 +255,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
     ;(canTransitionTimeOffStatus as jest.Mock).mockReturnValue(true)
+    ;(getTeacherTimeOffShifts as jest.Mock).mockResolvedValue([])
     ;(updateTimeOffRequest as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
@@ -500,5 +502,84 @@ describe('PUT /api/time-off/[id] integration', () => {
 
     expect(response.status).toBe(500)
     expect(json.error).toMatch(/db failure/i)
+  })
+
+  it('PUT in non-production checks persisted shift count after rebuild', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'test'
+
+    const timeOffRequestsTable = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({
+        data: {
+          coverage_request_id: null,
+          start_date: '2026-02-20',
+          end_date: '2026-02-20',
+        },
+        error: null,
+      }),
+    }
+
+    const timeOffShiftsTable = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({
+        count: 1,
+        error: null,
+      }),
+    }
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'time_off_requests') return timeOffRequestsTable
+      if (table === 'time_off_shifts') return timeOffShiftsTable
+      return { select: jest.fn().mockReturnThis(), eq: jest.fn().mockResolvedValue({ data: null }) }
+    })
+    ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
+      id: 'timeoff-2',
+      school_id: 'school-1',
+      status: 'active',
+      start_date: '2026-02-20',
+      end_date: '2026-02-20',
+      teacher_id: 'teacher-1',
+      shift_selection_mode: 'select_shifts',
+    })
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
+    ;(canTransitionTimeOffStatus as jest.Mock).mockReturnValue(true)
+    ;(updateTimeOffRequest as jest.Mock).mockResolvedValue({
+      id: 'timeoff-2',
+      school_id: 'school-1',
+      status: 'active',
+      start_date: '2026-02-20',
+      end_date: '2026-02-20',
+      teacher_id: 'teacher-1',
+      shift_selection_mode: 'select_shifts',
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/time-off/timeoff-2', 'PUT', {
+      status: 'active',
+      teacher_id: 'teacher-1',
+      start_date: '2026-02-20',
+      end_date: '2026-02-20',
+      shift_selection_mode: 'select_shifts',
+      shifts: [
+        {
+          date: '2026-02-20',
+          day_of_week_id: 'day-1',
+          time_slot_id: 'slot-1',
+        },
+      ],
+    })
+
+    const response = await PUT(request as any, { params: Promise.resolve({ id: 'timeoff-2' }) })
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(timeOffShiftsTable.select).toHaveBeenCalledWith('id', { count: 'exact', head: true })
+    expect(timeOffShiftsTable.eq).toHaveBeenCalledWith('time_off_request_id', 'timeoff-2')
+    expect(deleteTimeOffShifts).toHaveBeenCalledWith('timeoff-2')
+    expect(json.id).toBe('timeoff-2')
+
+    process.env.NODE_ENV = previousNodeEnv
   })
 })
