@@ -176,4 +176,95 @@ describe('ContactSubPanel', () => {
       ).toBeInTheDocument()
     })
   })
+
+  it('skips coverage fetch for manual absences', async () => {
+    global.fetch = jest.fn() as jest.Mock
+
+    render(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        variant="inline"
+        sub={{
+          id: 'sub-1',
+          name: 'Sally A.',
+          phone: '555-111-2222',
+          email: 'sally@example.com',
+          coverage_percent: 100,
+          shifts_covered: 1,
+          total_shifts: 1,
+          can_cover: [
+            {
+              date: '2026-02-09',
+              day_name: 'Monday',
+              time_slot_code: 'EM',
+              class_name: 'Infant',
+            },
+          ],
+          cannot_cover: [],
+          assigned_shifts: [],
+        }}
+        absence={{
+          id: 'manual-absence-1',
+          teacher_name: 'Teacher One',
+          start_date: '2026-02-09',
+          end_date: '2026-02-09',
+        }}
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/contact summary/i)).toBeInTheDocument()
+    })
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it('shows declining-all state from cached contact data', async () => {
+    render(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        variant="inline"
+        sub={{
+          id: 'sub-1',
+          name: 'Sally A.',
+          phone: '555-111-2222',
+          email: 'sally@example.com',
+          coverage_percent: 100,
+          shifts_covered: 1,
+          total_shifts: 1,
+          can_cover: [
+            {
+              date: '2026-02-09',
+              day_name: 'Monday',
+              time_slot_code: 'EM',
+              class_name: 'Infant',
+            },
+          ],
+          cannot_cover: [],
+          assigned_shifts: [],
+        }}
+        absence={{
+          id: 'absence-1',
+          teacher_name: 'Teacher One',
+          start_date: '2026-02-09',
+          end_date: '2026-02-09',
+        }}
+        initialContactData={{
+          id: 'contact-1',
+          is_contacted: true,
+          contacted_at: '2026-02-09T12:00:00.000Z',
+          response_status: 'declined_all',
+          notes: '',
+          coverage_request_id: 'coverage-1',
+          selected_shift_keys: [],
+          override_shift_keys: [],
+        }}
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/declining all shifts/i)).toBeInTheDocument()
+    })
+  })
 })

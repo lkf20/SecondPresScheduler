@@ -141,6 +141,7 @@ describe('TimeOffForm', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    window.sessionStorage.clear()
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
       if (url === '/api/teachers') {
@@ -251,5 +252,90 @@ describe('TimeOffForm', () => {
     expect(
       await screen.findByText(/all selected shifts already have time off recorded/i)
     ).toBeInTheDocument()
+  })
+
+  it('shows formatted warning toast when backend excludes conflicting shifts', async () => {
+    const user = userEvent.setup()
+    ;(global.fetch as jest.Mock).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/api/teachers') {
+        return {
+          ok: true,
+          json: async () => [teacher],
+        } as Response
+      }
+      if (url === '/api/time-off') {
+        return {
+          ok: true,
+          json: async () => ({
+            warning:
+              'This teacher already has time off recorded for 1 of these shifts.<br>1 shift will not be recorded: Mon Feb 9',
+          }),
+        } as Response
+      }
+      return {
+        ok: false,
+        json: async () => ({ error: `Unhandled fetch URL in test: ${url}` }),
+      } as Response
+    })
+
+    renderWithQueryClient(<TimeOffForm />)
+
+    const teacherInput = screen.getByPlaceholderText(/select a teacher/i)
+    await user.click(teacherInput)
+    await user.click(await screen.findByRole('button', { name: /bella wilbanks/i }))
+    fireEvent.change(screen.getByTestId('time-off-start-date'), { target: { value: '2026-02-09' } })
+    await user.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/time-off',
+        expect.objectContaining({ method: 'POST' })
+      )
+      expect(mockToastWarning).toHaveBeenCalled()
+    })
+
+    const warningMessage = (mockToastWarning.mock.calls[0]?.[0] ?? '') as string
+    expect(warningMessage).toMatch(/already has time off recorded/i)
+  })
+
+  it('surfaces backend error when create fails', async () => {
+    const user = userEvent.setup()
+    ;(global.fetch as jest.Mock).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/api/teachers') {
+        return {
+          ok: true,
+          json: async () => [teacher],
+        } as Response
+      }
+      if (url === '/api/time-off') {
+        return {
+          ok: false,
+          json: async () => ({ error: 'Teacher cannot be scheduled on this date' }),
+        } as Response
+      }
+      return {
+        ok: false,
+        json: async () => ({ error: `Unhandled fetch URL in test: ${url}` }),
+      } as Response
+    })
+
+    renderWithQueryClient(<TimeOffForm />)
+
+    const teacherInput = screen.getByPlaceholderText(/select a teacher/i)
+    await user.click(teacherInput)
+    await user.click(await screen.findByRole('button', { name: /bella wilbanks/i }))
+    fireEvent.change(screen.getByTestId('time-off-start-date'), { target: { value: '2026-02-09' } })
+    await user.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/time-off',
+        expect.objectContaining({ method: 'POST' })
+      )
+    })
+
+    expect(await screen.findByText(/teacher cannot be scheduled/i)).toBeInTheDocument()
   })
 })
