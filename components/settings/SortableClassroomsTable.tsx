@@ -62,7 +62,7 @@ function SortableRow({ classroom }: { classroom: Classroom }) {
 
   return (
     <TableRow ref={setNodeRef} style={style} className={cn(isDragging && 'bg-muted')}>
-      <TableCell className="w-10">
+      <TableCell className="w-10 text-base">
         <button
           {...attributes}
           {...listeners}
@@ -72,7 +72,7 @@ function SortableRow({ classroom }: { classroom: Classroom }) {
           <GripVertical className="h-4 w-4 text-muted-foreground" />
         </button>
       </TableCell>
-      <TableCell>
+      <TableCell className="text-base">
         <div className="flex items-center gap-2">
           {!classroom.is_active && (
             <Badge variant="secondary" className="text-xs">
@@ -87,9 +87,11 @@ function SortableRow({ classroom }: { classroom: Classroom }) {
           </Link>
         </div>
       </TableCell>
-      <TableCell>{classroom.capacity || '—'}</TableCell>
-      <TableCell className="max-w-md">{classroom.allowed_classes_display || 'None'}</TableCell>
-      <TableCell>
+      <TableCell className="text-base">{classroom.capacity || '—'}</TableCell>
+      <TableCell className="max-w-md text-base">
+        {classroom.allowed_classes_display || 'None'}
+      </TableCell>
+      <TableCell className="text-base">
         {classroom.color ? (
           <div
             className="w-8 h-8 rounded"
@@ -199,7 +201,7 @@ export default function SortableClassroomsTable({
         </div>
         <div className="flex items-center gap-2">
           <Switch id="show-inactive" checked={showInactive} onCheckedChange={setShowInactive} />
-          <Label htmlFor="show-inactive" className="text-sm cursor-pointer">
+          <Label htmlFor="show-inactive" className="text-sm font-normal cursor-pointer">
             Show inactive
           </Label>
         </div>
@@ -222,7 +224,7 @@ export default function SortableClassroomsTable({
               <TableBody>
                 {filteredClassrooms.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="text-base text-center text-muted-foreground">
                       No classrooms found
                     </TableCell>
                   </TableRow>
@@ -262,12 +264,12 @@ export default function SortableClassroomsTable({
               ) : (
                 filteredClassrooms.map(classroom => (
                   <TableRow key={classroom.id}>
-                    <TableCell className="w-10">
+                    <TableCell className="w-10 text-base">
                       <div className="p-1">
                         <GripVertical className="h-4 w-4 text-muted-foreground" />
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-base">
                       <div className="flex items-center gap-2">
                         {!classroom.is_active && (
                           <Badge variant="secondary" className="text-xs">
@@ -285,11 +287,11 @@ export default function SortableClassroomsTable({
                         </Link>
                       </div>
                     </TableCell>
-                    <TableCell>{classroom.capacity || '—'}</TableCell>
-                    <TableCell className="max-w-md">
+                    <TableCell className="text-base">{classroom.capacity || '—'}</TableCell>
+                    <TableCell className="max-w-md text-base">
                       {classroom.allowed_classes_display || 'None'}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-base">
                       {classroom.color ? (
                         <div
                           className="w-8 h-8 rounded"

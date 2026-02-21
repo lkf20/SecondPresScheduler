@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -409,14 +409,14 @@ export default function StaffPageClient({
         >
           Substitute Teachers ({counts.substitute})
         </button>
-        <div className="flex items-center space-x-2 pl-2">
-          <Checkbox
+        <div className="flex items-center gap-2 pl-2">
+          <Switch
             id="include-inactive-staff"
             checked={includeInactiveStaff}
             onCheckedChange={checked => setIncludeInactiveStaff(checked === true)}
           />
           <Label htmlFor="include-inactive-staff" className="text-sm font-normal cursor-pointer">
-            Include Inactive Staff
+            Show inactive
           </Label>
         </div>
       </div>

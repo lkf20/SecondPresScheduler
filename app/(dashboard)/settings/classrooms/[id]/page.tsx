@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { getClassroomById } from '@/lib/api/classrooms'
-import ClassroomFormClient from './ClassroomFormClient'
+import ClassroomForm from '@/components/settings/ClassroomForm'
 
 export default async function ClassroomDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -12,5 +12,5 @@ export default async function ClassroomDetailPage({ params }: { params: Promise<
     notFound()
   }
 
-  return <ClassroomFormClient classroom={classroom} />
+  return <ClassroomForm mode="edit" classroom={classroom} />
 }
