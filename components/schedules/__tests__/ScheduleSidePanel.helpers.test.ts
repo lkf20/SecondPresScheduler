@@ -1,9 +1,12 @@
 import {
+  buildFindSubLink,
   buildStaffingSummary,
   buildFlexRemovalDialogCopy,
   calculateScheduledStaffCount,
   formatFlexWeekdayList,
   mapAssignmentsToTeachers,
+  sortAbsencesByTeacherName,
+  sortAssignmentsForPanel,
 } from '@/components/schedules/ScheduleSidePanel'
 
 describe('ScheduleSidePanel helpers', () => {
@@ -203,5 +206,119 @@ describe('ScheduleSidePanel helpers', () => {
       status: null,
       label: 'No staffing target',
     })
+  })
+
+  it('sorts absences alphabetically by teacher name', () => {
+    expect(
+      sortAbsencesByTeacherName([
+        {
+          teacher_id: 't-2',
+          teacher_name: 'Zara T.',
+          has_sub: false,
+          is_partial: false,
+        },
+        {
+          teacher_id: 't-1',
+          teacher_name: 'Amy P.',
+          has_sub: true,
+          is_partial: true,
+        },
+      ])
+    ).toEqual([
+      {
+        teacher_id: 't-1',
+        teacher_name: 'Amy P.',
+        has_sub: true,
+        is_partial: true,
+      },
+      {
+        teacher_id: 't-2',
+        teacher_name: 'Zara T.',
+        has_sub: false,
+        is_partial: false,
+      },
+    ])
+  })
+
+  it('sorts assignments into permanent, flex, and floater groups', () => {
+    const result = sortAssignmentsForPanel([
+      {
+        id: 'a-3',
+        teacher_id: 'teacher-3',
+        teacher_name: 'Floater A.',
+        classroom_id: 'class-1',
+        classroom_name: 'Infant Room',
+        is_floater: true,
+      },
+      {
+        id: 'a-1',
+        teacher_id: 'teacher-1',
+        teacher_name: 'Teacher Z.',
+        classroom_id: 'class-1',
+        classroom_name: 'Infant Room',
+      },
+      {
+        id: 'a-2',
+        teacher_id: 'teacher-2',
+        teacher_name: 'Flex A.',
+        classroom_id: 'class-1',
+        classroom_name: 'Infant Room',
+        is_flexible: true,
+      },
+      {
+        id: 'a-sub',
+        teacher_id: 'sub-1',
+        teacher_name: 'Sub A.',
+        classroom_id: 'class-1',
+        classroom_name: 'Infant Room',
+        is_substitute: true,
+      },
+    ])
+
+    expect(result.permanentAssignments.map(a => a.teacher_name)).toEqual(['Teacher Z.'])
+    expect(result.flexAssignments.map(a => a.teacher_name)).toEqual(['Flex A.'])
+    expect(result.floaterAssignments.map(a => a.teacher_name)).toEqual(['Floater A.'])
+  })
+
+  it('builds sub finder links with absence, then teacher, then default fallback', () => {
+    expect(
+      buildFindSubLink({
+        absences: [
+          {
+            teacher_id: 't-1',
+            teacher_name: 'Amy P.',
+            has_sub: false,
+            is_partial: false,
+            time_off_request_id: 'req-1',
+          },
+        ],
+        assignments: [
+          {
+            id: 'a-1',
+            teacher_id: 'teacher-1',
+            teacher_name: 'Teacher A.',
+            classroom_id: 'class-1',
+            classroom_name: 'Infant Room',
+          },
+        ],
+      })
+    ).toBe('/sub-finder?absence_id=req-1')
+
+    expect(
+      buildFindSubLink({
+        absences: [],
+        assignments: [
+          {
+            id: 'a-1',
+            teacher_id: 'teacher-1',
+            teacher_name: 'Teacher A.',
+            classroom_id: 'class-1',
+            classroom_name: 'Infant Room',
+          },
+        ],
+      })
+    ).toBe('/sub-finder?teacher_id=teacher-1')
+
+    expect(buildFindSubLink({ absences: [], assignments: [] })).toBe('/sub-finder')
   })
 })

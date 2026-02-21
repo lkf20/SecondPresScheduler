@@ -254,6 +254,67 @@ export const buildStaffingSummary = ({
   }
 }
 
+const compareByTeacherName = (a: { teacher_name: string }, b: { teacher_name: string }) =>
+  (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown')
+
+export const sortAbsencesByTeacherName = (
+  absences: NonNullable<SelectedCellData['absences']> = []
+) => [...absences].sort(compareByTeacherName)
+
+export const sortAssignmentsForPanel = (assignments: WeeklyScheduleData['assignments'] = []) => {
+  const permanentAssignments = assignments
+    .filter(
+      assignment => !assignment.is_substitute && !assignment.is_flexible && !assignment.is_floater
+    )
+    .sort(compareByTeacherName)
+
+  const flexAssignments = assignments
+    .filter(
+      assignment => !assignment.is_substitute && assignment.is_flexible && !assignment.is_floater
+    )
+    .sort(compareByTeacherName)
+
+  const floaterAssignments = assignments
+    .filter(assignment => !assignment.is_substitute && assignment.is_floater)
+    .sort(compareByTeacherName)
+
+  return {
+    permanentAssignments,
+    flexAssignments,
+    floaterAssignments,
+  }
+}
+
+export const buildFindSubLink = ({
+  absences,
+  assignments,
+}: {
+  absences?: SelectedCellData['absences']
+  assignments?: WeeklyScheduleData['assignments']
+}) => {
+  const absenceForCell =
+    absences?.find(
+      (absence: {
+        teacher_id: string
+        teacher_name: string
+        has_sub: boolean
+        is_partial: boolean
+        time_off_request_id?: string | null
+      }) => absence.time_off_request_id
+    ) ?? null
+
+  const primaryTeacher =
+    assignments?.find(assignment => !assignment.is_substitute && !assignment.is_flexible) ?? null
+
+  if (absenceForCell?.time_off_request_id) {
+    return `/sub-finder?absence_id=${absenceForCell.time_off_request_id}`
+  }
+  if (primaryTeacher?.teacher_id) {
+    return `/sub-finder?teacher_id=${primaryTeacher.teacher_id}`
+  }
+  return '/sub-finder'
+}
+
 export default function ScheduleSidePanel({
   isOpen,
   onClose,
@@ -1875,43 +1936,16 @@ export default function ScheduleSidePanel({
 
   const flexAssignments =
     selectedCellData?.assignments?.filter(assignment => assignment.is_flexible) ?? []
-  const sortedAbsences = [...(selectedCellData?.absences ?? [])].sort((a, b) =>
-    (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown')
-  )
-  const sortedPermanentAssignments = [
-    ...(selectedCellData?.assignments?.filter(
-      assignment => !assignment.is_substitute && !assignment.is_flexible && !assignment.is_floater
-    ) ?? []),
-  ].sort((a, b) => (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown'))
-  const sortedFlexAssignments = [
-    ...(selectedCellData?.assignments?.filter(
-      assignment => !assignment.is_substitute && assignment.is_flexible && !assignment.is_floater
-    ) ?? []),
-  ].sort((a, b) => (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown'))
-  const sortedFloaterAssignments = [
-    ...(selectedCellData?.assignments?.filter(
-      assignment => !assignment.is_substitute && assignment.is_floater
-    ) ?? []),
-  ].sort((a, b) => (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown'))
-  const absenceForCell =
-    selectedCellData?.absences?.find(
-      (absence: {
-        teacher_id: string
-        teacher_name: string
-        has_sub: boolean
-        is_partial: boolean
-        time_off_request_id?: string | null
-      }) => absence.time_off_request_id
-    ) ?? null
-  const primaryTeacher =
-    selectedCellData?.assignments?.find(
-      assignment => !assignment.is_substitute && !assignment.is_flexible
-    ) ?? null
-  const findSubLink = absenceForCell?.time_off_request_id
-    ? `/sub-finder?absence_id=${absenceForCell.time_off_request_id}`
-    : primaryTeacher?.teacher_id
-      ? `/sub-finder?teacher_id=${primaryTeacher.teacher_id}`
-      : '/sub-finder'
+  const sortedAbsences = sortAbsencesByTeacherName(selectedCellData?.absences ?? [])
+  const {
+    permanentAssignments: sortedPermanentAssignments,
+    flexAssignments: sortedFlexAssignments,
+    floaterAssignments: sortedFloaterAssignments,
+  } = sortAssignmentsForPanel(selectedCellData?.assignments ?? [])
+  const findSubLink = buildFindSubLink({
+    absences: selectedCellData?.absences,
+    assignments: selectedCellData?.assignments,
+  })
 
   // Debug logging
   useEffect(() => {
