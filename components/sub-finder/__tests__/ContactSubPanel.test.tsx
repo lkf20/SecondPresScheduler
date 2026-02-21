@@ -657,4 +657,83 @@ describe('ContactSubPanel', () => {
     })
     expect(mockAssignMutateAsync).not.toHaveBeenCalled()
   })
+
+  it('shows alert when declined-all save cannot get or create contact', async () => {
+    const user = userEvent.setup()
+    const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+
+      if (url.includes('/api/subs/')) {
+        return {
+          ok: true,
+          json: async () => ({ active: true }),
+        } as Response
+      }
+
+      if (url.includes('/api/sub-finder/substitute-contacts?') && !init?.method) {
+        return {
+          ok: false,
+          json: async () => ({ error: 'lookup failed' }),
+        } as Response
+      }
+
+      return {
+        ok: true,
+        json: async () => ({}),
+      } as Response
+    }) as jest.Mock
+
+    render(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        variant="inline"
+        sub={{
+          id: 'sub-1',
+          name: 'Sally A.',
+          phone: '555-111-2222',
+          email: 'sally@example.com',
+          coverage_percent: 100,
+          shifts_covered: 1,
+          total_shifts: 1,
+          can_cover: [
+            {
+              date: '2026-02-09',
+              day_name: 'Monday',
+              time_slot_code: 'EM',
+              class_name: 'Infant',
+            },
+          ],
+          cannot_cover: [],
+          assigned_shifts: [],
+        }}
+        absence={{
+          id: 'absence-1',
+          teacher_name: 'Teacher One',
+          start_date: '2026-02-09',
+          end_date: '2026-02-09',
+        }}
+        initialContactData={{
+          id: '',
+          is_contacted: true,
+          contacted_at: '2026-02-09T12:00:00.000Z',
+          response_status: 'declined_all',
+          notes: '',
+          coverage_request_id: 'coverage-1',
+          selected_shift_keys: [],
+          override_shift_keys: [],
+        }}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /mark as declined/i }))
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/error saving declined status: failed to get or create contact/i)
+      )
+    })
+  })
 })
