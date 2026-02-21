@@ -63,7 +63,7 @@ type WeeklyScheduleCellData = WeeklyScheduleData & {
 }
 
 // Helper function to convert hex color to rgba with opacity
-function hexToRgba(hex: string, opacity: number = 0.08): string {
+export function hexToRgba(hex: string, opacity: number = 0.08): string {
   // Remove # if present
   const cleanHex = hex.replace('#', '')
 
@@ -76,7 +76,7 @@ function hexToRgba(hex: string, opacity: number = 0.08): string {
 }
 
 // Helper function to generate grid template for days-x-classrooms layout
-function generateDaysXClassroomsGridTemplate(
+export function generateDaysXClassroomsGridTemplate(
   classroomCount: number,
   days: Array<{ id: string; name: string; number: number }>,
   timeSlots: Array<{ id: string; code: string }>
@@ -105,7 +105,7 @@ function generateDaysXClassroomsGridTemplate(
 }
 
 // Helper function to generate grid template for classrooms-x-days layout
-function generateClassroomsXDaysGridTemplate(
+export function generateClassroomsXDaysGridTemplate(
   dayCount: number,
   timeSlotCount: number
 ): { columns: string; rows: string } {

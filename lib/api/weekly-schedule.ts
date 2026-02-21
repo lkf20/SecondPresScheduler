@@ -40,7 +40,7 @@ type StaffRoleAssignmentRow = {
   role_type: { code: string } | { code: string }[] | null
 }
 
-const getStaffDisplayName = (
+export const getStaffDisplayName = (
   staff: StaffLite | StaffLite[] | null | undefined,
   displayNameFormat: DisplayNameFormat
 ) => {
@@ -58,7 +58,7 @@ const getStaffDisplayName = (
   )
 }
 
-const getStaffNameParts = (
+export const getStaffNameParts = (
   staff: StaffLite | StaffLite[] | null | undefined,
   displayNameFormat: DisplayNameFormat
 ) => {
