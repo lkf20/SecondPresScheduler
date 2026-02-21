@@ -18,7 +18,7 @@ import {
   formatStaffDisplayName,
   type DisplayNameFormat,
 } from '@/lib/utils/staff-display-name'
-import { formatUSPhoneDashed, isValidUSPhone } from '@/lib/utils/phone'
+import { formatUSPhoneDashed, formatUSPhoneDashedInput, isValidUSPhone } from '@/lib/utils/phone'
 
 const staffSchema = z
   .object({
@@ -132,6 +132,7 @@ export default function StaffForm({
     resolver: zodResolver(staffSchema) as Resolver<StaffFormData>,
     defaultValues: initialValues,
   })
+  const phoneField = register('phone')
 
   const firstName = watch('first_name')
   const lastName = watch('last_name')
@@ -348,7 +349,18 @@ export default function StaffForm({
         </FormField>
 
         <FormField label="Phone" error={errors.phone?.message}>
-          <Input type="tel" {...register('phone')} placeholder="555-555-5555" />
+          <Input
+            type="tel"
+            {...phoneField}
+            placeholder="555-555-5555"
+            onChange={event => {
+              const formatted = formatUSPhoneDashedInput(event.target.value)
+              setValue('phone', formatted, {
+                shouldDirty: true,
+                shouldValidate: true,
+              })
+            }}
+          />
         </FormField>
       </div>
 

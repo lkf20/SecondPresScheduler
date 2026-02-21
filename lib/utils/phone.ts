@@ -40,3 +40,10 @@ export function formatUSPhoneDashed(value: string | null | undefined): string {
   const line = normalized.slice(6)
   return `${area}-${prefix}-${line}`
 }
+
+export function formatUSPhoneDashedInput(value: string | null | undefined): string {
+  const digits = getPhoneDigits(value).slice(0, 10)
+  if (digits.length <= 3) return digits
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`
+}
