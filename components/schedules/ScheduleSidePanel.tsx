@@ -254,6 +254,60 @@ export const buildStaffingSummary = ({
   }
 }
 
+export const formatTimeRange = (
+  timeSlotStartTime: string | null,
+  timeSlotEndTime: string | null
+) => (timeSlotStartTime && timeSlotEndTime ? `${timeSlotStartTime}–${timeSlotEndTime}` : '')
+
+export const calculateDayNameDate = (weekStartISO?: string, dayNumber?: number | null) => {
+  if (!weekStartISO) return ''
+  const base = parseLocalDate(weekStartISO)
+  const offset = dayNumber ? Math.max(0, dayNumber - 1) : 0
+  const target = new Date(base.getTime())
+  target.setDate(target.getDate() + offset)
+  const year = target.getFullYear()
+  const month = `${target.getMonth() + 1}`.padStart(2, '0')
+  const day = `${target.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export const formatDayNameDateLabel = (dayNameDate: string) => {
+  if (!dayNameDate) return ''
+  const date = parseLocalDate(dayNameDate)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+export const pickClassGroupForRatio = <
+  T extends { min_age: number | null; required_ratio: number; preferred_ratio: number | null },
+>(
+  classGroups: T[]
+) =>
+  classGroups.length > 0
+    ? classGroups.reduce((lowest, current) => {
+        const currentMinAge = current.min_age ?? Infinity
+        const lowestMinAge = lowest.min_age ?? Infinity
+        return currentMinAge < lowestMinAge ? current : lowest
+      })
+    : null
+
+export const calculateTeacherTargets = ({
+  classGroupForRatio,
+  enrollmentForCalculation,
+}: {
+  classGroupForRatio: { required_ratio: number; preferred_ratio: number | null } | null | undefined
+  enrollmentForCalculation: number | null
+}) => ({
+  requiredTeachers:
+    classGroupForRatio && enrollmentForCalculation
+      ? Math.ceil(enrollmentForCalculation / classGroupForRatio.required_ratio)
+      : undefined,
+  preferredTeachers:
+    classGroupForRatio && enrollmentForCalculation && classGroupForRatio.preferred_ratio
+      ? Math.ceil(enrollmentForCalculation / classGroupForRatio.preferred_ratio)
+      : undefined,
+})
+
 const compareByTeacherName = (a: { teacher_name: string }, b: { teacher_name: string }) =>
   (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown')
 
@@ -462,20 +516,13 @@ export default function ScheduleSidePanel({
   }, [classGroups])
 
   // Format time range for header
-  const timeRange =
-    timeSlotStartTime && timeSlotEndTime ? `${timeSlotStartTime}–${timeSlotEndTime}` : ''
+  const timeRange = formatTimeRange(timeSlotStartTime, timeSlotEndTime)
 
   const formatLocalDate = (date: Date) => {
     const year = date.getFullYear()
     const month = `${date.getMonth() + 1}`.padStart(2, '0')
     const day = `${date.getDate()}`.padStart(2, '0')
     return `${year}-${month}-${day}`
-  }
-
-  const addDays = (date: Date, days: number) => {
-    const next = new Date(date.getTime())
-    next.setDate(next.getDate() + days)
-    return next
   }
 
   const openTimeOffPanel = (teacherId: string, teacherName?: string | null) => {
@@ -514,24 +561,12 @@ export default function ScheduleSidePanel({
     setFlexApplyDayNames(new Set([dayName.toLowerCase()]))
   }, [panelMode, flexStartDate, dayName])
 
-  const dayNameDate = useMemo(() => {
-    if (!weekStartISO) return ''
-    const base = parseLocalDate(weekStartISO)
-    const dayNumber = selectedCellData?.day_number
-    const offset = dayNumber ? Math.max(0, dayNumber - 1) : 0
-    const target = addDays(base, offset)
-    const year = target.getFullYear()
-    const month = `${target.getMonth() + 1}`.padStart(2, '0')
-    const day = `${target.getDate()}`.padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }, [weekStartISO, selectedCellData?.day_number])
+  const dayNameDate = useMemo(
+    () => calculateDayNameDate(weekStartISO, selectedCellData?.day_number),
+    [weekStartISO, selectedCellData?.day_number]
+  )
 
-  const dayNameDateLabel = useMemo(() => {
-    if (!dayNameDate) return ''
-    const date = parseLocalDate(dayNameDate)
-    if (Number.isNaN(date.getTime())) return ''
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  }, [dayNameDate])
+  const dayNameDateLabel = useMemo(() => formatDayNameDateLabel(dayNameDate), [dayNameDate])
 
   const flexShiftOptions = useMemo(() => {
     if (!flexStartDate || !flexEndDate || flexTimeSlotIds.length === 0) return []
@@ -1925,14 +1960,7 @@ export default function ScheduleSidePanel({
   const enrollmentForCalculation = cell?.enrollment_for_staffing ?? enrollment
 
   // Find class group with lowest min_age for ratio calculation
-  const classGroupForRatio =
-    classGroups.length > 0
-      ? classGroups.reduce((lowest, current) => {
-          const currentMinAge = current.min_age ?? Infinity
-          const lowestMinAge = lowest.min_age ?? Infinity
-          return currentMinAge < lowestMinAge ? current : lowest
-        })
-      : null
+  const classGroupForRatio = pickClassGroupForRatio(classGroups)
 
   const flexAssignments =
     selectedCellData?.assignments?.filter(assignment => assignment.is_flexible) ?? []
@@ -1958,14 +1986,10 @@ export default function ScheduleSidePanel({
     )
   }, [classGroups, classGroupForRatio])
 
-  const requiredTeachers =
-    classGroupForRatio && enrollmentForCalculation
-      ? Math.ceil(enrollmentForCalculation / classGroupForRatio.required_ratio)
-      : undefined
-  const preferredTeachers =
-    classGroupForRatio && enrollmentForCalculation && classGroupForRatio.preferred_ratio
-      ? Math.ceil(enrollmentForCalculation / classGroupForRatio.preferred_ratio)
-      : undefined
+  const { requiredTeachers, preferredTeachers } = calculateTeacherTargets({
+    classGroupForRatio,
+    enrollmentForCalculation,
+  })
 
   const scheduledStaffCount = useMemo(() => {
     return calculateScheduledStaffCount({

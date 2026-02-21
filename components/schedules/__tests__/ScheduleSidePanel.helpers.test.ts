@@ -2,9 +2,14 @@ import {
   buildFindSubLink,
   buildStaffingSummary,
   buildFlexRemovalDialogCopy,
+  calculateDayNameDate,
   calculateScheduledStaffCount,
+  calculateTeacherTargets,
+  formatDayNameDateLabel,
   formatFlexWeekdayList,
+  formatTimeRange,
   mapAssignmentsToTeachers,
+  pickClassGroupForRatio,
   sortAbsencesByTeacherName,
   sortAssignmentsForPanel,
 } from '@/components/schedules/ScheduleSidePanel'
@@ -320,5 +325,53 @@ describe('ScheduleSidePanel helpers', () => {
     ).toBe('/sub-finder?teacher_id=teacher-1')
 
     expect(buildFindSubLink({ absences: [], assignments: [] })).toBe('/sub-finder')
+  })
+
+  it('formats panel time range safely with missing values', () => {
+    expect(formatTimeRange('08:00', '12:00')).toBe('08:00–12:00')
+    expect(formatTimeRange('08:00', null)).toBe('')
+    expect(formatTimeRange(null, '12:00')).toBe('')
+  })
+
+  it('calculates and formats day-name date labels from week start', () => {
+    expect(calculateDayNameDate('2026-02-09', 3)).toBe('2026-02-11')
+    expect(calculateDayNameDate(undefined, 3)).toBe('')
+    expect(formatDayNameDateLabel('2026-02-11')).toBe('Feb 11')
+    expect(formatDayNameDateLabel('')).toBe('')
+    expect(formatDayNameDateLabel('not-a-date')).toBe('')
+  })
+
+  it('picks the youngest class group and calculates teacher targets', () => {
+    const ratioGroup = pickClassGroupForRatio([
+      { min_age: 3, required_ratio: 8, preferred_ratio: 6 },
+      { min_age: 1, required_ratio: 4, preferred_ratio: 3 },
+      { min_age: null, required_ratio: 5, preferred_ratio: 4 },
+    ])
+
+    expect(ratioGroup).toEqual({
+      min_age: 1,
+      required_ratio: 4,
+      preferred_ratio: 3,
+    })
+
+    expect(
+      calculateTeacherTargets({
+        classGroupForRatio: ratioGroup,
+        enrollmentForCalculation: 9,
+      })
+    ).toEqual({
+      requiredTeachers: 3,
+      preferredTeachers: 3,
+    })
+
+    expect(
+      calculateTeacherTargets({
+        classGroupForRatio: null,
+        enrollmentForCalculation: 9,
+      })
+    ).toEqual({
+      requiredTeachers: undefined,
+      preferredTeachers: undefined,
+    })
   })
 })
