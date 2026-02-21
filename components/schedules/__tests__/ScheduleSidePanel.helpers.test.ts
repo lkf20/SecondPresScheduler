@@ -1,5 +1,7 @@
 import {
+  buildStaffingSummary,
   buildFlexRemovalDialogCopy,
+  calculateScheduledStaffCount,
   formatFlexWeekdayList,
   mapAssignmentsToTeachers,
 } from '@/components/schedules/ScheduleSidePanel'
@@ -101,5 +103,105 @@ describe('ScheduleSidePanel helpers', () => {
     expect(copy.showPrompt).toBe(true)
     expect(copy.showWeekdayOption).toBe(true)
     expect(copy.weekdayScopeLabel).toBe('All Monday shifts')
+  })
+
+  it('calculates scheduled staff count from selected teachers in edit mode', () => {
+    expect(
+      calculateScheduledStaffCount({
+        readOnly: false,
+        selectedTeacherCount: 4,
+      })
+    ).toBe(4)
+  })
+
+  it('calculates unique scheduled staff count from assignments in read-only mode', () => {
+    expect(
+      calculateScheduledStaffCount({
+        readOnly: true,
+        selectedTeacherCount: 0,
+        assignments: [
+          {
+            id: 'a-1',
+            teacher_id: 'teacher-1',
+            teacher_name: 'Teacher A.',
+            classroom_id: 'class-1',
+            classroom_name: 'Infant Room',
+          },
+          {
+            id: 'a-1',
+            teacher_id: 'teacher-1',
+            teacher_name: 'Teacher A.',
+            classroom_id: 'class-1',
+            classroom_name: 'Infant Room',
+          },
+          {
+            id: '',
+            teacher_id: 'teacher-1',
+            teacher_name: 'Teacher A.',
+            classroom_id: 'class-1',
+            classroom_name: 'Infant Room',
+          },
+          {
+            id: '',
+            teacher_id: 'teacher-1',
+            teacher_name: 'Teacher A.',
+            classroom_id: 'class-2',
+            classroom_name: 'Toddler Room',
+          },
+          {
+            id: '',
+            teacher_id: 'teacher-1',
+            teacher_name: 'Sub A.',
+            classroom_id: 'class-2',
+            classroom_name: 'Toddler Room',
+            is_substitute: true,
+          },
+        ],
+      })
+    ).toBe(4)
+  })
+
+  it('builds staffing summary labels for required/preferred/adequate/no-target states', () => {
+    expect(
+      buildStaffingSummary({
+        requiredTeachers: 3,
+        preferredTeachers: 4,
+        scheduledStaffCount: 2,
+      })
+    ).toEqual({
+      status: 'below_required',
+      label: 'Below Required by 1',
+    })
+
+    expect(
+      buildStaffingSummary({
+        requiredTeachers: 2,
+        preferredTeachers: 4,
+        scheduledStaffCount: 3,
+      })
+    ).toEqual({
+      status: 'below_preferred',
+      label: 'Below Preferred by 1',
+    })
+
+    expect(
+      buildStaffingSummary({
+        requiredTeachers: 2,
+        preferredTeachers: 3,
+        scheduledStaffCount: 3,
+      })
+    ).toEqual({
+      status: 'adequate',
+      label: 'On Target',
+    })
+
+    expect(
+      buildStaffingSummary({
+        scheduledStaffCount: 0,
+      })
+    ).toEqual({
+      status: null,
+      label: 'No staffing target',
+    })
   })
 })

@@ -189,6 +189,71 @@ export const buildFlexRemovalDialogCopy = ({
   }
 }
 
+export const calculateScheduledStaffCount = ({
+  readOnly,
+  assignments,
+  selectedTeacherCount,
+}: {
+  readOnly: boolean
+  assignments?: WeeklyScheduleData['assignments']
+  selectedTeacherCount: number
+}) => {
+  if (!readOnly) {
+    return selectedTeacherCount
+  }
+
+  const uniqueAssignmentKeys = new Set<string>()
+  ;(assignments || []).forEach(assignment => {
+    const key = assignment.id
+      ? `${assignment.id}`
+      : `${assignment.teacher_id}|${assignment.is_substitute ? 'sub' : 'staff'}|${
+          assignment.classroom_id
+        }`
+    uniqueAssignmentKeys.add(key)
+  })
+  return uniqueAssignmentKeys.size
+}
+
+export const buildStaffingSummary = ({
+  requiredTeachers,
+  preferredTeachers,
+  scheduledStaffCount,
+}: {
+  requiredTeachers?: number
+  preferredTeachers?: number
+  scheduledStaffCount: number
+}) => {
+  const required = requiredTeachers ?? null
+  const preferred = preferredTeachers ?? null
+  const scheduled = scheduledStaffCount
+
+  if (required !== null && scheduled < required) {
+    return {
+      status: 'below_required' as const,
+      label: `Below Required by ${required - scheduled}`,
+    }
+  }
+
+  if (preferred !== null && scheduled < preferred) {
+    return {
+      status: 'below_preferred' as const,
+      label: `Below Preferred by ${preferred - scheduled}`,
+    }
+  }
+
+  if (required !== null || preferred !== null) {
+    return {
+      status: 'adequate' as const,
+      label: 'On Target',
+    }
+  }
+
+  return {
+    status: null,
+    label: 'No staffing target',
+  }
+}
+
 export default function ScheduleSidePanel({
   isOpen,
   onClose,
@@ -1869,52 +1934,19 @@ export default function ScheduleSidePanel({
       : undefined
 
   const scheduledStaffCount = useMemo(() => {
-    if (readOnly) {
-      const assignments = selectedCellData?.assignments || []
-      const uniqueAssignmentKeys = new Set<string>()
-      assignments.forEach(assignment => {
-        const key = assignment.id
-          ? `${assignment.id}`
-          : `${assignment.teacher_id}|${assignment.is_substitute ? 'sub' : 'staff'}|${
-              assignment.classroom_id
-            }`
-        uniqueAssignmentKeys.add(key)
-      })
-      return uniqueAssignmentKeys.size
-    }
-    return selectedTeachers.length
+    return calculateScheduledStaffCount({
+      readOnly,
+      assignments: selectedCellData?.assignments,
+      selectedTeacherCount: selectedTeachers.length,
+    })
   }, [readOnly, selectedCellData?.assignments, selectedTeachers.length])
 
   const staffingSummary = useMemo(() => {
-    const required = requiredTeachers ?? null
-    const preferred = preferredTeachers ?? null
-    const scheduled = scheduledStaffCount
-
-    if (required !== null && scheduled < required) {
-      return {
-        status: 'below_required' as const,
-        label: `Below Required by ${required - scheduled}`,
-      }
-    }
-
-    if (preferred !== null && scheduled < preferred) {
-      return {
-        status: 'below_preferred' as const,
-        label: `Below Preferred by ${preferred - scheduled}`,
-      }
-    }
-
-    if (required !== null || preferred !== null) {
-      return {
-        status: 'adequate' as const,
-        label: 'On Target',
-      }
-    }
-
-    return {
-      status: null,
-      label: 'No staffing target',
-    }
+    return buildStaffingSummary({
+      requiredTeachers,
+      preferredTeachers,
+      scheduledStaffCount,
+    })
   }, [requiredTeachers, preferredTeachers, scheduledStaffCount])
 
   return (
