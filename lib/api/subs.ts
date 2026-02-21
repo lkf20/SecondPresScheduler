@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
+import { normalizeEmailForStorage } from '@/lib/utils/email'
+import { normalizeUSPhoneForStorage } from '@/lib/utils/phone'
 
 type Staff = Database['public']['Tables']['staff']['Row']
 
@@ -57,6 +59,10 @@ export async function createSub(sub: {
   if (!sub.school_id) {
     throw new Error('school_id is required to create sub')
   }
+  const normalizedEmail = normalizeEmailForStorage(sub.email)
+  if (sub.email && sub.email.trim() !== '' && !normalizedEmail) {
+    throw new Error('Invalid email address')
+  }
 
   // Exclude id from the insert if it's undefined or empty
   const { id, ...subData } = sub
@@ -64,8 +70,8 @@ export async function createSub(sub: {
     first_name: subData.first_name,
     last_name: subData.last_name,
     display_name: subData.display_name || null,
-    phone: subData.phone || null,
-    ...(sub.email && sub.email.trim() !== '' ? { email: sub.email } : {}),
+    phone: normalizeUSPhoneForStorage(subData.phone),
+    ...(normalizedEmail ? { email: normalizedEmail } : {}),
     is_sub: true,
     is_teacher: sub.is_teacher ?? false, // Preserve is_teacher flag
     active: subData.active ?? true,
@@ -88,9 +94,22 @@ export async function createSub(sub: {
 
 export async function updateSub(id: string, updates: Partial<Staff>) {
   const supabase = await createClient()
+  const hasEmailInUpdate = Object.prototype.hasOwnProperty.call(updates, 'email')
+  const rawEmail = (updates.email as string | null | undefined) ?? null
+  const normalizedEmail = normalizeEmailForStorage(rawEmail)
+  if (hasEmailInUpdate && rawEmail && rawEmail.trim() !== '' && !normalizedEmail) {
+    throw new Error('Invalid email address')
+  }
+  const normalizedUpdates = {
+    ...updates,
+    ...(Object.prototype.hasOwnProperty.call(updates, 'phone')
+      ? { phone: normalizeUSPhoneForStorage(updates.phone ?? null) }
+      : {}),
+    ...(hasEmailInUpdate ? { email: normalizedEmail } : {}),
+  }
   const { data, error } = await supabase
     .from('staff')
-    .update(updates)
+    .update(normalizedUpdates)
     .eq('id', id)
     .select()
     .single()

@@ -24,6 +24,7 @@ import {
   formatStaffDisplayName,
   type DisplayNameFormat,
 } from '@/lib/utils/staff-display-name'
+import { formatUSPhone } from '@/lib/utils/phone'
 
 interface StaffPageClientProps {
   staff: StaffWithRole[]
@@ -92,16 +93,18 @@ export default function StaffPageClient({
       const roleCodes = roleAssignments
         .map(assignment => assignment.staff_role_types?.code)
         .filter(Boolean) as string[]
-      const roleLabels = roleAssignments
-        .map(assignment => assignment.staff_role_types?.label)
-        .filter(Boolean) as string[]
+      const orderedRoleLabels: string[] = []
+      if (roleCodes.includes('PERMANENT')) orderedRoleLabels.push('Permanent')
+      if (roleCodes.includes('FLEXIBLE')) orderedRoleLabels.push('Flexible')
+      if (member.is_sub) orderedRoleLabels.push('Substitute')
 
       const { name: computedName, isCustom } = computeDisplayName(member, defaultFormat)
 
       return {
         ...member,
         full_name: `${member.first_name} ${member.last_name}`.trim() || '—',
-        role_type_label: roleLabels.length > 0 ? roleLabels.join(', ') : '—',
+        role_type_label: orderedRoleLabels.length > 0 ? orderedRoleLabels.join(', ') : '—',
+        ordered_role_labels: orderedRoleLabels,
         role_codes: roleCodes,
         is_permanent: roleCodes.includes('PERMANENT'),
         is_flexible: roleCodes.includes('FLEXIBLE'),
@@ -244,21 +247,55 @@ export default function StaffPageClient({
     {
       key: 'phone',
       header: 'Phone',
+      cell: row => (row.phone ? formatUSPhone(row.phone) : '—'),
     },
     {
       key: 'role_type_label',
       header: 'Staff Role',
       sortable: true,
+      cell: row => {
+        if (!row.ordered_role_labels || row.ordered_role_labels.length === 0) return '—'
+        return (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {row.ordered_role_labels.map(label => {
+              if (label === 'Permanent') {
+                return (
+                  <span
+                    key={label}
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300"
+                    style={{ borderColor: '#93c5fd' }}
+                  >
+                    {label}
+                  </span>
+                )
+              }
+              if (label === 'Flexible') {
+                return (
+                  <span
+                    key={label}
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-500 border-dashed"
+                    style={{ borderColor: '#3b82f6' }}
+                  >
+                    {label}
+                  </span>
+                )
+              }
+              return (
+                <span
+                  key={label}
+                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200"
+                >
+                  {label}
+                </span>
+              )
+            })}
+          </div>
+        )
+      },
     },
     {
       key: 'active',
       header: 'Status',
-    },
-    {
-      key: 'is_sub',
-      header: 'Is Sub?',
-      sortable: true,
-      cell: row => (row.is_sub ? 'Yes' : 'No'),
     },
   ]
 
@@ -393,6 +430,7 @@ export default function StaffPageClient({
         searchPlaceholder="Search staff..."
         emptyMessage="No staff found. Add your first staff member to get started."
         paginate={false}
+        cellClassName="text-base"
       />
     </div>
   )

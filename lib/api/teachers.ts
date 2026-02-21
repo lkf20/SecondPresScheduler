@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
+import { normalizeEmailForStorage } from '@/lib/utils/email'
+import { normalizeUSPhoneForStorage } from '@/lib/utils/phone'
 
 type Staff = Database['public']['Tables']['staff']['Row']
 type StaffRoleType = Database['public']['Tables']['staff_role_types']['Row']
@@ -76,11 +78,16 @@ export async function createTeacher(teacher: {
   const { id, role_type_ids, ...teacherData } = teacher
   const teacherId = id && id.trim() !== '' ? id : crypto.randomUUID()
   const roleTypeIds = role_type_ids && role_type_ids.length > 0 ? role_type_ids : []
+  const normalizedEmail = normalizeEmailForStorage(teacher.email)
+  if (teacher.email && teacher.email.trim() !== '' && !normalizedEmail) {
+    throw new Error('Invalid email address')
+  }
 
   const insertData: Partial<Staff> & { id: string } = {
     ...teacherData,
     id: teacherId,
-    email: teacher.email && teacher.email.trim() !== '' ? teacher.email : undefined,
+    phone: normalizeUSPhoneForStorage(teacher.phone),
+    email: normalizedEmail ?? undefined,
     is_teacher: true,
     is_sub: teacher.is_sub ?? false,
     school_id: teacher.school_id,
@@ -102,10 +109,23 @@ export async function updateTeacher(
 ) {
   const supabase = await createClient()
   const { role_type_ids, ...staffUpdates } = updates
+  const hasEmailInUpdate = Object.prototype.hasOwnProperty.call(staffUpdates, 'email')
+  const rawEmail = (staffUpdates.email as string | null | undefined) ?? null
+  const normalizedEmail = normalizeEmailForStorage(rawEmail)
+  if (hasEmailInUpdate && rawEmail && rawEmail.trim() !== '' && !normalizedEmail) {
+    throw new Error('Invalid email address')
+  }
+  const normalizedStaffUpdates = {
+    ...staffUpdates,
+    ...(Object.prototype.hasOwnProperty.call(staffUpdates, 'phone')
+      ? { phone: normalizeUSPhoneForStorage(staffUpdates.phone ?? null) }
+      : {}),
+    ...(hasEmailInUpdate ? { email: normalizedEmail } : {}),
+  }
   const roleTypeIds = role_type_ids === undefined ? null : role_type_ids
   const { data, error } = await supabase.rpc('update_staff_with_role_assignments', {
     p_staff_id: id,
-    p_updates: staffUpdates,
+    p_updates: normalizedStaffUpdates,
     p_role_type_ids: roleTypeIds,
   })
 

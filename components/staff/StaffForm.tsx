@@ -18,17 +18,24 @@ import {
   formatStaffDisplayName,
   type DisplayNameFormat,
 } from '@/lib/utils/staff-display-name'
+import { formatUSPhoneDashed, isValidUSPhone } from '@/lib/utils/phone'
 
 const staffSchema = z
   .object({
     first_name: z.string().min(1, 'First name is required'),
     last_name: z.string().min(1, 'Last name is required'),
     display_name: z.string().min(1, 'Display name is required'),
-    phone: z.string().optional(),
-    email: z
-      .union([z.string().email('Invalid email address'), z.literal('')])
+    phone: z
+      .string()
       .optional()
-      .transform(val => (val === '' ? undefined : val)),
+      .refine(value => !value || value.trim() === '' || isValidUSPhone(value), {
+        message: 'Phone number must contain exactly 10 digits',
+      }),
+    email: z
+      .string()
+      .trim()
+      .min(1, 'Please enter a valid email.')
+      .email('Please enter a valid email.'),
     role_type_ids: z.array(z.string()),
     active: z.boolean().default(true),
     is_sub: z.boolean().default(false),
@@ -98,7 +105,7 @@ export default function StaffForm({
           first_name: staff.first_name,
           last_name: staff.last_name,
           display_name: staff.display_name || '',
-          phone: staff.phone || '',
+          phone: formatUSPhoneDashed(staff.phone),
           email: staff.email || '',
           role_type_ids: normalizeRoleTypeIds(staff.role_type_ids || []),
           active: staff.active ?? true,
@@ -337,11 +344,11 @@ export default function StaffForm({
         </div>
 
         <FormField label="Email" error={errors.email?.message}>
-          <Input type="email" {...register('email')} placeholder="Optional" />
+          <Input type="text" {...register('email')} placeholder="name@school.com" />
         </FormField>
 
         <FormField label="Phone" error={errors.phone?.message}>
-          <Input type="tel" {...register('phone')} placeholder="Optional" />
+          <Input type="tel" {...register('phone')} placeholder="555-555-5555" />
         </FormField>
       </div>
 

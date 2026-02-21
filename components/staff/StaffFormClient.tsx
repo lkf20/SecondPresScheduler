@@ -322,30 +322,32 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
       </div>
       <div className="mb-6 max-w-2xl">
         <div className="flex items-center justify-between gap-6">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() =>
-                previousStaffId && navigateWithUnsavedGuard(getStaffDetailUrl(previousStaffId))
-              }
-              disabled={!previousStaffId}
-              className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Previous staff member"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
+          <div className="flex items-center gap-3">
             <p className="text-3xl font-bold tracking-tight text-slate-900">{staffName}</p>
-            <button
-              type="button"
-              onClick={() =>
-                nextStaffId && navigateWithUnsavedGuard(getStaffDetailUrl(nextStaffId))
-              }
-              disabled={!nextStaffId}
-              className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Next staff member"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  previousStaffId && navigateWithUnsavedGuard(getStaffDetailUrl(previousStaffId))
+                }
+                disabled={!previousStaffId}
+                className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Previous staff member"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  nextStaffId && navigateWithUnsavedGuard(getStaffDetailUrl(nextStaffId))
+                }
+                disabled={!nextStaffId}
+                className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Next staff member"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <Switch
