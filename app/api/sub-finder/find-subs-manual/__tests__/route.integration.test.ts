@@ -4,7 +4,8 @@ import { POST } from '@/app/api/sub-finder/find-subs-manual/route'
 import { createJsonRequest } from '@/tests/helpers/api'
 import { getSubs } from '@/lib/api/subs'
 import { getSubAvailability, getSubAvailabilityExceptions } from '@/lib/api/sub-availability'
-import { getTeacherScheduledShifts } from '@/lib/api/time-off-shifts'
+import { getTeacherScheduledShifts, getTimeOffShifts } from '@/lib/api/time-off-shifts'
+import { getTimeOffRequests } from '@/lib/api/time-off'
 
 const mockIn = jest.fn()
 const mockLte = jest.fn()
@@ -304,5 +305,137 @@ describe('POST /api/sub-finder/find-subs-manual integration', () => {
       shifts_covered: 1,
       total_shifts: 1,
     })
+  })
+
+  it('marks sub as unavailable when there is a schedule conflict', async () => {
+    mockIn
+      .mockResolvedValueOnce({
+        data: [{ id: 'day-1', name: 'Monday' }],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [{ id: 'slot-1', code: 'EM' }],
+        error: null,
+      })
+    ;(getSubs as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'sub-1',
+        first_name: 'Sally',
+        last_name: 'A',
+        display_name: 'Sally A.',
+        active: true,
+      },
+    ])
+    ;(getSubAvailability as jest.Mock).mockResolvedValueOnce([
+      { day_of_week_id: 'day-1', time_slot_id: 'slot-1', available: true },
+    ])
+    ;(getSubAvailabilityExceptions as jest.Mock).mockResolvedValueOnce([])
+    ;(getTeacherScheduledShifts as jest.Mock).mockResolvedValueOnce([
+      {
+        date: '2026-02-10',
+        time_slot_id: 'slot-1',
+      },
+    ])
+    ;(getTimeOffRequests as jest.Mock).mockResolvedValueOnce([])
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/find-subs-manual',
+      'POST',
+      {
+        teacher_id: 'teacher-1',
+        start_date: '2026-02-10',
+        end_date: '2026-02-10',
+        shifts: [
+          {
+            date: '2026-02-10',
+            day_of_week_id: 'day-1',
+            time_slot_id: 'slot-1',
+          },
+        ],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.subs).toHaveLength(1)
+    expect(json.subs[0].coverage_percent).toBe(0)
+    expect(json.subs[0].cannot_cover[0].reason).toBe('Scheduled to teach')
+  })
+
+  it('marks sub as unavailable when there is a time-off conflict', async () => {
+    mockIn
+      .mockResolvedValueOnce({
+        data: [{ id: 'day-1', name: 'Monday' }],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [{ id: 'slot-1', code: 'EM' }],
+        error: null,
+      })
+    ;(getSubs as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'sub-1',
+        first_name: 'Sally',
+        last_name: 'A',
+        display_name: 'Sally A.',
+        active: true,
+      },
+    ])
+    ;(getSubAvailability as jest.Mock).mockResolvedValueOnce([
+      { day_of_week_id: 'day-1', time_slot_id: 'slot-1', available: true },
+    ])
+    ;(getSubAvailabilityExceptions as jest.Mock).mockResolvedValueOnce([])
+    ;(getTeacherScheduledShifts as jest.Mock).mockResolvedValueOnce([])
+    ;(getTimeOffRequests as jest.Mock).mockResolvedValueOnce([{ id: 'req-1', teacher_id: 'sub-1' }])
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValueOnce([
+      {
+        date: '2026-02-10',
+        time_slot_id: 'slot-1',
+      },
+    ])
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/find-subs-manual',
+      'POST',
+      {
+        teacher_id: 'teacher-1',
+        start_date: '2026-02-10',
+        end_date: '2026-02-10',
+        shifts: [
+          {
+            date: '2026-02-10',
+            day_of_week_id: 'day-1',
+            time_slot_id: 'slot-1',
+          },
+        ],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.subs).toHaveLength(1)
+    expect(json.subs[0].coverage_percent).toBe(0)
+    expect(json.subs[0].cannot_cover[0].reason).toBe('Has time off')
+  })
+
+  it('returns 500 when request parsing fails', async () => {
+    const request = {
+      method: 'POST',
+      nextUrl: new URL('http://localhost:3000/api/sub-finder/find-subs-manual'),
+      headers: new Headers(),
+      json: async () => {
+        throw new Error('bad json')
+      },
+    }
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/bad json/i)
   })
 })

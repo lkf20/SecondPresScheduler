@@ -200,4 +200,180 @@ describe('POST /api/sub-finder/assign-shifts integration', () => {
       time_slot_code: 'EM',
     })
   })
+
+  it('returns 404 when coverage request has no teacher_id', async () => {
+    const coverageRequestsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({
+        data: {
+          teacher_id: null,
+          source_request_id: 'timeoff-1',
+          request_type: 'time_off',
+          school_id: 'school-1',
+        },
+        error: null,
+      }),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'coverage_requests') return coverageRequestsQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/assign-shifts',
+      'POST',
+      {
+        coverage_request_id: 'coverage-1',
+        sub_id: 'sub-1',
+        selected_shift_ids: ['shift-1'],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(404)
+    expect(json.error).toMatch(/teacher id not found/i)
+  })
+
+  it('returns 500 when fallback classroom lookup fails', async () => {
+    const coverageRequestsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({
+        data: {
+          teacher_id: 'teacher-1',
+          source_request_id: 'timeoff-1',
+          request_type: 'time_off',
+          school_id: 'school-1',
+        },
+        error: null,
+      }),
+    }
+
+    const coverageRequestShiftsQuery = {
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnThis(),
+        in: jest.fn().mockResolvedValue({
+          data: [
+            {
+              id: 'shift-1',
+              date: '2099-02-10',
+              day_of_week_id: 'day-1',
+              time_slot_id: 'slot-1',
+              classroom_id: null,
+            },
+          ],
+          error: null,
+        }),
+      }),
+    }
+
+    const teacherSchedulesQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({
+        data: null,
+        error: { message: 'schedule lookup failed' },
+      }),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'coverage_requests') return coverageRequestsQuery
+        if (table === 'coverage_request_shifts') return coverageRequestShiftsQuery
+        if (table === 'teacher_schedules') return teacherSchedulesQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/assign-shifts',
+      'POST',
+      {
+        coverage_request_id: 'coverage-1',
+        sub_id: 'sub-1',
+        selected_shift_ids: ['shift-1'],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/failed to resolve classroom/i)
+  })
+
+  it('returns 500 when selected shifts cannot resolve a classroom', async () => {
+    const coverageRequestsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({
+        data: {
+          teacher_id: 'teacher-1',
+          source_request_id: 'timeoff-1',
+          request_type: 'time_off',
+          school_id: 'school-1',
+        },
+        error: null,
+      }),
+    }
+
+    const coverageRequestShiftsQuery = {
+      select: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnThis(),
+        in: jest.fn().mockResolvedValue({
+          data: [
+            {
+              id: 'shift-1',
+              date: '2099-02-10',
+              day_of_week_id: 'day-1',
+              time_slot_id: 'slot-1',
+              classroom_id: null,
+            },
+          ],
+          error: null,
+        }),
+      }),
+    }
+
+    const teacherSchedulesQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({
+        data: [],
+        error: null,
+      }),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'coverage_requests') return coverageRequestsQuery
+        if (table === 'coverage_request_shifts') return coverageRequestShiftsQuery
+        if (table === 'teacher_schedules') return teacherSchedulesQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/assign-shifts',
+      'POST',
+      {
+        coverage_request_id: 'coverage-1',
+        sub_id: 'sub-1',
+        selected_shift_ids: ['shift-1'],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/missing classroom assignment/i)
+  })
 })
