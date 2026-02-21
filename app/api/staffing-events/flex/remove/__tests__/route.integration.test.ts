@@ -161,6 +161,25 @@ describe('/api/staffing-events/flex/remove integration', () => {
     })
   })
 
+  it('GET returns 404 when flex assignment is not found', async () => {
+    buildSupabaseMock({
+      eventMaybeSingleResult: {
+        data: null,
+        error: null,
+      },
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove?event_id=missing-event',
+      'GET'
+    )
+    const response = await GET(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(404)
+    expect(json.error).toMatch(/flex assignment not found/i)
+  })
+
   it('POST returns 400 when required fields are missing', async () => {
     const request = createJsonRequest(
       'http://localhost:3000/api/staffing-events/flex/remove',

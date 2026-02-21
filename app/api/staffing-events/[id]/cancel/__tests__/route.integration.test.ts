@@ -44,6 +44,21 @@ describe('POST /api/staffing-events/[id]/cancel integration', () => {
     expect(json.error).toMatch(/missing school context/i)
   })
 
+  it('returns 400 when event id is missing from params', async () => {
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events//cancel',
+      'POST',
+      {}
+    )
+    const response = await POST(request as any, {
+      params: Promise.resolve({ id: '' }),
+    })
+    const json = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(json.error).toMatch(/missing event id/i)
+  })
+
   it('returns 500 when event cancellation update fails', async () => {
     ;(createClient as jest.Mock).mockResolvedValue({
       from: jest.fn((table: string) => {
