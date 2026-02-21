@@ -34,7 +34,8 @@ export default async function ClassroomsPage() {
         <div className="flex-1">
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Classrooms</h1>
           <p className="text-muted-foreground mt-2">
-            Manage classroom locations and capacity. Drag rows to reorder.
+            Manage classrooms. Drag rows to reorder. Order will be reflected in schedules and
+            reports.
           </p>
         </div>
         <div className="flex-shrink-0">

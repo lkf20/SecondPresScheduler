@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type CSSProperties } from 'react'
 import Link from 'next/link'
 import {
   DndContext,
@@ -49,6 +49,25 @@ interface SortableClassroomsTableProps {
   onOrderChange?: (classrooms: Classroom[]) => void
 }
 
+function getClassroomChipStyle(color?: string | null): CSSProperties | undefined {
+  if (!color) return undefined
+  const hex = color.trim()
+  const match = /^#([0-9a-fA-F]{6})$/.exec(hex)
+  if (!match) return { borderColor: color, color }
+
+  const [r, g, b] = [
+    parseInt(match[1].slice(0, 2), 16),
+    parseInt(match[1].slice(2, 4), 16),
+    parseInt(match[1].slice(4, 6), 16),
+  ]
+
+  return {
+    borderColor: hex,
+    color: hex,
+    backgroundColor: `rgba(${r}, ${g}, ${b}, 0.14)`,
+  }
+}
+
 function SortableRow({ classroom }: { classroom: Classroom }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: classroom.id,
@@ -81,26 +100,20 @@ function SortableRow({ classroom }: { classroom: Classroom }) {
           )}
           <Link
             href={`/settings/classrooms/${classroom.id}`}
-            className={cn('hover:underline', !classroom.is_active && 'text-muted-foreground')}
+            className={cn('hover:opacity-90', !classroom.is_active && 'opacity-70')}
           >
-            {classroom.name}
+            <span
+              className="inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium border-[#bfc8dd] bg-[#dce3fd] text-[#265ee8]"
+              style={getClassroomChipStyle(classroom.color)}
+            >
+              {classroom.name}
+            </span>
           </Link>
         </div>
       </TableCell>
       <TableCell className="text-base">{classroom.capacity || '—'}</TableCell>
       <TableCell className="max-w-md text-base">
         {classroom.allowed_classes_display || 'None'}
-      </TableCell>
-      <TableCell className="text-base">
-        {classroom.color ? (
-          <div
-            className="w-8 h-8 rounded"
-            style={{ backgroundColor: classroom.color }}
-            title={classroom.color}
-          />
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
       </TableCell>
     </TableRow>
   )
@@ -218,13 +231,12 @@ export default function SortableClassroomsTable({
                   <TableHead>Name</TableHead>
                   <TableHead>Capacity</TableHead>
                   <TableHead>Allowed Class Groups</TableHead>
-                  <TableHead>Color</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredClassrooms.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-base text-center text-muted-foreground">
+                    <TableCell colSpan={4} className="text-base text-center text-muted-foreground">
                       No classrooms found
                     </TableCell>
                   </TableRow>
@@ -251,13 +263,12 @@ export default function SortableClassroomsTable({
                 <TableHead>Name</TableHead>
                 <TableHead>Capacity</TableHead>
                 <TableHead>Allowed Class Groups</TableHead>
-                <TableHead>Color</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredClassrooms.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">
                     No classrooms found
                   </TableCell>
                 </TableRow>
@@ -278,29 +289,20 @@ export default function SortableClassroomsTable({
                         )}
                         <Link
                           href={`/settings/classrooms/${classroom.id}`}
-                          className={cn(
-                            'hover:underline',
-                            !classroom.is_active && 'text-muted-foreground'
-                          )}
+                          className={cn('hover:opacity-90', !classroom.is_active && 'opacity-70')}
                         >
-                          {classroom.name}
+                          <span
+                            className="inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium border-[#bfc8dd] bg-[#dce3fd] text-[#265ee8]"
+                            style={getClassroomChipStyle(classroom.color)}
+                          >
+                            {classroom.name}
+                          </span>
                         </Link>
                       </div>
                     </TableCell>
                     <TableCell className="text-base">{classroom.capacity || '—'}</TableCell>
                     <TableCell className="max-w-md text-base">
                       {classroom.allowed_classes_display || 'None'}
-                    </TableCell>
-                    <TableCell className="text-base">
-                      {classroom.color ? (
-                        <div
-                          className="w-8 h-8 rounded"
-                          style={{ backgroundColor: classroom.color }}
-                          title={classroom.color}
-                        />
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
                     </TableCell>
                   </TableRow>
                 ))

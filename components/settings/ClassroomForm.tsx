@@ -1,7 +1,6 @@
 'use client'
 
-import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -15,6 +14,7 @@ import FormField from '@/components/shared/FormField'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import ClassSelector from '@/components/settings/ClassSelector'
 import ClassroomColorPicker from '@/components/settings/ClassroomColorPicker'
+import StaffUnsavedChangesDialog from '@/components/staff/StaffUnsavedChangesDialog'
 import { Database } from '@/types/database'
 
 type Classroom = Database['public']['Tables']['classrooms']['Row']
@@ -34,6 +34,16 @@ interface ClassroomFormProps {
   classroom?: Classroom
 }
 
+type ClassroomFormSnapshot = {
+  name: string
+  capacity: string
+  allowedClassIds: string[]
+  color: string | null
+  isActive: boolean
+}
+
+const normalizeAllowedClassIds = (ids: string[]) => [...ids].sort((a, b) => a.localeCompare(b))
+
 export default function ClassroomForm({ mode, classroom }: ClassroomFormProps) {
   const router = useRouter()
   const isEdit = mode === 'edit'
@@ -46,6 +56,8 @@ export default function ClassroomForm({ mode, classroom }: ClassroomFormProps) {
   const [allowedClassIds, setAllowedClassIds] = useState<string[]>([])
   const [loadingAllowedClasses, setLoadingAllowedClasses] = useState(isEdit)
   const [selectedColor, setSelectedColor] = useState<string | null>(classroom?.color ?? null)
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
+  const [pendingPath, setPendingPath] = useState<string | null>(null)
 
   const {
     register,
@@ -63,10 +75,50 @@ export default function ClassroomForm({ mode, classroom }: ClassroomFormProps) {
   })
 
   const isActive = watch('is_active')
+  const name = watch('name')
+  const capacity = watch('capacity')
+
+  const currentSnapshot = useMemo<ClassroomFormSnapshot>(
+    () => ({
+      name: name?.trim() ?? '',
+      capacity: capacity?.trim() ?? '',
+      allowedClassIds: normalizeAllowedClassIds(allowedClassIds),
+      color: selectedColor ?? null,
+      isActive: isActive ?? true,
+    }),
+    [name, capacity, allowedClassIds, selectedColor, isActive]
+  )
+
+  const baselineSnapshotRef = useRef<ClassroomFormSnapshot>({
+    name: classroom?.name?.trim() ?? '',
+    capacity: classroom?.capacity?.toString() ?? '',
+    allowedClassIds: [],
+    color: classroom?.color ?? null,
+    isActive: classroom?.is_active ?? true,
+  })
+
+  const hasUnsavedChanges =
+    JSON.stringify(currentSnapshot) !== JSON.stringify(baselineSnapshotRef.current)
+
+  const navigateWithUnsavedGuard = (path: string) => {
+    if (hasUnsavedChanges) {
+      setPendingPath(path)
+      setShowUnsavedDialog(true)
+      return
+    }
+    router.push(path)
+  }
 
   useEffect(() => {
     if (!isEdit || !classroom) {
       setLoadingAllowedClasses(false)
+      baselineSnapshotRef.current = {
+        name: '',
+        capacity: '',
+        allowedClassIds: [],
+        color: null,
+        isActive: true,
+      }
       return
     }
 
@@ -79,7 +131,15 @@ export default function ClassroomForm({ mode, classroom }: ClassroomFormProps) {
         return r.json()
       })
       .then(data => {
-        setAllowedClassIds(Array.isArray(data) ? data : [])
+        const ids = Array.isArray(data) ? normalizeAllowedClassIds(data) : []
+        setAllowedClassIds(ids)
+        baselineSnapshotRef.current = {
+          name: classroom.name?.trim() ?? '',
+          capacity: classroom.capacity?.toString() ?? '',
+          allowedClassIds: ids,
+          color: classroom.color ?? null,
+          isActive: classroom.is_active ?? true,
+        }
       })
       .catch(err => {
         console.error('Failed to load allowed class groups:', err)
@@ -88,6 +148,56 @@ export default function ClassroomForm({ mode, classroom }: ClassroomFormProps) {
         setLoadingAllowedClasses(false)
       })
   }, [isEdit, classroom])
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null
+      if (!target) return
+
+      const anchor = target.closest('a[href]') as HTMLAnchorElement | null
+      if (!anchor) return
+      if (anchor.target && anchor.target !== '_self') return
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+
+      const href = anchor.getAttribute('href')
+      if (!href || href.startsWith('#') || href.startsWith('javascript:')) return
+
+      const nextUrl = new URL(anchor.href, window.location.href)
+      if (nextUrl.origin !== window.location.origin) return
+
+      const nextPath = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`
+      const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`
+      if (nextPath === currentPath) return
+
+      event.preventDefault()
+      setPendingPath(nextPath)
+      setShowUnsavedDialog(true)
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('click', handleDocumentClick, true)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('click', handleDocumentClick, true)
+    }
+  }, [hasUnsavedChanges])
+
+  const handleDiscardAndLeave = () => {
+    const destination = pendingPath
+    setShowUnsavedDialog(false)
+    setPendingPath(null)
+    if (destination) {
+      router.push(destination)
+    }
+  }
 
   const onSubmit = async (data: ClassroomFormData) => {
     try {
@@ -175,19 +285,27 @@ export default function ClassroomForm({ mode, classroom }: ClassroomFormProps) {
   return (
     <div>
       <div className="mb-4">
-        <Link
-          href="/settings/classrooms"
+        <button
+          type="button"
+          onClick={() => navigateWithUnsavedGuard('/settings/classrooms')}
           className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Classrooms
-        </Link>
+        </button>
       </div>
 
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-          {isEdit ? 'Edit Classroom' : 'Add New Classroom'}
-        </h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            {isEdit ? 'Edit Classroom' : 'Add New Classroom'}
+          </h1>
+          {hasUnsavedChanges && (
+            <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+              Unsaved changes
+            </span>
+          )}
+        </div>
         <p className="text-muted-foreground mt-2">
           {isEdit ? classroom?.name : 'Create a new classroom'}
         </p>
@@ -245,7 +363,7 @@ export default function ClassroomForm({ mode, classroom }: ClassroomFormProps) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.push('/settings/classrooms')}
+              onClick={() => navigateWithUnsavedGuard('/settings/classrooms')}
             >
               Cancel
             </Button>
@@ -261,6 +379,15 @@ export default function ClassroomForm({ mode, classroom }: ClassroomFormProps) {
           </div>
         </form>
       </div>
+      <StaffUnsavedChangesDialog
+        open={showUnsavedDialog}
+        onOpenChange={setShowUnsavedDialog}
+        onKeepEditing={() => {
+          setShowUnsavedDialog(false)
+          setPendingPath(null)
+        }}
+        onDiscardAndLeave={handleDiscardAndLeave}
+      />
     </div>
   )
 }
