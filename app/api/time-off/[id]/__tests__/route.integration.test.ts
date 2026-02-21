@@ -335,6 +335,118 @@ describe('PUT /api/time-off/[id] integration', () => {
     expect(json.assignments[0].display).toMatch(/Sally A\./)
   })
 
+  it('DELETE summary uses fallback name formatting when display names are missing', async () => {
+    ;(getActiveSubAssignmentsForTimeOffRequest as jest.Mock).mockResolvedValue([
+      {
+        id: 'assignment-1',
+        coverage_request_shift: {
+          date: '2026-02-10',
+          days_of_week: { name: 'Monday' },
+          time_slots: { code: 'EM' },
+          classrooms: { name: 'Infant Room' },
+        },
+        sub: {
+          first_name: 'Sally',
+          last_name: 'Anders',
+        },
+      },
+    ])
+    ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
+      id: 'timeoff-1',
+      teacher: { first_name: 'Bella', last_name: 'Wilbanks' },
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/time-off/timeoff-1', 'DELETE', {})
+    const response = await DELETE(request as any, { params: Promise.resolve({ id: 'timeoff-1' }) })
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.teacherName).toBe('Bella Wilbanks')
+    expect(json.assignments[0].subName).toBe('Sally Anders')
+    expect(json.assignments[0].display).toMatch(/Mon Feb/)
+  })
+
+  it('DELETE cancellation accepts malformed JSON body and uses defaults', async () => {
+    ;(getActiveSubAssignmentsForTimeOffRequest as jest.Mock).mockResolvedValue([])
+    ;(cancelTimeOffRequest as jest.Mock).mockResolvedValue({
+      cancelled: true,
+      removedAssignments: 0,
+    })
+
+    const request = {
+      method: 'DELETE',
+      nextUrl: new URL('http://localhost:3000/api/time-off/timeoff-1'),
+      headers: new Headers(),
+      json: async () => {
+        throw new Error('invalid json')
+      },
+    }
+
+    const response = await DELETE(request as any, { params: Promise.resolve({ id: 'timeoff-1' }) })
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(cancelTimeOffRequest).toHaveBeenCalledWith('timeoff-1', {
+      keepAssignmentsAsExtraCoverage: false,
+      assignmentIdsToKeep: undefined,
+    })
+    expect(json.success).toBe(true)
+  })
+
+  it('PUT draft mode rebuilds shifts without conflict filtering', async () => {
+    ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
+      id: 'timeoff-1',
+      school_id: 'school-1',
+      status: 'draft',
+      start_date: '2026-02-20',
+      end_date: '2026-02-20',
+      teacher_id: 'teacher-1',
+      shift_selection_mode: 'select_shifts',
+    })
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
+    ;(canTransitionTimeOffStatus as jest.Mock).mockReturnValue(true)
+    ;(updateTimeOffRequest as jest.Mock).mockResolvedValue({
+      id: 'timeoff-1',
+      school_id: 'school-1',
+      status: 'draft',
+      start_date: '2026-02-20',
+      end_date: '2026-02-20',
+      teacher_id: 'teacher-1',
+      shift_selection_mode: 'select_shifts',
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/time-off/timeoff-1', 'PUT', {
+      status: 'draft',
+      teacher_id: 'teacher-1',
+      start_date: '2026-02-20',
+      end_date: '2026-02-20',
+      shift_selection_mode: 'select_shifts',
+      shifts: [
+        {
+          date: '2026-02-20',
+          day_of_week_id: 'day-1',
+          time_slot_id: 'slot-1',
+        },
+      ],
+    })
+
+    const response = await PUT(request as any, { params: Promise.resolve({ id: 'timeoff-1' }) })
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(getTeacherTimeOffShifts).not.toHaveBeenCalled()
+    expect(createTimeOffShifts).toHaveBeenCalledWith('timeoff-1', [
+      {
+        date: '2026-02-20',
+        day_of_week_id: 'day-1',
+        time_slot_id: 'slot-1',
+      },
+    ])
+    expect(json.warning).toBeNull()
+    expect(json.excludedShiftCount).toBe(0)
+  })
+
   it('DELETE cancels request and revalidates when action is provided', async () => {
     ;(getActiveSubAssignmentsForTimeOffRequest as jest.Mock).mockResolvedValue([])
     ;(cancelTimeOffRequest as jest.Mock).mockResolvedValue({

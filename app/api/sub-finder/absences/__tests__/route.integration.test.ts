@@ -167,4 +167,159 @@ describe('GET /api/sub-finder/absences integration', () => {
       },
     })
   })
+
+  it('respects include_partially_covered flag and keeps no-shift absences', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn(() => ({
+        select: jest.fn().mockReturnThis(),
+        in: jest.fn().mockResolvedValue({ data: [] }),
+      })),
+    })
+    ;(getTimeOffRequests as jest.Mock).mockResolvedValue([
+      {
+        id: 'req-uncovered',
+        teacher_id: 'teacher-1',
+        start_date: '2099-02-10',
+        end_date: '2099-02-10',
+      },
+      {
+        id: 'req-partial',
+        teacher_id: 'teacher-1',
+        start_date: '2099-02-11',
+        end_date: '2099-02-11',
+      },
+      {
+        id: 'req-fully-covered',
+        teacher_id: 'teacher-1',
+        start_date: '2099-02-12',
+        end_date: '2099-02-12',
+      },
+      {
+        id: 'req-no-shifts',
+        teacher_id: 'teacher-1',
+        start_date: '2099-02-13',
+        end_date: '2099-02-13',
+      },
+    ])
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValue([])
+    ;(getActiveSubAssignmentsForTimeOffRequest as jest.Mock).mockResolvedValue([])
+    ;(transformTimeOffCardData as jest.Mock).mockImplementation((request: { id: string }) => {
+      if (request.id === 'req-uncovered') {
+        return {
+          id: request.id,
+          teacher_id: 'teacher-1',
+          teacher_name: 'Uncovered',
+          start_date: '2099-02-10',
+          end_date: '2099-02-10',
+          reason: null,
+          notes: null,
+          classrooms: [],
+          total: 1,
+          uncovered: 1,
+          partial: 0,
+          covered: 0,
+          shift_details: [],
+        }
+      }
+      if (request.id === 'req-partial') {
+        return {
+          id: request.id,
+          teacher_id: 'teacher-1',
+          teacher_name: 'Partial',
+          start_date: '2099-02-11',
+          end_date: '2099-02-11',
+          reason: null,
+          notes: null,
+          classrooms: [],
+          total: 1,
+          uncovered: 0,
+          partial: 1,
+          covered: 0,
+          shift_details: [],
+        }
+      }
+      if (request.id === 'req-fully-covered') {
+        return {
+          id: request.id,
+          teacher_id: 'teacher-1',
+          teacher_name: 'Covered',
+          start_date: '2099-02-12',
+          end_date: '2099-02-12',
+          reason: null,
+          notes: null,
+          classrooms: [],
+          total: 1,
+          uncovered: 0,
+          partial: 0,
+          covered: 1,
+          shift_details: [],
+        }
+      }
+      return {
+        id: request.id,
+        teacher_id: 'teacher-1',
+        teacher_name: 'No shifts',
+        start_date: '2099-02-13',
+        end_date: '2099-02-13',
+        reason: null,
+        notes: null,
+        classrooms: [],
+        total: 0,
+        uncovered: 0,
+        partial: 0,
+        covered: 0,
+        shift_details: [],
+      }
+    })
+    ;(getCoverageStatus as jest.Mock).mockReturnValue('uncovered')
+    ;(buildCoverageBadges as jest.Mock).mockReturnValue([])
+    ;(sortCoverageShifts as jest.Mock).mockImplementation((shifts: any) => shifts)
+    ;(buildCoverageSegments as jest.Mock).mockImplementation(() => [])
+
+    const withPartialRequest = {
+      nextUrl: new URL(
+        'http://localhost:3000/api/sub-finder/absences?include_partially_covered=true'
+      ),
+    }
+    const withPartialResponse = await GET(withPartialRequest as any)
+    const withPartialJson = await withPartialResponse.json()
+    const withPartialIds = withPartialJson.map((row: { id: string }) => row.id)
+
+    expect(withPartialResponse.status).toBe(200)
+    expect(withPartialIds).toEqual(['req-uncovered', 'req-partial', 'req-no-shifts'])
+
+    const uncoveredOnlyRequest = {
+      nextUrl: new URL(
+        'http://localhost:3000/api/sub-finder/absences?include_partially_covered=false'
+      ),
+    }
+    const uncoveredOnlyResponse = await GET(uncoveredOnlyRequest as any)
+    const uncoveredOnlyJson = await uncoveredOnlyResponse.json()
+    const uncoveredOnlyIds = uncoveredOnlyJson.map((row: { id: string }) => row.id)
+
+    expect(uncoveredOnlyResponse.status).toBe(200)
+    expect(uncoveredOnlyIds).toEqual(['req-uncovered', 'req-no-shifts'])
+  })
+
+  it('returns 500 on unexpected failures', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn(() => ({
+        select: jest.fn().mockReturnThis(),
+        in: jest.fn().mockResolvedValue({ data: [] }),
+      })),
+    })
+    ;(getTimeOffRequests as jest.Mock).mockRejectedValue(new Error('forced absences failure'))
+
+    const request = {
+      nextUrl: new URL('http://localhost:3000/api/sub-finder/absences'),
+    }
+
+    const response = await GET(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/forced absences failure/i)
+  })
 })
