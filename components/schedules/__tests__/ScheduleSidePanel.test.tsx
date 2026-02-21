@@ -231,6 +231,40 @@ describe('ScheduleSidePanel interactions', () => {
     expect(screen.getByText('All shifts')).toBeInTheDocument()
   })
 
+  it('shows staffing summary chip and counts in the header', async () => {
+    setupFetch({
+      start_date: '2026-01-01',
+      end_date: '2026-03-01',
+      weekdays: ['Monday', 'Wednesday', 'Friday'],
+      matching_shift_count: 6,
+    })
+
+    render(<ScheduleSidePanel {...buildProps()} />)
+
+    expect(await screen.findByText('Below Preferred by 1')).toBeInTheDocument()
+    expect(screen.getByText('Required: 2 • Preferred: 3 • Scheduled: 2')).toBeInTheDocument()
+  })
+
+  it('supports baseline edit handoff and return to cell panel', async () => {
+    setupFetch({
+      start_date: '2026-01-01',
+      end_date: '2026-03-01',
+      weekdays: ['Monday', 'Wednesday', 'Friday'],
+      matching_shift_count: 6,
+    })
+
+    render(<ScheduleSidePanel {...buildProps()} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /edit permanent staff/i }))
+    expect(screen.getByText('Edit baseline assignment?')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^continue$/i }))
+    expect(screen.getByText('Edit Permanent Staff')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^back$/i }))
+    expect(await screen.findByText('Flex Staff')).toBeInTheDocument()
+  })
+
   it('shows single-shift confirmation copy with no weekday/all-shifts options', async () => {
     setupFetch({
       start_date: '2026-02-09',
