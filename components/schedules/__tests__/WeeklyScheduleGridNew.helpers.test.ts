@@ -1,8 +1,11 @@
 import {
+  calculateAssignmentCounts,
+  extractDaysAndTimeSlots,
   generateClassroomsXDaysGridTemplate,
   generateDaysXClassroomsGridTemplate,
   hexToRgba,
 } from '@/components/schedules/WeeklyScheduleGridNew'
+import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 
 describe('WeeklyScheduleGridNew helpers', () => {
   it('converts hex colors to rgba values', () => {
@@ -43,5 +46,132 @@ describe('WeeklyScheduleGridNew helpers', () => {
 
     expect(result.columns).toBe('110px ')
     expect(result.rows).toBe('auto auto repeat(0, minmax(120px, auto))')
+  })
+
+  it('calculates assignment counts for chips and coverage issues', () => {
+    const data: WeeklyScheduleDataByClassroom[] = [
+      {
+        classroom_id: 'class-1',
+        classroom_name: 'Infant Room',
+        classroom_color: '#00AEEF',
+        days: [
+          {
+            day_of_week_id: 'day-mon',
+            day_name: 'Monday',
+            day_number: 1,
+            time_slots: [
+              {
+                time_slot_id: 'slot-am',
+                time_slot_code: 'AM',
+                time_slot_name: 'Morning',
+                time_slot_display_order: 1,
+                time_slot_start_time: null,
+                time_slot_end_time: null,
+                assignments: [
+                  {
+                    id: 'a-1',
+                    teacher_id: 'teacher-1',
+                    teacher_name: 'Teacher A.',
+                    classroom_id: 'class-1',
+                    classroom_name: 'Infant Room',
+                  },
+                  {
+                    id: 'a-2',
+                    teacher_id: 'sub-1',
+                    teacher_name: 'Sub A.',
+                    classroom_id: 'class-1',
+                    classroom_name: 'Infant Room',
+                    is_substitute: true,
+                  },
+                ],
+                absences: [
+                  {
+                    teacher_id: 'teacher-2',
+                    teacher_name: 'Teacher B.',
+                    has_sub: true,
+                    is_partial: false,
+                  },
+                ],
+                schedule_cell: {
+                  id: 'cell-1',
+                  is_active: true,
+                  enrollment_for_staffing: 9,
+                  notes: null,
+                  class_groups: [
+                    {
+                      id: 'cg-1',
+                      name: 'Infant A',
+                      min_age: 1,
+                      max_age: 2,
+                      required_ratio: 4,
+                      preferred_ratio: 3,
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ]
+
+    expect(calculateAssignmentCounts(data)).toEqual({
+      all: 2,
+      subs: 1,
+      permanent: 2,
+      coverageIssues: 1,
+      absences: 1,
+    })
+  })
+
+  it('extracts sorted days and time slots for selected days only', () => {
+    const data: WeeklyScheduleDataByClassroom[] = [
+      {
+        classroom_id: 'class-1',
+        classroom_name: 'Infant Room',
+        classroom_color: null,
+        days: [
+          {
+            day_of_week_id: 'day-sun',
+            day_name: 'Sunday',
+            day_number: 0,
+            time_slots: [
+              {
+                time_slot_id: 'slot-2',
+                time_slot_code: 'PM',
+                time_slot_name: 'PM',
+                time_slot_display_order: 2,
+                time_slot_start_time: null,
+                time_slot_end_time: null,
+                assignments: [],
+                schedule_cell: null,
+              },
+            ],
+          },
+          {
+            day_of_week_id: 'day-mon',
+            day_name: 'Monday',
+            day_number: 1,
+            time_slots: [
+              {
+                time_slot_id: 'slot-1',
+                time_slot_code: 'AM',
+                time_slot_name: 'AM',
+                time_slot_display_order: 1,
+                time_slot_start_time: null,
+                time_slot_end_time: null,
+                assignments: [],
+                schedule_cell: null,
+              },
+            ],
+          },
+        ],
+      },
+    ]
+
+    const result = extractDaysAndTimeSlots(data, ['day-mon', 'day-sun'])
+
+    expect(result.days.map(day => day.id)).toEqual(['day-mon', 'day-sun'])
+    expect(result.timeSlots.map(slot => slot.id)).toEqual(['slot-1', 'slot-2'])
   })
 })

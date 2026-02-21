@@ -120,6 +120,145 @@ export function generateClassroomsXDaysGridTemplate(
   return { columns, rows }
 }
 
+export function calculateAssignmentCounts(data: WeeklyScheduleDataByClassroom[]) {
+  let allCount = 0
+  let permanentCount = 0
+  let subsCount = 0
+  let coverageIssuesCount = 0
+  let absencesCount = 0
+
+  data.forEach(classroom => {
+    classroom.days.forEach(day => {
+      day.time_slots.forEach(slot => {
+        slot.assignments.forEach(assignment => {
+          allCount++
+          if (assignment.teacher_id && !assignment.is_floater) {
+            permanentCount++
+          }
+        })
+
+        const hasSubstitute = slot.assignments.some(a => a.is_substitute === true)
+        if (hasSubstitute) {
+          subsCount++
+        }
+
+        if (slot.absences && slot.absences.length > 0) {
+          absencesCount++
+        }
+
+        const scheduleCell = slot.schedule_cell
+        if (
+          scheduleCell &&
+          scheduleCell.is_active &&
+          scheduleCell.class_groups &&
+          scheduleCell.class_groups.length > 0
+        ) {
+          const classGroupForRatio = scheduleCell.class_groups.reduce((lowest, current) => {
+            const currentMinAge = current.min_age ?? Infinity
+            const lowestMinAge = lowest.min_age ?? Infinity
+            return currentMinAge < lowestMinAge ? current : lowest
+          })
+
+          const requiredTeachers = classGroupForRatio.required_ratio
+            ? Math.ceil(scheduleCell.enrollment_for_staffing! / classGroupForRatio.required_ratio)
+            : undefined
+          const preferredTeachers = classGroupForRatio.preferred_ratio
+            ? Math.ceil(scheduleCell.enrollment_for_staffing! / classGroupForRatio.preferred_ratio)
+            : undefined
+
+          const assignedCount = slot.assignments.filter(
+            a => a.teacher_id && !a.is_substitute
+          ).length
+          const belowRequired = requiredTeachers !== undefined && assignedCount < requiredTeachers
+          const belowPreferred =
+            preferredTeachers !== undefined && assignedCount < preferredTeachers
+
+          if (belowRequired || belowPreferred) {
+            coverageIssuesCount++
+          }
+        }
+      })
+    })
+  })
+
+  return {
+    all: allCount,
+    subs: subsCount,
+    permanent: permanentCount,
+    coverageIssues: coverageIssuesCount,
+    absences: absencesCount,
+  }
+}
+
+export function extractDaysAndTimeSlots(
+  data: WeeklyScheduleDataByClassroom[],
+  selectedDayIds: string[]
+) {
+  const daySet = new Map<string, { id: string; name: string; number: number }>()
+  const timeSlotSet = new Map<
+    string,
+    {
+      id: string
+      code: string
+      name: string | null
+      display_order: number | null
+      default_start_time: string | null
+      default_end_time: string | null
+    }
+  >()
+
+  const daysToProcess = selectedDayIds.length > 0 ? selectedDayIds : []
+
+  data.forEach(classroom => {
+    classroom.days.forEach(day => {
+      if (daysToProcess.length === 0 || !daysToProcess.includes(day.day_of_week_id)) {
+        return
+      }
+
+      if (!daySet.has(day.day_of_week_id)) {
+        daySet.set(day.day_of_week_id, {
+          id: day.day_of_week_id,
+          name: day.day_name,
+          number: day.day_number,
+        })
+      }
+      day.time_slots.forEach(slot => {
+        if (!timeSlotSet.has(slot.time_slot_id)) {
+          timeSlotSet.set(slot.time_slot_id, {
+            id: slot.time_slot_id,
+            code: slot.time_slot_code,
+            name: slot.time_slot_name,
+            display_order: slot.time_slot_display_order,
+            default_start_time: null,
+            default_end_time: null,
+          })
+        }
+      })
+    })
+  })
+
+  const days = Array.from(daySet.values())
+    .filter(day => {
+      if (selectedDayIds.length > 0) {
+        return selectedDayIds.includes(day.id)
+      }
+      return false
+    })
+    .sort((a, b) => {
+      const aNum = a.number === 0 ? 7 : a.number
+      const bNum = b.number === 0 ? 7 : b.number
+      return aNum - bNum
+    })
+
+  const timeSlots = Array.from(timeSlotSet.values()).sort((a, b) => {
+    const orderA = a.display_order ?? 999
+    const orderB = b.display_order ?? 999
+    return orderA - orderB
+  })
+
+  return { days, timeSlots }
+}
+
 export default function WeeklyScheduleGridNew({
   data,
   selectedDayIds,
@@ -188,162 +327,15 @@ export default function WeeklyScheduleGridNew({
   // Calculate assignment counts for filter chips
   // Note: Since substitutes are merged into assignments with teacher_id, we can't distinguish them directly
   // For now, count all assignments, and separate permanent teachers from floaters
-  const assignmentCounts = useMemo(() => {
-    let allCount = 0
-    let permanentCount = 0
-    let subsCount = 0 // Count slots with substitutes
-    let coverageIssuesCount = 0
-    let absencesCount = 0
-
-    data.forEach(classroom => {
-      classroom.days.forEach(day => {
-        day.time_slots.forEach(slot => {
-          slot.assignments.forEach(assignment => {
-            allCount++
-            // Count permanent teachers (non-floaters with teacher_id)
-            if (assignment.teacher_id && !assignment.is_floater) {
-              permanentCount++
-            }
-          })
-
-          // Count slots with substitutes (check if any assignment is marked as substitute)
-          const hasSubstitute = slot.assignments.some(a => a.is_substitute === true)
-          if (hasSubstitute) {
-            subsCount++
-          }
-
-          // Count absences from the absences array (if available)
-          if (slot.absences && slot.absences.length > 0) {
-            absencesCount++
-          }
-
-          // Check if slot has coverage issues
-          const scheduleCell = slot.schedule_cell
-          if (
-            scheduleCell &&
-            scheduleCell.is_active &&
-            scheduleCell.class_groups &&
-            scheduleCell.class_groups.length > 0
-          ) {
-            // Find class group with lowest min_age for ratio calculation
-            const classGroupForRatio = scheduleCell.class_groups.reduce((lowest, current) => {
-              const currentMinAge = current.min_age ?? Infinity
-              const lowestMinAge = lowest.min_age ?? Infinity
-              return currentMinAge < lowestMinAge ? current : lowest
-            })
-
-            const requiredTeachers = classGroupForRatio.required_ratio
-              ? Math.ceil(scheduleCell.enrollment_for_staffing! / classGroupForRatio.required_ratio)
-              : undefined
-            const preferredTeachers = classGroupForRatio.preferred_ratio
-              ? Math.ceil(
-                  scheduleCell.enrollment_for_staffing! / classGroupForRatio.preferred_ratio
-                )
-              : undefined
-
-            // Count all teachers assigned to this classroom/day/time slot
-            // Teachers are assigned to classrooms, not specific class groups
-            // All teachers in the assignments array are already filtered by classroom_id in the API
-            const assignedCount = slot.assignments.filter(
-              a => a.teacher_id && !a.is_substitute // Count regular teachers, exclude substitutes (they're counted separately)
-            ).length
-
-            const belowRequired = requiredTeachers !== undefined && assignedCount < requiredTeachers
-            const belowPreferred =
-              preferredTeachers !== undefined && assignedCount < preferredTeachers
-
-            // Count as coverage issue if below required or below preferred
-            if (belowRequired || belowPreferred) {
-              coverageIssuesCount++
-            }
-          }
-        })
-      })
-    })
-
-    return {
-      all: allCount,
-      subs: subsCount,
-      permanent: permanentCount,
-      coverageIssues: coverageIssuesCount,
-      absences: absencesCount,
-    }
-  }, [data])
+  const assignmentCounts = useMemo(() => calculateAssignmentCounts(data), [data])
 
   const countsForChips = displayModeCounts ?? assignmentCounts
 
   // Extract unique days and time slots from data, filtered by selectedDayIds
-  const { days, timeSlots } = useMemo(() => {
-    const daySet = new Map<string, { id: string; name: string; number: number }>()
-    const timeSlotSet = new Map<
-      string,
-      {
-        id: string
-        code: string
-        name: string | null
-        display_order: number | null
-        default_start_time: string | null
-        default_end_time: string | null
-      }
-    >()
-
-    // If selectedDayIds is provided and not empty, only process those days
-    // If empty, don't process any days (settings might not be configured)
-    const daysToProcess = selectedDayIds.length > 0 ? selectedDayIds : [] // Empty array means don't process any days
-
-    data.forEach(classroom => {
-      classroom.days.forEach(day => {
-        // Strict filtering: only include days that are in selectedDayIds
-        // If selectedDayIds is empty, don't include any days
-        if (daysToProcess.length === 0 || !daysToProcess.includes(day.day_of_week_id)) {
-          return
-        }
-
-        if (!daySet.has(day.day_of_week_id)) {
-          daySet.set(day.day_of_week_id, {
-            id: day.day_of_week_id,
-            name: day.day_name,
-            number: day.day_number,
-          })
-        }
-        day.time_slots.forEach(slot => {
-          if (!timeSlotSet.has(slot.time_slot_id)) {
-            timeSlotSet.set(slot.time_slot_id, {
-              id: slot.time_slot_id,
-              code: slot.time_slot_code,
-              name: slot.time_slot_name,
-              display_order: slot.time_slot_display_order,
-              default_start_time: null, // Will be fetched from API if needed
-              default_end_time: null,
-            })
-          }
-        })
-      })
-    })
-
-    const daysArray = Array.from(daySet.values())
-      .filter(day => {
-        // Final filter: only include selected days if selectedDayIds is provided and not empty
-        // If selectedDayIds is empty, don't include any days
-        if (selectedDayIds.length > 0) {
-          return selectedDayIds.includes(day.id)
-        }
-        return false // Don't show any days if selectedDayIds is empty
-      })
-      .sort((a, b) => {
-        // Handle Sunday (day_number 0 or 7) for sorting
-        const aNum = a.number === 0 ? 7 : a.number
-        const bNum = b.number === 0 ? 7 : b.number
-        return aNum - bNum
-      })
-    const timeSlotsArray = Array.from(timeSlotSet.values()).sort((a, b) => {
-      const orderA = a.display_order ?? 999
-      const orderB = b.display_order ?? 999
-      return orderA - orderB
-    })
-
-    return { days: daysArray, timeSlots: timeSlotsArray }
-  }, [data, selectedDayIds])
+  const { days, timeSlots } = useMemo(
+    () => extractDaysAndTimeSlots(data, selectedDayIds),
+    [data, selectedDayIds]
+  )
 
   const hasAppliedInitialSelection = useRef(false)
 
