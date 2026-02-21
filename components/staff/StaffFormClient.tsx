@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import StaffForm, { type StaffFormData } from '@/components/staff/StaffForm'
 import ErrorMessage from '@/components/shared/ErrorMessage'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import StaffEditorTabs from '@/components/staff/StaffEditorTabs'
+import StaffUnsavedChangesDialog from '@/components/staff/StaffUnsavedChangesDialog'
 import SubAvailabilitySection from '@/components/subs/SubAvailabilitySection'
 import SubPreferencesSection from '@/components/subs/SubPreferencesSection'
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -42,14 +42,26 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
   const queryClient = useQueryClient()
   const schoolId = useSchool()
   const searchParams = useSearchParams()
+  const requestedTab = searchParams.get('tab')
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState(() => {
+    if (requestedTab === 'availability' || requestedTab === 'preferences') return requestedTab
+    return 'overview'
+  })
   const [roleTypes, setRoleTypes] = useState<RoleTypeLookup>({})
   const [defaultFormat, setDefaultFormat] = useState<DisplayNameFormat>(
     defaultDisplayNameFormat ?? 'first_last_initial'
   )
   const [isActive, setIsActive] = useState(staff.active ?? true)
+  const [savedIsActive, setSavedIsActive] = useState(staff.active ?? true)
+  const [isOverviewDirty, setIsOverviewDirty] = useState(false)
+  const [isAvailabilityDirty, setIsAvailabilityDirty] = useState(false)
+  const [isPreferencesDirty, setIsPreferencesDirty] = useState(false)
+  const [availabilitySaveSignal, setAvailabilitySaveSignal] = useState(0)
+  const [preferencesSaveSignal, setPreferencesSaveSignal] = useState(0)
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [staffList, setStaffList] = useState<Array<{ id: string }>>([])
+  const [pendingPath, setPendingPath] = useState<string | null>(null)
 
   const returnPage = searchParams.get('returnPage') || '1'
   const returnSearch = searchParams.get('returnSearch')
@@ -142,12 +154,82 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
   }, [roleTypes, staff.role_type_codes, staff.role_type_ids])
 
   const showAvailability = staff.is_sub || roleTypeCodes.includes('FLEXIBLE')
+  const overviewHasUnsavedChanges = isOverviewDirty || isActive !== savedIsActive
+  const hasUnsavedChanges = overviewHasUnsavedChanges || isAvailabilityDirty || isPreferencesDirty
+
+  const navigateWithUnsavedGuard = (path: string) => {
+    if (hasUnsavedChanges) {
+      setPendingPath(path)
+      setShowUnsavedDialog(true)
+      return
+    }
+    router.push(path)
+  }
 
   useEffect(() => {
     if (!showAvailability && activeTab === 'availability') {
       setActiveTab('overview')
     }
   }, [showAvailability, activeTab])
+
+  useEffect(() => {
+    if (requestedTab === 'availability') {
+      setActiveTab(showAvailability ? 'availability' : 'overview')
+      return
+    }
+    if (requestedTab === 'preferences') {
+      setActiveTab('preferences')
+    }
+  }, [requestedTab, showAvailability])
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null
+      if (!target) return
+      const anchor = target.closest('a[href]') as HTMLAnchorElement | null
+      if (!anchor) return
+      if (anchor.target && anchor.target !== '_self') return
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+
+      const href = anchor.getAttribute('href')
+      if (!href || href.startsWith('#') || href.startsWith('javascript:')) return
+
+      const nextUrl = new URL(anchor.href, window.location.href)
+      if (nextUrl.origin !== window.location.origin) return
+
+      const nextPath = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`
+      const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`
+      if (nextPath === currentPath) return
+
+      event.preventDefault()
+      setPendingPath(nextPath)
+      setShowUnsavedDialog(true)
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('click', handleDocumentClick, true)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('click', handleDocumentClick, true)
+    }
+  }, [hasUnsavedChanges])
+
+  const handleDiscardAndLeave = () => {
+    const destination = pendingPath
+    setShowUnsavedDialog(false)
+    setPendingPath(null)
+    if (destination) {
+      router.push(destination)
+    }
+  }
 
   const handleSubmit = async (data: StaffFormData) => {
     try {
@@ -186,6 +268,8 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
         invalidateTimeOffRequests(queryClient, schoolId),
         invalidateSubFinderAbsences(queryClient, schoolId),
       ])
+      setSavedIsActive(isActive)
+      setIsOverviewDirty(false)
       router.refresh()
       toast.success('Staff updated.')
     } catch (err: unknown) {
@@ -229,7 +313,7 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
       <div className="mb-4">
         <button
           type="button"
-          onClick={() => router.push(getReturnUrl())}
+          onClick={() => navigateWithUnsavedGuard(getReturnUrl())}
           className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -238,26 +322,32 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
       </div>
       <div className="mb-6 max-w-2xl">
         <div className="flex items-center justify-between gap-6">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => previousStaffId && router.push(getStaffDetailUrl(previousStaffId))}
-              disabled={!previousStaffId}
-              className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Previous staff member"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
+          <div className="flex items-center gap-3">
             <p className="text-3xl font-bold tracking-tight text-slate-900">{staffName}</p>
-            <button
-              type="button"
-              onClick={() => nextStaffId && router.push(getStaffDetailUrl(nextStaffId))}
-              disabled={!nextStaffId}
-              className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Next staff member"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  previousStaffId && navigateWithUnsavedGuard(getStaffDetailUrl(previousStaffId))
+                }
+                disabled={!previousStaffId}
+                className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Previous staff member"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  nextStaffId && navigateWithUnsavedGuard(getStaffDetailUrl(nextStaffId))
+                }
+                disabled={!nextStaffId}
+                className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Next staff member"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <Switch
@@ -279,65 +369,73 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
 
       {error && <ErrorMessage message={error} className="mb-6" />}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList
-          className={`grid w-full max-w-2xl ${showAvailability ? 'grid-cols-3' : 'grid-cols-2'}`}
-        >
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          {showAvailability && <TabsTrigger value="availability">Availability</TabsTrigger>}
-          <TabsTrigger value="preferences">Preferences & Qualifications</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Overview</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="max-w-2xl">
-                <StaffForm
-                  staff={staff}
-                  onSubmit={handleSubmit}
-                  onCancel={() => router.push(getReturnUrl())}
-                  defaultDisplayNameFormat={defaultFormat}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {showAvailability && (
-          <TabsContent value="availability" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Availability</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <SubAvailabilitySection subId={staff.id} />
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
-
-        <TabsContent value="preferences" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Preferences & Qualifications</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <SubPreferencesSection
-                subId={staff.id}
-                sub={{
-                  can_change_diapers: staff.can_change_diapers,
-                  can_lift_children: staff.can_lift_children,
-                  can_assist_with_toileting: staff.can_assist_with_toileting,
-                  capabilities_notes: staff.capabilities_notes,
-                }}
+      <StaffEditorTabs
+        activeTab={activeTab}
+        onActiveTabChange={setActiveTab}
+        showAvailabilityTab={showAvailability}
+        overview={{
+          title: 'Overview',
+          dirty: overviewHasUnsavedChanges,
+          actionLabel: 'Save',
+          actionFormId: `staff-overview-form-${staff.id}`,
+          content: (
+            <div className="max-w-2xl">
+              <StaffForm
+                staff={staff}
+                onSubmit={handleSubmit}
+                onCancel={() => navigateWithUnsavedGuard(getReturnUrl())}
+                defaultDisplayNameFormat={defaultFormat}
+                roleTypes={Object.values(roleTypes)}
+                draftCacheKey={`staff-form:${staff.id}`}
+                onDirtyChange={setIsOverviewDirty}
+                formId={`staff-overview-form-${staff.id}`}
               />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </div>
+          ),
+        }}
+        availability={{
+          title: 'Availability',
+          dirty: isAvailabilityDirty,
+          actionLabel: 'Save',
+          onAction: () => setAvailabilitySaveSignal(v => v + 1),
+          cardClassName: 'max-w-3xl',
+          content: (
+            <SubAvailabilitySection
+              subId={staff.id}
+              onDirtyChange={setIsAvailabilityDirty}
+              externalSaveSignal={availabilitySaveSignal}
+            />
+          ),
+        }}
+        preferences={{
+          title: 'Preferences & Qualifications',
+          dirty: isPreferencesDirty,
+          actionLabel: 'Save',
+          onAction: () => setPreferencesSaveSignal(v => v + 1),
+          content: (
+            <SubPreferencesSection
+              subId={staff.id}
+              sub={{
+                can_change_diapers: staff.can_change_diapers,
+                can_lift_children: staff.can_lift_children,
+                can_assist_with_toileting: staff.can_assist_with_toileting,
+                capabilities_notes: staff.capabilities_notes,
+              }}
+              onDirtyChange={setIsPreferencesDirty}
+              externalSaveSignal={preferencesSaveSignal}
+            />
+          ),
+        }}
+      />
+      <StaffUnsavedChangesDialog
+        open={showUnsavedDialog}
+        onOpenChange={setShowUnsavedDialog}
+        onKeepEditing={() => {
+          setShowUnsavedDialog(false)
+          setPendingPath(null)
+        }}
+        onDiscardAndLeave={handleDiscardAndLeave}
+      />
     </div>
   )
 }

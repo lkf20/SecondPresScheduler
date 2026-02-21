@@ -35,7 +35,8 @@ export async function upsertSubAvailability(
     .single()
 
   if (subError) throw subError
-  const schoolId = subRow?.school_id || '00000000-0000-0000-0000-000000000001'
+  const schoolId = subRow?.school_id
+  if (!schoolId) throw new Error('school_id is required for sub availability')
   const { data, error } = await supabase
     .from('sub_availability')
     .upsert(
@@ -93,7 +94,8 @@ export async function createSubAvailabilityException(exception: {
     .single()
 
   if (subError) throw subError
-  const schoolId = subRow?.school_id || '00000000-0000-0000-0000-000000000001'
+  const schoolId = subRow?.school_id
+  if (!schoolId) throw new Error('school_id is required for sub availability exceptions')
   const { data, error } = await supabase
     .from('sub_availability_exceptions')
     .insert({ ...exception, school_id: schoolId })

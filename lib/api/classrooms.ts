@@ -167,8 +167,8 @@ export async function setClassroomAllowedClasses(classroomId: string, classGroup
     .single()
 
   if (classroomError) throw classroomError
-  const schoolId =
-    classroomRow?.school_id || (await getUserSchoolId()) || '00000000-0000-0000-0000-000000000001'
+  const schoolId = classroomRow?.school_id || (await getUserSchoolId())
+  if (!schoolId) throw new Error('school_id is required to set classroom allowed classes')
 
   // Delete existing allowed classes
   const { error: deleteError } = await supabase

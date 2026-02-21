@@ -32,6 +32,7 @@ interface DataTableProps<T> {
   searchPlaceholder?: string
   onRowClick?: (row: T) => void
   className?: string
+  cellClassName?: string
   emptyMessage?: string
   paginate?: boolean
 }
@@ -43,6 +44,7 @@ export default function DataTable<T extends Record<string, unknown>>({
   searchPlaceholder = 'Search...',
   onRowClick,
   className,
+  cellClassName,
   emptyMessage = 'No data available',
   paginate = true,
 }: DataTableProps<T>) {
@@ -238,7 +240,7 @@ export default function DataTable<T extends Record<string, unknown>>({
                     }
 
                     return (
-                      <TableCell key={column.key}>
+                      <TableCell key={column.key} className={cellClassName}>
                         {href ? (
                           <Link href={href} className="hover:underline">
                             {cellContent}

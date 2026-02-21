@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -22,6 +24,7 @@ import {
   formatStaffDisplayName,
   type DisplayNameFormat,
 } from '@/lib/utils/staff-display-name'
+import { formatUSPhone } from '@/lib/utils/phone'
 
 interface StaffPageClientProps {
   staff: StaffWithRole[]
@@ -49,6 +52,7 @@ export default function StaffPageClient({
   defaultDisplayNameFormat,
 }: StaffPageClientProps) {
   const [activeFilters, setActiveFilters] = useState<FilterKey[]>([])
+  const [includeInactiveStaff, setIncludeInactiveStaff] = useState(false)
   const [staffState, setStaffState] = useState(staff)
   const [defaultFormat, setDefaultFormat] = useState<DisplayNameFormat>(
     defaultDisplayNameFormat ?? 'first_last_initial'
@@ -89,16 +93,18 @@ export default function StaffPageClient({
       const roleCodes = roleAssignments
         .map(assignment => assignment.staff_role_types?.code)
         .filter(Boolean) as string[]
-      const roleLabels = roleAssignments
-        .map(assignment => assignment.staff_role_types?.label)
-        .filter(Boolean) as string[]
+      const orderedRoleLabels: string[] = []
+      if (roleCodes.includes('PERMANENT')) orderedRoleLabels.push('Permanent')
+      if (roleCodes.includes('FLEXIBLE')) orderedRoleLabels.push('Flexible')
+      if (member.is_sub) orderedRoleLabels.push('Substitute')
 
       const { name: computedName, isCustom } = computeDisplayName(member, defaultFormat)
 
       return {
         ...member,
         full_name: `${member.first_name} ${member.last_name}`.trim() || '—',
-        role_type_label: roleLabels.length > 0 ? roleLabels.join(', ') : '—',
+        role_type_label: orderedRoleLabels.length > 0 ? orderedRoleLabels.join(', ') : '—',
+        ordered_role_labels: orderedRoleLabels,
         role_codes: roleCodes,
         is_permanent: roleCodes.includes('PERMANENT'),
         is_flexible: roleCodes.includes('FLEXIBLE'),
@@ -108,8 +114,13 @@ export default function StaffPageClient({
     })
   }, [staffState, defaultFormat])
 
+  const visibleStaffPool = useMemo(() => {
+    if (includeInactiveStaff) return staffWithMeta
+    return staffWithMeta.filter(member => member.active !== false)
+  }, [staffWithMeta, includeInactiveStaff])
+
   const counts = useMemo(() => {
-    return staffWithMeta.reduce(
+    return visibleStaffPool.reduce(
       (acc, member) => {
         if (member.is_permanent) acc.permanent += 1
         if (member.is_flexible) acc.flexible += 1
@@ -118,13 +129,13 @@ export default function StaffPageClient({
       },
       { permanent: 0, flexible: 0, substitute: 0 }
     )
-  }, [staffWithMeta])
+  }, [visibleStaffPool])
 
-  const totalCount = staffWithMeta.length
+  const totalCount = visibleStaffPool.length
 
   const filteredStaff = useMemo(() => {
-    if (activeFilters.length === 0) return staffWithMeta
-    return staffWithMeta.filter(member => {
+    if (activeFilters.length === 0) return visibleStaffPool
+    return visibleStaffPool.filter(member => {
       return activeFilters.some(filter => {
         if (filter === 'permanent') return member.is_permanent
         if (filter === 'flexible') return member.is_flexible
@@ -132,7 +143,7 @@ export default function StaffPageClient({
         return false
       })
     })
-  }, [activeFilters, staffWithMeta])
+  }, [activeFilters, visibleStaffPool])
 
   const duplicateMap = useMemo(
     () => buildDuplicateDisplayNameMap(staffState, defaultFormat),
@@ -236,21 +247,55 @@ export default function StaffPageClient({
     {
       key: 'phone',
       header: 'Phone',
+      cell: row => (row.phone ? formatUSPhone(row.phone) : '—'),
     },
     {
       key: 'role_type_label',
       header: 'Staff Role',
       sortable: true,
+      cell: row => {
+        if (!row.ordered_role_labels || row.ordered_role_labels.length === 0) return '—'
+        return (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {row.ordered_role_labels.map(label => {
+              if (label === 'Permanent') {
+                return (
+                  <span
+                    key={label}
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300"
+                    style={{ borderColor: '#93c5fd' }}
+                  >
+                    {label}
+                  </span>
+                )
+              }
+              if (label === 'Flexible') {
+                return (
+                  <span
+                    key={label}
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-500 border-dashed"
+                    style={{ borderColor: '#3b82f6' }}
+                  >
+                    {label}
+                  </span>
+                )
+              }
+              return (
+                <span
+                  key={label}
+                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200"
+                >
+                  {label}
+                </span>
+              )
+            })}
+          </div>
+        )
+      },
     },
     {
       key: 'active',
       header: 'Status',
-    },
-    {
-      key: 'is_sub',
-      header: 'Is Sub?',
-      sortable: true,
-      cell: row => (row.is_sub ? 'Yes' : 'No'),
     },
   ]
 
@@ -305,7 +350,9 @@ export default function StaffPageClient({
               <div className="w-12" />
               <div className="flex flex-wrap items-center gap-2">
                 <Button
-                  variant="default"
+                  variant="outline"
+                  className="hover:!bg-teal-50"
+                  style={{ borderColor: 'rgb(13 148 136)', color: 'rgb(15 118 110)' }}
                   onClick={handleApplyAll}
                   disabled={isUpdatingFormat || !settingsLoaded}
                 >
@@ -362,6 +409,16 @@ export default function StaffPageClient({
         >
           Substitute Teachers ({counts.substitute})
         </button>
+        <div className="flex items-center space-x-2 pl-2">
+          <Checkbox
+            id="include-inactive-staff"
+            checked={includeInactiveStaff}
+            onCheckedChange={checked => setIncludeInactiveStaff(checked === true)}
+          />
+          <Label htmlFor="include-inactive-staff" className="text-sm font-normal cursor-pointer">
+            Include Inactive Staff
+          </Label>
+        </div>
       </div>
 
       {error && <ErrorMessage message={error} className="mb-6" />}
@@ -373,6 +430,7 @@ export default function StaffPageClient({
         searchPlaceholder="Search staff..."
         emptyMessage="No staff found. Add your first staff member to get started."
         paginate={false}
+        cellClassName="text-base"
       />
     </div>
   )

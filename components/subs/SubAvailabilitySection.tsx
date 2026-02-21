@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import SubAvailabilityGrid from './SubAvailabilityGrid'
 import SubAvailabilityExceptions from './SubAvailabilityExceptions'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Loader2, AlertTriangle } from 'lucide-react'
+import { Loader2, AlertTriangle, Plus } from 'lucide-react'
 
 interface AvailabilityData {
   weekly: Array<{
@@ -57,9 +57,35 @@ interface TeacherSchedule {
 
 interface SubAvailabilitySectionProps {
   subId: string
+  onDirtyChange?: (dirty: boolean) => void
+  externalSaveSignal?: number
 }
 
-export default function SubAvailabilitySection({ subId }: SubAvailabilitySectionProps) {
+const availabilityCache = new Map<string, AvailabilityData>()
+const availabilityDirtyCache = new Map<string, boolean>()
+const availabilityBaselineSignatureCache = new Map<string, string>()
+let cachedTimeSlots: TimeSlot[] | null = null
+let cachedDaysOfWeek: DayOfWeek[] | null = null
+
+const buildWeeklySignature = (
+  weekly: Array<{
+    day_of_week_id: string
+    time_slot_id: string
+    available: boolean
+  }>
+) =>
+  [...weekly]
+    .sort((a, b) =>
+      `${a.day_of_week_id}|${a.time_slot_id}`.localeCompare(`${b.day_of_week_id}|${b.time_slot_id}`)
+    )
+    .map(item => `${item.day_of_week_id}|${item.time_slot_id}|${item.available ? 1 : 0}`)
+    .join(';')
+
+export default function SubAvailabilitySection({
+  subId,
+  onDirtyChange,
+  externalSaveSignal,
+}: SubAvailabilitySectionProps) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [availabilityData, setAvailabilityData] = useState<AvailabilityData | null>(null)
@@ -68,48 +94,74 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [conflicts, setConflicts] = useState<Array<{ day: string; timeSlot: string }>>([])
   const [showConflictWarning, setShowConflictWarning] = useState(false)
+  const [startAddExceptionSignal, setStartAddExceptionSignal] = useState(0)
+  const [baselineWeeklySignature, setBaselineWeeklySignature] = useState('')
+  const lastHandledExternalSaveSignalRef = useRef(0)
 
-  const fetchAvailability = useCallback(async () => {
-    setLoading(true)
-    try {
-      const response = await fetch(`/api/subs/${subId}/availability`)
-      if (!response.ok) throw new Error('Failed to fetch availability')
-      const data = await response.json()
-      setAvailabilityData(data)
-    } catch (error) {
-      console.error('Error fetching availability:', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [subId])
+  useEffect(() => {
+    onDirtyChange?.(hasUnsavedChanges)
+  }, [hasUnsavedChanges, onDirtyChange])
+
+  const fetchAvailability = useCallback(
+    async (options?: { showLoading?: boolean }) => {
+      const showLoading = options?.showLoading ?? true
+      if (showLoading) setLoading(true)
+      try {
+        const response = await fetch(`/api/subs/${subId}/availability`)
+        if (!response.ok) throw new Error('Failed to fetch availability')
+        const data = await response.json()
+        setAvailabilityData(data)
+        availabilityCache.set(subId, data as AvailabilityData)
+        const signature = buildWeeklySignature((data as AvailabilityData).weekly)
+        setBaselineWeeklySignature(signature)
+        availabilityBaselineSignatureCache.set(subId, signature)
+        availabilityDirtyCache.set(subId, false)
+        setHasUnsavedChanges(false)
+      } catch (error) {
+        console.error('Error fetching availability:', error)
+      } finally {
+        if (showLoading) setLoading(false)
+      }
+    },
+    [subId]
+  )
 
   const fetchTimeSlots = useCallback(async () => {
+    if (cachedTimeSlots) {
+      setTimeSlots(cachedTimeSlots)
+      return
+    }
     try {
       const response = await fetch('/api/timeslots')
       if (!response.ok) throw new Error('Failed to fetch time slots')
       const data = await response.json()
       // Sort time slots by display_order (from settings), then by code as fallback
-      setTimeSlots(
-        (data as TimeSlot[]).sort((a, b) => {
-          const orderA = a.display_order ?? 999
-          const orderB = b.display_order ?? 999
-          if (orderA !== orderB) {
-            return orderA - orderB
-          }
-          return (a.code || '').localeCompare(b.code || '')
-        })
-      )
+      const sorted = (data as TimeSlot[]).sort((a, b) => {
+        const orderA = a.display_order ?? 999
+        const orderB = b.display_order ?? 999
+        if (orderA !== orderB) {
+          return orderA - orderB
+        }
+        return (a.code || '').localeCompare(b.code || '')
+      })
+      cachedTimeSlots = sorted
+      setTimeSlots(sorted)
     } catch (error) {
       console.error('Error fetching time slots:', error)
     }
   }, [])
 
   const fetchDaysOfWeek = useCallback(async () => {
+    if (cachedDaysOfWeek) {
+      setDaysOfWeek(cachedDaysOfWeek)
+      return
+    }
     try {
       const response = await fetch('/api/days-of-week')
       if (!response.ok) throw new Error('Failed to fetch days of week')
       const data = await response.json()
-      setDaysOfWeek(data as DayOfWeek[])
+      cachedDaysOfWeek = data as DayOfWeek[]
+      setDaysOfWeek(cachedDaysOfWeek)
     } catch (error) {
       console.error('Error fetching days of week:', error)
     }
@@ -117,30 +169,58 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
 
   // Fetch initial data
   useEffect(() => {
-    fetchAvailability()
+    const cachedAvailability = availabilityCache.get(subId)
+    const cachedDirty = availabilityDirtyCache.get(subId) === true
+    const cachedBaselineSignature =
+      availabilityBaselineSignatureCache.get(subId) ||
+      (cachedAvailability ? buildWeeklySignature(cachedAvailability.weekly) : '')
+    setBaselineWeeklySignature(cachedBaselineSignature)
+    if (cachedAvailability) {
+      setAvailabilityData(cachedAvailability)
+      const currentSignature = buildWeeklySignature(cachedAvailability.weekly)
+      const dirty = cachedBaselineSignature
+        ? currentSignature !== cachedBaselineSignature
+        : cachedDirty
+      setHasUnsavedChanges(dirty)
+      availabilityDirtyCache.set(subId, dirty)
+      setLoading(false)
+      if (!cachedDirty) {
+        fetchAvailability({ showLoading: false })
+      }
+    } else {
+      fetchAvailability({ showLoading: true })
+    }
     fetchTimeSlots()
     fetchDaysOfWeek()
-  }, [fetchAvailability, fetchTimeSlots, fetchDaysOfWeek])
+  }, [subId, fetchAvailability, fetchTimeSlots, fetchDaysOfWeek])
 
   const handleAvailabilityChange = async (
     availability: Array<{ day_of_week_id: string; time_slot_id: string; available: boolean }>
   ) => {
-    setHasUnsavedChanges(true)
+    const nextWeekly = availability.map(item => ({
+      id: '',
+      day_of_week_id: item.day_of_week_id,
+      time_slot_id: item.time_slot_id,
+      available: item.available,
+    }))
+    const nextSignature = buildWeeklySignature(nextWeekly)
+    const dirty = baselineWeeklySignature ? nextSignature !== baselineWeeklySignature : true
+    setHasUnsavedChanges(dirty)
     // Update local state immediately for responsive UI
     if (availabilityData) {
       setAvailabilityData({
         ...availabilityData,
-        weekly: availability.map(item => ({
-          id: '',
-          day_of_week_id: item.day_of_week_id,
-          time_slot_id: item.time_slot_id,
-          available: item.available,
-        })),
+        weekly: nextWeekly,
       })
+      availabilityCache.set(subId, {
+        ...availabilityData,
+        weekly: nextWeekly,
+      })
+      availabilityDirtyCache.set(subId, dirty)
     }
   }
 
-  const handleSaveWeekly = async () => {
+  const handleSaveWeekly = useCallback(async () => {
     if (!availabilityData) return
 
     setSaving(true)
@@ -203,14 +283,26 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
       })
 
       if (!response.ok) throw new Error('Failed to save availability')
+      const nextBaseline = buildWeeklySignature(availabilityData.weekly)
+      setBaselineWeeklySignature(nextBaseline)
+      availabilityBaselineSignatureCache.set(subId, nextBaseline)
       setHasUnsavedChanges(false)
+      availabilityDirtyCache.set(subId, false)
     } catch (error) {
       console.error('Error saving availability:', error)
       alert('Failed to save availability. Please try again.')
     } finally {
       setSaving(false)
     }
-  }
+  }, [availabilityData, daysOfWeek, subId, timeSlots])
+
+  useEffect(() => {
+    if (!externalSaveSignal) return
+    if (externalSaveSignal === lastHandledExternalSaveSignalRef.current) return
+    lastHandledExternalSaveSignalRef.current = externalSaveSignal
+    if (!hasUnsavedChanges || saving) return
+    void handleSaveWeekly()
+  }, [externalSaveSignal, hasUnsavedChanges, saving, handleSaveWeekly])
 
   const handleAddException = async (exception: {
     start_date: string
@@ -281,8 +373,8 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-2">Weekly Availability</h3>
-        <p className="text-sm text-muted-foreground mb-4">
+        <h3 className="text-lg font-semibold mb-2">Weekly Sub Availability</h3>
+        <p className="text-base text-muted-foreground mb-4">
           Check the boxes for time slots when this sub is regularly available. Unchecked =
           unavailable.
         </p>
@@ -322,20 +414,29 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
             </AlertDescription>
           </Alert>
         )}
-        {hasUnsavedChanges && (
-          <div className="mt-4 flex justify-end">
-            <Button onClick={handleSaveWeekly} disabled={saving}>
-              {saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Save Weekly Availability'
-              )}
-            </Button>
-          </div>
-        )}
+        <div className="mt-4 flex justify-end gap-3">
+          <Button
+            type="button"
+            size="default"
+            variant="outline"
+            className="hover:!bg-teal-50"
+            style={{ borderColor: 'rgb(13 148 136)', color: 'rgb(15 118 110)' }}
+            onClick={() => setStartAddExceptionSignal(prev => prev + 1)}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Exception
+          </Button>
+          <Button size="default" onClick={handleSaveWeekly} disabled={saving || !hasUnsavedChanges}>
+            {saving ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Weekly Availability'
+            )}
+          </Button>
+        </div>
       </div>
 
       <div>
@@ -346,6 +447,8 @@ export default function SubAvailabilitySection({ subId }: SubAvailabilitySection
           onAddException={handleAddException}
           onDeleteException={handleDeleteException}
           defaultExpanded={hasUpcomingExceptions}
+          showAddButton={false}
+          startAddSignal={startAddExceptionSignal}
         />
       </div>
     </div>

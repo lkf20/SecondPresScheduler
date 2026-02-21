@@ -18,19 +18,29 @@ type Staff = Database['public']['Tables']['staff']['Row']
 type StaffWithRoleIds = Staff & { role_type_ids?: string[] }
 type StaffRoleType = Database['public']['Tables']['staff_role_types']['Row']
 
-const teacherSchema = z.object({
-  first_name: z.string().min(1, 'First name is required'),
-  last_name: z.string().min(1, 'Last name is required'),
-  display_name: z.string().optional(),
-  phone: z.string().optional(),
-  email: z
-    .union([z.string().email('Invalid email address'), z.literal('')])
-    .optional()
-    .transform(val => (val === '' ? undefined : val)),
-  role_type_ids: z.array(z.string()).min(1, 'At least one staff role is required'),
-  active: z.boolean().default(true),
-  is_sub: z.boolean().default(false),
-})
+const teacherSchema = z
+  .object({
+    first_name: z.string().min(1, 'First name is required'),
+    last_name: z.string().min(1, 'Last name is required'),
+    display_name: z.string().optional(),
+    phone: z.string().optional(),
+    email: z
+      .union([z.string().email('Invalid email address'), z.literal('')])
+      .optional()
+      .transform(val => (val === '' ? undefined : val)),
+    role_type_ids: z.array(z.string()),
+    active: z.boolean().default(true),
+    is_sub: z.boolean().default(false),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.is_sub && (!data.role_type_ids || data.role_type_ids.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['role_type_ids'],
+        message: 'Select at least one: Permanent, Flexible, or Substitute.',
+      })
+    }
+  })
 
 export type TeacherFormData = z.infer<typeof teacherSchema>
 
@@ -227,7 +237,9 @@ export default function TeacherForm({ teacher, onSubmit, onCancel }: TeacherForm
                 <Checkbox
                   id="is_sub"
                   checked={isSub}
-                  onCheckedChange={checked => setValue('is_sub', checked === true)}
+                  onCheckedChange={checked =>
+                    setValue('is_sub', checked === true, { shouldValidate: true })
+                  }
                 />
                 <Label htmlFor="is_sub" className="font-normal cursor-pointer">
                   Is also a sub

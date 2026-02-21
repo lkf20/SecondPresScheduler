@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
-import { setStaffRoleAssignments } from '@/lib/api/teachers'
+import { normalizeUSPhoneForStorage } from '@/lib/utils/phone'
+import { normalizeEmailForStorage } from '@/lib/utils/email'
 
 type Staff = Database['public']['Tables']['staff']['Row']
 type StaffRoleType = Database['public']['Tables']['staff_role_types']['Row']
@@ -76,28 +77,34 @@ export async function createStaff(staff: {
   school_id?: string
 }) {
   const supabase = await createClient()
+  if (!staff.school_id) {
+    throw new Error('school_id is required to create staff')
+  }
 
   const { id, role_type_ids, ...staffData } = staff
   const staffId = id && id.trim() !== '' ? id : crypto.randomUUID()
+  const roleTypeIds = role_type_ids && role_type_ids.length > 0 ? role_type_ids : []
+  const normalizedEmail = normalizeEmailForStorage(staff.email)
+  if (staff.email && staff.email.trim() !== '' && !normalizedEmail) {
+    throw new Error('Invalid email address')
+  }
 
   const insertData: Partial<Staff> & { id: string } = {
     ...staffData,
     id: staffId,
-    email: staff.email && staff.email.trim() !== '' ? staff.email : undefined,
+    phone: normalizeUSPhoneForStorage(staff.phone),
+    email: normalizedEmail ?? undefined,
     is_sub: staff.is_sub ?? false,
     is_teacher: staff.is_teacher,
-    school_id: staff.school_id || '00000000-0000-0000-0000-000000000001',
+    school_id: staff.school_id,
   }
 
-  const { data, error } = await supabase.from('staff').insert(insertData).select().single()
+  const { data, error } = await supabase.rpc('create_staff_with_role_assignments', {
+    p_staff: insertData,
+    p_role_type_ids: roleTypeIds,
+  })
 
   if (error) throw error
-
-  const roleTypeIds = role_type_ids && role_type_ids.length > 0 ? role_type_ids : []
-
-  if (roleTypeIds.length > 0) {
-    await setStaffRoleAssignments(supabase, data.id, roleTypeIds, insertData.school_id!)
-  }
 
   return data as Staff
 }
@@ -108,20 +115,27 @@ export async function updateStaff(
 ) {
   const supabase = await createClient()
   const { role_type_ids, ...staffUpdates } = updates
-  const { data, error } = await supabase
-    .from('staff')
-    .update(staffUpdates)
-    .eq('id', id)
-    .select()
-    .single()
+  const hasEmailInUpdate = Object.prototype.hasOwnProperty.call(staffUpdates, 'email')
+  const rawEmail = (staffUpdates.email as string | null | undefined) ?? null
+  const normalizedEmail = normalizeEmailForStorage(rawEmail)
+  if (hasEmailInUpdate && rawEmail && rawEmail.trim() !== '' && !normalizedEmail) {
+    throw new Error('Invalid email address')
+  }
+  const normalizedStaffUpdates = {
+    ...staffUpdates,
+    ...(Object.prototype.hasOwnProperty.call(staffUpdates, 'phone')
+      ? { phone: normalizeUSPhoneForStorage(staffUpdates.phone ?? null) }
+      : {}),
+    ...(hasEmailInUpdate ? { email: normalizedEmail } : {}),
+  }
+  const roleTypeIds = role_type_ids === undefined ? null : role_type_ids
+  const { data, error } = await supabase.rpc('update_staff_with_role_assignments', {
+    p_staff_id: id,
+    p_updates: normalizedStaffUpdates,
+    p_role_type_ids: roleTypeIds,
+  })
 
   if (error) throw error
-
-  const roleTypeIds = role_type_ids && role_type_ids.length > 0 ? role_type_ids : []
-
-  if (role_type_ids) {
-    await setStaffRoleAssignments(supabase, id, roleTypeIds, data.school_id!)
-  }
 
   return data as Staff
 }
