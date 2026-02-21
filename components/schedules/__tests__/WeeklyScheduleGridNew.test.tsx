@@ -190,4 +190,43 @@ describe('WeeklyScheduleGridNew interactions', () => {
 
     expect(onDisplayModeChange).toHaveBeenCalledWith('coverage-issues')
   })
+
+  it('opens panel from classrooms-x-days layout cell clicks', async () => {
+    render(
+      <WeeklyScheduleGridNew
+        data={scheduleData}
+        selectedDayIds={['day-mon']}
+        layout="classrooms-x-days"
+        readOnly
+      />
+    )
+
+    fireEvent.click(screen.getByText('Bella W.'))
+
+    expect(await screen.findByText('Panel: Infant Room')).toBeInTheDocument()
+    expect(screen.getByText('Slot: Monday EM')).toBeInTheDocument()
+  })
+
+  it('registers panel manager lifecycle on open and close', async () => {
+    render(
+      <WeeklyScheduleGridNew
+        data={scheduleData}
+        selectedDayIds={['day-mon']}
+        layout="days-x-classrooms"
+        readOnly
+      />
+    )
+
+    fireEvent.click(screen.getByText('Bella W.'))
+    await screen.findByText('Panel: Infant Room')
+
+    expect(setActivePanelMock).toHaveBeenCalledWith('schedule', expect.any(Function))
+    expect(registerPanelCloseHandlerMock).toHaveBeenCalledWith('schedule', expect.any(Function))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Panel' }))
+
+    await waitFor(() => {
+      expect(setActivePanelMock).toHaveBeenCalledWith(null)
+    })
+  })
 })
