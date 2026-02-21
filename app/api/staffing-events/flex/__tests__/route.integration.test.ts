@@ -116,6 +116,22 @@ describe('POST /api/staffing-events/flex integration', () => {
     expect(json.error).toMatch(/start_date must be before end_date/i)
   })
 
+  it('returns 400 when start_date or end_date is invalid', async () => {
+    const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
+      staff_id: 'staff-1',
+      start_date: 'invalid-date',
+      end_date: '2026-03-02',
+      classroom_ids: ['class-1'],
+      time_slot_ids: ['slot-1'],
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(json.error).toMatch(/invalid start_date or end_date/i)
+  })
+
   it('returns 400 when no shifts match selected day filters', async () => {
     const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
       staff_id: 'staff-1',
@@ -194,6 +210,26 @@ describe('POST /api/staffing-events/flex integration', () => {
 
     expect(response.status).toBe(409)
     expect(json.error).toMatch(/conflicts with an existing active assignment/i)
+  })
+
+  it('returns 500 when shift insert fails for non-conflict error', async () => {
+    mockShiftInsert.mockResolvedValue({
+      error: { code: 'PGRST999', message: 'insert shift failed' },
+    })
+    const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
+      staff_id: 'staff-1',
+      start_date: '2026-03-02',
+      end_date: '2026-03-02',
+      classroom_ids: ['class-1'],
+      time_slot_ids: ['slot-1'],
+      day_of_week_ids: ['day-mon'],
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/insert shift failed/i)
   })
 
   it('creates flex event with explicit shifts and returns created id + shift count', async () => {
