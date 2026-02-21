@@ -322,4 +322,137 @@ describe('GET /api/sub-finder/absences integration', () => {
     expect(response.status).toBe(500)
     expect(json.error).toMatch(/forced absences failure/i)
   })
+
+  it('merges coverage and teacher-date assignments and prefers coverage-linked assignment data', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+
+    const teacherSchedulesQuery = {
+      select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockResolvedValue({ data: [] }),
+    }
+
+    const subAssignmentsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'assignment-1',
+            coverage_request_shift_id: null,
+            date: '2099-03-01',
+            time_slot_id: 'slot-1',
+            is_partial: false,
+            assignment_type: 'manual',
+            sub: { display_name: 'Teacher-Date Sub' },
+          },
+          {
+            id: 'assignment-2',
+            coverage_request_shift_id: null,
+            date: '2099-03-02',
+            time_slot_id: 'slot-2',
+            is_partial: false,
+            assignment_type: 'manual',
+            sub: { display_name: 'Extra Sub' },
+          },
+        ],
+      }),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'teacher_schedules') return teacherSchedulesQuery
+        if (table === 'sub_assignments') return subAssignmentsQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+    ;(getTimeOffRequests as jest.Mock).mockResolvedValue([
+      {
+        id: 'req-merge',
+        coverage_request_id: 'coverage-1',
+        teacher_id: 'teacher-1',
+        start_date: '2099-03-01',
+        end_date: '2099-03-02',
+        reason: 'Vacation',
+        notes: null,
+      },
+    ])
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValue([
+      {
+        id: 'shift-1',
+        date: '2099-03-01',
+        day_of_week_id: 'day-1',
+        time_slot_id: 'slot-1',
+        day_of_week: { name: 'Monday' },
+        time_slot: { code: 'EM' },
+      },
+    ])
+    ;(getActiveSubAssignmentsForTimeOffRequest as jest.Mock).mockResolvedValue([
+      {
+        id: 'coverage-assignment-1',
+        date: '2099-03-01',
+        time_slot_id: 'slot-1',
+        is_partial: true,
+        assignment_type: 'coverage',
+        sub: { display_name: 'Coverage Sub' },
+        coverage_request_shift: {
+          date: '2099-03-01',
+          time_slot_id: 'slot-1',
+        },
+      },
+    ])
+    ;(transformTimeOffCardData as jest.Mock).mockReturnValue({
+      id: 'req-merge',
+      teacher_id: 'teacher-1',
+      teacher_name: 'Teacher One',
+      start_date: '2099-03-01',
+      end_date: '2099-03-02',
+      reason: 'Vacation',
+      notes: null,
+      classrooms: [],
+      total: 2,
+      uncovered: 1,
+      partial: 1,
+      covered: 0,
+      shift_details: [],
+    })
+    ;(getCoverageStatus as jest.Mock).mockReturnValue('partial')
+    ;(buildCoverageBadges as jest.Mock).mockReturnValue([])
+    ;(sortCoverageShifts as jest.Mock).mockImplementation((shifts: any) => shifts)
+    ;(buildCoverageSegments as jest.Mock).mockReturnValue([])
+
+    const request = {
+      nextUrl: new URL('http://localhost:3000/api/sub-finder/absences'),
+    }
+
+    const response = await GET(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json).toHaveLength(1)
+    expect(transformTimeOffCardData).toHaveBeenCalled()
+
+    const transformArgs = (transformTimeOffCardData as jest.Mock).mock.calls.at(-1)
+    expect(transformArgs).toBeDefined()
+    const assignmentRows = transformArgs[2]
+
+    expect(assignmentRows).toHaveLength(2)
+    expect(assignmentRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          date: '2099-03-01',
+          time_slot_id: 'slot-1',
+          is_partial: true,
+          assignment_type: 'coverage',
+          sub: { display_name: 'Coverage Sub' },
+        }),
+        expect.objectContaining({
+          date: '2099-03-02',
+          time_slot_id: 'slot-2',
+          assignment_type: 'manual',
+          sub: { display_name: 'Extra Sub' },
+        }),
+      ])
+    )
+  })
 })

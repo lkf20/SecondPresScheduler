@@ -11,6 +11,7 @@ const mockRestorePreviousPanel = jest.fn()
 const mockSetActivePanel = jest.fn()
 const mockRequestPanelClose = jest.fn()
 const mockFormReset = jest.fn()
+let mockActivePanel: string | null = 'weekly-schedule'
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -31,7 +32,7 @@ jest.mock('@/lib/utils/colors', () => ({
 
 jest.mock('@/lib/contexts/PanelManagerContext', () => ({
   usePanelManager: () => ({
-    activePanel: 'weekly-schedule',
+    activePanel: mockActivePanel,
     savePreviousPanel: mockSavePreviousPanel,
     restorePreviousPanel: mockRestorePreviousPanel,
     setActivePanel: mockSetActivePanel,
@@ -102,6 +103,7 @@ jest.mock('@/components/time-off/TimeOffForm', () => {
 describe('AddTimeOffButton', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockActivePanel = 'weekly-schedule'
     jest.useFakeTimers()
   })
 
@@ -178,5 +180,51 @@ describe('AddTimeOffButton', () => {
     await user.click(screen.getByRole('button', { name: /open custom trigger/i }))
     expect(mockSetActivePanel).toHaveBeenCalledWith('time-off')
     expect(screen.getByRole('heading', { name: /add time off request/i })).toBeInTheDocument()
+  })
+
+  it('does not request other panel close when time-off panel is already active', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+    mockActivePanel = 'time-off'
+
+    render(<AddTimeOffButton />)
+
+    await user.click(screen.getByRole('button', { name: /add time off/i }))
+
+    expect(mockSavePreviousPanel).not.toHaveBeenCalled()
+    expect(mockRequestPanelClose).not.toHaveBeenCalled()
+    expect(mockSetActivePanel).toHaveBeenCalledWith('time-off')
+  })
+
+  it('closes cleanly without unsaved changes and restores previous panel', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+    const onClose = jest.fn()
+
+    render(<AddTimeOffButton onClose={onClose} />)
+
+    await user.click(screen.getByRole('button', { name: /add time off/i }))
+    await user.click(screen.getByRole('button', { name: /close sheet/i }))
+
+    expect(mockSetActivePanel).toHaveBeenCalledWith(null)
+    jest.advanceTimersByTime(120)
+    await waitFor(() => expect(mockRestorePreviousPanel).toHaveBeenCalled())
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('shows updated toast copy in edit mode success path', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+    const onClose = jest.fn()
+
+    render(<AddTimeOffButton timeOffRequestId="request-1" onClose={onClose} />)
+
+    await user.click(screen.getByRole('button', { name: /submit success/i }))
+
+    expect(mockToastSuccess).toHaveBeenCalledWith(
+      expect.stringMatching(/time off updated for bella w\./i)
+    )
+    expect(mockRefresh).toHaveBeenCalled()
+    expect(mockSetActivePanel).toHaveBeenCalledWith(null)
+    jest.advanceTimersByTime(120)
+    await waitFor(() => expect(mockRestorePreviousPanel).toHaveBeenCalled())
+    expect(onClose).toHaveBeenCalled()
   })
 })

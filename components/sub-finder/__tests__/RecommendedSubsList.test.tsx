@@ -73,6 +73,51 @@ describe('RecommendedSubsList', () => {
     expect(screen.getByText(/no subs found/i)).toBeInTheDocument()
   })
 
+  it('renders recommended-mode empty state copy when showAllSubs is false', () => {
+    render(
+      <RecommendedSubsList
+        subs={[]}
+        loading={false}
+        absence={absence}
+        shiftDetails={shiftDetails}
+      />
+    )
+
+    expect(screen.getByText(/no recommended subs found/i)).toBeInTheDocument()
+  })
+
+  it('falls back to showing processed subs when none cover remaining shifts in recommended mode', () => {
+    render(
+      <RecommendedSubsList
+        subs={
+          [
+            {
+              ...baseSub,
+              id: 'fallback-sub',
+              name: 'Fallback Sub',
+              coverage_percent: 0,
+              shifts_covered: 0,
+              can_cover: [],
+              cannot_cover: [
+                {
+                  date: '2026-02-09',
+                  day_name: 'Monday',
+                  time_slot_code: 'EM',
+                  reason: 'Unavailable',
+                },
+              ],
+            },
+          ] as any
+        }
+        loading={false}
+        absence={absence}
+        shiftDetails={shiftDetails}
+      />
+    )
+
+    expect(screen.getByText('Fallback Sub')).toBeInTheDocument()
+  })
+
   it('groups subs by status in show-all mode and filters by selected bucket', async () => {
     const user = userEvent.setup()
 
@@ -136,5 +181,25 @@ describe('RecommendedSubsList', () => {
 
     expect(screen.getByText('Unavailable Sub')).toBeInTheDocument()
     expect(screen.queryByText('Available Sub')).not.toBeInTheDocument()
+
+    await user.click(filters.getByRole('button', { name: /unavailable \(1\)/i }))
+
+    expect(screen.getByText('Unavailable Sub')).toBeInTheDocument()
+    expect(screen.getByText('Available Sub')).toBeInTheDocument()
+  })
+
+  it('hides header copy when hideHeader is true', () => {
+    render(
+      <RecommendedSubsList
+        subs={[{ ...baseSub, id: 'sub-1', name: 'Sally A.' }] as any}
+        loading={false}
+        absence={absence}
+        shiftDetails={shiftDetails}
+        hideHeader
+      />
+    )
+
+    expect(screen.queryByText(/recommended subs for/i)).not.toBeInTheDocument()
+    expect(screen.getByText('Sally A.')).toBeInTheDocument()
   })
 })
