@@ -1,5 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import SortableClassroomsTable from '@/components/settings/SortableClassroomsTable'
+
+let dragEvent: { active: { id: string }; over: { id: string } | null } | null = null
 
 jest.mock('next/link', () => ({
   __esModule: true,
@@ -9,7 +11,25 @@ jest.mock('next/link', () => ({
 }))
 
 jest.mock('@dnd-kit/core', () => ({
-  DndContext: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DndContext: ({
+    children,
+    onDragEnd,
+  }: {
+    children: React.ReactNode
+    onDragEnd?: (event: { active: { id: string }; over: { id: string } | null }) => void
+  }) => (
+    <div>
+      <button
+        type="button"
+        onClick={() => {
+          if (dragEvent && onDragEnd) onDragEnd(dragEvent)
+        }}
+      >
+        Trigger Drag End
+      </button>
+      {children}
+    </div>
+  ),
   closestCenter: jest.fn(),
   KeyboardSensor: jest.fn(),
   PointerSensor: jest.fn(),
@@ -18,7 +38,12 @@ jest.mock('@dnd-kit/core', () => ({
 }))
 
 jest.mock('@dnd-kit/sortable', () => ({
-  arrayMove: <T,>(items: T[]) => items,
+  arrayMove: <T,>(items: T[], from: number, to: number) => {
+    const clone = [...items]
+    const [moved] = clone.splice(from, 1)
+    clone.splice(to, 0, moved)
+    return clone
+  },
   SortableContext: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   sortableKeyboardCoordinates: jest.fn(),
   useSortable: () => ({
@@ -61,6 +86,9 @@ jest.mock('@/components/ui/switch', () => ({
 }))
 
 describe('SortableClassroomsTable', () => {
+  const originalFetch = global.fetch
+  const originalAlert = global.alert
+
   const classrooms = [
     {
       id: 'class-1',
@@ -80,6 +108,18 @@ describe('SortableClassroomsTable', () => {
     },
   ]
 
+  beforeEach(() => {
+    dragEvent = null
+    jest.clearAllMocks()
+    global.fetch = jest.fn(async () => ({ ok: true }) as Response) as jest.Mock
+    global.alert = jest.fn()
+  })
+
+  afterAll(() => {
+    global.fetch = originalFetch
+    global.alert = originalAlert
+  })
+
   it('filters by search, toggles inactive rows, and shows fallback content', async () => {
     render(<SortableClassroomsTable classrooms={classrooms} />)
 
@@ -96,5 +136,41 @@ describe('SortableClassroomsTable', () => {
     expect(screen.queryByText('Infant Room')).not.toBeInTheDocument()
     expect(screen.getByText('Toddler Room')).toBeInTheDocument()
     expect(screen.getAllByText('—').length).toBeGreaterThan(0)
+  })
+
+  it('persists classroom order changes after drag end', async () => {
+    dragEvent = { active: { id: 'class-1' }, over: { id: 'class-2' } }
+    render(<SortableClassroomsTable classrooms={classrooms} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /trigger drag end/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(2)
+    })
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/classrooms/class-1',
+      expect.objectContaining({ method: 'PUT' })
+    )
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/classrooms/class-2',
+      expect.objectContaining({ method: 'PUT' })
+    )
+  })
+
+  it('shows alert and reverts when classroom order save fails', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+    dragEvent = { active: { id: 'class-1' }, over: { id: 'class-2' } }
+    global.fetch = jest.fn(async () => {
+      throw new Error('save failed')
+    }) as jest.Mock
+
+    render(<SortableClassroomsTable classrooms={classrooms} />)
+    fireEvent.click(screen.getByRole('button', { name: /trigger drag end/i }))
+
+    await waitFor(() => {
+      expect(global.alert).toHaveBeenCalledWith('Failed to save order. Please try again.')
+    })
+    expect(errorSpy).toHaveBeenCalled()
+    errorSpy.mockRestore()
   })
 })
