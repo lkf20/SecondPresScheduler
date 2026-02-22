@@ -123,4 +123,57 @@ describe('ClassSelector', () => {
 
     expect(screen.getByText('No class groups found')).toBeInTheDocument()
   })
+
+  it('supports remove chip and select-all/clear-all dialog actions', async () => {
+    const onSelectionChange = jest.fn()
+    global.fetch = jest.fn(async () => {
+      return {
+        ok: true,
+        json: async () => [
+          { id: 'cg-1', name: 'Infant A' },
+          { id: 'cg-2', name: 'Toddler B' },
+        ],
+      } as Response
+    }) as jest.Mock
+
+    render(<ClassSelector selectedClassIds={['cg-1']} onSelectionChange={onSelectionChange} />)
+
+    expect(await screen.findByText('Infant A')).toBeInTheDocument()
+    const chip = screen.getByText('Infant A').closest('div')
+    const removeButton = chip?.querySelector('button')
+    expect(removeButton).toBeTruthy()
+    fireEvent.click(removeButton as HTMLButtonElement)
+    expect(onSelectionChange).toHaveBeenCalledWith([])
+
+    fireEvent.click(screen.getByRole('button', { name: /add class groups/i }))
+    fireEvent.click(screen.getByRole('button', { name: /select all/i }))
+    fireEvent.click(screen.getByRole('button', { name: /save \(2 selected\)/i }))
+    expect(onSelectionChange).toHaveBeenCalledWith(expect.arrayContaining(['cg-1', 'cg-2']))
+
+    fireEvent.click(screen.getByRole('button', { name: /add class groups/i }))
+    fireEvent.change(screen.getByPlaceholderText('Search class groups...'), {
+      target: { value: 'Toddler' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /clear all/i }))
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+    fireEvent.click(screen.getByRole('button', { name: /add class groups/i }))
+    expect(screen.getByPlaceholderText('Search class groups...')).toHaveValue('')
+  })
+
+  it('handles class-group fetch failure gracefully', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+    global.fetch = jest.fn(async () => {
+      throw new Error('fetch failed')
+    }) as jest.Mock
+
+    render(<ClassSelector selectedClassIds={[]} onSelectionChange={jest.fn()} />)
+
+    await waitFor(() => {
+      expect(errorSpy).toHaveBeenCalled()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /add class groups/i }))
+    expect(screen.getByText('No class groups found')).toBeInTheDocument()
+    errorSpy.mockRestore()
+  })
 })
