@@ -195,4 +195,34 @@ describe('ClassSelector', () => {
     expect(screen.getByText('No class groups found')).toBeInTheDocument()
     errorSpy.mockRestore()
   })
+
+  it('syncs selectedIds when selectedClassIds prop changes', async () => {
+    const onSelectionChange = jest.fn()
+    global.fetch = jest.fn(async () => {
+      return {
+        ok: true,
+        json: async () => [
+          { id: 'cg-1', name: 'Infant A' },
+          { id: 'cg-2', name: 'Toddler B' },
+        ],
+      } as Response
+    }) as jest.Mock
+
+    const { rerender } = render(
+      <ClassSelector selectedClassIds={['cg-1']} onSelectionChange={onSelectionChange} />
+    )
+
+    expect(await screen.findByText('Infant A')).toBeInTheDocument()
+    expect(screen.queryByText('Toddler B')).not.toBeInTheDocument()
+
+    rerender(<ClassSelector selectedClassIds={['cg-2']} onSelectionChange={onSelectionChange} />)
+
+    expect(await screen.findByText('Toddler B')).toBeInTheDocument()
+    expect(screen.queryByText('Infant A')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /add class groups/i }))
+    fireEvent.click(screen.getByRole('button', { name: /save \(1 selected\)/i }))
+
+    expect(onSelectionChange).toHaveBeenLastCalledWith(['cg-2'])
+  })
 })
