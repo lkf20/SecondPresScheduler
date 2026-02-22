@@ -455,4 +455,178 @@ describe('GET /api/sub-finder/absences integration', () => {
       ])
     )
   })
+
+  it('continues when coverage-linked assignment lookup fails and falls back to teacher-date assignments', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+
+    const teacherSchedulesQuery = {
+      select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockResolvedValue({ data: [] }),
+    }
+
+    const subAssignmentsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'assignment-1',
+            coverage_request_shift_id: null,
+            date: '2099-03-01',
+            time_slot_id: 'slot-1',
+            is_partial: false,
+            assignment_type: 'manual',
+            sub: { display_name: 'Teacher-Date Sub' },
+          },
+        ],
+      }),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'teacher_schedules') return teacherSchedulesQuery
+        if (table === 'sub_assignments') return subAssignmentsQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+    ;(getTimeOffRequests as jest.Mock).mockResolvedValue([
+      {
+        id: 'req-fallback',
+        coverage_request_id: 'coverage-1',
+        teacher_id: 'teacher-1',
+        start_date: '2099-03-01',
+        end_date: '2099-03-01',
+        reason: null,
+        notes: null,
+      },
+    ])
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValue([
+      {
+        id: 'shift-1',
+        date: '2099-03-01',
+        day_of_week_id: 'day-1',
+        time_slot_id: 'slot-1',
+        day_of_week: { name: 'Monday' },
+        time_slot: { code: 'EM' },
+      },
+    ])
+    ;(getActiveSubAssignmentsForTimeOffRequest as jest.Mock).mockRejectedValue(
+      new Error('coverage assignment lookup failed')
+    )
+    ;(transformTimeOffCardData as jest.Mock).mockReturnValue({
+      id: 'req-fallback',
+      teacher_id: 'teacher-1',
+      teacher_name: 'Teacher One',
+      start_date: '2099-03-01',
+      end_date: '2099-03-01',
+      reason: null,
+      notes: null,
+      classrooms: [],
+      total: 1,
+      uncovered: 0,
+      partial: 0,
+      covered: 1,
+      shift_details: [],
+    })
+    ;(getCoverageStatus as jest.Mock).mockReturnValue('fully_covered')
+    ;(buildCoverageBadges as jest.Mock).mockReturnValue([])
+    ;(sortCoverageShifts as jest.Mock).mockImplementation((shifts: any) => shifts)
+    ;(buildCoverageSegments as jest.Mock).mockReturnValue([])
+
+    const request = {
+      nextUrl: new URL(
+        'http://localhost:3000/api/sub-finder/absences?include_partially_covered=true'
+      ),
+    }
+
+    const response = await GET(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json).toHaveLength(0)
+    expect(transformTimeOffCardData).toHaveBeenCalled()
+    const transformArgs = (transformTimeOffCardData as jest.Mock).mock.calls.at(-1)
+    expect(transformArgs[2]).toEqual([
+      expect.objectContaining({
+        date: '2099-03-01',
+        time_slot_id: 'slot-1',
+        assignment_type: 'manual',
+      }),
+    ])
+  })
+
+  it('filters out absences that are entirely in the past', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn(() => ({
+        select: jest.fn().mockReturnThis(),
+        in: jest.fn().mockResolvedValue({ data: [] }),
+      })),
+    })
+    ;(getTimeOffRequests as jest.Mock).mockResolvedValue([
+      {
+        id: 'req-past',
+        teacher_id: 'teacher-1',
+        start_date: '2000-01-01',
+        end_date: '2000-01-02',
+      },
+      {
+        id: 'req-future',
+        teacher_id: 'teacher-1',
+        start_date: '2099-02-10',
+        end_date: '2099-02-10',
+      },
+    ])
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValue([])
+    ;(getActiveSubAssignmentsForTimeOffRequest as jest.Mock).mockResolvedValue([])
+    ;(transformTimeOffCardData as jest.Mock).mockImplementation((request: { id: string }) => {
+      if (request.id === 'req-past') {
+        return {
+          id: request.id,
+          teacher_id: 'teacher-1',
+          teacher_name: 'Past Teacher',
+          start_date: '2000-01-01',
+          end_date: '2000-01-02',
+          reason: null,
+          notes: null,
+          classrooms: [],
+          total: 0,
+          uncovered: 0,
+          partial: 0,
+          covered: 0,
+          shift_details: [],
+        }
+      }
+      return {
+        id: request.id,
+        teacher_id: 'teacher-1',
+        teacher_name: 'Future Teacher',
+        start_date: '2099-02-10',
+        end_date: '2099-02-10',
+        reason: null,
+        notes: null,
+        classrooms: [],
+        total: 1,
+        uncovered: 1,
+        partial: 0,
+        covered: 0,
+        shift_details: [],
+      }
+    })
+    ;(getCoverageStatus as jest.Mock).mockReturnValue('uncovered')
+    ;(buildCoverageBadges as jest.Mock).mockReturnValue([])
+    ;(sortCoverageShifts as jest.Mock).mockImplementation((shifts: any) => shifts)
+    ;(buildCoverageSegments as jest.Mock).mockImplementation(() => [])
+
+    const request = {
+      nextUrl: new URL('http://localhost:3000/api/sub-finder/absences'),
+    }
+
+    const response = await GET(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.map((item: { id: string }) => item.id)).toEqual(['req-future'])
+  })
 })
