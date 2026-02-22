@@ -161,6 +161,54 @@ describe('/api/staffing-events/flex/remove integration', () => {
     })
   })
 
+  it('GET applies classroom and timeslot filters when provided', async () => {
+    const eqSpy = jest.fn(function () {
+      return this
+    })
+    const maybeSingle = jest.fn().mockResolvedValue({
+      data: { id: 'event-1', start_date: '2026-01-01', end_date: '2026-03-01' },
+      error: null,
+    })
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'staffing_events') {
+          return {
+            select: jest.fn().mockReturnValue({
+              eq: eqSpy,
+              maybeSingle,
+            }),
+          }
+        }
+        if (table === 'staffing_event_shifts') {
+          const builder = {
+            select: jest.fn().mockReturnThis(),
+            eq: eqSpy,
+            then: (resolve: (value: any) => any, reject?: (reason: any) => any) =>
+              Promise.resolve({ data: [], error: null }).then(resolve, reject),
+          }
+          return builder
+        }
+        if (table === 'days_of_week') {
+          return {
+            select: jest.fn(() => makeAwaitableBuilder({ data: [], error: null })),
+          }
+        }
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove?event_id=event-1&classroom_id=class-1&time_slot_id=slot-1',
+      'GET'
+    )
+
+    const response = await GET(request as any)
+    expect(response.status).toBe(200)
+    expect(eqSpy).toHaveBeenCalledWith('classroom_id', 'class-1')
+    expect(eqSpy).toHaveBeenCalledWith('time_slot_id', 'slot-1')
+  })
+
   it('GET returns 404 when flex assignment is not found', async () => {
     buildSupabaseMock({
       eventMaybeSingleResult: {
@@ -243,6 +291,22 @@ describe('/api/staffing-events/flex/remove integration', () => {
 
     expect(response.status).toBe(500)
     expect(json.error).toMatch(/shift lookup failed/i)
+  })
+
+  it('GET returns 500 when an unexpected error is thrown', async () => {
+    ;(createClient as jest.Mock).mockImplementation(async () => {
+      throw new Error('unexpected get failure')
+    })
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove?event_id=event-1',
+      'GET'
+    )
+
+    const response = await GET(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/unexpected get failure/i)
   })
 
   it('POST returns 400 when required fields are missing', async () => {
@@ -552,5 +616,52 @@ describe('/api/staffing-events/flex/remove integration', () => {
 
     expect(response.status).toBe(500)
     expect(json.error).toMatch(/event cancel failed/i)
+  })
+
+  it('POST removes a single shift when scope is single_shift', async () => {
+    const { shiftUpdateBuilder } = buildSupabaseMock({
+      shiftUpdateSelectResult: {
+        data: [{ id: 's1' }],
+        error: null,
+      },
+      shiftSelectResults: [{ count: 2, error: null }],
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove',
+      'POST',
+      {
+        event_id: 'event-1',
+        scope: 'single_shift',
+        date: '2026-02-09',
+        classroom_id: 'class-1',
+        time_slot_id: 'slot-1',
+      }
+    )
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json).toEqual({
+      success: true,
+      removed_count: 1,
+      remaining_active_shifts: 2,
+    })
+    expect(shiftUpdateBuilder.eq).toHaveBeenCalledWith('date', '2026-02-09')
+    expect(shiftUpdateBuilder.eq).toHaveBeenCalledWith('classroom_id', 'class-1')
+    expect(shiftUpdateBuilder.eq).toHaveBeenCalledWith('time_slot_id', 'slot-1')
+  })
+
+  it('POST returns 500 when an unexpected error is thrown', async () => {
+    const badRequest = {
+      json: jest.fn(async () => {
+        throw new Error('unexpected post failure')
+      }),
+    }
+    const response = await POST(badRequest as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/unexpected post failure/i)
   })
 })
