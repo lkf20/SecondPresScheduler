@@ -8,6 +8,7 @@ const createJestConfig = nextJest({
 // Add any custom config to be passed to Jest
 const isPhase1CoverageGate = process.env.ENFORCE_PHASE1_COVERAGE === 'true'
 const isPhase2CoverageGate = process.env.ENFORCE_PHASE2_COVERAGE === 'true'
+const isPhase3CoverageGate = process.env.ENFORCE_PHASE3_COVERAGE === 'true'
 
 const defaultCoverageGlobs = [
   'app/**/*.{js,jsx,ts,tsx}',
@@ -31,32 +32,32 @@ const phase2CoverageGlobs = [
   'app/api/weekly-schedule/**/*.ts',
 ]
 
+const phase3CoverageGlobs = [
+  'app/api/schedule-settings/**/*.ts',
+  'app/api/days-of-week/**/*.ts',
+  'app/api/timeslots/**/*.ts',
+  'app/api/class-groups/**/*.ts',
+  'app/api/classrooms/**/*.ts',
+  'components/settings/**/*.tsx',
+]
+
 const getCoverageGlobs = () => {
-  if (isPhase1CoverageGate && isPhase2CoverageGate) {
-    return [...phase1CoverageGlobs, ...phase2CoverageGlobs]
-  }
-  if (isPhase1CoverageGate) {
-    return phase1CoverageGlobs
-  }
-  if (isPhase2CoverageGate) {
-    return phase2CoverageGlobs
+  if (isPhase1CoverageGate || isPhase2CoverageGate || isPhase3CoverageGate) {
+    return [
+      ...(isPhase1CoverageGate ? phase1CoverageGlobs : []),
+      ...(isPhase2CoverageGate ? phase2CoverageGlobs : []),
+      ...(isPhase3CoverageGate ? phase3CoverageGlobs : []),
+    ]
   }
   return defaultCoverageGlobs
 }
 
 const getCoverageThreshold = () => {
-  if (isPhase1CoverageGate && isPhase2CoverageGate) {
-    return {
-      global: {
-        branches: 60,
-        functions: 70,
-        lines: 70,
-        statements: 70,
-      },
-    }
-  }
-
-  if (isPhase2CoverageGate) {
+  if (
+    isPhase2CoverageGate ||
+    isPhase3CoverageGate ||
+    (isPhase1CoverageGate && isPhase2CoverageGate)
+  ) {
     return {
       global: {
         branches: 60,

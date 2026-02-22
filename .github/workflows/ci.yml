@@ -22,7 +22,9 @@ jobs:
   jest:
     runs-on: ubuntu-latest
     env:
+      ENFORCE_PHASE1_COVERAGE: 'true'
       ENFORCE_PHASE2_COVERAGE: 'true'
+      ENFORCE_PHASE3_COVERAGE: 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

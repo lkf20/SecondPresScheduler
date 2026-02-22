@@ -16,6 +16,7 @@
     "test:coverage": "jest --coverage",
     "test:coverage:phase1": "ENFORCE_PHASE1_COVERAGE=true jest --coverage --runInBand",
     "test:coverage:phase2": "ENFORCE_PHASE2_COVERAGE=true jest --coverage --runInBand",
+    "test:coverage:phase3": "ENFORCE_PHASE3_COVERAGE=true jest --coverage --runInBand",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",

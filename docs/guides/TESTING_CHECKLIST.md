@@ -39,6 +39,7 @@ Use this checklist when adding or reviewing feature work.
 - [ ] `npm run test:e2e:smoke` passes
 - [ ] If Phase 1 domain touched, progressive coverage gate passes
 - [ ] If Phase 2 scheduling domain touched, progressive coverage gate passes
+- [ ] If Phase 3 settings domain touched, progressive coverage gate passes
 
 ## 6) Feature Matrix by Domain
 
