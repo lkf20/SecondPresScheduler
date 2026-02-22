@@ -48,6 +48,9 @@ describe('POST /api/staffing-events/flex/availability integration', () => {
       selected_day_ids: ['day-mon'],
       default_display_name_format: 'first_last_initial',
     })
+    ;(getTeacherScheduledShifts as jest.Mock).mockResolvedValue([])
+    ;(getTimeOffRequests as jest.Mock).mockResolvedValue([])
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValue([])
   })
 
   it('returns 403 when school context is missing', async () => {
@@ -849,6 +852,338 @@ describe('POST /api/staffing-events/flex/availability integration', () => {
         scheduled_staff: 3,
         status: 'ok',
       }),
+    ])
+  })
+
+  it('defaults settings/day options and returns fully available flex shifts when no availability rows exist', async () => {
+    let staffingEventShiftSelectCount = 0
+    ;(getScheduleSettings as jest.Mock).mockResolvedValue(null)
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'days_of_week') {
+          return {
+            select: jest.fn().mockResolvedValue({
+              data: [
+                { id: 'day-mon', name: 'Monday', day_number: 1 },
+                { id: 'day-bad', name: null, day_number: null },
+              ],
+              error: null,
+            }),
+          }
+        }
+        if (table === 'staff') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockResolvedValue({
+              data: [
+                {
+                  id: 'staff-flex-1',
+                  first_name: 'Bella',
+                  last_name: 'Wilbanks',
+                  display_name: null,
+                  staff_role_type_assignments: [
+                    { staff_role_types: [{ code: 'FLEXIBLE' }] },
+                    { staff_role_types: { code: 'TEACHER' } },
+                  ],
+                },
+              ],
+              error: null,
+            }),
+          }
+        }
+        if (table === 'time_slots') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            in: jest.fn().mockResolvedValue({
+              data: [{ id: 'slot-1', code: null }],
+              error: null,
+            }),
+          }
+        }
+        if (table === 'sub_availability') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            in: jest.fn().mockResolvedValue({
+              data: [
+                {
+                  sub_id: 'staff-flex-1',
+                  day_of_week_id: 'day-mon',
+                  time_slot_id: 'slot-1',
+                  available: false,
+                },
+              ],
+              error: null,
+            }),
+          }
+        }
+        if (table === 'sub_availability_exceptions') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            in: jest.fn().mockReturnThis(),
+            gte: jest.fn().mockReturnThis(),
+            lte: jest.fn().mockResolvedValue({
+              data: [{ sub_id: null, date: '2026-03-02', time_slot_id: 'slot-1', available: true }],
+              error: null,
+            }),
+          }
+        }
+        if (table === 'staffing_event_shifts') {
+          staffingEventShiftSelectCount += 1
+          if (staffingEventShiftSelectCount === 1) {
+            return {
+              select: jest.fn(() =>
+                makeThenableBuilder({ data: [], error: null }, ['in', 'eq', 'gte', 'lte'])
+              ),
+            }
+          }
+          return {
+            select: jest.fn(() =>
+              makeThenableBuilder({ data: [], error: null }, ['eq', 'gte', 'lte'])
+            ),
+          }
+        }
+        if (table === 'schedule_cells') {
+          return {
+            select: jest.fn(() =>
+              makeThenableBuilder(
+                {
+                  data: [
+                    {
+                      id: 'cell-1',
+                      classroom_id: 'class-1',
+                      day_of_week_id: 'day-mon',
+                      time_slot_id: 'slot-1',
+                      enrollment_for_staffing: null,
+                      is_active: true,
+                      classroom: null,
+                      schedule_cell_class_groups: null,
+                    },
+                  ],
+                  error: null,
+                },
+                ['eq']
+              )
+            ),
+          }
+        }
+        if (table === 'teacher_schedules') {
+          return {
+            select: jest.fn(() =>
+              makeThenableBuilder(
+                {
+                  data: [],
+                  error: null,
+                },
+                ['eq']
+              )
+            ),
+          }
+        }
+        if (table === 'sub_assignments') {
+          return {
+            select: jest.fn(() =>
+              makeThenableBuilder(
+                {
+                  data: [],
+                  error: null,
+                },
+                ['eq', 'gte', 'lte']
+              )
+            ),
+          }
+        }
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/availability',
+      'POST',
+      {
+        start_date: '2026-03-02',
+        end_date: '2026-03-02',
+        time_slot_ids: ['slot-1'],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.staff).toEqual([
+      {
+        id: 'staff-flex-1',
+        name: 'Bella W.',
+        availableShiftKeys: ['2026-03-02|slot-1'],
+      },
+    ])
+    expect(json.shifts).toEqual([
+      {
+        date: '2026-03-02',
+        time_slot_id: 'slot-1',
+        time_slot_code: '',
+      },
+    ])
+    expect(json.day_options).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'day-mon',
+          name: 'Monday',
+          short_name: 'Mon',
+          day_number: 1,
+        }),
+        expect.objectContaining({ id: 'day-bad', day_number: 0 }),
+      ])
+    )
+    expect(json.shift_metrics).toEqual([])
+  })
+
+  it('ignores schedule/time-off lookup failures while still returning availability', async () => {
+    let staffingEventShiftSelectCount = 0
+    ;(getTeacherScheduledShifts as jest.Mock).mockRejectedValue(new Error('schedule down'))
+    ;(getTimeOffRequests as jest.Mock).mockResolvedValue([{ id: 'req-1' }])
+    ;(getTimeOffShifts as jest.Mock).mockRejectedValue(new Error('time off down'))
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'days_of_week') {
+          return {
+            select: jest.fn().mockResolvedValue({
+              data: [{ id: 'day-mon', name: 'Monday', day_number: 1 }],
+              error: null,
+            }),
+          }
+        }
+        if (table === 'staff') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockResolvedValue({
+              data: [
+                {
+                  id: 'staff-flex-1',
+                  first_name: 'Bella',
+                  last_name: 'Wilbanks',
+                  display_name: null,
+                  staff_role_type_assignments: [{ staff_role_types: { code: 'FLEXIBLE' } }],
+                },
+              ],
+              error: null,
+            }),
+          }
+        }
+        if (table === 'time_slots') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            in: jest.fn().mockResolvedValue({
+              data: [{ id: 'slot-1', code: 'EM' }],
+              error: null,
+            }),
+          }
+        }
+        if (table === 'sub_availability') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            in: jest.fn().mockResolvedValue({
+              data: [
+                {
+                  sub_id: 'staff-flex-1',
+                  day_of_week_id: 'day-mon',
+                  time_slot_id: 'slot-1',
+                  available: true,
+                },
+              ],
+              error: null,
+            }),
+          }
+        }
+        if (table === 'sub_availability_exceptions') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            in: jest.fn().mockReturnThis(),
+            gte: jest.fn().mockReturnThis(),
+            lte: jest.fn().mockResolvedValue({
+              data: [],
+              error: null,
+            }),
+          }
+        }
+        if (table === 'staffing_event_shifts') {
+          staffingEventShiftSelectCount += 1
+          if (staffingEventShiftSelectCount === 1) {
+            return {
+              select: jest.fn(() =>
+                makeThenableBuilder({ data: [], error: null }, ['in', 'eq', 'gte', 'lte'])
+              ),
+            }
+          }
+          return {
+            select: jest.fn(() =>
+              makeThenableBuilder({ data: [], error: null }, ['eq', 'gte', 'lte'])
+            ),
+          }
+        }
+        if (table === 'schedule_cells') {
+          return {
+            select: jest.fn(() =>
+              makeThenableBuilder(
+                {
+                  data: [],
+                  error: null,
+                },
+                ['eq']
+              )
+            ),
+          }
+        }
+        if (table === 'teacher_schedules') {
+          return {
+            select: jest.fn(() =>
+              makeThenableBuilder(
+                {
+                  data: [],
+                  error: null,
+                },
+                ['eq']
+              )
+            ),
+          }
+        }
+        if (table === 'sub_assignments') {
+          return {
+            select: jest.fn(() =>
+              makeThenableBuilder(
+                {
+                  data: [],
+                  error: null,
+                },
+                ['eq', 'gte', 'lte']
+              )
+            ),
+          }
+        }
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/availability',
+      'POST',
+      {
+        start_date: '2026-03-02',
+        end_date: '2026-03-02',
+        time_slot_ids: ['slot-1'],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.staff).toEqual([
+      {
+        id: 'staff-flex-1',
+        name: 'Bella W.',
+        availableShiftKeys: ['2026-03-02|slot-1'],
+      },
     ])
   })
 
