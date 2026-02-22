@@ -64,6 +64,10 @@ jest.mock('@/lib/lifecycle/status-transitions', () => ({
 }))
 
 describe('PUT /api/time-off/[id] integration', () => {
+  beforeEach(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
   afterEach(() => {
     jest.restoreAllMocks()
     jest.clearAllMocks()

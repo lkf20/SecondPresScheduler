@@ -132,6 +132,8 @@ const renderWithQueryClient = (node: ReactNode) => {
 }
 
 describe('TimeOffForm', () => {
+  let consoleLogSpy: jest.SpyInstance
+
   const teacher = {
     id: 'teacher-1',
     first_name: 'Bella',
@@ -141,6 +143,7 @@ describe('TimeOffForm', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
     window.sessionStorage.clear()
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
@@ -161,6 +164,10 @@ describe('TimeOffForm', () => {
         json: async () => ({ error: `Unhandled fetch URL in test: ${url}` }),
       } as Response
     }) as jest.Mock
+  })
+
+  afterEach(() => {
+    consoleLogSpy.mockRestore()
   })
 
   it('validates required fields while saving a draft', async () => {

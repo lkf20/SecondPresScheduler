@@ -22,6 +22,10 @@ jest.mock('@/lib/utils/time-off-card-data', () => ({
 }))
 
 describe('GET /api/time-off-requests integration', () => {
+  beforeEach(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
   afterEach(() => {
     jest.restoreAllMocks()
   })
