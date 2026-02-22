@@ -220,6 +220,48 @@ describe('POST /api/teacher-schedules/resolve-conflict integration', () => {
     expect(json.updated).toEqual([{ id: 'conflict-1', is_floater: true }])
   })
 
+  it('returns empty updated list when mark_floater updates return null', async () => {
+    ;(validateRequest as jest.Mock).mockReturnValue({
+      success: true,
+      data: {
+        ...baseValidationData,
+        resolution: 'mark_floater',
+      },
+    })
+    ;(createClient as jest.Mock).mockResolvedValue(
+      createSupabaseForResolve({
+        data: [
+          {
+            id: 'conflict-1',
+            classroom_id: 'class-a',
+            is_floater: false,
+          },
+        ],
+        error: null,
+      })
+    )
+    ;(updateTeacherSchedule as jest.Mock).mockResolvedValue(null)
+    ;(createTeacherSchedule as jest.Mock).mockResolvedValue({
+      id: 'new-floater-schedule',
+      teacher_id: 'teacher-1',
+      classroom_id: 'class-target',
+      is_floater: true,
+    })
+
+    const response = await POST(
+      new Request('http://localhost/api/teacher-schedules/resolve-conflict', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }) as any
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(updateTeacherSchedule).toHaveBeenCalled()
+    expect(json.updated).toEqual([])
+    expect(json.created.id).toBe('new-floater-schedule')
+  })
+
   it('handles cancel resolution by logging and returning empty result', async () => {
     ;(validateRequest as jest.Mock).mockReturnValue({
       success: true,
