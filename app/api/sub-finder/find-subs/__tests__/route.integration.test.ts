@@ -134,6 +134,73 @@ describe('POST /api/sub-finder/find-subs integration', () => {
     expect(json).toEqual([])
   })
 
+  it('returns 500 when staff lookup fails', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+
+    const teacherSchedulesQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({
+        data: [],
+        error: null,
+      }),
+    }
+
+    const roleTypesQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({ data: [], error: null }),
+    }
+
+    const staffQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn((field: string) => {
+        if (field === 'school_id') return staffQuery
+        if (field === 'is_sub') {
+          return Promise.resolve({
+            data: null,
+            error: { message: 'staff query failed' },
+          })
+        }
+        return staffQuery
+      }),
+      or: jest.fn(),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'teacher_schedules') return teacherSchedulesQuery
+        if (table === 'staff_role_types') return roleTypesQuery
+        if (table === 'staff') return staffQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+    ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
+      id: 'absence-1',
+      teacher_id: 'teacher-1',
+      start_date: '2099-02-09',
+      end_date: '2099-02-09',
+    })
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValue([
+      {
+        id: 'shift-1',
+        date: '2099-02-09',
+        day_of_week_id: 'day-1',
+        day_of_week: { name: 'Monday' },
+        time_slot_id: 'slot-1',
+        time_slot: { code: 'EM' },
+      },
+    ])
+
+    const request = createJsonRequest('http://localhost:3000/api/sub-finder/find-subs', 'POST', {
+      absence_id: 'absence-1',
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/staff query failed|failed to find subs/i)
+  })
+
   it('returns recommended subs payload for a valid request', async () => {
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
 
