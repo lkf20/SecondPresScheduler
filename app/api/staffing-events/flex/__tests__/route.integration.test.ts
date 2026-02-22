@@ -100,6 +100,22 @@ describe('POST /api/staffing-events/flex integration', () => {
     expect(json.error).toMatch(/classroom_ids is required/i)
   })
 
+  it('returns 400 when time_slot_ids is missing or empty', async () => {
+    const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
+      staff_id: 'staff-1',
+      start_date: '2026-03-02',
+      end_date: '2026-03-02',
+      classroom_ids: ['class-1'],
+      time_slot_ids: [],
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(json.error).toMatch(/time_slot_ids is required/i)
+  })
+
   it('returns 400 when start_date is after end_date', async () => {
     const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
       staff_id: 'staff-1',
@@ -272,5 +288,19 @@ describe('POST /api/staffing-events/flex integration', () => {
         status: 'active',
       }),
     ])
+  })
+
+  it('returns 500 when request parsing throws unexpectedly', async () => {
+    const badRequest = {
+      json: jest.fn(async () => {
+        throw new Error('malformed json')
+      }),
+    }
+
+    const response = await POST(badRequest as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/malformed json/i)
   })
 })
