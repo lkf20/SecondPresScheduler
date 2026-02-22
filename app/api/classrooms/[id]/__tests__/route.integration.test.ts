@@ -33,6 +33,18 @@ describe('classrooms id route integration', () => {
     expect(json.id).toBe('class-1')
   })
 
+  it('GET returns 500 when fetch fails', async () => {
+    ;(getClassroomById as jest.Mock).mockRejectedValue(new Error('fetch failed'))
+
+    const response = await GET(new Request('http://localhost/api/classrooms/class-1') as any, {
+      params: Promise.resolve({ id: 'class-1' }),
+    })
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toBe('fetch failed')
+  })
+
   it('PUT updates classroom and allowed classes via allowed_class_group_ids', async () => {
     ;(updateClassroom as jest.Mock).mockResolvedValue({ id: 'class-1', name: 'Updated Room' })
     ;(setClassroomAllowedClasses as jest.Mock).mockResolvedValue(undefined)
@@ -114,5 +126,38 @@ describe('classrooms id route integration', () => {
     expect(response.status).toBe(200)
     expect(deleteClassroom).toHaveBeenCalledWith('class-1')
     expect(json).toEqual({ success: true })
+  })
+
+  it('PUT returns 500 when update throws', async () => {
+    ;(updateClassroom as jest.Mock).mockRejectedValue(new Error('update failed'))
+
+    const response = await PUT(
+      new Request('http://localhost/api/classrooms/class-1', {
+        method: 'PUT',
+        body: JSON.stringify({ name: 'Updated Room' }),
+      }) as any,
+      {
+        params: Promise.resolve({ id: 'class-1' }),
+      }
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toBe('update failed')
+  })
+
+  it('DELETE returns 500 when delete throws', async () => {
+    ;(deleteClassroom as jest.Mock).mockRejectedValue(new Error('delete failed'))
+
+    const response = await DELETE(
+      new Request('http://localhost/api/classrooms/class-1', { method: 'DELETE' }) as any,
+      {
+        params: Promise.resolve({ id: 'class-1' }),
+      }
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toBe('delete failed')
   })
 })

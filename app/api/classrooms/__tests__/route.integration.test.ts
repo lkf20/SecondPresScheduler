@@ -34,6 +34,17 @@ describe('classrooms collection route integration', () => {
     expect(json).toEqual([{ id: 'class-1', name: 'Infant Room' }])
   })
 
+  it('GET routes failures through createErrorResponse', async () => {
+    ;(getClassrooms as jest.Mock).mockRejectedValue(new Error('read failed'))
+
+    const response = await GET()
+    const json = await response.json()
+
+    expect(createErrorResponse).toHaveBeenCalled()
+    expect(response.status).toBe(500)
+    expect(json.error).toBe('Failed to fetch classrooms')
+  })
+
   it('POST creates classroom and sets allowed classes from allowed_class_group_ids', async () => {
     ;(createClassroom as jest.Mock).mockResolvedValue({ id: 'class-1', name: 'Infant Room' })
     ;(setClassroomAllowedClasses as jest.Mock).mockResolvedValue(undefined)

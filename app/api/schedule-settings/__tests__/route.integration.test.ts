@@ -14,8 +14,15 @@ jest.mock('@/lib/utils/auth', () => ({
 }))
 
 describe('schedule settings route integration', () => {
+  let consoleErrorSpy: jest.SpyInstance
+
   beforeEach(() => {
     jest.clearAllMocks()
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore()
   })
 
   it('GET returns 403 when school context is missing', async () => {
@@ -74,6 +81,21 @@ describe('schedule settings route integration', () => {
     expect(json.error).toMatch(/must be an array/i)
   })
 
+  it('PUT returns 403 when school context is missing', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue(null)
+
+    const response = await PUT(
+      new Request('http://localhost/api/schedule-settings', {
+        method: 'PUT',
+        body: JSON.stringify({ selected_day_ids: [] }),
+      }) as any
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(403)
+    expect(json.error).toMatch(/missing school_id/i)
+  })
+
   it('PUT validates display name format values', async () => {
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
 
@@ -120,5 +142,37 @@ describe('schedule settings route integration', () => {
       'UTC'
     )
     expect(json.selected_day_ids).toEqual(['day-mon', 'day-tue'])
+  })
+
+  it('GET returns 500 when fetch throws', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getScheduleSettings as jest.Mock).mockRejectedValue(new Error('fetch failed'))
+
+    const response = await GET()
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toBe('fetch failed')
+    expect(consoleErrorSpy).toHaveBeenCalled()
+  })
+
+  it('PUT returns 500 when update throws', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(updateScheduleSettings as jest.Mock).mockRejectedValue(new Error('update failed'))
+
+    const response = await PUT(
+      new Request('http://localhost/api/schedule-settings', {
+        method: 'PUT',
+        body: JSON.stringify({
+          selected_day_ids: ['day-mon'],
+          default_display_name_format: 'first_name',
+          time_zone: 'UTC',
+        }),
+      }) as any
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toBe('update failed')
   })
 })
