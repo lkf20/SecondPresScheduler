@@ -2,6 +2,13 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import SortableClassroomsTable from '@/components/settings/SortableClassroomsTable'
 
 let dragEvent: { active: { id: string }; over: { id: string } | null } | null = null
+let mockIsDragging = false
+const arrayMoveMock = jest.fn(<T,>(items: T[], from: number, to: number) => {
+  const clone = [...items]
+  const [moved] = clone.splice(from, 1)
+  clone.splice(to, 0, moved)
+  return clone
+})
 
 jest.mock('next/link', () => ({
   __esModule: true,
@@ -38,12 +45,7 @@ jest.mock('@dnd-kit/core', () => ({
 }))
 
 jest.mock('@dnd-kit/sortable', () => ({
-  arrayMove: <T,>(items: T[], from: number, to: number) => {
-    const clone = [...items]
-    const [moved] = clone.splice(from, 1)
-    clone.splice(to, 0, moved)
-    return clone
-  },
+  arrayMove: <T,>(items: T[], from: number, to: number) => arrayMoveMock(items, from, to),
   SortableContext: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   sortableKeyboardCoordinates: jest.fn(),
   useSortable: () => ({
@@ -52,7 +54,7 @@ jest.mock('@dnd-kit/sortable', () => ({
     setNodeRef: jest.fn(),
     transform: null,
     transition: undefined,
-    isDragging: false,
+    isDragging: mockIsDragging,
   }),
   verticalListSortingStrategy: jest.fn(),
 }))
@@ -110,6 +112,13 @@ describe('SortableClassroomsTable', () => {
 
   beforeEach(() => {
     dragEvent = null
+    mockIsDragging = false
+    arrayMoveMock.mockImplementation(<T,>(items: T[], from: number, to: number) => {
+      const clone = [...items]
+      const [moved] = clone.splice(from, 1)
+      clone.splice(to, 0, moved)
+      return clone
+    })
     jest.clearAllMocks()
     global.fetch = jest.fn(async () => ({ ok: true }) as Response) as jest.Mock
     global.alert = jest.fn()
@@ -172,5 +181,57 @@ describe('SortableClassroomsTable', () => {
     })
     expect(errorSpy).toHaveBeenCalled()
     errorSpy.mockRestore()
+  })
+
+  it('does nothing when drag ends without an over target', async () => {
+    dragEvent = { active: { id: 'class-1' }, over: null }
+    render(<SortableClassroomsTable classrooms={classrooms} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /trigger drag end/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).not.toHaveBeenCalled()
+    })
+  })
+
+  it('skips save when classroom order remains unchanged', async () => {
+    arrayMoveMock.mockImplementation(<T,>(items: T[]) => items)
+    dragEvent = { active: { id: 'class-1' }, over: { id: 'class-2' } }
+    const ordered = [
+      {
+        id: 'class-1',
+        name: 'Infant Room',
+        capacity: 10,
+        allowed_classes_display: 'Infant A',
+        order: 1,
+        is_active: true,
+        color: '#AABBCC',
+      },
+      {
+        id: 'class-2',
+        name: 'Toddler Room',
+        capacity: null,
+        allowed_classes_display: '',
+        order: 2,
+        is_active: true,
+        color: null,
+      },
+    ]
+
+    render(<SortableClassroomsTable classrooms={ordered} />)
+    fireEvent.click(screen.getByRole('button', { name: /trigger drag end/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).not.toHaveBeenCalled()
+    })
+  })
+
+  it('applies dragging row styles when a classroom is dragging', () => {
+    mockIsDragging = true
+    render(<SortableClassroomsTable classrooms={classrooms} />)
+
+    const row = screen.getByText('Infant Room').closest('tr')
+    expect(row).toHaveClass('bg-muted')
+    expect(row).toHaveStyle({ opacity: '0.5' })
   })
 })
