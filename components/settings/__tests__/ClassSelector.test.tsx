@@ -160,6 +160,25 @@ describe('ClassSelector', () => {
     expect(screen.getByPlaceholderText('Search class groups...')).toHaveValue('')
   })
 
+  it('deselects via checkbox onCheckedChange and saves empty selection', async () => {
+    const onSelectionChange = jest.fn()
+    global.fetch = jest.fn(async () => {
+      return {
+        ok: true,
+        json: async () => [{ id: 'cg-1', name: 'Infant A' }],
+      } as Response
+    }) as jest.Mock
+
+    render(<ClassSelector selectedClassIds={['cg-1']} onSelectionChange={onSelectionChange} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /add class groups/i }))
+    const checkbox = screen.getByLabelText('Class checkbox')
+    fireEvent.click(checkbox)
+    fireEvent.click(screen.getByRole('button', { name: /save \(0 selected\)/i }))
+
+    expect(onSelectionChange).toHaveBeenCalledWith([])
+  })
+
   it('handles class-group fetch failure gracefully', async () => {
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
     global.fetch = jest.fn(async () => {
