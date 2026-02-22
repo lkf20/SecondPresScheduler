@@ -90,4 +90,40 @@ describe('GET /api/weekly-schedule integration', () => {
 
     process.env.NODE_ENV = previousNodeEnv
   })
+
+  it('falls back to all days when settings selected_day_ids is null', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getScheduleSettings as jest.Mock).mockResolvedValue({
+      selected_day_ids: null,
+    })
+    ;(getWeeklyScheduleData as jest.Mock).mockResolvedValue([{ classroom_id: 'class-2' }])
+
+    const response = await GET(
+      new Request('http://localhost:3000/api/weekly-schedule?weekStartISO=2026-03-16')
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(getWeeklyScheduleData).toHaveBeenCalledWith('school-1', undefined, '2026-03-16')
+    expect(json).toEqual([{ classroom_id: 'class-2' }])
+  })
+
+  it('returns 500 without stack details outside development', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getScheduleSettings as jest.Mock).mockResolvedValue({ selected_day_ids: ['day-mon'] })
+    ;(getWeeklyScheduleData as jest.Mock).mockRejectedValue(new Error('weekly prod failure'))
+
+    const response = await GET(new Request('http://localhost:3000/api/weekly-schedule'))
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/weekly prod failure/i)
+    expect(json.details).toBeUndefined()
+    expect(errorSpy).toHaveBeenCalledWith('Error fetching weekly schedule:', expect.any(Error))
+
+    process.env.NODE_ENV = previousNodeEnv
+  })
 })

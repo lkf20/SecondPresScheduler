@@ -150,4 +150,23 @@ describe('POST /api/staffing-events/[id]/cancel integration', () => {
     expect(response.status).toBe(200)
     expect(json).toEqual({ success: true })
   })
+
+  it('returns 500 when an unexpected error is thrown', async () => {
+    ;(createClient as jest.Mock).mockImplementation(async () => {
+      throw new Error('unexpected cancel failure')
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/event-1/cancel',
+      'POST',
+      {}
+    )
+    const response = await POST(request as any, {
+      params: Promise.resolve({ id: 'event-1' }),
+    })
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json.error).toMatch(/unexpected cancel failure/i)
+  })
 })
