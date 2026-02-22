@@ -53,7 +53,7 @@ const getCoverageGlobs = () => {
 }
 
 const getCoverageThreshold = () => {
-  if (isPhase1CoverageGate && isPhase2CoverageGate && isPhase3CoverageGate) {
+  if (isPhase3CoverageGate) {
     return {
       global: {
         branches: 65,
@@ -81,14 +81,11 @@ const getCoverageThreshold = () => {
 
   if (isPhase1CoverageGate) {
     return {
-      // Progressive Phase 1 gate: enforce a meaningful floor now and ratchet up as
-      // remaining high-complexity files gain coverage.
-      // TODO(phase-1): raise to statements/lines/functions 70 and branches 60.
       global: {
-        branches: 45,
-        functions: 55,
-        lines: 60,
-        statements: 60,
+        branches: 60,
+        functions: 70,
+        lines: 70,
+        statements: 70,
       },
     }
   }

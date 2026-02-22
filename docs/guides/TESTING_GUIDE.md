@@ -104,9 +104,8 @@ Phase 1 targeted domains:
 
 Thresholds:
 
-- statements/lines: **60%**
-- functions: **55%**
-- branches: **45%**
+- statements/functions/lines: **70%**
+- branches: **60%**
 
 Phase 2 scheduling coverage thresholds are configured in `jest.config.js` and can be enabled via:
 
@@ -122,8 +121,8 @@ Phase 2 targeted domains:
 
 Thresholds:
 
-- statements/functions/lines: **70%**
-- branches: **60%**
+- statements/functions/lines: **75%**
+- branches: **65%**
 
 Phase 3 settings coverage thresholds are configured in `jest.config.js` and can be enabled via:
 
@@ -147,8 +146,7 @@ Thresholds:
 
 CI note:
 
-- GitHub Actions `jest` job enforces Phases 1-3 domain gates via
-  `ENFORCE_PHASE1_COVERAGE=true`, `ENFORCE_PHASE2_COVERAGE=true`, and `ENFORCE_PHASE3_COVERAGE=true`.
-- When all three gates are enabled together, stricter global thresholds apply:
-  - statements/functions/lines: **75%**
-  - branches: **65%**
+- GitHub Actions `jest` job enforces phase/domain gates with the matching `ENFORCE_PHASE*_COVERAGE` flags.
+- Post-Phase-3 policy:
+  - Phase 3 runs at global **75/65** (statements/functions/lines at 75, branches at 65).
+  - Phase 1 and Phase 2 remain at **70/60** targeted gates.
