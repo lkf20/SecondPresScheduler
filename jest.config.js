@@ -53,6 +53,17 @@ const getCoverageGlobs = () => {
 }
 
 const getCoverageThreshold = () => {
+  if (isPhase1CoverageGate && isPhase2CoverageGate && isPhase3CoverageGate) {
+    return {
+      global: {
+        branches: 65,
+        functions: 75,
+        lines: 75,
+        statements: 75,
+      },
+    }
+  }
+
   if (
     isPhase2CoverageGate ||
     isPhase3CoverageGate ||
