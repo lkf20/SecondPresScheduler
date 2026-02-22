@@ -1,4 +1,3 @@
-/* eslint-disable react/display-name */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import ClassSelector from '@/components/settings/ClassSelector'
 

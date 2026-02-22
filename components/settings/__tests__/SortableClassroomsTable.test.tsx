@@ -1,4 +1,3 @@
-/* eslint-disable react/display-name */
 import { fireEvent, render, screen } from '@testing-library/react'
 import SortableClassroomsTable from '@/components/settings/SortableClassroomsTable'
 
