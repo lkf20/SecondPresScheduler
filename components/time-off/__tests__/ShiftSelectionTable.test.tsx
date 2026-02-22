@@ -3,8 +3,19 @@ import userEvent from '@testing-library/user-event'
 import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
 
 describe('ShiftSelectionTable', () => {
+  let consoleErrorSpy: jest.SpyInstance
+
   beforeEach(() => {
     jest.clearAllMocks()
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      const firstArg = args[0]
+      if (
+        typeof firstArg === 'string' &&
+        firstArg.includes('An update to ShiftSelectionTable inside a test was not wrapped in act')
+      ) {
+        return
+      }
+    })
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
       if (url === '/api/timeslots') {
@@ -20,6 +31,10 @@ describe('ShiftSelectionTable', () => {
         json: async () => [],
       } as Response
     }) as jest.Mock
+  })
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore()
   })
 
   it('shows placeholder message when teacher and start date are missing', () => {
