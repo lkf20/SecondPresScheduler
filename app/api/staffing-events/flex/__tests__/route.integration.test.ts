@@ -100,6 +100,21 @@ describe('POST /api/staffing-events/flex integration', () => {
     expect(json.error).toMatch(/classroom_ids is required/i)
   })
 
+  it('returns 400 when staff_id is missing', async () => {
+    const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
+      start_date: '2026-03-02',
+      end_date: '2026-03-02',
+      classroom_ids: ['class-1'],
+      time_slot_ids: ['slot-1'],
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(json.error).toMatch(/staff_id, start_date, end_date are required/i)
+  })
+
   it('returns 400 when time_slot_ids is missing or empty', async () => {
     const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
       staff_id: 'staff-1',
@@ -286,6 +301,47 @@ describe('POST /api/staffing-events/flex integration', () => {
         time_slot_id: 'slot-1',
         classroom_id: 'class-1',
         status: 'active',
+      }),
+    ])
+  })
+
+  it('creates generated shifts when explicit shifts are not provided', async () => {
+    ;(getScheduleSettings as jest.Mock).mockResolvedValue(null)
+
+    const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
+      staff_id: 'staff-1',
+      start_date: '2026-03-02',
+      end_date: '2026-03-02',
+      classroom_ids: ['class-1', 'class-2'],
+      time_slot_ids: ['slot-1'],
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json).toEqual({ id: 'event-1', shift_count: 2 })
+    expect(mockEventInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notes: null,
+      })
+    )
+    expect(mockShiftInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        staffing_event_id: 'event-1',
+        staff_id: 'staff-1',
+        date: '2026-03-02',
+        day_of_week_id: 'day-mon',
+        time_slot_id: 'slot-1',
+        classroom_id: 'class-1',
+      }),
+      expect.objectContaining({
+        staffing_event_id: 'event-1',
+        staff_id: 'staff-1',
+        date: '2026-03-02',
+        day_of_week_id: 'day-mon',
+        time_slot_id: 'slot-1',
+        classroom_id: 'class-2',
       }),
     ])
   })
