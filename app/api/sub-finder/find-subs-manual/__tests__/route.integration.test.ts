@@ -422,6 +422,226 @@ describe('POST /api/sub-finder/find-subs-manual integration', () => {
     expect(json.subs[0].cannot_cover[0].reason).toBe('Has time off')
   })
 
+  it('filters out inactive subs from manual recommendations', async () => {
+    mockIn
+      .mockResolvedValueOnce({
+        data: [{ id: 'day-1', name: 'Monday' }],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [{ id: 'slot-1', code: 'EM' }],
+        error: null,
+      })
+    ;(getSubs as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'sub-inactive',
+        first_name: 'Inactive',
+        last_name: 'Sub',
+        display_name: 'Inactive Sub',
+        active: false,
+      },
+    ])
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/find-subs-manual',
+      'POST',
+      {
+        teacher_id: 'teacher-1',
+        start_date: '2026-02-10',
+        end_date: '2026-02-10',
+        shifts: [
+          {
+            date: '2026-02-10',
+            day_of_week_id: 'day-1',
+            time_slot_id: 'slot-1',
+          },
+        ],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.subs).toHaveLength(0)
+    expect(getSubAvailability).not.toHaveBeenCalled()
+    expect(getSubAvailabilityExceptions).not.toHaveBeenCalled()
+    expect(getTeacherScheduledShifts).not.toHaveBeenCalled()
+  })
+
+  it('builds shift_details totals using fully and partially covered sub assignments', async () => {
+    mockIn
+      .mockResolvedValueOnce({
+        data: [{ id: 'day-1', name: 'Monday' }],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [
+          { id: 'slot-1', code: 'EM' },
+          { id: 'slot-2', code: 'LM' },
+        ],
+        error: null,
+      })
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'days_of_week' || table === 'time_slots') {
+        return {
+          select: () => ({
+            in: mockIn,
+          }),
+        }
+      }
+      if (table === 'teacher_schedules') {
+        return {
+          select: () => ({
+            eq: jest.fn().mockResolvedValue({
+              data: [],
+              error: null,
+            }),
+          }),
+        }
+      }
+      if (table === 'sub_assignments') {
+        return {
+          select: () => ({
+            eq: () => ({
+              gte: () => ({
+                lte: jest.fn().mockResolvedValue({
+                  data: [
+                    {
+                      date: '2026-02-10',
+                      time_slot_id: 'slot-1',
+                      is_partial: false,
+                      assignment_type: 'Full Day',
+                      sub: { display_name: 'Sub One' },
+                    },
+                    {
+                      date: '2026-02-10',
+                      time_slot_id: 'slot-2',
+                      is_partial: false,
+                      assignment_type: 'Partial Sub Shift',
+                      sub: { first_name: 'Sub', last_name: 'Two' },
+                    },
+                  ],
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        }
+      }
+      return {
+        select: () => ({
+          eq: jest.fn().mockResolvedValue({ data: [], error: null }),
+        }),
+      }
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/find-subs-manual',
+      'POST',
+      {
+        teacher_id: 'teacher-1',
+        start_date: '2026-02-10',
+        end_date: '2026-02-10',
+        shifts: [
+          {
+            date: '2026-02-10',
+            day_of_week_id: 'day-1',
+            time_slot_id: 'slot-1',
+          },
+          {
+            date: '2026-02-10',
+            day_of_week_id: 'day-1',
+            time_slot_id: 'slot-2',
+          },
+        ],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.totals).toEqual({
+      total: 2,
+      uncovered: 0,
+      partially_covered: 1,
+      fully_covered: 1,
+    })
+    expect(json.shift_details).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          time_slot_code: 'EM',
+          status: 'fully_covered',
+          sub_name: 'Sub One',
+        }),
+        expect.objectContaining({
+          time_slot_code: 'LM',
+          status: 'partially_covered',
+          sub_name: 'Sub Two',
+          is_partial: true,
+        }),
+      ])
+    )
+  })
+
+  it('continues when loading time-off shifts fails for a sub request', async () => {
+    mockIn
+      .mockResolvedValueOnce({
+        data: [{ id: 'day-1', name: 'Monday' }],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [{ id: 'slot-1', code: 'EM' }],
+        error: null,
+      })
+    ;(getSubs as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'sub-1',
+        first_name: 'Sally',
+        last_name: 'A',
+        display_name: 'Sally A.',
+        active: true,
+      },
+    ])
+    ;(getSubAvailability as jest.Mock).mockResolvedValueOnce([
+      { day_of_week_id: 'day-1', time_slot_id: 'slot-1', available: true },
+    ])
+    ;(getSubAvailabilityExceptions as jest.Mock).mockResolvedValueOnce([])
+    ;(getTeacherScheduledShifts as jest.Mock).mockResolvedValueOnce([])
+    ;(getTimeOffRequests as jest.Mock).mockResolvedValueOnce([{ id: 'req-1', teacher_id: 'sub-1' }])
+    ;(getTimeOffShifts as jest.Mock).mockRejectedValueOnce(new Error('shift load failed'))
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/find-subs-manual',
+      'POST',
+      {
+        teacher_id: 'teacher-1',
+        start_date: '2026-02-10',
+        end_date: '2026-02-10',
+        shifts: [
+          {
+            date: '2026-02-10',
+            day_of_week_id: 'day-1',
+            time_slot_id: 'slot-1',
+          },
+        ],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.subs[0].coverage_percent).toBe(100)
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/error fetching shifts for time off request/i),
+      expect.any(Error)
+    )
+  })
+
   it('returns 500 when request parsing fails', async () => {
     const request = {
       method: 'POST',
