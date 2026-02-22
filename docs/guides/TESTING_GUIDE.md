@@ -76,6 +76,8 @@ Seed file:
 
 - `npm run test` - Jest suite
 - `npm run test:coverage` - Jest with coverage
+- `npm run test:coverage:phase1` - Phase 1 domain coverage gate
+- `npm run test:coverage:phase2` - Phase 2 scheduling coverage gate
 - `npm run test:e2e` - Playwright full suite
 - `npm run test:e2e:smoke` - Playwright smoke suite
 - `npm run test:e2e:ui` - Playwright UI mode
@@ -103,3 +105,24 @@ Thresholds:
 
 - statements/functions/lines: **70%**
 - branches: **60%**
+
+Phase 2 scheduling coverage thresholds are configured in `jest.config.js` and can be enabled via:
+
+```bash
+ENFORCE_PHASE2_COVERAGE=true npm run test:coverage
+```
+
+Phase 2 targeted domains:
+
+- `app/api/staffing-events/**`
+- `app/api/teacher-schedules/**`
+- `app/api/weekly-schedule/**`
+
+Thresholds:
+
+- statements/functions/lines: **70%**
+- branches: **60%**
+
+CI note:
+
+- GitHub Actions `jest` job enforces the Phase 2 gate by default via `ENFORCE_PHASE2_COVERAGE=true`.
