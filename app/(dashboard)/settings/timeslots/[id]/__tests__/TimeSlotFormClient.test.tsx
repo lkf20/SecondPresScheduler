@@ -33,7 +33,12 @@ jest.mock('@/components/ui/button', () => ({
 
 jest.mock('@/components/ui/input', () => ({
   Input: React.forwardRef<HTMLInputElement, React.ComponentProps<'input'>>((props, ref) => (
-    <input ref={ref} {...props} aria-label={props.placeholder || 'input'} value={props.value ?? undefined} />
+    <input
+      ref={ref}
+      {...props}
+      aria-label={props.placeholder || 'input'}
+      value={props.value ?? undefined}
+    />
   )),
 }))
 
@@ -43,7 +48,9 @@ const originalConfirm = global.confirm
 describe('TimeSlotFormClient', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({}) }) as Response) as jest.Mock
+    global.fetch = jest.fn(
+      async () => ({ ok: true, json: async () => ({}) }) as Response
+    ) as jest.Mock
     global.confirm = jest.fn(() => true)
   })
 
@@ -80,7 +87,9 @@ describe('TimeSlotFormClient', () => {
       )
     })
 
-    const putCall = (global.fetch as jest.Mock).mock.calls.find(call => call[0] === '/api/timeslots/slot-1')
+    const putCall = (global.fetch as jest.Mock).mock.calls.find(
+      call => call[0] === '/api/timeslots/slot-1'
+    )
     expect(JSON.parse(putCall[1].body)).toMatchObject({
       code: 'EM',
       name: null,

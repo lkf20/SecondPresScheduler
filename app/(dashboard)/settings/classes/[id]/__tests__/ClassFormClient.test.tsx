@@ -68,7 +68,9 @@ const originalFetch = global.fetch
 describe('ClassFormClient', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({}) }) as Response) as jest.Mock
+    global.fetch = jest.fn(
+      async () => ({ ok: true, json: async () => ({}) }) as Response
+    ) as jest.Mock
   })
 
   afterAll(() => {

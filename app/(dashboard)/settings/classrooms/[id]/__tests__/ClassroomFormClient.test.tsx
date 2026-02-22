@@ -33,7 +33,12 @@ jest.mock('@/components/ui/button', () => ({
 
 jest.mock('@/components/ui/input', () => ({
   Input: React.forwardRef<HTMLInputElement, React.ComponentProps<'input'>>((props, ref) => (
-    <input ref={ref} {...props} aria-label={props.placeholder || 'input'} value={props.value ?? undefined} />
+    <input
+      ref={ref}
+      {...props}
+      aria-label={props.placeholder || 'input'}
+      value={props.value ?? undefined}
+    />
   )),
 }))
 
