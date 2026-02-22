@@ -30,6 +30,8 @@ jest.mock('@/lib/api/time-off', () => ({
 }))
 
 describe('POST /api/staffing-events/flex/availability integration', () => {
+  let consoleLogSpy: jest.SpyInstance
+
   const makeThenableBuilder = (result: any, methods: string[]) => {
     const builder: any = {}
     for (const method of methods) {
@@ -42,6 +44,7 @@ describe('POST /api/staffing-events/flex/availability integration', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getScheduleSettings as jest.Mock).mockResolvedValue({
       time_zone: 'UTC',
@@ -51,6 +54,10 @@ describe('POST /api/staffing-events/flex/availability integration', () => {
     ;(getTeacherScheduledShifts as jest.Mock).mockResolvedValue([])
     ;(getTimeOffRequests as jest.Mock).mockResolvedValue([])
     ;(getTimeOffShifts as jest.Mock).mockResolvedValue([])
+  })
+
+  afterEach(() => {
+    consoleLogSpy.mockRestore()
   })
 
   it('returns 403 when school context is missing', async () => {

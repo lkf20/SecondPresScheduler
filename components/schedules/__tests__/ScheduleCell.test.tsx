@@ -47,6 +47,16 @@ const isBefore = (a: HTMLElement, b: HTMLElement) =>
   Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
 
 describe('ScheduleCell', () => {
+  let consoleLogSpy: jest.SpyInstance
+
+  beforeEach(() => {
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleLogSpy.mockRestore()
+  })
+
   it('renders absent->sub->teacher->flex->floater in order with alphabetical sorting within groups', () => {
     render(
       <ScheduleCell
