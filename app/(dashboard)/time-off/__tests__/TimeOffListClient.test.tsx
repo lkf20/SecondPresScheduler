@@ -36,9 +36,16 @@ jest.mock('@/components/shared/TimeOffCard', () => {
 })
 
 describe('TimeOffListClient', () => {
+  let consoleLogSpy: jest.SpyInstance
+
   beforeEach(() => {
     jest.clearAllMocks()
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
     mockSearchParams = new URLSearchParams('view=drafts')
+  })
+
+  afterEach(() => {
+    consoleLogSpy.mockRestore()
   })
 
   it('renders loading state', () => {

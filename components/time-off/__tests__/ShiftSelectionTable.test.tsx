@@ -4,9 +4,11 @@ import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
 
 describe('ShiftSelectionTable', () => {
   let consoleErrorSpy: jest.SpyInstance
+  let consoleLogSpy: jest.SpyInstance
 
   beforeEach(() => {
     jest.clearAllMocks()
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
       const firstArg = args[0]
       if (
@@ -35,6 +37,7 @@ describe('ShiftSelectionTable', () => {
 
   afterEach(() => {
     consoleErrorSpy.mockRestore()
+    consoleLogSpy.mockRestore()
   })
 
   it('shows placeholder message when teacher and start date are missing', () => {
