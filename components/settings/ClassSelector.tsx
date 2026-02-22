@@ -1,18 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { X, Plus } from 'lucide-react'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { ChevronDown, X } from 'lucide-react'
 import { Database } from '@/types/database'
 
 type ClassGroup = Database['public']['Tables']['class_groups']['Row']
@@ -23,10 +16,10 @@ interface ClassSelectorProps {
 }
 
 export default function ClassSelector({ selectedClassIds, onSelectionChange }: ClassSelectorProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const [classes, setClasses] = useState<ClassGroup[]>([])
   const [searchQuery, setSearchQuery] = useState('')
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(selectedClassIds ?? []))
+  const [isExpanded, setIsExpanded] = useState(false)
 
   useEffect(() => {
     fetch('/api/class-groups')
@@ -37,39 +30,44 @@ export default function ClassSelector({ selectedClassIds, onSelectionChange }: C
       .catch(console.error)
   }, [])
 
-  // Sync selectedIds with prop changes
   useEffect(() => {
-    setSelectedIds(new Set(selectedClassIds ?? []))
-  }, [selectedClassIds])
+    const handleDocumentClick = (event: MouseEvent) => {
+      const target = event.target as Node | null
+      if (!target) return
+      if (target instanceof Element && target.closest('button[type="submit"]')) return
+      if (containerRef.current?.contains(target)) return
+      setIsExpanded(false)
+    }
+
+    document.addEventListener('click', handleDocumentClick)
+    return () => {
+      document.removeEventListener('click', handleDocumentClick)
+    }
+  }, [])
+
+  const selectedIdSet = new Set(selectedClassIds ?? [])
 
   const filteredClasses = classes.filter(cls => {
     return cls.name.toLowerCase().includes(searchQuery.toLowerCase())
   })
 
   const handleToggle = (classId: string, checked: boolean) => {
-    const newSelected = new Set(selectedIds)
+    const newSelected = new Set(selectedIdSet)
     if (checked) {
       newSelected.add(classId)
     } else {
       newSelected.delete(classId)
     }
-    setSelectedIds(newSelected)
-  }
-
-  const handleSave = () => {
-    onSelectionChange(Array.from(selectedIds))
-    setIsDialogOpen(false)
-    setSearchQuery('')
-  }
-
-  const handleRemove = (classId: string) => {
-    const newSelected = new Set(selectedIds)
-    newSelected.delete(classId)
-    setSelectedIds(newSelected)
     onSelectionChange(Array.from(newSelected))
   }
 
-  const selectedClassesList = classes.filter(cls => selectedIds.has(cls.id))
+  const handleRemove = (classId: string) => {
+    const newSelected = new Set(selectedIdSet)
+    newSelected.delete(classId)
+    onSelectionChange(Array.from(newSelected))
+  }
+
+  const selectedClassesList = classes.filter(cls => selectedIdSet.has(cls.id))
 
   return (
     <div className="space-y-3">
@@ -90,73 +88,64 @@ export default function ClassSelector({ selectedClassIds, onSelectionChange }: C
             </button>
           </div>
         ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setIsDialogOpen(true)}
-          className="h-7"
-        >
-          <Plus className="h-3 w-3 mr-1" />
-          Add Class Groups
-        </Button>
       </div>
 
-      {/* Selection Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md max-h-[80vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Select Class Groups</DialogTitle>
-            <DialogDescription>
-              Choose which class groups are allowed in this classroom
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex flex-col flex-1 min-h-0">
-            {/* Search input */}
-            <Input
-              placeholder="Search class groups..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="mb-3"
+      <div ref={containerRef} className="space-y-3">
+        <div className="relative">
+          <Input
+            placeholder="Search class groups..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onFocus={() => setIsExpanded(true)}
+            onClick={() => setIsExpanded(true)}
+            className="pr-9"
+          />
+          <button
+            type="button"
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            onClick={() => setIsExpanded(prev => !prev)}
+            aria-label={isExpanded ? 'Collapse class groups list' : 'Expand class groups list'}
+          >
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
             />
+          </button>
+        </div>
 
-            {/* Select All / Clear All buttons */}
-            <div className="flex gap-2 mb-3">
+        {isExpanded && (
+          <>
+            <div className="flex gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  const newSelected = new Set(selectedIds)
+                  const newSelected = new Set(selectedIdSet)
                   filteredClasses.forEach(cls => {
                     newSelected.add(cls.id)
                   })
-                  setSelectedIds(newSelected)
+                  onSelectionChange(Array.from(newSelected))
                 }}
-                className="flex-1"
               >
-                Select All
+                Select all
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  const newSelected = new Set(selectedIds)
+                  const newSelected = new Set(selectedIdSet)
                   filteredClasses.forEach(cls => {
                     newSelected.delete(cls.id)
                   })
-                  setSelectedIds(newSelected)
+                  onSelectionChange(Array.from(newSelected))
                 }}
-                className="flex-1"
               >
-                Clear All
+                Deselect all
               </Button>
             </div>
 
-            {/* Class list */}
-            <div className="border rounded-md overflow-y-auto flex-1 min-h-0">
+            <div className="max-h-72 overflow-y-auto rounded-md border">
               {filteredClasses.length === 0 ? (
                 <div className="p-4 text-sm text-muted-foreground text-center">
                   No class groups found
@@ -164,44 +153,30 @@ export default function ClassSelector({ selectedClassIds, onSelectionChange }: C
               ) : (
                 <div className="p-2 space-y-1">
                   {filteredClasses.map(cls => {
-                    const isSelected = selectedIds.has(cls.id)
+                    const isSelected = selectedIdSet.has(cls.id)
+                    const checkboxId = `class-group-${cls.id}`
                     return (
                       <div
                         key={cls.id}
-                        className="flex items-center space-x-2 p-2 hover:bg-accent rounded cursor-pointer"
-                        onClick={() => handleToggle(cls.id, !isSelected)}
+                        className="flex items-center space-x-2 p-2 hover:bg-accent rounded"
                       >
                         <Checkbox
+                          id={checkboxId}
                           checked={isSelected}
                           onCheckedChange={checked => handleToggle(cls.id, checked === true)}
                         />
-                        <Label className="cursor-pointer flex-1">{cls.name}</Label>
+                        <Label htmlFor={checkboxId} className="cursor-pointer flex-1">
+                          {cls.name}
+                        </Label>
                       </div>
                     )
                   })}
                 </div>
               )}
             </div>
-
-            {/* Footer buttons */}
-            <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setIsDialogOpen(false)
-                  setSearchQuery('')
-                }}
-              >
-                Cancel
-              </Button>
-              <Button type="button" onClick={handleSave}>
-                Save ({selectedIds.size} selected)
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </>
+        )}
+      </div>
     </div>
   )
 }

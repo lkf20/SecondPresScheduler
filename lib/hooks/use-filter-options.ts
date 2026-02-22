@@ -44,7 +44,10 @@ export function useFilterOptions() {
   return useQuery({
     queryKey: ['filterOptions', schoolId],
     queryFn: fetchFilterOptions,
-    staleTime: 600000, // 10 minutes - these rarely change
-    refetchOnWindowFocus: false,
+    // Keep this query fresh because classrooms/time slots can be edited from Settings,
+    // then users navigate straight into schedule views expecting immediate updates.
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   })
 }

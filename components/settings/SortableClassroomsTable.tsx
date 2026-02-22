@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, type CSSProperties } from 'react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   DndContext,
   closestCenter,
@@ -50,7 +50,13 @@ interface SortableClassroomsTableProps {
 }
 
 function getClassroomChipStyle(color?: string | null): CSSProperties | undefined {
-  if (!color) return undefined
+  if (!color) {
+    return {
+      borderColor: '#334155',
+      color: '#334155',
+      backgroundColor: '#ffffff',
+    }
+  }
   const hex = color.trim()
   const match = /^#([0-9a-fA-F]{6})$/.exec(hex)
   if (!match) return { borderColor: color, color }
@@ -69,6 +75,7 @@ function getClassroomChipStyle(color?: string | null): CSSProperties | undefined
 }
 
 function SortableRow({ classroom }: { classroom: Classroom }) {
+  const router = useRouter()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: classroom.id,
   })
@@ -80,11 +87,31 @@ function SortableRow({ classroom }: { classroom: Classroom }) {
   }
 
   return (
-    <TableRow ref={setNodeRef} style={style} className={cn(isDragging && 'bg-muted')}>
+    <TableRow
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'cursor-pointer transition-colors hover:bg-slate-50',
+        isDragging && 'bg-muted hover:bg-muted'
+      )}
+      onClick={event => {
+        const target = event.target as HTMLElement
+        if (target.closest('button, a, input, textarea, select, [role="switch"]')) return
+        router.push(`/settings/classrooms/${classroom.id}`)
+      }}
+      onKeyDown={event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          router.push(`/settings/classrooms/${classroom.id}`)
+        }
+      }}
+      tabIndex={0}
+    >
       <TableCell className="w-10 text-base">
         <button
           {...attributes}
           {...listeners}
+          onClick={event => event.stopPropagation()}
           className="cursor-grab active:cursor-grabbing p-1 hover:bg-accent rounded"
           type="button"
         >
@@ -98,17 +125,14 @@ function SortableRow({ classroom }: { classroom: Classroom }) {
               Inactive
             </Badge>
           )}
-          <Link
-            href={`/settings/classrooms/${classroom.id}`}
-            className={cn('hover:opacity-90', !classroom.is_active && 'opacity-70')}
-          >
+          <span className={cn(!classroom.is_active && 'opacity-70')} aria-label={classroom.name}>
             <span
-              className="inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium border-[#bfc8dd] bg-[#dce3fd] text-[#265ee8]"
+              className="inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium"
               style={getClassroomChipStyle(classroom.color)}
             >
               {classroom.name}
             </span>
-          </Link>
+          </span>
         </div>
       </TableCell>
       <TableCell className="text-base">{classroom.capacity || '—'}</TableCell>
@@ -122,6 +146,7 @@ function SortableRow({ classroom }: { classroom: Classroom }) {
 export default function SortableClassroomsTable({
   classrooms: initialClassrooms,
 }: SortableClassroomsTableProps) {
+  const router = useRouter()
   const [classrooms, setClassrooms] = useState(initialClassrooms)
   const [search, setSearch] = useState('')
   const [showInactive, setShowInactive] = useState(false)
@@ -223,7 +248,7 @@ export default function SortableClassroomsTable({
 
       {isMounted ? (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <div className="rounded-md border">
+          <div className="rounded-md border bg-white">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -255,7 +280,7 @@ export default function SortableClassroomsTable({
           </div>
         </DndContext>
       ) : (
-        <div className="rounded-md border">
+        <div className="rounded-md border bg-white">
           <Table>
             <TableHeader>
               <TableRow>
@@ -274,7 +299,23 @@ export default function SortableClassroomsTable({
                 </TableRow>
               ) : (
                 filteredClassrooms.map(classroom => (
-                  <TableRow key={classroom.id}>
+                  <TableRow
+                    key={classroom.id}
+                    className="cursor-pointer transition-colors hover:bg-slate-50"
+                    onClick={event => {
+                      const target = event.target as HTMLElement
+                      if (target.closest('button, a, input, textarea, select, [role=\"switch\"]'))
+                        return
+                      router.push(`/settings/classrooms/${classroom.id}`)
+                    }}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        router.push(`/settings/classrooms/${classroom.id}`)
+                      }
+                    }}
+                    tabIndex={0}
+                  >
                     <TableCell className="w-10 text-base">
                       <div className="p-1">
                         <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -287,17 +328,17 @@ export default function SortableClassroomsTable({
                             Inactive
                           </Badge>
                         )}
-                        <Link
-                          href={`/settings/classrooms/${classroom.id}`}
-                          className={cn('hover:opacity-90', !classroom.is_active && 'opacity-70')}
+                        <span
+                          className={cn(!classroom.is_active && 'opacity-70')}
+                          aria-label={classroom.name}
                         >
                           <span
-                            className="inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium border-[#bfc8dd] bg-[#dce3fd] text-[#265ee8]"
+                            className="inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium"
                             style={getClassroomChipStyle(classroom.color)}
                           >
                             {classroom.name}
                           </span>
-                        </Link>
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell className="text-base">{classroom.capacity || '—'}</TableCell>

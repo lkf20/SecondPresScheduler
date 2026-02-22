@@ -271,7 +271,11 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
       setSavedIsActive(isActive)
       setIsOverviewDirty(false)
       router.refresh()
-      toast.success('Staff updated.')
+      const staffNameForToast =
+        data.display_name?.trim() ||
+        [data.first_name?.trim(), data.last_name?.trim()].filter(Boolean).join(' ') ||
+        'Staff member'
+      toast.success(`${staffNameForToast} has been updated.`)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to update staff')
     }
@@ -350,14 +354,14 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <Label htmlFor="active-toggle" className="font-normal cursor-pointer">
+              {isActive ? 'Active' : 'Inactive'}
+            </Label>
             <Switch
               id="active-toggle"
               checked={isActive}
               onCheckedChange={checked => setIsActive(checked === true)}
             />
-            <Label htmlFor="active-toggle" className="font-normal cursor-pointer">
-              {isActive ? 'Active' : 'Inactive'}
-            </Label>
           </div>
         </div>
         <p className="text-sm text-muted-foreground mt-2">
@@ -378,6 +382,7 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
           dirty: overviewHasUnsavedChanges,
           actionLabel: 'Save',
           actionFormId: `staff-overview-form-${staff.id}`,
+          cardClassName: 'max-w-2xl',
           content: (
             <div className="max-w-2xl">
               <StaffForm
@@ -412,6 +417,7 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
           dirty: isPreferencesDirty,
           actionLabel: 'Save',
           onAction: () => setPreferencesSaveSignal(v => v + 1),
+          cardClassName: 'max-w-2xl',
           content: (
             <SubPreferencesSection
               subId={staff.id}

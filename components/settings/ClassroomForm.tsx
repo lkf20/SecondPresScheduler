@@ -8,7 +8,7 @@ import * as z from 'zod'
 import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import FormField from '@/components/shared/FormField'
 import ErrorMessage from '@/components/shared/ErrorMessage'
@@ -16,6 +16,16 @@ import ClassSelector from '@/components/settings/ClassSelector'
 import ClassroomColorPicker from '@/components/settings/ClassroomColorPicker'
 import StaffUnsavedChangesDialog from '@/components/staff/StaffUnsavedChangesDialog'
 import { Database } from '@/types/database'
+import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
+import { useSchool } from '@/lib/contexts/SchoolContext'
+import {
+  invalidateDailySchedule,
+  invalidateDashboard,
+  invalidateSubFinderAbsences,
+  invalidateTimeOffRequests,
+  invalidateWeeklySchedule,
+} from '@/lib/utils/invalidation'
 
 type Classroom = Database['public']['Tables']['classrooms']['Row']
 
@@ -46,7 +56,10 @@ const normalizeAllowedClassIds = (ids: string[]) => [...ids].sort((a, b) => a.lo
 
 export default function ClassroomForm({ mode, classroom }: ClassroomFormProps) {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const schoolId = useSchool()
   const isEdit = mode === 'edit'
+  const formId = `classroom-form-${isEdit ? (classroom?.id ?? 'edit') : 'new'}`
 
   if (isEdit && !classroom) {
     throw new Error('classroom is required in edit mode')
@@ -244,7 +257,7 @@ export default function ClassroomForm({ mode, classroom }: ClassroomFormProps) {
         } = {
           name: data.name,
           color: selectedColor ?? null,
-          is_active: true,
+          is_active: data.is_active ?? true,
         }
 
         if (data.capacity && data.capacity !== '') {
@@ -269,6 +282,20 @@ export default function ClassroomForm({ mode, classroom }: ClassroomFormProps) {
         }
       }
 
+      const classroomName = data.name?.trim() || 'Classroom'
+      toast.success(isEdit ? `${classroomName} updated.` : `${classroomName} created.`)
+      await Promise.all([
+        invalidateWeeklySchedule(queryClient, schoolId),
+        invalidateDailySchedule(queryClient, schoolId),
+        invalidateDashboard(queryClient, schoolId),
+        invalidateTimeOffRequests(queryClient, schoolId),
+        invalidateSubFinderAbsences(queryClient, schoolId),
+        queryClient.invalidateQueries({ queryKey: ['filterOptions', schoolId] }),
+        queryClient.invalidateQueries({ queryKey: ['filterOptions'] }),
+        queryClient.invalidateQueries({ queryKey: ['dailySchedule'] }),
+        queryClient.invalidateQueries({ queryKey: ['weeklySchedule'] }),
+        queryClient.invalidateQueries({ queryKey: ['scheduleSettings'] }),
+      ])
       router.push('/settings/classrooms')
       router.refresh()
     } catch (err: unknown) {
@@ -295,89 +322,95 @@ export default function ClassroomForm({ mode, classroom }: ClassroomFormProps) {
         </button>
       </div>
 
-      <div className="mb-8">
-        <div className="flex items-center gap-2">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-            {isEdit ? 'Edit Classroom' : 'Add New Classroom'}
-          </h1>
-          {hasUnsavedChanges && (
-            <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-              Unsaved changes
-            </span>
-          )}
+      <div className="mb-8 max-w-2xl">
+        <div className="flex items-center justify-between gap-6">
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+              {isEdit ? name?.trim() || 'Classroom' : 'Add Classroom'}
+            </h1>
+            {hasUnsavedChanges && (
+              <>
+                <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                  Unsaved changes
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-teal-700 hover:bg-transparent hover:text-teal-800"
+                  type="submit"
+                  form={formId}
+                >
+                  Save
+                </Button>
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <Label htmlFor="is_active" className="font-normal cursor-pointer">
+              {isActive ? 'Active' : 'Inactive'}
+            </Label>
+            <Switch
+              id="is_active"
+              checked={isActive}
+              onCheckedChange={checked => setValue('is_active', checked === true)}
+            />
+          </div>
         </div>
         <p className="text-muted-foreground mt-2">
-          {isEdit ? classroom?.name : 'Create a new classroom'}
+          {isActive
+            ? 'Active items will appear in schedules and dropdowns.'
+            : 'Inactive items will not appear in dropdowns but historical data is preserved.'}
         </p>
       </div>
 
       {error && <ErrorMessage message={error} className="mb-6" />}
 
       <div className="max-w-2xl">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <FormField label="Classroom Name" error={errors.name?.message} required>
-            <Input {...register('name')} />
-          </FormField>
+        <div className="rounded-lg border bg-white p-6">
+          <form id={formId} onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <FormField label="Classroom Name" error={errors.name?.message} required>
+              <Input {...register('name')} placeholder="e.g. Toddler Room" />
+            </FormField>
 
-          <FormField label="Capacity" error={errors.capacity?.message}>
-            <Input type="number" {...register('capacity')} placeholder="Optional" />
-          </FormField>
+            <FormField label="Capacity" error={errors.capacity?.message}>
+              <Input type="number" {...register('capacity')} placeholder="Optional" />
+            </FormField>
 
-          <FormField label="Color (Optional)" error={errors.color?.message}>
-            <ClassroomColorPicker value={selectedColor} onChange={setSelectedColor} />
-          </FormField>
+            <FormField label="Color (Optional)" error={errors.color?.message}>
+              <ClassroomColorPicker value={selectedColor} onChange={setSelectedColor} />
+            </FormField>
 
-          <FormField label="Allowed Class Groups" error={errors.allowed_classes?.message}>
-            {loadingAllowedClasses ? (
-              <div className="text-sm text-muted-foreground">Loading...</div>
-            ) : (
-              <ClassSelector
-                selectedClassIds={allowedClassIds}
-                onSelectionChange={setAllowedClassIds}
-              />
-            )}
-          </FormField>
-
-          {isEdit && (
-            <div className="space-y-4 pt-6 border-t">
-              <div>
-                <Label className="text-base font-semibold">Status</Label>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Inactive items will not appear in dropdowns but historical data is preserved.
-                </p>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="is_active"
-                  checked={isActive}
-                  onCheckedChange={checked => setValue('is_active', checked === true)}
+            <FormField label="Allowed Class Groups" error={errors.allowed_classes?.message}>
+              {loadingAllowedClasses ? (
+                <div className="text-sm text-muted-foreground">Loading...</div>
+              ) : (
+                <ClassSelector
+                  selectedClassIds={allowedClassIds}
+                  onSelectionChange={setAllowedClassIds}
                 />
-                <Label htmlFor="is_active" className="font-normal cursor-pointer">
-                  Active (appears in dropdowns)
-                </Label>
-              </div>
-            </div>
-          )}
+              )}
+            </FormField>
 
-          <div className="flex justify-end gap-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigateWithUnsavedGuard('/settings/classrooms')}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting
-                ? isEdit
-                  ? 'Updating...'
-                  : 'Creating...'
-                : isEdit
-                  ? 'Update'
-                  : 'Create'}
-            </Button>
-          </div>
-        </form>
+            <div className="flex justify-end gap-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => navigateWithUnsavedGuard('/settings/classrooms')}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting
+                  ? isEdit
+                    ? 'Updating...'
+                    : 'Creating...'
+                  : isEdit
+                    ? 'Update'
+                    : 'Create'}
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
       <StaffUnsavedChangesDialog
         open={showUnsavedDialog}

@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { getClassrooms } from '@/lib/api/classrooms'
 import { Button } from '@/components/ui/button'
-import { Plus } from 'lucide-react'
+import { ArrowLeft, Plus } from 'lucide-react'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import SortableClassroomsTable from '@/components/settings/SortableClassroomsTable'
 
@@ -30,6 +30,15 @@ export default async function ClassroomsPage() {
 
   return (
     <div>
+      <div className="mb-4">
+        <Link
+          href="/settings"
+          className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Settings
+        </Link>
+      </div>
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-8">
         <div className="flex-1">
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Classrooms</h1>

@@ -81,8 +81,10 @@ function generateDaysXClassroomsGridTemplate(
   days: Array<{ id: string; name: string; number: number }>,
   timeSlots: Array<{ id: string; code: string }>
 ): { columns: string; rows: string } {
-  // Columns: Combined Day/Time (120px) + Classrooms (minmax(230px, 1fr) each) - matches Classrooms x Days
-  const columns = `120px repeat(${classroomCount}, minmax(230px, 1fr))`
+  // Columns: Combined Day/Time (120px) + fixed classroom columns.
+  // Keep columns fixed so selecting fewer classrooms makes the grid narrower
+  // instead of stretching each column.
+  const columns = `120px repeat(${classroomCount}, 240px)`
 
   // Rows: Header (auto) + (Spacer row + Day header + time slots for each day)
   // For the first day: no spacer, just day header + time slots
@@ -110,8 +112,9 @@ function generateClassroomsXDaysGridTemplate(
   timeSlotCount: number
 ): { columns: string; rows: string } {
   // Columns: Classroom (110px - reduced to fit "Kindergarten" while saving space) + (Day columns: each day has timeSlotCount columns)
-  // Column width: 220px card + 10px left margin + 10px right margin = 220px + 20px = 240px minimum, using 230px for tighter spacing
-  const dayColumns = Array(dayCount).fill(`repeat(${timeSlotCount}, minmax(230px, 1fr))`).join(' ')
+  // Column width: 220px card + 10px left margin + 10px right margin = 240px.
+  // Keep columns fixed so grid width reflects number of selected filters.
+  const dayColumns = Array(dayCount).fill(`repeat(${timeSlotCount}, 240px)`).join(' ')
   const columns = `110px ${dayColumns}`
 
   // Rows: 2 header rows + 1 row per classroom
@@ -1030,9 +1033,8 @@ export default function WeeklyScheduleGridNew({
               {
                 gridTemplateColumns: classroomsXDaysGrid.columns,
                 gridTemplateRows: classroomsXDaysGrid.rows,
-                width: '100%', // Constrain to parent width
-                maxWidth: '100%', // Ensure it doesn't exceed parent
-                minWidth: 0, // Allow grid to shrink below content size, enabling internal scrolling
+                width: 'fit-content',
+                minWidth: 'fit-content',
                 // CSS custom properties for header heights and column widths
                 '--header-row-1-height': 'calc(0.5rem + 1.5rem + 0.125rem)', // Day header: pt-2 + text-base line-height + pb-0.5
                 '--header-row-2-height': 'calc(0.5rem + 1.5rem + 0.75rem)', // Time slot header: pt-2 + chip height ~1.5rem + pb-3

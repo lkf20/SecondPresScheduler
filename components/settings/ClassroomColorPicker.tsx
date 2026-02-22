@@ -55,8 +55,11 @@ export default function ClassroomColorPicker({ value, onChange }: ClassroomColor
           <PopoverTrigger asChild>
             <Button type="button" variant="outline" className="w-[200px] justify-start">
               <div
-                className="w-4 h-4 rounded border border-gray-300 mr-2"
-                style={{ backgroundColor: value || 'transparent' }}
+                className="w-4 h-4 rounded border mr-2"
+                style={{
+                  backgroundColor: value || 'transparent',
+                  borderColor: value || '#d1d5db',
+                }}
               />
               {value ? (
                 <span className="text-sm">{selectedColorName || 'No color selected'}</span>
@@ -103,16 +106,6 @@ export default function ClassroomColorPicker({ value, onChange }: ClassroomColor
             </div>
           </PopoverContent>
         </Popover>
-
-        {value && selectedColorName && (
-          <div className="flex items-center gap-2">
-            <div
-              className="w-8 h-8 rounded border border-gray-300"
-              style={{ backgroundColor: value }}
-            />
-            <span className="text-sm text-muted-foreground">{selectedColorName}</span>
-          </div>
-        )}
       </div>
     </div>
   )

@@ -77,6 +77,10 @@ export default function WeeklySchedulePage() {
     () => filterOptions?.classrooms || [],
     [filterOptions?.classrooms]
   )
+  const availableClassroomIds = useMemo(
+    () => availableClassrooms.map(c => c.id),
+    [availableClassrooms]
+  )
 
   const loading = isLoadingSchedule || isLoadingSettings || isLoadingFilters
   const error = scheduleError
@@ -86,6 +90,8 @@ export default function WeeklySchedulePage() {
     : null
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
+  const prevAvailableClassroomIdsRef = useRef<string[] | null>(null)
+  const previousAvailableClassroomsStorageKey = 'weekly-schedule-available-classroom-ids'
   const [filters, setFilters] = useState<FilterState | null>(() => {
     // Load filters from localStorage on mount
     if (typeof window !== 'undefined') {
@@ -187,6 +193,32 @@ export default function WeeklySchedulePage() {
     availableClassrooms.length,
   ])
 
+  // Normalize selected classroom IDs against current available classrooms.
+  // This repairs stale localStorage selections (e.g., deleted classroom IDs lingering)
+  // that can otherwise hide newly added classrooms.
+  useEffect(() => {
+    if (!filters || availableClassroomIds.length === 0) return
+
+    const availableSet = new Set(availableClassroomIds)
+    const validSelected = filters.selectedClassroomIds.filter(id => availableSet.has(id))
+    const hadInvalidIds = validSelected.length !== filters.selectedClassroomIds.length
+    if (!hadInvalidIds) return
+
+    // If user previously had "all" selected (by count), keep that intent and select all current.
+    // Otherwise preserve only valid IDs.
+    const nextSelected =
+      filters.selectedClassroomIds.length >= availableClassroomIds.length
+        ? availableClassroomIds
+        : validSelected
+
+    const isSame =
+      nextSelected.length === filters.selectedClassroomIds.length &&
+      nextSelected.every(id => filters.selectedClassroomIds.includes(id))
+    if (isSame) return
+
+    setFilters(prev => (prev ? { ...prev, selectedClassroomIds: nextSelected } : prev))
+  }, [availableClassroomIds, filters])
+
   // Save filters to localStorage whenever they change (with debounce to avoid excessive writes)
   useEffect(() => {
     if (filters && typeof window !== 'undefined') {
@@ -197,6 +229,66 @@ export default function WeeklySchedulePage() {
       }
     }
   }, [filters])
+
+  // If new classrooms appear and user previously had all currently-available classrooms selected,
+  // auto-include newly added classroom IDs so they immediately appear.
+  useEffect(() => {
+    if (!filters) return
+    if (availableClassroomIds.length === 0) {
+      return
+    }
+
+    let previousAvailableIds = prevAvailableClassroomIdsRef.current
+    if (!previousAvailableIds && typeof window !== 'undefined') {
+      try {
+        const stored = window.localStorage.getItem(previousAvailableClassroomsStorageKey)
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed)) {
+            previousAvailableIds = parsed.filter((id): id is string => typeof id === 'string')
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing previous available classrooms:', e)
+      }
+    }
+    if (!previousAvailableIds) {
+      previousAvailableIds = availableClassroomIds
+    }
+
+    const previousAvailableSet = new Set(previousAvailableIds)
+    const selectedSet = new Set(filters.selectedClassroomIds)
+
+    const hadAllPreviouslyAvailableSelected =
+      previousAvailableIds.length > 0 && previousAvailableIds.every(id => selectedSet.has(id))
+
+    const newlyAddedIds = availableClassroomIds.filter(id => !previousAvailableSet.has(id))
+
+    if (hadAllPreviouslyAvailableSelected && newlyAddedIds.length > 0) {
+      setFilters(prev => {
+        if (!prev) return prev
+        const prevSelectedSet = new Set(prev.selectedClassroomIds)
+        const stillMissing = newlyAddedIds.filter(id => !prevSelectedSet.has(id))
+        if (stillMissing.length === 0) return prev
+        return {
+          ...prev,
+          selectedClassroomIds: [...prev.selectedClassroomIds, ...stillMissing],
+        }
+      })
+    }
+
+    prevAvailableClassroomIdsRef.current = availableClassroomIds
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(
+          previousAvailableClassroomsStorageKey,
+          JSON.stringify(availableClassroomIds)
+        )
+      } catch (e) {
+        console.error('Error saving previous available classrooms:', e)
+      }
+    }
+  }, [availableClassroomIds, filters?.selectedClassroomIds])
 
   // Handle refresh - invalidate React Query cache
   const handleRefresh = async () => {
@@ -419,6 +511,35 @@ export default function WeeklySchedulePage() {
 
     return result
   }, [scheduleData, filters, weekStartISO])
+
+  // Temporary debug logs for classroom visibility issues after creating a classroom.
+  useEffect(() => {
+    if (!filters) return
+
+    const scheduleClassroomIds = scheduleData.map(c => c.classroom_id)
+    const selectedClassroomIds = filters.selectedClassroomIds
+    const filteredClassroomIds = filteredData.map(c => c.classroom_id)
+
+    const availableNotSelected = availableClassroomIds.filter(
+      id => !selectedClassroomIds.includes(id)
+    )
+    const availableNotInSchedule = availableClassroomIds.filter(
+      id => !scheduleClassroomIds.includes(id)
+    )
+
+    console.log('[WeeklySchedulePage][ClassroomDebug] visibility snapshot', {
+      availableClassroomCount: availableClassroomIds.length,
+      selectedClassroomCount: selectedClassroomIds.length,
+      scheduleClassroomCount: scheduleClassroomIds.length,
+      filteredClassroomCount: filteredClassroomIds.length,
+      availableClassroomIds,
+      selectedClassroomIds,
+      scheduleClassroomIds,
+      filteredClassroomIds,
+      availableNotSelected,
+      availableNotInSchedule,
+    })
+  }, [availableClassroomIds, filters, filteredData, scheduleData])
 
   // Base data for chip counts: apply only day/time/classroom selections, but NOT displayMode.
   // This keeps chip counts stable and non-confusing when a displayMode is selected.
