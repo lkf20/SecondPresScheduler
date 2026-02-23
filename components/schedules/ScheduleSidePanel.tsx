@@ -110,7 +110,9 @@ interface ScheduleSidePanelProps {
   readOnly?: boolean
 }
 
-const mapAssignmentsToTeachers = (assignments?: WeeklyScheduleData['assignments']): Teacher[] => {
+export const mapAssignmentsToTeachers = (
+  assignments?: WeeklyScheduleData['assignments']
+): Teacher[] => {
   if (!assignments) return []
   const seen = new Set<string>()
   return assignments
@@ -136,12 +138,235 @@ const log = (...args: unknown[]) => {
   }
 }
 
-const formatFlexWeekdayList = (days: string[]) => {
+export const formatFlexWeekdayList = (days: string[]) => {
   if (days.length === 0) return ''
   const pluralized = days.map(day => (day.endsWith('s') ? day : `${day}s`))
   if (pluralized.length === 1) return pluralized[0]
   if (pluralized.length === 2) return `${pluralized[0]} and ${pluralized[1]}`
   return `${pluralized.slice(0, -1).join(', ')}, and ${pluralized[pluralized.length - 1]}`
+}
+
+export const buildFlexRemovalDialogCopy = ({
+  teacherName,
+  classroomName,
+  dayName,
+  context,
+}: {
+  teacherName: string
+  classroomName: string
+  dayName: string
+  context: FlexRemovalContext | null
+}) => {
+  const isSingleShift = (context?.matching_shift_count || 0) <= 1
+  const weekdayText = formatFlexWeekdayList(context?.weekdays || [])
+  const singleWeekday = context?.weekdays?.[0] || ''
+  const startLabel = context?.start_date
+    ? parseLocalDate(context.start_date).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      })
+    : 'selected start date'
+  const endLabel = context?.end_date
+    ? parseLocalDate(context.end_date).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      })
+    : 'selected end date'
+
+  let summary = `${teacherName} is assigned as flex staff to ${classroomName}.`
+  if (isSingleShift && startLabel === endLabel && singleWeekday) {
+    summary = `${teacherName} is assigned as flex staff to ${classroomName} on ${singleWeekday}, ${startLabel}.`
+  } else if (weekdayText) {
+    summary = `${teacherName} is assigned as flex staff to ${classroomName} on ${weekdayText} from ${startLabel} to ${endLabel}.`
+  }
+
+  return {
+    summary,
+    isSingleShift,
+    showPrompt: !isSingleShift,
+    showWeekdayOption: !isSingleShift && (context?.weekdays?.length || 0) > 1,
+    weekdayScopeLabel: `All ${dayName} shifts`,
+  }
+}
+
+export const calculateScheduledStaffCount = ({
+  readOnly,
+  assignments,
+  selectedTeacherCount,
+}: {
+  readOnly: boolean
+  assignments?: WeeklyScheduleData['assignments']
+  selectedTeacherCount: number
+}) => {
+  if (!readOnly) {
+    return selectedTeacherCount
+  }
+
+  const uniqueAssignmentKeys = new Set<string>()
+  ;(assignments || []).forEach(assignment => {
+    const key = assignment.id
+      ? `${assignment.id}`
+      : `${assignment.teacher_id}|${assignment.is_substitute ? 'sub' : 'staff'}|${
+          assignment.classroom_id
+        }`
+    uniqueAssignmentKeys.add(key)
+  })
+  return uniqueAssignmentKeys.size
+}
+
+export const buildStaffingSummary = ({
+  requiredTeachers,
+  preferredTeachers,
+  scheduledStaffCount,
+}: {
+  requiredTeachers?: number
+  preferredTeachers?: number
+  scheduledStaffCount: number
+}) => {
+  const required = requiredTeachers ?? null
+  const preferred = preferredTeachers ?? null
+  const scheduled = scheduledStaffCount
+
+  if (required !== null && scheduled < required) {
+    return {
+      status: 'below_required' as const,
+      label: `Below Required by ${required - scheduled}`,
+    }
+  }
+
+  if (preferred !== null && scheduled < preferred) {
+    return {
+      status: 'below_preferred' as const,
+      label: `Below Preferred by ${preferred - scheduled}`,
+    }
+  }
+
+  if (required !== null || preferred !== null) {
+    return {
+      status: 'adequate' as const,
+      label: 'On Target',
+    }
+  }
+
+  return {
+    status: null,
+    label: 'No staffing target',
+  }
+}
+
+export const formatTimeRange = (
+  timeSlotStartTime: string | null,
+  timeSlotEndTime: string | null
+) => (timeSlotStartTime && timeSlotEndTime ? `${timeSlotStartTime}–${timeSlotEndTime}` : '')
+
+export const calculateDayNameDate = (weekStartISO?: string, dayNumber?: number | null) => {
+  if (!weekStartISO) return ''
+  const base = parseLocalDate(weekStartISO)
+  const offset = dayNumber ? Math.max(0, dayNumber - 1) : 0
+  const target = new Date(base.getTime())
+  target.setDate(target.getDate() + offset)
+  const year = target.getFullYear()
+  const month = `${target.getMonth() + 1}`.padStart(2, '0')
+  const day = `${target.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export const formatDayNameDateLabel = (dayNameDate: string) => {
+  if (!dayNameDate) return ''
+  const date = parseLocalDate(dayNameDate)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+export const pickClassGroupForRatio = <
+  T extends { min_age: number | null; required_ratio: number; preferred_ratio: number | null },
+>(
+  classGroups: T[]
+) =>
+  classGroups.length > 0
+    ? classGroups.reduce((lowest, current) => {
+        const currentMinAge = current.min_age ?? Infinity
+        const lowestMinAge = lowest.min_age ?? Infinity
+        return currentMinAge < lowestMinAge ? current : lowest
+      })
+    : null
+
+export const calculateTeacherTargets = ({
+  classGroupForRatio,
+  enrollmentForCalculation,
+}: {
+  classGroupForRatio: { required_ratio: number; preferred_ratio: number | null } | null | undefined
+  enrollmentForCalculation: number | null
+}) => ({
+  requiredTeachers:
+    classGroupForRatio && enrollmentForCalculation
+      ? Math.ceil(enrollmentForCalculation / classGroupForRatio.required_ratio)
+      : undefined,
+  preferredTeachers:
+    classGroupForRatio && enrollmentForCalculation && classGroupForRatio.preferred_ratio
+      ? Math.ceil(enrollmentForCalculation / classGroupForRatio.preferred_ratio)
+      : undefined,
+})
+
+const compareByTeacherName = (a: { teacher_name: string }, b: { teacher_name: string }) =>
+  (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown')
+
+export const sortAbsencesByTeacherName = (
+  absences: NonNullable<SelectedCellData['absences']> = []
+) => [...absences].sort(compareByTeacherName)
+
+export const sortAssignmentsForPanel = (assignments: WeeklyScheduleData['assignments'] = []) => {
+  const permanentAssignments = assignments
+    .filter(
+      assignment => !assignment.is_substitute && !assignment.is_flexible && !assignment.is_floater
+    )
+    .sort(compareByTeacherName)
+
+  const flexAssignments = assignments
+    .filter(
+      assignment => !assignment.is_substitute && assignment.is_flexible && !assignment.is_floater
+    )
+    .sort(compareByTeacherName)
+
+  const floaterAssignments = assignments
+    .filter(assignment => !assignment.is_substitute && assignment.is_floater)
+    .sort(compareByTeacherName)
+
+  return {
+    permanentAssignments,
+    flexAssignments,
+    floaterAssignments,
+  }
+}
+
+export const buildFindSubLink = ({
+  absences,
+  assignments,
+}: {
+  absences?: SelectedCellData['absences']
+  assignments?: WeeklyScheduleData['assignments']
+}) => {
+  const absenceForCell =
+    absences?.find(
+      (absence: {
+        teacher_id: string
+        teacher_name: string
+        has_sub: boolean
+        is_partial: boolean
+        time_off_request_id?: string | null
+      }) => absence.time_off_request_id
+    ) ?? null
+
+  const primaryTeacher =
+    assignments?.find(assignment => !assignment.is_substitute && !assignment.is_flexible) ?? null
+
+  if (absenceForCell?.time_off_request_id) {
+    return `/sub-finder?absence_id=${absenceForCell.time_off_request_id}`
+  }
+  if (primaryTeacher?.teacher_id) {
+    return `/sub-finder?teacher_id=${primaryTeacher.teacher_id}`
+  }
+  return '/sub-finder'
 }
 
 export default function ScheduleSidePanel({
@@ -291,20 +516,13 @@ export default function ScheduleSidePanel({
   }, [classGroups])
 
   // Format time range for header
-  const timeRange =
-    timeSlotStartTime && timeSlotEndTime ? `${timeSlotStartTime}–${timeSlotEndTime}` : ''
+  const timeRange = formatTimeRange(timeSlotStartTime, timeSlotEndTime)
 
   const formatLocalDate = (date: Date) => {
     const year = date.getFullYear()
     const month = `${date.getMonth() + 1}`.padStart(2, '0')
     const day = `${date.getDate()}`.padStart(2, '0')
     return `${year}-${month}-${day}`
-  }
-
-  const addDays = (date: Date, days: number) => {
-    const next = new Date(date.getTime())
-    next.setDate(next.getDate() + days)
-    return next
   }
 
   const openTimeOffPanel = (teacherId: string, teacherName?: string | null) => {
@@ -343,24 +561,12 @@ export default function ScheduleSidePanel({
     setFlexApplyDayNames(new Set([dayName.toLowerCase()]))
   }, [panelMode, flexStartDate, dayName])
 
-  const dayNameDate = useMemo(() => {
-    if (!weekStartISO) return ''
-    const base = parseLocalDate(weekStartISO)
-    const dayNumber = selectedCellData?.day_number
-    const offset = dayNumber ? Math.max(0, dayNumber - 1) : 0
-    const target = addDays(base, offset)
-    const year = target.getFullYear()
-    const month = `${target.getMonth() + 1}`.padStart(2, '0')
-    const day = `${target.getDate()}`.padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }, [weekStartISO, selectedCellData?.day_number])
+  const dayNameDate = useMemo(
+    () => calculateDayNameDate(weekStartISO, selectedCellData?.day_number),
+    [weekStartISO, selectedCellData?.day_number]
+  )
 
-  const dayNameDateLabel = useMemo(() => {
-    if (!dayNameDate) return ''
-    const date = parseLocalDate(dayNameDate)
-    if (Number.isNaN(date.getTime())) return ''
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  }, [dayNameDate])
+  const dayNameDateLabel = useMemo(() => formatDayNameDateLabel(dayNameDate), [dayNameDate])
 
   const flexShiftOptions = useMemo(() => {
     if (!flexStartDate || !flexEndDate || flexTimeSlotIds.length === 0) return []
@@ -1754,54 +1960,20 @@ export default function ScheduleSidePanel({
   const enrollmentForCalculation = cell?.enrollment_for_staffing ?? enrollment
 
   // Find class group with lowest min_age for ratio calculation
-  const classGroupForRatio =
-    classGroups.length > 0
-      ? classGroups.reduce((lowest, current) => {
-          const currentMinAge = current.min_age ?? Infinity
-          const lowestMinAge = lowest.min_age ?? Infinity
-          return currentMinAge < lowestMinAge ? current : lowest
-        })
-      : null
+  const classGroupForRatio = pickClassGroupForRatio(classGroups)
 
   const flexAssignments =
     selectedCellData?.assignments?.filter(assignment => assignment.is_flexible) ?? []
-  const sortedAbsences = [...(selectedCellData?.absences ?? [])].sort((a, b) =>
-    (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown')
-  )
-  const sortedPermanentAssignments = [
-    ...(selectedCellData?.assignments?.filter(
-      assignment => !assignment.is_substitute && !assignment.is_flexible && !assignment.is_floater
-    ) ?? []),
-  ].sort((a, b) => (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown'))
-  const sortedFlexAssignments = [
-    ...(selectedCellData?.assignments?.filter(
-      assignment => !assignment.is_substitute && assignment.is_flexible && !assignment.is_floater
-    ) ?? []),
-  ].sort((a, b) => (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown'))
-  const sortedFloaterAssignments = [
-    ...(selectedCellData?.assignments?.filter(
-      assignment => !assignment.is_substitute && assignment.is_floater
-    ) ?? []),
-  ].sort((a, b) => (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown'))
-  const absenceForCell =
-    selectedCellData?.absences?.find(
-      (absence: {
-        teacher_id: string
-        teacher_name: string
-        has_sub: boolean
-        is_partial: boolean
-        time_off_request_id?: string | null
-      }) => absence.time_off_request_id
-    ) ?? null
-  const primaryTeacher =
-    selectedCellData?.assignments?.find(
-      assignment => !assignment.is_substitute && !assignment.is_flexible
-    ) ?? null
-  const findSubLink = absenceForCell?.time_off_request_id
-    ? `/sub-finder?absence_id=${absenceForCell.time_off_request_id}`
-    : primaryTeacher?.teacher_id
-      ? `/sub-finder?teacher_id=${primaryTeacher.teacher_id}`
-      : '/sub-finder'
+  const sortedAbsences = sortAbsencesByTeacherName(selectedCellData?.absences ?? [])
+  const {
+    permanentAssignments: sortedPermanentAssignments,
+    flexAssignments: sortedFlexAssignments,
+    floaterAssignments: sortedFloaterAssignments,
+  } = sortAssignmentsForPanel(selectedCellData?.assignments ?? [])
+  const findSubLink = buildFindSubLink({
+    absences: selectedCellData?.absences,
+    assignments: selectedCellData?.assignments,
+  })
 
   // Debug logging
   useEffect(() => {
@@ -1814,62 +1986,25 @@ export default function ScheduleSidePanel({
     )
   }, [classGroups, classGroupForRatio])
 
-  const requiredTeachers =
-    classGroupForRatio && enrollmentForCalculation
-      ? Math.ceil(enrollmentForCalculation / classGroupForRatio.required_ratio)
-      : undefined
-  const preferredTeachers =
-    classGroupForRatio && enrollmentForCalculation && classGroupForRatio.preferred_ratio
-      ? Math.ceil(enrollmentForCalculation / classGroupForRatio.preferred_ratio)
-      : undefined
+  const { requiredTeachers, preferredTeachers } = calculateTeacherTargets({
+    classGroupForRatio,
+    enrollmentForCalculation,
+  })
 
   const scheduledStaffCount = useMemo(() => {
-    if (readOnly) {
-      const assignments = selectedCellData?.assignments || []
-      const uniqueAssignmentKeys = new Set<string>()
-      assignments.forEach(assignment => {
-        const key = assignment.id
-          ? `${assignment.id}`
-          : `${assignment.teacher_id}|${assignment.is_substitute ? 'sub' : 'staff'}|${
-              assignment.classroom_id
-            }`
-        uniqueAssignmentKeys.add(key)
-      })
-      return uniqueAssignmentKeys.size
-    }
-    return selectedTeachers.length
+    return calculateScheduledStaffCount({
+      readOnly,
+      assignments: selectedCellData?.assignments,
+      selectedTeacherCount: selectedTeachers.length,
+    })
   }, [readOnly, selectedCellData?.assignments, selectedTeachers.length])
 
   const staffingSummary = useMemo(() => {
-    const required = requiredTeachers ?? null
-    const preferred = preferredTeachers ?? null
-    const scheduled = scheduledStaffCount
-
-    if (required !== null && scheduled < required) {
-      return {
-        status: 'below_required' as const,
-        label: `Below Required by ${required - scheduled}`,
-      }
-    }
-
-    if (preferred !== null && scheduled < preferred) {
-      return {
-        status: 'below_preferred' as const,
-        label: `Below Preferred by ${preferred - scheduled}`,
-      }
-    }
-
-    if (required !== null || preferred !== null) {
-      return {
-        status: 'adequate' as const,
-        label: 'On Target',
-      }
-    }
-
-    return {
-      status: null,
-      label: 'No staffing target',
-    }
+    return buildStaffingSummary({
+      requiredTeachers,
+      preferredTeachers,
+      scheduledStaffCount,
+    })
   }, [requiredTeachers, preferredTeachers, scheduledStaffCount])
 
   return (
@@ -3189,34 +3324,20 @@ export default function ScheduleSidePanel({
             <DialogDescription className="space-y-3">
               <p className="text-base text-slate-700">
                 {(() => {
-                  const teacherName = flexRemoveTarget?.teacher_name || 'this staff member'
-                  const isSingleShift = (flexRemoveContext?.matching_shift_count || 0) <= 1
-                  const weekdayText = formatFlexWeekdayList(flexRemoveContext?.weekdays || [])
-                  const singleWeekday = flexRemoveContext?.weekdays?.[0] || ''
-                  const startLabel = flexRemoveContext?.start_date
-                    ? parseLocalDate(flexRemoveContext.start_date).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })
-                    : 'selected start date'
-                  const endLabel = flexRemoveContext?.end_date
-                    ? parseLocalDate(flexRemoveContext.end_date).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })
-                    : 'selected end date'
-
-                  if (isSingleShift && startLabel === endLabel && singleWeekday) {
-                    return `${teacherName} is assigned as flex staff to ${classroomName} on ${singleWeekday}, ${startLabel}.`
-                  }
-
-                  if (weekdayText) {
-                    return `${teacherName} is assigned as flex staff to ${classroomName} on ${weekdayText} from ${startLabel} to ${endLabel}.`
-                  }
-                  return `${teacherName} is assigned as flex staff to ${classroomName}.`
+                  return buildFlexRemovalDialogCopy({
+                    teacherName: flexRemoveTarget?.teacher_name || 'this staff member',
+                    classroomName,
+                    dayName,
+                    context: flexRemoveContext,
+                  }).summary
                 })()}
               </p>
-              {(flexRemoveContext?.matching_shift_count || 0) > 1 && (
+              {buildFlexRemovalDialogCopy({
+                teacherName: flexRemoveTarget?.teacher_name || 'this staff member',
+                classroomName,
+                dayName,
+                context: flexRemoveContext,
+              }).showPrompt && (
                 <p>
                   {`Would you like to remove ${flexRemoveTarget?.teacher_name || 'this staff member'} from:`}
                 </p>
@@ -3228,10 +3349,14 @@ export default function ScheduleSidePanel({
           ) : (
             <>
               {(() => {
-                const isSingleShift = (flexRemoveContext?.matching_shift_count || 0) <= 1
-                const hasMultipleWeekdays = (flexRemoveContext?.weekdays?.length || 0) > 1
+                const removalCopy = buildFlexRemovalDialogCopy({
+                  teacherName: flexRemoveTarget?.teacher_name || 'this staff member',
+                  classroomName,
+                  dayName,
+                  context: flexRemoveContext,
+                })
 
-                if (isSingleShift) {
+                if (removalCopy.isSingleShift) {
                   return null
                 }
 
@@ -3245,10 +3370,10 @@ export default function ScheduleSidePanel({
                       <RadioGroupItem value="single_shift" id="flex-remove-single" />
                       This shift only
                     </label>
-                    {hasMultipleWeekdays && (
+                    {removalCopy.showWeekdayOption && (
                       <label className="flex items-center gap-2 text-sm">
                         <RadioGroupItem value="weekday" id="flex-remove-weekday" />
-                        All {dayName} shifts
+                        {removalCopy.weekdayScopeLabel}
                       </label>
                     )}
                     <label className="flex items-center gap-2 text-sm text-red-700">

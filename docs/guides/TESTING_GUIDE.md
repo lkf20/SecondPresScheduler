@@ -1,90 +1,152 @@
 # Testing Guide
 
-This document outlines the testing setup and best practices for the Preschool Scheduler application.
+This project uses a balanced test pyramid:
 
-## Setup
+- **Unit tests** for pure logic and utility behavior
+- **Integration tests** for API route behavior and data rules
+- **Component tests** for high-interaction UI behavior
+- **E2E tests** (Playwright) for critical user journeys
 
-The project uses **Jest** and **React Testing Library** for testing.
-
-### Running Tests
+## Quickstart
 
 ```bash
-# Run all tests
-npm test
+# Install dependencies
+npm ci
 
-# Run tests in watch mode
-npm run test:watch
+# Unit/integration/component tests
+npm run test
 
-# Run tests with coverage
+# Coverage output
 npm run test:coverage
+
+# E2E smoke
+npm run test:e2e:smoke
+
+# Full E2E suite
+npm run test:e2e
 ```
 
-## Test Structure
+## Local DB Test Harness (Supabase)
 
-Tests should be placed next to the files they test:
+Use local Supabase when running DB-backed integration suites.
 
-```
-lib/utils/
-  errors.ts
-  __tests__/
-    errors.test.ts
+```bash
+# Reset local DB (migrations only)
+npm run test:db:reset
 
-components/
-  shared/
-    ErrorMessage.tsx
-    __tests__/
-      ErrorMessage.test.tsx
+# Seed deterministic test fixtures
+npm run test:db:seed
 ```
 
-## Writing Tests
+Seed file:
 
-### Component Tests
+- `supabase/seed.test.sql`
 
-```typescript
-import { render, screen } from '@testing-library/react'
-import MyComponent from '../MyComponent'
+## Test Layer Conventions
 
-describe('MyComponent', () => {
-  it('should render correctly', () => {
-    render(<MyComponent />)
-    expect(screen.getByText('Hello')).toBeInTheDocument()
-  })
-})
+## Unit
+
+- Fast, deterministic, no network/DB
+- Table-driven edge cases preferred
+- Co-locate tests near implementation when possible
+
+## Integration
+
+- Validate route-level behavior and error contracts
+- Favor real query paths against local Supabase where practical
+- Mock only external dependencies that are not under test
+
+## Component
+
+- Use RTL + user-event
+- Assert visible behavior and user outcomes
+- Avoid implementation-detail assertions
+
+## E2E
+
+- Keep smoke suite small and stable
+- Use `@smoke` tags for PR-gated subset
+- Full suite runs nightly
+- Protected-flow smoke specs (Time Off/Sub Finder) require:
+  - `E2E_TEST_EMAIL`
+  - `E2E_TEST_PASSWORD`
+- If those credentials are not set, protected smoke specs are skipped and login smoke still runs
+
+## Scripts
+
+- `npm run test` - Jest suite
+- `npm run test:coverage` - Jest with coverage
+- `npm run test:coverage:phase1` - Phase 1 domain coverage gate
+- `npm run test:coverage:phase2` - Phase 2 scheduling coverage gate
+- `npm run test:coverage:phase3` - Phase 3 settings coverage gate
+- `npm run test:e2e` - Playwright full suite
+- `npm run test:e2e:smoke` - Playwright smoke suite
+- `npm run test:e2e:ui` - Playwright UI mode
+- `npm run test:e2e:headed` - Playwright headed mode
+- `npm run test:all` - Jest + E2E smoke
+- `npm run test:db:reset` - reset local Supabase test DB
+- `npm run test:db:seed` - seed local Supabase test DB
+
+## Coverage Gates (Progressive)
+
+Phase 1 coverage thresholds are configured in `jest.config.js` and can be enabled via:
+
+```bash
+ENFORCE_PHASE1_COVERAGE=true npm run test:coverage
 ```
 
-### Utility Function Tests
+Phase 1 targeted domains:
 
-```typescript
-import { myFunction } from '../myFunction'
+- `app/api/time-off/**`
+- `app/api/sub-finder/**`
+- `components/time-off/**`
+- `components/sub-finder/**`
 
-describe('myFunction', () => {
-  it('should return expected value', () => {
-    expect(myFunction('input')).toBe('expected output')
-  })
-})
+Thresholds:
+
+- statements/functions/lines: **70%**
+- branches: **60%**
+
+Phase 2 scheduling coverage thresholds are configured in `jest.config.js` and can be enabled via:
+
+```bash
+ENFORCE_PHASE2_COVERAGE=true npm run test:coverage
 ```
 
-## Best Practices
+Phase 2 targeted domains:
 
-1. **Test behavior, not implementation**: Focus on what the component/function does, not how
-2. **Use descriptive test names**: Test names should clearly describe what is being tested
-3. **Keep tests simple**: Each test should verify one thing
-4. **Use appropriate queries**: Prefer `getByRole`, `getByLabelText` over `getByTestId`
-5. **Test edge cases**: Include tests for error states, empty states, boundary conditions
+- `app/api/staffing-events/**`
+- `app/api/teacher-schedules/**`
+- `app/api/weekly-schedule/**`
 
-## Coverage Goals
+Thresholds:
 
-- **Start small**: Begin with critical utilities and shared components
-- **Build over time**: Add tests as you work on features
-- **Aim for 80%+**: Focus on high-value code paths
+- statements/functions/lines: **75%**
+- branches: **65%**
 
-## Example Tests
+Phase 3 settings coverage thresholds are configured in `jest.config.js` and can be enabled via:
 
-See the existing tests for examples:
+```bash
+ENFORCE_PHASE3_COVERAGE=true npm run test:coverage
+```
 
-- `lib/utils/__tests__/errors.test.ts` - Utility function tests
-- `components/shared/__tests__/ErrorMessage.test.tsx` - Component tests
+Phase 3 targeted domains:
 
----
+- `app/api/schedule-settings/**`
+- `app/api/days-of-week/**`
+- `app/api/timeslots/**`
+- `app/api/class-groups/**`
+- `app/api/classrooms/**`
+- `components/settings/**`
 
-_Last updated: January 2025_
+Thresholds:
+
+- statements/functions/lines: **70%**
+- branches: **60%**
+
+CI note:
+
+- GitHub Actions `jest` job enforces phase/domain gates with the matching `ENFORCE_PHASE*_COVERAGE` flags.
+- Post-Phase-3 policy:
+  - Phase 3 runs at global **75/65** (statements/functions/lines at 75, branches at 65).
+  - Phase 1 and Phase 2 remain at **70/60** targeted gates.
