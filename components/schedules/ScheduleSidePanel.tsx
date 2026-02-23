@@ -625,6 +625,7 @@ export default function ScheduleSidePanel({
       id: string
       name: string
       parent_class_id?: string | null
+      age_unit?: 'months' | 'years'
       min_age: number | null
       max_age: number | null
       required_ratio: number
@@ -635,6 +636,7 @@ export default function ScheduleSidePanel({
       id: cg.id,
       name: cg.name || '',
       parent_class_id: cg.parent_class_id ?? null,
+      age_unit: cg.age_unit ?? 'years',
       min_age: cg.min_age ?? null,
       max_age: cg.max_age ?? null,
       required_ratio: cg.required_ratio ?? 8,
@@ -1762,6 +1764,23 @@ export default function ScheduleSidePanel({
           return currentMinAge < lowestMinAge ? current : lowest
         })
       : null
+
+  const formatAgeRange = useCallback(
+    (group: { min_age: number | null; max_age: number | null; age_unit?: 'months' | 'years' }) => {
+      const unit = group.age_unit ?? 'years'
+      if (group.min_age !== null && group.max_age !== null) {
+        return `${group.min_age}–${group.max_age} ${unit}`
+      }
+      if (group.min_age !== null) {
+        return `${group.min_age}+ ${unit}`
+      }
+      if (group.max_age !== null) {
+        return `Up to ${group.max_age} ${unit}`
+      }
+      return 'Not specified'
+    },
+    []
+  )
 
   const flexAssignments =
     selectedCellData?.assignments?.filter(assignment => assignment.is_flexible) ?? []
@@ -2918,14 +2937,7 @@ export default function ScheduleSidePanel({
                           <div className="flex items-center gap-2">
                             <div className="text-muted-foreground">Age (lowest):</div>
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                              {classGroupForRatio.min_age !== null &&
-                              classGroupForRatio.max_age !== null
-                                ? `${classGroupForRatio.min_age}–${classGroupForRatio.max_age} years`
-                                : classGroupForRatio.min_age !== null
-                                  ? `${classGroupForRatio.min_age}+ years`
-                                  : classGroupForRatio.max_age !== null
-                                    ? `Up to ${classGroupForRatio.max_age} years`
-                                    : 'Not specified'}
+                              {formatAgeRange(classGroupForRatio)}
                             </span>
                           </div>
 

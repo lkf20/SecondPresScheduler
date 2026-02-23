@@ -30,6 +30,7 @@ export async function getClassGroupById(id: string) {
 
 export async function createClassGroup(classGroupData: {
   name: string
+  age_unit?: 'months' | 'years'
   parent_class_id?: string
   order?: number | null
   min_age?: number | null

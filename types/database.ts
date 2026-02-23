@@ -57,6 +57,7 @@ export type Database = {
       }
       class_groups: {
         Row: {
+          age_unit: 'months' | 'years'
           created_at: string | null
           diaper_changing_required: boolean | null
           id: string
@@ -74,6 +75,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          age_unit?: 'months' | 'years'
           created_at?: string | null
           diaper_changing_required?: boolean | null
           id?: string
@@ -91,6 +93,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          age_unit?: 'months' | 'years'
           created_at?: string | null
           diaper_changing_required?: boolean | null
           id?: string

@@ -170,6 +170,7 @@ export default function WeeklyScheduleGridNew({
       class_groups?: Array<{
         id: string
         name: string
+        age_unit: 'months' | 'years'
         min_age: number | null
         max_age: number | null
         required_ratio: number

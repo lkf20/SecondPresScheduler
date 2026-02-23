@@ -183,6 +183,7 @@ export interface WeeklyScheduleDataByClassroom {
         class_groups?: Array<{
           id: string
           name: string
+          age_unit: 'months' | 'years'
           min_age: number | null
           max_age: number | null
           required_ratio: number
@@ -465,7 +466,7 @@ export async function getScheduleSnapshotData({
         `
         *,
         schedule_cell_class_groups(
-          class_group:class_groups(id, name, min_age, max_age, required_ratio, preferred_ratio)
+          class_group:class_groups(id, name, age_unit, min_age, max_age, required_ratio, preferred_ratio)
         )
       `
       )
@@ -608,6 +609,7 @@ export async function getScheduleSnapshotData({
           class_groups?: Array<{
             id: string
             name: string
+            age_unit: 'months' | 'years'
             min_age: number | null
             max_age: number | null
             required_ratio: number

@@ -17,6 +17,7 @@ export interface ScheduleCellWithDetails extends ScheduleCell {
   class_groups?: Array<{
     id: string
     name: string
+    age_unit: 'months' | 'years'
     min_age: number | null
     max_age: number | null
     required_ratio: number
@@ -76,7 +77,7 @@ export async function getScheduleCell(
       day_of_week:days_of_week(id, name, day_number),
       time_slot:time_slots(id, code, name, default_start_time, default_end_time),
       schedule_cell_class_groups(
-        class_group:class_groups(id, name, min_age, max_age, required_ratio, preferred_ratio, is_active, order)
+        class_group:class_groups(id, name, age_unit, min_age, max_age, required_ratio, preferred_ratio, is_active, order)
       )
     `
     )
@@ -123,7 +124,7 @@ export async function getScheduleCells(
       day_of_week:days_of_week(id, name, day_number),
       time_slot:time_slots(id, code, name, default_start_time, default_end_time),
       schedule_cell_class_groups(
-        class_group:class_groups(id, name, min_age, max_age, required_ratio, preferred_ratio, is_active, order)
+        class_group:class_groups(id, name, age_unit, min_age, max_age, required_ratio, preferred_ratio, is_active, order)
       )
     `
     )

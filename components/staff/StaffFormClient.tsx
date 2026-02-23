@@ -8,7 +8,7 @@ import StaffEditorTabs from '@/components/staff/StaffEditorTabs'
 import StaffUnsavedChangesDialog from '@/components/staff/StaffUnsavedChangesDialog'
 import SubAvailabilitySection from '@/components/subs/SubAvailabilitySection'
 import SubPreferencesSection from '@/components/subs/SubPreferencesSection'
-import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Database } from '@/types/database'
 import type { DisplayNameFormat } from '@/lib/utils/staff-display-name'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
@@ -24,6 +24,7 @@ import {
 } from '@/lib/utils/invalidation'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface StaffFormClientProps {
   staff: Database['public']['Tables']['staff']['Row'] & {
@@ -31,13 +32,18 @@ interface StaffFormClientProps {
     role_type_codes?: string[]
   }
   defaultDisplayNameFormat?: DisplayNameFormat
+  showInactiveBaselineWarning?: boolean
 }
 
 type StaffRoleType = Database['public']['Tables']['staff_role_types']['Row']
 
 type RoleTypeLookup = Record<string, StaffRoleType>
 
-export default function StaffFormClient({ staff, defaultDisplayNameFormat }: StaffFormClientProps) {
+export default function StaffFormClient({
+  staff,
+  defaultDisplayNameFormat,
+  showInactiveBaselineWarning = false,
+}: StaffFormClientProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const schoolId = useSchool()
@@ -369,6 +375,14 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
             ? 'Available for scheduling and assignments.'
             : 'Cannot be scheduled or assigned. Past records are preserved.'}
         </p>
+        {!isActive && showInactiveBaselineWarning && (
+          <Alert className="mt-3 border-amber-200 bg-amber-50 text-amber-900">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              This staff member is marked as inactive but still appears in the baseline schedule.
+            </AlertDescription>
+          </Alert>
+        )}
       </div>
 
       {error && <ErrorMessage message={error} className="mb-6" />}

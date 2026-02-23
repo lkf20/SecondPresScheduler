@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input'
 import FormField from '@/components/shared/FormField'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import { Database } from '@/types/database'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { AlertTriangle } from 'lucide-react'
 
 type TimeSlot = Database['public']['Tables']['time_slots']['Row']
 
@@ -30,9 +32,15 @@ type TimeSlotFormData = z.infer<typeof timeslotSchema>
 
 interface TimeSlotFormClientProps {
   timeslot: TimeSlot
+  isInactive?: boolean
+  showInactiveBaselineWarning?: boolean
 }
 
-export default function TimeSlotFormClient({ timeslot }: TimeSlotFormClientProps) {
+export default function TimeSlotFormClient({
+  timeslot,
+  isInactive = false,
+  showInactiveBaselineWarning = false,
+}: TimeSlotFormClientProps) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
 
@@ -134,6 +142,14 @@ export default function TimeSlotFormClient({ timeslot }: TimeSlotFormClientProps
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">Edit Time Slot</h1>
         <p className="text-muted-foreground mt-2">{timeslot.name || timeslot.code}</p>
+        {isInactive && showInactiveBaselineWarning && (
+          <Alert className="mt-3 border-amber-200 bg-amber-50 text-amber-900">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              This time slot is marked as inactive but still appears in the baseline schedule.
+            </AlertDescription>
+          </Alert>
+        )}
       </div>
 
       {error && <ErrorMessage message={error} className="mb-6" />}

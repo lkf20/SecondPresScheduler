@@ -5,11 +5,12 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { ArrowLeft } from 'lucide-react'
+import { AlertTriangle, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import FormField from '@/components/shared/FormField'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import ClassSelector from '@/components/settings/ClassSelector'
@@ -42,6 +43,7 @@ type ClassroomFormData = z.infer<typeof classroomSchema>
 interface ClassroomFormProps {
   mode: 'create' | 'edit'
   classroom?: Classroom
+  showInactiveBaselineWarning?: boolean
 }
 
 type ClassroomFormSnapshot = {
@@ -54,7 +56,11 @@ type ClassroomFormSnapshot = {
 
 const normalizeAllowedClassIds = (ids: string[]) => [...ids].sort((a, b) => a.localeCompare(b))
 
-export default function ClassroomForm({ mode, classroom }: ClassroomFormProps) {
+export default function ClassroomForm({
+  mode,
+  classroom,
+  showInactiveBaselineWarning = false,
+}: ClassroomFormProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const schoolId = useSchool()
@@ -358,9 +364,17 @@ export default function ClassroomForm({ mode, classroom }: ClassroomFormProps) {
         </div>
         <p className="text-muted-foreground mt-2">
           {isActive
-            ? 'Active items will appear in schedules and dropdowns.'
-            : 'Inactive items will not appear in dropdowns but historical data is preserved.'}
+            ? 'Active classrooms will appear in schedules and dropdowns.'
+            : 'Inactive classrooms will not appear in dropdowns but historical data is preserved.'}
         </p>
+        {!isActive && showInactiveBaselineWarning && (
+          <Alert className="mt-3 border-amber-200 bg-amber-50 text-amber-900">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              This classroom is marked as inactive but still appears in the baseline schedule.
+            </AlertDescription>
+          </Alert>
+        )}
       </div>
 
       {error && <ErrorMessage message={error} className="mb-6" />}
