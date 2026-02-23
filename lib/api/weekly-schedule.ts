@@ -363,6 +363,7 @@ export async function getScheduleSnapshotData({
     .from('time_slots')
     .select('*')
     .eq('school_id', schoolId)
+    .eq('is_active', true)
     .order('display_order', { ascending: true })
 
   if (timeSlotsError) {

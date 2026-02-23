@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   DndContext,
@@ -27,9 +27,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { GripVertical } from 'lucide-react'
+import { ArrowDown, ArrowUp, GripVertical } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Database } from '@/types/database'
+import { useQueryClient } from '@tanstack/react-query'
+import { useSchool } from '@/lib/contexts/SchoolContext'
+import {
+  invalidateDailySchedule,
+  invalidateDashboard,
+  invalidateSubFinderAbsences,
+  invalidateTimeOffRequests,
+  invalidateWeeklySchedule,
+} from '@/lib/utils/invalidation'
 
 type TimeSlot = Database['public']['Tables']['time_slots']['Row']
 
@@ -52,6 +61,19 @@ const formatTime12Hour = (time24: string | null | undefined): string => {
   }
 }
 
+const timeToMinutes = (time24: string | null | undefined): number => {
+  if (!time24) return Number.MAX_SAFE_INTEGER
+  try {
+    const [hours, minutes] = time24.split(':')
+    const hour24 = Number.parseInt(hours, 10)
+    const mins = Number.parseInt(minutes || '0', 10)
+    if (Number.isNaN(hour24) || Number.isNaN(mins)) return Number.MAX_SAFE_INTEGER
+    return hour24 * 60 + mins
+  } catch {
+    return Number.MAX_SAFE_INTEGER
+  }
+}
+
 function SortableRow({ timeSlot }: { timeSlot: TimeSlot }) {
   const router = useRouter()
   const isActive = timeSlot.is_active !== false
@@ -68,7 +90,7 @@ function SortableRow({ timeSlot }: { timeSlot: TimeSlot }) {
         opacity: isDragging ? 0.5 : 1,
       }}
       className={cn(
-        'cursor-pointer transition-colors hover:bg-slate-50',
+        'cursor-default transition-colors hover:bg-slate-50',
         isDragging && 'bg-muted hover:bg-muted'
       )}
       onClick={event => {
@@ -90,7 +112,8 @@ function SortableRow({ timeSlot }: { timeSlot: TimeSlot }) {
           {...listeners}
           type="button"
           onClick={event => event.stopPropagation()}
-          className="cursor-grab active:cursor-grabbing rounded p-1 hover:bg-accent"
+          className="touch-none cursor-grab active:cursor-grabbing rounded p-1 hover:bg-accent"
+          style={{ cursor: 'grab' }}
           aria-label={`Reorder ${timeSlot.name || timeSlot.code}`}
         >
           <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -119,9 +142,12 @@ export default function SortableTimeSlotsTable({
   timeSlots: initialTimeSlots,
 }: SortableTimeSlotsTableProps) {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const schoolId = useSchool()
   const [timeSlots, setTimeSlots] = useState(initialTimeSlots)
   const [isSaving, setIsSaving] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
+  const [startTimeSort, setStartTimeSort] = useState<'asc' | 'desc' | null>(null)
 
   useEffect(() => {
     setIsMounted(true)
@@ -130,6 +156,17 @@ export default function SortableTimeSlotsTable({
   useEffect(() => {
     setTimeSlots(initialTimeSlots)
   }, [initialTimeSlots])
+
+  const displayedTimeSlots = useMemo(() => {
+    if (!startTimeSort) return timeSlots
+    const sorted = [...timeSlots].sort((a, b) => {
+      const aMinutes = timeToMinutes(a.default_start_time)
+      const bMinutes = timeToMinutes(b.default_start_time)
+      if (aMinutes !== bMinutes) return aMinutes - bMinutes
+      return a.code.localeCompare(b.code)
+    })
+    return startTimeSort === 'asc' ? sorted : sorted.reverse()
+  }, [timeSlots, startTimeSort])
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -142,15 +179,18 @@ export default function SortableTimeSlotsTable({
     const { active, over } = event
     if (!over || active.id === over.id) return
 
-    const oldIndex = timeSlots.findIndex(slot => slot.id === active.id)
-    const newIndex = timeSlots.findIndex(slot => slot.id === over.id)
+    const oldIndex = displayedTimeSlots.findIndex(slot => slot.id === active.id)
+    const newIndex = displayedTimeSlots.findIndex(slot => slot.id === over.id)
     if (oldIndex < 0 || newIndex < 0) return
 
-    const reordered = arrayMove(timeSlots, oldIndex, newIndex).map((slot, index) => ({
+    const reordered = arrayMove(displayedTimeSlots, oldIndex, newIndex).map((slot, index) => ({
       ...slot,
       display_order: index + 1,
     }))
     setTimeSlots(reordered)
+    if (startTimeSort !== null) {
+      setStartTimeSort(null)
+    }
 
     setIsSaving(true)
     try {
@@ -168,6 +208,18 @@ export default function SortableTimeSlotsTable({
             })
           )
         )
+        await Promise.all([
+          invalidateWeeklySchedule(queryClient, schoolId),
+          invalidateDailySchedule(queryClient, schoolId),
+          invalidateDashboard(queryClient, schoolId),
+          invalidateTimeOffRequests(queryClient, schoolId),
+          invalidateSubFinderAbsences(queryClient, schoolId),
+          queryClient.invalidateQueries({ queryKey: ['filterOptions', schoolId] }),
+          queryClient.invalidateQueries({ queryKey: ['filterOptions'] }),
+          queryClient.invalidateQueries({ queryKey: ['dailySchedule'] }),
+          queryClient.invalidateQueries({ queryKey: ['weeklySchedule'] }),
+          queryClient.invalidateQueries({ queryKey: ['scheduleSettings'] }),
+        ])
       }
     } catch (error) {
       console.error('Failed to save time slot order:', error)
@@ -193,13 +245,31 @@ export default function SortableTimeSlotsTable({
                   <TableHead className="w-10"></TableHead>
                   <TableHead>Code</TableHead>
                   <TableHead>Name</TableHead>
-                  <TableHead>Start Time</TableHead>
+                  <TableHead>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 text-left hover:text-slate-900"
+                      onClick={() =>
+                        setStartTimeSort(current => {
+                          if (current === null) return 'asc'
+                          return current === 'asc' ? 'desc' : 'asc'
+                        })
+                      }
+                    >
+                      Start Time
+                      {startTimeSort === null || startTimeSort === 'asc' ? (
+                        <ArrowUp className="h-3.5 w-3.5 text-slate-500" />
+                      ) : (
+                        <ArrowDown className="h-3.5 w-3.5 text-slate-500" />
+                      )}
+                    </button>
+                  </TableHead>
                   <TableHead>End Time</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {timeSlots.length === 0 ? (
+                {displayedTimeSlots.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-base text-muted-foreground">
                       No time slots found
@@ -207,10 +277,10 @@ export default function SortableTimeSlotsTable({
                   </TableRow>
                 ) : (
                   <SortableContext
-                    items={timeSlots.map(slot => slot.id)}
+                    items={displayedTimeSlots.map(slot => slot.id)}
                     strategy={verticalListSortingStrategy}
                   >
-                    {timeSlots.map(slot => (
+                    {displayedTimeSlots.map(slot => (
                       <SortableRow key={slot.id} timeSlot={slot} />
                     ))}
                   </SortableContext>
@@ -227,20 +297,38 @@ export default function SortableTimeSlotsTable({
                 <TableHead className="w-10"></TableHead>
                 <TableHead>Code</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Start Time</TableHead>
+                <TableHead>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-left hover:text-slate-900"
+                    onClick={() => {
+                      setStartTimeSort(current => {
+                        if (current === null) return 'asc'
+                        return current === 'asc' ? 'desc' : 'asc'
+                      })
+                    }}
+                  >
+                    Start Time
+                    {startTimeSort === null || startTimeSort === 'asc' ? (
+                      <ArrowUp className="h-3.5 w-3.5 text-slate-500" />
+                    ) : (
+                      <ArrowDown className="h-3.5 w-3.5 text-slate-500" />
+                    )}
+                  </button>
+                </TableHead>
                 <TableHead>End Time</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {timeSlots.length === 0 ? (
+              {displayedTimeSlots.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-base text-muted-foreground">
                     No time slots found
                   </TableCell>
                 </TableRow>
               ) : (
-                timeSlots.map(slot => {
+                displayedTimeSlots.map(slot => {
                   const isActive = slot.is_active !== false
                   return (
                     <TableRow

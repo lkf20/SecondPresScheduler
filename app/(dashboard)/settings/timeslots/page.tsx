@@ -151,7 +151,7 @@ export default function TimeSlotsPage() {
       {error && <ErrorMessage message={error} className="mb-6" />}
 
       <div className="mb-8 rounded-lg border bg-white p-6">
-        <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="mb-4">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-semibold">Days</h2>
             {hasUnsavedDayChanges && (
@@ -171,13 +171,23 @@ export default function TimeSlotsPage() {
               </>
             )}
           </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Select days included in staffing schedule. Only selected days will appear in the weekly
+            schedule.
+          </p>
         </div>
         <DaySelector selectedDayIds={selectedDayIds} onSelectionChange={setSelectedDayIds} />
       </div>
 
       <div className="mb-6">
         <div className="mb-4 flex items-center justify-between gap-4">
-          <h2 className="text-xl font-semibold">Time Slots</h2>
+          <div>
+            <h2 className="text-xl font-semibold">Time Slots</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Define time slots for scheduling staff. These time slots will appear in the weekly
+              schedule across all days and classrooms.
+            </p>
+          </div>
           <div className="flex items-center gap-2">
             <Switch
               id="show-inactive-timeslots"
