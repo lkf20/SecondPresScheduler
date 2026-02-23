@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { getTimeSlotById } from '@/lib/api/timeslots'
-import TimeSlotFormClient from './TimeSlotFormClient'
+import TimeSlotForm from '@/components/settings/TimeSlotForm'
 import { isTimeSlotUsedInBaselineSchedule } from '@/lib/api/baseline-usage'
 
 export default async function TimeSlotDetailPage(props: { params: Promise<{ id: string }> }) {
@@ -13,8 +13,7 @@ export default async function TimeSlotDetailPage(props: { params: Promise<{ id: 
     notFound()
   }
 
-  const timeSlotWithInactive = timeslot as typeof timeslot & { is_active?: boolean | null }
-  const isInactive = timeSlotWithInactive.is_active === false
+  const isInactive = timeslot.is_active === false
   const showInactiveBaselineWarning = isInactive
     ? await isTimeSlotUsedInBaselineSchedule(timeslot.id, {
         schoolId: timeslot.school_id ?? undefined,
@@ -22,9 +21,9 @@ export default async function TimeSlotDetailPage(props: { params: Promise<{ id: 
     : false
 
   return (
-    <TimeSlotFormClient
-      timeslot={timeslot}
-      isInactive={isInactive}
+    <TimeSlotForm
+      mode="edit"
+      timeSlot={timeslot}
       showInactiveBaselineWarning={showInactiveBaselineWarning}
     />
   )

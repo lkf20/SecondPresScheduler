@@ -1515,6 +1515,7 @@ export type Database = {
           default_start_time: string | null
           display_order: number | null
           id: string
+          is_active: boolean
           name: string | null
           school_id: string
         }
@@ -1525,6 +1526,7 @@ export type Database = {
           default_start_time?: string | null
           display_order?: number | null
           id?: string
+          is_active?: boolean
           name?: string | null
           school_id: string
         }
@@ -1535,6 +1537,7 @@ export type Database = {
           default_start_time?: string | null
           display_order?: number | null
           id?: string
+          is_active?: boolean
           name?: string | null
           school_id?: string
         }

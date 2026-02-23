@@ -1,0 +1,290 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { GripVertical } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Database } from '@/types/database'
+
+type TimeSlot = Database['public']['Tables']['time_slots']['Row']
+
+interface SortableTimeSlotsTableProps {
+  timeSlots: TimeSlot[]
+}
+
+const formatTime12Hour = (time24: string | null | undefined): string => {
+  if (!time24) return '—'
+  try {
+    const [hours, minutes] = time24.split(':')
+    const hour24 = Number.parseInt(hours, 10)
+    if (Number.isNaN(hour24)) return time24
+    const mins = minutes || '00'
+    const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24
+    const ampm = hour24 >= 12 ? 'PM' : 'AM'
+    return `${hour12}:${mins} ${ampm}`
+  } catch {
+    return time24
+  }
+}
+
+function SortableRow({ timeSlot }: { timeSlot: TimeSlot }) {
+  const router = useRouter()
+  const isActive = timeSlot.is_active !== false
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: timeSlot.id,
+  })
+
+  return (
+    <TableRow
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+      }}
+      className={cn(
+        'cursor-pointer transition-colors hover:bg-slate-50',
+        isDragging && 'bg-muted hover:bg-muted'
+      )}
+      onClick={event => {
+        const target = event.target as HTMLElement
+        if (target.closest('button, a, input, textarea, select, [role="switch"]')) return
+        router.push(`/settings/timeslots/${timeSlot.id}`)
+      }}
+      onKeyDown={event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          router.push(`/settings/timeslots/${timeSlot.id}`)
+        }
+      }}
+      tabIndex={0}
+    >
+      <TableCell className="w-10 text-base">
+        <button
+          {...attributes}
+          {...listeners}
+          type="button"
+          onClick={event => event.stopPropagation()}
+          className="cursor-grab active:cursor-grabbing rounded p-1 hover:bg-accent"
+          aria-label={`Reorder ${timeSlot.name || timeSlot.code}`}
+        >
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
+        </button>
+      </TableCell>
+      <TableCell className="text-base font-medium">{timeSlot.code}</TableCell>
+      <TableCell className="text-base">{timeSlot.name || '—'}</TableCell>
+      <TableCell className="text-base">{formatTime12Hour(timeSlot.default_start_time)}</TableCell>
+      <TableCell className="text-base">{formatTime12Hour(timeSlot.default_end_time)}</TableCell>
+      <TableCell>
+        <span
+          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${
+            isActive
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              : 'border-slate-200 bg-slate-100 text-slate-600'
+          }`}
+        >
+          {isActive ? 'Active' : 'Inactive'}
+        </span>
+      </TableCell>
+    </TableRow>
+  )
+}
+
+export default function SortableTimeSlotsTable({
+  timeSlots: initialTimeSlots,
+}: SortableTimeSlotsTableProps) {
+  const router = useRouter()
+  const [timeSlots, setTimeSlots] = useState(initialTimeSlots)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  useEffect(() => {
+    setTimeSlots(initialTimeSlots)
+  }, [initialTimeSlots])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const oldIndex = timeSlots.findIndex(slot => slot.id === active.id)
+    const newIndex = timeSlots.findIndex(slot => slot.id === over.id)
+    if (oldIndex < 0 || newIndex < 0) return
+
+    const reordered = arrayMove(timeSlots, oldIndex, newIndex).map((slot, index) => ({
+      ...slot,
+      display_order: index + 1,
+    }))
+    setTimeSlots(reordered)
+
+    setIsSaving(true)
+    try {
+      const changed = reordered.filter(slot => {
+        const original = initialTimeSlots.find(s => s.id === slot.id)
+        return original?.display_order !== slot.display_order
+      })
+      if (changed.length > 0) {
+        await Promise.all(
+          changed.map(slot =>
+            fetch(`/api/timeslots/${slot.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ display_order: slot.display_order }),
+            })
+          )
+        )
+      }
+    } catch (error) {
+      console.error('Failed to save time slot order:', error)
+      setTimeSlots(initialTimeSlots)
+      alert('Failed to save time slot order. Please try again.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-4 flex-wrap">
+        {isSaving && <span className="text-sm text-muted-foreground">Saving...</span>}
+      </div>
+
+      {isMounted ? (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <div className="rounded-md border bg-white">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10"></TableHead>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Start Time</TableHead>
+                  <TableHead>End Time</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {timeSlots.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-base text-muted-foreground">
+                      No time slots found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  <SortableContext
+                    items={timeSlots.map(slot => slot.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {timeSlots.map(slot => (
+                      <SortableRow key={slot.id} timeSlot={slot} />
+                    ))}
+                  </SortableContext>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </DndContext>
+      ) : (
+        <div className="rounded-md border bg-white">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-10"></TableHead>
+                <TableHead>Code</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Start Time</TableHead>
+                <TableHead>End Time</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {timeSlots.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-base text-muted-foreground">
+                    No time slots found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                timeSlots.map(slot => {
+                  const isActive = slot.is_active !== false
+                  return (
+                    <TableRow
+                      key={slot.id}
+                      className="cursor-pointer transition-colors hover:bg-slate-50"
+                      onClick={event => {
+                        const target = event.target as HTMLElement
+                        if (target.closest('button, a, input, textarea, select, [role="switch"]'))
+                          return
+                        router.push(`/settings/timeslots/${slot.id}`)
+                      }}
+                    >
+                      <TableCell className="w-10 text-base">
+                        <div className="rounded p-1">
+                          <GripVertical className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-base font-medium">{slot.code}</TableCell>
+                      <TableCell className="text-base">{slot.name || '—'}</TableCell>
+                      <TableCell className="text-base">
+                        {formatTime12Hour(slot.default_start_time)}
+                      </TableCell>
+                      <TableCell className="text-base">
+                        {formatTime12Hour(slot.default_end_time)}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${
+                            isActive
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                              : 'border-slate-200 bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  )
+}
