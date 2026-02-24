@@ -14,6 +14,22 @@ export async function getTimeSlots(schoolId?: string) {
     query = query.eq('school_id', effectiveSchoolId)
   }
 
+  query = query.eq('is_active', true)
+
+  const { data, error } = await query
+  if (error) throw error
+  return data as TimeSlot[]
+}
+
+export async function getTimeSlotsWithInactive(schoolId?: string) {
+  const supabase = await createClient()
+  let query = supabase.from('time_slots').select('*').order('display_order', { ascending: true })
+
+  const effectiveSchoolId = schoolId || (await getUserSchoolId())
+  if (effectiveSchoolId) {
+    query = query.eq('school_id', effectiveSchoolId)
+  }
+
   const { data, error } = await query
   if (error) throw error
   return data as TimeSlot[]
@@ -40,6 +56,7 @@ export async function createTimeSlot(timeslot: {
   default_start_time?: string
   default_end_time?: string
   display_order?: number
+  is_active?: boolean
   school_id?: string
 }) {
   const supabase = await createClient()
@@ -52,7 +69,7 @@ export async function createTimeSlot(timeslot: {
 
   const { data, error } = await supabase
     .from('time_slots')
-    .insert({ ...timeslot, school_id: schoolId })
+    .insert({ ...timeslot, school_id: schoolId, is_active: timeslot.is_active ?? true })
     .select()
     .single()
 
@@ -77,14 +94,14 @@ export async function updateTimeSlot(id: string, updates: Partial<TimeSlot>, sch
 
 export async function deleteTimeSlot(id: string, schoolId?: string) {
   const supabase = await createClient()
-  let query = supabase.from('time_slots').delete().eq('id', id)
+  let query = supabase.from('time_slots').update({ is_active: false }).eq('id', id)
 
   const effectiveSchoolId = schoolId || (await getUserSchoolId())
   if (effectiveSchoolId) {
     query = query.eq('school_id', effectiveSchoolId)
   }
 
-  const { error } = await query
+  const { error } = await query.select().single()
 
   if (error) throw error
 }

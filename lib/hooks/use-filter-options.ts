@@ -17,8 +17,8 @@ interface FilterOptions {
 async function fetchFilterOptions(): Promise<FilterOptions> {
   const [daysRes, timeSlotsRes, classroomsRes] = await Promise.all([
     fetch('/api/days-of-week'),
-    fetch('/api/timeslots'),
-    fetch('/api/classrooms'),
+    fetch('/api/timeslots?includeInactive=true'),
+    fetch('/api/classrooms?includeInactive=true'),
   ])
 
   if (!daysRes.ok || !timeSlotsRes.ok || !classroomsRes.ok) {
@@ -44,7 +44,10 @@ export function useFilterOptions() {
   return useQuery({
     queryKey: ['filterOptions', schoolId],
     queryFn: fetchFilterOptions,
-    staleTime: 600000, // 10 minutes - these rarely change
-    refetchOnWindowFocus: false,
+    // Keep this query fresh because classrooms/time slots can be edited from Settings,
+    // then users navigate straight into schedule views expecting immediate updates.
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   })
 }

@@ -8,7 +8,7 @@ import StaffEditorTabs from '@/components/staff/StaffEditorTabs'
 import StaffUnsavedChangesDialog from '@/components/staff/StaffUnsavedChangesDialog'
 import SubAvailabilitySection from '@/components/subs/SubAvailabilitySection'
 import SubPreferencesSection from '@/components/subs/SubPreferencesSection'
-import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Database } from '@/types/database'
 import type { DisplayNameFormat } from '@/lib/utils/staff-display-name'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
@@ -24,6 +24,7 @@ import {
 } from '@/lib/utils/invalidation'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface StaffFormClientProps {
   staff: Database['public']['Tables']['staff']['Row'] & {
@@ -31,13 +32,18 @@ interface StaffFormClientProps {
     role_type_codes?: string[]
   }
   defaultDisplayNameFormat?: DisplayNameFormat
+  showInactiveBaselineWarning?: boolean
 }
 
 type StaffRoleType = Database['public']['Tables']['staff_role_types']['Row']
 
 type RoleTypeLookup = Record<string, StaffRoleType>
 
-export default function StaffFormClient({ staff, defaultDisplayNameFormat }: StaffFormClientProps) {
+export default function StaffFormClient({
+  staff,
+  defaultDisplayNameFormat,
+  showInactiveBaselineWarning = false,
+}: StaffFormClientProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const schoolId = useSchool()
@@ -271,7 +277,11 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
       setSavedIsActive(isActive)
       setIsOverviewDirty(false)
       router.refresh()
-      toast.success('Staff updated.')
+      const staffNameForToast =
+        data.display_name?.trim() ||
+        [data.first_name?.trim(), data.last_name?.trim()].filter(Boolean).join(' ') ||
+        'Staff member'
+      toast.success(`${staffNameForToast} has been updated.`)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to update staff')
     }
@@ -350,14 +360,14 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <Label htmlFor="active-toggle" className="font-normal cursor-pointer">
+              {isActive ? 'Active' : 'Inactive'}
+            </Label>
             <Switch
               id="active-toggle"
               checked={isActive}
               onCheckedChange={checked => setIsActive(checked === true)}
             />
-            <Label htmlFor="active-toggle" className="font-normal cursor-pointer">
-              {isActive ? 'Active' : 'Inactive'}
-            </Label>
           </div>
         </div>
         <p className="text-sm text-muted-foreground mt-2">
@@ -365,6 +375,14 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
             ? 'Available for scheduling and assignments.'
             : 'Cannot be scheduled or assigned. Past records are preserved.'}
         </p>
+        {!isActive && showInactiveBaselineWarning && (
+          <Alert className="mt-3 border-amber-200 bg-amber-50 text-amber-900">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              This staff member is marked as inactive but still appears in the baseline schedule.
+            </AlertDescription>
+          </Alert>
+        )}
       </div>
 
       {error && <ErrorMessage message={error} className="mb-6" />}
@@ -378,6 +396,7 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
           dirty: overviewHasUnsavedChanges,
           actionLabel: 'Save',
           actionFormId: `staff-overview-form-${staff.id}`,
+          cardClassName: 'max-w-2xl',
           content: (
             <div className="max-w-2xl">
               <StaffForm
@@ -389,6 +408,7 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
                 draftCacheKey={`staff-form:${staff.id}`}
                 onDirtyChange={setIsOverviewDirty}
                 formId={`staff-overview-form-${staff.id}`}
+                externalDirty={isActive !== savedIsActive}
               />
             </div>
           ),
@@ -412,6 +432,7 @@ export default function StaffFormClient({ staff, defaultDisplayNameFormat }: Sta
           dirty: isPreferencesDirty,
           actionLabel: 'Save',
           onAction: () => setPreferencesSaveSignal(v => v + 1),
+          cardClassName: 'max-w-2xl',
           content: (
             <SubPreferencesSection
               subId={staff.id}

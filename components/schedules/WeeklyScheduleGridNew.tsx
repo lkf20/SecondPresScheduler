@@ -6,6 +6,11 @@ import ScheduleCell from './ScheduleCell'
 import ScheduleSidePanel from './ScheduleSidePanel'
 import type { WeeklyScheduleData, WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
+import { isSlotEffectivelyInactive } from '@/lib/utils/schedule-slot-activity'
+import {
+  SCHEDULE_INACTIVE_CARD_CLASS,
+  SCHEDULE_INACTIVE_LEGEND_DOT_CLASS,
+} from '@/lib/ui/schedule-inactive-tokens'
 
 interface WeeklyScheduleGridNewProps {
   data: WeeklyScheduleDataByClassroom[]
@@ -53,6 +58,7 @@ interface WeeklyScheduleGridNewProps {
 }
 
 type WeeklyScheduleCellData = WeeklyScheduleData & {
+  time_slot_is_active?: boolean
   schedule_cell: WeeklyScheduleDataByClassroom['days'][number]['time_slots'][number]['schedule_cell']
   absences?: Array<{
     teacher_id: string
@@ -81,8 +87,10 @@ export function generateDaysXClassroomsGridTemplate(
   days: Array<{ id: string; name: string; number: number }>,
   timeSlots: Array<{ id: string; code: string }>
 ): { columns: string; rows: string } {
-  // Columns: Combined Day/Time (120px) + Classrooms (minmax(230px, 1fr) each) - matches Classrooms x Days
-  const columns = `120px repeat(${classroomCount}, minmax(230px, 1fr))`
+  // Columns: Combined Day/Time (120px) + fixed classroom columns.
+  // Keep columns fixed so selecting fewer classrooms makes the grid narrower
+  // instead of stretching each column.
+  const columns = `120px repeat(${classroomCount}, 240px)`
 
   // Rows: Header (auto) + (Spacer row + Day header + time slots for each day)
   // For the first day: no spacer, just day header + time slots
@@ -110,8 +118,9 @@ export function generateClassroomsXDaysGridTemplate(
   timeSlotCount: number
 ): { columns: string; rows: string } {
   // Columns: Classroom (110px - reduced to fit "Kindergarten" while saving space) + (Day columns: each day has timeSlotCount columns)
-  // Column width: 220px card + 10px left margin + 10px right margin = 220px + 20px = 240px minimum, using 230px for tighter spacing
-  const dayColumns = Array(dayCount).fill(`repeat(${timeSlotCount}, minmax(230px, 1fr))`).join(' ')
+  // Column width: 220px card + 10px left margin + 10px right margin = 240px.
+  // Keep columns fixed so grid width reflects number of selected filters.
+  const dayColumns = Array(dayCount).fill(`repeat(${timeSlotCount}, 240px)`).join(' ')
   const columns = `110px ${dayColumns}`
 
   // Rows: 2 header rows + 1 row per classroom
@@ -120,6 +129,68 @@ export function generateClassroomsXDaysGridTemplate(
   return { columns, rows }
 }
 
+function ScheduleLegend({ showLegendSubstitutes }: { showLegendSubstitutes: boolean }) {
+  return (
+    <div className="mb-6 p-3 bg-gray-100 rounded-md border border-gray-200">
+      <div className="flex flex-wrap items-center gap-4 text-sm">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-gray-700">Key:</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300"
+            style={{ borderColor: '#93c5fd' }}
+          >
+            Teacher
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-500 border-dashed"
+            style={{ borderColor: '#3b82f6' }}
+          >
+            Flex Teacher
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-300 border-dashed">
+            Floater
+          </span>
+        </div>
+        {showLegendSubstitutes && (
+          <>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200">
+                Substitute
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+                Absent
+              </span>
+            </div>
+          </>
+        )}
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 text-green-600" />
+          <span className="text-gray-600">Meets preferred</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+          <span className="text-gray-600">Below preferred</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <XCircle className="h-4 w-4 text-red-600" />
+          <span className="text-gray-600">Below required</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={SCHEDULE_INACTIVE_LEGEND_DOT_CLASS} />
+          <span className="text-gray-600">Inactive</span>
+        </div>
+      </div>
+    </div>
+  )
+}
 export function calculateAssignmentCounts(data: WeeklyScheduleDataByClassroom[]) {
   let allCount = 0
   let permanentCount = 0
@@ -204,6 +275,7 @@ export function extractDaysAndTimeSlots(
       display_order: number | null
       default_start_time: string | null
       default_end_time: string | null
+      is_active: boolean
     }
   >()
 
@@ -231,6 +303,7 @@ export function extractDaysAndTimeSlots(
             display_order: slot.time_slot_display_order,
             default_start_time: null,
             default_end_time: null,
+            is_active: slot.time_slot_is_active !== false,
           })
         }
       })
@@ -316,6 +389,8 @@ export function buildSelectedCellSnapshot(
     assignments: timeSlot.assignments,
     schedule_cell: timeSlot.schedule_cell || null,
     absences: timeSlot.absences,
+    time_slot_is_active: timeSlot.time_slot_is_active,
+    classroom_is_active: classroom.classroom_is_active,
   }
 }
 
@@ -366,6 +441,7 @@ export default function WeeklyScheduleGridNew({
       class_groups?: Array<{
         id: string
         name: string
+        age_unit: 'months' | 'years'
         min_age: number | null
         max_age: number | null
         required_ratio: number
@@ -379,6 +455,8 @@ export default function WeeklyScheduleGridNew({
       is_partial: boolean
       time_off_request_id?: string
     }>
+    time_slot_is_active?: boolean
+    classroom_is_active?: boolean
   }>()
   const { setActivePanel, previousPanel, restorePreviousPanel, registerPanelCloseHandler } =
     usePanelManager()
@@ -541,7 +619,13 @@ export default function WeeklyScheduleGridNew({
     // Reorganize: day → timeSlot → classrooms
     const result: Array<{
       day: { id: string; name: string; number: number }
-      timeSlot: { id: string; code: string; name: string | null; display_order: number | null }
+      timeSlot: {
+        id: string
+        code: string
+        name: string | null
+        display_order: number | null
+        is_active: boolean
+      }
       classrooms: Array<{
         classroomId: string
         classroomName: string
@@ -570,6 +654,7 @@ export default function WeeklyScheduleGridNew({
                 time_slot_code: timeSlot.code,
                 time_slot_name: timeSlot.name,
                 time_slot_display_order: timeSlot.display_order,
+                time_slot_is_active: timeSlotData.time_slot_is_active,
                 assignments: timeSlotData.assignments,
                 schedule_cell: timeSlotData.schedule_cell || null,
                 absences: timeSlotData.absences,
@@ -610,60 +695,7 @@ export default function WeeklyScheduleGridNew({
     return (
       <>
         {/* Legend */}
-        <div className="mb-6 p-3 bg-gray-100 rounded-md border border-gray-200">
-          <div className="flex flex-wrap items-center gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-gray-700">Key:</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span
-                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300"
-                style={{ borderColor: '#93c5fd' }}
-              >
-                Teacher
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span
-                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-500 border-dashed"
-                style={{ borderColor: '#3b82f6' }}
-              >
-                Flex Teacher
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-300 border-dashed">
-                Floater
-              </span>
-            </div>
-            {showLegendSubstitutes && (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200">
-                    Substitute
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
-                    Absent
-                  </span>
-                </div>
-              </>
-            )}
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <span className="text-gray-600">Meets preferred</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-yellow-600" />
-              <span className="text-gray-600">Below preferred</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <XCircle className="h-4 w-4 text-red-600" />
-              <span className="text-gray-600">Below required</span>
-            </div>
-          </div>
-        </div>
+        <ScheduleLegend showLegendSubstitutes={showLegendSubstitutes} />
         {/* Filter chips - separate row below legend */}
         {showFilterChips && (
           <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -745,12 +777,17 @@ export default function WeeklyScheduleGridNew({
                   }}
                 >
                   <div
-                    className="text-sm font-semibold"
+                    className="inline-flex items-center justify-center gap-1.5 text-sm font-semibold"
                     style={{
                       color: classroomColor || '#1f2937',
                     }}
                   >
-                    {classroom.classroom_name}
+                    <span>{classroom.classroom_name}</span>
+                    {!classroom.classroom_is_active && (
+                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium leading-none text-slate-600">
+                        Inactive
+                      </span>
+                    )}
                   </div>
                 </div>
               )
@@ -858,16 +895,27 @@ export default function WeeklyScheduleGridNew({
                             boxShadow: '2px 0 8px -2px rgba(0, 0, 0, 0.1)',
                           }}
                         >
-                          <span className="inline-flex items-center px-4 py-2.5 rounded-full bg-gray-100 text-gray-700 text-sm font-medium">
-                            {timeSlot.code}
-                          </span>
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="inline-flex items-center px-4 py-2.5 rounded-full bg-gray-100 text-gray-700 text-sm font-medium">
+                              {timeSlot.code}
+                            </span>
+                            {!timeSlot.is_active && (
+                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium leading-none text-slate-600">
+                                Inactive
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Classroom Cells */}
                         {item.classrooms.map((classroom, classroomIndex) => {
-                          const isInactive =
-                            classroom.cellData?.schedule_cell &&
-                            !classroom.cellData.schedule_cell.is_active
+                          const isInactive = isSlotEffectivelyInactive({
+                            schedule_cell: classroom.cellData?.schedule_cell,
+                            classroom_is_active: data.find(
+                              c => c.classroom_id === classroom.classroomId
+                            )?.classroom_is_active,
+                            time_slot_is_active: classroom.cellData?.time_slot_is_active,
+                          })
                           const classroomColor =
                             data.find(c => c.classroom_id === classroom.classroomId)
                               ?.classroom_color || undefined
@@ -889,7 +937,7 @@ export default function WeeklyScheduleGridNew({
                                   allowCardClick
                                     ? 'hover:shadow-md cursor-pointer'
                                     : 'cursor-default'
-                                } ${isInactive ? 'opacity-60 bg-gray-50' : ''}`}
+                                } ${isInactive ? SCHEDULE_INACTIVE_CARD_CLASS : ''}`}
                                 style={{
                                   width: '220px',
                                   minWidth: '220px',
@@ -957,60 +1005,7 @@ export default function WeeklyScheduleGridNew({
     return (
       <div className="space-y-4">
         {/* Legend */}
-        <div className="mb-6 p-3 bg-gray-100 rounded-md border border-gray-200">
-          <div className="flex flex-wrap items-center gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-gray-700">Key:</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span
-                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300"
-                style={{ borderColor: '#93c5fd' }}
-              >
-                Teacher
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span
-                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-500 border-dashed"
-                style={{ borderColor: '#3b82f6' }}
-              >
-                Flex Teacher
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-300 border-dashed">
-                Floater
-              </span>
-            </div>
-            {showLegendSubstitutes && (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200">
-                    Substitute
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
-                    Absent
-                  </span>
-                </div>
-              </>
-            )}
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <span className="text-gray-600">Meets preferred</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-yellow-600" />
-              <span className="text-gray-600">Below preferred</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <XCircle className="h-4 w-4 text-red-600" />
-              <span className="text-gray-600">Below required</span>
-            </div>
-          </div>
-        </div>
+        <ScheduleLegend showLegendSubstitutes={showLegendSubstitutes} />
         {/* Filter chips - separate row below legend */}
         {showFilterChips && (
           <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -1059,9 +1054,8 @@ export default function WeeklyScheduleGridNew({
               {
                 gridTemplateColumns: classroomsXDaysGrid.columns,
                 gridTemplateRows: classroomsXDaysGrid.rows,
-                width: '100%', // Constrain to parent width
-                maxWidth: '100%', // Ensure it doesn't exceed parent
-                minWidth: 0, // Allow grid to shrink below content size, enabling internal scrolling
+                width: 'fit-content',
+                minWidth: 'fit-content',
                 // CSS custom properties for header heights and column widths
                 '--header-row-1-height': 'calc(0.5rem + 1.5rem + 0.125rem)', // Day header: pt-2 + text-base line-height + pb-0.5
                 '--header-row-2-height': 'calc(0.5rem + 1.5rem + 0.75rem)', // Time slot header: pt-2 + chip height ~1.5rem + pb-3
@@ -1128,9 +1122,16 @@ export default function WeeklyScheduleGridNew({
                     left: 'var(--classroom-column-width)', // Stop at right edge of classroom column
                   }}
                 >
-                  <span className="inline-flex items-center px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
-                    {slot.code}
-                  </span>
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span className="inline-flex items-center px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
+                      {slot.code}
+                    </span>
+                    {!slot.is_active && (
+                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium leading-none text-slate-600">
+                        Inactive
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))
             )}
@@ -1164,37 +1165,46 @@ export default function WeeklyScheduleGridNew({
                         color: classroom.classroom_color || '#1f2937',
                       }}
                     >
-                      {(() => {
-                        const name = classroom.classroom_name
-                        const roomIndex = name.indexOf(' Room')
-                        if (roomIndex > 0) {
-                          // Split before "Room" - e.g., "Toddler A Room" -> "Toddler A<br>Room"
-                          const beforeRoom = name.substring(0, roomIndex)
-                          const room = name.substring(roomIndex + 1) // +1 to skip the space
-                          return (
-                            <>
-                              {beforeRoom}
-                              <br />
-                              {room}
-                            </>
-                          )
-                        }
-                        // If no " Room" found, split on last space as fallback
-                        const lastSpaceIndex = name.lastIndexOf(' ')
-                        if (lastSpaceIndex > 0) {
-                          const firstPart = name.substring(0, lastSpaceIndex)
-                          const secondPart = name.substring(lastSpaceIndex + 1)
-                          return (
-                            <>
-                              {firstPart}
-                              <br />
-                              {secondPart}
-                            </>
-                          )
-                        }
-                        // If no space found, return as-is
-                        return name
-                      })()}
+                      <div className="inline-flex flex-col items-center gap-1">
+                        <span>
+                          {(() => {
+                            const name = classroom.classroom_name
+                            const roomIndex = name.indexOf(' Room')
+                            if (roomIndex > 0) {
+                              // Split before "Room" - e.g., "Toddler A Room" -> "Toddler A<br>Room"
+                              const beforeRoom = name.substring(0, roomIndex)
+                              const room = name.substring(roomIndex + 1) // +1 to skip the space
+                              return (
+                                <>
+                                  {beforeRoom}
+                                  <br />
+                                  {room}
+                                </>
+                              )
+                            }
+                            // If no " Room" found, split on last space as fallback
+                            const lastSpaceIndex = name.lastIndexOf(' ')
+                            if (lastSpaceIndex > 0) {
+                              const firstPart = name.substring(0, lastSpaceIndex)
+                              const secondPart = name.substring(lastSpaceIndex + 1)
+                              return (
+                                <>
+                                  {firstPart}
+                                  <br />
+                                  {secondPart}
+                                </>
+                              )
+                            }
+                            // If no space found, return as-is
+                            return name
+                          })()}
+                        </span>
+                        {!classroom.classroom_is_active && (
+                          <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium leading-none text-slate-600">
+                            Inactive
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -1216,14 +1226,18 @@ export default function WeeklyScheduleGridNew({
                             time_slot_code: slot.code,
                             time_slot_name: slot.name,
                             time_slot_display_order: slot.display_order,
+                            time_slot_is_active: timeSlotData.time_slot_is_active,
                             assignments: timeSlotData.assignments,
                             schedule_cell: timeSlotData.schedule_cell || null,
                             absences: timeSlotData.absences,
                           }
                         : undefined
 
-                      const isInactive =
-                        cellData?.schedule_cell && !cellData.schedule_cell.is_active
+                      const isInactive = isSlotEffectivelyInactive({
+                        schedule_cell: cellData?.schedule_cell,
+                        classroom_is_active: classroom.classroom_is_active,
+                        time_slot_is_active: timeSlotData?.time_slot_is_active,
+                      })
                       const colIndex = dayIndex * timeSlots.length + slotIndex + 2
 
                       return (
@@ -1253,7 +1267,7 @@ export default function WeeklyScheduleGridNew({
                           <div
                             className={`rounded-lg border border-gray-200 bg-white shadow-sm transition-all duration-200 ${
                               allowCardClick ? 'hover:shadow-md cursor-pointer' : 'cursor-default'
-                            } ${isInactive ? 'opacity-60 bg-gray-50' : ''}`}
+                            } ${isInactive ? SCHEDULE_INACTIVE_CARD_CLASS : ''}`}
                             style={{
                               width: '220px',
                               minWidth: '220px',

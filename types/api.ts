@@ -16,6 +16,7 @@ export interface ClassGroup {
   id: string
   name: string
   parent_class_id: string | null
+  age_unit: 'months' | 'years'
   min_age: number | null
   max_age: number | null
   required_ratio: number

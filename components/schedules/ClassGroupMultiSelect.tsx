@@ -5,6 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { X, Plus } from 'lucide-react'
 import {
   Dialog,
@@ -38,18 +39,19 @@ export default function ClassGroupMultiSelect({
   disabled = false,
   existingClassGroups = [],
 }: ClassGroupMultiSelectProps) {
-  const [activeClassGroups, setActiveClassGroups] = useState<ClassGroup[]>([])
+  const [classGroups, setClassGroups] = useState<ClassGroup[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  const [showInactive, setShowInactive] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(selectedClassGroupIds))
   const searchInputRef = useRef<HTMLInputElement>(null)
 
-  // Fetch active class groups for the dropdown
+  // Fetch all class groups once; picker can then toggle inactive visibility.
   useEffect(() => {
-    fetch('/api/class-groups')
+    fetch('/api/class-groups?includeInactive=true')
       .then(r => r.json())
       .then(data => {
-        setActiveClassGroups(data)
+        setClassGroups(data)
       })
       .catch(console.error)
   }, [])
@@ -64,8 +66,8 @@ export default function ClassGroupMultiSelect({
       existingMap.set(cg.id, cg)
     })
 
-    // Add active class groups from API (will overwrite if duplicate, but that's fine)
-    activeClassGroups.forEach(cg => {
+    // Add class groups from API (will overwrite if duplicate, but that's fine)
+    classGroups.forEach(cg => {
       existingMap.set(cg.id, cg)
     })
 
@@ -76,15 +78,18 @@ export default function ClassGroupMultiSelect({
       if (orderA !== orderB) return orderA - orderB
       return a.name.localeCompare(b.name)
     })
-  }, [existingClassGroups, activeClassGroups])
+  }, [existingClassGroups, classGroups])
 
   // Sync selectedIds with prop changes
   useEffect(() => {
     setSelectedIds(new Set(selectedClassGroupIds))
   }, [selectedClassGroupIds])
 
-  // Filter class groups for dropdown (only show active ones, preserve order)
-  const filteredClassGroups = activeClassGroups.filter(cg => {
+  // Filter class groups for dropdown, preserving order from API.
+  const filteredClassGroups = classGroups.filter(cg => {
+    if (!showInactive && cg.is_active === false) {
+      return false
+    }
     // Filter by allowed IDs if provided
     if (allowedClassGroupIds && allowedClassGroupIds.length > 0) {
       if (!allowedClassGroupIds.includes(cg.id)) return false
@@ -137,11 +142,11 @@ export default function ClassGroupMultiSelect({
               variant={isInactive ? 'outline' : 'secondary'}
               className={cn(
                 'flex items-center gap-1 px-3 py-1 text-sm',
-                isInactive && 'border-destructive/50 text-muted-foreground'
+                isInactive && 'border-slate-200 bg-slate-50 text-slate-500'
               )}
             >
               {cg.name}
-              {isInactive && <span className="ml-1 text-xs text-destructive">(Inactive)</span>}
+              {isInactive && <span className="ml-1 text-xs text-slate-500">(Inactive)</span>}
               {!disabled && (
                 <button
                   type="button"
@@ -188,6 +193,24 @@ export default function ClassGroupMultiSelect({
               className="mb-3"
             />
 
+            <div className="mb-3 flex items-center gap-2">
+              <Switch
+                id="show-inactive-class-groups"
+                checked={showInactive}
+                onCheckedChange={setShowInactive}
+              />
+              <Label
+                htmlFor="show-inactive-class-groups"
+                className="cursor-pointer text-sm font-normal"
+              >
+                Show inactive
+              </Label>
+            </div>
+            <p className="mb-3 text-xs text-slate-500">
+              Inactive class groups are shown for reference and can be removed, but cannot be newly
+              selected.
+            </p>
+
             {/* Select All / Clear All buttons */}
             <div className="flex gap-2 mb-3">
               <Button
@@ -232,17 +255,36 @@ export default function ClassGroupMultiSelect({
                 <div className="p-2 space-y-1">
                   {filteredClassGroups.map(cg => {
                     const isSelected = selectedIds.has(cg.id)
+                    const isInactive = cg.is_active === false
+                    const disableNewInactiveSelection = isInactive && !isSelected
                     return (
                       <div
                         key={cg.id}
-                        className="flex items-center space-x-2 p-2 hover:bg-accent rounded cursor-pointer"
-                        onClick={() => handleToggle(cg.id, !isSelected)}
+                        className={cn(
+                          'flex items-center space-x-2 rounded p-2',
+                          disableNewInactiveSelection
+                            ? 'cursor-not-allowed opacity-60'
+                            : 'cursor-pointer hover:bg-accent'
+                        )}
+                        onClick={() => {
+                          if (disableNewInactiveSelection) return
+                          handleToggle(cg.id, !isSelected)
+                        }}
                       >
                         <Checkbox
                           checked={isSelected}
+                          disabled={disableNewInactiveSelection}
                           onCheckedChange={checked => handleToggle(cg.id, checked === true)}
                         />
-                        <Label className="cursor-pointer flex-1">{cg.name}</Label>
+                        <Label
+                          className={cn(
+                            'flex-1',
+                            disableNewInactiveSelection ? 'cursor-not-allowed' : 'cursor-pointer'
+                          )}
+                        >
+                          {cg.name}
+                          {isInactive ? ' (Inactive)' : ''}
+                        </Label>
                       </div>
                     )
                   })}

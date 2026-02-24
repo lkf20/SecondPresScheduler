@@ -8,11 +8,13 @@ import FilterPanel, { type FilterState } from '@/components/schedules/FilterPane
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
 import { Button } from '@/components/ui/button'
-import { Filter } from 'lucide-react'
+import { ArrowLeft, Filter } from 'lucide-react'
+import Link from 'next/link'
 import { useWeeklySchedule } from '@/lib/hooks/use-weekly-schedule'
 import { useScheduleSettings } from '@/lib/hooks/use-schedule-settings'
 import { useFilterOptions } from '@/lib/hooks/use-filter-options'
 import { invalidateWeeklySchedule } from '@/lib/utils/invalidation'
+import { isSlotInactive } from '@/lib/utils/schedule-slot-activity'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 
 // Calculate Monday of current week as ISO string for query key
@@ -59,6 +61,10 @@ export default function BaselineSchedulePage() {
     () => filterOptions?.classrooms || [],
     [filterOptions?.classrooms]
   )
+  const availableClassroomIds = useMemo(
+    () => availableClassrooms.map(c => c.id),
+    [availableClassrooms]
+  )
 
   const loading = isLoadingSchedule || isLoadingSettings || isLoadingFilters
   const error = scheduleError
@@ -68,6 +74,8 @@ export default function BaselineSchedulePage() {
     : null
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
+  const prevAvailableClassroomIdsRef = useRef<string[] | null>(null)
+  const previousAvailableClassroomsStorageKey = 'baseline-schedule-available-classroom-ids'
   const [filters, setFilters] = useState<FilterState | null>(() => {
     // Load filters from localStorage on mount (using separate key for baseline schedule)
     if (typeof window !== 'undefined') {
@@ -169,6 +177,30 @@ export default function BaselineSchedulePage() {
     availableClassrooms.length,
   ])
 
+  // Normalize selected classroom IDs against current available classrooms.
+  // This repairs stale localStorage selections (e.g., deleted classroom IDs lingering)
+  // that can otherwise hide newly added classrooms.
+  useEffect(() => {
+    if (!filters || availableClassroomIds.length === 0) return
+
+    const availableSet = new Set(availableClassroomIds)
+    const validSelected = filters.selectedClassroomIds.filter(id => availableSet.has(id))
+    const hadInvalidIds = validSelected.length !== filters.selectedClassroomIds.length
+    if (!hadInvalidIds) return
+
+    const nextSelected =
+      filters.selectedClassroomIds.length >= availableClassroomIds.length
+        ? availableClassroomIds
+        : validSelected
+
+    const isSame =
+      nextSelected.length === filters.selectedClassroomIds.length &&
+      nextSelected.every(id => filters.selectedClassroomIds.includes(id))
+    if (isSame) return
+
+    setFilters(prev => (prev ? { ...prev, selectedClassroomIds: nextSelected } : prev))
+  }, [availableClassroomIds, filters])
+
   // Save filters to localStorage whenever they change (using separate key for baseline schedule)
   useEffect(() => {
     if (filters && typeof window !== 'undefined') {
@@ -179,6 +211,66 @@ export default function BaselineSchedulePage() {
       }
     }
   }, [filters])
+
+  // If new classrooms appear and user previously had all currently-available classrooms selected,
+  // auto-include newly added classroom IDs so they immediately appear.
+  useEffect(() => {
+    if (!filters) return
+    if (availableClassroomIds.length === 0) {
+      return
+    }
+
+    let previousAvailableIds = prevAvailableClassroomIdsRef.current
+    if (!previousAvailableIds && typeof window !== 'undefined') {
+      try {
+        const stored = window.localStorage.getItem(previousAvailableClassroomsStorageKey)
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed)) {
+            previousAvailableIds = parsed.filter((id): id is string => typeof id === 'string')
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing previous available classrooms:', e)
+      }
+    }
+    if (!previousAvailableIds) {
+      previousAvailableIds = availableClassroomIds
+    }
+
+    const previousAvailableSet = new Set(previousAvailableIds)
+    const selectedSet = new Set(filters.selectedClassroomIds)
+
+    const hadAllPreviouslyAvailableSelected =
+      previousAvailableIds.length > 0 && previousAvailableIds.every(id => selectedSet.has(id))
+
+    const newlyAddedIds = availableClassroomIds.filter(id => !previousAvailableSet.has(id))
+
+    if (hadAllPreviouslyAvailableSelected && newlyAddedIds.length > 0) {
+      setFilters(prev => {
+        if (!prev) return prev
+        const prevSelectedSet = new Set(prev.selectedClassroomIds)
+        const stillMissing = newlyAddedIds.filter(id => !prevSelectedSet.has(id))
+        if (stillMissing.length === 0) return prev
+        return {
+          ...prev,
+          selectedClassroomIds: [...prev.selectedClassroomIds, ...stillMissing],
+        }
+      })
+    }
+
+    prevAvailableClassroomIdsRef.current = availableClassroomIds
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(
+          previousAvailableClassroomsStorageKey,
+          JSON.stringify(availableClassroomIds)
+        )
+      } catch (e) {
+        console.error('Error saving previous available classrooms:', e)
+      }
+    }
+  }, [availableClassroomIds, filters?.selectedClassroomIds])
 
   // Handle refresh - invalidate React Query cache
   const handleRefresh = () => {
@@ -198,7 +290,11 @@ export default function BaselineSchedulePage() {
     if (!filters) return scheduleData
 
     return scheduleData
-      .filter(classroom => filters.selectedClassroomIds.includes(classroom.classroom_id))
+      .filter(
+        classroom =>
+          filters.selectedClassroomIds.includes(classroom.classroom_id) &&
+          (filters.displayFilters.inactive || classroom.classroom_is_active !== false)
+      )
       .map(classroom => ({
         ...classroom,
         days: classroom.days
@@ -208,11 +304,14 @@ export default function BaselineSchedulePage() {
             time_slots: day.time_slots
               .filter(slot => filters.selectedTimeSlotIds.includes(slot.time_slot_id))
               .filter(slot => {
-                const scheduleCell = slot.schedule_cell
-                if (!scheduleCell) return filters.displayFilters.inactive
+                if (!filters.displayFilters.inactive && slot.time_slot_is_active === false) {
+                  return false
+                }
 
-                const isInactive = !scheduleCell.is_active
-                if (isInactive) return filters.displayFilters.inactive
+                if (isSlotInactive(slot)) return filters.displayFilters.inactive
+
+                const scheduleCell = slot.schedule_cell
+                if (!scheduleCell) return false
 
                 // Calculate staffing status
                 if (
@@ -298,6 +397,15 @@ export default function BaselineSchedulePage() {
 
   return (
     <div>
+      <div className="mb-4">
+        <Link
+          href="/settings"
+          className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Settings
+        </Link>
+      </div>
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Baseline Schedule</h1>
@@ -305,14 +413,6 @@ export default function BaselineSchedulePage() {
             Manage staffing by classroom, day, and time slot
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => setFilterPanelOpen(true)}
-          className="flex items-center gap-2"
-        >
-          <Filter className="h-4 w-4" />
-          Views & Filters
-        </Button>
       </div>
 
       {error && <ErrorMessage message={error} className="mb-6" />}
@@ -321,7 +421,15 @@ export default function BaselineSchedulePage() {
         <LoadingSpinner />
       ) : (
         <>
-          <div className="mb-4">
+          <div className="mb-4 flex items-center gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setFilterPanelOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <Filter className="h-4 w-4" />
+              Views & Filters
+            </Button>
             <p className="text-sm text-muted-foreground italic">
               Showing {slotCounts.shown} of {slotCounts.total} slots
             </p>

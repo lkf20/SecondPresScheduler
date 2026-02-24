@@ -22,6 +22,80 @@ function normalizeTeacherSchedule<T extends Record<string, unknown>>(row: T): T 
   return row
 }
 
+async function assertActiveTeachers(
+  teacherIds: string[],
+  schoolId: string,
+  messagePrefix: string
+): Promise<void> {
+  if (teacherIds.length === 0) return
+  const uniqueIds = [...new Set(teacherIds)]
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('staff')
+    .select('id, school_id, active')
+    .in('id', uniqueIds)
+
+  if (error) throw error
+
+  const rowById = new Map((data || []).map(row => [row.id, row]))
+  for (const teacherId of uniqueIds) {
+    const row = rowById.get(teacherId)
+    if (!row || row.school_id !== schoolId || row.active === false) {
+      throw new Error(
+        `${messagePrefix}: staff member is inactive, missing, or out of school scope.`
+      )
+    }
+  }
+}
+
+async function assertActiveClassrooms(
+  classroomIds: string[],
+  schoolId: string,
+  messagePrefix: string
+): Promise<void> {
+  if (classroomIds.length === 0) return
+  const uniqueIds = [...new Set(classroomIds)]
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('classrooms')
+    .select('id, school_id, is_active')
+    .in('id', uniqueIds)
+
+  if (error) throw error
+
+  const rowById = new Map((data || []).map(row => [row.id, row]))
+  for (const classroomId of uniqueIds) {
+    const row = rowById.get(classroomId)
+    if (!row || row.school_id !== schoolId || row.is_active === false) {
+      throw new Error(`${messagePrefix}: classroom is inactive, missing, or out of school scope.`)
+    }
+  }
+}
+
+async function assertActiveTimeSlots(
+  timeSlotIds: string[],
+  schoolId: string,
+  messagePrefix: string
+): Promise<void> {
+  if (timeSlotIds.length === 0) return
+  const uniqueIds = [...new Set(timeSlotIds)]
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('time_slots')
+    .select('id, school_id, is_active')
+    .in('id', uniqueIds)
+
+  if (error) throw error
+
+  const rowById = new Map((data || []).map(row => [row.id, row]))
+  for (const timeSlotId of uniqueIds) {
+    const row = rowById.get(timeSlotId)
+    if (!row || row.school_id !== schoolId || row.is_active === false) {
+      throw new Error(`${messagePrefix}: time slot is inactive, missing, or out of school scope.`)
+    }
+  }
+}
+
 export async function getTeacherSchedules(
   teacherId: string,
   schoolId?: string
@@ -57,6 +131,10 @@ export async function createTeacherSchedule(schedule: {
   if (!schoolId) {
     throw new Error('school_id is required to create a teacher schedule')
   }
+
+  await assertActiveTeachers([schedule.teacher_id], schoolId, 'Cannot create teacher schedule')
+  await assertActiveClassrooms([schedule.classroom_id], schoolId, 'Cannot create teacher schedule')
+  await assertActiveTimeSlots([schedule.time_slot_id], schoolId, 'Cannot create teacher schedule')
 
   const insertData = {
     teacher_id: schedule.teacher_id,
@@ -119,13 +197,38 @@ export async function updateTeacherSchedule(
   schoolId?: string
 ): Promise<TeacherSchedule | null> {
   const supabase = await createClient()
+  const effectiveSchoolId = schoolId || (await getUserSchoolId())
+  if (!effectiveSchoolId) {
+    throw new Error('school_id is required to update teacher schedule')
+  }
+
+  if (updates.teacher_id) {
+    await assertActiveTeachers(
+      [updates.teacher_id],
+      effectiveSchoolId,
+      'Cannot update teacher schedule'
+    )
+  }
+  if (updates.classroom_id) {
+    await assertActiveClassrooms(
+      [updates.classroom_id],
+      effectiveSchoolId,
+      'Cannot update teacher schedule'
+    )
+  }
+  if (updates.time_slot_id) {
+    await assertActiveTimeSlots(
+      [updates.time_slot_id],
+      effectiveSchoolId,
+      'Cannot update teacher schedule'
+    )
+  }
+
   const updateData: Record<string, unknown> = {
     ...updates,
   }
 
   let query = supabase.from('teacher_schedules').update(updateData).eq('id', id)
-
-  const effectiveSchoolId = schoolId || (await getUserSchoolId())
   if (effectiveSchoolId) {
     query = query.eq('school_id', effectiveSchoolId)
   }
@@ -183,6 +286,18 @@ export async function bulkCreateTeacherSchedules(
   if (!effectiveSchoolId) {
     throw new Error('school_id is required to create teacher schedules')
   }
+
+  await assertActiveTeachers([teacherId], effectiveSchoolId, 'Cannot create teacher schedules')
+  await assertActiveClassrooms(
+    schedules.map(schedule => schedule.classroom_id),
+    effectiveSchoolId,
+    'Cannot create teacher schedules'
+  )
+  await assertActiveTimeSlots(
+    schedules.map(schedule => schedule.time_slot_id),
+    effectiveSchoolId,
+    'Cannot create teacher schedules'
+  )
 
   const scheduleData = schedules.map(schedule => ({
     teacher_id: teacherId,

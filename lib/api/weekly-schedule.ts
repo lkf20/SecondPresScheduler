@@ -200,6 +200,7 @@ export interface WeeklyScheduleDataByClassroom {
   classroom_id: string
   classroom_name: string
   classroom_color: string | null
+  classroom_is_active: boolean
   days: Array<{
     day_of_week_id: string
     day_name: string
@@ -211,6 +212,7 @@ export interface WeeklyScheduleDataByClassroom {
       time_slot_display_order: number | null
       time_slot_start_time: string | null
       time_slot_end_time: string | null
+      time_slot_is_active: boolean
       assignments: WeeklyScheduleData['assignments']
       absences?: Array<{
         teacher_id: string
@@ -230,6 +232,8 @@ export interface WeeklyScheduleDataByClassroom {
         class_groups?: Array<{
           id: string
           name: string
+          is_active?: boolean
+          age_unit: 'months' | 'years'
           min_age: number | null
           max_age: number | null
           required_ratio: number
@@ -428,7 +432,6 @@ export async function getScheduleSnapshotData({
     .from('classrooms')
     .select('*')
     .eq('school_id', schoolId)
-    .eq('is_active', true)
     .order('order', { ascending: true, nullsFirst: false })
     .order('name', { ascending: true })
 
@@ -512,7 +515,7 @@ export async function getScheduleSnapshotData({
         `
         *,
         schedule_cell_class_groups(
-          class_group:class_groups(id, name, min_age, max_age, required_ratio, preferred_ratio)
+          class_group:class_groups(id, name, is_active, age_unit, min_age, max_age, required_ratio, preferred_ratio)
         )
       `
       )
@@ -636,6 +639,7 @@ export async function getScheduleSnapshotData({
         time_slot_display_order: number | null
         time_slot_start_time: string | null
         time_slot_end_time: string | null
+        time_slot_is_active: boolean
         assignments: WeeklyScheduleData['assignments']
         schedule_cell: {
           id: string
@@ -645,6 +649,7 @@ export async function getScheduleSnapshotData({
           class_groups?: Array<{
             id: string
             name: string
+            age_unit: 'months' | 'years'
             min_age: number | null
             max_age: number | null
             required_ratio: number
@@ -990,6 +995,7 @@ export async function getScheduleSnapshotData({
           time_slot_display_order: timeSlot.display_order,
           time_slot_start_time: timeSlot.default_start_time,
           time_slot_end_time: timeSlot.default_end_time,
+          time_slot_is_active: timeSlot.is_active !== false,
           assignments,
           ...(absences.length > 0 ? { absences } : {}),
           schedule_cell: scheduleCell
@@ -1016,6 +1022,7 @@ export async function getScheduleSnapshotData({
       classroom_id: classroom.id,
       classroom_name: classroom.name,
       classroom_color: classroom.color ?? null,
+      classroom_is_active: classroom.is_active !== false,
       days: classroomDays,
     })
   }

@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -14,7 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Plus } from 'lucide-react'
+import { ArrowLeft, Plus } from 'lucide-react'
 import DataTable, { Column } from '@/components/shared/DataTable'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import type { StaffWithRole } from '@/lib/api/staff'
@@ -51,6 +52,7 @@ export default function StaffPageClient({
   error,
   defaultDisplayNameFormat,
 }: StaffPageClientProps) {
+  const router = useRouter()
   const [activeFilters, setActiveFilters] = useState<FilterKey[]>([])
   const [includeInactiveStaff, setIncludeInactiveStaff] = useState(false)
   const [staffState, setStaffState] = useState(staff)
@@ -311,6 +313,15 @@ export default function StaffPageClient({
 
   return (
     <div>
+      <div className="mb-4">
+        <Link
+          href="/settings"
+          className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Settings
+        </Link>
+      </div>
       <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Staff</h1>
@@ -409,29 +420,32 @@ export default function StaffPageClient({
         >
           Substitute Teachers ({counts.substitute})
         </button>
-        <div className="flex items-center space-x-2 pl-2">
-          <Checkbox
+        <div className="flex items-center gap-2 pl-2">
+          <Switch
             id="include-inactive-staff"
             checked={includeInactiveStaff}
             onCheckedChange={checked => setIncludeInactiveStaff(checked === true)}
           />
           <Label htmlFor="include-inactive-staff" className="text-sm font-normal cursor-pointer">
-            Include Inactive Staff
+            Show inactive
           </Label>
         </div>
       </div>
 
       {error && <ErrorMessage message={error} className="mb-6" />}
 
-      <DataTable
-        data={filteredStaff}
-        columns={columns}
-        searchable
-        searchPlaceholder="Search staff..."
-        emptyMessage="No staff found. Add your first staff member to get started."
-        paginate={false}
-        cellClassName="text-base"
-      />
+      <div className="rounded-lg border bg-white p-4">
+        <DataTable
+          data={filteredStaff}
+          columns={columns}
+          searchable
+          searchPlaceholder="Search staff..."
+          emptyMessage="No staff found. Add your first staff member to get started."
+          paginate={false}
+          cellClassName="text-base"
+          onRowClick={row => router.push(`/staff/${row.id as string}`)}
+        />
+      </div>
     </div>
   )
 }

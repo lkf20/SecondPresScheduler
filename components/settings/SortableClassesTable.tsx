@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   DndContext,
   closestCenter,
@@ -30,15 +31,17 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Search, GripVertical } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import ActiveStatusChip from '@/components/settings/ActiveStatusChip'
 
 interface Class {
   id: string
   name: string
   order?: number | null
   is_active?: boolean
+  required_ratio?: number | null
+  preferred_ratio?: number | null
 }
 
 interface SortableClassesTableProps {
@@ -47,6 +50,7 @@ interface SortableClassesTableProps {
 }
 
 function SortableRow({ classItem }: { classItem: Class }) {
+  const router = useRouter()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: classItem.id,
   })
@@ -58,31 +62,56 @@ function SortableRow({ classItem }: { classItem: Class }) {
   }
 
   return (
-    <TableRow ref={setNodeRef} style={style} className={cn(isDragging && 'bg-muted')}>
-      <TableCell className="w-10">
+    <TableRow
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'cursor-pointer transition-colors hover:bg-slate-50',
+        isDragging && 'bg-muted hover:bg-muted'
+      )}
+      onClick={event => {
+        const target = event.target as HTMLElement
+        if (target.closest('button, a, input, textarea, select, [role="switch"]')) return
+        router.push(`/settings/classes/${classItem.id}`)
+      }}
+      onKeyDown={event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          router.push(`/settings/classes/${classItem.id}`)
+        }
+      }}
+      tabIndex={0}
+    >
+      <TableCell className="w-10 text-base">
         <button
           {...attributes}
           {...listeners}
+          onClick={event => event.stopPropagation()}
           className="cursor-grab active:cursor-grabbing p-1 hover:bg-accent rounded"
           type="button"
         >
           <GripVertical className="h-4 w-4 text-muted-foreground" />
         </button>
       </TableCell>
-      <TableCell>
-        <div className="flex items-center gap-2">
-          {!classItem.is_active && (
-            <Badge variant="secondary" className="text-xs">
-              Inactive
-            </Badge>
+      <TableCell className="text-base">
+        <Link
+          href={`/settings/classes/${classItem.id}`}
+          className={cn(
+            'hover:underline text-base',
+            !classItem.is_active && 'text-muted-foreground'
           )}
-          <Link
-            href={`/settings/classes/${classItem.id}`}
-            className={cn('hover:underline', !classItem.is_active && 'text-muted-foreground')}
-          >
-            {classItem.name}
-          </Link>
-        </div>
+        >
+          {classItem.name}
+        </Link>
+      </TableCell>
+      <TableCell className="text-base text-center">
+        {classItem.required_ratio ? `1:${classItem.required_ratio}` : '—'}
+      </TableCell>
+      <TableCell className="text-base text-center">
+        {classItem.preferred_ratio ? `1:${classItem.preferred_ratio}` : '—'}
+      </TableCell>
+      <TableCell className="text-base text-center">
+        <ActiveStatusChip isActive={classItem.is_active !== false} />
       </TableCell>
     </TableRow>
   )
@@ -91,6 +120,7 @@ function SortableRow({ classItem }: { classItem: Class }) {
 export default function SortableClassesTable({
   classes: initialClasses,
 }: SortableClassesTableProps) {
+  const router = useRouter()
   const [classes, setClasses] = useState(initialClasses)
   const [search, setSearch] = useState('')
   const [showInactive, setShowInactive] = useState(false)
@@ -183,7 +213,7 @@ export default function SortableClassesTable({
         </div>
         <div className="flex items-center gap-2">
           <Switch id="show-inactive" checked={showInactive} onCheckedChange={setShowInactive} />
-          <Label htmlFor="show-inactive" className="text-sm cursor-pointer">
+          <Label htmlFor="show-inactive" className="text-sm font-normal cursor-pointer">
             Show inactive
           </Label>
         </div>
@@ -192,18 +222,21 @@ export default function SortableClassesTable({
 
       {isMounted ? (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <div className="rounded-md border">
+          <div className="rounded-md border bg-white">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10"></TableHead>
-                  <TableHead>Name</TableHead>
+                  <TableHead className="w-10 text-base"></TableHead>
+                  <TableHead className="text-base">Name</TableHead>
+                  <TableHead className="text-base text-center">Required Ratio</TableHead>
+                  <TableHead className="text-base text-center">Preferred Ratio</TableHead>
+                  <TableHead className="text-base text-center">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredClasses.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={2} className="text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground text-base">
                       No classes found
                     </TableCell>
                   </TableRow>
@@ -222,46 +255,68 @@ export default function SortableClassesTable({
           </div>
         </DndContext>
       ) : (
-        <div className="rounded-md border">
+        <div className="rounded-md border bg-white">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10"></TableHead>
-                <TableHead>Name</TableHead>
+                <TableHead className="w-10 text-base"></TableHead>
+                <TableHead className="text-base">Name</TableHead>
+                <TableHead className="text-base text-center">Required Ratio</TableHead>
+                <TableHead className="text-base text-center">Preferred Ratio</TableHead>
+                <TableHead className="text-base text-center">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredClasses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={2} className="text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground text-base">
                     No classes found
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredClasses.map(classItem => (
-                  <TableRow key={classItem.id}>
-                    <TableCell className="w-10">
+                  <TableRow
+                    key={classItem.id}
+                    className="cursor-pointer transition-colors hover:bg-slate-50"
+                    onClick={event => {
+                      const target = event.target as HTMLElement
+                      if (target.closest('button, a, input, textarea, select, [role="switch"]')) {
+                        return
+                      }
+                      router.push(`/settings/classes/${classItem.id}`)
+                    }}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        router.push(`/settings/classes/${classItem.id}`)
+                      }
+                    }}
+                    tabIndex={0}
+                  >
+                    <TableCell className="w-10 text-base">
                       <div className="p-1">
                         <GripVertical className="h-4 w-4 text-muted-foreground" />
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {!classItem.is_active && (
-                          <Badge variant="secondary" className="text-xs">
-                            Inactive
-                          </Badge>
+                    <TableCell className="text-base">
+                      <Link
+                        href={`/settings/classes/${classItem.id}`}
+                        className={cn(
+                          'hover:underline text-base',
+                          !classItem.is_active && 'text-muted-foreground'
                         )}
-                        <Link
-                          href={`/settings/classes/${classItem.id}`}
-                          className={cn(
-                            'hover:underline',
-                            !classItem.is_active && 'text-muted-foreground'
-                          )}
-                        >
-                          {classItem.name}
-                        </Link>
-                      </div>
+                      >
+                        {classItem.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-base text-center">
+                      {classItem.required_ratio ? `1:${classItem.required_ratio}` : '—'}
+                    </TableCell>
+                    <TableCell className="text-base text-center">
+                      {classItem.preferred_ratio ? `1:${classItem.preferred_ratio}` : '—'}
+                    </TableCell>
+                    <TableCell className="text-base text-center">
+                      <ActiveStatusChip isActive={classItem.is_active !== false} />
                     </TableCell>
                   </TableRow>
                 ))

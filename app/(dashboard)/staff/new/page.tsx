@@ -9,6 +9,7 @@ import StaffUnsavedChangesDialog from '@/components/staff/StaffUnsavedChangesDia
 import { Database } from '@/types/database'
 import type { DisplayNameFormat } from '@/lib/utils/staff-display-name'
 import { ArrowLeft } from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function NewStaffPage() {
   const router = useRouter()
@@ -136,6 +137,11 @@ export default function NewStaffPage() {
 
       const createdStaff = await response.json()
       setIsOverviewDirty(false)
+      const staffNameForToast =
+        data.display_name?.trim() ||
+        [data.first_name?.trim(), data.last_name?.trim()].filter(Boolean).join(' ') ||
+        'Staff member'
+      toast.success(`${staffNameForToast} has been created.`)
       const nextTab = data.is_sub ? 'availability' : 'preferences'
       router.push(`/staff/${createdStaff.id}?tab=${nextTab}`)
       router.refresh()
@@ -172,6 +178,7 @@ export default function NewStaffPage() {
           dirty: isOverviewDirty,
           actionLabel: 'Create',
           actionFormId: 'staff-new-overview-form',
+          cardClassName: 'max-w-2xl',
           content: (
             <div className="max-w-2xl">
               <StaffForm
@@ -199,6 +206,7 @@ export default function NewStaffPage() {
         preferences={{
           title: 'Preferences & Qualifications',
           triggerDisabled: true,
+          cardClassName: 'max-w-2xl',
           content: (
             <p className="text-sm text-muted-foreground">
               Create this staff member first. Preferences and qualifications can be managed on their

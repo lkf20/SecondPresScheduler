@@ -16,6 +16,16 @@ import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/lib/contexts/ThemeContext'
 
+const SETTINGS_LAST_PATH_KEY = 'settingsLastPath'
+const SETTINGS_LAST_PATH_TIMESTAMP_KEY = 'settingsLastPathTimestamp'
+const SETTINGS_LAST_PATH_TTL_MS = 2 * 60 * 60 * 1000 // 2 hours
+
+const isSettingsAreaPath = (path: string) =>
+  path === '/settings' ||
+  path.startsWith('/settings/') ||
+  path === '/staff' ||
+  path.startsWith('/staff/')
+
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Weekly Schedule', href: '/schedules/weekly', icon: Calendar },
@@ -32,6 +42,7 @@ export default function Sidebar() {
   const [isPinned, setIsPinned] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
   const [suppressHover, setSuppressHover] = useState(false)
+  const [settingsDestination, setSettingsDestination] = useState('/settings')
   const isExpanded = isPinned || isHovered
 
   useEffect(() => {
@@ -50,6 +61,38 @@ export default function Sidebar() {
     document.documentElement.style.setProperty('--sidebar-visual-width', visualWidth)
     window.sessionStorage.setItem('sidebarPinned', String(isPinned))
   }, [isPinned, isExpanded])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!pathname || !isSettingsAreaPath(pathname)) return
+    if (pathname === '/settings') return
+
+    window.sessionStorage.setItem(SETTINGS_LAST_PATH_KEY, pathname)
+    window.sessionStorage.setItem(SETTINGS_LAST_PATH_TIMESTAMP_KEY, String(Date.now()))
+  }, [pathname])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const lastPath = window.sessionStorage.getItem(SETTINGS_LAST_PATH_KEY)
+    const lastTimestampRaw = window.sessionStorage.getItem(SETTINGS_LAST_PATH_TIMESTAMP_KEY)
+    const lastTimestamp = lastTimestampRaw ? Number.parseInt(lastTimestampRaw, 10) : NaN
+
+    if (!lastPath || Number.isNaN(lastTimestamp)) {
+      setSettingsDestination('/settings')
+      return
+    }
+    if (!isSettingsAreaPath(lastPath)) {
+      setSettingsDestination('/settings')
+      return
+    }
+    if (Date.now() - lastTimestamp > SETTINGS_LAST_PATH_TTL_MS) {
+      setSettingsDestination('/settings')
+      return
+    }
+
+    setSettingsDestination(lastPath)
+  }, [pathname])
 
   return (
     <aside
@@ -89,11 +132,15 @@ export default function Sidebar() {
           </div>
           <nav className="flex-1 px-2 space-y-1">
             {navigation.map(item => {
-              const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+              const isSettingsItem = item.name === 'Settings'
+              const itemHref = isSettingsItem ? settingsDestination : item.href
+              const isActive = isSettingsItem
+                ? Boolean(pathname && isSettingsAreaPath(pathname))
+                : pathname === item.href || pathname?.startsWith(item.href + '/')
               return (
                 <Link
                   key={item.name}
-                  href={item.href}
+                  href={itemHref}
                   prefetch={true}
                   onClick={() => {
                     if (!isPinned) {

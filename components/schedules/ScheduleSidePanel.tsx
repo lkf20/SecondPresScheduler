@@ -50,6 +50,10 @@ import {
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 import { parseLocalDate } from '@/lib/utils/date'
+import {
+  getSlotInactiveReasons,
+  isSlotEffectivelyInactive,
+} from '@/lib/utils/schedule-slot-activity'
 import { toast } from 'sonner'
 
 interface Teacher {
@@ -73,6 +77,8 @@ type ClassGroupWithMeta = ClassGroup & {
 }
 
 type SelectedCellData = WeeklyScheduleData & {
+  time_slot_is_active?: boolean
+  classroom_is_active?: boolean
   absences?: Array<{
     teacher_id: string
     teacher_name: string
@@ -831,6 +837,7 @@ export default function ScheduleSidePanel({
       id: string
       name: string
       parent_class_id?: string | null
+      age_unit?: 'months' | 'years'
       min_age: number | null
       max_age: number | null
       required_ratio: number
@@ -841,6 +848,7 @@ export default function ScheduleSidePanel({
       id: cg.id,
       name: cg.name || '',
       parent_class_id: cg.parent_class_id ?? null,
+      age_unit: cg.age_unit ?? 'years',
       min_age: cg.min_age ?? null,
       max_age: cg.max_age ?? null,
       required_ratio: cg.required_ratio ?? 8,
@@ -1301,6 +1309,34 @@ export default function ScheduleSidePanel({
   // Determine if cell has data (current state)
   const hasData = !!(classGroupIds.length > 0 || enrollment !== null || selectedTeachers.length > 0)
 
+  const parentInactiveReasons = getSlotInactiveReasons({
+    schedule_cell: { is_active: true },
+    classroom_is_active: selectedCellData?.classroom_is_active,
+    time_slot_is_active: selectedCellData?.time_slot_is_active,
+  })
+
+  const isParentEffectivelyInactive = isSlotEffectivelyInactive({
+    schedule_cell: { is_active: true },
+    classroom_is_active: selectedCellData?.classroom_is_active,
+    time_slot_is_active: selectedCellData?.time_slot_is_active,
+  })
+
+  const effectiveInactiveReasonLabel =
+    parentInactiveReasons.length === 0
+      ? null
+      : parentInactiveReasons
+          .map(reason =>
+            reason === 'classroom'
+              ? 'Classroom is inactive'
+              : reason === 'time_slot'
+                ? 'Time slot is inactive'
+                : null
+          )
+          .filter(Boolean)
+          .join(' • ')
+
+  const effectiveIsActive = isActive && !isParentEffectivelyInactive
+
   // Auto-activate cell when class groups, enrollment, or teachers are added (only if inactive and originally empty)
   useEffect(() => {
     // If cell is inactive and originally had no data, and user is now adding data, activate it
@@ -1310,8 +1346,8 @@ export default function ScheduleSidePanel({
     }
   }, [classGroupIds.length, enrollment, selectedTeachers.length, isActive, hasData])
 
-  // Fields should be disabled if inactive AND has data
-  const fieldsDisabled = !isActive && hasData
+  // Fields should be disabled if parent entities are inactive, or if explicitly inactive with existing data.
+  const fieldsDisabled = isParentEffectivelyInactive || (!isActive && hasData)
 
   // Track unsaved changes
   useEffect(() => {
@@ -1962,6 +1998,23 @@ export default function ScheduleSidePanel({
   // Find class group with lowest min_age for ratio calculation
   const classGroupForRatio = pickClassGroupForRatio(classGroups)
 
+  const formatAgeRange = useCallback(
+    (group: { min_age: number | null; max_age: number | null; age_unit?: 'months' | 'years' }) => {
+      const unit = group.age_unit ?? 'years'
+      if (group.min_age !== null && group.max_age !== null) {
+        return `${group.min_age}–${group.max_age} ${unit}`
+      }
+      if (group.min_age !== null) {
+        return `${group.min_age}+ ${unit}`
+      }
+      if (group.max_age !== null) {
+        return `Up to ${group.max_age} ${unit}`
+      }
+      return 'Not specified'
+    },
+    []
+  )
+
   const flexAssignments =
     selectedCellData?.assignments?.filter(assignment => assignment.is_flexible) ?? []
   const sortedAbsences = sortAbsencesByTeacherName(selectedCellData?.absences ?? [])
@@ -2026,6 +2079,11 @@ export default function ScheduleSidePanel({
                   ? 'View schedule details and take quick actions'
                   : 'Configure schedule cell settings and assignments'}
               </SheetDescription>
+              {effectiveInactiveReasonLabel && (
+                <div className="mt-2 inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                  Inactive: {effectiveInactiveReasonLabel}
+                </div>
+              )}
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
                 {staffingSummary.status && (
                   <span
@@ -2917,9 +2975,14 @@ export default function ScheduleSidePanel({
                             classGroups.map(group => (
                               <span
                                 key={group.id}
-                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700"
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                  group.is_active === false
+                                    ? 'border border-slate-200 bg-slate-50 text-slate-500'
+                                    : 'bg-slate-100 text-slate-700'
+                                }`}
                               >
                                 {group.name}
+                                {group.is_active === false ? ' (Inactive)' : ''}
                               </span>
                             ))
                           ) : (
@@ -2932,6 +2995,11 @@ export default function ScheduleSidePanel({
                             {enrollmentForCalculation ?? '—'}
                           </span>
                         </div>
+                        {classGroups.some(group => group.is_active === false) && (
+                          <div className="text-xs text-slate-500">
+                            Includes inactive class groups
+                          </div>
+                        )}
                       </div>
                       <Button
                         type="button"
@@ -2972,8 +3040,10 @@ export default function ScheduleSidePanel({
                     {/* Section A: Slot Status */}
                     <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-1">
                       <SlotStatusToggle
-                        isActive={isActive}
+                        isActive={effectiveIsActive}
+                        disabled={isParentEffectivelyInactive}
                         onToggle={newActive => {
+                          if (isParentEffectivelyInactive) return
                           if (isActive && !newActive) {
                             // Show confirmation when deactivating
                             setShowDeactivateDialog(true)
@@ -2983,7 +3053,14 @@ export default function ScheduleSidePanel({
                         }}
                       />
                       <div className="mt-0">
-                        {isActive ? (
+                        {isParentEffectivelyInactive ? (
+                          <p className="text-xs text-muted-foreground italic leading-relaxed">
+                            This slot appears inactive because parent settings are inactive
+                            {effectiveInactiveReasonLabel
+                              ? ` (${effectiveInactiveReasonLabel})`
+                              : ''}
+                          </p>
+                        ) : isActive ? (
                           <p className="text-xs text-muted-foreground italic whitespace-nowrap">
                             This slot requires staffing and will be validated
                           </p>
@@ -3053,14 +3130,7 @@ export default function ScheduleSidePanel({
                           <div className="flex items-center gap-2">
                             <div className="text-muted-foreground">Age (lowest):</div>
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                              {classGroupForRatio.min_age !== null &&
-                              classGroupForRatio.max_age !== null
-                                ? `${classGroupForRatio.min_age}–${classGroupForRatio.max_age} years`
-                                : classGroupForRatio.min_age !== null
-                                  ? `${classGroupForRatio.min_age}+ years`
-                                  : classGroupForRatio.max_age !== null
-                                    ? `Up to ${classGroupForRatio.max_age} years`
-                                    : 'Not specified'}
+                              {formatAgeRange(classGroupForRatio)}
                             </span>
                           </div>
 
