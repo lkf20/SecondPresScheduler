@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
@@ -18,6 +19,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ArrowLeft, Plus } from 'lucide-react'
 import DataTable, { Column } from '@/components/shared/DataTable'
 import ErrorMessage from '@/components/shared/ErrorMessage'
+import ActiveStatusChip from '@/components/settings/ActiveStatusChip'
 import type { StaffWithRole } from '@/lib/api/staff'
 import {
   buildDuplicateDisplayNameMap,
@@ -26,6 +28,14 @@ import {
   type DisplayNameFormat,
 } from '@/lib/utils/staff-display-name'
 import { formatUSPhone } from '@/lib/utils/phone'
+import { useSchool } from '@/lib/contexts/SchoolContext'
+import {
+  invalidateDashboard,
+  invalidateDailySchedule,
+  invalidateSubFinderAbsences,
+  invalidateTimeOffRequests,
+  invalidateWeeklySchedule,
+} from '@/lib/utils/invalidation'
 
 interface StaffPageClientProps {
   staff: StaffWithRole[]
@@ -53,7 +63,9 @@ export default function StaffPageClient({
   defaultDisplayNameFormat,
 }: StaffPageClientProps) {
   const router = useRouter()
-  const [activeFilters, setActiveFilters] = useState<FilterKey[]>([])
+  const queryClient = useQueryClient()
+  const schoolId = useSchool()
+  const [activeFilter, setActiveFilter] = useState<FilterKey | null>(null)
   const [includeInactiveStaff, setIncludeInactiveStaff] = useState(false)
   const [staffState, setStaffState] = useState(staff)
   const [defaultFormat, setDefaultFormat] = useState<DisplayNameFormat>(
@@ -136,21 +148,28 @@ export default function StaffPageClient({
   const totalCount = visibleStaffPool.length
 
   const filteredStaff = useMemo(() => {
-    if (activeFilters.length === 0) return visibleStaffPool
+    if (!activeFilter) return visibleStaffPool
     return visibleStaffPool.filter(member => {
-      return activeFilters.some(filter => {
-        if (filter === 'permanent') return member.is_permanent
-        if (filter === 'flexible') return member.is_flexible
-        if (filter === 'substitute') return member.is_sub
-        return false
-      })
+      if (activeFilter === 'permanent') return member.is_permanent
+      if (activeFilter === 'flexible') return member.is_flexible
+      if (activeFilter === 'substitute') return member.is_sub
+      return false
     })
-  }, [activeFilters, visibleStaffPool])
+  }, [activeFilter, visibleStaffPool])
 
   const duplicateMap = useMemo(
     () => buildDuplicateDisplayNameMap(staffState, defaultFormat),
     [staffState, defaultFormat]
   )
+  const duplicateDisplayNameCount = useMemo(
+    () => Array.from(duplicateMap.values()).filter(count => count > 1).length,
+    [duplicateMap]
+  )
+  const customNameStaff = useMemo(
+    () => staffWithMeta.filter(member => member.is_custom_display_name),
+    [staffWithMeta]
+  )
+  const customNameCount = customNameStaff.length
 
   const updateDefaultFormat = async (nextFormat: DisplayNameFormat) => {
     if (!settingsLoaded) return
@@ -187,14 +206,25 @@ export default function StaffPageClient({
     )
   }
 
-  const handleApplyAll = async () => {
-    const confirmed = window.confirm('This will overwrite all custom display names. Continue?')
+  const handleResetCustomNames = async () => {
+    if (customNameCount === 0) return
+    const confirmed = window.confirm(
+      `Reset ${customNameCount} custom display ${customNameCount === 1 ? 'name' : 'names'} to the default format?`
+    )
     if (!confirmed) return
-    for (const member of staffState) {
+    for (const member of customNameStaff) {
       const computed = formatStaffDisplayName(member, defaultFormat)
-      if (!computed) continue
-      await updateStaffDisplayName(member.id, computed)
+      await updateStaffDisplayName(member.id, computed || null)
     }
+    await Promise.all([
+      invalidateWeeklySchedule(queryClient, schoolId),
+      invalidateDailySchedule(queryClient, schoolId),
+      invalidateDashboard(queryClient, schoolId),
+      invalidateTimeOffRequests(queryClient, schoolId),
+      invalidateSubFinderAbsences(queryClient, schoolId),
+      queryClient.invalidateQueries({ queryKey: ['staff'] }),
+    ])
+    router.refresh()
   }
 
   const previewTarget = staffState.find(member => Boolean(member.first_name))
@@ -208,8 +238,9 @@ export default function StaffPageClient({
       linkBasePath: '/staff',
     },
     {
-      key: 'display_name',
+      key: 'computed_display_name',
       header: 'Display Name',
+      sortable: true,
       cell: row => {
         const computedName = row.computed_display_name || ''
         const duplicateCount = computedName ? duplicateMap.get(computedName.toLowerCase()) || 0 : 0
@@ -249,12 +280,15 @@ export default function StaffPageClient({
     {
       key: 'phone',
       header: 'Phone',
+      sortable: true,
       cell: row => (row.phone ? formatUSPhone(row.phone) : '—'),
     },
     {
       key: 'role_type_label',
       header: 'Staff Role',
       sortable: true,
+      headerClassName: 'w-[360px]',
+      cellClassName: 'w-[360px]',
       cell: row => {
         if (!row.ordered_role_labels || row.ordered_role_labels.length === 0) return '—'
         return (
@@ -298,17 +332,23 @@ export default function StaffPageClient({
     {
       key: 'active',
       header: 'Status',
+      sortable: true,
+      headerClassName: 'w-[100px]',
+      cellClassName: 'w-[100px]',
+      cell: row => (
+        <div className="w-[100px]">
+          <ActiveStatusChip isActive={row.active !== false} className="w-[100px] justify-center" />
+        </div>
+      ),
     },
   ]
 
   const toggleFilter = (filter: FilterKey) => {
-    setActiveFilters(prev =>
-      prev.includes(filter) ? prev.filter(item => item !== filter) : [...prev, filter]
-    )
+    setActiveFilter(prev => (prev === filter ? null : filter))
   }
 
   const clearFilters = () => {
-    setActiveFilters([])
+    setActiveFilter(null)
   }
 
   return (
@@ -335,7 +375,7 @@ export default function StaffPageClient({
         </Link>
       </div>
 
-      <div className="mb-8 space-y-4 rounded-lg border bg-white p-4">
+      <div className="mb-6 space-y-4 rounded-lg border bg-white p-4">
         <div className="space-y-3">
           <p className="text-sm font-medium text-slate-900">Display Name Format</p>
           <div className="flex flex-wrap items-center gap-3">
@@ -359,28 +399,41 @@ export default function StaffPageClient({
                 {previewName ? `Preview: ${previewName}` : 'Preview unavailable'}
               </span>
               <div className="w-12" />
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  className="hover:!bg-teal-50"
-                  style={{ borderColor: 'rgb(13 148 136)', color: 'rgb(15 118 110)' }}
-                  onClick={handleApplyAll}
-                  disabled={isUpdatingFormat || !settingsLoaded}
-                >
-                  Apply to all
-                </Button>
-              </div>
+              {customNameCount > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="outline"
+                    className="hover:!bg-teal-50"
+                    style={{ borderColor: 'rgb(13 148 136)', color: 'rgb(15 118 110)' }}
+                    onClick={handleResetCustomNames}
+                    disabled={isUpdatingFormat || !settingsLoaded}
+                  >
+                    Reset {customNameCount} Custom {customNameCount === 1 ? 'Name' : 'Names'}
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {duplicateDisplayNameCount > 0 && (
+        <>
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {duplicateDisplayNameCount} duplicate display{' '}
+            {duplicateDisplayNameCount === 1 ? 'name' : 'names'} detected. Please review display
+            names.
+          </div>
+          <div className="h-6" aria-hidden />
+        </>
+      )}
 
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={clearFilters}
           className={
-            activeFilters.length === 0
+            activeFilter === null
               ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
               : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
           }
@@ -391,7 +444,7 @@ export default function StaffPageClient({
           type="button"
           onClick={() => toggleFilter('permanent')}
           className={
-            activeFilters.includes('permanent')
+            activeFilter === 'permanent'
               ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
               : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
           }
@@ -402,7 +455,7 @@ export default function StaffPageClient({
           type="button"
           onClick={() => toggleFilter('flexible')}
           className={
-            activeFilters.includes('flexible')
+            activeFilter === 'flexible'
               ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
               : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
           }
@@ -413,7 +466,7 @@ export default function StaffPageClient({
           type="button"
           onClick={() => toggleFilter('substitute')}
           className={
-            activeFilters.includes('substitute')
+            activeFilter === 'substitute'
               ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
               : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
           }
@@ -442,6 +495,7 @@ export default function StaffPageClient({
           searchPlaceholder="Search staff..."
           emptyMessage="No staff found. Add your first staff member to get started."
           paginate={false}
+          fixedLayout
           cellClassName="text-base"
           onRowClick={row => router.push(`/staff/${row.id as string}`)}
         />

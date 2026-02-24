@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
@@ -23,6 +23,8 @@ export interface Column<T> {
   cell?: (row: T) => React.ReactNode
   sortable?: boolean
   linkBasePath?: string
+  headerClassName?: string
+  cellClassName?: string
 }
 
 interface DataTableProps<T> {
@@ -35,6 +37,7 @@ interface DataTableProps<T> {
   cellClassName?: string
   emptyMessage?: string
   paginate?: boolean
+  fixedLayout?: boolean
 }
 
 export default function DataTable<T extends Record<string, unknown>>({
@@ -47,6 +50,7 @@ export default function DataTable<T extends Record<string, unknown>>({
   cellClassName,
   emptyMessage = 'No data available',
   paginate = true,
+  fixedLayout = false,
 }: DataTableProps<T>) {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -127,6 +131,20 @@ export default function DataTable<T extends Record<string, unknown>>({
     updatePageInUrl(newPage)
   }
 
+  const updateSearch = (newSearch: string) => {
+    setSearch(newSearch)
+    setCurrentPage(1)
+
+    const params = new URLSearchParams(searchParams.toString())
+    if (newSearch) {
+      params.set('search', newSearch)
+    } else {
+      params.delete('search')
+    }
+    params.delete('page')
+    router.push(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
   return (
     <div className={cn('space-y-4', className)}>
       {searchable && (
@@ -136,35 +154,35 @@ export default function DataTable<T extends Record<string, unknown>>({
             <Input
               placeholder={searchPlaceholder}
               value={search}
-              onChange={e => {
-                const newSearch = e.target.value
-                setSearch(newSearch)
-                setCurrentPage(1)
-
-                // Update URL with search param
-                const params = new URLSearchParams(searchParams.toString())
-                if (newSearch) {
-                  params.set('search', newSearch)
-                } else {
-                  params.delete('search')
-                }
-                params.delete('page') // Reset to page 1 when searching
-                router.push(`${pathname}?${params.toString()}`, { scroll: false })
-              }}
-              className="pl-8"
+              onChange={e => updateSearch(e.target.value)}
+              className="pl-8 pr-8"
             />
+            {search.length > 0 && (
+              <button
+                type="button"
+                onClick={() => updateSearch('')}
+                className="absolute text-muted-foreground hover:text-slate-700"
+                style={{ right: '0.5rem', top: '50%', transform: 'translateY(-50%)' }}
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
       )}
 
       <div className="rounded-md border bg-white">
-        <Table>
+        <Table className={fixedLayout ? 'w-full table-fixed' : 'w-full'}>
           <TableHeader>
             <TableRow>
               {columns.map(column => (
                 <TableHead
                   key={column.key}
-                  className={column.sortable ? 'cursor-pointer hover:bg-accent' : ''}
+                  className={cn(
+                    column.sortable ? 'cursor-pointer hover:bg-accent' : '',
+                    column.headerClassName
+                  )}
                   onClick={() => column.sortable && handleSort(column.key)}
                 >
                   {column.header}
@@ -240,7 +258,10 @@ export default function DataTable<T extends Record<string, unknown>>({
                     }
 
                     return (
-                      <TableCell key={column.key} className={cellClassName}>
+                      <TableCell
+                        key={column.key}
+                        className={cn(cellClassName, column.cellClassName)}
+                      >
                         {href ? (
                           <Link href={href} className="hover:underline">
                             {cellContent}
