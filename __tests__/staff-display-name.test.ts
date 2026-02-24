@@ -13,11 +13,11 @@ const staff = (first: string, last: string, displayName?: string) => ({
 
 describe('formatStaffDisplayName', () => {
   it('formats first + last initial', () => {
-    expect(formatStaffDisplayName(staff('Lisa', 'Bohn'), 'first_last_initial')).toBe('Lisa B')
+    expect(formatStaffDisplayName(staff('Lisa', 'Bohn'), 'first_last_initial')).toBe('Lisa B.')
   })
 
   it('formats first initial + last', () => {
-    expect(formatStaffDisplayName(staff('Lisa', 'Bohn'), 'first_initial_last')).toBe('L Bohn')
+    expect(formatStaffDisplayName(staff('Lisa', 'Bohn'), 'first_initial_last')).toBe('L. Bohn')
   })
 
   it('formats first + last', () => {

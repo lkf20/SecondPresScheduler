@@ -1,18 +1,14 @@
 // Learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom'
+import { TextEncoder, TextDecoder } from 'util'
 
-// Mock Next.js server globals
-global.Request = class {
-  constructor() {}
-}
+global.TextEncoder = TextEncoder
+global.TextDecoder = TextDecoder
 
-global.Response = class {
-  constructor(body, init) {
-    this.body = body
-    this.status = (init && init.status) || 200
-  }
-
-  static json(body, init) {
-    return new global.Response(body, init)
+if (typeof global.ResizeObserver === 'undefined') {
+  global.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
   }
 }
