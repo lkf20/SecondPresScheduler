@@ -15,13 +15,7 @@ import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSchool } from '@/lib/contexts/SchoolContext'
-import {
-  invalidateDashboard,
-  invalidateDailySchedule,
-  invalidateSubFinderAbsences,
-  invalidateTimeOffRequests,
-  invalidateWeeklySchedule,
-} from '@/lib/utils/invalidation'
+import { invalidateSchedulingSurfaces } from '@/lib/utils/invalidation'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -267,13 +261,9 @@ export default function StaffFormClient({
         throw new Error(errorData.error || 'Failed to update staff')
       }
 
-      await Promise.all([
-        invalidateWeeklySchedule(queryClient, schoolId),
-        invalidateDailySchedule(queryClient, schoolId),
-        invalidateDashboard(queryClient, schoolId),
-        invalidateTimeOffRequests(queryClient, schoolId),
-        invalidateSubFinderAbsences(queryClient, schoolId),
-      ])
+      await invalidateSchedulingSurfaces(queryClient, schoolId, {
+        includeFilterOptions: false,
+      })
       setSavedIsActive(isActive)
       setIsOverviewDirty(false)
       router.refresh()

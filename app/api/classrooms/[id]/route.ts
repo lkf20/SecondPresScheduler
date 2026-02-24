@@ -5,6 +5,15 @@ import {
   deleteClassroom,
   setClassroomAllowedClasses,
 } from '@/lib/api/classrooms'
+import { revalidatePath } from 'next/cache'
+
+function revalidateClassroomDependentPaths() {
+  revalidatePath('/settings/classrooms')
+  revalidatePath('/schedules/weekly')
+  revalidatePath('/settings/baseline-schedule')
+  revalidatePath('/reports/daily-schedule')
+  revalidatePath('/sub-finder')
+}
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -35,6 +44,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       await setClassroomAllowedClasses(id, ids)
     }
 
+    revalidateClassroomDependentPaths()
     return NextResponse.json(classroom)
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -48,6 +58,7 @@ export async function DELETE(
   try {
     const { id } = await params
     await deleteClassroom(id)
+    revalidateClassroomDependentPaths()
     return NextResponse.json({ success: true })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })

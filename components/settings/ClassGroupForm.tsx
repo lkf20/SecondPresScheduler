@@ -20,13 +20,7 @@ import { Database } from '@/types/database'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSchool } from '@/lib/contexts/SchoolContext'
-import {
-  invalidateDailySchedule,
-  invalidateDashboard,
-  invalidateSubFinderAbsences,
-  invalidateTimeOffRequests,
-  invalidateWeeklySchedule,
-} from '@/lib/utils/invalidation'
+import { invalidateSchedulingSurfaces } from '@/lib/utils/invalidation'
 
 type ClassGroup = Database['public']['Tables']['class_groups']['Row']
 
@@ -287,18 +281,7 @@ export default function ClassGroupForm({
 
       const classGroupName = data.name?.trim() || 'Class group'
       toast.success(isEdit ? `${classGroupName} updated.` : `${classGroupName} created.`)
-      await Promise.all([
-        invalidateWeeklySchedule(queryClient, schoolId),
-        invalidateDailySchedule(queryClient, schoolId),
-        invalidateDashboard(queryClient, schoolId),
-        invalidateTimeOffRequests(queryClient, schoolId),
-        invalidateSubFinderAbsences(queryClient, schoolId),
-        queryClient.invalidateQueries({ queryKey: ['filterOptions', schoolId] }),
-        queryClient.invalidateQueries({ queryKey: ['filterOptions'] }),
-        queryClient.invalidateQueries({ queryKey: ['dailySchedule'] }),
-        queryClient.invalidateQueries({ queryKey: ['weeklySchedule'] }),
-        queryClient.invalidateQueries({ queryKey: ['scheduleSettings'] }),
-      ])
+      await invalidateSchedulingSurfaces(queryClient, schoolId)
       router.push('/settings/classes')
       router.refresh()
     } catch (err: unknown) {
