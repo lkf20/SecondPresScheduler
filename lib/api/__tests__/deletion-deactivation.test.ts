@@ -4,6 +4,7 @@
  * This test suite covers:
  * - Class groups (soft delete via is_active)
  * - Classrooms (soft delete via is_active)
+ * - Staff (soft delete via active)
  * - Teachers (hard delete)
  * - Subs (hard delete)
  * - Error handling for entities with dependencies
@@ -11,6 +12,7 @@
 
 import { deleteClassGroup, updateClassGroup, getClassGroupById } from '../class-groups'
 import { deleteClassroom, updateClassroom } from '../classrooms'
+import { deactivateStaff } from '../staff'
 import { deleteTeacher, updateTeacher } from '../teachers'
 import { deleteSub, updateSub } from '../subs'
 import { createClient } from '@/lib/supabase/server'
@@ -304,6 +306,21 @@ describe('Deletion and Deactivation Handling', () => {
           })
         )
         expect(result.active).toBe(true)
+      })
+    })
+  })
+
+  describe('Staff', () => {
+    describe('Soft Delete (active = false)', () => {
+      it('should set active to false when deleting staff', async () => {
+        const staffId = 'test-staff-id'
+
+        await deactivateStaff(staffId)
+
+        expect(mockSupabase.from).toHaveBeenCalledWith('staff')
+        expect(mockSupabase.update).toHaveBeenCalledWith({ active: false })
+        expect(mockSupabase.eq).toHaveBeenCalledWith('id', staffId)
+        expect(mockSupabase.delete).not.toHaveBeenCalled()
       })
     })
   })

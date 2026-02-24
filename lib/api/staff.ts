@@ -140,9 +140,9 @@ export async function updateStaff(
   return data as Staff
 }
 
-export async function deleteStaff(id: string) {
+export async function deactivateStaff(id: string) {
   const supabase = await createClient()
-  const { error } = await supabase.from('staff').delete().eq('id', id)
+  const { error } = await supabase.from('staff').update({ active: false }).eq('id', id)
 
   if (error) throw error
 }

@@ -215,4 +215,27 @@ describe('TimeSlotForm (edit)', () => {
     expect(await screen.findByText('Failed to update time slot')).toBeInTheDocument()
     expect(pushMock).not.toHaveBeenCalled()
   })
+
+  it('shows baseline warning when time slot is inactive and still used', async () => {
+    render(
+      <TimeSlotForm
+        mode="edit"
+        timeSlot={
+          {
+            id: 'slot-2',
+            code: 'PM',
+            name: 'Afternoon',
+            is_active: false,
+          } as never
+        }
+        showInactiveBaselineWarning
+      />
+    )
+
+    expect(
+      await screen.findByText(
+        'This time slot is marked as inactive but still appears in the baseline schedule.'
+      )
+    ).toBeInTheDocument()
+  })
 })

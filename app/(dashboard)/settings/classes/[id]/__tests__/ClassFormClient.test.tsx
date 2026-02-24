@@ -162,4 +162,27 @@ describe('ClassGroupForm (edit)', () => {
     expect(await screen.findByText('Failed to update class group')).toBeInTheDocument()
     expect(pushMock).not.toHaveBeenCalled()
   })
+
+  it('shows baseline warning when class group is inactive and still used', async () => {
+    render(
+      <ClassGroupForm
+        mode="edit"
+        classData={
+          {
+            id: 'cg-2',
+            name: 'Toddler B',
+            required_ratio: 4,
+            is_active: false,
+          } as never
+        }
+        showInactiveBaselineWarning
+      />
+    )
+
+    expect(
+      await screen.findByText(
+        'This class group is marked as inactive but still appears in the baseline schedule.'
+      )
+    ).toBeInTheDocument()
+  })
 })

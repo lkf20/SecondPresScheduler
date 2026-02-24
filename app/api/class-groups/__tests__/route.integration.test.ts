@@ -39,6 +39,19 @@ describe('class groups collection route integration', () => {
     expect(json).toEqual([{ id: 'cg-1', name: 'Infant A' }])
   })
 
+  it('GET passes includeInactive=true when requested', async () => {
+    ;(getClassGroups as jest.Mock).mockResolvedValue([{ id: 'cg-2', name: 'Toddler B' }])
+
+    const response = await GET(
+      new NextRequest('http://localhost/api/class-groups?includeInactive=true') as any
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(getClassGroups).toHaveBeenCalledWith(true)
+    expect(json).toEqual([{ id: 'cg-2', name: 'Toddler B' }])
+  })
+
   it('GET routes failures through createErrorResponse', async () => {
     ;(getClassGroups as jest.Mock).mockRejectedValue(new Error('read failed'))
 

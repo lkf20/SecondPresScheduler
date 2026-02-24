@@ -203,4 +203,28 @@ describe('ClassroomForm (edit)', () => {
     expect(await screen.findByText('Failed to update classroom')).toBeInTheDocument()
     expect(pushMock).not.toHaveBeenCalled()
   })
+
+  it('shows baseline warning when classroom is inactive and still used', async () => {
+    render(
+      <ClassroomForm
+        mode="edit"
+        classroom={
+          {
+            id: 'class-2',
+            name: 'Toddler Room',
+            capacity: 8,
+            is_active: false,
+            color: null,
+          } as never
+        }
+        showInactiveBaselineWarning
+      />
+    )
+
+    expect(
+      await screen.findByText(
+        'This classroom is marked as inactive but still appears in the baseline schedule.'
+      )
+    ).toBeInTheDocument()
+  })
 })
