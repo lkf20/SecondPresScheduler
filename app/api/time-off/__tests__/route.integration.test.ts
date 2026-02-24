@@ -55,6 +55,7 @@ jest.mock('@/lib/supabase/server', () => ({
 
 describe('GET /api/time-off integration', () => {
   beforeEach(() => {
+    jest.spyOn(console, 'error').mockImplementation(() => {})
     ;(getAuditActorContext as jest.Mock).mockResolvedValue({
       actorUserId: 'user-1',
       actorDisplayName: 'Test User',
