@@ -200,13 +200,23 @@ export default function SortableTimeSlotsTable({
       })
       if (changed.length > 0) {
         await Promise.all(
-          changed.map(slot =>
-            fetch(`/api/timeslots/${slot.id}`, {
+          changed.map(async slot => {
+            const response = await fetch(`/api/timeslots/${slot.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ display_order: slot.display_order }),
             })
-          )
+            if (!response.ok) {
+              let message = `Failed to update time slot order for ${slot.code}`
+              try {
+                const errorData = (await response.json()) as { error?: string }
+                if (errorData?.error) message = errorData.error
+              } catch {
+                // Ignore JSON parse issues and keep fallback message.
+              }
+              throw new Error(message)
+            }
+          })
         )
         await Promise.all([
           invalidateWeeklySchedule(queryClient, schoolId),
