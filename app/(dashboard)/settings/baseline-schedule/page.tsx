@@ -14,6 +14,7 @@ import { useWeeklySchedule } from '@/lib/hooks/use-weekly-schedule'
 import { useScheduleSettings } from '@/lib/hooks/use-schedule-settings'
 import { useFilterOptions } from '@/lib/hooks/use-filter-options'
 import { invalidateWeeklySchedule } from '@/lib/utils/invalidation'
+import { isSlotInactive } from '@/lib/utils/schedule-slot-activity'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 
 // Calculate Monday of current week as ISO string for query key
@@ -289,7 +290,11 @@ export default function BaselineSchedulePage() {
     if (!filters) return scheduleData
 
     return scheduleData
-      .filter(classroom => filters.selectedClassroomIds.includes(classroom.classroom_id))
+      .filter(
+        classroom =>
+          filters.selectedClassroomIds.includes(classroom.classroom_id) &&
+          (filters.displayFilters.inactive || classroom.classroom_is_active !== false)
+      )
       .map(classroom => ({
         ...classroom,
         days: classroom.days
@@ -299,11 +304,14 @@ export default function BaselineSchedulePage() {
             time_slots: day.time_slots
               .filter(slot => filters.selectedTimeSlotIds.includes(slot.time_slot_id))
               .filter(slot => {
-                const scheduleCell = slot.schedule_cell
-                if (!scheduleCell) return filters.displayFilters.inactive
+                if (!filters.displayFilters.inactive && slot.time_slot_is_active === false) {
+                  return false
+                }
 
-                const isInactive = !scheduleCell.is_active
-                if (isInactive) return filters.displayFilters.inactive
+                if (isSlotInactive(slot)) return filters.displayFilters.inactive
+
+                const scheduleCell = slot.schedule_cell
+                if (!scheduleCell) return false
 
                 // Calculate staffing status
                 if (

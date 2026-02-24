@@ -50,6 +50,10 @@ import {
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 import { parseLocalDate } from '@/lib/utils/date'
+import {
+  getSlotInactiveReasons,
+  isSlotEffectivelyInactive,
+} from '@/lib/utils/schedule-slot-activity'
 import { toast } from 'sonner'
 
 interface Teacher {
@@ -73,6 +77,8 @@ type ClassGroupWithMeta = ClassGroup & {
 }
 
 type SelectedCellData = WeeklyScheduleData & {
+  time_slot_is_active?: boolean
+  classroom_is_active?: boolean
   absences?: Array<{
     teacher_id: string
     teacher_name: string
@@ -1097,6 +1103,32 @@ export default function ScheduleSidePanel({
   // Determine if cell has data (current state)
   const hasData = !!(classGroupIds.length > 0 || enrollment !== null || selectedTeachers.length > 0)
 
+  const parentInactiveReasons = getSlotInactiveReasons({
+    schedule_cell: { is_active: true },
+    classroom_is_active: selectedCellData?.classroom_is_active,
+    time_slot_is_active: selectedCellData?.time_slot_is_active,
+  })
+
+  const isParentEffectivelyInactive = isSlotEffectivelyInactive({
+    schedule_cell: { is_active: true },
+    classroom_is_active: selectedCellData?.classroom_is_active,
+    time_slot_is_active: selectedCellData?.time_slot_is_active,
+  })
+
+  const effectiveInactiveReasonLabel =
+    parentInactiveReasons.length === 0
+      ? null
+      : parentInactiveReasons
+          .map(reason =>
+            reason === 'classroom'
+              ? 'Classroom is inactive'
+              : reason === 'time_slot'
+                ? 'Time slot is inactive'
+                : null
+          )
+          .filter(Boolean)
+          .join(' • ')
+
   // Auto-activate cell when class groups, enrollment, or teachers are added (only if inactive and originally empty)
   useEffect(() => {
     // If cell is inactive and originally had no data, and user is now adding data, activate it
@@ -1106,8 +1138,8 @@ export default function ScheduleSidePanel({
     }
   }, [classGroupIds.length, enrollment, selectedTeachers.length, isActive, hasData])
 
-  // Fields should be disabled if inactive AND has data
-  const fieldsDisabled = !isActive && hasData
+  // Fields should be disabled if parent entities are inactive, or if explicitly inactive with existing data.
+  const fieldsDisabled = isParentEffectivelyInactive || (!isActive && hasData)
 
   // Track unsaved changes
   useEffect(() => {
@@ -1910,6 +1942,11 @@ export default function ScheduleSidePanel({
                   ? 'View schedule details and take quick actions'
                   : 'Configure schedule cell settings and assignments'}
               </SheetDescription>
+              {effectiveInactiveReasonLabel && (
+                <div className="mt-2 inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                  Inactive: {effectiveInactiveReasonLabel}
+                </div>
+              )}
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
                 {staffingSummary.status && (
                   <span
@@ -2801,9 +2838,14 @@ export default function ScheduleSidePanel({
                             classGroups.map(group => (
                               <span
                                 key={group.id}
-                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700"
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                  group.is_active === false
+                                    ? 'border border-slate-200 bg-slate-50 text-slate-500'
+                                    : 'bg-slate-100 text-slate-700'
+                                }`}
                               >
                                 {group.name}
+                                {group.is_active === false ? ' (Inactive)' : ''}
                               </span>
                             ))
                           ) : (
@@ -2816,6 +2858,11 @@ export default function ScheduleSidePanel({
                             {enrollmentForCalculation ?? '—'}
                           </span>
                         </div>
+                        {classGroups.some(group => group.is_active === false) && (
+                          <div className="text-xs text-slate-500">
+                            Includes inactive class groups
+                          </div>
+                        )}
                       </div>
                       <Button
                         type="button"

@@ -408,6 +408,7 @@ export default function StaffFormClient({
                 draftCacheKey={`staff-form:${staff.id}`}
                 onDirtyChange={setIsOverviewDirty}
                 formId={`staff-overview-form-${staff.id}`}
+                externalDirty={isActive !== savedIsActive}
               />
             </div>
           ),

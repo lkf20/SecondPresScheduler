@@ -30,9 +30,9 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Search, GripVertical } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import ActiveStatusChip from '@/components/settings/ActiveStatusChip'
 
 interface Classroom {
   id: string
@@ -119,21 +119,17 @@ function SortableRow({ classroom }: { classroom: Classroom }) {
         </button>
       </TableCell>
       <TableCell className="text-base">
-        <div className="flex items-center gap-2">
-          {!classroom.is_active && (
-            <Badge variant="secondary" className="text-xs">
-              Inactive
-            </Badge>
-          )}
-          <span className={cn(!classroom.is_active && 'opacity-70')} aria-label={classroom.name}>
-            <span
-              className="inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium"
-              style={getClassroomChipStyle(classroom.color)}
-            >
-              {classroom.name}
-            </span>
+        <span className={cn(!classroom.is_active && 'opacity-70')} aria-label={classroom.name}>
+          <span
+            className="inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium"
+            style={getClassroomChipStyle(classroom.color)}
+          >
+            {classroom.name}
           </span>
-        </div>
+        </span>
+      </TableCell>
+      <TableCell className="text-base">
+        <ActiveStatusChip isActive={classroom.is_active !== false} />
       </TableCell>
       <TableCell className="text-base">{classroom.capacity || '—'}</TableCell>
       <TableCell className="max-w-md text-base">
@@ -254,6 +250,7 @@ export default function SortableClassroomsTable({
                 <TableRow>
                   <TableHead className="w-10"></TableHead>
                   <TableHead>Name</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Capacity</TableHead>
                   <TableHead>Allowed Class Groups</TableHead>
                 </TableRow>
@@ -261,7 +258,7 @@ export default function SortableClassroomsTable({
               <TableBody>
                 {filteredClassrooms.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-base text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="text-base text-center text-muted-foreground">
                       No classrooms found
                     </TableCell>
                   </TableRow>
@@ -286,6 +283,7 @@ export default function SortableClassroomsTable({
               <TableRow>
                 <TableHead className="w-10"></TableHead>
                 <TableHead>Name</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Capacity</TableHead>
                 <TableHead>Allowed Class Groups</TableHead>
               </TableRow>
@@ -293,7 +291,7 @@ export default function SortableClassroomsTable({
             <TableBody>
               {filteredClassrooms.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
                     No classrooms found
                   </TableCell>
                 </TableRow>
@@ -322,24 +320,20 @@ export default function SortableClassroomsTable({
                       </div>
                     </TableCell>
                     <TableCell className="text-base">
-                      <div className="flex items-center gap-2">
-                        {!classroom.is_active && (
-                          <Badge variant="secondary" className="text-xs">
-                            Inactive
-                          </Badge>
-                        )}
+                      <span
+                        className={cn(!classroom.is_active && 'opacity-70')}
+                        aria-label={classroom.name}
+                      >
                         <span
-                          className={cn(!classroom.is_active && 'opacity-70')}
-                          aria-label={classroom.name}
+                          className="inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium"
+                          style={getClassroomChipStyle(classroom.color)}
                         >
-                          <span
-                            className="inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium"
-                            style={getClassroomChipStyle(classroom.color)}
-                          >
-                            {classroom.name}
-                          </span>
+                          {classroom.name}
                         </span>
-                      </div>
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-base">
+                      <ActiveStatusChip isActive={classroom.is_active !== false} />
                     </TableCell>
                     <TableCell className="text-base">{classroom.capacity || '—'}</TableCell>
                     <TableCell className="max-w-md text-base">

@@ -31,15 +31,17 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Search, GripVertical } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import ActiveStatusChip from '@/components/settings/ActiveStatusChip'
 
 interface Class {
   id: string
   name: string
   order?: number | null
   is_active?: boolean
+  required_ratio?: number | null
+  preferred_ratio?: number | null
 }
 
 interface SortableClassesTableProps {
@@ -92,22 +94,24 @@ function SortableRow({ classItem }: { classItem: Class }) {
         </button>
       </TableCell>
       <TableCell className="text-base">
-        <div className="flex items-center gap-2">
-          {!classItem.is_active && (
-            <Badge variant="secondary" className="text-xs">
-              Inactive
-            </Badge>
+        <Link
+          href={`/settings/classes/${classItem.id}`}
+          className={cn(
+            'hover:underline text-base',
+            !classItem.is_active && 'text-muted-foreground'
           )}
-          <Link
-            href={`/settings/classes/${classItem.id}`}
-            className={cn(
-              'hover:underline text-base',
-              !classItem.is_active && 'text-muted-foreground'
-            )}
-          >
-            {classItem.name}
-          </Link>
-        </div>
+        >
+          {classItem.name}
+        </Link>
+      </TableCell>
+      <TableCell className="text-base text-center">
+        {classItem.required_ratio ? `1:${classItem.required_ratio}` : '—'}
+      </TableCell>
+      <TableCell className="text-base text-center">
+        {classItem.preferred_ratio ? `1:${classItem.preferred_ratio}` : '—'}
+      </TableCell>
+      <TableCell className="text-base text-center">
+        <ActiveStatusChip isActive={classItem.is_active !== false} />
       </TableCell>
     </TableRow>
   )
@@ -224,12 +228,15 @@ export default function SortableClassesTable({
                 <TableRow>
                   <TableHead className="w-10 text-base"></TableHead>
                   <TableHead className="text-base">Name</TableHead>
+                  <TableHead className="text-base text-center">Required Ratio</TableHead>
+                  <TableHead className="text-base text-center">Preferred Ratio</TableHead>
+                  <TableHead className="text-base text-center">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredClasses.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={2} className="text-center text-muted-foreground text-base">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground text-base">
                       No classes found
                     </TableCell>
                   </TableRow>
@@ -254,12 +261,15 @@ export default function SortableClassesTable({
               <TableRow>
                 <TableHead className="w-10 text-base"></TableHead>
                 <TableHead className="text-base">Name</TableHead>
+                <TableHead className="text-base text-center">Required Ratio</TableHead>
+                <TableHead className="text-base text-center">Preferred Ratio</TableHead>
+                <TableHead className="text-base text-center">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredClasses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={2} className="text-center text-muted-foreground text-base">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground text-base">
                     No classes found
                   </TableCell>
                 </TableRow>
@@ -289,22 +299,24 @@ export default function SortableClassesTable({
                       </div>
                     </TableCell>
                     <TableCell className="text-base">
-                      <div className="flex items-center gap-2">
-                        {!classItem.is_active && (
-                          <Badge variant="secondary" className="text-xs">
-                            Inactive
-                          </Badge>
+                      <Link
+                        href={`/settings/classes/${classItem.id}`}
+                        className={cn(
+                          'hover:underline text-base',
+                          !classItem.is_active && 'text-muted-foreground'
                         )}
-                        <Link
-                          href={`/settings/classes/${classItem.id}`}
-                          className={cn(
-                            'hover:underline text-base',
-                            !classItem.is_active && 'text-muted-foreground'
-                          )}
-                        >
-                          {classItem.name}
-                        </Link>
-                      </div>
+                      >
+                        {classItem.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-base text-center">
+                      {classItem.required_ratio ? `1:${classItem.required_ratio}` : '—'}
+                    </TableCell>
+                    <TableCell className="text-base text-center">
+                      {classItem.preferred_ratio ? `1:${classItem.preferred_ratio}` : '—'}
+                    </TableCell>
+                    <TableCell className="text-base text-center">
+                      <ActiveStatusChip isActive={classItem.is_active !== false} />
                     </TableCell>
                   </TableRow>
                 ))

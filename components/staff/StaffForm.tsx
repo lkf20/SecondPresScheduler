@@ -65,6 +65,7 @@ interface StaffFormProps {
   draftCacheKey?: string
   onDirtyChange?: (dirty: boolean) => void
   formId?: string
+  externalDirty?: boolean
 }
 
 const staffFormDraftCache = new Map<string, StaffFormData>()
@@ -89,6 +90,7 @@ export default function StaffForm({
   draftCacheKey,
   onDirtyChange,
   formId,
+  externalDirty = false,
 }: StaffFormProps) {
   const [roleTypes, setRoleTypes] = useState<StaffRoleType[]>(roleTypesProp)
   const [loadingRoleTypes, setLoadingRoleTypes] = useState(roleTypesProp.length === 0)
@@ -450,7 +452,10 @@ export default function StaffForm({
             Cancel
           </Button>
         )}
-        <Button type="submit" disabled={isSubmitting || (Boolean(staff) && !isFormDirty)}>
+        <Button
+          type="submit"
+          disabled={isSubmitting || (Boolean(staff) && !isFormDirty && !externalDirty)}
+        >
           {isSubmitting ? 'Saving...' : staff ? 'Update' : 'Create'}
         </Button>
       </div>

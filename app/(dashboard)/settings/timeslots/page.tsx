@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -118,9 +118,18 @@ export default function TimeSlotsPage() {
     }
   }
 
+  const sortedTimeSlots = useMemo(() => {
+    return [...timeslots].sort((a, b) => {
+      const orderA = a.display_order ?? Number.MAX_SAFE_INTEGER
+      const orderB = b.display_order ?? Number.MAX_SAFE_INTEGER
+      if (orderA !== orderB) return orderA - orderB
+      return a.code.localeCompare(b.code)
+    })
+  }, [timeslots])
+
   const filteredTimeSlots = showInactive
-    ? timeslots
-    : timeslots.filter(slot => slot.is_active !== false)
+    ? sortedTimeSlots
+    : sortedTimeSlots.filter(slot => slot.is_active !== false)
 
   return (
     <div>

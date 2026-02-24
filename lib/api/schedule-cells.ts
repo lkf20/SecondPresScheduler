@@ -52,6 +52,84 @@ async function getSchoolIdMapForClassrooms(classroomIds: string[]): Promise<Map<
   return map
 }
 
+async function assertActiveClassrooms(
+  classroomIds: string[],
+  schoolId: string,
+  messagePrefix: string
+): Promise<void> {
+  if (classroomIds.length === 0) return
+  const uniqueIds = [...new Set(classroomIds)]
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('classrooms')
+    .select('id, school_id, is_active')
+    .in('id', uniqueIds)
+
+  if (error) throw error
+
+  const rowById = new Map((data || []).map(row => [row.id, row]))
+  for (const classroomId of uniqueIds) {
+    const row = rowById.get(classroomId)
+    if (!row || row.school_id !== schoolId || row.is_active === false) {
+      throw new Error(
+        `${messagePrefix}: classroom is inactive, missing, or belongs to a different school.`
+      )
+    }
+  }
+}
+
+async function assertActiveTimeSlots(
+  timeSlotIds: string[],
+  schoolId: string,
+  messagePrefix: string
+): Promise<void> {
+  if (timeSlotIds.length === 0) return
+  const uniqueIds = [...new Set(timeSlotIds)]
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('time_slots')
+    .select('id, school_id, is_active')
+    .in('id', uniqueIds)
+
+  if (error) throw error
+
+  const rowById = new Map((data || []).map(row => [row.id, row]))
+  for (const timeSlotId of uniqueIds) {
+    const row = rowById.get(timeSlotId)
+    if (!row || row.school_id !== schoolId || row.is_active === false) {
+      throw new Error(
+        `${messagePrefix}: time slot is inactive, missing, or belongs to a different school.`
+      )
+    }
+  }
+}
+
+async function assertActiveClassGroups(
+  classGroupIds: string[],
+  schoolId: string,
+  messagePrefix: string
+): Promise<void> {
+  if (classGroupIds.length === 0) return
+  const uniqueIds = [...new Set(classGroupIds)]
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('class_groups')
+    .select('id, school_id, is_active')
+    .in('id', uniqueIds)
+
+  if (error) throw error
+
+  const rowById = new Map((data || []).map(row => [row.id, row]))
+  for (const classGroupId of uniqueIds) {
+    const row = rowById.get(classGroupId)
+    if (!row || row.school_id !== schoolId || row.is_active === false) {
+      throw new Error(
+        `${messagePrefix}: class group is inactive, missing, or belongs to a different school.`
+      )
+    }
+  }
+}
+
 export interface ScheduleCellFilters {
   classroom_id?: string
   day_of_week_id?: string
@@ -187,6 +265,11 @@ export async function createScheduleCell(cell: {
   if (!schoolId) {
     throw new Error('school_id is required to create a schedule cell')
   }
+
+  await assertActiveClassrooms([cell.classroom_id], schoolId, 'Cannot create schedule cell')
+  await assertActiveTimeSlots([cell.time_slot_id], schoolId, 'Cannot create schedule cell')
+  await assertActiveClassGroups(cell.class_group_ids || [], schoolId, 'Cannot create schedule cell')
+
   // Create the schedule cell
   const { data: cellData, error: cellError } = await supabase
     .from('schedule_cells')
@@ -235,6 +318,34 @@ export async function updateScheduleCell(
   // Extract class_group_ids if present
   const { class_group_ids, ...cellUpdates } = updates
 
+  const { data: existingCell, error: existingCellError } = await supabase
+    .from('schedule_cells')
+    .select('id, school_id')
+    .eq('id', id)
+    .single()
+
+  if (existingCellError) throw existingCellError
+  const schoolId = existingCell.school_id || (await getUserSchoolId())
+  if (!schoolId) throw new Error('school_id is required to update schedule cell')
+
+  if (class_group_ids !== undefined) {
+    const { data: existingJoins, error: joinsError } = await supabase
+      .from('schedule_cell_class_groups')
+      .select('class_group_id')
+      .eq('schedule_cell_id', id)
+    if (joinsError) throw joinsError
+
+    const existingIds = new Set(
+      (existingJoins || []).map(row => row.class_group_id).filter(Boolean)
+    )
+    const newlyAddedIds = class_group_ids.filter(classGroupId => !existingIds.has(classGroupId))
+    await assertActiveClassGroups(
+      newlyAddedIds,
+      schoolId,
+      'Cannot add inactive class group to schedule cell'
+    )
+  }
+
   // Update the schedule cell
   const { data, error } = await supabase
     .from('schedule_cells')
@@ -244,8 +355,8 @@ export async function updateScheduleCell(
     .single()
 
   if (error) throw error
-  const schoolId = data?.school_id || (await getUserSchoolId())
-  if (!schoolId) throw new Error('school_id is required to update schedule cell class groups')
+  const dataSchoolId = data?.school_id || schoolId
+  if (!dataSchoolId) throw new Error('school_id is required to update schedule cell class groups')
 
   // Update class group associations if provided
   if (class_group_ids !== undefined) {
@@ -262,7 +373,7 @@ export async function updateScheduleCell(
       const joinRows = class_group_ids.map(class_group_id => ({
         schedule_cell_id: id,
         class_group_id,
-        school_id: schoolId,
+        school_id: dataSchoolId,
       }))
 
       const { error: insertError } = await supabase
@@ -381,6 +492,81 @@ export async function bulkUpdateScheduleCells(
       notes: update.notes !== undefined ? update.notes : null,
     }
   })
+
+  // For rows that do not yet exist, prevent linking to inactive classroom/time slot.
+  const newRows = updates.filter(update => {
+    const key = `${update.classroom_id}|${update.day_of_week_id}|${update.time_slot_id}`
+    return !existingMap.has(key)
+  })
+  if (newRows.length > 0) {
+    const newSchoolId = newRows[0]?.school_id || schoolId || schoolMap.get(newRows[0].classroom_id)
+    if (!newSchoolId) {
+      throw new Error('school_id is required to create schedule cells')
+    }
+    await assertActiveClassrooms(
+      newRows.map(row => row.classroom_id),
+      newSchoolId,
+      'Cannot create schedule cell'
+    )
+    await assertActiveTimeSlots(
+      newRows.map(row => row.time_slot_id),
+      newSchoolId,
+      'Cannot create schedule cell'
+    )
+  }
+
+  // Prevent adding new inactive class-group links in bulk updates.
+  const updatesWithClassGroups = updates.filter(update => update.class_group_ids !== undefined)
+  if (updatesWithClassGroups.length > 0) {
+    const existingCellIds = updatesWithClassGroups
+      .map(update => {
+        const key = `${update.classroom_id}|${update.day_of_week_id}|${update.time_slot_id}`
+        return existingMap.get(key)?.id || null
+      })
+      .filter((id): id is string => Boolean(id))
+
+    const existingClassGroupIdsByCell = new Map<string, Set<string>>()
+    if (existingCellIds.length > 0) {
+      const { data: joins, error: joinsError } = await supabase
+        .from('schedule_cell_class_groups')
+        .select('schedule_cell_id, class_group_id')
+        .in('schedule_cell_id', existingCellIds)
+      if (joinsError) throw joinsError
+      ;(joins || []).forEach(row => {
+        if (!existingClassGroupIdsByCell.has(row.schedule_cell_id)) {
+          existingClassGroupIdsByCell.set(row.schedule_cell_id, new Set())
+        }
+        existingClassGroupIdsByCell.get(row.schedule_cell_id)!.add(row.class_group_id)
+      })
+    }
+
+    const newlyAddedClassGroupIds: string[] = []
+    for (const update of updatesWithClassGroups) {
+      const key = `${update.classroom_id}|${update.day_of_week_id}|${update.time_slot_id}`
+      const existingCell = existingMap.get(key)
+      const existingIds = existingCell
+        ? existingClassGroupIdsByCell.get(existingCell.id) || new Set<string>()
+        : new Set<string>()
+      ;(update.class_group_ids || []).forEach(classGroupId => {
+        if (!existingIds.has(classGroupId)) newlyAddedClassGroupIds.push(classGroupId)
+      })
+    }
+
+    if (newlyAddedClassGroupIds.length > 0) {
+      const classGroupSchoolId =
+        updatesWithClassGroups[0]?.school_id ||
+        schoolId ||
+        schoolMap.get(updatesWithClassGroups[0].classroom_id)
+      if (!classGroupSchoolId) {
+        throw new Error('school_id is required to update schedule cell class groups')
+      }
+      await assertActiveClassGroups(
+        newlyAddedClassGroupIds,
+        classGroupSchoolId,
+        'Cannot add inactive class group to schedule cell'
+      )
+    }
+  }
 
   // Batch upsert all cells at once
   const { data: upsertedCells, error: upsertError } = await supabase

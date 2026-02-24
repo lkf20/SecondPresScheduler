@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils'
 import { Database } from '@/types/database'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSchool } from '@/lib/contexts/SchoolContext'
+import ActiveStatusChip from '@/components/settings/ActiveStatusChip'
 import {
   invalidateDailySchedule,
   invalidateDashboard,
@@ -44,6 +45,13 @@ type TimeSlot = Database['public']['Tables']['time_slots']['Row']
 
 interface SortableTimeSlotsTableProps {
   timeSlots: TimeSlot[]
+}
+
+const sortByDisplayOrderThenCode = (a: TimeSlot, b: TimeSlot) => {
+  const orderA = a.display_order ?? Number.MAX_SAFE_INTEGER
+  const orderB = b.display_order ?? Number.MAX_SAFE_INTEGER
+  if (orderA !== orderB) return orderA - orderB
+  return a.code.localeCompare(b.code)
 }
 
 const formatTime12Hour = (time24: string | null | undefined): string => {
@@ -124,15 +132,7 @@ function SortableRow({ timeSlot }: { timeSlot: TimeSlot }) {
       <TableCell className="text-base">{formatTime12Hour(timeSlot.default_start_time)}</TableCell>
       <TableCell className="text-base">{formatTime12Hour(timeSlot.default_end_time)}</TableCell>
       <TableCell>
-        <span
-          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${
-            isActive
-              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-              : 'border-slate-200 bg-slate-100 text-slate-600'
-          }`}
-        >
-          {isActive ? 'Active' : 'Inactive'}
-        </span>
+        <ActiveStatusChip isActive={isActive} />
       </TableCell>
     </TableRow>
   )
@@ -154,7 +154,7 @@ export default function SortableTimeSlotsTable({
   }, [])
 
   useEffect(() => {
-    setTimeSlots(initialTimeSlots)
+    setTimeSlots([...initialTimeSlots].sort(sortByDisplayOrderThenCode))
   }, [initialTimeSlots])
 
   const displayedTimeSlots = useMemo(() => {
@@ -355,15 +355,7 @@ export default function SortableTimeSlotsTable({
                         {formatTime12Hour(slot.default_end_time)}
                       </TableCell>
                       <TableCell>
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${
-                            isActive
-                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                              : 'border-slate-200 bg-slate-100 text-slate-600'
-                          }`}
-                        >
-                          {isActive ? 'Active' : 'Inactive'}
-                        </span>
+                        <ActiveStatusChip isActive={isActive} />
                       </TableCell>
                     </TableRow>
                   )

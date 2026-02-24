@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getClassrooms, createClassroom, setClassroomAllowedClasses } from '@/lib/api/classrooms'
 import { createErrorResponse } from '@/lib/utils/errors'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const classrooms = await getClassrooms()
+    const includeInactive = request.nextUrl.searchParams.get('includeInactive') === 'true'
+    const classrooms = await getClassrooms(includeInactive)
     return NextResponse.json(classrooms)
   } catch (error) {
     return createErrorResponse(error, 'Failed to fetch classrooms', 500, 'GET /api/classrooms')

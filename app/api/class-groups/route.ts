@@ -12,9 +12,10 @@ function revalidateClassGroupDependentPaths() {
   revalidatePath('/sub-finder')
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const classGroups = await getClassGroups()
+    const includeInactive = request.nextUrl.searchParams.get('includeInactive') === 'true'
+    const classGroups = await getClassGroups(includeInactive)
     return NextResponse.json(classGroups)
   } catch (error) {
     return createErrorResponse(error, 'Failed to fetch class groups', 500, 'GET /api/class-groups')

@@ -17,8 +17,8 @@ interface FilterOptions {
 async function fetchFilterOptions(): Promise<FilterOptions> {
   const [daysRes, timeSlotsRes, classroomsRes] = await Promise.all([
     fetch('/api/days-of-week'),
-    fetch('/api/timeslots'),
-    fetch('/api/classrooms'),
+    fetch('/api/timeslots?includeInactive=true'),
+    fetch('/api/classrooms?includeInactive=true'),
   ])
 
   if (!daysRes.ok || !timeSlotsRes.ok || !classroomsRes.ok) {

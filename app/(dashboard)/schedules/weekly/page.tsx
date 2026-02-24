@@ -15,6 +15,7 @@ import { useWeeklySchedule } from '@/lib/hooks/use-weekly-schedule'
 import { useScheduleSettings } from '@/lib/hooks/use-schedule-settings'
 import { useFilterOptions } from '@/lib/hooks/use-filter-options'
 import { invalidateWeeklySchedule } from '@/lib/utils/invalidation'
+import { isSlotInactive } from '@/lib/utils/schedule-slot-activity'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 
 // Calculate Monday of current week as ISO string for query key
@@ -36,23 +37,8 @@ export default function WeeklySchedulePage() {
   const focusTimeSlotId = searchParams.get('time_slot_id')
   const hasAppliedFocusRef = useRef(false)
 
-  // Week state - initialize from localStorage or use current week
-  const [weekStartISO, setWeekStartISO] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const savedWeek = localStorage.getItem('weekly-schedule-week')
-      if (savedWeek) {
-        return savedWeek
-      }
-    }
-    return getWeekStartISO()
-  })
-
-  // Save week to localStorage when it changes
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('weekly-schedule-week', weekStartISO)
-    }
-  }, [weekStartISO])
+  // Week state - default to the current week
+  const [weekStartISO, setWeekStartISO] = useState<string>(() => getWeekStartISO())
 
   // React Query hooks
   const {
@@ -312,7 +298,11 @@ export default function WeeklySchedulePage() {
     console.log('[WeeklySchedulePage] Total scheduleData classrooms:', scheduleData.length)
 
     const result = scheduleData
-      .filter(classroom => filters.selectedClassroomIds.includes(classroom.classroom_id))
+      .filter(
+        classroom =>
+          filters.selectedClassroomIds.includes(classroom.classroom_id) &&
+          (filters.displayFilters.inactive || classroom.classroom_is_active !== false)
+      )
       .map(classroom => ({
         ...classroom,
         days: classroom.days
@@ -322,6 +312,10 @@ export default function WeeklySchedulePage() {
             time_slots: day.time_slots
               .filter(slot => filters.selectedTimeSlotIds.includes(slot.time_slot_id))
               .filter(slot => {
+                if (!filters.displayFilters.inactive && slot.time_slot_is_active === false) {
+                  return false
+                }
+
                 // In Absences mode, we ONLY want slots that actually contain absences.
                 // Do this before scheduleCell/staffing checks, since those checks can otherwise
                 // "let through" lots of inactive/missing slots via displayFilters.inactive.
@@ -413,11 +407,10 @@ export default function WeeklySchedulePage() {
                   return belowRequired || belowPreferred
                 }
 
-                const scheduleCell = slot.schedule_cell
-                if (!scheduleCell) return filters.displayFilters.inactive
+                if (isSlotInactive(slot)) return filters.displayFilters.inactive
 
-                const isInactive = !scheduleCell.is_active
-                if (isInactive) return filters.displayFilters.inactive
+                const scheduleCell = slot.schedule_cell
+                if (!scheduleCell) return false
 
                 // Calculate staffing status
                 if (
