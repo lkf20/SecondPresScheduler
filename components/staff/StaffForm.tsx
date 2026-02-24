@@ -34,8 +34,10 @@ const staffSchema = z
     email: z
       .string()
       .trim()
-      .min(1, 'Please enter a valid email.')
-      .email('Please enter a valid email.'),
+      .refine(
+        value => value === '' || z.string().email().safeParse(value).success,
+        'Please enter a valid email.'
+      ),
     role_type_ids: z.array(z.string()),
     active: z.boolean().default(true),
     is_sub: z.boolean().default(false),
