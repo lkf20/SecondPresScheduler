@@ -18,6 +18,7 @@ import { Database } from '@/types/database'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSchool } from '@/lib/contexts/SchoolContext'
+import { useUnsavedNavigationGuard } from '@/lib/hooks/use-unsaved-navigation-guard'
 import { invalidateSchedulingSurfaces } from '@/lib/utils/invalidation'
 
 type TimeSlot = Database['public']['Tables']['time_slots']['Row']
@@ -69,8 +70,6 @@ export default function TimeSlotForm({
   }
 
   const [error, setError] = useState<string | null>(null)
-  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
-  const [pendingPath, setPendingPath] = useState<string | null>(null)
 
   const {
     register,
@@ -127,64 +126,16 @@ export default function TimeSlotForm({
   const hasUnsavedChanges =
     JSON.stringify(currentSnapshot) !== JSON.stringify(baselineSnapshotRef.current)
 
-  const navigateWithUnsavedGuard = (path: string) => {
-    if (hasUnsavedChanges) {
-      setPendingPath(path)
-      setShowUnsavedDialog(true)
-      return
-    }
-    router.push(path)
-  }
-
-  useEffect(() => {
-    if (!hasUnsavedChanges) return
-
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-      event.returnValue = ''
-    }
-
-    const handleDocumentClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null
-      if (!target) return
-
-      const anchor = target.closest('a[href]') as HTMLAnchorElement | null
-      if (!anchor) return
-      if (anchor.target && anchor.target !== '_self') return
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-
-      const href = anchor.getAttribute('href')
-      if (!href || href.startsWith('#') || href.startsWith('javascript:')) return
-
-      const nextUrl = new URL(anchor.href, window.location.href)
-      if (nextUrl.origin !== window.location.origin) return
-
-      const nextPath = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`
-      const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`
-      if (nextPath === currentPath) return
-
-      event.preventDefault()
-      setPendingPath(nextPath)
-      setShowUnsavedDialog(true)
-    }
-
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    document.addEventListener('click', handleDocumentClick, true)
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-      document.removeEventListener('click', handleDocumentClick, true)
-    }
-  }, [hasUnsavedChanges])
-
-  const handleDiscardAndLeave = () => {
-    const destination = pendingPath
-    setShowUnsavedDialog(false)
-    setPendingPath(null)
-    if (destination) {
-      router.push(destination)
-    }
-  }
+  const {
+    showUnsavedDialog,
+    setShowUnsavedDialog,
+    navigateWithUnsavedGuard,
+    handleKeepEditing,
+    handleDiscardAndLeave,
+  } = useUnsavedNavigationGuard({
+    hasUnsavedChanges,
+    onNavigate: path => router.push(path),
+  })
 
   const invalidateAfterSave = async () => {
     await invalidateSchedulingSurfaces(queryClient, schoolId)
@@ -336,10 +287,7 @@ export default function TimeSlotForm({
       <StaffUnsavedChangesDialog
         open={showUnsavedDialog}
         onOpenChange={setShowUnsavedDialog}
-        onKeepEditing={() => {
-          setShowUnsavedDialog(false)
-          setPendingPath(null)
-        }}
+        onKeepEditing={handleKeepEditing}
         onDiscardAndLeave={handleDiscardAndLeave}
       />
     </div>
