@@ -3,17 +3,20 @@ import ClassSelector from '@/components/settings/ClassSelector'
 
 jest.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({
+    id,
     checked,
     onCheckedChange,
   }: {
+    id?: string
     checked?: boolean
     onCheckedChange?: (checked: boolean) => void
   }) => (
     <input
+      id={id}
       type="checkbox"
       checked={checked}
       onChange={e => onCheckedChange?.(e.target.checked)}
-      aria-label="Class checkbox"
+      aria-label={id || 'Class checkbox'}
     />
   ),
 }))
@@ -64,6 +67,18 @@ jest.mock('@/components/ui/dialog', () => ({
 }))
 
 const originalFetch = global.fetch
+const openClassList = () => {
+  const toggleButton = screen.getByRole('button', {
+    name: /expand class groups list|collapse class groups list/i,
+  })
+  if ((toggleButton.getAttribute('aria-label') || '').toLowerCase().includes('expand')) {
+    fireEvent.click(toggleButton)
+  }
+}
+const waitForClassGroupCheckbox = async (id = 'class-group-cg-1') => {
+  openClassList()
+  await screen.findByLabelText(id)
+}
 
 describe('ClassSelector', () => {
   afterEach(() => {
@@ -89,14 +104,10 @@ describe('ClassSelector', () => {
     render(<ClassSelector selectedClassIds={[]} onSelectionChange={onSelectionChange} />)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /add class groups/i })).toBeInTheDocument()
+      expect(screen.getByPlaceholderText('Search class groups...')).toBeInTheDocument()
     })
-
-    fireEvent.click(screen.getByRole('button', { name: /add class groups/i }))
-    expect(screen.getByText('Select Class Groups')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByText('Infant A'))
-    fireEvent.click(screen.getByRole('button', { name: /save \(1 selected\)/i }))
+    await waitForClassGroupCheckbox()
+    fireEvent.click(screen.getByLabelText('class-group-cg-1'))
 
     expect(onSelectionChange).toHaveBeenCalledWith(['cg-1'])
   })
@@ -112,11 +123,7 @@ describe('ClassSelector', () => {
 
     render(<ClassSelector selectedClassIds={[]} onSelectionChange={onSelectionChange} />)
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /add class groups/i })).toBeInTheDocument()
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: /add class groups/i }))
+    await waitForClassGroupCheckbox()
     fireEvent.change(screen.getByPlaceholderText('Search class groups...'), {
       target: { value: 'NoMatch' },
     })
@@ -144,20 +151,30 @@ describe('ClassSelector', () => {
     expect(removeButton).toBeTruthy()
     fireEvent.click(removeButton as HTMLButtonElement)
     expect(onSelectionChange).toHaveBeenCalledWith([])
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: /add class groups/i }))
-    fireEvent.click(screen.getByRole('button', { name: /select all/i }))
-    fireEvent.click(screen.getByRole('button', { name: /save \(2 selected\)/i }))
+  it('supports select-all and deselect-all actions in the expanded list', async () => {
+    const onSelectionChange = jest.fn()
+    global.fetch = jest.fn(async () => {
+      return {
+        ok: true,
+        json: async () => [
+          { id: 'cg-1', name: 'Infant A' },
+          { id: 'cg-2', name: 'Toddler B' },
+        ],
+      } as Response
+    }) as jest.Mock
+
+    render(<ClassSelector selectedClassIds={[]} onSelectionChange={onSelectionChange} />)
+
+    await waitForClassGroupCheckbox()
+    fireEvent.click(screen.getByRole('button', { name: /^select all$/i }))
     expect(onSelectionChange).toHaveBeenCalledWith(expect.arrayContaining(['cg-1', 'cg-2']))
-
-    fireEvent.click(screen.getByRole('button', { name: /add class groups/i }))
     fireEvent.change(screen.getByPlaceholderText('Search class groups...'), {
       target: { value: 'Toddler' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /clear all/i }))
-    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
-    fireEvent.click(screen.getByRole('button', { name: /add class groups/i }))
-    expect(screen.getByPlaceholderText('Search class groups...')).toHaveValue('')
+    fireEvent.click(screen.getByRole('button', { name: /^deselect all$/i }))
+    expect(onSelectionChange).toHaveBeenCalledWith(expect.not.arrayContaining(['cg-2']))
   })
 
   it('deselects via checkbox onCheckedChange and saves empty selection', async () => {
@@ -171,10 +188,9 @@ describe('ClassSelector', () => {
 
     render(<ClassSelector selectedClassIds={['cg-1']} onSelectionChange={onSelectionChange} />)
 
-    fireEvent.click(await screen.findByRole('button', { name: /add class groups/i }))
-    const checkbox = screen.getByLabelText('Class checkbox')
+    await waitForClassGroupCheckbox()
+    const checkbox = screen.getByLabelText('class-group-cg-1')
     fireEvent.click(checkbox)
-    fireEvent.click(screen.getByRole('button', { name: /save \(0 selected\)/i }))
 
     expect(onSelectionChange).toHaveBeenCalledWith([])
   })
@@ -191,7 +207,7 @@ describe('ClassSelector', () => {
       expect(errorSpy).toHaveBeenCalled()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: /add class groups/i }))
+    openClassList()
     expect(screen.getByText('No class groups found')).toBeInTheDocument()
     errorSpy.mockRestore()
   })
@@ -220,9 +236,9 @@ describe('ClassSelector', () => {
     expect(await screen.findByText('Toddler B')).toBeInTheDocument()
     expect(screen.queryByText('Infant A')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /add class groups/i }))
-    fireEvent.click(screen.getByRole('button', { name: /save \(1 selected\)/i }))
+    await waitForClassGroupCheckbox('class-group-cg-2')
+    fireEvent.click(screen.getByLabelText('class-group-cg-2'))
 
-    expect(onSelectionChange).toHaveBeenLastCalledWith(['cg-2'])
+    expect(onSelectionChange).toHaveBeenLastCalledWith([])
   })
 })

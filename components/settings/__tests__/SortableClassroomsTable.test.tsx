@@ -17,6 +17,12 @@ jest.mock('next/link', () => ({
   ),
 }))
 
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    refresh: jest.fn(),
+  }),
+}))
+
 jest.mock('@dnd-kit/core', () => ({
   DndContext: ({
     children,

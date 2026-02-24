@@ -16,7 +16,7 @@ describe('ShiftStatusCard', () => {
     expect(screen.getByText(/monday feb 9/i)).toBeInTheDocument()
     expect(screen.getByText(/absence: amy p\./i)).toBeInTheDocument()
     expect(screen.getByText(/uncovered/i)).toBeInTheDocument()
-    expect(screen.getByText(/not contacted/i)).toBeInTheDocument()
+    expect(screen.getByText(/no subs contacted/i)).toBeInTheDocument()
   })
 
   it('renders confirmed sub label when fully covered with sub name', () => {

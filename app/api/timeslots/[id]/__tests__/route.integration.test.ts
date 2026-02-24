@@ -2,6 +2,9 @@
 
 import { GET, PUT, DELETE } from '@/app/api/timeslots/[id]/route'
 import { getTimeSlotById, updateTimeSlot, deleteTimeSlot } from '@/lib/api/timeslots'
+import { createErrorResponse } from '@/lib/utils/errors'
+import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 
 jest.mock('@/lib/api/timeslots', () => ({
   getTimeSlotById: jest.fn(),
@@ -9,9 +12,21 @@ jest.mock('@/lib/api/timeslots', () => ({
   deleteTimeSlot: jest.fn(),
 }))
 
+jest.mock('@/lib/utils/errors', () => ({
+  createErrorResponse: jest.fn(),
+}))
+
+jest.mock('next/cache', () => ({
+  revalidatePath: jest.fn(),
+}))
+
 describe('timeslots id route integration', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    ;(createErrorResponse as jest.Mock).mockImplementation(
+      (_error: unknown, message: string, status: number) =>
+        NextResponse.json({ error: message }, { status })
+    )
   })
 
   it('GET returns timeslot by id', async () => {
@@ -36,7 +51,7 @@ describe('timeslots id route integration', () => {
     const json = await response.json()
 
     expect(response.status).toBe(500)
-    expect(json.error).toBe('fetch failed')
+    expect(json.error).toBe('Failed to fetch time slot')
   })
 
   it('PUT updates timeslot by id', async () => {
@@ -55,6 +70,7 @@ describe('timeslots id route integration', () => {
 
     expect(response.status).toBe(200)
     expect(updateTimeSlot).toHaveBeenCalledWith('slot-em', { code: 'AM' })
+    expect(revalidatePath).toHaveBeenCalled()
     expect(json).toEqual({ id: 'slot-em', code: 'AM' })
   })
 
@@ -73,7 +89,7 @@ describe('timeslots id route integration', () => {
     const json = await response.json()
 
     expect(response.status).toBe(500)
-    expect(json.error).toBe('update failed')
+    expect(json.error).toBe('Failed to update time slot')
   })
 
   it('DELETE removes timeslot by id', async () => {
@@ -89,6 +105,7 @@ describe('timeslots id route integration', () => {
 
     expect(response.status).toBe(200)
     expect(deleteTimeSlot).toHaveBeenCalledWith('slot-em')
+    expect(revalidatePath).toHaveBeenCalled()
     expect(json).toEqual({ success: true })
   })
 
@@ -104,6 +121,6 @@ describe('timeslots id route integration', () => {
     const json = await response.json()
 
     expect(response.status).toBe(500)
-    expect(json.error).toBe('delete failed')
+    expect(json.error).toBe('Failed to delete time slot')
   })
 })

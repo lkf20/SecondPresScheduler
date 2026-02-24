@@ -33,8 +33,8 @@ describe('ShiftChips', () => {
       />
     )
 
-    expect(screen.getByText('Assigned')).toBeInTheDocument()
-    expect(screen.getByText('Available')).toBeInTheDocument()
-    expect(screen.getByText('Unavailable')).toBeInTheDocument()
+    expect(screen.getByText('Assigned to this sub')).toBeInTheDocument()
+    expect(screen.getByText('Can cover')).toBeInTheDocument()
+    expect(screen.getByText('Cannot cover')).toBeInTheDocument()
   })
 })

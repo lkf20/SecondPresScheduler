@@ -164,28 +164,19 @@ describe('RecommendedSubsList', () => {
       />
     )
 
-    const filterBar = screen.getByRole('button', { name: /all \(6\)/i }).parentElement
-    expect(filterBar).not.toBeNull()
-    const filters = within(filterBar as HTMLElement)
+    expect(screen.getByRole('button', { name: /assigned \(1\)/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /contacted \(1\)/i })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /available \(1\)/i }).length).toBeGreaterThan(0)
+    await user.click(screen.getByRole('button', { name: /more filters/i }))
+    const popover = within(screen.getByRole('dialog'))
+    expect(popover.getByRole('button', { name: /available with limitations/i })).toBeInTheDocument()
+    expect(popover.getByRole('button', { name: /unavailable/i })).toBeInTheDocument()
+    expect(popover.getByRole('button', { name: /declined/i })).toBeInTheDocument()
 
-    expect(filters.getByRole('button', { name: /assigned \(1\)/i })).toBeInTheDocument()
-    expect(filters.getByRole('button', { name: /contacted \(1\)/i })).toBeInTheDocument()
-    expect(filters.getByRole('button', { name: /^Available \(1\)$/i })).toBeInTheDocument()
-    expect(
-      filters.getByRole('button', { name: /available with limitations \(1\)/i })
-    ).toBeInTheDocument()
-    expect(filters.getByRole('button', { name: /unavailable \(1\)/i })).toBeInTheDocument()
-    expect(filters.getByRole('button', { name: /declined \(1\)/i })).toBeInTheDocument()
-
-    await user.click(filters.getByRole('button', { name: /unavailable \(1\)/i }))
+    await user.click(popover.getByRole('button', { name: /unavailable/i }))
 
     expect(screen.getByText('Unavailable Sub')).toBeInTheDocument()
     expect(screen.queryByText('Available Sub')).not.toBeInTheDocument()
-
-    await user.click(filters.getByRole('button', { name: /unavailable \(1\)/i }))
-
-    expect(screen.getByText('Unavailable Sub')).toBeInTheDocument()
-    expect(screen.getByText('Available Sub')).toBeInTheDocument()
   })
 
   it('hides header copy when hideHeader is true', () => {

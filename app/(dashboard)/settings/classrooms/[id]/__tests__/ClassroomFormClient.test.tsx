@@ -1,7 +1,7 @@
 /* eslint-disable react/display-name */
 import React from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import ClassroomFormClient from '@/app/(dashboard)/settings/classrooms/[id]/ClassroomFormClient'
+import ClassroomForm from '@/components/settings/ClassroomForm'
 
 const pushMock = jest.fn()
 const refreshMock = jest.fn()
@@ -11,6 +11,16 @@ jest.mock('next/navigation', () => ({
     push: pushMock,
     refresh: refreshMock,
   }),
+}))
+
+jest.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({
+    invalidateQueries: jest.fn().mockResolvedValue(undefined),
+  }),
+}))
+
+jest.mock('@/lib/contexts/SchoolContext', () => ({
+  useSchool: () => 'school-1',
 }))
 
 jest.mock('@/components/ui/button', () => ({
@@ -97,7 +107,7 @@ jest.mock('@/components/settings/ClassroomColorPicker', () => ({
 
 const originalFetch = global.fetch
 
-describe('ClassroomFormClient', () => {
+describe('ClassroomForm (edit)', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
@@ -115,7 +125,8 @@ describe('ClassroomFormClient', () => {
 
   it('loads allowed classes and submits updates with selected classes and color', async () => {
     render(
-      <ClassroomFormClient
+      <ClassroomForm
+        mode="edit"
         classroom={
           {
             id: 'class-1',
@@ -173,7 +184,8 @@ describe('ClassroomFormClient', () => {
     }) as jest.Mock
 
     render(
-      <ClassroomFormClient
+      <ClassroomForm
+        mode="edit"
         classroom={
           {
             id: 'class-1',

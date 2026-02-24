@@ -280,6 +280,20 @@ describe('POST /api/sub-finder/find-subs integration', () => {
     ;(classPreferencesQuery.eq as jest.Mock)
       .mockReturnValueOnce(classPreferencesQuery)
       .mockResolvedValueOnce({ data: [], error: null })
+
+    const subAssignmentsQuery = {
+      select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({ data: [], error: null }),
+    }
+
+    const substituteContactsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      single: jest.fn().mockRejectedValue(new Error('no contact')),
+    }
     ;(createClient as jest.Mock).mockResolvedValue({
       from: jest.fn((table: string) => {
         if (table === 'teacher_schedules') return teacherSchedulesQuery
@@ -288,6 +302,8 @@ describe('POST /api/sub-finder/find-subs integration', () => {
         if (table === 'sub_availability') return availabilityQuery
         if (table === 'sub_availability_exceptions') return exceptionsQuery
         if (table === 'sub_class_preferences') return classPreferencesQuery
+        if (table === 'sub_assignments') return subAssignmentsQuery
+        if (table === 'substitute_contacts') return substituteContactsQuery
         throw new Error(`Unexpected table: ${table}`)
       }),
     })
@@ -404,6 +420,20 @@ describe('POST /api/sub-finder/find-subs integration', () => {
     ;(classPreferencesQuery.eq as jest.Mock)
       .mockReturnValueOnce(classPreferencesQuery)
       .mockResolvedValueOnce({ data: [], error: null })
+
+    const subAssignmentsQuery = {
+      select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({ data: [], error: null }),
+    }
+
+    const substituteContactsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      single: jest.fn().mockRejectedValue(new Error('no contact')),
+    }
     ;(createClient as jest.Mock).mockResolvedValue({
       from: jest.fn((table: string) => {
         if (table === 'teacher_schedules') return teacherSchedulesQuery
@@ -412,6 +442,8 @@ describe('POST /api/sub-finder/find-subs integration', () => {
         if (table === 'sub_availability') return availabilityQuery
         if (table === 'sub_availability_exceptions') return exceptionsQuery
         if (table === 'sub_class_preferences') return classPreferencesQuery
+        if (table === 'sub_assignments') return subAssignmentsQuery
+        if (table === 'substitute_contacts') return substituteContactsQuery
         throw new Error(`Unexpected table: ${table}`)
       }),
     })
@@ -553,23 +585,24 @@ describe('POST /api/sub-finder/find-subs integration', () => {
 
     const subAssignmentsQuery = {
       select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
       gte: jest.fn().mockReturnThis(),
-      lte: jest.fn().mockReturnThis(),
-    }
-    ;(subAssignmentsQuery.eq as jest.Mock)
-      .mockReturnValueOnce(subAssignmentsQuery)
-      .mockReturnValueOnce(subAssignmentsQuery)
-      .mockResolvedValueOnce({
+      lte: jest.fn().mockResolvedValue({
         data: [
           {
+            sub_id: 'staff-flex-1',
+            teacher_id: 'teacher-1',
             date: '2099-02-09',
+            time_slot_id: 'slot-1',
             time_slots: { code: 'EM' },
             days_of_week: { name: 'Monday' },
+            classrooms: { name: 'Infant Room' },
           },
         ],
         error: null,
-      })
+      }),
+    }
 
     const substituteContactsQuery = {
       select: jest.fn().mockReturnThis(),
@@ -756,14 +789,11 @@ describe('POST /api/sub-finder/find-subs integration', () => {
 
     const subAssignmentsQuery = {
       select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
       gte: jest.fn().mockReturnThis(),
-      lte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({ data: [], error: null }),
     }
-    ;(subAssignmentsQuery.eq as jest.Mock)
-      .mockReturnValueOnce(subAssignmentsQuery)
-      .mockReturnValueOnce(subAssignmentsQuery)
-      .mockResolvedValueOnce({ data: [], error: null })
 
     const substituteContactsQuery = {
       select: jest.fn().mockReturnThis(),
@@ -879,6 +909,19 @@ describe('POST /api/sub-finder/find-subs integration', () => {
       gte: jest.fn().mockReturnThis(),
       lte: jest.fn().mockResolvedValue({ data: [], error: null }),
     }
+    const subAssignmentsQuery = {
+      select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({ data: [], error: null }),
+    }
+
+    const substituteContactsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      single: jest.fn().mockRejectedValue(new Error('no contact')),
+    }
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
 
     ;(createClient as jest.Mock).mockResolvedValue({
@@ -888,6 +931,8 @@ describe('POST /api/sub-finder/find-subs integration', () => {
         if (table === 'staff') return staffQuery
         if (table === 'sub_availability') return availabilityQuery
         if (table === 'sub_availability_exceptions') return exceptionsQuery
+        if (table === 'sub_assignments') return subAssignmentsQuery
+        if (table === 'substitute_contacts') return substituteContactsQuery
         if (table === 'sub_class_preferences') {
           throw new Error('preferences lookup exploded')
         }

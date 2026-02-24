@@ -1,7 +1,7 @@
 /* eslint-disable react/display-name */
 import React from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import ClassFormClient from '@/app/(dashboard)/settings/classes/[id]/ClassFormClient'
+import ClassGroupForm from '@/components/settings/ClassGroupForm'
 
 const pushMock = jest.fn()
 const refreshMock = jest.fn()
@@ -11,6 +11,16 @@ jest.mock('next/navigation', () => ({
     push: pushMock,
     refresh: refreshMock,
   }),
+}))
+
+jest.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({
+    invalidateQueries: jest.fn().mockResolvedValue(undefined),
+  }),
+}))
+
+jest.mock('@/lib/contexts/SchoolContext', () => ({
+  useSchool: () => 'school-1',
 }))
 
 jest.mock('@/components/ui/button', () => ({
@@ -65,7 +75,7 @@ jest.mock('@/components/ui/label', () => ({
 
 const originalFetch = global.fetch
 
-describe('ClassFormClient', () => {
+describe('ClassGroupForm (edit)', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     global.fetch = jest.fn(
@@ -79,7 +89,8 @@ describe('ClassFormClient', () => {
 
   it('submits class updates and normalizes optional number fields to null', async () => {
     render(
-      <ClassFormClient
+      <ClassGroupForm
+        mode="edit"
         classData={
           {
             id: 'cg-1',
@@ -130,7 +141,8 @@ describe('ClassFormClient', () => {
     }) as jest.Mock
 
     render(
-      <ClassFormClient
+      <ClassGroupForm
+        mode="edit"
         classData={
           {
             id: 'cg-1',
@@ -142,6 +154,9 @@ describe('ClassFormClient', () => {
       />
     )
 
+    fireEvent.change(screen.getByDisplayValue('Infant A'), {
+      target: { value: 'Infant A Updated' },
+    })
     fireEvent.click(screen.getByRole('button', { name: /update/i }))
 
     expect(await screen.findByText('Failed to update class group')).toBeInTheDocument()

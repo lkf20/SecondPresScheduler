@@ -11,6 +11,8 @@ import {
 } from '@/lib/api/time-off-shifts'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
 import { revalidatePath } from 'next/cache'
+import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
+import { createClient } from '@/lib/supabase/server'
 
 jest.mock('@/lib/utils/auth', () => ({
   getUserSchoolId: jest.fn(),
@@ -35,7 +37,40 @@ jest.mock('next/cache', () => ({
   revalidatePath: jest.fn(),
 }))
 
+jest.mock('@/lib/audit/logAuditEvent', () => ({
+  getAuditActorContext: jest.fn(),
+  logAuditEvent: jest.fn(),
+}))
+
+const mockMaybeSingle = jest.fn()
+const mockEq = jest.fn(() => ({ maybeSingle: mockMaybeSingle }))
+const mockSelect = jest.fn(() => ({ eq: mockEq }))
+const mockFrom = jest.fn(() => ({ select: mockSelect }))
+
+jest.mock('@/lib/supabase/server', () => ({
+  createClient: jest.fn(async () => ({
+    from: mockFrom,
+  })),
+}))
+
 describe('GET /api/time-off integration', () => {
+  beforeEach(() => {
+    ;(getAuditActorContext as jest.Mock).mockResolvedValue({
+      actorUserId: 'user-1',
+      actorDisplayName: 'Test User',
+    })
+    ;(logAuditEvent as jest.Mock).mockResolvedValue(undefined)
+    mockMaybeSingle.mockResolvedValue({
+      data: {
+        first_name: 'Teacher',
+        last_name: 'One',
+        display_name: 'Teacher One',
+      },
+      error: null,
+    })
+    ;(createClient as jest.Mock).mockResolvedValue({ from: mockFrom })
+  })
+
   afterEach(() => {
     jest.restoreAllMocks()
   })
