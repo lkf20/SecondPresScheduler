@@ -1129,6 +1129,8 @@ export default function ScheduleSidePanel({
           .filter(Boolean)
           .join(' • ')
 
+  const effectiveIsActive = isActive && !isParentEffectivelyInactive
+
   // Auto-activate cell when class groups, enrollment, or teachers are added (only if inactive and originally empty)
   useEffect(() => {
     // If cell is inactive and originally had no data, and user is now adding data, activate it
@@ -2903,8 +2905,10 @@ export default function ScheduleSidePanel({
                     {/* Section A: Slot Status */}
                     <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-1">
                       <SlotStatusToggle
-                        isActive={isActive}
+                        isActive={effectiveIsActive}
+                        disabled={isParentEffectivelyInactive}
                         onToggle={newActive => {
+                          if (isParentEffectivelyInactive) return
                           if (isActive && !newActive) {
                             // Show confirmation when deactivating
                             setShowDeactivateDialog(true)
@@ -2914,7 +2918,14 @@ export default function ScheduleSidePanel({
                         }}
                       />
                       <div className="mt-0">
-                        {isActive ? (
+                        {isParentEffectivelyInactive ? (
+                          <p className="text-xs text-muted-foreground italic leading-relaxed">
+                            This slot appears inactive because parent settings are inactive
+                            {effectiveInactiveReasonLabel
+                              ? ` (${effectiveInactiveReasonLabel})`
+                              : ''}
+                          </p>
+                        ) : isActive ? (
                           <p className="text-xs text-muted-foreground italic whitespace-nowrap">
                             This slot requires staffing and will be validated
                           </p>
