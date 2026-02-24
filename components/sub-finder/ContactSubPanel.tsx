@@ -96,6 +96,15 @@ const mapContactStatusToLegacy = (status: ContactStatus) => {
   }
 }
 
+const shouldDebugLog =
+  process.env.NODE_ENV === 'development' || process.env.SUB_FINDER_DEBUG === 'true'
+
+const logContactPanelError = (...args: unknown[]) => {
+  if (shouldDebugLog) {
+    console.error(...args)
+  }
+}
+
 type ShiftOverride = {
   coverage_request_shift_id?: string | null
   selected: boolean
@@ -346,7 +355,7 @@ export default function ContactSubPanel({
           : `Removed ${sub.name} from all shifts for this request.`
       )
     } catch (error) {
-      console.error('Error removing assigned shift(s):', error)
+      logContactPanelError('Error removing assigned shift(s):', error)
       toast.error(error instanceof Error ? error.message : 'Failed to remove sub assignment.')
     } finally {
       setRemovingScope(null)
@@ -460,7 +469,7 @@ export default function ContactSubPanel({
 
         if (!coverageResponse.ok) {
           const errorBody = await coverageResponse.text().catch(() => '')
-          console.error(
+          logContactPanelError(
             `Failed to fetch coverage request: status=${coverageResponse.status} statusText=${coverageResponse.statusText} url=${coverageResponse.url} body=${errorBody.slice(0, 200)}`
           )
           setFetching(false)
@@ -493,7 +502,7 @@ export default function ContactSubPanel({
           }
         }
       } catch (error) {
-        console.error('Error fetching contact data:', error)
+        logContactPanelError('Error fetching contact data:', error)
       } finally {
         setFetching(false)
       }
@@ -525,12 +534,16 @@ export default function ContactSubPanel({
             typeof data.remaining_shift_count === 'number' ? data.remaining_shift_count : null
           )
         } else {
-          console.error('Failed to fetch assigned shifts:', response.status, response.statusText)
+          logContactPanelError(
+            'Failed to fetch assigned shifts:',
+            response.status,
+            response.statusText
+          )
           const errorText = await response.text()
-          console.error('Error response:', errorText)
+          logContactPanelError('Error response:', errorText)
         }
       } catch (error) {
-        console.error('Error fetching remaining shifts:', error)
+        logContactPanelError('Error fetching remaining shifts:', error)
       }
     }
 
@@ -757,7 +770,8 @@ export default function ContactSubPanel({
 
   const handleSave = async () => {
     if (!coverageRequestId) {
-      console.error('Coverage request ID not available')
+      logContactPanelError('Coverage request ID not available')
+      toast.error('Coverage request ID not available')
       return
     }
     const hasAssignedToThisSub = assignedShifts.length > 0
@@ -824,8 +838,10 @@ export default function ContactSubPanel({
 
       onClose()
     } catch (error) {
-      console.error('Error saving contact:', error)
-      alert(`Error saving contact: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      logContactPanelError('Error saving contact:', error)
+      toast.error('Error saving contact', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
     } finally {
       setLoading(false)
     }
@@ -871,7 +887,8 @@ export default function ContactSubPanel({
     isContactedOverride?: boolean
   }) => {
     if (!coverageRequestId || selectedShifts.size === 0) {
-      console.error('Cannot assign: missing coverage request or no shifts selected')
+      logContactPanelError('Cannot assign: missing coverage request or no shifts selected')
+      toast.error('Select at least one shift to assign.')
       return
     }
 
@@ -936,7 +953,7 @@ export default function ContactSubPanel({
           errorData = { rawError: errorText }
         }
 
-        console.error('Update contact error:', {
+        logContactPanelError('Update contact error:', {
           status: updateResponse.status,
           statusText: updateResponse.statusText,
           errorText: errorText || '(empty response)',
@@ -990,8 +1007,10 @@ export default function ContactSubPanel({
 
       // Don't close - keep panel open so user can see the updated status
     } catch (error) {
-      console.error('Error assigning shifts:', error)
-      alert(`Error assigning shifts: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      logContactPanelError('Error assigning shifts:', error)
+      toast.error('Error assigning shifts', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
     } finally {
       setLoading(false)
     }
@@ -1016,7 +1035,8 @@ export default function ContactSubPanel({
     // When declined_all is selected with no shifts, save the contact but keep panel open
     if (responseStatus === 'declined_all' && selectedShiftsCount === 0) {
       if (!coverageRequestId) {
-        console.error('Coverage request ID not available')
+        logContactPanelError('Coverage request ID not available')
+        toast.error('Coverage request ID not available')
         return
       }
 
@@ -1086,10 +1106,10 @@ export default function ContactSubPanel({
         // Close the panel after marking as declined
         onClose()
       } catch (error) {
-        console.error('Error saving declined status:', error)
-        alert(
-          `Error saving declined status: ${error instanceof Error ? error.message : 'Unknown error'}`
-        )
+        logContactPanelError('Error saving declined status:', error)
+        toast.error('Error saving declined status', {
+          description: error instanceof Error ? error.message : 'Unknown error',
+        })
       } finally {
         setLoading(false)
       }
