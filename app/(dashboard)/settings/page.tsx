@@ -50,7 +50,7 @@ const settingsSections = [
     title: 'Scheduling',
     categories: [
       {
-        name: 'Baseline Staffing',
+        name: 'Baseline Schedule',
         description: 'Manage baseline staffing assignments by classroom, day, and time slot',
         href: '/settings/baseline-schedule',
         icon: CalendarCheck,
