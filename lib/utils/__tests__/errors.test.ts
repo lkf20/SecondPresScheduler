@@ -4,11 +4,15 @@ import { getErrorMessage, logError, createErrorResponse } from '../errors'
 const mockConsoleError = jest.spyOn(console, 'error').mockImplementation()
 
 describe('Error Utilities', () => {
+  const originalApiErrorDebug = process.env.API_ERROR_DEBUG
+
   beforeEach(() => {
+    process.env.API_ERROR_DEBUG = 'true'
     mockConsoleError.mockClear()
   })
 
   afterAll(() => {
+    process.env.API_ERROR_DEBUG = originalApiErrorDebug
     mockConsoleError.mockRestore()
   })
 
@@ -62,7 +66,7 @@ describe('Error Utilities', () => {
       expect(mockConsoleError).toHaveBeenCalledWith(
         '[TestContext] Error:',
         expect.objectContaining({
-          message: 'string error',
+          message: 'An unexpected error occurred: string error',
         })
       )
     })

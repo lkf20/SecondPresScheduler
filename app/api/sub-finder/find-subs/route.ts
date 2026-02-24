@@ -86,6 +86,15 @@ const parseDateOnly = (dateString: string) => {
   return new Date(year, month - 1, day)
 }
 
+const shouldDebugLog =
+  process.env.NODE_ENV === 'development' || process.env.SUB_FINDER_DEBUG === 'true'
+
+const logFindSubsError = (...args: unknown[]) => {
+  if (shouldDebugLog) {
+    console.error(...args)
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Require schoolId from session
@@ -144,7 +153,7 @@ export async function POST(request: NextRequest) {
       .eq('teacher_id', timeOffRequest.teacher_id)
 
     if (scheduleError) {
-      console.error('Error fetching teacher schedules:', scheduleError)
+      logFindSubsError('Error fetching teacher schedules:', scheduleError)
     } else {
       ;(teacherSchedules || []).forEach((schedule: any) => {
         const key = `${schedule.day_of_week_id}|${schedule.time_slot_id}`
@@ -332,7 +341,7 @@ export async function POST(request: NextRequest) {
         .lte('date', endDate)
 
       if (activeSubAssignmentsError) {
-        console.error(
+        logFindSubsError(
           'Error loading active sub assignments for conflict check:',
           activeSubAssignmentsError
         )
@@ -449,7 +458,7 @@ export async function POST(request: NextRequest) {
                 timeOffConflicts.add(key)
               })
             } catch (error) {
-              console.error(`Error fetching shifts for time off request ${req.id}:`, error)
+              logFindSubsError(`Error fetching shifts for time off request ${req.id}:`, error)
             }
           }
 
@@ -687,7 +696,7 @@ export async function POST(request: NextRequest) {
                     : 'not_contacted'),
           }
         } catch (error) {
-          console.error(`Error evaluating sub ${sub.id}:`, error)
+          logFindSubsError(`Error evaluating sub ${sub.id}:`, error)
           return null
         }
       })
