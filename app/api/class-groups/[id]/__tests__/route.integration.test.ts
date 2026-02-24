@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { GET, PUT, DELETE } from '@/app/api/class-groups/[id]/route'
 import { getClassGroupById, updateClassGroup, deleteClassGroup } from '@/lib/api/class-groups'
 import { createErrorResponse } from '@/lib/utils/errors'
+import { revalidatePath } from 'next/cache'
 
 jest.mock('@/lib/api/class-groups', () => ({
   getClassGroupById: jest.fn(),
@@ -13,6 +14,10 @@ jest.mock('@/lib/api/class-groups', () => ({
 
 jest.mock('@/lib/utils/errors', () => ({
   createErrorResponse: jest.fn(),
+}))
+
+jest.mock('next/cache', () => ({
+  revalidatePath: jest.fn(),
 }))
 
 describe('class groups id route integration', () => {
@@ -66,6 +71,7 @@ describe('class groups id route integration', () => {
 
     expect(response.status).toBe(200)
     expect(updateClassGroup).toHaveBeenCalledWith('cg-1', { name: 'Updated Group' })
+    expect(revalidatePath).toHaveBeenCalled()
     expect(json.name).toBe('Updated Group')
   })
 
@@ -82,6 +88,7 @@ describe('class groups id route integration', () => {
 
     expect(response.status).toBe(200)
     expect(deleteClassGroup).toHaveBeenCalledWith('cg-1')
+    expect(revalidatePath).toHaveBeenCalled()
     expect(json).toEqual({ success: true })
   })
 })

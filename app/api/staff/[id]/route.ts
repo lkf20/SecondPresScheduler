@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { deleteStaff, getStaffById, updateStaff } from '@/lib/api/staff'
+import { deactivateStaff, getStaffById, updateStaff } from '@/lib/api/staff'
 
 function getErrorStatus(error: unknown): number {
   const maybeError = error as { code?: string; message?: string } | undefined
@@ -41,7 +41,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
-    await deleteStaff(id)
+    await deactivateStaff(id)
     return NextResponse.json({ success: true })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: getErrorStatus(error) })

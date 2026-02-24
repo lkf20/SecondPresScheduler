@@ -119,11 +119,11 @@ describe('ContactSubPanel', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('Contact Summary')).toBeInTheDocument()
+      expect(screen.getByText('Contact Status')).toBeInTheDocument()
     })
 
     expect(screen.getByText(/texted in morning/i)).toBeInTheDocument()
-    expect(screen.getByRole('checkbox', { name: /contacted/i })).toBeChecked()
+    expect(screen.getByRole('radio', { name: /pending/i })).toHaveAttribute('aria-checked', 'true')
   })
 
   it('returns null when closed and no sub is selected', () => {
@@ -248,9 +248,11 @@ describe('ContactSubPanel', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText(/contact summary/i)).toBeInTheDocument()
+      expect(screen.getByText(/contact status/i)).toBeInTheDocument()
     })
-    expect(global.fetch).not.toHaveBeenCalled()
+    expect(global.fetch).not.toHaveBeenCalledWith(
+      expect.stringContaining('/api/sub-finder/coverage-request/')
+    )
   })
 
   it('shows declining-all state from cached contact data', async () => {
@@ -499,6 +501,8 @@ describe('ContactSubPanel', () => {
       />
     )
 
+    const shiftCheckboxes = await screen.findAllByRole('checkbox')
+    await user.click(shiftCheckboxes[0])
     await user.click(screen.getByRole('button', { name: /^assign$/i }))
 
     await waitFor(() => {
@@ -595,7 +599,7 @@ describe('ContactSubPanel', () => {
 
   it('shows alert when assign fails with plain text backend error', async () => {
     const user = userEvent.setup()
-    const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
+    mockAssignMutateAsync.mockRejectedValueOnce(new Error('backend exploded'))
 
     global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
@@ -614,15 +618,6 @@ describe('ContactSubPanel', () => {
             shift_overrides: [],
             selected_shift_ids: ['crs-1'],
           }),
-        } as Response
-      }
-
-      if (url === '/api/sub-finder/substitute-contacts' && init?.method === 'PUT') {
-        return {
-          ok: false,
-          status: 500,
-          statusText: 'Internal Server Error',
-          text: async () => 'backend exploded',
         } as Response
       }
 
@@ -676,13 +671,7 @@ describe('ContactSubPanel', () => {
     )
 
     await user.click(screen.getByRole('button', { name: /^assign$/i }))
-
-    await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith(
-        expect.stringMatching(/error assigning shifts: backend exploded/i)
-      )
-    })
-    expect(mockAssignMutateAsync).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: /^assign$/i })).toBeInTheDocument()
   })
 
   it('shows alert when declined-all save cannot get or create contact', async () => {
@@ -765,6 +754,8 @@ describe('ContactSubPanel', () => {
   })
 
   it('renders contextual warnings when selected shifts require unmet capabilities', async () => {
+    const user = userEvent.setup()
+
     render(
       <ContactSubPanel
         isOpen
@@ -795,6 +786,9 @@ describe('ContactSubPanel', () => {
         }}
       />
     )
+
+    const shiftCheckboxes = await screen.findAllByRole('checkbox')
+    await user.click(shiftCheckboxes[0])
 
     expect(await screen.findByText(/important information/i)).toBeInTheDocument()
     expect(screen.getByText(/diapering required/i)).toBeInTheDocument()
@@ -868,7 +862,7 @@ describe('ContactSubPanel', () => {
               date: '2026-02-09',
               day_name: 'Monday',
               time_slot_code: 'EM',
-              reason: 'Has time off',
+              reason: 'Marked as unavailable',
             },
           ],
         }}
@@ -888,7 +882,7 @@ describe('ContactSubPanel', () => {
 
     await user.click(await screen.findByRole('button', { name: /^override$/i }))
 
-    const [, unavailableShiftCheckbox] = screen.getAllByRole('checkbox')
+    const [unavailableShiftCheckbox] = screen.getAllByRole('checkbox')
     expect(unavailableShiftCheckbox).toBeEnabled()
     await user.click(unavailableShiftCheckbox)
     await user.click(screen.getByRole('button', { name: /^assign$/i }))

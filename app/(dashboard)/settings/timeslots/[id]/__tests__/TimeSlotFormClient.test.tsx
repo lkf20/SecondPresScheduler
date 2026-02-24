@@ -1,16 +1,41 @@
 /* eslint-disable react/display-name */
 import React from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import TimeSlotFormClient from '@/app/(dashboard)/settings/timeslots/[id]/TimeSlotFormClient'
+import TimeSlotForm from '@/components/settings/TimeSlotForm'
 
 const pushMock = jest.fn()
 const refreshMock = jest.fn()
+const invalidateQueriesMock = jest.fn().mockResolvedValue(undefined)
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
     push: pushMock,
     refresh: refreshMock,
   }),
+}))
+
+jest.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({
+    invalidateQueries: invalidateQueriesMock,
+  }),
+}))
+
+jest.mock('@/lib/contexts/SchoolContext', () => ({
+  useSchool: () => 'school-1',
+}))
+
+jest.mock('@/lib/utils/invalidation', () => ({
+  invalidateWeeklySchedule: jest.fn().mockResolvedValue(undefined),
+  invalidateDailySchedule: jest.fn().mockResolvedValue(undefined),
+  invalidateDashboard: jest.fn().mockResolvedValue(undefined),
+  invalidateTimeOffRequests: jest.fn().mockResolvedValue(undefined),
+  invalidateSubFinderAbsences: jest.fn().mockResolvedValue(undefined),
+}))
+
+jest.mock('sonner', () => ({
+  toast: {
+    success: jest.fn(),
+  },
 }))
 
 jest.mock('@/components/ui/button', () => ({
@@ -42,42 +67,100 @@ jest.mock('@/components/ui/input', () => ({
   )),
 }))
 
-const originalFetch = global.fetch
-const originalConfirm = global.confirm
+jest.mock('@/components/ui/switch', () => ({
+  Switch: ({
+    checked,
+    onCheckedChange,
+    id,
+  }: {
+    checked?: boolean
+    onCheckedChange?: (checked: boolean) => void
+    id?: string
+  }) => (
+    <input
+      id={id}
+      aria-label={id}
+      type="checkbox"
+      checked={checked}
+      onChange={event => onCheckedChange?.(event.target.checked)}
+    />
+  ),
+}))
 
-describe('TimeSlotFormClient', () => {
+jest.mock('@/components/ui/label', () => ({
+  Label: ({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) => (
+    <label htmlFor={htmlFor}>{children}</label>
+  ),
+}))
+
+jest.mock('@/components/ui/alert', () => ({
+  Alert: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AlertDescription: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}))
+
+jest.mock('@/components/shared/FormField', () => ({
+  __esModule: true,
+  default: ({
+    label,
+    children,
+    error,
+  }: {
+    label: string
+    children: React.ReactNode
+    error?: string
+  }) => (
+    <div>
+      <label>{label}</label>
+      {children}
+      {error ? <p>{error}</p> : null}
+    </div>
+  ),
+}))
+
+jest.mock('@/components/shared/ErrorMessage', () => ({
+  __esModule: true,
+  default: ({ message }: { message: string }) => <p>{message}</p>,
+}))
+
+jest.mock('@/components/staff/StaffUnsavedChangesDialog', () => ({
+  __esModule: true,
+  default: () => null,
+}))
+
+const originalFetch = global.fetch
+
+describe('TimeSlotForm (edit)', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     global.fetch = jest.fn(
       async () => ({ ok: true, json: async () => ({}) }) as Response
     ) as jest.Mock
-    global.confirm = jest.fn(() => true)
   })
 
   afterAll(() => {
     global.fetch = originalFetch
-    global.confirm = originalConfirm
   })
 
   it('submits updates and normalizes optional text/time fields to null', async () => {
     render(
-      <TimeSlotFormClient
-        timeslot={
+      <TimeSlotForm
+        mode="edit"
+        timeSlot={
           {
             id: 'slot-1',
             code: 'EM',
             name: 'Early Morning',
             default_start_time: '08:00:00',
             default_end_time: '10:00:00',
-            display_order: 1,
+            is_active: true,
           } as never
         }
       />
     )
 
     fireEvent.change(screen.getByDisplayValue('Early Morning'), { target: { value: '' } })
-    fireEvent.change(screen.getByDisplayValue('08:00:00'), { target: { value: '' } })
-    fireEvent.change(screen.getByDisplayValue('10:00:00'), { target: { value: '' } })
+    fireEvent.change(screen.getByDisplayValue('08:00'), { target: { value: '' } })
+    fireEvent.change(screen.getByDisplayValue('10:00'), { target: { value: '' } })
     fireEvent.click(screen.getByRole('button', { name: /update/i }))
 
     await waitFor(() => {
@@ -95,60 +178,64 @@ describe('TimeSlotFormClient', () => {
       name: null,
       default_start_time: null,
       default_end_time: null,
-      display_order: 1,
+      is_active: true,
     })
+    const { toast } = await import('sonner')
+    expect(toast.success).toHaveBeenCalledWith('EM updated.')
+    expect(invalidateQueriesMock).toHaveBeenCalled()
     expect(pushMock).toHaveBeenCalledWith('/settings/timeslots')
     expect(refreshMock).toHaveBeenCalled()
   })
 
-  it('deletes after confirmation and navigates back', async () => {
+  it('shows an error when update fails', async () => {
+    global.fetch = jest.fn(async () => {
+      return {
+        ok: false,
+        json: async () => ({ error: 'Failed to update time slot' }),
+      } as Response
+    }) as jest.Mock
+
     render(
-      <TimeSlotFormClient
-        timeslot={
+      <TimeSlotForm
+        mode="edit"
+        timeSlot={
           {
             id: 'slot-1',
             code: 'EM',
             name: 'Early Morning',
-            display_order: 1,
+            is_active: true,
           } as never
         }
       />
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /delete time slot/i }))
+    fireEvent.change(screen.getByDisplayValue('Early Morning'), { target: { value: 'Late AM' } })
+    fireEvent.click(screen.getByRole('button', { name: /update/i }))
 
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/timeslots/slot-1',
-        expect.objectContaining({ method: 'DELETE' })
-      )
-    })
-    expect(pushMock).toHaveBeenCalledWith('/settings/timeslots')
+    expect(await screen.findByText('Failed to update time slot')).toBeInTheDocument()
+    expect(pushMock).not.toHaveBeenCalled()
   })
 
-  it('does not delete when confirmation is canceled', async () => {
-    global.confirm = jest.fn(() => false)
-
+  it('shows baseline warning when time slot is inactive and still used', async () => {
     render(
-      <TimeSlotFormClient
-        timeslot={
+      <TimeSlotForm
+        mode="edit"
+        timeSlot={
           {
-            id: 'slot-1',
-            code: 'EM',
-            name: 'Early Morning',
-            display_order: 1,
+            id: 'slot-2',
+            code: 'PM',
+            name: 'Afternoon',
+            is_active: false,
           } as never
         }
+        showInactiveBaselineWarning
       />
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /delete time slot/i }))
-
-    await waitFor(() => {
-      expect(global.fetch).not.toHaveBeenCalledWith(
-        '/api/timeslots/slot-1',
-        expect.objectContaining({ method: 'DELETE' })
+    expect(
+      await screen.findByText(
+        'This time slot is marked as inactive but still appears in the baseline schedule.'
       )
-    })
+    ).toBeInTheDocument()
   })
 })

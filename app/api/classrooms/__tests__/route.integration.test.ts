@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { GET, POST } from '@/app/api/classrooms/route'
 import { getClassrooms, createClassroom, setClassroomAllowedClasses } from '@/lib/api/classrooms'
 import { createErrorResponse } from '@/lib/utils/errors'
+import { NextRequest } from 'next/server'
 
 jest.mock('@/lib/api/classrooms', () => ({
   getClassrooms: jest.fn(),
@@ -27,17 +28,30 @@ describe('classrooms collection route integration', () => {
   it('GET returns classrooms', async () => {
     ;(getClassrooms as jest.Mock).mockResolvedValue([{ id: 'class-1', name: 'Infant Room' }])
 
-    const response = await GET()
+    const response = await GET(new NextRequest('http://localhost/api/classrooms') as any)
     const json = await response.json()
 
     expect(response.status).toBe(200)
     expect(json).toEqual([{ id: 'class-1', name: 'Infant Room' }])
   })
 
+  it('GET passes includeInactive=true when requested', async () => {
+    ;(getClassrooms as jest.Mock).mockResolvedValue([{ id: 'class-2', name: 'Toddler Room' }])
+
+    const response = await GET(
+      new NextRequest('http://localhost/api/classrooms?includeInactive=true') as any
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(getClassrooms).toHaveBeenCalledWith(true)
+    expect(json).toEqual([{ id: 'class-2', name: 'Toddler Room' }])
+  })
+
   it('GET routes failures through createErrorResponse', async () => {
     ;(getClassrooms as jest.Mock).mockRejectedValue(new Error('read failed'))
 
-    const response = await GET()
+    const response = await GET(new NextRequest('http://localhost/api/classrooms') as any)
     const json = await response.json()
 
     expect(createErrorResponse).toHaveBeenCalled()

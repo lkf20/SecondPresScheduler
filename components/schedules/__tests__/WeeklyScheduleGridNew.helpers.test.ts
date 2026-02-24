@@ -28,7 +28,7 @@ describe('WeeklyScheduleGridNew helpers', () => {
       ]
     )
 
-    expect(result.columns).toBe('120px repeat(2, minmax(230px, 1fr))')
+    expect(result.columns).toBe('120px repeat(2, 240px)')
     expect(result.rows).toBe(
       'auto 36px minmax(120px, auto) minmax(120px, auto) 16px 36px minmax(120px, auto) minmax(120px, auto)'
     )
@@ -37,9 +37,7 @@ describe('WeeklyScheduleGridNew helpers', () => {
   it('builds grid template for classrooms x days layout', () => {
     const result = generateClassroomsXDaysGridTemplate(3, 2)
 
-    expect(result.columns).toBe(
-      '110px repeat(2, minmax(230px, 1fr)) repeat(2, minmax(230px, 1fr)) repeat(2, minmax(230px, 1fr))'
-    )
+    expect(result.columns).toBe('110px repeat(2, 240px) repeat(2, 240px) repeat(2, 240px)')
     expect(result.rows).toBe('auto auto repeat(auto, minmax(120px, auto))')
   })
 

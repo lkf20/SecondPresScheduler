@@ -287,27 +287,6 @@ export default function StaffFormClient({
     }
   }
 
-  const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this staff member?')) return
-
-    try {
-      setError(null)
-      const response = await fetch(`/api/staff/${staff.id}`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to delete staff')
-      }
-
-      router.push(getReturnUrl())
-      router.refresh()
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to delete staff')
-    }
-  }
-
   const staffName =
     getStaffDisplayName(
       {

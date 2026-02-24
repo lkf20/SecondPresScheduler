@@ -79,13 +79,26 @@ describe('GET /api/sub-finder/coverage-request/[absence_id]/assigned-shifts inte
 
     const coverageRequestShiftsQuery = {
       select: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockResolvedValue({ data: [], error: null }),
+      eq: jest.fn().mockReturnThis(),
     }
+    ;(coverageRequestShiftsQuery.eq as jest.Mock)
+      .mockReturnValueOnce(coverageRequestShiftsQuery)
+      .mockResolvedValueOnce({ data: [], error: null })
 
+    const subAssignmentsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+    }
+    ;(subAssignmentsQuery.eq as jest.Mock)
+      .mockReturnValueOnce(subAssignmentsQuery)
+      .mockReturnValueOnce(subAssignmentsQuery)
+      .mockReturnValueOnce(subAssignmentsQuery)
+      .mockResolvedValueOnce({ data: [], error: null })
     ;(createClient as jest.Mock).mockResolvedValue({
       from: jest.fn((table: string) => {
         if (table === 'coverage_requests') return coverageRequestsQuery
         if (table === 'coverage_request_shifts') return coverageRequestShiftsQuery
+        if (table === 'sub_assignments') return subAssignmentsQuery
         throw new Error(`Unexpected table: ${table}`)
       }),
     })
@@ -123,20 +136,24 @@ describe('GET /api/sub-finder/coverage-request/[absence_id]/assigned-shifts inte
 
     const coverageRequestShiftsQuery = {
       select: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockResolvedValue({
+      eq: jest.fn().mockReturnThis(),
+    }
+    ;(coverageRequestShiftsQuery.eq as jest.Mock)
+      .mockReturnValueOnce(coverageRequestShiftsQuery)
+      .mockResolvedValueOnce({
         data: [
           { date: '2099-02-10', time_slot_id: 'slot-1', time_slots: { code: 'EM' } },
           { date: '2099-02-10', time_slot_id: 'slot-2', time_slots: { code: 'PM' } },
         ],
         error: null,
-      }),
-    }
+      })
 
     const subAssignmentsQuery = {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
     }
     ;(subAssignmentsQuery.eq as jest.Mock)
+      .mockReturnValueOnce(subAssignmentsQuery)
       .mockReturnValueOnce(subAssignmentsQuery)
       .mockResolvedValueOnce({
         data: [

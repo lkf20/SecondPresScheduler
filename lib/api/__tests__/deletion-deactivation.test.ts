@@ -4,6 +4,7 @@
  * This test suite covers:
  * - Class groups (soft delete via is_active)
  * - Classrooms (soft delete via is_active)
+ * - Staff (soft delete via active)
  * - Teachers (hard delete)
  * - Subs (hard delete)
  * - Error handling for entities with dependencies
@@ -11,6 +12,7 @@
 
 import { deleteClassGroup, updateClassGroup, getClassGroupById } from '../class-groups'
 import { deleteClassroom, updateClassroom } from '../classrooms'
+import { deactivateStaff } from '../staff'
 import { deleteTeacher, updateTeacher } from '../teachers'
 import { deleteSub, updateSub } from '../subs'
 import { createClient } from '@/lib/supabase/server'
@@ -28,6 +30,7 @@ jest.mock('@/lib/utils/auth', () => ({
 describe('Deletion and Deactivation Handling', () => {
   let mockSupabase: {
     from: jest.Mock
+    rpc: jest.Mock
     select: jest.Mock
     insert: jest.Mock
     update: jest.Mock
@@ -40,6 +43,19 @@ describe('Deletion and Deactivation Handling', () => {
   beforeEach(() => {
     mockSupabase = {
       from: jest.fn().mockReturnThis(),
+      rpc: jest
+        .fn()
+        .mockImplementation((_fn: string, params: { p_updates?: { active?: boolean } }) =>
+          Promise.resolve({
+            data: {
+              id: 'test-staff-id',
+              first_name: 'Test',
+              last_name: 'Staff',
+              active: params?.p_updates?.active ?? true,
+            },
+            error: null,
+          })
+        ),
       select: jest.fn().mockReturnThis(),
       insert: jest.fn().mockReturnThis(),
       update: jest.fn().mockReturnThis(),
@@ -256,8 +272,13 @@ describe('Deletion and Deactivation Handling', () => {
 
         const result = await updateTeacher(teacherId, { active: false })
 
-        expect(mockSupabase.from).toHaveBeenCalledWith('staff')
-        expect(mockSupabase.update).toHaveBeenCalledWith({ active: false })
+        expect(mockSupabase.rpc).toHaveBeenCalledWith(
+          'update_staff_with_role_assignments',
+          expect.objectContaining({
+            p_staff_id: teacherId,
+            p_updates: expect.objectContaining({ active: false }),
+          })
+        )
         expect(result.active).toBe(false)
       })
 
@@ -277,7 +298,29 @@ describe('Deletion and Deactivation Handling', () => {
 
         const result = await updateTeacher(teacherId, { active: true })
 
+        expect(mockSupabase.rpc).toHaveBeenCalledWith(
+          'update_staff_with_role_assignments',
+          expect.objectContaining({
+            p_staff_id: teacherId,
+            p_updates: expect.objectContaining({ active: true }),
+          })
+        )
         expect(result.active).toBe(true)
+      })
+    })
+  })
+
+  describe('Staff', () => {
+    describe('Soft Delete (active = false)', () => {
+      it('should set active to false when deleting staff', async () => {
+        const staffId = 'test-staff-id'
+
+        await deactivateStaff(staffId)
+
+        expect(mockSupabase.from).toHaveBeenCalledWith('staff')
+        expect(mockSupabase.update).toHaveBeenCalledWith({ active: false })
+        expect(mockSupabase.eq).toHaveBeenCalledWith('id', staffId)
+        expect(mockSupabase.delete).not.toHaveBeenCalled()
       })
     })
   })

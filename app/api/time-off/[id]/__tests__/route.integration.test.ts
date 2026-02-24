@@ -19,6 +19,7 @@ import {
 } from '@/lib/api/time-off-shifts'
 import { updateTimeOffRequest } from '@/lib/api/time-off'
 import { revalidatePath } from 'next/cache'
+import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 
 jest.mock('@/lib/api/time-off', () => ({
   getTimeOffRequestById: jest.fn(),
@@ -63,9 +64,34 @@ jest.mock('@/lib/lifecycle/status-transitions', () => ({
   formatTransitionError: jest.fn(() => 'Invalid status transition'),
 }))
 
+jest.mock('@/lib/audit/logAuditEvent', () => ({
+  getAuditActorContext: jest.fn(),
+  logAuditEvent: jest.fn(),
+}))
+
 describe('PUT /api/time-off/[id] integration', () => {
   beforeEach(() => {
     jest.spyOn(console, 'log').mockImplementation(() => {})
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValue([])
+    ;(getAuditActorContext as jest.Mock).mockResolvedValue({
+      actorUserId: 'user-1',
+      actorDisplayName: 'Test User',
+    })
+    ;(logAuditEvent as jest.Mock).mockResolvedValue(undefined)
+    mockFrom.mockImplementation(() => {
+      const chain: any = {
+        select: jest.fn().mockReturnThis(),
+        update: jest.fn().mockReturnThis(),
+        delete: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        in: jest.fn().mockReturnThis(),
+        gte: jest.fn().mockReturnThis(),
+        lte: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({ data: null, error: null }),
+        maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
+      }
+      return chain
+    })
   })
 
   afterEach(() => {
@@ -235,10 +261,16 @@ describe('PUT /api/time-off/[id] integration', () => {
 
     const coverageRequestShiftsTable = {
       select: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockResolvedValue({
-        data: [{ date: '2026-02-21' }, { date: '2026-02-22' }],
-        error: null,
-      }),
+      eq: jest
+        .fn()
+        .mockResolvedValueOnce({
+          data: [{ date: '2026-02-21' }, { date: '2026-02-22' }],
+          error: null,
+        })
+        .mockResolvedValueOnce({
+          data: [{ date: '2026-02-21' }, { date: '2026-02-22' }],
+          error: null,
+        }),
     }
 
     mockFrom.mockImplementation((table: string) => {
@@ -289,7 +321,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     const json = await response.json()
 
     expect(response.status).toBe(200)
-    expect(deleteTimeOffShifts).toHaveBeenCalledWith('timeoff-1')
+    expect(deleteTimeOffShifts).not.toHaveBeenCalled()
     expect(createTimeOffShifts).toHaveBeenCalledWith('timeoff-1', [
       {
         date: '2026-02-21',

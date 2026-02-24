@@ -74,13 +74,10 @@ describe('SubFinderCard', () => {
       />
     )
 
-    await user.click(screen.getByRole('button', { name: /notes/i }))
-    await user.click(screen.getByRole('button', { name: /^edit$/i }))
-
     const textarea = screen.getByRole('textbox')
     await user.clear(textarea)
     await user.type(textarea, 'Updated note')
-    await user.click(screen.getByRole('button', { name: /^save$/i }))
+    await user.tab()
 
     expect(onSaveNote).toHaveBeenCalledWith('Updated note')
   })
@@ -114,7 +111,7 @@ describe('SubFinderCard', () => {
       />
     )
 
-    await user.click(screen.getByRole('button', { name: /view all shifts/i }))
+    await user.click(screen.getByRole('button', { name: /shifts/i }))
     expect(screen.getByTestId('shift-chips')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /contact & assign/i }))
