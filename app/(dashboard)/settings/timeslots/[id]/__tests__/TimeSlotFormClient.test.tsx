@@ -24,12 +24,9 @@ jest.mock('@/lib/contexts/SchoolContext', () => ({
   useSchool: () => 'school-1',
 }))
 
+const invalidateSchedulingSurfacesMock = jest.fn().mockResolvedValue(undefined)
 jest.mock('@/lib/utils/invalidation', () => ({
-  invalidateWeeklySchedule: jest.fn().mockResolvedValue(undefined),
-  invalidateDailySchedule: jest.fn().mockResolvedValue(undefined),
-  invalidateDashboard: jest.fn().mockResolvedValue(undefined),
-  invalidateTimeOffRequests: jest.fn().mockResolvedValue(undefined),
-  invalidateSubFinderAbsences: jest.fn().mockResolvedValue(undefined),
+  invalidateSchedulingSurfaces: (...args: unknown[]) => invalidateSchedulingSurfacesMock(...args),
 }))
 
 jest.mock('sonner', () => ({
@@ -182,7 +179,7 @@ describe('TimeSlotForm (edit)', () => {
     })
     const { toast } = await import('sonner')
     expect(toast.success).toHaveBeenCalledWith('EM updated.')
-    expect(invalidateQueriesMock).toHaveBeenCalled()
+    expect(invalidateSchedulingSurfacesMock).toHaveBeenCalled()
     expect(pushMock).toHaveBeenCalledWith('/settings/timeslots')
     expect(refreshMock).toHaveBeenCalled()
   })

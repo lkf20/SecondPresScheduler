@@ -7,12 +7,17 @@ import {
   deleteClassroom,
   setClassroomAllowedClasses,
 } from '@/lib/api/classrooms'
+import { revalidatePath } from 'next/cache'
 
 jest.mock('@/lib/api/classrooms', () => ({
   getClassroomById: jest.fn(),
   updateClassroom: jest.fn(),
   deleteClassroom: jest.fn(),
   setClassroomAllowedClasses: jest.fn(),
+}))
+
+jest.mock('next/cache', () => ({
+  revalidatePath: jest.fn(),
 }))
 
 describe('classrooms id route integration', () => {
@@ -66,6 +71,7 @@ describe('classrooms id route integration', () => {
     expect(response.status).toBe(200)
     expect(updateClassroom).toHaveBeenCalledWith('class-1', { name: 'Updated Room' })
     expect(setClassroomAllowedClasses).toHaveBeenCalledWith('class-1', ['cg-1', 'cg-2'])
+    expect(revalidatePath).toHaveBeenCalled()
     expect(json.name).toBe('Updated Room')
   })
 
@@ -125,6 +131,7 @@ describe('classrooms id route integration', () => {
 
     expect(response.status).toBe(200)
     expect(deleteClassroom).toHaveBeenCalledWith('class-1')
+    expect(revalidatePath).toHaveBeenCalled()
     expect(json).toEqual({ success: true })
   })
 
