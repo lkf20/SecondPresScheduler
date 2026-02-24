@@ -7,6 +7,15 @@ import {
 } from '@/lib/api/substitute-contacts'
 import { createErrorResponse } from '@/lib/utils/errors'
 
+const shouldDebugLog =
+  process.env.NODE_ENV === 'development' || process.env.SUB_FINDER_DEBUG === 'true'
+
+const logSubstituteContactsError = (...args: unknown[]) => {
+  if (shouldDebugLog) {
+    console.error(...args)
+  }
+}
+
 /**
  * GET /api/sub-finder/substitute-contacts
  * Get or create a substitute contact
@@ -27,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(contactWithDetails || contact)
   } catch (error) {
-    console.error('Error fetching substitute contact:', error)
+    logSubstituteContactsError('Error fetching substitute contact:', error)
     return createErrorResponse(
       error,
       'Failed to fetch substitute contact',
@@ -98,7 +107,7 @@ export async function PUT(request: NextRequest) {
       } catch (overrideError) {
         const details =
           overrideError instanceof Error ? overrideError.message : String(overrideError)
-        console.error('Error upserting shift overrides:', {
+        logSubstituteContactsError('Error upserting shift overrides:', {
           contact_id: id,
           details,
         })
@@ -120,14 +129,14 @@ export async function PUT(request: NextRequest) {
         updatedContact.sub_id
       )
     } catch (fetchError) {
-      console.error('Error fetching contact with details:', fetchError)
+      logSubstituteContactsError('Error fetching contact with details:', fetchError)
       // Return the updated contact even if fetching details fails
       return NextResponse.json(updatedContact)
     }
 
     return NextResponse.json(contactWithDetails || updatedContact)
   } catch (error) {
-    console.error('Error updating substitute contact:', error)
+    logSubstituteContactsError('Error updating substitute contact:', error)
     return createErrorResponse(
       error,
       'Failed to update substitute contact',
