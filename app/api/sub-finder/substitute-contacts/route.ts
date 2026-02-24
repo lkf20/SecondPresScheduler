@@ -88,12 +88,27 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update shift overrides if provided
-    if (shift_overrides && Array.isArray(shift_overrides)) {
+    if (shift_overrides !== undefined && !Array.isArray(shift_overrides)) {
+      return createErrorResponse('shift_overrides must be an array', 400)
+    }
+
+    if (Array.isArray(shift_overrides)) {
       try {
         await upsertShiftOverrides(id, shift_overrides)
       } catch (overrideError) {
-        console.error('Error upserting shift overrides:', overrideError)
-        throw overrideError
+        const details =
+          overrideError instanceof Error ? overrideError.message : String(overrideError)
+        console.error('Error upserting shift overrides:', {
+          contact_id: id,
+          details,
+        })
+        return NextResponse.json(
+          {
+            error: 'Failed to upsert shift overrides',
+            details,
+          },
+          { status: 500 }
+        )
       }
     }
 
@@ -113,11 +128,6 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(contactWithDetails || updatedContact)
   } catch (error) {
     console.error('Error updating substitute contact:', error)
-    console.error('Error details:', {
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      error,
-    })
     return createErrorResponse(
       error,
       'Failed to update substitute contact',
