@@ -247,6 +247,13 @@ export const buildStaffingSummary = ({
     }
   }
 
+  if (preferred !== null && scheduled > preferred) {
+    return {
+      status: 'above_target' as const,
+      label: 'Above Target',
+    }
+  }
+
   if (required !== null || preferred !== null) {
     return {
       status: 'adequate' as const,
@@ -495,6 +502,7 @@ export default function ScheduleSidePanel({
   const teacherCacheRef = useRef<Map<string, Teacher[]>>(new Map())
   const teacherFetchKeyRef = useRef<string | null>(null)
   const classGroupsRef = useRef<ClassGroupWithMeta[]>([])
+  const unsavedDialogReturnToCellRef = useRef(false)
 
   const fallbackTeachers = selectedCellData?.assignments
     ? mapAssignmentsToTeachers(selectedCellData.assignments)
@@ -1899,7 +1907,12 @@ export default function ScheduleSidePanel({
   const handleDiscard = () => {
     setShowUnsavedDialog(false)
     setHasUnsavedChanges(false)
-    onClose()
+    if (unsavedDialogReturnToCellRef.current) {
+      unsavedDialogReturnToCellRef.current = false
+      setPanelMode('cell')
+    } else {
+      onClose()
+    }
   }
 
   const handleApplyScopeChange = (
@@ -2114,13 +2127,21 @@ export default function ScheduleSidePanel({
                               borderColor: staffingColorValues.below_preferred.border,
                               color: staffingColorValues.below_preferred.text,
                             }
-                          : {
-                              backgroundColor: 'rgb(220, 252, 231)', // green-100
-                              borderStyle: 'solid',
-                              borderWidth: '1px',
-                              borderColor: 'rgb(34, 197, 94)', // green-500
-                              color: 'rgb(22, 101, 52)', // green-800
-                            }
+                          : staffingSummary.status === 'above_target'
+                            ? {
+                                backgroundColor: staffingColorValues.above_target.bg,
+                                borderStyle: 'solid',
+                                borderWidth: '1px',
+                                borderColor: staffingColorValues.above_target.border,
+                                color: staffingColorValues.above_target.text,
+                              }
+                            : {
+                                backgroundColor: 'rgb(220, 252, 231)', // green-100
+                                borderStyle: 'solid',
+                                borderWidth: '1px',
+                                borderColor: 'rgb(34, 197, 94)', // green-500
+                                color: 'rgb(22, 101, 52)', // green-800
+                              }
                     }
                   >
                     {staffingSummary.label}
@@ -3087,11 +3108,11 @@ export default function ScheduleSidePanel({
                             </p>
                           </div>
                         ) : isActive ? (
-                          <p className="text-xs text-muted-foreground italic whitespace-nowrap">
+                          <p className="text-xs text-muted-foreground whitespace-nowrap">
                             This slot requires staffing and will be validated
                           </p>
                         ) : (
-                          <p className="text-xs text-muted-foreground italic whitespace-nowrap">
+                          <p className="text-xs text-muted-foreground whitespace-nowrap">
                             Inactive slots are ignored for staffing and substitutes
                           </p>
                         )}
@@ -3305,7 +3326,22 @@ export default function ScheduleSidePanel({
                           </p>
                         )}
                       <div className="flex justify-end gap-2">
-                        <Button variant="outline" onClick={handleClose} disabled={saving}>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            if (readOnly && panelMode === 'editCell') {
+                              if (hasUnsavedChanges) {
+                                unsavedDialogReturnToCellRef.current = true
+                                setShowUnsavedDialog(true)
+                              } else {
+                                setPanelMode('cell')
+                              }
+                            } else {
+                              handleClose()
+                            }
+                          }}
+                          disabled={saving}
+                        >
                           Cancel
                         </Button>
                         <Button onClick={handleSave} disabled={saving || slotIsInactive}>
@@ -3325,7 +3361,10 @@ export default function ScheduleSidePanel({
         isOpen={showUnsavedDialog}
         onSave={handleSave}
         onDiscard={handleDiscard}
-        onCancel={() => setShowUnsavedDialog(false)}
+        onCancel={() => {
+          setShowUnsavedDialog(false)
+          unsavedDialogReturnToCellRef.current = false
+        }}
       />
 
       {/* Deactivation Confirmation Dialog */}

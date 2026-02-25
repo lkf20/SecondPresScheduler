@@ -205,6 +205,17 @@ describe('ScheduleSidePanel helpers', () => {
 
     expect(
       buildStaffingSummary({
+        requiredTeachers: 2,
+        preferredTeachers: 3,
+        scheduledStaffCount: 4,
+      })
+    ).toEqual({
+      status: 'above_target',
+      label: 'Above Target',
+    })
+
+    expect(
+      buildStaffingSummary({
         scheduledStaffCount: 0,
       })
     ).toEqual({

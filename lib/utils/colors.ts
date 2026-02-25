@@ -251,7 +251,7 @@ export function getNeutralChipClasses(): string {
 // STAFFING COLORS
 // ============================================================================
 
-export type StaffingStatus = 'below_required' | 'below_preferred' | 'adequate'
+export type StaffingStatus = 'below_required' | 'below_preferred' | 'adequate' | 'above_target'
 
 /**
  * Standardized colors for staffing status badges
@@ -271,6 +271,11 @@ export const staffingColors = {
     bg: neutralColors.bgLight,
     border: neutralColors.border,
     text: neutralColors.textMedium,
+  },
+  above_target: {
+    bg: 'bg-teal-100',
+    border: 'border-teal-600',
+    text: 'text-teal-700',
   },
 } as const
 
@@ -293,6 +298,11 @@ export const staffingColorValues = {
     bg: 'rgb(248, 250, 252)', // slate-50
     border: 'rgb(226, 232, 240)', // slate-200
     text: 'rgb(71, 85, 105)', // slate-600
+  },
+  above_target: {
+    bg: 'rgb(204, 251, 241)', // teal-100
+    border: 'rgb(13, 148, 136)', // teal-600
+    text: 'rgb(15, 118, 110)', // teal-700
   },
 } as const
 
