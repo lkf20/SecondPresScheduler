@@ -83,9 +83,7 @@ jest.mock('@/components/ui/date-picker-input', () => () => <input />)
 
 jest.mock('@/components/time-off/TimeOffForm', () => () => <div>TimeOffForm</div>)
 jest.mock('@/components/schedules/SlotStatusToggle', () => () => <div>SlotStatusToggle</div>)
-jest.mock('@/components/schedules/ClassGroupMultiSelect', () => () => (
-  <div>ClassGroupMultiSelect</div>
-))
+jest.mock('@/components/settings/ClassSelector', () => () => <div>ClassSelector</div>)
 jest.mock('@/components/schedules/EnrollmentInput', () => () => <div>EnrollmentInput</div>)
 jest.mock('@/components/schedules/TeacherMultiSelect', () => () => <div>TeacherMultiSelect</div>)
 jest.mock('@/components/schedules/MultiDayApplySelector', () => ({

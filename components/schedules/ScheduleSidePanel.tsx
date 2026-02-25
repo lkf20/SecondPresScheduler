@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { AlertTriangle, ChevronDown, ChevronUp, CornerDownRight, Pencil, Plus } from 'lucide-react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Sheet,
@@ -26,7 +27,7 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import TimeOffForm from '@/components/time-off/TimeOffForm'
 import SlotStatusToggle from './SlotStatusToggle'
-import ClassGroupMultiSelect from './ClassGroupMultiSelect'
+import ClassSelector from '@/components/settings/ClassSelector'
 import EnrollmentInput from './EnrollmentInput'
 import TeacherMultiSelect from './TeacherMultiSelect'
 import MultiDayApplySelector from './MultiDayApplySelector'
@@ -3127,15 +3128,15 @@ export default function ScheduleSidePanel({
                             </p>
                           </div>
                         ) : isActive ? (
-                          <p className="text-xs text-muted-foreground whitespace-nowrap">
+                          <p className="text-sm text-muted-foreground whitespace-nowrap">
                             This slot requires staffing and will be validated
                           </p>
                         ) : (
                           <div className="space-y-1">
-                            <p className="text-xs text-muted-foreground whitespace-nowrap">
+                            <p className="text-sm text-muted-foreground whitespace-nowrap">
                               Inactive slots are ignored for staffing and substitutes
                             </p>
-                            <p className="text-xs font-medium text-slate-700">
+                            <p className="text-sm font-medium text-slate-700">
                               To assign teachers and make changes, turn Slot status to Active above.
                             </p>
                           </div>
@@ -3147,8 +3148,14 @@ export default function ScheduleSidePanel({
                     <div
                       className={`rounded-lg bg-white border border-gray-200 p-6 space-y-2 ${fieldsDisabled ? 'opacity-60' : ''}`}
                     >
-                      <ClassGroupMultiSelect
-                        selectedClassGroupIds={classGroupIds}
+                      <Label
+                        htmlFor="class-group-select"
+                        className="text-base font-medium mb-6 block"
+                      >
+                        Class Groups
+                      </Label>
+                      <ClassSelector
+                        selectedClassIds={classGroupIds}
                         onSelectionChange={newClassGroupIds => {
                           // Preserve teachers whenever class groups change (added or removed) if we have existing teachers
                           // This prevents teachers from disappearing when class groups are modified
@@ -3184,8 +3191,8 @@ export default function ScheduleSidePanel({
                         allowedClassGroupIds={
                           allowedClassGroupIds.length > 0 ? allowedClassGroupIds : undefined
                         }
+                        includeInactive
                         disabled={fieldsDisabled}
-                        existingClassGroups={classGroups as ClassGroup[]}
                       />
                       <div className="pt-2 pb-3 border-b border-gray-200"></div>
                       {isActive && classGroupIds.length === 0 && (
@@ -3196,11 +3203,11 @@ export default function ScheduleSidePanel({
 
                       {/* Age and Ratios Display */}
                       {classGroups.length > 0 && classGroupForRatio && (
-                        <div className="space-y-2 text-sm pt-1">
+                        <div className="space-y-2 text-base pt-1">
                           {/* Age Range (from lowest min_age) */}
                           <div className="flex items-center gap-2">
                             <div className="text-muted-foreground">Age (lowest):</div>
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
                               {formatAgeRange(classGroupForRatio)}
                             </span>
                           </div>
@@ -3209,16 +3216,26 @@ export default function ScheduleSidePanel({
                           <div className="flex items-center gap-2">
                             <div className="text-muted-foreground">Ratios:</div>
                             <div className="flex flex-wrap gap-2">
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
                                 Required 1:{classGroupForRatio.required_ratio}
                               </span>
                               {classGroupForRatio.preferred_ratio && (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
                                   Preferred 1:{classGroupForRatio.preferred_ratio}
                                 </span>
                               )}
                             </div>
                           </div>
+                          <p className="text-sm text-muted-foreground pt-0.5">
+                            To update age and ratios, go to{' '}
+                            <Link
+                              href="/settings/classes"
+                              className="text-primary underline underline-offset-2 hover:text-primary/90"
+                            >
+                              Settings → Class Groups
+                            </Link>
+                            .
+                          </p>
                         </div>
                       )}
                     </div>
@@ -3236,18 +3253,18 @@ export default function ScheduleSidePanel({
 
                       {/* Required Teachers Preview */}
                       {classGroupForRatio && enrollment !== null && enrollment > 0 && (
-                        <div className="text-sm pt-1">
+                        <div className="text-base pt-1">
                           <div className="flex items-center gap-2">
                             <div className="text-muted-foreground">Based on enrollment:</div>
                             <div className="flex flex-wrap gap-2">
                               {requiredTeachers !== undefined && (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
                                   Required: {requiredTeachers} Teacher
                                   {requiredTeachers !== 1 ? 's' : ''}
                                 </span>
                               )}
                               {preferredTeachers !== undefined && (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
                                   Preferred: {preferredTeachers} Teacher
                                   {preferredTeachers !== 1 ? 's' : ''}
                                 </span>

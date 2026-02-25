@@ -59,7 +59,7 @@ export default function EnrollmentInput({
         disabled={disabled}
         placeholder="Enter enrollment"
       />
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         Used to calculate required/preferred staffing. Not daily attendance.
       </p>
       {!value && !disabled && (

@@ -23,6 +23,7 @@ interface MultiDayApplySelectorProps {
   currentClassroomName: string
   selectedDayIds: string[] // Days that are in the weekly schedule
   timeSlots: TimeSlot[] // All available time slots
+  disabled?: boolean
   onApplyScopeChange: (
     scope: 'single' | 'timeSlot' | 'day',
     dayIds: string[],
@@ -38,6 +39,7 @@ export default function MultiDayApplySelector({
   currentClassroomName,
   selectedDayIds,
   timeSlots,
+  disabled = false,
   onApplyScopeChange,
 }: MultiDayApplySelectorProps) {
   const [days, setDays] = useState<DayOfWeek[]>([])
@@ -86,6 +88,7 @@ export default function MultiDayApplySelector({
   })
 
   const handleScopeChange = (newScope: 'single' | 'timeSlot' | 'day') => {
+    if (disabled) return
     setScope(newScope)
     if (newScope === 'single') {
       setSelectedDays(new Set([currentDayId]))
@@ -104,6 +107,7 @@ export default function MultiDayApplySelector({
   }
 
   const handleDayToggle = (dayId: string, checked: boolean) => {
+    if (disabled) return
     const newSelected = new Set(selectedDays)
     if (checked) {
       newSelected.add(dayId)
@@ -120,6 +124,7 @@ export default function MultiDayApplySelector({
   }
 
   const handleTimeSlotToggle = (timeSlotId: string, checked: boolean) => {
+    if (disabled) return
     const newSelected = new Set(selectedTimeSlots)
     if (checked) {
       newSelected.add(timeSlotId)
@@ -140,7 +145,7 @@ export default function MultiDayApplySelector({
   const option3Label = `${currentClassroomName} - ${currentDayName} during:`
 
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 ${disabled ? 'opacity-60' : ''}`}>
       <Label className="text-base font-medium text-foreground block mb-6">
         Apply changes to...
       </Label>
@@ -152,7 +157,7 @@ export default function MultiDayApplySelector({
         className="space-y-3"
       >
         <div className="flex items-center space-x-2">
-          <RadioGroupItem value="single" id="scope-single" />
+          <RadioGroupItem value="single" id="scope-single" disabled={disabled} />
           <Label htmlFor="scope-single" className="cursor-pointer font-normal">
             {option1Label}
           </Label>
@@ -160,7 +165,7 @@ export default function MultiDayApplySelector({
 
         <div className="space-y-2">
           <div className="flex items-center space-x-2">
-            <RadioGroupItem value="timeSlot" id="scope-timeSlot" />
+            <RadioGroupItem value="timeSlot" id="scope-timeSlot" disabled={disabled} />
             <Label htmlFor="scope-timeSlot" className="cursor-pointer font-normal">
               {option2Label}
             </Label>
@@ -182,7 +187,7 @@ export default function MultiDayApplySelector({
                         id={`day-${day.id}`}
                         checked={isChecked}
                         onCheckedChange={checked => handleDayToggle(day.id, checked === true)}
-                        disabled={isCurrentDay || scope !== 'timeSlot'}
+                        disabled={disabled || isCurrentDay || scope !== 'timeSlot'}
                       />
                       <Label
                         htmlFor={`day-${day.id}`}
@@ -201,7 +206,7 @@ export default function MultiDayApplySelector({
 
         <div className="space-y-2">
           <div className="flex items-center space-x-2">
-            <RadioGroupItem value="day" id="scope-day" />
+            <RadioGroupItem value="day" id="scope-day" disabled={disabled} />
             <Label htmlFor="scope-day" className="cursor-pointer font-normal">
               {option3Label}
             </Label>
@@ -223,7 +228,7 @@ export default function MultiDayApplySelector({
                         onCheckedChange={checked =>
                           handleTimeSlotToggle(timeSlot.id, checked === true)
                         }
-                        disabled={scope !== 'day'}
+                        disabled={disabled || scope !== 'day'}
                       />
                       <Label
                         htmlFor={`timeslot-${timeSlot.id}`}
