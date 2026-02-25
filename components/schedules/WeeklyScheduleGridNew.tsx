@@ -2,15 +2,12 @@
 
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react'
 import { CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
-import ScheduleCell from './ScheduleCell'
+import ScheduleGridCellCard from './ScheduleGridCellCard'
 import ScheduleSidePanel from './ScheduleSidePanel'
 import type { WeeklyScheduleData, WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 import { isSlotEffectivelyInactive } from '@/lib/utils/schedule-slot-activity'
-import {
-  SCHEDULE_INACTIVE_CARD_CLASS,
-  SCHEDULE_INACTIVE_LEGEND_DOT_CLASS,
-} from '@/lib/ui/schedule-inactive-tokens'
+import { SCHEDULE_INACTIVE_LEGEND_DOT_CLASS } from '@/lib/ui/schedule-inactive-tokens'
 
 interface WeeklyScheduleGridNewProps {
   data: WeeklyScheduleDataByClassroom[]
@@ -932,37 +929,22 @@ export default function WeeklyScheduleGridNew({
                                 minHeight: '120px', // Ensure minimum height for Safari compatibility (matches grid row minmax)
                               }}
                             >
-                              <div
-                                className={`rounded-lg border border-gray-200 bg-white shadow-sm transition-all duration-200 min-h-[120px] flex-shrink-0 ${
-                                  allowCardClick
-                                    ? 'hover:shadow-md cursor-pointer'
-                                    : 'cursor-default'
-                                } ${isInactive ? SCHEDULE_INACTIVE_CARD_CLASS : ''}`}
-                                style={{
-                                  width: '220px',
-                                  minWidth: '220px',
-                                  maxWidth: '220px',
-                                  marginTop: '6px',
-                                  marginBottom: '6px',
-                                  marginLeft: '10px',
-                                  marginRight: '10px',
-                                }}
-                                onClick={
-                                  allowCardClick
-                                    ? () =>
-                                        handleCellClick(
-                                          day.id,
-                                          day.name,
-                                          timeSlot.id,
-                                          item.timeSlot.name || timeSlot.code,
-                                          classroom.classroomId,
-                                          classroom.classroomName
-                                        )
-                                    : undefined
+                              <ScheduleGridCellCard
+                                data={classroom.cellData}
+                                displayMode={displayMode}
+                                allowCardClick={allowCardClick}
+                                isInactive={isInactive}
+                                onClick={() =>
+                                  handleCellClick(
+                                    day.id,
+                                    day.name,
+                                    timeSlot.id,
+                                    item.timeSlot.name || timeSlot.code,
+                                    classroom.classroomId,
+                                    classroom.classroomName
+                                  )
                                 }
-                              >
-                                <ScheduleCell data={classroom.cellData} displayMode={displayMode} />
-                              </div>
+                              />
                             </div>
                           )
                         })}
@@ -1264,39 +1246,22 @@ export default function WeeklyScheduleGridNew({
                             minHeight: '120px', // Ensure minimum height for Safari compatibility (matches grid row minmax)
                           }}
                         >
-                          <div
-                            className={`rounded-lg border border-gray-200 bg-white shadow-sm transition-all duration-200 ${
-                              allowCardClick ? 'hover:shadow-md cursor-pointer' : 'cursor-default'
-                            } ${isInactive ? SCHEDULE_INACTIVE_CARD_CLASS : ''}`}
-                            style={{
-                              width: '220px',
-                              minWidth: '220px',
-                              maxWidth: '220px',
-                              minHeight: '120px',
-                              boxSizing: 'border-box',
-                              flexShrink: 0,
-                              flexGrow: 0,
-                              marginTop: '10px',
-                              marginBottom: '10px',
-                              marginLeft: '10px',
-                              marginRight: '10px',
-                            }}
-                            onClick={
-                              allowCardClick
-                                ? () =>
-                                    handleCellClick(
-                                      day.id,
-                                      day.name,
-                                      slot.id,
-                                      slot.name || slot.code,
-                                      classroom.classroom_id,
-                                      classroom.classroom_name
-                                    )
-                                : undefined
+                          <ScheduleGridCellCard
+                            data={cellData}
+                            displayMode={displayMode}
+                            allowCardClick={allowCardClick}
+                            isInactive={isInactive}
+                            onClick={() =>
+                              handleCellClick(
+                                day.id,
+                                day.name,
+                                slot.id,
+                                slot.name || slot.code,
+                                classroom.classroom_id,
+                                classroom.classroom_name
+                              )
                             }
-                          >
-                            <ScheduleCell data={cellData} displayMode={displayMode} />
-                          </div>
+                          />
                         </div>
                       )
                     })
@@ -1324,6 +1289,8 @@ export default function WeeklyScheduleGridNew({
             selectedDayIds={selectedDayIds}
             selectedCellData={selectedCellData}
             onSave={handleSave}
+            weekStartISO={weekStartISO}
+            readOnly={readOnly}
           />
         )}
       </div>
