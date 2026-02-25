@@ -1569,7 +1569,8 @@ export default function ScheduleSidePanel({
   }
 
   const handleSave = async () => {
-    if (slotIsInactive) return
+    // Block save only when parent (classroom/time slot) is inactive; allow saving when user set cell to inactive
+    if (isParentEffectivelyInactive) return
     setSaving(true)
     try {
       // Validate - class groups are always required to save
@@ -2094,16 +2095,30 @@ export default function ScheduleSidePanel({
                   ? 'View schedule details and take quick actions'
                   : 'Configure schedule cell settings and assignments'}
               </SheetDescription>
-              {effectiveInactiveReasonLabel && (
+              {slotIsInactive && (
                 <div className="mt-2 space-y-1.5 pt-4 pb-4">
-                  <div className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-gray-200 px-3 py-1 text-xs font-semibold text-gray-900">
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    Inactive: {effectiveInactiveReasonLabel}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    To make this cell active, go to Baseline Schedule in Settings and make Classroom
-                    and Timeslot Active.
-                  </p>
+                  {isParentEffectivelyInactive ? (
+                    <>
+                      <div className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-gray-200 px-3 py-1 text-xs font-semibold text-gray-900">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        Inactive: {effectiveInactiveReasonLabel}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        To make this cell active, go to Baseline Schedule in Settings and make
+                        Classroom and Time Slot Active.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-gray-200 px-3 py-1 text-xs font-semibold text-gray-900">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        This slot is inactive
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Turn Slot status to Active below to assign teachers and make changes.
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
@@ -3078,7 +3093,11 @@ export default function ScheduleSidePanel({
                       </div>
                     )}
                     {/* Section A: Slot Status */}
-                    <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-1">
+                    <div
+                      className={`rounded-lg border border-gray-200 p-6 space-y-1 ${
+                        !isActive ? 'bg-slate-100' : 'bg-white'
+                      }`}
+                    >
                       <SlotStatusToggle
                         isActive={effectiveIsActive}
                         disabled={isParentEffectivelyInactive}
@@ -3112,9 +3131,14 @@ export default function ScheduleSidePanel({
                             This slot requires staffing and will be validated
                           </p>
                         ) : (
-                          <p className="text-xs text-muted-foreground whitespace-nowrap">
-                            Inactive slots are ignored for staffing and substitutes
-                          </p>
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground whitespace-nowrap">
+                              Inactive slots are ignored for staffing and substitutes
+                            </p>
+                            <p className="text-xs font-medium text-slate-700">
+                              To assign teachers and make changes, turn Slot status to Active above.
+                            </p>
+                          </div>
                         )}
                       </div>
                     </div>

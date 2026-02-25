@@ -133,7 +133,11 @@ export default function Sidebar() {
           <nav className="flex-1 px-2 space-y-1">
             {navigation.map(item => {
               const isSettingsItem = item.name === 'Settings'
-              const itemHref = isSettingsItem ? settingsDestination : item.href
+              const itemHref = isSettingsItem
+                ? pathname && isSettingsAreaPath(pathname)
+                  ? '/settings'
+                  : settingsDestination
+                : item.href
               const isActive = isSettingsItem
                 ? Boolean(pathname && isSettingsAreaPath(pathname))
                 : pathname === item.href || pathname?.startsWith(item.href + '/')

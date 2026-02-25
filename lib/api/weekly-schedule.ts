@@ -696,11 +696,11 @@ export async function getScheduleSnapshotData({
           time_off_request_id?: string
         }> = []
 
-        // Only process if schedule_cell exists and is active with class groups
-        // Handle both class_groups (from transformed data) and schedule_cell_class_groups (from raw query)
+        // Build assignments when schedule_cell exists and has class groups and/or we have teacher assignments.
+        // Include inactive slots so the UI can display assigned teachers (with gray styling).
         const classGroups = scheduleCell?.class_groups || []
 
-        if (scheduleCell && classGroups && classGroups.length > 0 && scheduleCell.is_active) {
+        if (scheduleCell && (classGroups.length > 0 || assignmentsForSlot.length > 0)) {
           const classGroupIds = classGroups.map(cg => cg.id)
 
           // Get teachers assigned to this slot

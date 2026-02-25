@@ -28,9 +28,9 @@ export default function ScheduleGridCellCard({
 }: ScheduleGridCellCardProps) {
   return (
     <div
-      className={`rounded-lg border border-gray-200 bg-white shadow-sm transition-all duration-200 min-h-[120px] flex-shrink-0 ${
-        allowCardClick ? 'hover:shadow-md cursor-pointer' : 'cursor-default'
-      } ${isInactive ? SCHEDULE_INACTIVE_CARD_CLASS : ''}`}
+      className={`rounded-lg border border-gray-200 shadow-sm transition-all duration-200 min-h-[120px] flex-shrink-0 ${
+        isInactive ? SCHEDULE_INACTIVE_CARD_CLASS : 'bg-white'
+      } ${allowCardClick ? 'hover:shadow-md cursor-pointer' : 'cursor-default'}`}
       style={{
         width: '220px',
         minWidth: '220px',
