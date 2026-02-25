@@ -88,9 +88,14 @@ jest.mock('@/components/schedules/ClassGroupMultiSelect', () => () => (
 ))
 jest.mock('@/components/schedules/EnrollmentInput', () => () => <div>EnrollmentInput</div>)
 jest.mock('@/components/schedules/TeacherMultiSelect', () => () => <div>TeacherMultiSelect</div>)
-jest.mock('@/components/schedules/MultiDayApplySelector', () => () => (
-  <div>MultiDayApplySelector</div>
-))
+jest.mock('@/components/schedules/MultiDayApplySelector', () => ({
+  __esModule: true,
+  default: ({ disabled }: { disabled?: boolean }) => (
+    <div data-testid="multi-day-apply" data-disabled={disabled ? 'true' : 'false'}>
+      MultiDayApplySelector
+    </div>
+  ),
+}))
 jest.mock('@/components/schedules/UnsavedChangesDialog', () => () => null)
 jest.mock('@/components/schedules/ConflictBanner', () => () => <div>ConflictBanner</div>)
 
@@ -285,5 +290,66 @@ describe('ScheduleSidePanel interactions', () => {
     expect(screen.queryByText('This shift only')).not.toBeInTheDocument()
     expect(screen.queryByText('All Monday shifts')).not.toBeInTheDocument()
     expect(screen.queryByText('All shifts')).not.toBeInTheDocument()
+  })
+
+  it('disables Save and Apply changes when slot is inactive', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    render(
+      <ScheduleSidePanel
+        {...props}
+        readOnly={false}
+        selectedCellData={{
+          ...props.selectedCellData,
+          schedule_cell: {
+            ...props.selectedCellData.schedule_cell,
+            is_active: false,
+          },
+        }}
+      />
+    )
+
+    expect(await screen.findByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getByTestId('multi-day-apply')).toHaveAttribute('data-disabled', 'true')
+  })
+
+  it('disables quick actions in read-only cell panel when slot is inactive', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    render(
+      <ScheduleSidePanel
+        {...props}
+        readOnly
+        selectedCellData={{
+          ...props.selectedCellData,
+          schedule_cell: {
+            ...props.selectedCellData.schedule_cell,
+            is_active: false,
+          },
+        }}
+      />
+    )
+
+    expect(await screen.findByRole('button', { name: 'Add Flex Staff' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edit permanent staff' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edit class groups & enrollment' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled()
+
+    const addTimeOffButtons = screen.getAllByRole('button', { name: 'Add Time Off' })
+    addTimeOffButtons.forEach(button => {
+      expect(button).toBeDisabled()
+    })
   })
 })

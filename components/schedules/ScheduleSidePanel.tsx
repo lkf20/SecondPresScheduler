@@ -1336,6 +1336,7 @@ export default function ScheduleSidePanel({
           .join(' • ')
 
   const effectiveIsActive = isActive && !isParentEffectivelyInactive
+  const slotIsInactive = !effectiveIsActive
 
   // Auto-activate cell when class groups, enrollment, or teachers are added (only if inactive and originally empty)
   useEffect(() => {
@@ -1560,6 +1561,7 @@ export default function ScheduleSidePanel({
   }
 
   const handleSave = async () => {
+    if (slotIsInactive) return
     setSaving(true)
     try {
       // Validate - class groups are always required to save
@@ -2764,6 +2766,7 @@ export default function ScheduleSidePanel({
                                         size="sm"
                                         variant="outline"
                                         onClick={() => router.push('/time-off')}
+                                        disabled={slotIsInactive}
                                       >
                                         Edit Time Off
                                       </Button>
@@ -2772,6 +2775,7 @@ export default function ScheduleSidePanel({
                                           type="button"
                                           size="sm"
                                           onClick={() => router.push(findSubLink)}
+                                          disabled={slotIsInactive}
                                         >
                                           Find Sub
                                         </Button>
@@ -2796,6 +2800,7 @@ export default function ScheduleSidePanel({
                                             size="sm"
                                             variant="outline"
                                             onClick={() => router.push(findSubLink)}
+                                            disabled={slotIsInactive}
                                           >
                                             Change Sub
                                           </Button>
@@ -2844,6 +2849,7 @@ export default function ScheduleSidePanel({
                                     assignment.teacher_name || 'Unknown'
                                   )
                                 }
+                                disabled={slotIsInactive}
                               >
                                 <Plus className="h-3.5 w-3.5" />
                                 Add Time Off
@@ -2861,6 +2867,7 @@ export default function ScheduleSidePanel({
                         variant="ghost"
                         className="h-auto px-0 text-sm text-slate-500 hover:text-slate-700"
                         onClick={() => setShowBaselineEditDialog(true)}
+                        disabled={slotIsInactive}
                       >
                         <Pencil className="mr-1.5 h-3.5 w-3.5" />
                         Edit permanent staff
@@ -2876,6 +2883,7 @@ export default function ScheduleSidePanel({
                           className="h-9 rounded-md px-3.5 shadow-sm hover:opacity-95 focus-visible:outline-none focus-visible:ring-0"
                           style={{ backgroundColor: '#14b8a6', color: '#ffffff' }}
                           onClick={() => setPanelMode('flex')}
+                          disabled={slotIsInactive}
                         >
                           <Plus className="h-3.5 w-3.5" />
                           Add Flex Staff
@@ -2900,6 +2908,7 @@ export default function ScheduleSidePanel({
                                   onClick={() => {
                                     void handleOpenRemoveFlexDialog(assignment)
                                   }}
+                                  disabled={slotIsInactive}
                                 >
                                   Remove
                                 </Button>
@@ -2913,6 +2922,7 @@ export default function ScheduleSidePanel({
                                       assignment.teacher_name || 'Unknown'
                                     )
                                   }
+                                  disabled={slotIsInactive}
                                 >
                                   <Plus className="h-3.5 w-3.5" />
                                   Add Time Off
@@ -2950,6 +2960,7 @@ export default function ScheduleSidePanel({
                                     assignment.teacher_name || 'Unknown'
                                   )
                                 }
+                                disabled={slotIsInactive}
                               >
                                 <Plus className="h-3.5 w-3.5" />
                                 Add Time Off
@@ -3006,6 +3017,7 @@ export default function ScheduleSidePanel({
                         variant="ghost"
                         className="h-auto px-0 text-sm text-slate-500 hover:text-slate-700"
                         onClick={() => setShowClassGroupEditDialog(true)}
+                        disabled={slotIsInactive}
                       >
                         <Pencil className="mr-1.5 h-3.5 w-3.5" />
                         Edit class groups & enrollment
@@ -3260,6 +3272,7 @@ export default function ScheduleSidePanel({
                         currentClassroomName={classroomName}
                         selectedDayIds={selectedDayIds}
                         timeSlots={timeSlots}
+                        disabled={slotIsInactive}
                         onApplyScopeChange={handleApplyScopeChange}
                       />
                     </div>
@@ -3281,7 +3294,7 @@ export default function ScheduleSidePanel({
                         <Button variant="outline" onClick={handleClose} disabled={saving}>
                           Cancel
                         </Button>
-                        <Button onClick={handleSave} disabled={saving}>
+                        <Button onClick={handleSave} disabled={saving || slotIsInactive}>
                           {saving ? 'Saving...' : 'Save'}
                         </Button>
                       </div>
