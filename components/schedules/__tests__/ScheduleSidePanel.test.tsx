@@ -352,4 +352,114 @@ describe('ScheduleSidePanel interactions', () => {
       expect(button).toBeDisabled()
     })
   })
+
+  it('disables Save and Apply when classroom is inactive (parent inactive)', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    render(
+      <ScheduleSidePanel
+        {...props}
+        readOnly={false}
+        selectedCellData={{
+          ...props.selectedCellData,
+          classroom_is_active: false,
+        }}
+      />
+    )
+
+    expect(await screen.findByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getByTestId('multi-day-apply')).toHaveAttribute('data-disabled', 'true')
+  })
+
+  it('disables Save and Apply when time slot is inactive (parent inactive)', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    render(
+      <ScheduleSidePanel
+        {...props}
+        readOnly={false}
+        selectedCellData={{
+          ...props.selectedCellData,
+          time_slot_is_active: false,
+        }}
+      />
+    )
+
+    expect(await screen.findByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getByTestId('multi-day-apply')).toHaveAttribute('data-disabled', 'true')
+  })
+
+  it('disables quick actions when classroom is inactive (parent inactive)', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    render(
+      <ScheduleSidePanel
+        {...props}
+        readOnly
+        selectedCellData={{
+          ...props.selectedCellData,
+          classroom_is_active: false,
+        }}
+      />
+    )
+
+    expect(await screen.findByRole('button', { name: 'Add Flex Staff' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edit permanent staff' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edit class groups & enrollment' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled()
+
+    const addTimeOffButtons = screen.getAllByRole('button', { name: 'Add Time Off' })
+    addTimeOffButtons.forEach(button => {
+      expect(button).toBeDisabled()
+    })
+  })
+
+  it('disables quick actions when time slot is inactive (parent inactive)', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    render(
+      <ScheduleSidePanel
+        {...props}
+        readOnly
+        selectedCellData={{
+          ...props.selectedCellData,
+          time_slot_is_active: false,
+        }}
+      />
+    )
+
+    expect(await screen.findByRole('button', { name: 'Add Flex Staff' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edit permanent staff' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edit class groups & enrollment' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled()
+
+    const addTimeOffButtons = screen.getAllByRole('button', { name: 'Add Time Off' })
+    addTimeOffButtons.forEach(button => {
+      expect(button).toBeDisabled()
+    })
+  })
 })
