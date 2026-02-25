@@ -21,6 +21,7 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:smoke": "playwright test --grep @smoke",
+    "test:e2e:gold": "playwright test --grep @gold",
     "test:all": "npm run test -- --runInBand && npm run test:e2e:smoke",
     "test:db:reset": "node scripts/testing/db-reset.mjs",
     "test:db:seed": "node scripts/testing/db-seed.mjs",

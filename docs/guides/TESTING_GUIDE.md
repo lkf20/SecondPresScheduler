@@ -109,6 +109,7 @@ For manual or AI-driven checks against a known state:
 - `npm run qa:smoke` - one-command smoke (see above)
 - `npm run qa:audit` - one-command audit contract tests (see above)
 - `npm run qa:e2e` - one-command full E2E (see above)
+- `npm run test:e2e:gold` - Playwright tests tagged `@gold` (merge gate; see [scenarios/gold/README.md](../../scenarios/gold/README.md))
 
 ## Coverage Gates (Progressive)
 
