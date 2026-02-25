@@ -2,6 +2,10 @@
 
 This directory contains all project documentation organized by category.
 
+## Purpose and context
+
+- **APP_PURPOSE_AND_CONTEXT.md** - Who the app is for, what problem it solves, key flows, and product intent. Consult when making product or UX decisions; [AGENTS.md](../AGENTS.md) references it.
+
 ## Structure
 
 ### `/guides`
