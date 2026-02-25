@@ -4,6 +4,7 @@ import { createErrorResponse, getErrorMessage } from '@/lib/utils/errors'
 import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 import { revalidatePath } from 'next/cache'
 import { getUserSchoolId } from '@/lib/utils/auth'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 // See docs/data-lifecycle.md: sub_assignments lifecycle
 /**
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
 
     const { data: subRecord, error: subError } = await supabase
       .from('staff')
-      .select('id, school_id')
+      .select('id, school_id, first_name, last_name, display_name')
       .eq('id', sub_id)
       .single()
 
@@ -140,6 +141,14 @@ export async function POST(request: NextRequest) {
         403
       )
     }
+
+    const subName = getStaffDisplayName(subRecord)
+    const { data: teacherRow } = await supabase
+      .from('staff')
+      .select('first_name, last_name, display_name')
+      .eq('id', teacherId)
+      .maybeSingle()
+    const teacherName = teacherRow ? getStaffDisplayName(teacherRow) : null
 
     const uniqueSelectedShiftIds = Array.from(
       new Set(
@@ -389,6 +398,9 @@ export async function POST(request: NextRequest) {
                 changed_fields: ['override_availability'],
                 coverage_request_id: coverage_request_id,
                 sub_id: sub_id,
+                sub_name: subName ?? undefined,
+                teacher_id: teacherId,
+                teacher_name: teacherName ?? undefined,
                 coverage_request_shift_id: override.coverage_request_shift_id,
                 reason: 'Director override for unavailable shift',
               },
@@ -452,7 +464,9 @@ export async function POST(request: NextRequest) {
       details: {
         changed_fields: ['sub_assignments'],
         sub_id,
+        sub_name: subName ?? undefined,
         teacher_id: teacherId,
+        teacher_name: teacherName ?? undefined,
         assignment_ids: (createdAssignments || []).map((assignment: any) => assignment.id),
         shift_ids: uniqueSelectedShiftIds,
       },

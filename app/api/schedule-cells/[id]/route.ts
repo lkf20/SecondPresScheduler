@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getScheduleCells, updateScheduleCell, deleteScheduleCell } from '@/lib/api/schedule-cells'
+import {
+  getScheduleCells,
+  getScheduleCellById,
+  updateScheduleCell,
+  deleteScheduleCell,
+} from '@/lib/api/schedule-cells'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { updateScheduleCellSchema } from '@/lib/validations/schedule-cells'
 import { validateRequest } from '@/lib/utils/validation'
 import { z } from 'zod'
+import { getUserSchoolId } from '@/lib/utils/auth'
+import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 
 const uuidSchema = z.string().uuid({ message: 'Invalid ID format' })
 
@@ -57,6 +64,33 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const cell = await updateScheduleCell(id, validation.data)
+    const schoolId = (cell as { school_id?: string }).school_id ?? (await getUserSchoolId())
+    if (schoolId) {
+      const cellWithDetails = await getScheduleCellById(id)
+      const { actorUserId, actorDisplayName } = await getAuditActorContext()
+      await logAuditEvent({
+        schoolId,
+        actorUserId,
+        actorDisplayName,
+        action: 'update',
+        category: 'baseline_schedule',
+        entityType: 'schedule_cell',
+        entityId: id,
+        details: {
+          classroom_id: cell.classroom_id,
+          classroom_name: cellWithDetails?.classroom?.name,
+          day_of_week_id: cell.day_of_week_id,
+          day_name: cellWithDetails?.day_of_week?.name,
+          time_slot_id: cell.time_slot_id,
+          time_slot_code: cellWithDetails?.time_slot?.code,
+          is_active: validation.data.is_active,
+          class_group_ids: validation.data.class_group_ids,
+          enrollment_for_staffing: validation.data.enrollment_for_staffing,
+          notes: validation.data.notes,
+          updated_fields: Object.keys(validation.data),
+        },
+      })
+    }
     return NextResponse.json(cell)
   } catch (error) {
     return createErrorResponse(
@@ -81,7 +115,31 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid schedule cell ID format' }, { status: 400 })
     }
 
+    const existingCell = await getScheduleCellById(id)
     await deleteScheduleCell(id)
+    const schoolId =
+      (existingCell as { school_id?: string } | null)?.school_id ?? (await getUserSchoolId())
+    if (schoolId && existingCell) {
+      const { actorUserId, actorDisplayName } = await getAuditActorContext()
+      await logAuditEvent({
+        schoolId,
+        actorUserId,
+        actorDisplayName,
+        action: 'delete',
+        category: 'baseline_schedule',
+        entityType: 'schedule_cell',
+        entityId: id,
+        details: {
+          classroom_id: existingCell.classroom_id,
+          classroom_name: existingCell.classroom?.name,
+          day_of_week_id: existingCell.day_of_week_id,
+          day_name: existingCell.day_of_week?.name,
+          time_slot_id: existingCell.time_slot_id,
+          time_slot_code: existingCell.time_slot?.code,
+          is_active: false,
+        },
+      })
+    }
     return NextResponse.json({ success: true })
   } catch (error) {
     return createErrorResponse(

@@ -3,13 +3,30 @@
 import { NextResponse } from 'next/server'
 import { GET, POST } from '@/app/api/teacher-schedules/route'
 import { NextRequest } from 'next/server'
-import { getAllTeacherSchedules, createTeacherSchedule } from '@/lib/api/schedules'
+import {
+  getAllTeacherSchedules,
+  createTeacherSchedule,
+  getTeacherScheduleById,
+} from '@/lib/api/schedules'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { validateQueryParams, validateRequest } from '@/lib/utils/validation'
 
 jest.mock('@/lib/api/schedules', () => ({
   getAllTeacherSchedules: jest.fn(),
   createTeacherSchedule: jest.fn(),
+  getTeacherScheduleById: jest.fn(),
+}))
+
+jest.mock('@/lib/utils/auth', () => ({
+  getUserSchoolId: jest.fn().mockResolvedValue('school-1'),
+}))
+
+jest.mock('@/lib/audit/logAuditEvent', () => ({
+  getAuditActorContext: jest.fn().mockResolvedValue({
+    actorUserId: 'user-1',
+    actorDisplayName: 'Test User',
+  }),
+  logAuditEvent: jest.fn().mockResolvedValue(true),
 }))
 
 jest.mock('@/lib/utils/errors', () => ({
@@ -111,7 +128,20 @@ describe('teacher schedules collection route integration', () => {
       success: true,
       data: payload,
     })
-    ;(createTeacherSchedule as jest.Mock).mockResolvedValue({ id: 'schedule-new', ...payload })
+    ;(createTeacherSchedule as jest.Mock).mockResolvedValue({
+      id: 'schedule-new',
+      school_id: 'school-1',
+      ...payload,
+    })
+    ;(getTeacherScheduleById as jest.Mock).mockResolvedValue({
+      id: 'schedule-new',
+      school_id: 'school-1',
+      ...payload,
+      teacher: { first_name: 'Test', last_name: 'Teacher', display_name: null },
+      classroom: { name: 'Class 1' },
+      day_of_week: { name: 'Monday' },
+      time_slot: { code: 'AM' },
+    })
 
     const response = await POST(
       new Request('http://localhost/api/teacher-schedules', {

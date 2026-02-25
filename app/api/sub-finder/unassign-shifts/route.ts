@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 type UnassignScope = 'single' | 'all_for_absence'
 
@@ -156,6 +157,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to remove sub assignment(s).' }, { status: 500 })
     }
 
+    const { data: staffRows } = await supabase
+      .from('staff')
+      .select('id, first_name, last_name, display_name')
+      .in('id', [timeOffRequest.teacher_id, subId])
+    const staffById = new Map((staffRows ?? []).map(row => [row.id, row]))
+    const teacherName = staffById.has(timeOffRequest.teacher_id)
+      ? getStaffDisplayName(staffById.get(timeOffRequest.teacher_id)!)
+      : null
+    const subName = staffById.has(subId) ? getStaffDisplayName(staffById.get(subId)!) : null
+
     const { actorUserId, actorDisplayName } = await getAuditActorContext()
     await logAuditEvent({
       schoolId,
@@ -169,7 +180,9 @@ export async function POST(request: NextRequest) {
         changed_fields: ['sub_assignments'],
         scope,
         sub_id: subId,
+        sub_name: subName ?? undefined,
         teacher_id: timeOffRequest.teacher_id,
+        teacher_name: teacherName ?? undefined,
         assignment_ids: assignmentIdsToCancel,
         removed_count: assignmentIdsToCancel.length,
         time_off_request_id: absenceId,

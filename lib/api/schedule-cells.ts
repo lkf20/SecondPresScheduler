@@ -244,6 +244,45 @@ export async function getScheduleCells(
 }
 
 /**
+ * Get a single schedule cell by id
+ */
+export async function getScheduleCellById(id: string): Promise<ScheduleCellWithDetails | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('schedule_cells')
+    .select(
+      `
+      *,
+      classroom:classrooms(id, name),
+      day_of_week:days_of_week(id, name, day_number),
+      time_slot:time_slots(id, code, name, default_start_time, default_end_time),
+      schedule_cell_class_groups(
+        class_group:class_groups(id, name, age_unit, min_age, max_age, required_ratio, preferred_ratio, is_active, order)
+      )
+    `
+    )
+    .eq('id', id)
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') return null
+    throw error
+  }
+
+  const raw = data as ScheduleCellRaw
+  const flattened: ScheduleCellWithDetails = {
+    ...raw,
+    class_groups: raw.schedule_cell_class_groups
+      ? raw.schedule_cell_class_groups
+          .map(j => j.class_group)
+          .filter((cg): cg is NonNullable<typeof cg> => cg !== null)
+      : [],
+  }
+  delete (flattened as ScheduleCellRaw).schedule_cell_class_groups
+  return flattened
+}
+
+/**
  * Create a new schedule cell with class groups
  */
 export async function createScheduleCell(cell: {

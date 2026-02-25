@@ -2007,10 +2007,8 @@ export default function ScheduleSidePanel({
     setConflictResolutions(new Map())
   }
 
-  // Calculate staffing requirements
-  // Use enrollment from cell if available, otherwise use enrollment state
-  // This ensures consistency with the grid which uses scheduleCell.enrollment_for_staffing
-  const enrollmentForCalculation = cell?.enrollment_for_staffing ?? enrollment
+  // Calculate staffing requirements from current enrollment state so Required/Preferred update live as user types
+  const enrollmentForCalculation = enrollment
 
   // Find class group with lowest min_age for ratio calculation
   const classGroupForRatio = pickClassGroupForRatio(classGroups)
@@ -3335,6 +3333,7 @@ export default function ScheduleSidePanel({
                         placeholder="Add notes for baseline planning..."
                         disabled={fieldsDisabled}
                         rows={3}
+                        className="text-lg md:text-lg min-h-[80px]"
                       />
                     </div>
 

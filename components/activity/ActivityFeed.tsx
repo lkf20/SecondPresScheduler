@@ -67,6 +67,26 @@ function formatDescription(row: ActivityRow) {
     return 'Updated coverage details'
   }
 
+  if (row.category === 'baseline_schedule') {
+    if (row.entity_type === 'schedule_cell') {
+      if (row.action === 'create') return 'Created baseline schedule cell'
+      if (row.action === 'update') {
+        const count = details.cell_count
+        return count
+          ? `Updated baseline schedule (${count} cell${count !== 1 ? 's' : ''})`
+          : 'Updated baseline schedule cell'
+      }
+      if (row.action === 'delete') return 'Deactivated baseline schedule cell'
+    }
+    if (row.entity_type === 'teacher_schedule') {
+      if (row.action === 'assign') return 'Assigned teacher to baseline schedule'
+      if (row.action === 'unassign') return 'Removed teacher from baseline schedule'
+      if (row.action === 'update') return 'Updated teacher assignment in baseline schedule'
+      if (details.reason?.startsWith('conflict_resolution'))
+        return 'Resolved baseline schedule conflict'
+    }
+  }
+
   return `${row.action.replace('_', ' ')} ${row.entity_type.replace('_', ' ')}`
 }
 
@@ -76,6 +96,9 @@ function getEntityHref(row: ActivityRow) {
   }
   if (row.entity_type === 'coverage_request' && row.entity_id) {
     return `/sub-finder?coverage_request_id=${row.entity_id}`
+  }
+  if (row.category === 'baseline_schedule') {
+    return '/settings/baseline-schedule'
   }
   return null
 }
