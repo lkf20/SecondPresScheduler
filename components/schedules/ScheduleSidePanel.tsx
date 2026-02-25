@@ -2082,8 +2082,15 @@ export default function ScheduleSidePanel({
                   : 'Configure schedule cell settings and assignments'}
               </SheetDescription>
               {effectiveInactiveReasonLabel && (
-                <div className="mt-2 inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
-                  Inactive: {effectiveInactiveReasonLabel}
+                <div className="mt-2 space-y-1.5 pt-4 pb-4">
+                  <div className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-gray-200 px-3 py-1 text-xs font-semibold text-gray-900">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Inactive: {effectiveInactiveReasonLabel}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    To make this cell active, go to Baseline Schedule in Settings and make Classroom
+                    and Timeslot Active.
+                  </p>
                 </div>
               )}
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
@@ -3066,12 +3073,19 @@ export default function ScheduleSidePanel({
                       />
                       <div className="mt-0">
                         {isParentEffectivelyInactive ? (
-                          <p className="text-xs text-muted-foreground italic leading-relaxed">
-                            This slot appears inactive because parent settings are inactive
-                            {effectiveInactiveReasonLabel
-                              ? ` (${effectiveInactiveReasonLabel})`
-                              : ''}
-                          </p>
+                          <div className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                            <p className="text-xs font-medium text-amber-900">
+                              This cell is locked because parent settings are inactive
+                              {effectiveInactiveReasonLabel
+                                ? ` (${effectiveInactiveReasonLabel})`
+                                : ''}
+                              .
+                            </p>
+                            <p className="text-xs text-amber-800 leading-relaxed">
+                              To make this cell active, go to Settings → Baseline Schedule and set
+                              both Classroom and Time Slot to Active.
+                            </p>
+                          </div>
                         ) : isActive ? (
                           <p className="text-xs text-muted-foreground italic whitespace-nowrap">
                             This slot requires staffing and will be validated
