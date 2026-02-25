@@ -842,7 +842,7 @@ export default function WeeklyScheduleGridNew({
 
                   {/* Day Section Header */}
                   <div
-                    className="sticky px-4 rounded-lg flex items-center"
+                    className="sticky rounded-lg flex items-center"
                     style={{
                       position: 'sticky',
                       top: '30px',
@@ -861,10 +861,14 @@ export default function WeeklyScheduleGridNew({
                       paddingBottom: '6px',
                       height: '36px',
                       maxHeight: '36px',
-                      overflow: 'hidden',
                     }}
                   >
-                    <div className="text-base font-bold text-gray-800">{day.name}</div>
+                    <div
+                      className="text-base font-bold text-gray-800 px-4"
+                      style={{ position: 'sticky', left: 0 }}
+                    >
+                      {day.name}
+                    </div>
                   </div>
 
                   {/* Time Slot Rows for this day */}
