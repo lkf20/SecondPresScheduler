@@ -135,3 +135,44 @@ export function invalidateCoverageRequestShifts(
 
   return Promise.all(promises)
 }
+
+/**
+ * Invalidate all scheduling surfaces commonly affected by settings/staff updates.
+ */
+export function invalidateSchedulingSurfaces(
+  queryClient: QueryClient,
+  schoolId: string,
+  options?: {
+    includeFilterOptions?: boolean
+    includeUnscopedScheduleQueries?: boolean
+    includeScheduleSettings?: boolean
+  }
+) {
+  const includeFilterOptions = options?.includeFilterOptions ?? true
+  const includeUnscopedScheduleQueries = options?.includeUnscopedScheduleQueries ?? true
+  const includeScheduleSettings = options?.includeScheduleSettings ?? true
+
+  const promises = [
+    invalidateWeeklySchedule(queryClient, schoolId),
+    invalidateDailySchedule(queryClient, schoolId),
+    invalidateDashboard(queryClient, schoolId),
+    invalidateTimeOffRequests(queryClient, schoolId),
+    invalidateSubFinderAbsences(queryClient, schoolId),
+  ]
+
+  if (includeFilterOptions) {
+    promises.push(queryClient.invalidateQueries({ queryKey: ['filterOptions', schoolId] }))
+    promises.push(queryClient.invalidateQueries({ queryKey: ['filterOptions'] }))
+  }
+
+  if (includeUnscopedScheduleQueries) {
+    promises.push(queryClient.invalidateQueries({ queryKey: ['dailySchedule'] }))
+    promises.push(queryClient.invalidateQueries({ queryKey: ['weeklySchedule'] }))
+  }
+
+  if (includeScheduleSettings) {
+    promises.push(queryClient.invalidateQueries({ queryKey: ['scheduleSettings'] }))
+  }
+
+  return Promise.all(promises)
+}

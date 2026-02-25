@@ -22,12 +22,27 @@ export default function ClassSelector({ selectedClassIds, onSelectionChange }: C
   const [isExpanded, setIsExpanded] = useState(false)
 
   useEffect(() => {
-    fetch('/api/class-groups')
-      .then(r => r.json())
-      .then(data => {
-        setClasses(data as ClassGroup[])
-      })
-      .catch(console.error)
+    const abortController = new AbortController()
+
+    const fetchClassGroups = async () => {
+      try {
+        const response = await fetch('/api/class-groups', { signal: abortController.signal })
+        if (!response.ok) {
+          throw new Error('Failed to load class groups')
+        }
+        const data = (await response.json()) as ClassGroup[]
+        setClasses(data)
+      } catch (error) {
+        if ((error as Error).name === 'AbortError') return
+        console.error('Failed to load class groups:', error)
+      }
+    }
+
+    void fetchClassGroups()
+
+    return () => {
+      abortController.abort()
+    }
   }, [])
 
   useEffect(() => {

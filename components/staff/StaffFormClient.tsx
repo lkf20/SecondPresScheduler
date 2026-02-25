@@ -15,13 +15,8 @@ import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSchool } from '@/lib/contexts/SchoolContext'
-import {
-  invalidateDashboard,
-  invalidateDailySchedule,
-  invalidateSubFinderAbsences,
-  invalidateTimeOffRequests,
-  invalidateWeeklySchedule,
-} from '@/lib/utils/invalidation'
+import { useUnsavedNavigationGuard } from '@/lib/hooks/use-unsaved-navigation-guard'
+import { invalidateSchedulingSurfaces } from '@/lib/utils/invalidation'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -65,9 +60,7 @@ export default function StaffFormClient({
   const [isPreferencesDirty, setIsPreferencesDirty] = useState(false)
   const [availabilitySaveSignal, setAvailabilitySaveSignal] = useState(0)
   const [preferencesSaveSignal, setPreferencesSaveSignal] = useState(0)
-  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [staffList, setStaffList] = useState<Array<{ id: string }>>([])
-  const [pendingPath, setPendingPath] = useState<string | null>(null)
 
   const returnPage = searchParams.get('returnPage') || '1'
   const returnSearch = searchParams.get('returnSearch')
@@ -163,14 +156,16 @@ export default function StaffFormClient({
   const overviewHasUnsavedChanges = isOverviewDirty || isActive !== savedIsActive
   const hasUnsavedChanges = overviewHasUnsavedChanges || isAvailabilityDirty || isPreferencesDirty
 
-  const navigateWithUnsavedGuard = (path: string) => {
-    if (hasUnsavedChanges) {
-      setPendingPath(path)
-      setShowUnsavedDialog(true)
-      return
-    }
-    router.push(path)
-  }
+  const {
+    showUnsavedDialog,
+    setShowUnsavedDialog,
+    navigateWithUnsavedGuard,
+    handleKeepEditing,
+    handleDiscardAndLeave,
+  } = useUnsavedNavigationGuard({
+    hasUnsavedChanges,
+    onNavigate: path => router.push(path),
+  })
 
   useEffect(() => {
     if (!showAvailability && activeTab === 'availability') {
@@ -187,55 +182,6 @@ export default function StaffFormClient({
       setActiveTab('preferences')
     }
   }, [requestedTab, showAvailability])
-
-  useEffect(() => {
-    if (!hasUnsavedChanges) return
-
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-      event.returnValue = ''
-    }
-
-    const handleDocumentClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null
-      if (!target) return
-      const anchor = target.closest('a[href]') as HTMLAnchorElement | null
-      if (!anchor) return
-      if (anchor.target && anchor.target !== '_self') return
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-
-      const href = anchor.getAttribute('href')
-      if (!href || href.startsWith('#') || href.startsWith('javascript:')) return
-
-      const nextUrl = new URL(anchor.href, window.location.href)
-      if (nextUrl.origin !== window.location.origin) return
-
-      const nextPath = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`
-      const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`
-      if (nextPath === currentPath) return
-
-      event.preventDefault()
-      setPendingPath(nextPath)
-      setShowUnsavedDialog(true)
-    }
-
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    document.addEventListener('click', handleDocumentClick, true)
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-      document.removeEventListener('click', handleDocumentClick, true)
-    }
-  }, [hasUnsavedChanges])
-
-  const handleDiscardAndLeave = () => {
-    const destination = pendingPath
-    setShowUnsavedDialog(false)
-    setPendingPath(null)
-    if (destination) {
-      router.push(destination)
-    }
-  }
 
   const handleSubmit = async (data: StaffFormData) => {
     try {
@@ -267,13 +213,9 @@ export default function StaffFormClient({
         throw new Error(errorData.error || 'Failed to update staff')
       }
 
-      await Promise.all([
-        invalidateWeeklySchedule(queryClient, schoolId),
-        invalidateDailySchedule(queryClient, schoolId),
-        invalidateDashboard(queryClient, schoolId),
-        invalidateTimeOffRequests(queryClient, schoolId),
-        invalidateSubFinderAbsences(queryClient, schoolId),
-      ])
+      await invalidateSchedulingSurfaces(queryClient, schoolId, {
+        includeFilterOptions: false,
+      })
       setSavedIsActive(isActive)
       setIsOverviewDirty(false)
       router.refresh()
@@ -430,10 +372,7 @@ export default function StaffFormClient({
       <StaffUnsavedChangesDialog
         open={showUnsavedDialog}
         onOpenChange={setShowUnsavedDialog}
-        onKeepEditing={() => {
-          setShowUnsavedDialog(false)
-          setPendingPath(null)
-        }}
+        onKeepEditing={handleKeepEditing}
         onDiscardAndLeave={handleDiscardAndLeave}
       />
     </div>

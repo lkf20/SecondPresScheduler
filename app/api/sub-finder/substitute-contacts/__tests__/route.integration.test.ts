@@ -155,6 +155,7 @@ describe('substitute-contacts route integration', () => {
     const json = await response.json()
 
     expect(response.status).toBe(500)
-    expect(json.error).toMatch(/override failed/i)
+    expect(json.error).toBe('Failed to upsert shift overrides')
+    expect(json.details).toMatch(/override failed/i)
   })
 })

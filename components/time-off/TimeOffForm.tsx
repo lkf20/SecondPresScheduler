@@ -1195,93 +1195,97 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                   ? 'Cancel time off and sub coverage?'
                   : `Cancel this time off request for ${assignmentData?.teacherName || 'this teacher'}?`}
               </DialogTitle>
-              <DialogDescription className="space-y-4">
-                {assignmentData?.hasAssignments ? (
-                  <>
-                    <p>
-                      This time off request has sub assignment
-                      {assignmentData.assignmentCount !== 1 ? 's' : ''} on{' '}
-                      {assignmentData.assignmentCount} shift
-                      {assignmentData.assignmentCount !== 1 ? 's' : ''}.
-                    </p>
-
-                    {/* View Details Section */}
-                    <div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => setShowAssignmentDetails(!showAssignmentDetails)}
-                        className="w-full flex items-center justify-between p-2 hover:bg-gray-100"
-                      >
-                        <span className="font-medium text-sm">View details</span>
-                        {showAssignmentDetails ? (
-                          <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </Button>
-
-                      {showAssignmentDetails && (
-                        <div className="mt-2 p-4 bg-gray-50 rounded-md border border-gray-200 max-h-60 overflow-y-auto">
-                          <ul className="space-y-2">
-                            {assignmentData.assignments.map(assignment => (
-                              <li key={assignment.id} className="text-sm text-gray-700">
-                                {assignment.display}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-3 pt-2">
-                      <p className="text-sm font-medium">
-                        What would you like to do with{' '}
-                        {assignmentData.assignmentCount === 1
-                          ? 'this assignment'
-                          : 'these assignments'}
-                        ?
+              <DialogDescription asChild>
+                <div className="text-muted-foreground space-y-4 text-sm">
+                  {assignmentData?.hasAssignments ? (
+                    <>
+                      <p>
+                        This time off request has sub assignment
+                        {assignmentData.assignmentCount !== 1 ? 's' : ''} on{' '}
+                        {assignmentData.assignmentCount} shift
+                        {assignmentData.assignmentCount !== 1 ? 's' : ''}.
                       </p>
 
-                      <RadioGroup
-                        value={assignmentHandling}
-                        onValueChange={value => setAssignmentHandling(value as 'unassign' | 'keep')}
-                        className="space-y-3"
-                      >
-                        <div className="flex items-start space-x-3 p-3 border rounded-md hover:bg-gray-50">
-                          <RadioGroupItem value="unassign" id="unassign" className="mt-0.5" />
-                          <div className="flex-1">
-                            <Label htmlFor="unassign" className="font-medium cursor-pointer">
-                              Unassign subs from these shifts
-                            </Label>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              Sub coverage for this request will be removed, and these subs will be
-                              available for other assignments.
-                            </p>
-                          </div>
-                        </div>
+                      {/* View Details Section */}
+                      <div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => setShowAssignmentDetails(!showAssignmentDetails)}
+                          className="w-full flex items-center justify-between p-2 hover:bg-gray-100"
+                        >
+                          <span className="font-medium text-sm">View details</span>
+                          {showAssignmentDetails ? (
+                            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </Button>
 
-                        <div className="flex items-start space-x-3 p-3 border rounded-md hover:bg-gray-50">
-                          <RadioGroupItem value="keep" id="keep" className="mt-0.5" />
-                          <div className="flex-1">
-                            <Label htmlFor="keep" className="font-medium cursor-pointer">
-                              Keep sub assignments as extra coverage
-                            </Label>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              Keep these subs scheduled even though the time off request is
-                              cancelled.
-                            </p>
+                        {showAssignmentDetails && (
+                          <div className="mt-2 p-4 bg-gray-50 rounded-md border border-gray-200 max-h-60 overflow-y-auto">
+                            <ul className="space-y-2">
+                              {assignmentData.assignments.map(assignment => (
+                                <li key={assignment.id} className="text-sm text-gray-700">
+                                  {assignment.display}
+                                </li>
+                              ))}
+                            </ul>
                           </div>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                  </>
-                ) : (
-                  <p>
-                    Are you sure you want to cancel this time off request? This action cannot be
-                    undone.
-                  </p>
-                )}
+                        )}
+                      </div>
+
+                      <div className="space-y-3 pt-2">
+                        <p className="text-sm font-medium">
+                          What would you like to do with{' '}
+                          {assignmentData.assignmentCount === 1
+                            ? 'this assignment'
+                            : 'these assignments'}
+                          ?
+                        </p>
+
+                        <RadioGroup
+                          value={assignmentHandling}
+                          onValueChange={value =>
+                            setAssignmentHandling(value as 'unassign' | 'keep')
+                          }
+                          className="space-y-3"
+                        >
+                          <div className="flex items-start space-x-3 p-3 border rounded-md hover:bg-gray-50">
+                            <RadioGroupItem value="unassign" id="unassign" className="mt-0.5" />
+                            <div className="flex-1">
+                              <Label htmlFor="unassign" className="font-medium cursor-pointer">
+                                Unassign subs from these shifts
+                              </Label>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                Sub coverage for this request will be removed, and these subs will
+                                be available for other assignments.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start space-x-3 p-3 border rounded-md hover:bg-gray-50">
+                            <RadioGroupItem value="keep" id="keep" className="mt-0.5" />
+                            <div className="flex-1">
+                              <Label htmlFor="keep" className="font-medium cursor-pointer">
+                                Keep sub assignments as extra coverage
+                              </Label>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                Keep these subs scheduled even though the time off request is
+                                cancelled.
+                              </p>
+                            </div>
+                          </div>
+                        </RadioGroup>
+                      </div>
+                    </>
+                  ) : (
+                    <p>
+                      Are you sure you want to cancel this time off request? This action cannot be
+                      undone.
+                    </p>
+                  )}
+                </div>
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>

@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getClassrooms, createClassroom, setClassroomAllowedClasses } from '@/lib/api/classrooms'
 import { createErrorResponse } from '@/lib/utils/errors'
+import { revalidatePath } from 'next/cache'
+
+function revalidateClassroomDependentPaths() {
+  revalidatePath('/settings/classrooms')
+  revalidatePath('/schedules/weekly')
+  revalidatePath('/settings/baseline-schedule')
+  revalidatePath('/reports/daily-schedule')
+  revalidatePath('/sub-finder')
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,6 +39,7 @@ export async function POST(request: NextRequest) {
       await setClassroomAllowedClasses(classroom.id, allowedClassGroupIds)
     }
 
+    revalidateClassroomDependentPaths()
     return NextResponse.json(classroom, { status: 201 })
   } catch (error) {
     return createErrorResponse(error, 'Failed to create classroom', 500, 'POST /api/classrooms')

@@ -9,6 +9,9 @@ export interface ApiError {
   details?: unknown
 }
 
+const shouldLogErrors = () =>
+  process.env.NODE_ENV !== 'test' || process.env.API_ERROR_DEBUG === 'true'
+
 /**
  * Creates a user-friendly error message from various error types
  */
@@ -88,7 +91,9 @@ export function logError(
   error: unknown,
   additionalInfo?: Record<string, unknown>
 ) {
-  const errorMessage = error instanceof Error ? error.message : String(error)
+  if (!shouldLogErrors()) return
+
+  const errorMessage = getErrorMessage(error)
   const errorStack = error instanceof Error ? error.stack : undefined
 
   console.error(`[${context}] Error:`, {

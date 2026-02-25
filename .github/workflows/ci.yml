@@ -28,6 +28,8 @@ jobs:
       contents: read
     env:
       CI: 'true'
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -35,6 +37,10 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Verify required Supabase env vars
+        run: |
+          test -n "$NEXT_PUBLIC_SUPABASE_URL" || (echo "Missing NEXT_PUBLIC_SUPABASE_URL" && exit 1)
+          test -n "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" || (echo "Missing NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" && exit 1)
       - run: npm run test:coverage:phase3
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -49,6 +55,8 @@ jobs:
       contents: read
     env:
       CI: 'true'
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -56,6 +64,10 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Verify required Supabase env vars
+        run: |
+          test -n "$NEXT_PUBLIC_SUPABASE_URL" || (echo "Missing NEXT_PUBLIC_SUPABASE_URL" && exit 1)
+          test -n "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" || (echo "Missing NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" && exit 1)
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e:smoke
       - name: Upload Playwright report

@@ -33,13 +33,7 @@ import { Database } from '@/types/database'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 import ActiveStatusChip from '@/components/settings/ActiveStatusChip'
-import {
-  invalidateDailySchedule,
-  invalidateDashboard,
-  invalidateSubFinderAbsences,
-  invalidateTimeOffRequests,
-  invalidateWeeklySchedule,
-} from '@/lib/utils/invalidation'
+import { invalidateSchedulingSurfaces } from '@/lib/utils/invalidation'
 
 type TimeSlot = Database['public']['Tables']['time_slots']['Row']
 
@@ -200,26 +194,25 @@ export default function SortableTimeSlotsTable({
       })
       if (changed.length > 0) {
         await Promise.all(
-          changed.map(slot =>
-            fetch(`/api/timeslots/${slot.id}`, {
+          changed.map(async slot => {
+            const response = await fetch(`/api/timeslots/${slot.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ display_order: slot.display_order }),
             })
-          )
+            if (!response.ok) {
+              let message = `Failed to update time slot order for ${slot.code}`
+              try {
+                const errorData = (await response.json()) as { error?: string }
+                if (errorData?.error) message = errorData.error
+              } catch {
+                // Ignore JSON parse issues and keep fallback message.
+              }
+              throw new Error(message)
+            }
+          })
         )
-        await Promise.all([
-          invalidateWeeklySchedule(queryClient, schoolId),
-          invalidateDailySchedule(queryClient, schoolId),
-          invalidateDashboard(queryClient, schoolId),
-          invalidateTimeOffRequests(queryClient, schoolId),
-          invalidateSubFinderAbsences(queryClient, schoolId),
-          queryClient.invalidateQueries({ queryKey: ['filterOptions', schoolId] }),
-          queryClient.invalidateQueries({ queryKey: ['filterOptions'] }),
-          queryClient.invalidateQueries({ queryKey: ['dailySchedule'] }),
-          queryClient.invalidateQueries({ queryKey: ['weeklySchedule'] }),
-          queryClient.invalidateQueries({ queryKey: ['scheduleSettings'] }),
-        ])
+        await invalidateSchedulingSurfaces(queryClient, schoolId)
       }
     } catch (error) {
       console.error('Failed to save time slot order:', error)

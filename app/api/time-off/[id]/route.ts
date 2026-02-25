@@ -14,6 +14,15 @@ import {
   getTeacherTimeOffShifts,
 } from '@/lib/api/time-off-shifts'
 import { getUserSchoolId } from '@/lib/utils/auth'
+
+const shouldDebugLog =
+  process.env.NODE_ENV === 'development' || process.env.TIME_OFF_DEBUG === 'true'
+
+const logTimeOffRouteError = (...args: unknown[]) => {
+  if (shouldDebugLog) {
+    console.error(...args)
+  }
+}
 import { formatDateISOInTimeZone } from '@/lib/utils/date'
 import { createClient } from '@/lib/supabase/server'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
@@ -657,7 +666,7 @@ export async function DELETE(
       ...result,
     })
   } catch (error: any) {
-    console.error('Error cancelling time off request:', error)
+    logTimeOffRouteError('Error cancelling time off request:', error)
     if (error?.message === 'Time off request is already cancelled') {
       return NextResponse.json({ error: error.message }, { status: 409 })
     }

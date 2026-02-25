@@ -170,29 +170,11 @@ export async function setClassroomAllowedClasses(classroomId: string, classGroup
   const schoolId = classroomRow?.school_id || (await getUserSchoolId())
   if (!schoolId) throw new Error('school_id is required to set classroom allowed classes')
 
-  // Delete existing allowed classes
-  const { error: deleteError } = await supabase
-    .from('classroom_allowed_classes')
-    .delete()
-    .eq('classroom_id', classroomId)
-    .eq('school_id', schoolId)
+  const { error } = await supabase.rpc('set_classroom_allowed_classes_atomic', {
+    p_classroom_id: classroomId,
+    p_class_group_ids: classGroupIds,
+    p_school_id: schoolId,
+  })
 
-  if (deleteError) throw deleteError
-
-  // Insert new allowed classes
-  if (classGroupIds.length > 0) {
-    const insertData = classGroupIds.map(classGroupId => {
-      return {
-        classroom_id: classroomId,
-        class_group_id: classGroupId,
-        school_id: schoolId,
-      }
-    })
-
-    const { error: insertError } = await supabase
-      .from('classroom_allowed_classes')
-      .insert(insertData)
-
-    if (insertError) throw insertError
-  }
+  if (error) throw error
 }
