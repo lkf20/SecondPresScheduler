@@ -52,6 +52,10 @@ interface WeeklyScheduleGridNewProps {
   showLegendSubstitutes?: boolean
   showFilterChips?: boolean
   readOnly?: boolean
+  /** When true, Save button shows "Save & Return to Weekly Schedule" and parent onRefresh may navigate back */
+  returnToWeekly?: boolean
+  /** Renders to the left of filter chips (e.g. Views & Filters button). Only used when showFilterChips is true. */
+  leadingFilterContent?: React.ReactNode
 }
 
 type WeeklyScheduleCellData = WeeklyScheduleData & {
@@ -408,6 +412,8 @@ export default function WeeklyScheduleGridNew({
   showLegendSubstitutes = true,
   showFilterChips = true,
   readOnly = false,
+  returnToWeekly = false,
+  leadingFilterContent,
 }: WeeklyScheduleGridNewProps) {
   const [selectedCell, setSelectedCell] = useState<{
     dayId: string
@@ -696,6 +702,7 @@ export default function WeeklyScheduleGridNew({
         {/* Filter chips - separate row below legend */}
         {showFilterChips && (
           <div className="mb-4 flex flex-wrap items-center gap-2">
+            {leadingFilterContent}
             {[
               { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
               {
@@ -980,6 +987,7 @@ export default function WeeklyScheduleGridNew({
             onSave={handleSave}
             weekStartISO={weekStartISO}
             readOnly={readOnly}
+            returnToWeekly={returnToWeekly}
           />
         )}
       </>
@@ -995,6 +1003,7 @@ export default function WeeklyScheduleGridNew({
         {/* Filter chips - separate row below legend */}
         {showFilterChips && (
           <div className="mb-4 flex flex-wrap items-center gap-2">
+            {leadingFilterContent}
             {[
               { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
               {
@@ -1295,6 +1304,7 @@ export default function WeeklyScheduleGridNew({
             onSave={handleSave}
             weekStartISO={weekStartISO}
             readOnly={readOnly}
+            returnToWeekly={returnToWeekly}
           />
         )}
       </div>

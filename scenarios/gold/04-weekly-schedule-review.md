@@ -30,7 +30,8 @@ Define “done right” for the **Weekly Schedule** so an AI (or human) can revi
 
 ### 3. Filtering and layout modes
 
-- [ ] **Filters are single select:** Each filter (e.g. Classrooms, Days, Time slots, Subs) is single-select; selected filters show correct count in parentheses (e.g. “Subs (2)”).
+- [ ] **Display mode chips are single-select:** The filter chips (All, Coverage Issues, Subs, Absences, Permanent staff) are mutually exclusive—exactly one is active at a time. Each chip shows a count in parentheses (e.g. “Subs (2)”).
+- [ ] **Structural filters are multi-select:** In the Views & Filters panel, Classrooms, Days, and Time slots are multi-select (user can select multiple of each). Selected filters correctly filter which cells appear in the grid.
 - [ ] **Inactive filter:** When “Inactive” is checked, inactive cells are visible (gray background); when unchecked, inactive cells are not displayed.
 - [ ] **Inactive badges:** Inactive badges display correctly on inactive classrooms and inactive time slots.
 - [ ] **Classrooms × Days vs Days × Classrooms:** Both layout modes display the same information. Classrooms × Days: classrooms on the left, days and time slots across the top. Days × Classrooms: days and time slots on the left, classrooms across the top. UI and behavior should match aside from layout.
@@ -41,7 +42,8 @@ Define “done right” for the **Weekly Schedule** so an AI (or human) can revi
 ### 4. Panel behavior (Weekly = read-only detail)
 
 - [ ] **Right panel is read-only:** In Weekly Schedule, the right panel is the read-only detail panel (not the edit panel).
-- [ ] **Navigation to edit:** Clicking an action in the read-only panel (e.g. “Edit baseline”) takes the user to the correct place to make edits (e.g. Baseline Schedule edit panel).
+- [ ] **Navigation to edit:** Clicking “Edit permanent staff” or “Edit class groups & enrollment” in the read-only panel navigates to the Baseline Schedule edit page with the cell pre-selected (via query params).
+- [ ] **Save & Return to Weekly:** When the user has navigated from Weekly to Baseline to edit, the Baseline page shows “Save & Return to Weekly Schedule”; after saving, the user is returned to the Weekly Schedule.
 
 ### 5. Editing (panel commit / cancel)
 
@@ -82,17 +84,17 @@ Define “done right” for the **Weekly Schedule** so an AI (or human) can revi
 
 ## Test coverage
 
-| Area                                                             | Covered by test? | Notes                                                                                                                                      |
-| ---------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Load + grid structure (classroom, assignment visible)            | Yes              | `@gold` baseline-weekly-schedule.gold.spec.js; smoke weekly-schedule-panel.smoke.spec.js                                                   |
-| Baseline handoff (“Edit baseline assignment?”)                   | Yes              | weekly-schedule-panel.smoke.spec.js                                                                                                        |
-| Baseline save refreshes data                                     | Yes              | weekly-schedule-panel.smoke.spec.js (request count after save)                                                                             |
-| Flex removal scope                                               | Yes              | weekly-schedule-panel.smoke.spec.js                                                                                                        |
-| Rendering rules (cell order, inactive gray, no duplicate staff)  | No               | **Candidate for @gold or unit tests**                                                                                                      |
-| Filtering (single select, counts, Inactive filter, layout modes) | No               | **Candidate for @gold or component tests**                                                                                                 |
-| Panel behavior (read-only vs edit, navigation to Baseline)       | No               | **Candidate for @gold:** e.g. “Clicking ‘Edit baseline’ in Weekly read-only panel navigates to Baseline Schedule edit panel”               |
-| Week default, Today, Refresh                                     | No               | **Candidate for @gold:** e.g. “Refresh button triggers refetch and grid updates with latest data”; “Today button switches to present week” |
-| Data consistency (absence = time off, sub = assignment)          | Partially        | Implied by API/data layer; **candidate for integration test**                                                                              |
+| Area                                                                                            | Covered by test? | Notes                                                                                                                                      |
+| ----------------------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Load + grid structure (classroom, assignment visible)                                           | Yes              | `@gold` baseline-weekly-schedule.gold.spec.js; smoke weekly-schedule-panel.smoke.spec.js                                                   |
+| Baseline handoff (“Edit baseline assignment?”)                                                  | Yes              | weekly-schedule-panel.smoke.spec.js                                                                                                        |
+| Baseline save refreshes data                                                                    | Yes              | weekly-schedule-panel.smoke.spec.js (request count after save)                                                                             |
+| Flex removal scope                                                                              | Yes              | weekly-schedule-panel.smoke.spec.js                                                                                                        |
+| Rendering rules (cell order, inactive gray, no duplicate staff)                                 | No               | **Candidate for @gold or unit tests**                                                                                                      |
+| Filtering (display chips single-select, structural multi-select, Inactive filter, layout modes) | No               | **Candidate for @gold or component tests**                                                                                                 |
+| Panel behavior (read-only vs edit, navigation to Baseline)                                      | No               | **Candidate for @gold:** e.g. “Clicking ‘Edit baseline’ in Weekly read-only panel navigates to Baseline Schedule edit panel”               |
+| Week default, Today, Refresh                                                                    | No               | **Candidate for @gold:** e.g. “Refresh button triggers refetch and grid updates with latest data”; “Today button switches to present week” |
+| Data consistency (absence = time off, sub = assignment)                                         | Partially        | Implied by API/data layer; **candidate for integration test**                                                                              |
 
 ## References
 

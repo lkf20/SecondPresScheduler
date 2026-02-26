@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import WeeklyScheduleGridNew from '@/components/schedules/WeeklyScheduleGridNew'
 import FilterPanel, { type FilterState } from '@/components/schedules/FilterPanel'
@@ -28,9 +28,11 @@ function getWeekStartISO(): string {
 }
 
 export default function BaselineSchedulePage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
   const schoolId = useSchool()
+  const returnToWeekly = searchParams.get('return_to_weekly') === 'true'
   const focusClassroomId = searchParams.get('classroom_id')
   const focusDayId = searchParams.get('day_of_week_id')
   const focusTimeSlotId = searchParams.get('time_slot_id')
@@ -272,13 +274,20 @@ export default function BaselineSchedulePage() {
     }
   }, [availableClassroomIds, filters?.selectedClassroomIds])
 
-  // Handle refresh - invalidate React Query cache
-  const handleRefresh = () => {
+  // Handle refresh - invalidate React Query cache; when returnToWeekly, navigate back to Weekly Schedule
+  const handleRefresh = useCallback(async () => {
     if (schoolId) {
       invalidateWeeklySchedule(queryClient, schoolId)
       queryClient.invalidateQueries({ queryKey: ['scheduleSettings', schoolId] })
+      await queryClient.refetchQueries({
+        queryKey: ['weeklySchedule', schoolId],
+        type: 'active',
+      })
     }
-  }
+    if (returnToWeekly) {
+      router.push('/schedules/weekly')
+    }
+  }, [schoolId, queryClient, returnToWeekly, router])
 
   // Handle filter changes - ensure displayMode is always permanent-only for baseline schedule
   const handleFiltersChange = useCallback((newFilters: FilterState) => {
@@ -454,6 +463,7 @@ export default function BaselineSchedulePage() {
             }
             showLegendSubstitutes={false}
             showFilterChips={false}
+            returnToWeekly={returnToWeekly}
           />
           <FilterPanel
             isOpen={filterPanelOpen}

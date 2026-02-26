@@ -115,6 +115,8 @@ interface ScheduleSidePanelProps {
   onSave?: () => void | Promise<void>
   weekStartISO?: string
   readOnly?: boolean
+  /** When true, Save button shows "Save & Return to Weekly Schedule" and parent onSave may navigate back */
+  returnToWeekly?: boolean
 }
 
 export const mapAssignmentsToTeachers = (
@@ -400,6 +402,7 @@ export default function ScheduleSidePanel({
   onSave,
   weekStartISO,
   readOnly = false,
+  returnToWeekly = false,
 }: ScheduleSidePanelProps) {
   const [cell, setCell] = useState<
     | (Partial<ScheduleCellWithDetails> & {
@@ -2908,7 +2911,11 @@ export default function ScheduleSidePanel({
                         type="button"
                         variant="ghost"
                         className="h-auto px-0 text-sm text-slate-500 hover:text-slate-700"
-                        onClick={() => setShowBaselineEditDialog(true)}
+                        onClick={() => {
+                          router.push(
+                            `/settings/baseline-schedule?classroom_id=${classroomId}&day_of_week_id=${dayId}&time_slot_id=${timeSlotId}&return_to_weekly=true`
+                          )
+                        }}
                         disabled={slotIsInactive}
                       >
                         <Pencil className="mr-1.5 h-3.5 w-3.5" />
@@ -3058,7 +3065,11 @@ export default function ScheduleSidePanel({
                         type="button"
                         variant="ghost"
                         className="h-auto px-0 text-sm text-slate-500 hover:text-slate-700"
-                        onClick={() => setShowClassGroupEditDialog(true)}
+                        onClick={() => {
+                          router.push(
+                            `/settings/baseline-schedule?classroom_id=${classroomId}&day_of_week_id=${dayId}&time_slot_id=${timeSlotId}&return_to_weekly=true`
+                          )
+                        }}
                         disabled={slotIsInactive}
                       >
                         <Pencil className="mr-1.5 h-3.5 w-3.5" />
@@ -3385,7 +3396,11 @@ export default function ScheduleSidePanel({
                           Cancel
                         </Button>
                         <Button onClick={handleSave} disabled={saving || slotIsInactive}>
-                          {saving ? 'Saving...' : 'Save'}
+                          {saving
+                            ? 'Saving...'
+                            : returnToWeekly
+                              ? 'Save & Return to Weekly Schedule'
+                              : 'Save'}
                         </Button>
                       </div>
                     </div>

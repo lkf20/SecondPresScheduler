@@ -31,7 +31,8 @@ Define “done right” for the **Baseline Schedule** (configuration and assignm
 
 ### 3. Filtering and layout modes (Baseline)
 
-- [ ] **Filters are single select:** Filters show correct count in parentheses; selected filters correctly filter the schedule.
+- [ ] **Display mode chips are single-select (where applicable):** If display mode chips exist, exactly one is active at a time. Baseline typically shows permanent/flex/floaters only.
+- [ ] **Structural filters are multi-select:** In the Views & Filters panel, Classrooms, Days, and Time slots are multi-select; selected filters correctly filter the schedule.
 - [ ] **Inactive filter:** When “Inactive” is checked, inactive cells are visible (gray); when unchecked, they are not displayed.
 - [ ] **Inactive badges:** Inactive badges display correctly on inactive classrooms and inactive time slots.
 - [ ] **Classrooms × Days vs Days × Classrooms:** Same as Weekly—both layout modes show the same information; only axis layout differs. UI and behavior should match.
@@ -68,15 +69,15 @@ Define “done right” for the **Baseline Schedule** (configuration and assignm
 
 ## Test coverage
 
-| Area                                                       | Covered by test? | Notes                                                                                                                           |
-| ---------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Baseline handoff from Weekly (“Edit baseline assignment?”) | Yes              | weekly-schedule-panel.smoke.spec.js                                                                                             |
-| Baseline save refreshes schedule data                      | Yes              | weekly-schedule-panel.smoke.spec.js                                                                                             |
-| Rendering (permanent/flex/floaters only, no absences/subs) | No               | **Candidate for @gold or component test**                                                                                       |
-| Filtering, layout modes, inactive filter                   | No               | **Candidate for @gold or component test**                                                                                       |
-| Right panel = edit panel (Baseline)                        | No               | **Candidate for @gold:** e.g. “Clicking a cell in Baseline opens right-side edit panel (not read-only)”                         |
-| Layout parity with Weekly                                  | No               | **Candidate for @gold:** e.g. “Baseline and Weekly share same grid layout; Baseline omits absences/subs and has no week picker” |
-| Refresh button (if present)                                | No               | **Candidate for @gold:** e.g. “Refresh triggers refetch and grid updates with latest data”                                      |
+| Area                                                               | Covered by test? | Notes                                                                                                                           |
+| ------------------------------------------------------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Baseline handoff from Weekly (“Edit baseline assignment?”)         | Yes              | weekly-schedule-panel.smoke.spec.js                                                                                             |
+| Baseline save refreshes schedule data                              | Yes              | weekly-schedule-panel.smoke.spec.js                                                                                             |
+| Rendering (permanent/flex/floaters only, no absences/subs)         | No               | **Candidate for @gold or component test**                                                                                       |
+| Filtering (structural multi-select, layout modes, inactive filter) | No               | **Candidate for @gold or component test**                                                                                       |
+| Right panel = edit panel (Baseline)                                | No               | **Candidate for @gold:** e.g. “Clicking a cell in Baseline opens right-side edit panel (not read-only)”                         |
+| Layout parity with Weekly                                          | No               | **Candidate for @gold:** e.g. “Baseline and Weekly share same grid layout; Baseline omits absences/subs and has no week picker” |
+| Refresh button (if present)                                        | No               | **Candidate for @gold:** e.g. “Refresh triggers refetch and grid updates with latest data”                                      |
 
 ## References
 
