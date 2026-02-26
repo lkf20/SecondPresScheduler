@@ -4,11 +4,15 @@ These scenarios define **“done right”** behavior for the most expensive regr
 
 ## Scenarios
 
-| Scenario                                                                                   | Description                                                                                                            | Test    |
-| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ------- |
-| [01-double-booking-prevention.md](./01-double-booking-prevention.md)                       | Sub assign returns 409 when sub is already assigned to same shift(s); UI shows clear error.                            | `@gold` |
-| [02-warnings-vs-errors-proceed-anyway.md](./02-warnings-vs-errors-proceed-anyway.md)       | Warnings (e.g. duplicate staff) allow “Proceed anyway”; errors block. Submit disabled until user acknowledges warning. | `@gold` |
-| [03-baseline-weekly-schedule-correctness.md](./03-baseline-weekly-schedule-correctness.md) | Weekly schedule reflects baseline + overlays; assignments and structure load and display correctly.                    | `@gold` |
+| Scenario                                                                                   | Description                                                                                                            | Test      |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | --------- |
+| [01-double-booking-prevention.md](./01-double-booking-prevention.md)                       | Sub assign returns 409 when sub is already assigned to same shift(s); UI shows clear error.                            | `@gold`   |
+| [02-warnings-vs-errors-proceed-anyway.md](./02-warnings-vs-errors-proceed-anyway.md)       | Warnings (e.g. duplicate staff) allow “Proceed anyway”; errors block. Submit disabled until user acknowledges warning. | `@gold`   |
+| [03-baseline-weekly-schedule-correctness.md](./03-baseline-weekly-schedule-correctness.md) | Weekly schedule reflects baseline + overlays; assignments and structure load and display correctly.                    | `@gold`   |
+| [04-weekly-schedule-review.md](./04-weekly-schedule-review.md)                             | Thorough review checklist: Weekly Schedule (logic, backend, UI, UX, editing, conflict, flex).                          | Checklist |
+| [05-baseline-schedule-review.md](./05-baseline-schedule-review.md)                         | Thorough review checklist: Baseline Schedule (cells, teacher schedules, permanent vs flex, save/refresh).              | Checklist |
+
+Scenarios 04 and 05 are **review checklists** for AI-led or human review; implement as `@gold` tests when high-value.
 
 ## Running gold tests
 
