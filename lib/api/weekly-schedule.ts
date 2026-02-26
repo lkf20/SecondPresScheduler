@@ -988,6 +988,13 @@ export async function getScheduleSnapshotData({
           }
         }
 
+        // Omit absent permanent teachers from assignments so frontend math doesn't double-count them
+        const filteredAssignments = assignments.filter(a => {
+          if (a.is_substitute || a.is_flexible) return true
+          if (absences.some(absence => absence.teacher_id === a.teacher_id)) return false
+          return true
+        })
+
         dayTimeSlots.push({
           time_slot_id: timeSlot.id,
           time_slot_code: timeSlot.code,
@@ -996,7 +1003,7 @@ export async function getScheduleSnapshotData({
           time_slot_start_time: timeSlot.default_start_time,
           time_slot_end_time: timeSlot.default_end_time,
           time_slot_is_active: timeSlot.is_active !== false,
-          assignments,
+          assignments: filteredAssignments,
           ...(absences.length > 0 ? { absences } : {}),
           schedule_cell: scheduleCell
             ? {

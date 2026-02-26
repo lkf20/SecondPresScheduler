@@ -381,7 +381,17 @@ export default function ScheduleCell({
                     >
                       <span>{teacherName}</span>
                       {!hasSubForAbsence && (
-                        <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0" />
+                        <AlertTriangle
+                          className={`h-3 w-3 shrink-0 ${
+                            staffingStatus === 'green'
+                              ? 'text-gray-400'
+                              : staffingStatus === 'amber'
+                                ? 'text-amber-600'
+                                : staffingStatus === 'red'
+                                  ? 'text-red-600'
+                                  : 'text-amber-600'
+                          }`}
+                        />
                       )}
                     </span>
                   )
