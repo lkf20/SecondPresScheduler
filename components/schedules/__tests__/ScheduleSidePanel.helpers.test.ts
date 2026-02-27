@@ -55,12 +55,14 @@ describe('ScheduleSidePanel helpers', () => {
         name: 'Alice T.',
         teacher_id: 'teacher-1',
         is_floater: false,
+        is_flexible: false,
       },
       {
         id: 'teacher-2',
         name: 'Bella F.',
         teacher_id: 'teacher-2',
         is_floater: true,
+        is_flexible: false,
       },
     ])
   })

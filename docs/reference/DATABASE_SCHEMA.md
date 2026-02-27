@@ -2,7 +2,7 @@
 
 ## Overview
 
-The database schema consists of 17 tables organized into logical groups:
+The database schema consists of 19 tables organized into logical groups:
 
 ## Tables Created
 
@@ -15,11 +15,11 @@ The database schema consists of 17 tables organized into logical groups:
 
 ### People Tables (1)
 
-5. **staff** - All staff members (teachers and subs) with first_name, last_name, display_name
+5. **staff** - All staff members with first_name, last_name, display_name, and roles ('PERMANENT', 'FLEXIBLE', etc.)
 
 ### Schedule Tables (3)
 
-6. **teacher_schedules** - Regular teacher weekly schedules
+6. **teacher_schedules** - Baseline Permanent and Baseline Flex weekly schedules
 7. **sub_availability** - General sub availability by day/timeslot
 8. **sub_availability_exceptions** - One-off availability exceptions by date
 
@@ -34,12 +34,14 @@ The database schema consists of 17 tables organized into logical groups:
 12. **staffing_rules** - Teacher ratios (preferred vs required) per class/day/timeslot
 13. **enrollments** - Class enrollment counts per day/timeslot
 
-### Assignment & Calendar Tables (4)
+### Assignment & Calendar Tables (6)
 
 14. **time_off_requests** - Teacher time off requests
 15. **sub_assignments** - Actual sub assignments (master calendar)
-16. **sub_contact_overrides** - Contact tracking and shift overrides
-17. **sub_contact_log** - Historical log of all sub contacts
+16. **staffing_events** - Grouping for Temporary Coverage assignments (formerly flex assignments)
+17. **staffing_event_shifts** - Individual shift records for Temporary Coverage
+18. **sub_contact_overrides** - Contact tracking and shift overrides
+19. **sub_contact_log** - Historical log of all sub contacts
 
 ## Key Features
 
@@ -53,7 +55,8 @@ The database schema consists of 17 tables organized into logical groups:
 
 ## Relationships
 
-- Staff can be both teachers and subs (via `is_teacher` and `is_sub` flags)
+- Staff have roles ('PERMANENT', 'FLEXIBLE') to designate them as teachers. `is_teacher` is deprecated. Subs are indicated via the `is_sub` flag.
+- Temporary Coverage is handled via `staffing_events` and `staffing_event_shifts`, which link staff to specific classrooms and time slots without requiring a time-off request.
 - Class-to-Classroom mapping is many-to-many and varies by day and timeslot
 - Staffing rules are at the most specific level (class + day + timeslot)
 - Sub assignments track both full and partial shifts

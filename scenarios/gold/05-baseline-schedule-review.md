@@ -4,30 +4,30 @@
 
 ## Intent
 
-Define “done right” for the **Baseline Schedule** (configuration and assignments): permanent vs flex clear, no conflict with time-off logic, cells and teacher assignments consistent, save/refresh reliable.
+Define “done right” for the **Baseline Schedule** (configuration and assignments): Baseline Permanent vs Baseline Flex clear, no conflict with time-off logic, cells and teacher assignments consistent, save/refresh reliable.
 
 ## Review Dimensions
 
 ### 1. Data and logic (backend / API)
 
 - [ ] **Schedule cells:** Create/update/delete of schedule cells are scoped by school; uniqueness (e.g. classroom, day, time_slot) is enforced; no silent overwrite of another school’s data.
-- [ ] **Teacher schedules (baseline):** Assign/unassign/update permanent or flex teacher to a (classroom, day, time_slot) respects DB uniqueness (one assignment per teacher per slot); conflicts are detected and returned (e.g. conflict endpoint) rather than silent overwrite.
-- [ ] **Permanent vs flex:** Backend and API distinguish permanent vs flex assignments where required; flex behaves closer to baseline than to ad-hoc sub (e.g. for staffing calculations and conflict rules).
+- [ ] **Teacher schedules (baseline):** Assign/unassign/update Baseline Permanent or Baseline Flex teacher to a (classroom, day, time_slot) respects DB uniqueness (one assignment per teacher per slot); conflicts are detected and returned (e.g. conflict endpoint) rather than silent overwrite.
+- [ ] **Baseline Permanent vs Baseline Flex:** Backend and API distinguish Baseline Permanent vs Baseline Flex assignments where required; Baseline Flex behaves closer to baseline than to ad-hoc sub (e.g. for staffing calculations and conflict rules).
 - [ ] **No conflict with time off:** Baseline operations do not silently invalidate or hide time off; time off creates “gaps” that Sub Finder and weekly view consume; baseline remains the structural source.
 
 ### 2. UI — structure and visibility
 
 - [ ] **Baseline view:** User can see and navigate classrooms, days, time slots; schedule cells and teacher assignments display correctly for the selected scope.
-- [ ] **Permanent vs flex in UI:** Clear distinction between permanent and flex in labels or presentation so the director is not confused (per APP_PURPOSE_AND_CONTEXT — Baseline Staffing Setup).
+- [ ] **Baseline Permanent vs Baseline Flex in UI:** Clear distinction between permanent and flex in labels or presentation so the director is not confused (per APP_PURPOSE_AND_CONTEXT — Baseline Staffing Setup).
 - [ ] **Empty and loading states:** No blank or broken view when data is loading or when there are no cells/assignments; clear empty-state copy where appropriate.
-- [ ] **Baseline shows only permanent, flex, floaters:** Baseline Schedule does not show Absences or Subs (those are temporary overlays; Weekly shows them).
+- [ ] **Baseline shows only Baseline Permanent, Baseline Flex, floaters:** Baseline Schedule does not show Absences or Subs (those are temporary overlays; Weekly shows them).
 - [ ] **No duplicate staff in cell:** A staff member appears only once per cell (e.g. not as both permanent and flex in the same cell).
 - [ ] **Active vs inactive cells:** Active cells have white background; inactive cells have gray background (parent inactive = classroom or time slot; or cell itself inactive).
 - [ ] **Classroom labels:** Classroom labels match the colors assigned in Classroom Settings.
 - [ ] **Staffing state per cell:** Each cell correctly displays whether it Meets preferred, is Below preferred, or is Below required.
 - [ ] **Legend:** Legend correctly matches colors and styles used in the grid.
 - [ ] **Scroll behavior:** Schedule is scrollable horizontally and vertically with left and top headers staying fixed.
-- [ ] **Layout matches Weekly:** Layout and structure of Baseline Schedule match Weekly Schedule; the only content difference is Baseline = permanent, flex, floaters only (no absences/subs), and Baseline is not associated with a time period (no week picker).
+- [ ] **Layout matches Weekly:** Layout and structure of Baseline Schedule match Weekly Schedule; the only content difference is Baseline = Baseline Permanent, Baseline Flex, floaters only (no absences/subs), and Baseline is not associated with a time period (no week picker).
 
 ### 3. Filtering and layout modes (Baseline)
 

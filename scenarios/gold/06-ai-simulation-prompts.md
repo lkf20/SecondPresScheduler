@@ -18,10 +18,10 @@ _Tests exact ratio boundary calculations and rounding._
   - Classroom active.
   - Required ratio dictates 2 teachers.
   - Preferred ratio dictates 3 teachers.
-  - Currently staffed with exactly 2 permanent teachers.
+  - Currently staffed with exactly 2 Baseline Permanent teachers.
 - **Expected Rendering:**
   - Overall cell status badge shows "Below preferred" (amber triangle).
-  - Shows 2 regular teacher chips.
+  - Shows 2 Baseline Permanent teacher chips.
 - **Possible Inconsistencies:**
   - Math logic or rounding errors making it red ("Below required") or green ("Meets preferred").
 - **Edge Cases to Check:**
@@ -37,7 +37,7 @@ _Tests that surplus coverage is handled without alarming UI._
   - Currently staffed with 4 teachers (no absences).
 - **Expected Rendering:**
   - Overall cell status badge shows "Meets preferred" (green check).
-  - 4 regular teacher chips are visible.
+  - 4 Baseline Permanent teacher chips are visible.
   - No alarming or warning UI is present.
 - **Possible Inconsistencies:**
   - UI might mistakenly flag "surplus" as an error state or display warning colors.
@@ -64,20 +64,20 @@ _Tests that removing a teacher via absence dynamically downgrades the cell statu
 - **Edge Cases to Check:**
   - What if the absent teacher was a floater, not a permanent baseline teacher? Does the math still correctly handle the absence of a fractional resource?
 
-### Scenario 2B: Flex Covering an Absence
+### Scenario 2B: Baseline Flex Covering an Absence
 
 _Tests that valid coverage clears warnings even if it's not explicitly tagged as a "Sub"._
 
 - **Conditions:**
   - 1 Absence (no sub explicitly mapped to that absence).
-  - 1 Flex staff is assigned to the same slot.
-  - With the Flex staff, the total coverage mathematically Meets Preferred.
+  - 1 Baseline Flex staff is assigned to the same slot.
+  - With the Baseline Flex staff, the total coverage mathematically Meets Preferred.
 - **Expected Rendering:**
   - Absence chip (gray) is visible. It will show the amber "no sub" icon because no explicit sub is mapped to it.
-  - Flex chip (blue dashed) is visible.
+  - Baseline Flex chip (blue dashed) is visible.
   - Overall cell status is Green (Meets preferred) because total mathematical coverage is sufficient.
 - **Possible Inconsistencies:**
-  - System might require a "Sub" to be explicitly mapped to the absence to clear the overall cell warning, ignoring the valid, mathematically sufficient Flex staff presence.
+  - System might require a "Sub" to be explicitly mapped to the absence to clear the overall cell warning, ignoring the valid, mathematically sufficient Baseline Flex staff presence.
 
 ---
 
@@ -106,8 +106,8 @@ _Tests that display modes ruthlessly hide irrelevant slots._
 
 - **Conditions:**
   - View Display Mode is set to "Substitutes Only".
-  - A specific cell contains: 1 Permanent Teacher, 1 Absence, and NO Substitutes.
+  - A specific cell contains: 1 Baseline Permanent Teacher, 1 Absence, and NO Substitutes.
 - **Expected Rendering:**
-  - The cell is either completely hidden from the grid, or if structural layout requires it, rendered as an empty/null spacer. It should not show the Permanent Teacher or the Absence.
+  - The cell is either completely hidden from the grid, or if structural layout requires it, rendered as an empty/null spacer. It should not show the Baseline Permanent Teacher or the Absence.
 - **Possible Inconsistencies:**
   - The cell still shows up because the presence of the "Absence" data triggers the visibility logic incorrectly, bypassing the strict "Substitutes Only" filter.

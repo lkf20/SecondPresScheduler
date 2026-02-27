@@ -41,7 +41,7 @@ export default function TeacherSelector({
     fetch('/api/teachers')
       .then(r => r.json())
       .then(data => {
-        setTeachers((data as Staff[]).filter(t => t.is_teacher && t.active))
+        setTeachers((data as Staff[]).filter(t => t.active))
       })
       .catch(console.error)
   }, [])

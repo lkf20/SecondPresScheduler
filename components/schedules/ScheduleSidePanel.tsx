@@ -62,6 +62,7 @@ interface Teacher {
   name: string
   teacher_id?: string
   is_floater?: boolean
+  is_flexible?: boolean
 }
 
 type FlexRemovalScope = 'single_shift' | 'weekday' | 'all_shifts'
@@ -137,6 +138,7 @@ export const mapAssignmentsToTeachers = (
       name: assignment.teacher_name || 'Unknown',
       teacher_id: assignment.teacher_id,
       is_floater: assignment.is_floater ?? false,
+      is_flexible: assignment.is_flexible ?? false,
     }))
 }
 
@@ -418,6 +420,7 @@ export default function ScheduleSidePanel({
   const [enrollment, setEnrollment] = useState<number | null>(null)
   const [notes, setNotes] = useState<string | null>(null)
   const [selectedTeachers, setSelectedTeachers] = useState<Teacher[]>([])
+  const [selectedFlexTeachers, setSelectedFlexTeachers] = useState<Teacher[]>([])
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(false)
   const { format: displayNameFormat } = useDisplayNameFormat()
   const [allowedClassGroupIds, setAllowedClassGroupIds] = useState<string[]>([])
@@ -522,7 +525,8 @@ export default function ScheduleSidePanel({
     log('[ScheduleSidePanel] Seeding teachers from selectedCellData.assignments', {
       count: mappedTeachers.length,
     })
-    setSelectedTeachers(mappedTeachers)
+    setSelectedTeachers(mappedTeachers.filter(t => !t.is_flexible))
+    setSelectedFlexTeachers(mappedTeachers.filter(t => t.is_flexible))
   }, [isOpen, selectedCellData?.assignments])
 
   useEffect(() => {
@@ -725,6 +729,15 @@ export default function ScheduleSidePanel({
     [filteredFlexShiftMetrics]
   )
 
+  const isLongTermFlex = useMemo(() => {
+    if (!flexStartDate || !flexEndDate) return false
+    const start = parseLocalDate(flexStartDate)
+    const end = parseLocalDate(flexEndDate)
+    const diffTime = Math.abs(end.getTime() - start.getTime())
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return diffDays >= 60
+  }, [flexStartDate, flexEndDate])
+
   const flexStaffWithCounts = useMemo(() => {
     const selectedShiftKeys = new Set(flexShiftOptions.map(option => option.key))
     const totalCount = flexShiftOptions.length
@@ -904,7 +917,8 @@ export default function ScheduleSidePanel({
       setNotes(cellData.notes)
       const mappedTeachers = mapAssignmentsToTeachers(sourceAssignments)
       if (mappedTeachers.length > 0 && !teachersLoadedRef.current) {
-        setSelectedTeachers(mappedTeachers)
+        setSelectedTeachers(mappedTeachers.filter(t => !t.is_flexible))
+        setSelectedFlexTeachers(mappedTeachers.filter(t => t.is_flexible))
       }
       const originallyHadData = !!(
         mappedClassGroupIds.length > 0 || cellData.enrollment_for_staffing !== null
@@ -1266,6 +1280,10 @@ export default function ScheduleSidePanel({
             ) || 'Unknown',
           teacher_id: schedule.teacher_id,
           is_floater: schedule.is_floater ?? false,
+          is_flexible:
+            (schedule.teacher as any)?.staff_role_type_assignments?.some(
+              (a: any) => a.staff_role_types?.code === 'FLEXIBLE'
+            ) ?? false,
         }))
 
         log('[ScheduleSidePanel] Fetched teachers', {
@@ -1298,7 +1316,8 @@ export default function ScheduleSidePanel({
         teachersLoadedRef.current = true
         teacherCacheRef.current.set(cacheKey, teachers)
         setIsLoadingTeachers(false)
-        setSelectedTeachers(teachers)
+        setSelectedTeachers(teachers.filter(t => !t.is_flexible))
+        setSelectedFlexTeachers(teachers.filter(t => t.is_flexible))
       })
       .catch(err => {
         console.error('Error fetching teacher assignments:', err)
@@ -1315,6 +1334,7 @@ export default function ScheduleSidePanel({
         teachersLoadedRef.current = true
         setIsLoadingTeachers(false)
         setSelectedTeachers([])
+        setSelectedFlexTeachers([])
       })
   }, [isOpen, classroomId, dayId, timeSlotId, classGroupIds, isLoadingTeachers, displayNameFormat])
 
@@ -2375,6 +2395,23 @@ export default function ScheduleSidePanel({
                       )}
                     </div>
 
+                    {isLongTermFlex && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                        <div className="flex gap-3">
+                          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+                          <div>
+                            <h4 className="text-sm font-semibold text-amber-800">
+                              Long-term assignment detected
+                            </h4>
+                            <p className="mt-1 text-sm text-amber-700">
+                              Assigning for a whole semester? You might want to do this in the
+                              Baseline Schedule instead.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-1">
                       <p className="text-sm font-medium text-slate-900">
                         {totalFlexShiftCount} {totalFlexShiftCount === 1 ? 'shift' : 'shifts'}{' '}
@@ -2950,17 +2987,19 @@ export default function ScheduleSidePanel({
                                 {assignment.teacher_name}
                               </span>
                               <div className="flex items-center gap-2">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  className="h-8 px-2.5 text-red-600 hover:bg-red-50 hover:text-red-700"
-                                  onClick={() => {
-                                    void handleOpenRemoveFlexDialog(assignment)
-                                  }}
-                                  disabled={slotIsInactive}
-                                >
-                                  Remove
-                                </Button>
+                                {assignment.staffing_event_id && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="h-8 px-2.5 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                    onClick={() => {
+                                      void handleOpenRemoveFlexDialog(assignment)
+                                    }}
+                                    disabled={slotIsInactive}
+                                  >
+                                    Remove
+                                  </Button>
+                                )}
                                 <Button
                                   type="button"
                                   variant="ghost"

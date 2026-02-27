@@ -119,7 +119,6 @@ export default function NewStaffPage() {
       const payload = {
         ...data,
         email: data.email && data.email.trim() !== '' ? data.email : null,
-        is_teacher: isTeacherRole,
         is_sub: data.is_sub ?? false,
         role_type_ids: data.role_type_ids,
       }

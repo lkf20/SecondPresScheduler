@@ -50,7 +50,6 @@ export async function createSub(sub: {
   display_name?: string
   phone?: string
   email?: string
-  is_teacher?: boolean
   is_sub: boolean
   active?: boolean
   school_id?: string
@@ -73,7 +72,6 @@ export async function createSub(sub: {
     phone: normalizeUSPhoneForStorage(subData.phone),
     ...(normalizedEmail ? { email: normalizedEmail } : {}),
     is_sub: true,
-    is_teacher: sub.is_teacher ?? false, // Preserve is_teacher flag
     active: subData.active ?? true,
     school_id: sub.school_id,
   } as Partial<Staff> & { id: string }

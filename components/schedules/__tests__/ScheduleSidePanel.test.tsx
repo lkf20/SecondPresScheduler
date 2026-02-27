@@ -258,14 +258,57 @@ describe('ScheduleSidePanel interactions', () => {
 
     render(<ScheduleSidePanel {...buildProps()} />)
 
+    // Wait for the data to load
+    await waitFor(() => {
+      expect(screen.getByText('Bella W.')).toBeInTheDocument()
+    })
+
     fireEvent.click(await screen.findByRole('button', { name: /edit permanent staff/i }))
-    expect(screen.getByText('Edit baseline assignment?')).toBeInTheDocument()
+    expect(pushMock).toHaveBeenCalledWith(
+      expect.stringContaining(
+        '/settings/baseline-schedule?classroom_id=class-1&day_of_week_id=day-1&time_slot_id=slot-1&return_to_weekly=true'
+      )
+    )
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: /^continue$/i }))
-    expect(screen.getByText('Edit Permanent Staff')).toBeInTheDocument()
+  it('hides Remove button for flex assignments without staffing_event_id', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
 
-    fireEvent.click(screen.getByRole('button', { name: /^back$/i }))
-    expect(await screen.findByText('Flex Staff')).toBeInTheDocument()
+    // Flex assignment from baseline (teacher with FLEXIBLE role) - no staffing_event_id
+    const propsWithoutEventId = {
+      ...buildProps(),
+      selectedCellData: {
+        ...buildProps().selectedCellData,
+        assignments: [
+          {
+            id: 'a-1',
+            teacher_id: 'teacher-1',
+            teacher_name: 'Bella W.',
+            classroom_id: 'class-1',
+            classroom_name: 'Infant Room',
+          },
+          {
+            id: 'a-flex-baseline',
+            teacher_id: 'teacher-2',
+            teacher_name: 'Amy P.',
+            classroom_id: 'class-1',
+            classroom_name: 'Infant Room',
+            is_flexible: true,
+            staffing_event_id: undefined,
+          },
+        ],
+      },
+    }
+
+    render(<ScheduleSidePanel {...propsWithoutEventId} />)
+
+    expect(screen.getByText('Amy P.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument()
   })
 
   it('shows single-shift confirmation copy with no weekday/all-shifts options', async () => {

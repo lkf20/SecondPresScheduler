@@ -14,7 +14,7 @@ When the system shows a **warning** (e.g. “A staff member with this name alrea
 
 ## Scope
 
-- Staff form and Teacher form: duplicate-name/email warning with “Proceed anyway” checkbox; submit disabled until checked when duplicate is present.
+- Staff form and Staff form: duplicate-name/email warning with “Proceed anyway” checkbox; submit disabled until checked when duplicate is present.
 - Other flows that introduce similar warning patterns should follow the same rule.
 
 ## References

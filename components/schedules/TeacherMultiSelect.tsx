@@ -19,11 +19,21 @@ import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 type Staff = Database['public']['Tables']['staff']['Row']
 
+type StaffRoleType = Database['public']['Tables']['staff_role_types']['Row']
+type StaffRoleAssignment = Database['public']['Tables']['staff_role_type_assignments']['Row']
+
+type StaffWithRole = Staff & {
+  staff_role_type_assignments?: Array<
+    StaffRoleAssignment & { staff_role_types?: StaffRoleType | null }
+  >
+}
+
 interface Teacher {
   id: string
   name: string
   teacher_id?: string
   is_floater?: boolean
+  is_flexible?: boolean
 }
 
 interface TeacherMultiSelectProps {
@@ -32,6 +42,7 @@ interface TeacherMultiSelectProps {
   requiredCount?: number
   preferredCount?: number
   disabled?: boolean
+  roleFilter?: 'FLEXIBLE' | 'PERMANENT'
 }
 
 export default function TeacherMultiSelect({
@@ -40,8 +51,9 @@ export default function TeacherMultiSelect({
   requiredCount,
   preferredCount,
   disabled = false,
+  roleFilter,
 }: TeacherMultiSelectProps) {
-  const [teachers, setTeachers] = useState<Staff[]>([])
+  const [teachers, setTeachers] = useState<StaffWithRole[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [isOpen, setIsOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
@@ -55,7 +67,8 @@ export default function TeacherMultiSelect({
     fetch('/api/teachers')
       .then(r => r.json())
       .then(data => {
-        setTeachers((data as Staff[]).filter(t => t.is_teacher && t.active))
+        // Filter is handled by the API which returns staff with PERMANENT or FLEXIBLE roles
+        setTeachers(Array.isArray(data) ? (data as StaffWithRole[]).filter(t => t.active) : [])
       })
       .catch(console.error)
   }, [])
@@ -67,6 +80,18 @@ export default function TeacherMultiSelect({
 
   const filteredTeachers = teachers
     .filter(teacher => {
+      if (roleFilter === 'FLEXIBLE') {
+        const isFlex = teacher.staff_role_type_assignments?.some(
+          a => a.staff_role_types?.code === 'FLEXIBLE'
+        )
+        if (!isFlex) return false
+      } else if (roleFilter === 'PERMANENT') {
+        const isFlex = teacher.staff_role_type_assignments?.some(
+          a => a.staff_role_types?.code === 'FLEXIBLE'
+        )
+        if (isFlex) return false
+      }
+
       const name = getStaffDisplayName(
         {
           first_name: teacher.first_name ?? '',
@@ -124,6 +149,7 @@ export default function TeacherMultiSelect({
           ),
           teacher_id: t.id,
           is_floater: existing?.is_floater ?? false,
+          is_flexible: roleFilter === 'FLEXIBLE',
         }
       })
     onTeachersChange(selected)

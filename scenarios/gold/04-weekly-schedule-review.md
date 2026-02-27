@@ -10,18 +10,18 @@ Define “done right” for the **Weekly Schedule** so an AI (or human) can revi
 
 ### 1. Data and logic (backend / API)
 
-- [ ] **Baseline + overlays:** Weekly schedule API returns baseline assignments (permanent + flex) plus overlay data (sub assignments, time off) so the client can render “who is actually covering” per cell. No missing or duplicated assignments for a (classroom, day, time_slot).
+- [ ] **Baseline + overlays:** Weekly schedule API returns baseline assignments (Baseline Permanent + Baseline Flex) plus overlay data (sub assignments, time off) so the client can render “who is actually covering” per cell. No missing or duplicated assignments for a (classroom, day, time_slot).
 - [ ] **Status consistency:** Staffing state (understaffed / OK / surplus) is computed from the same data the grid uses; no silent mismatch between badge state and visible assignments.
 - [ ] **School scope:** All queries and responses are scoped by `school_id`; no cross-school leakage.
 
 ### 2. UI — structure and visibility
 
-- [ ] **Grid structure:** Classrooms (or equivalent grouping), days, and time slots render; assignments (teachers, flex, subs) appear in the correct cells when data is present.
+- [ ] **Grid structure:** Classrooms (or equivalent grouping), days, and time slots render; assignments (Baseline Permanent, Baseline Flex, Subs) appear in the correct cells when data is present.
 - [ ] **No silent blank grid:** If the API returns valid data, the grid shows it (no permanent loading or empty state due to a front-end bug).
 - [ ] **State hierarchy:** Staffing badges/state (e.g. understaffed, OK, surplus) are scannable; above-preferred is visible but not alarming (per APP_PURPOSE_AND_CONTEXT).
 - [ ] **Consistency:** Colors and labels mean the same thing everywhere (per design guardrails).
-- [ ] **Cell order in Weekly:** Within each cell, display order is: Absence → Sub (directly below absence, with arrow pointing to Sub) → Permanent staff → Flex staff → Floaters.
-- [ ] **No duplicate staff in cell:** If a staff member is absent, show them only as an absence—not also as permanent or flex in the same cell.
+- [ ] **Cell order in Weekly:** Within each cell, display order is: Absence → Sub (directly below absence, with arrow pointing to Sub) → Baseline Baseline Permanent staff → Baseline Baseline Flex staff → Floaters.
+- [ ] **No duplicate staff in cell:** If a staff member is absent, show them only as an absence—not also as Baseline Permanent or Baseline Flex in the same cell.
 - [ ] **Active vs inactive cells:** Active cells have white background; inactive cells have gray background. Inactive can be due to parent (classroom or time slot inactive) or the specific cell being inactive.
 - [ ] **Classroom labels:** Classroom labels match the colors assigned in Classroom Settings.
 - [ ] **Staffing state per cell:** Each cell correctly displays whether it Meets preferred, is Below preferred, or is Below required.
@@ -30,7 +30,7 @@ Define “done right” for the **Weekly Schedule** so an AI (or human) can revi
 
 ### 3. Filtering and layout modes
 
-- [ ] **Display mode chips are single-select:** The filter chips (All, Coverage Issues, Subs, Absences, Permanent staff) are mutually exclusive—exactly one is active at a time. Each chip shows a count in parentheses (e.g. “Subs (2)”).
+- [ ] **Display mode chips are single-select:** The filter chips (All, Coverage Issues, Subs, Absences, Baseline Permanent staff) are mutually exclusive—exactly one is active at a time. Each chip shows a count in parentheses (e.g. “Subs (2)”).
 - [ ] **Structural filters are multi-select:** In the Views & Filters panel, Classrooms, Days, and Time slots are multi-select (user can select multiple of each). Selected filters correctly filter which cells appear in the grid.
 - [ ] **Inactive filter:** When “Inactive” is checked, inactive cells are visible (gray background); when unchecked, inactive cells are not displayed.
 - [ ] **Inactive badges:** Inactive badges display correctly on inactive classrooms and inactive time slots.
@@ -58,10 +58,11 @@ Define “done right” for the **Weekly Schedule** so an AI (or human) can revi
 - [ ] **Resolve flow:** User can resolve via the offered options (e.g. remove other, mark floaters); resolve API and UI leave data consistent (no orphaned or duplicate assignments).
 - [ ] **No silent overwrite:** Conflicting assignments are not silently overwritten without user choice.
 
-### 7. Flex assignment (weekly context)
+### 7. Temporary coverage (weekly context)
 
-- [ ] **Flex in weekly view:** Assigning flex from the weekly schedule (date range, slot) creates the intended staffing event; double-booking is prevented (409 or equivalent).
-- [ ] **Visibility:** New flex assignment appears in the grid after save; removal removes it without leaving stale state.
+- [ ] **Flex in weekly view:** Assigning temporary coverage from the weekly schedule (date range, slot) creates the intended staffing event; double-booking is prevented (409 or equivalent).
+- [ ] **Visibility:** New temporary coverage appears in the grid after save; removal removes it without leaving stale state.
+- [ ] **Remove button only for staffing-event temporary coverage:** The "Remove" button for Baseline Flex staff is shown only when the assignment has a `staffing_event_id` (i.e. it came from a staffing event). Baseline-assigned teachers with the FLEXIBLE role appear in the Baseline Flex Staff section but do not have a Remove button; use "Edit permanent staff" to change those.
 
 ### 8. Week selection, refresh, and data consistency
 
@@ -89,7 +90,7 @@ Define “done right” for the **Weekly Schedule** so an AI (or human) can revi
 | Load + grid structure (classroom, assignment visible)                                           | Yes              | `@gold` baseline-weekly-schedule.gold.spec.js; smoke weekly-schedule-panel.smoke.spec.js                                                   |
 | Baseline handoff (“Edit baseline assignment?”)                                                  | Yes              | weekly-schedule-panel.smoke.spec.js                                                                                                        |
 | Baseline save refreshes data                                                                    | Yes              | weekly-schedule-panel.smoke.spec.js (request count after save)                                                                             |
-| Flex removal scope                                                                              | Yes              | weekly-schedule-panel.smoke.spec.js                                                                                                        |
+| Temporary coverage removal scope                                                                | Yes              | weekly-schedule-panel.smoke.spec.js; ScheduleSidePanel.test.tsx (Remove hidden when no staffing_event_id)                                  |
 | Rendering rules (cell order, inactive gray, no duplicate staff)                                 | No               | **Candidate for @gold or unit tests**                                                                                                      |
 | Filtering (display chips single-select, structural multi-select, Inactive filter, layout modes) | No               | **Candidate for @gold or component tests**                                                                                                 |
 | Panel behavior (read-only vs edit, navigation to Baseline)                                      | No               | **Candidate for @gold:** e.g. “Clicking ‘Edit baseline’ in Weekly read-only panel navigates to Baseline Schedule edit panel”               |

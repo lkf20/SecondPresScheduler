@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
       .from('staffing_events')
       .insert({
         school_id: schoolId,
-        event_type: 'flex_assignment',
+        event_type: 'temporary_coverage',
         staff_id,
         start_date,
         end_date,

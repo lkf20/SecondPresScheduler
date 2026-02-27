@@ -356,7 +356,6 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
           role_type_ids: roleTypeId ? [roleTypeId] : [],
           active: parseStatus(row.status),
           is_sub: parseIsSub(row.is_sub),
-          is_teacher: true,
         }
       })
 

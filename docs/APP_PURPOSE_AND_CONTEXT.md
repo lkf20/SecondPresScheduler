@@ -2,7 +2,7 @@
 
 Use this document when making product, UX, or architectural decisions. It keeps intent centralized so contributors and AI agents can align changes with the app's goals. If a decision conflicts with this document, either update this file intentionally or revisit the change.
 
-**Quick reference:** Single source of truth; baseline-first (permanent + flex define structure; subs are overlays). No silent data changes—inactive means visible but not selectable. Clarity and low cognitive load over feature density. Default: simpler, clearer, less magical.
+**Quick reference:** Single source of truth; baseline-first (Baseline Permanent + Baseline Flex define structure; subs are overlays). No silent data changes—inactive means visible but not selectable. Clarity and low cognitive load over feature density. Default: simpler, clearer, less magical.
 
 ---
 
@@ -10,18 +10,19 @@ Use this document when making product, UX, or architectural decisions. It keeps 
 
 Use these terms consistently in the app and in documentation.
 
-| Term                               | Definition                                                                                                                                                             |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Baseline**                       | Structural staffing defined by permanent and flex staff; the foundation the weekly schedule is built on. Sub assignments are overlays on top of it.                    |
-| **Class Group**                    | A grouping typically by age within a classroom. A classroom can have multiple class groups; used for staffing ratios and coverage.                                     |
-| **Confirmed**                      | A status meaning the assignment is actually in place—no silent mismatch between "confirmed" and reality.                                                               |
-| **Flex (flex staff)**              | Often semester-based staff; more stable than subs. Often college students; schedules change each semester. Can be used as subs in a pinch even if not marked as a sub. |
-| **Inactive**                       | Not selectable for new assignments going forward; remains visible when referenced in history (no silent deletion).                                                     |
-| **Overlay**                        | A temporary layer on top of baseline (e.g. sub assignment, flex assignment for a date range). Weekly schedule = baseline + overlays.                                   |
-| **Permanent staff**                | Fixed structural staffing; part of the baseline.                                                                                                                       |
-| **Preferred vs Required (ratios)** | Required = minimum staffing needed; Preferred = target staffing. Prefer to meet preferred when possible.                                                               |
-| **Sub (substitute)**               | Temporary coverage for an absence. A sub can also be permanent or flex.                                                                                                |
-| **Time off**                       | An absence request that creates coverage gaps, filled via Sub Finder or flex assignment.                                                                               |
+| Term                               | Definition                                                                                                                                                            |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Baseline**                       | Structural staffing defined by Baseline Permanent and Baseline Flex staff; the foundation the weekly schedule is built on. Sub assignments are overlays on top of it. |
+| **Baseline Flex**                  | Hourly, typically scheduled Aug-Dec. Assigned the 'FLEXIBLE' role. Can have absences and subs, and can be assigned for temporary coverage.                            |
+| **Baseline Permanent**             | Salaried, typically scheduled Aug-May. Assigned the 'PERMANENT' role. Can have absences and subs, and can be assigned for temporary coverage.                         |
+| **Class Group**                    | A grouping typically by age within a classroom. A classroom can have multiple class groups; used for staffing ratios and coverage.                                    |
+| **Confirmed**                      | A status meaning the assignment is actually in place—no silent mismatch between "confirmed" and reality.                                                              |
+| **Inactive**                       | Not selectable for new assignments going forward; remains visible when referenced in history (no silent deletion).                                                    |
+| **Overlay**                        | A temporary layer on top of baseline (e.g. sub assignment, temporary coverage for a date range). Weekly schedule = baseline + overlays.                               |
+| **Preferred vs Required (ratios)** | Required = minimum staffing needed; Preferred = target staffing. Prefer to meet preferred when possible.                                                              |
+| **Subs**                           | Have the `is_sub = true` flag. Temporary coverage for an absence. Can also be Baseline Permanent or Baseline Flex staff or neither.                                   |
+| **Temporary Coverage**             | Moving a person from one room to another without a fake absence. Handled via staffing events. A teacher doing temporary coverage can still get sick and need a sub.   |
+| **Time off**                       | An absence request that creates coverage gaps, filled via Sub Finder or temporary coverage.                                                                           |
 
 ---
 
@@ -38,9 +39,9 @@ Use these terms consistently in the app and in documentation.
 - Early childhood / preschool setting
 - Single school (for now), potentially multi-school in the future
 - ~60–70 staff total
-- **Permanent teachers**
-- **Flex staff** (generally semester-based and semi-permanent)
-- **Substitute teachers** (who can also be Permanent or Flex staff)
+- **Baseline Permanent staff**
+- **Baseline Flex staff** (Hourly, generally semester-based)
+- **Subs** (who can also be Baseline Permanent or Baseline Flex staff)
 - 14 classrooms
 - 12 Class Groups (classrooms can have multiple Class Groups). Class Groups generally defined by age
 - Complex staffing ratios and coverage needs, based on age
@@ -51,8 +52,8 @@ Use these terms consistently in the app and in documentation.
 - Scheduling changes often happen in real time.
 - Subs are needed on a daily basis.
 - Director values giving teachers and staff flexibility in their schedules.
-- Flex staff are generally college students whose schedules change each semester.
-- In a pinch, Flex staff can also be used as Subs (even if not marked as a sub).
+- Baseline Flex staff are generally college students whose schedules change each semester.
+- In a pinch, Baseline Flex staff can also be used as Subs (even if not marked as a sub).
 - Prefer to meet Preferred class ratios when possible.
 - They are not technical.
 - They value clarity, speed, and trustworthiness over advanced features.
@@ -78,7 +79,7 @@ It solves:
    - Flex capacity
 
 3. **Baseline vs daily reality mismatch**
-   - Permanent and flex staff define the baseline
+   - Baseline Permanent and Baseline Flex staff define the baseline
    - Time off creates gaps
    - Sub Finder resolves those gaps
    - Weekly schedule reflects actual coverage
@@ -101,7 +102,7 @@ It solves:
 ## Core Product Principles
 
 1. **Baseline is foundational**
-   - Permanent + flex staff define structural staffing.
+   - Baseline Permanent + Baseline Flex staff define structural staffing.
    - Sub assignments are temporary overlays.
    - Weekly schedule reflects reality layered on baseline.
 
@@ -159,7 +160,7 @@ Director defines semester structure.
 
 **Requirements:**
 
-- Clear distinction between permanent and flex.
+- Clear distinction between Baseline Permanent and Baseline Flex.
 - No conflict between baseline and time off logic.
 - Flex behaves closer to baseline than sub.
 
@@ -170,7 +171,7 @@ Director reviews current week in Dashboard and in Weekly Schedule.
 1. Scans Upcoming Time Off
 2. Scans Upcoming Subs
 3. Scans Understaffed classrooms and Surplus classrooms
-4. Makes adjustments (assign flex, find sub).
+4. Makes adjustments (assign temporary coverage, find sub).
 
 **Requirements:**
 
@@ -187,7 +188,7 @@ Director assigns flex staff for semester.
 3. Avoids double booking.
 4. Sees impact on staffing calculations.
 
-**Flex is:**
+**Temporary coverage is:**
 
 - More stable than sub.
 - Often semester-based.
@@ -288,7 +289,7 @@ These may be introduced later:
 - Multi-school support
 - Advanced reporting
 - Optimization suggestions
-- Conversion from sub → flex suggestion
+- Conversion from sub → temporary coverage suggestion
 - Term duplication tools
 - AI chat to make changes in the app
 

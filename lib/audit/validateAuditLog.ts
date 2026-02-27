@@ -16,7 +16,7 @@ export type AuditCategory =
   | 'time_off'
   | 'sub_assignment'
   | 'baseline_schedule'
-  | 'flex_assignment'
+  | 'temporary_coverage'
   | 'staff'
   | 'coverage'
   | 'system'
@@ -51,7 +51,7 @@ const CATEGORIES: AuditCategory[] = [
   'time_off',
   'sub_assignment',
   'baseline_schedule',
-  'flex_assignment',
+  'temporary_coverage',
   'staff',
   'coverage',
   'system',

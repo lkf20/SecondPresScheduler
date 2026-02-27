@@ -690,7 +690,6 @@ export type Database = {
           first_name: string
           id: string
           is_sub: boolean | null
-          is_teacher: boolean | null
           last_name: string
           phone: string | null
           school_id: string | null
@@ -708,7 +707,6 @@ export type Database = {
           first_name: string
           id?: string
           is_sub?: boolean | null
-          is_teacher?: boolean | null
           last_name: string
           phone?: string | null
           school_id?: string | null
@@ -726,7 +724,6 @@ export type Database = {
           first_name?: string
           id?: string
           is_sub?: boolean | null
-          is_teacher?: boolean | null
           last_name?: string
           phone?: string | null
           school_id?: string | null

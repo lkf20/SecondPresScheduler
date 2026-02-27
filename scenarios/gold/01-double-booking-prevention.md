@@ -14,7 +14,7 @@ The system must prevent double-booking a sub for the same shift(s). When the use
 ## Out of scope
 
 - Baseline teacher-schedule double-booking (DB unique constraint + ConflictBanner) is covered separately.
-- Flex assignment conflict (409) is a related but separate flow.
+- Temporary coverage conflict (409) is a related but separate flow.
 
 ## References
 

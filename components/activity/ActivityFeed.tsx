@@ -27,7 +27,7 @@ const CATEGORY_OPTIONS = [
   { key: 'time_off', label: 'Time Off' },
   { key: 'sub_assignment', label: 'Sub Assignments' },
   { key: 'baseline_schedule', label: 'Baseline' },
-  { key: 'flex_assignment', label: 'Flex' },
+  { key: 'temporary_coverage', label: 'Temporary Coverage' },
   { key: 'staff', label: 'Staff' },
   { key: 'coverage', label: 'Coverage' },
 ]
