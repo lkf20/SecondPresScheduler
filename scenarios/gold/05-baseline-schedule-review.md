@@ -20,12 +20,12 @@ Define “done right” for the **Baseline Schedule** (configuration and assignm
 - [ ] **Baseline view:** User can see and navigate classrooms, days, time slots; schedule cells and teacher assignments display correctly for the selected scope.
 - [ ] **Baseline Permanent vs Baseline Flex in UI:** Clear distinction between permanent and flex in labels or presentation so the director is not confused (per APP_PURPOSE_AND_CONTEXT — Baseline Staffing Setup).
 - [ ] **Empty and loading states:** No blank or broken view when data is loading or when there are no cells/assignments; clear empty-state copy where appropriate.
-- [ ] **Baseline shows only Baseline Permanent, Baseline Flex, floaters:** Baseline Schedule does not show Absences or Subs (those are temporary overlays; Weekly shows them).
+- [ ] **Baseline shows only Baseline Permanent, Baseline Flex, floaters:** Baseline Schedule does not show Absences, Subs, or Temporary Coverage (those are overlays; Weekly shows them).
 - [ ] **No duplicate staff in cell:** A staff member appears only once per cell (e.g. not as both permanent and flex in the same cell).
 - [ ] **Active vs inactive cells:** Active cells have white background; inactive cells have gray background (parent inactive = classroom or time slot; or cell itself inactive).
 - [ ] **Classroom labels:** Classroom labels match the colors assigned in Classroom Settings.
 - [ ] **Staffing state per cell:** Each cell correctly displays whether it Meets preferred, is Below preferred, or is Below required.
-- [ ] **Legend:** Legend correctly matches colors and styles used in the grid.
+- [ ] **Legend:** Legend shows only Teacher, Flex Teacher, and Floater (no Substitute, Absent, or Temporary Coverage). Baseline has no overlay items; legend matches grid content.
 - [ ] **Scroll behavior:** Schedule is scrollable horizontally and vertically with left and top headers staying fixed.
 - [ ] **Layout matches Weekly:** Layout and structure of Baseline Schedule match Weekly Schedule; the only content difference is Baseline = Baseline Permanent, Baseline Flex, floaters only (no absences/subs), and Baseline is not associated with a time period (no week picker).
 

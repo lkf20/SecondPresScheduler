@@ -50,6 +50,8 @@ interface WeeklyScheduleGridNewProps {
   }
   slotCounts?: { shown: number; total: number } // Slot counts for display
   showLegendSubstitutes?: boolean
+  /** When false (e.g. Baseline), legend omits overlay items: Substitute, Absent, Temporary Coverage. Default true for Weekly. */
+  showLegendTemporaryCoverage?: boolean
   showFilterChips?: boolean
   readOnly?: boolean
   /** When true, Save button shows "Save & Return to Weekly Schedule" and parent onRefresh may navigate back */
@@ -130,7 +132,13 @@ export function generateClassroomsXDaysGridTemplate(
   return { columns, rows }
 }
 
-function ScheduleLegend({ showLegendSubstitutes }: { showLegendSubstitutes: boolean }) {
+function ScheduleLegend({
+  showLegendSubstitutes,
+  showLegendTemporaryCoverage = true,
+}: {
+  showLegendSubstitutes: boolean
+  showLegendTemporaryCoverage?: boolean
+}) {
   return (
     <div className="mb-6 p-3 bg-gray-100 rounded-md border border-gray-200">
       <div className="flex flex-wrap items-center gap-4 text-sm">
@@ -153,6 +161,20 @@ function ScheduleLegend({ showLegendSubstitutes }: { showLegendSubstitutes: bool
             Flex Teacher
           </span>
         </div>
+        {showLegendTemporaryCoverage && (
+          <div className="flex items-center gap-2">
+            <span
+              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border border-dashed"
+              style={{
+                borderColor: '#fb7185',
+                backgroundColor: '#ffe4e6',
+                color: '#db2777',
+              }}
+            >
+              Temporary Coverage
+            </span>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-300 border-dashed">
             Floater
@@ -410,6 +432,7 @@ export default function WeeklyScheduleGridNew({
   displayModeCounts,
   slotCounts,
   showLegendSubstitutes = true,
+  showLegendTemporaryCoverage = true,
   showFilterChips = true,
   readOnly = false,
   returnToWeekly = false,
@@ -698,7 +721,10 @@ export default function WeeklyScheduleGridNew({
     return (
       <>
         {/* Legend */}
-        <ScheduleLegend showLegendSubstitutes={showLegendSubstitutes} />
+        <ScheduleLegend
+          showLegendSubstitutes={showLegendSubstitutes}
+          showLegendTemporaryCoverage={showLegendTemporaryCoverage}
+        />
         {/* Filter chips - separate row below legend */}
         {showFilterChips && (
           <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -999,7 +1025,10 @@ export default function WeeklyScheduleGridNew({
     return (
       <div className="space-y-4">
         {/* Legend */}
-        <ScheduleLegend showLegendSubstitutes={showLegendSubstitutes} />
+        <ScheduleLegend
+          showLegendSubstitutes={showLegendSubstitutes}
+          showLegendTemporaryCoverage={showLegendTemporaryCoverage}
+        />
         {/* Filter chips - separate row below legend */}
         {showFilterChips && (
           <div className="mb-4 flex flex-wrap items-center gap-2">

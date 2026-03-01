@@ -1,6 +1,7 @@
 import {
   buildFindSubLink,
   buildStaffingSummary,
+  buildStaffingWarningMessage,
   buildFlexRemovalDialogCopy,
   calculateDayNameDate,
   calculateScheduledStaffCount,
@@ -12,6 +13,7 @@ import {
   pickClassGroupForRatio,
   sortAbsencesByTeacherName,
   sortAssignmentsForPanel,
+  sortClassGroupsBySettingsOrder,
 } from '@/components/schedules/ScheduleSidePanel'
 
 describe('ScheduleSidePanel helpers', () => {
@@ -89,7 +91,9 @@ describe('ScheduleSidePanel helpers', () => {
       },
     })
 
-    expect(copy.summary).toBe('Amy P. is assigned as flex staff to Infant Room on Monday, Feb 9.')
+    expect(copy.summary).toBe(
+      'Amy P. is assigned for temporary coverage to Infant Room on Monday, Feb 9.'
+    )
     expect(copy.showPrompt).toBe(false)
     expect(copy.showWeekdayOption).toBe(false)
   })
@@ -108,7 +112,7 @@ describe('ScheduleSidePanel helpers', () => {
     })
 
     expect(copy.summary).toBe(
-      'Bella W. is assigned as flex staff to Infant Room on Mondays, Wednesdays, and Fridays from Jan 1 to Mar 1.'
+      'Bella W. is assigned for temporary coverage to Infant Room on Mondays, Wednesdays, and Fridays from Jan 1 to Mar 1.'
     )
     expect(copy.showPrompt).toBe(true)
     expect(copy.showWeekdayOption).toBe(true)
@@ -258,7 +262,7 @@ describe('ScheduleSidePanel helpers', () => {
     ])
   })
 
-  it('sorts assignments into permanent, flex, and floater groups', () => {
+  it('sorts assignments into permanent, baseline flex, temporary coverage, and floater groups', () => {
     const result = sortAssignmentsForPanel([
       {
         id: 'a-3',
@@ -284,6 +288,15 @@ describe('ScheduleSidePanel helpers', () => {
         is_flexible: true,
       },
       {
+        id: 'a-temp',
+        teacher_id: 'teacher-4',
+        teacher_name: 'Temp Cover B.',
+        classroom_id: 'class-1',
+        classroom_name: 'Infant Room',
+        is_flexible: true,
+        staffing_event_id: 'event-1',
+      },
+      {
         id: 'a-sub',
         teacher_id: 'sub-1',
         teacher_name: 'Sub A.',
@@ -294,8 +307,124 @@ describe('ScheduleSidePanel helpers', () => {
     ])
 
     expect(result.permanentAssignments.map(a => a.teacher_name)).toEqual(['Teacher Z.'])
-    expect(result.flexAssignments.map(a => a.teacher_name)).toEqual(['Flex A.'])
+    expect(result.baselineFlexAssignments.map(a => a.teacher_name)).toEqual(['Flex A.'])
+    expect(result.temporaryCoverageAssignments.map(a => a.teacher_name)).toEqual(['Temp Cover B.'])
     expect(result.floaterAssignments.map(a => a.teacher_name)).toEqual(['Floater A.'])
+  })
+
+  it('sorts class groups by settings order then name', () => {
+    const groups = [
+      { id: 'cg-2', name: 'Toddlers', order: 2 },
+      { id: 'cg-1', name: 'Infants', order: 1 },
+      { id: 'cg-3', name: 'Preschool', order: 3 },
+    ]
+    expect(sortClassGroupsBySettingsOrder(groups).map(g => g.name)).toEqual([
+      'Infants',
+      'Toddlers',
+      'Preschool',
+    ])
+    const withNullOrder = [
+      { id: 'cg-a', name: 'Alpha', order: null },
+      { id: 'cg-b', name: 'Beta', order: 1 },
+    ]
+    expect(sortClassGroupsBySettingsOrder(withNullOrder).map(g => g.name)).toEqual([
+      'Beta',
+      'Alpha',
+    ])
+    const sameOrder = [
+      { id: 'cg-1', name: 'Zebra', order: 1 },
+      { id: 'cg-2', name: 'Alpha', order: 1 },
+    ]
+    expect(sortClassGroupsBySettingsOrder(sameOrder).map(g => g.name)).toEqual(['Alpha', 'Zebra'])
+  })
+
+  it('builds staffing warning message (actionable only; no status prefix)', () => {
+    const staffingSummary = (status: string) => ({ status, label: '' })
+
+    expect(
+      buildStaffingWarningMessage({
+        staffingSummary: staffingSummary('below_required'),
+        requiredTeachers: 3,
+        preferredTeachers: 4,
+        scheduledStaffCount: 1,
+        absences: [{ teacher_name: 'Bella W.', has_sub: false }],
+      })
+    ).toEqual({
+      message: 'Assign subs for uncovered absences or assign extra coverage to meet target.',
+      status: 'below_required',
+    })
+
+    expect(
+      buildStaffingWarningMessage({
+        staffingSummary: staffingSummary('below_required'),
+        requiredTeachers: 2,
+        preferredTeachers: 3,
+        scheduledStaffCount: 1,
+        absences: [],
+      })
+    ).toEqual({
+      message: 'Assign extra coverage to meet target.',
+      status: 'below_required',
+    })
+
+    expect(
+      buildStaffingWarningMessage({
+        staffingSummary: staffingSummary('below_preferred'),
+        requiredTeachers: 2,
+        preferredTeachers: 4,
+        scheduledStaffCount: 2,
+        absences: [{ teacher_name: 'Joe', has_sub: false }],
+      })
+    ).toEqual({
+      message: 'Assign subs for uncovered absences or assign extra coverage to meet target.',
+      status: 'below_preferred',
+    })
+
+    expect(
+      buildStaffingWarningMessage({
+        staffingSummary: staffingSummary('below_preferred'),
+        requiredTeachers: 2,
+        preferredTeachers: 4,
+        scheduledStaffCount: 2,
+        absences: [{ teacher_name: 'Jane', has_sub: true }],
+      })
+    ).toEqual({
+      message: 'Assign extra coverage to meet target.',
+      status: 'below_preferred',
+    })
+
+    expect(
+      buildStaffingWarningMessage({
+        staffingSummary: staffingSummary('adequate'),
+        requiredTeachers: 2,
+        preferredTeachers: 4,
+        scheduledStaffCount: 4,
+        absences: [],
+      })
+    ).toBeNull()
+
+    expect(
+      buildStaffingWarningMessage({
+        staffingSummary: staffingSummary('above_target'),
+        requiredTeachers: 2,
+        preferredTeachers: 4,
+        scheduledStaffCount: 5,
+        absences: [],
+      })
+    ).toEqual({
+      message: 'Extra coverage available to be re-assigned to another slot if needed.',
+      status: 'above_target',
+    })
+
+    expect(
+      buildStaffingWarningMessage({
+        staffingSummary: { status: null, label: 'No staffing target' },
+        requiredTeachers: undefined,
+        preferredTeachers: undefined,
+        scheduledStaffCount: 0,
+        absences: [],
+      })
+    ).toBeNull()
   })
 
   it('builds sub finder links with absence, then teacher, then default fallback', () => {

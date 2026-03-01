@@ -209,7 +209,7 @@ describe('/api/staffing-events/flex/remove integration', () => {
     expect(eqSpy).toHaveBeenCalledWith('time_slot_id', 'slot-1')
   })
 
-  it('GET returns 404 when flex assignment is not found', async () => {
+  it('GET returns 404 when temporary coverage is not found', async () => {
     buildSupabaseMock({
       eventMaybeSingleResult: {
         data: null,
@@ -225,7 +225,7 @@ describe('/api/staffing-events/flex/remove integration', () => {
     const json = await response.json()
 
     expect(response.status).toBe(404)
-    expect(json.error).toMatch(/flex assignment not found/i)
+    expect(json.error).toMatch(/temporary coverage not found/i)
   })
 
   it('GET returns 500 when event lookup fails', async () => {
@@ -410,7 +410,7 @@ describe('/api/staffing-events/flex/remove integration', () => {
     const json = await response.json()
 
     expect(response.status).toBe(404)
-    expect(json.error).toMatch(/flex assignment not found/i)
+    expect(json.error).toMatch(/temporary coverage not found/i)
   })
 
   it('POST returns 500 when event lookup fails', async () => {

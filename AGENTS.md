@@ -51,11 +51,27 @@ For any code change more significant than trivial (e.g. beyond font or color twe
 - **Prefer the existing stack.** Use Next.js, React, Supabase, Tailwind, and existing libraries unless there is a strong reason to add something new.
 - **Justify new dependencies.** If you add a new package, note in the PR why it’s needed and that no existing dependency could cover the use case.
 
+### Tailwind and inline styles
+
+- **Prefer Tailwind utilities for layout and typography** (spacing, flex, rounded, border width, font size). For **colors**, the build may not include every Tailwind color; even static classes like `bg-pink-50` can fail to render if that shade isn’t in the generated CSS.
+- **When a color doesn’t appear:** Use inline `style` for that color. Set `backgroundColor`, `color`, and/or `borderColor` as needed (e.g. `style={{ backgroundColor: '#ffe4e6', color: '#db2777', borderColor: '#fb7185' }}`). Keep Tailwind classes for layout and shape (e.g. `rounded-full border border-dashed px-2 py-0.5`).
+- **Do not build color class names dynamically** (e.g. `` `bg-${color}-50` ``); JIT/purge may strip them and the styles will not render.
+- **For new or non-standard colors** (e.g. a new badge or chip color that must always show), use inline `style` for the color values from the start. Optionally add the color to the Tailwind config/safelist later if you want a reusable class.
+
 ## Workflow
 
 - Work via pull requests. Follow the repo’s branch and commit rules (see `.cursor/rules` if present).
 - Before merging: run lint, type-check, tests, and smoke E2E; include evidence (screenshots or log rows) and tests for behavioral changes.
 - Use the PR template (Risks, Checks run, Evidence, Tests for non-trivial changes) for every PR.
+
+## Database migrations
+
+To run migrations against the **staging** database:
+
+1. Link to staging: `./scripts/supabase-link.sh staging`
+2. Push migrations: `supabase db push`
+
+Run these commands from the project root (`scheduler-app/`). The link script uses `.env.supabase.staging` for the project ref.
 
 ## Session and collaboration
 

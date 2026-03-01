@@ -227,8 +227,10 @@ describe('ScheduleSidePanel interactions', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Remove' }))
 
-    await screen.findByText('Remove flex assignment?')
-    expect(screen.getByText(/Amy P. is assigned as flex staff to Infant Room/i)).toBeInTheDocument()
+    await screen.findByText('Remove temporary coverage?')
+    expect(
+      screen.getByText(/Amy P. is assigned for temporary coverage to Infant Room/i)
+    ).toBeInTheDocument()
     expect(screen.getByText('This shift only')).toBeInTheDocument()
     expect(screen.getByText('All Monday shifts')).toBeInTheDocument()
     expect(screen.getByText('All shifts')).toBeInTheDocument()
@@ -263,7 +265,7 @@ describe('ScheduleSidePanel interactions', () => {
       expect(screen.getByText('Bella W.')).toBeInTheDocument()
     })
 
-    fireEvent.click(await screen.findByRole('button', { name: /edit permanent staff/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /edit baseline staff/i }))
     expect(pushMock).toHaveBeenCalledWith(
       expect.stringContaining(
         '/settings/baseline-schedule?classroom_id=class-1&day_of_week_id=day-1&time_slot_id=slot-1&return_to_weekly=true'
@@ -271,7 +273,7 @@ describe('ScheduleSidePanel interactions', () => {
     )
   })
 
-  it('hides Remove button for flex assignments without staffing_event_id', async () => {
+  it('hides Remove button for temporary coverage assignments without staffing_event_id', async () => {
     setupFetch({
       start_date: '2026-02-09',
       end_date: '2026-02-09',
@@ -325,7 +327,9 @@ describe('ScheduleSidePanel interactions', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText('Amy P. is assigned as flex staff to Infant Room on Monday, Feb 9.')
+        screen.getByText(
+          'Amy P. is assigned for temporary coverage to Infant Room on Monday, Feb 9.'
+        )
       ).toBeInTheDocument()
     })
     expect(screen.queryByText('This shift only')).not.toBeInTheDocument()
@@ -383,9 +387,11 @@ describe('ScheduleSidePanel interactions', () => {
       />
     )
 
-    expect(await screen.findByRole('button', { name: 'Add Flex Staff' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Edit permanent staff' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Edit class groups & enrollment' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Add Temporary Coverage' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edit baseline staff' })).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Edit class groups, enrollment & ratios' })
+    ).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled()
 
     const addTimeOffButtons = screen.getAllByRole('button', { name: 'Add Time Off' })
@@ -462,9 +468,11 @@ describe('ScheduleSidePanel interactions', () => {
       />
     )
 
-    expect(await screen.findByRole('button', { name: 'Add Flex Staff' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Edit permanent staff' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Edit class groups & enrollment' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Add Temporary Coverage' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edit baseline staff' })).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Edit class groups, enrollment & ratios' })
+    ).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled()
 
     const addTimeOffButtons = screen.getAllByRole('button', { name: 'Add Time Off' })
@@ -493,9 +501,11 @@ describe('ScheduleSidePanel interactions', () => {
       />
     )
 
-    expect(await screen.findByRole('button', { name: 'Add Flex Staff' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Edit permanent staff' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Edit class groups & enrollment' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Add Temporary Coverage' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edit baseline staff' })).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Edit class groups, enrollment & ratios' })
+    ).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled()
 
     const addTimeOffButtons = screen.getAllByRole('button', { name: 'Add Time Off' })

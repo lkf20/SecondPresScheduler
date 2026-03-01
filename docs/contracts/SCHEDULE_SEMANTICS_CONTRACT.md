@@ -35,7 +35,8 @@
 
 ### 5. Rendering rules
 
-- **Cell order (Weekly):** Within each cell, display order is: Absence → Sub (directly below absence, arrow pointing to Sub) → Permanent staff → Flex staff → Floaters. Baseline shows only Permanent, Flex, Floaters (no Absences, Subs).
+- **Cell order (Weekly):** Within each cell, display order is: Absence → Sub (directly below absence, arrow pointing to Sub) → Permanent staff → Flex staff → Floaters. Baseline shows only Permanent, Flex, Floaters (no Absences, Subs, or Temporary Coverage).
+- **Legend scope:** Baseline legend shows only Teacher, Flex Teacher, and Floater. Weekly legend may additionally show Substitute, Absent, and Temporary Coverage (overlay items).
 - **No duplicate staff in cell:** If a staff member is absent, show them only as an absence—not also as permanent or flex in the same cell. A staff member appears at most once per cell.
 - **Active vs inactive:** Active cells have white background; inactive cells have gray background. Inactive can be due to parent (classroom or time slot inactive) or the cell itself being inactive. Inactive filter (when unchecked) hides inactive cells from view.
 - **Colors consistent:** Classroom labels and legend colors match Classroom Settings and are used consistently across the grid.

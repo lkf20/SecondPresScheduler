@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: eventError.message }, { status: 500 })
     }
     if (!eventRow) {
-      return NextResponse.json({ error: 'Flex assignment not found.' }, { status: 404 })
+      return NextResponse.json({ error: 'Temporary coverage not found.' }, { status: 404 })
     }
 
     let shiftsQuery = supabase
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: eventError.message }, { status: 500 })
     }
     if (!eventRow) {
-      return NextResponse.json({ error: 'Flex assignment not found.' }, { status: 404 })
+      return NextResponse.json({ error: 'Temporary coverage not found.' }, { status: 404 })
     }
 
     let cancelQuery = supabase

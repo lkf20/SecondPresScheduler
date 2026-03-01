@@ -448,8 +448,13 @@ export default function ScheduleCell({
                       'bg-purple-100 text-purple-800 border border-purple-300 border-dashed'
                     title = 'Floater assignment'
                   } else if (assignment.is_flexible) {
-                    className += 'bg-blue-50 text-blue-800 border border-blue-500 border-dashed'
-                    title = 'Flex assignment'
+                    if (assignment.staffing_event_id) {
+                      className += 'bg-pink-50 text-pink-700 border border-pink-400 border-dashed'
+                      title = 'Temporary coverage'
+                    } else {
+                      className += 'bg-blue-50 text-blue-800 border border-blue-500 border-dashed'
+                      title = 'Flex Teacher'
+                    }
                   } else {
                     className += 'bg-blue-100 text-blue-800 border border-blue-300'
                   }
@@ -461,7 +466,13 @@ export default function ScheduleCell({
                       title={title}
                       style={
                         assignment.is_flexible
-                          ? { borderColor: '#3b82f6' }
+                          ? assignment.staffing_event_id
+                            ? {
+                                borderColor: '#fb7185',
+                                backgroundColor: '#ffe4e6',
+                                color: '#db2777',
+                              }
+                            : { borderColor: '#3b82f6' }
                           : !assignment.is_floater
                             ? { borderColor: '#93c5fd' }
                             : undefined

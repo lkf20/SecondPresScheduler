@@ -462,6 +462,7 @@ export default function BaselineSchedulePage() {
                 : null
             }
             showLegendSubstitutes={false}
+            showLegendTemporaryCoverage={false}
             showFilterChips={false}
             returnToWeekly={returnToWeekly}
           />

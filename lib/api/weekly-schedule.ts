@@ -515,7 +515,7 @@ export async function getScheduleSnapshotData({
         `
         *,
         schedule_cell_class_groups(
-          class_group:class_groups(id, name, is_active, age_unit, min_age, max_age, required_ratio, preferred_ratio)
+          class_group:class_groups(id, name, is_active, age_unit, min_age, max_age, required_ratio, preferred_ratio, order)
         )
       `
       )

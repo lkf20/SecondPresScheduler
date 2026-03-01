@@ -204,15 +204,15 @@ test('weekly schedule baseline handoff and return @smoke', async ({ page }) => {
 
   await expect(page.getByRole('heading', { name: /weekly schedule/i })).toBeVisible()
   await page.getByText('Bella W.').first().click()
-  await expect(page.getByText('Edit permanent staff')).toBeVisible()
+  await expect(page.getByText('Edit baseline staff')).toBeVisible()
 
-  await page.getByText('Edit permanent staff').click()
+  await page.getByText('Edit baseline staff').click()
   await expect(page.getByText('Edit baseline assignment?')).toBeVisible()
   await page.getByRole('button', { name: /^continue$/i }).click()
 
   await expect(page.getByText('Edit Permanent Staff')).toBeVisible()
   await page.getByRole('button', { name: /^back$/i }).click()
-  await expect(page.getByText('Flex Staff')).toBeVisible()
+  await expect(page.getByText('Temporary Coverage')).toBeVisible()
 })
 
 test('weekly schedule flex removal scope flow @smoke', async ({ page }) => {
@@ -227,8 +227,10 @@ test('weekly schedule flex removal scope flow @smoke', async ({ page }) => {
   await page.getByText('Bella W.').first().click()
   await page.getByRole('button', { name: /^remove$/i }).click()
 
-  await expect(page.getByText('Remove flex assignment?')).toBeVisible()
-  await expect(page.getByText(/Amy P\. is assigned as flex staff to Infant Room/i)).toBeVisible()
+  await expect(page.getByText('Remove temporary coverage?')).toBeVisible()
+  await expect(
+    page.getByText(/Amy P\. is assigned for temporary coverage to Infant Room/i)
+  ).toBeVisible()
   await expect(page.getByText('This shift only')).toBeVisible()
   await expect(page.getByText('All Monday shifts')).toBeVisible()
   await expect(page.getByText('All shifts')).toBeVisible()
@@ -253,7 +255,7 @@ test('weekly schedule baseline save refreshes schedule data @smoke', async ({ pa
   await ensureAuthenticated(page, '/schedules/weekly')
 
   await page.getByText('Bella W.').first().click()
-  await page.getByText('Edit permanent staff').click()
+  await page.getByText('Edit baseline staff').click()
   await page.getByRole('button', { name: /^continue$/i }).click()
 
   await page

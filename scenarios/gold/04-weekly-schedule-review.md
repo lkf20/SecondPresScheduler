@@ -25,7 +25,7 @@ Define “done right” for the **Weekly Schedule** so an AI (or human) can revi
 - [ ] **Active vs inactive cells:** Active cells have white background; inactive cells have gray background. Inactive can be due to parent (classroom or time slot inactive) or the specific cell being inactive.
 - [ ] **Classroom labels:** Classroom labels match the colors assigned in Classroom Settings.
 - [ ] **Staffing state per cell:** Each cell correctly displays whether it Meets preferred, is Below preferred, or is Below required.
-- [ ] **Legend:** Legend correctly matches colors and styles used in the grid.
+- [ ] **Legend:** Legend correctly matches colors and styles used in the grid. Weekly legend includes overlay items: Substitute, Absent, Temporary Coverage.
 - [ ] **Scroll behavior:** Schedule is scrollable horizontally and vertically with left and top headers (classrooms, days/time slots) staying fixed.
 
 ### 3. Filtering and layout modes
@@ -42,7 +42,9 @@ Define “done right” for the **Weekly Schedule** so an AI (or human) can revi
 ### 4. Panel behavior (Weekly = read-only detail)
 
 - [ ] **Right panel is read-only:** In Weekly Schedule, the right panel is the read-only detail panel (not the edit panel).
-- [ ] **Navigation to edit:** Clicking “Edit permanent staff” or “Edit class groups & enrollment” in the read-only panel navigates to the Baseline Schedule edit page with the cell pre-selected (via query params).
+- [ ] **Staffing warning:** When status is below required/preferred or above target, a rectangle above Staff Assignments shows the actionable message only (no redundant status—header badge has that). Below target: suggests assigning subs for uncovered absences or extra coverage. Above target: notes extra coverage can be re-assigned. On target: no rectangle (header badge suffices).
+- [ ] **Class group chips order:** In the Class Groups, Enrollment & Ratios card, class group chips are displayed in the order defined in Class Group settings (same order as drag-and-drop in settings).
+- [ ] **Navigation to edit:** Clicking “Edit baseline staff” or “Edit class groups, enrollment & ratios” in the read-only panel navigates to the Baseline Schedule edit page with the cell pre-selected (via query params).
 - [ ] **Save & Return to Weekly:** When the user has navigated from Weekly to Baseline to edit, the Baseline page shows “Save & Return to Weekly Schedule”; after saving, the user is returned to the Weekly Schedule.
 
 ### 5. Editing (panel commit / cancel)
@@ -62,7 +64,7 @@ Define “done right” for the **Weekly Schedule** so an AI (or human) can revi
 
 - [ ] **Flex in weekly view:** Assigning temporary coverage from the weekly schedule (date range, slot) creates the intended staffing event; double-booking is prevented (409 or equivalent).
 - [ ] **Visibility:** New temporary coverage appears in the grid after save; removal removes it without leaving stale state.
-- [ ] **Remove button only for staffing-event temporary coverage:** The "Remove" button for Baseline Flex staff is shown only when the assignment has a `staffing_event_id` (i.e. it came from a staffing event). Baseline-assigned teachers with the FLEXIBLE role appear in the Baseline Flex Staff section but do not have a Remove button; use "Edit permanent staff" to change those.
+- [ ] **Remove button only for staffing-event temporary coverage:** The "Remove" button for Baseline Flex staff is shown only when the assignment has a `staffing_event_id` (i.e. it came from a staffing event). Baseline-assigned teachers with the FLEXIBLE role appear in the Baseline Flex Staff section but do not have a Remove button; use "Edit baseline staff" to change those.
 
 ### 8. Week selection, refresh, and data consistency
 

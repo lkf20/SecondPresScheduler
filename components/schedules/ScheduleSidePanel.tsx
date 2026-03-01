@@ -184,11 +184,11 @@ export const buildFlexRemovalDialogCopy = ({
       })
     : 'selected end date'
 
-  let summary = `${teacherName} is assigned as flex staff to ${classroomName}.`
+  let summary = `${teacherName} is assigned for temporary coverage to ${classroomName}.`
   if (isSingleShift && startLabel === endLabel && singleWeekday) {
-    summary = `${teacherName} is assigned as flex staff to ${classroomName} on ${singleWeekday}, ${startLabel}.`
+    summary = `${teacherName} is assigned for temporary coverage to ${classroomName} on ${singleWeekday}, ${startLabel}.`
   } else if (weekdayText) {
-    summary = `${teacherName} is assigned as flex staff to ${classroomName} on ${weekdayText} from ${startLabel} to ${endLabel}.`
+    summary = `${teacherName} is assigned for temporary coverage to ${classroomName} on ${weekdayText} from ${startLabel} to ${endLabel}.`
   }
 
   return {
@@ -272,6 +272,70 @@ export const buildStaffingSummary = ({
   }
 }
 
+export type StaffingWarningStatus =
+  | 'below_required'
+  | 'below_preferred'
+  | 'adequate'
+  | 'above_target'
+
+export const buildStaffingWarningMessage = ({
+  staffingSummary,
+  requiredTeachers,
+  preferredTeachers,
+  scheduledStaffCount,
+  absences = [],
+}: {
+  staffingSummary: ReturnType<typeof buildStaffingSummary>
+  requiredTeachers?: number
+  preferredTeachers?: number
+  scheduledStaffCount: number
+  absences?: Array<{ teacher_name: string; has_sub: boolean }>
+}): { message: string; status: StaffingWarningStatus } | null => {
+  if (!staffingSummary.status || staffingSummary.status === null) return null
+  const status = staffingSummary.status as StaffingWarningStatus
+  const absencesWithoutSub = absences.filter(a => !a.has_sub)
+  const hasUncoveredAbsences = absencesWithoutSub.length > 0
+
+  if (status === 'adequate') {
+    return null // Header badge suffices; no actionable message
+  }
+
+  if (status === 'below_required') {
+    if (hasUncoveredAbsences) {
+      return {
+        message: 'Assign subs for uncovered absences or assign extra coverage to meet target.',
+        status,
+      }
+    }
+    return {
+      message: 'Assign extra coverage to meet target.',
+      status,
+    }
+  }
+
+  if (status === 'below_preferred') {
+    if (hasUncoveredAbsences) {
+      return {
+        message: 'Assign subs for uncovered absences or assign extra coverage to meet target.',
+        status,
+      }
+    }
+    return {
+      message: 'Assign extra coverage to meet target.',
+      status,
+    }
+  }
+
+  if (status === 'above_target') {
+    return {
+      message: 'Extra coverage available to be re-assigned to another slot if needed.',
+      status,
+    }
+  }
+
+  return null
+}
+
 export const formatTimeRange = (
   timeSlotStartTime: string | null,
   timeSlotEndTime: string | null
@@ -340,10 +404,14 @@ export const sortAssignmentsForPanel = (assignments: WeeklyScheduleData['assignm
     )
     .sort(compareByTeacherName)
 
-  const flexAssignments = assignments
-    .filter(
-      assignment => !assignment.is_substitute && assignment.is_flexible && !assignment.is_floater
-    )
+  const flexibleAssignments = assignments.filter(
+    assignment => !assignment.is_substitute && assignment.is_flexible && !assignment.is_floater
+  )
+  const baselineFlexAssignments = flexibleAssignments
+    .filter(a => !a.staffing_event_id)
+    .sort(compareByTeacherName)
+  const temporaryCoverageAssignments = flexibleAssignments
+    .filter(a => !!a.staffing_event_id)
     .sort(compareByTeacherName)
 
   const floaterAssignments = assignments
@@ -352,10 +420,24 @@ export const sortAssignmentsForPanel = (assignments: WeeklyScheduleData['assignm
 
   return {
     permanentAssignments,
-    flexAssignments,
+    baselineFlexAssignments,
+    temporaryCoverageAssignments,
     floaterAssignments,
   }
 }
+
+/** Sort class groups by the order stored in Class Group settings, then by name. */
+export const sortClassGroupsBySettingsOrder = <
+  T extends { id: string; name: string; order?: number | null },
+>(
+  groups: T[]
+): T[] =>
+  [...groups].sort((a, b) => {
+    const orderA = a.order ?? Infinity
+    const orderB = b.order ?? Infinity
+    if (orderA !== orderB) return orderA - orderB
+    return (a.name || '').localeCompare(b.name || '')
+  })
 
 export const buildFindSubLink = ({
   absences,
@@ -824,7 +906,7 @@ export default function ScheduleSidePanel({
         })
         const data = await response.json()
         if (!response.ok) {
-          throw new Error(data?.error || 'Failed to load flex availability.')
+          throw new Error(data?.error || 'Failed to load temporary coverage availability.')
         }
         if (!cancelled) {
           setFlexAvailability(Array.isArray(data?.staff) ? data.staff : [])
@@ -841,7 +923,9 @@ export default function ScheduleSidePanel({
           setFlexAvailability([])
           setFlexShiftMetrics([])
           setFlexAvailabilityError(
-            error instanceof Error ? error.message : 'Failed to load flex availability.'
+            error instanceof Error
+              ? error.message
+              : 'Failed to load temporary coverage availability.'
           )
         }
       } finally {
@@ -1411,7 +1495,7 @@ export default function ScheduleSidePanel({
   const handleCreateFlexAssignment = async (staffId: string, shiftKeys: string[]) => {
     setFlexError(null)
     if (!staffId) {
-      setFlexError('Select a flex staff member.')
+      setFlexError('Select a staff member for temporary coverage.')
       return
     }
     if (!flexStartDate || !flexEndDate) {
@@ -1454,12 +1538,12 @@ export default function ScheduleSidePanel({
       })
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to add flex coverage.')
+        throw new Error(errorData.error || 'Failed to add temporary coverage.')
       }
       try {
         await onSave?.()
       } catch (refreshError) {
-        console.error('Failed to refresh after flex assignment:', refreshError)
+        console.error('Failed to refresh after temporary coverage assignment:', refreshError)
       }
       const assignedStaffName =
         flexAvailability.find(staff => staff.id === staffId)?.name || 'Staff member'
@@ -1472,9 +1556,11 @@ export default function ScheduleSidePanel({
           : classroomName || 'selected classroom'
       setExpandedFlexStaffId(null)
       setPanelMode('cell')
-      toast.success(`${assignedStaffName} assigned as flex staff to ${assignedClassroomLabel}`)
+      toast.success(
+        `${assignedStaffName} assigned for temporary coverage to ${assignedClassroomLabel}`
+      )
     } catch (error) {
-      setFlexError(error instanceof Error ? error.message : 'Failed to add flex coverage.')
+      setFlexError(error instanceof Error ? error.message : 'Failed to add temporary coverage.')
     } finally {
       setFlexSaving(false)
     }
@@ -1486,7 +1572,7 @@ export default function ScheduleSidePanel({
       const response = await fetch(`/api/staffing-events/${eventId}/cancel`, { method: 'POST' })
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to remove flex coverage.')
+        throw new Error(errorData.error || 'Failed to remove temporary coverage.')
       }
       try {
         await onSave?.()
@@ -1494,7 +1580,7 @@ export default function ScheduleSidePanel({
         console.error('Failed to refresh after flex removal:', refreshError)
       }
     } catch (error) {
-      setFlexError(error instanceof Error ? error.message : 'Failed to remove flex coverage.')
+      setFlexError(error instanceof Error ? error.message : 'Failed to remove temporary coverage.')
     }
   }
 
@@ -1502,7 +1588,7 @@ export default function ScheduleSidePanel({
     assignment: WeeklyScheduleData['assignments'][number]
   ) => {
     if (!assignment.staffing_event_id) {
-      toast.error('Unable to remove this flex assignment. Missing event id.')
+      toast.error('Unable to remove this temporary coverage. Missing event id.')
       return
     }
 
@@ -1521,7 +1607,7 @@ export default function ScheduleSidePanel({
       const response = await fetch(`/api/staffing-events/flex/remove?${params.toString()}`)
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to load flex assignment details.')
+        throw new Error(errorData.error || 'Failed to load temporary coverage details.')
       }
       const data = await response.json()
       setFlexRemoveContext({
@@ -1532,7 +1618,7 @@ export default function ScheduleSidePanel({
       })
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : 'Failed to load flex assignment details.'
+        error instanceof Error ? error.message : 'Failed to load temporary coverage details.'
       )
     } finally {
       setFlexRemoveLoading(false)
@@ -1563,7 +1649,7 @@ export default function ScheduleSidePanel({
       })
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to remove flex assignment.')
+        throw new Error(errorData.error || 'Failed to remove temporary coverage.')
       }
 
       try {
@@ -1584,7 +1670,8 @@ export default function ScheduleSidePanel({
       setFlexRemoveTarget(null)
       setFlexRemoveContext(null)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to remove flex assignment.'
+      const message =
+        error instanceof Error ? error.message : 'Failed to remove temporary coverage.'
       toast.error(message)
       setFlexError(message)
     } finally {
@@ -2053,12 +2140,11 @@ export default function ScheduleSidePanel({
     []
   )
 
-  const flexAssignments =
-    selectedCellData?.assignments?.filter(assignment => assignment.is_flexible) ?? []
   const sortedAbsences = sortAbsencesByTeacherName(selectedCellData?.absences ?? [])
   const {
     permanentAssignments: sortedPermanentAssignments,
-    flexAssignments: sortedFlexAssignments,
+    baselineFlexAssignments: sortedBaselineFlexAssignments,
+    temporaryCoverageAssignments: sortedTemporaryCoverageAssignments,
     floaterAssignments: sortedFloaterAssignments,
   } = sortAssignmentsForPanel(selectedCellData?.assignments ?? [])
   const findSubLink = buildFindSubLink({
@@ -2097,6 +2183,23 @@ export default function ScheduleSidePanel({
       scheduledStaffCount,
     })
   }, [requiredTeachers, preferredTeachers, scheduledStaffCount])
+
+  const classGroupsSortedForDisplay = useMemo(
+    () => sortClassGroupsBySettingsOrder(classGroups),
+    [classGroups]
+  )
+
+  const staffingWarning = useMemo(
+    () =>
+      buildStaffingWarningMessage({
+        staffingSummary,
+        requiredTeachers,
+        preferredTeachers,
+        scheduledStaffCount,
+        absences: sortedAbsences.map(a => ({ teacher_name: a.teacher_name, has_sub: a.has_sub })),
+      }),
+    [staffingSummary, requiredTeachers, preferredTeachers, scheduledStaffCount, sortedAbsences]
+  )
 
   return (
     <>
@@ -2245,9 +2348,11 @@ export default function ScheduleSidePanel({
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Flex Coverage
+                          Temporary Coverage
                         </p>
-                        <h2 className="text-xl font-semibold text-slate-900">Add Flex Staff</h2>
+                        <h2 className="text-xl font-semibold text-slate-900">
+                          Add Temporary Coverage
+                        </h2>
                       </div>
                       <Button type="button" variant="outline" onClick={() => setPanelMode('cell')}>
                         Back
@@ -2539,7 +2644,9 @@ export default function ScheduleSidePanel({
 
                     {flexAvailabilityLoading ? (
                       <div className="space-y-3">
-                        <p className="text-sm text-muted-foreground">Loading flex staff...</p>
+                        <p className="text-sm text-muted-foreground">
+                          Loading staff for temporary coverage...
+                        </p>
                         {[1, 2, 3].map(i => (
                           <div
                             key={`flex-loading-${i}`}
@@ -2580,7 +2687,9 @@ export default function ScheduleSidePanel({
                         ))}
                       </div>
                     ) : flexStaffWithCounts.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No flex staff found.</p>
+                      <p className="text-sm text-muted-foreground">
+                        No staff found for temporary coverage.
+                      </p>
                     ) : (
                       <div className="space-y-6">
                         {[
@@ -2816,13 +2925,48 @@ export default function ScheduleSidePanel({
                 )}
                 {panelMode === 'cell' && readOnly && (
                   <div className="space-y-6">
-                    <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-semibold text-slate-900">Absences & Subs</h3>
+                    {staffingWarning && (
+                      <div
+                        className="rounded-lg border border-slate-200 bg-white p-3 text-sm font-medium"
+                        style={
+                          staffingWarning.status === 'below_required'
+                            ? {
+                                borderLeftWidth: '4px',
+                                borderLeftColor: staffingColorValues.below_required.border,
+                                borderLeftStyle: 'solid',
+                                color: staffingColorValues.below_required.text,
+                              }
+                            : staffingWarning.status === 'below_preferred'
+                              ? {
+                                  borderLeftWidth: '4px',
+                                  borderLeftColor: staffingColorValues.below_preferred.border,
+                                  borderLeftStyle: 'solid',
+                                  color: staffingColorValues.below_preferred.text,
+                                }
+                              : staffingWarning.status === 'above_target'
+                                ? {
+                                    borderLeftWidth: '4px',
+                                    borderLeftColor: staffingColorValues.above_target.border,
+                                    borderLeftStyle: 'solid',
+                                    color: staffingColorValues.above_target.text,
+                                  }
+                                : {
+                                    borderLeftWidth: '4px',
+                                    borderLeftColor: 'rgb(34, 197, 94)',
+                                    borderLeftStyle: 'solid',
+                                    color: 'rgb(22, 101, 52)',
+                                  }
+                        }
+                      >
+                        {staffingWarning.message}
                       </div>
-                      {sortedAbsences.length > 0 ? (
-                        <div className="space-y-4">
-                          {sortedAbsences.map(
+                    )}
+                    {/* Single staff card: Absence → Sub → Permanent → Flex → Temporary Coverage → Floater */}
+                    <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
+                      <h3 className="text-sm font-semibold text-slate-900">Staff Assignments</h3>
+                      <div className="space-y-2">
+                        {sortedAbsences.length > 0 &&
+                          sortedAbsences.map(
                             (absence: {
                               teacher_id: string
                               teacher_name: string
@@ -2838,15 +2982,21 @@ export default function ScheduleSidePanel({
                                 ) ?? []
                               return (
                                 <div key={absence.teacher_id} className="space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium text-slate-900">
-                                      {absence.teacher_name}
-                                    </span>
-                                    <div className="flex items-center gap-4">
+                                  <div className="flex items-center justify-between rounded-md border border-gray-300 bg-gray-100 px-3 py-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-semibold text-gray-800">
+                                        {absence.teacher_name}
+                                      </span>
+                                      <span className="inline-flex items-center rounded-full border border-gray-300 bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-700">
+                                        Absent
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
                                       <Button
                                         type="button"
+                                        variant="ghost"
                                         size="sm"
-                                        variant="outline"
+                                        className="h-8 px-2.5 text-sm"
                                         onClick={() => router.push('/time-off')}
                                         disabled={slotIsInactive}
                                       >
@@ -2856,6 +3006,7 @@ export default function ScheduleSidePanel({
                                         <Button
                                           type="button"
                                           size="sm"
+                                          className="h-8 px-2.5"
                                           onClick={() => router.push(findSubLink)}
                                           disabled={slotIsInactive}
                                         >
@@ -2864,57 +3015,52 @@ export default function ScheduleSidePanel({
                                       )}
                                     </div>
                                   </div>
-                                  {subsForAbsence.length > 0 && (
-                                    <div className="space-y-2">
-                                      {subsForAbsence.map(sub => (
-                                        <div
-                                          key={sub.id}
-                                          className="flex items-center justify-between rounded-md border border-teal-100 bg-teal-50 px-3 py-2"
-                                        >
-                                          <div className="flex items-center gap-2">
-                                            <CornerDownRight className="h-4 w-4 text-slate-400" />
-                                            <span className="text-sm text-teal-700">
-                                              {sub.teacher_name}
-                                            </span>
-                                          </div>
-                                          <Button
-                                            type="button"
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => router.push(findSubLink)}
-                                            disabled={slotIsInactive}
-                                          >
-                                            Change Sub
-                                          </Button>
+                                  {subsForAbsence.length > 0 &&
+                                    subsForAbsence.map(sub => (
+                                      <div
+                                        key={sub.id}
+                                        className="flex items-center justify-between rounded-md border border-teal-200 bg-teal-50 px-3 py-2 ml-2"
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <CornerDownRight className="h-4 w-4 text-slate-400" />
+                                          <span className="text-sm font-semibold text-teal-700">
+                                            {sub.teacher_name}
+                                          </span>
+                                          <span className="inline-flex items-center rounded-full border border-teal-300 bg-teal-100 px-2 py-0.5 text-[10px] font-medium text-teal-700">
+                                            Sub
+                                          </span>
                                         </div>
-                                      ))}
-                                    </div>
-                                  )}
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 px-2.5"
+                                          onClick={() => router.push(findSubLink)}
+                                          disabled={slotIsInactive}
+                                        >
+                                          Change Sub
+                                        </Button>
+                                      </div>
+                                    ))}
                                 </div>
                               )
                             }
                           )}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">No absences for this slot.</p>
-                      )}
-                    </div>
-
-                    <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-semibold text-slate-900">Permanent Staff</h3>
-                      </div>
-                      {sortedPermanentAssignments.length > 0 ? (
-                        <div className="space-y-2">
-                          {sortedPermanentAssignments.map(assignment => (
+                        {sortedPermanentAssignments.length > 0 &&
+                          sortedPermanentAssignments.map(assignment => (
                             <div
                               key={assignment.id}
                               className="flex items-center justify-between rounded-md border border-blue-300 bg-blue-100 px-3 py-2"
                               style={{ borderColor: '#93c5fd' }}
                             >
-                              <span className="text-sm font-semibold text-blue-800">
-                                {assignment.teacher_name}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold text-blue-800">
+                                  {assignment.teacher_name}
+                                </span>
+                                <span className="inline-flex items-center rounded-full border border-blue-300 bg-blue-200 px-2 py-0.5 text-[10px] font-medium text-blue-800">
+                                  Permanent
+                                </span>
+                              </div>
                               <Button
                                 type="button"
                                 variant="ghost"
@@ -2938,68 +3084,78 @@ export default function ScheduleSidePanel({
                               </Button>
                             </div>
                           ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">
-                          No permanent staff assigned.
-                        </p>
-                      )}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="h-auto px-0 text-sm text-slate-500 hover:text-slate-700"
-                        onClick={() => {
-                          router.push(
-                            `/settings/baseline-schedule?classroom_id=${classroomId}&day_of_week_id=${dayId}&time_slot_id=${timeSlotId}&return_to_weekly=true`
-                          )
-                        }}
-                        disabled={slotIsInactive}
-                      >
-                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                        Edit permanent staff
-                      </Button>
-                    </div>
-
-                    <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-semibold text-slate-900">Flex Staff</h3>
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="h-9 rounded-md px-3.5 shadow-sm hover:opacity-95 focus-visible:outline-none focus-visible:ring-0"
-                          style={{ backgroundColor: '#14b8a6', color: '#ffffff' }}
-                          onClick={() => setPanelMode('flex')}
-                          disabled={slotIsInactive}
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                          Add Flex Staff
-                        </Button>
-                      </div>
-                      {sortedFlexAssignments.length > 0 ? (
-                        <div className="space-y-2">
-                          {sortedFlexAssignments.map(assignment => (
+                        {sortedBaselineFlexAssignments.length > 0 &&
+                          sortedBaselineFlexAssignments.map(assignment => (
                             <div
                               key={assignment.id}
                               className="flex items-center justify-between rounded-md border border-blue-500 border-dashed bg-blue-50 px-3 py-2"
                               style={{ borderColor: '#3b82f6' }}
                             >
-                              <span className="text-sm font-semibold text-blue-800">
-                                {assignment.teacher_name}
-                              </span>
                               <div className="flex items-center gap-2">
-                                {assignment.staffing_event_id && (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    className="h-8 px-2.5 text-red-600 hover:bg-red-50 hover:text-red-700"
-                                    onClick={() => {
-                                      void handleOpenRemoveFlexDialog(assignment)
-                                    }}
-                                    disabled={slotIsInactive}
-                                  >
-                                    Remove
-                                  </Button>
-                                )}
+                                <span className="text-sm font-semibold text-blue-800">
+                                  {assignment.teacher_name}
+                                </span>
+                                <span className="inline-flex items-center rounded-full border border-blue-400 bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-800">
+                                  Flex
+                                </span>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="h-8 gap-1.5 rounded-md bg-white px-3 font-medium text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
+                                onClick={() =>
+                                  openTimeOffPanel(
+                                    assignment.teacher_id,
+                                    assignment.teacher_name || 'Unknown'
+                                  )
+                                }
+                                disabled={slotIsInactive}
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                                Add Time Off
+                              </Button>
+                            </div>
+                          ))}
+                        {sortedTemporaryCoverageAssignments.length > 0 &&
+                          sortedTemporaryCoverageAssignments.map(assignment => (
+                            <div
+                              key={assignment.id}
+                              className="flex items-center justify-between rounded-md border border-dashed px-3 py-2"
+                              style={{
+                                borderColor: '#fb7185',
+                                backgroundColor: '#ffe4e6',
+                              }}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="text-sm font-semibold"
+                                  style={{ color: '#db2777' }}
+                                >
+                                  {assignment.teacher_name}
+                                </span>
+                                <span
+                                  className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                                  style={{
+                                    borderColor: '#fb7185',
+                                    backgroundColor: '#fecdd3',
+                                    color: '#9d174d',
+                                  }}
+                                >
+                                  Temporary
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  className="h-8 px-2.5 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                  onClick={() => {
+                                    void handleOpenRemoveFlexDialog(assignment)
+                                  }}
+                                  disabled={slotIsInactive}
+                                >
+                                  Remove
+                                </Button>
                                 <Button
                                   type="button"
                                   variant="ghost"
@@ -3018,26 +3174,20 @@ export default function ScheduleSidePanel({
                               </div>
                             </div>
                           ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">No flex staff assigned.</p>
-                      )}
-                    </div>
-
-                    <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-semibold text-slate-900">Floaters</h3>
-                      </div>
-                      {sortedFloaterAssignments.length > 0 ? (
-                        <div className="space-y-2">
-                          {sortedFloaterAssignments.map(assignment => (
+                        {sortedFloaterAssignments.length > 0 &&
+                          sortedFloaterAssignments.map(assignment => (
                             <div
                               key={assignment.id}
                               className="flex items-center justify-between rounded-md border border-purple-300 border-dashed bg-purple-100 px-3 py-2"
                             >
-                              <span className="text-sm font-semibold text-purple-800">
-                                {assignment.teacher_name}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold text-purple-800">
+                                  {assignment.teacher_name}
+                                </span>
+                                <span className="inline-flex items-center rounded-full border border-purple-300 bg-purple-200 px-2 py-0.5 text-[10px] font-medium text-purple-800">
+                                  Floater
+                                </span>
+                              </div>
                               <Button
                                 type="button"
                                 variant="ghost"
@@ -3055,23 +3205,59 @@ export default function ScheduleSidePanel({
                               </Button>
                             </div>
                           ))}
+                        {sortedAbsences.length === 0 &&
+                          sortedPermanentAssignments.length === 0 &&
+                          sortedBaselineFlexAssignments.length === 0 &&
+                          sortedTemporaryCoverageAssignments.length === 0 &&
+                          sortedFloaterAssignments.length === 0 && (
+                            <p className="text-sm text-muted-foreground py-2">
+                              No staff assigned for this slot.
+                            </p>
+                          )}
+                      </div>
+
+                      <div className="border-t border-gray-200 pt-4 mt-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="h-auto px-0 text-sm text-slate-500 hover:text-slate-700 shrink-0"
+                            onClick={() => {
+                              router.push(
+                                `/settings/baseline-schedule?classroom_id=${classroomId}&day_of_week_id=${dayId}&time_slot_id=${timeSlotId}&return_to_weekly=true`
+                              )
+                            }}
+                            disabled={slotIsInactive}
+                          >
+                            <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                            Edit baseline staff
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-9 rounded-md px-3.5 shadow-sm hover:opacity-95 focus-visible:outline-none focus-visible:ring-0 shrink-0"
+                            style={{ backgroundColor: '#14b8a6', color: '#ffffff' }}
+                            onClick={() => setPanelMode('flex')}
+                            disabled={slotIsInactive}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Add Temporary Coverage
+                          </Button>
                         </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">No floaters assigned.</p>
-                      )}
+                      </div>
                     </div>
 
                     <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
                       <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold text-slate-900">
-                          Class Groups & Enrollment
+                          Class Groups, Enrollment & Ratios
                         </h3>
                       </div>
                       <div className="space-y-2 text-sm">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-muted-foreground">Class groups:</span>
-                          {classGroups.length > 0 ? (
-                            classGroups.map(group => (
+                          {classGroupsSortedForDisplay.length > 0 ? (
+                            classGroupsSortedForDisplay.map(group => (
                               <span
                                 key={group.id}
                                 className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -3094,6 +3280,19 @@ export default function ScheduleSidePanel({
                             {enrollmentForCalculation ?? '—'}
                           </span>
                         </div>
+                        {classGroupForRatio && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-muted-foreground">Ratios:</span>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                              Required 1:{classGroupForRatio.required_ratio}
+                            </span>
+                            {classGroupForRatio.preferred_ratio != null && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                                Preferred 1:{classGroupForRatio.preferred_ratio}
+                              </span>
+                            )}
+                          </div>
+                        )}
                         {classGroups.some(group => group.is_active === false) && (
                           <div className="text-xs text-slate-500">
                             Includes inactive class groups
@@ -3112,7 +3311,7 @@ export default function ScheduleSidePanel({
                         disabled={slotIsInactive}
                       >
                         <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                        Edit class groups & enrollment
+                        Edit class groups, enrollment & ratios
                       </Button>
                     </div>
                   </div>
@@ -3517,7 +3716,7 @@ export default function ScheduleSidePanel({
       <Dialog open={showClassGroupEditDialog} onOpenChange={setShowClassGroupEditDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit class groups & enrollment?</DialogTitle>
+            <DialogTitle>Edit class groups, enrollment & ratios?</DialogTitle>
             <DialogDescription>
               Changes apply to all {dayName} {timeSlotCode} slots, not just{' '}
               {dayNameDateLabel || 'this date'}.
@@ -3550,7 +3749,7 @@ export default function ScheduleSidePanel({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Remove flex assignment?</DialogTitle>
+            <DialogTitle>Remove temporary coverage?</DialogTitle>
             <DialogDescription className="space-y-3">
               <p className="text-base text-slate-700">
                 {(() => {
