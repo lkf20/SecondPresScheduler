@@ -1124,7 +1124,12 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                   </FormField>
 
                   <FormField label="Notes" error={errors.notes?.message}>
-                    <Textarea {...register('notes')} placeholder="Optional notes" tabIndex={10} />
+                    <Textarea
+                      {...register('notes')}
+                      placeholder="Optional notes"
+                      tabIndex={10}
+                      className="text-base md:text-lg"
+                    />
                   </FormField>
                 </div>
               </div>

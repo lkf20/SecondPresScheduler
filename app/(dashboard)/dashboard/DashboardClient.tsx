@@ -28,9 +28,10 @@ import {
   getCoverageColors,
   neutralColors,
   coverageColorValues,
-  getButtonColors,
+  staffingColors,
   staffingColorValues,
 } from '@/lib/utils/colors'
+import { StaffingStatusBadge } from '@/components/ui/staffing-status-badge'
 import TimeOffCard from '@/components/shared/TimeOffCard'
 import { Loader2 } from 'lucide-react'
 import { useDashboard } from '@/lib/hooks/use-dashboard'
@@ -113,9 +114,6 @@ const formatFullDateLabel = (value: string) => {
   )
   return `${weekday} ${dateLabel}`
 }
-
-const formatShortfallLabel = (shortfall: number) =>
-  `Below ${shortfall === 1 ? 'by 1' : `by ${shortfall}`}`
 
 const formatShortfallValue = (required: number, scheduled: number) =>
   Math.max(0, required - scheduled)
@@ -396,7 +394,6 @@ export default function DashboardClient({
     const partialColors = getCoverageColors('partial')
     const infoColors = { text: 'text-blue-600', bg: 'bg-blue-100', icon: 'text-blue-600' }
     const tealColors = { text: 'text-teal-700', bg: 'bg-teal-100', icon: 'text-teal-600' }
-    const purpleColors = { text: 'text-purple-800', bg: 'bg-blue-100', icon: 'text-purple-800' }
 
     return [
       {
@@ -441,12 +438,14 @@ export default function DashboardClient({
         cardStyle: `${neutralColors.border} bg-white ${neutralColors.textMedium}`,
         secondaryCount: belowPreferredClassrooms,
         secondaryIcon: AlertTriangle,
-        secondaryStyle: purpleColors.text,
-        secondaryIconStyle: `${purpleColors.bg} ${purpleColors.icon}`,
+        secondaryStyle: staffingColors.below_preferred.text,
+        secondaryIconStyle: `${staffingColors.below_preferred.bg} ${staffingColors.below_preferred.text}`,
+        secondaryColorValues: staffingColorValues.below_preferred,
         secondaryRightCount: belowRequiredClassrooms,
         secondaryRightIcon: AlertCircle,
-        secondaryRightStyle: purpleColors.text,
-        secondaryRightIconStyle: `${purpleColors.bg} ${purpleColors.icon}`,
+        secondaryRightStyle: staffingColors.below_required.text,
+        secondaryRightIconStyle: `${staffingColors.below_required.bg} ${staffingColors.below_required.text}`,
+        secondaryRightColorValues: staffingColorValues.below_required,
       },
     ]
   }, [overview.summary, belowRequiredClassrooms, belowPreferredClassrooms])
@@ -715,10 +714,18 @@ export default function DashboardClient({
                                 'flex items-center gap-2 text-3xl font-semibold',
                                 item.secondaryStyle
                               )}
-                              style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}
+                              style={
+                                'secondaryColorValues' in item && item.secondaryColorValues
+                                  ? { color: item.secondaryColorValues.text }
+                                  : undefined
+                              }
                             >
                               <span
-                                style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}
+                                style={
+                                  'secondaryColorValues' in item && item.secondaryColorValues
+                                    ? { color: item.secondaryColorValues.text }
+                                    : undefined
+                                }
                               >
                                 {item.secondaryCount}
                               </span>
@@ -728,10 +735,12 @@ export default function DashboardClient({
                                   item.secondaryIconStyle
                                 )}
                                 style={
-                                  {
-                                    backgroundColor: 'rgba(219, 234, 254, 1)', // blue-100
-                                    color: 'rgba(37, 99, 235, 1)', // blue-600
-                                  } as React.CSSProperties
+                                  'secondaryColorValues' in item && item.secondaryColorValues
+                                    ? {
+                                        backgroundColor: item.secondaryColorValues.bg,
+                                        color: item.secondaryColorValues.text,
+                                      }
+                                    : undefined
                                 }
                               >
                                 <item.secondaryIcon className="h-5 w-5" />
@@ -753,10 +762,20 @@ export default function DashboardClient({
                                 'flex items-center gap-2 text-3xl font-semibold',
                                 item.secondaryRightStyle
                               )}
-                              style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}
+                              style={
+                                'secondaryRightColorValues' in item &&
+                                item.secondaryRightColorValues
+                                  ? { color: item.secondaryRightColorValues.text }
+                                  : undefined
+                              }
                             >
                               <span
-                                style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}
+                                style={
+                                  'secondaryRightColorValues' in item &&
+                                  item.secondaryRightColorValues
+                                    ? { color: item.secondaryRightColorValues.text }
+                                    : undefined
+                                }
                               >
                                 {item.secondaryRightCount}
                               </span>
@@ -766,10 +785,13 @@ export default function DashboardClient({
                                   item.secondaryRightIconStyle
                                 )}
                                 style={
-                                  {
-                                    backgroundColor: 'rgba(219, 234, 254, 1)', // blue-100
-                                    color: 'rgba(37, 99, 235, 1)', // blue-600
-                                  } as React.CSSProperties
+                                  'secondaryRightColorValues' in item &&
+                                  item.secondaryRightColorValues
+                                    ? {
+                                        backgroundColor: item.secondaryRightColorValues.bg,
+                                        color: item.secondaryRightColorValues.text,
+                                      }
+                                    : undefined
                                 }
                               >
                                 <item.secondaryRightIcon className="h-5 w-5" />
@@ -1023,12 +1045,7 @@ export default function DashboardClient({
                       </div>
                     </div>
                     <div className="flex w-full justify-end sm:w-auto">
-                      <Button
-                        asChild
-                        size="sm"
-                        variant="outline"
-                        className={getButtonColors('teal').base}
-                      >
+                      <Button asChild size="sm" variant="teal">
                         <Link href={`/schedules/weekly?sub_assignment_id=${assignment.id}`}>
                           Update Sub
                         </Link>
@@ -1121,40 +1138,14 @@ export default function DashboardClient({
                                     {formatSlotLabel(slot.day_name, slot.time_slot_code)}
                                   </div>
                                   <div className="flex flex-col items-start gap-2">
-                                    <span
-                                      className="inline-flex items-center rounded-full px-3.5 py-1 text-xs font-medium"
-                                      style={
-                                        slot.status === 'below_required'
-                                          ? ({
-                                              backgroundColor:
-                                                staffingColorValues.below_required.bg,
-                                              borderStyle: 'solid',
-                                              borderWidth: '1px',
-                                              borderColor:
-                                                staffingColorValues.below_required.border,
-                                              color: staffingColorValues.below_required.text,
-                                            } as React.CSSProperties)
-                                          : slot.status === 'below_preferred'
-                                            ? ({
-                                                backgroundColor:
-                                                  staffingColorValues.below_preferred.bg,
-                                                borderStyle: 'solid',
-                                                borderWidth: '1px',
-                                                borderColor:
-                                                  staffingColorValues.below_preferred.border,
-                                                color: staffingColorValues.below_preferred.text,
-                                              } as React.CSSProperties)
-                                            : undefined
-                                      }
-                                    >
-                                      Below Required{' '}
-                                      {formatShortfallLabel(
-                                        formatShortfallValue(
-                                          slot.required_staff,
-                                          slot.scheduled_staff
-                                        )
-                                      )}
-                                    </span>
+                                    <StaffingStatusBadge
+                                      status={slot.status}
+                                      label={`Below Required by ${formatShortfallValue(
+                                        slot.required_staff,
+                                        slot.scheduled_staff
+                                      )}`}
+                                      size="md"
+                                    />
                                     <div className="text-xs text-slate-600 whitespace-nowrap">
                                       Required: {slot.required_staff} · Scheduled:{' '}
                                       {slot.scheduled_staff}
@@ -1163,12 +1154,7 @@ export default function DashboardClient({
                                 </div>
                               </div>
                               <div className="flex items-center justify-end self-center flex-shrink-0">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className={getButtonColors('teal').base}
-                                  disabled
-                                >
+                                <Button size="sm" variant="teal" disabled>
                                   Assign Coverage
                                 </Button>
                               </div>
@@ -1224,38 +1210,14 @@ export default function DashboardClient({
                                     {formatSlotLabel(slot.day_name, slot.time_slot_code)}
                                   </div>
                                   <div className="flex flex-col items-start gap-2">
-                                    <span
-                                      className="inline-flex items-center rounded-full px-3.5 py-1 text-xs font-medium"
-                                      style={
-                                        slot.status === 'below_preferred'
-                                          ? ({
-                                              backgroundColor:
-                                                staffingColorValues.below_preferred.bg,
-                                              borderStyle: 'solid',
-                                              borderWidth: '1px',
-                                              borderColor:
-                                                staffingColorValues.below_preferred.border,
-                                              color: staffingColorValues.below_preferred.text,
-                                            } as React.CSSProperties)
-                                          : slot.status === 'below_required'
-                                            ? ({
-                                                backgroundColor:
-                                                  staffingColorValues.below_required.bg,
-                                                borderStyle: 'solid',
-                                                borderWidth: '1px',
-                                                borderColor:
-                                                  staffingColorValues.below_required.border,
-                                                color: staffingColorValues.below_required.text,
-                                              } as React.CSSProperties)
-                                            : undefined
-                                      }
-                                    >
-                                      Below Preferred by{' '}
-                                      {formatShortfallValue(
+                                    <StaffingStatusBadge
+                                      status={slot.status}
+                                      label={`Below Preferred by ${formatShortfallValue(
                                         slot.preferred_staff ?? slot.required_staff,
                                         slot.scheduled_staff
-                                      )}
-                                    </span>
+                                      )}`}
+                                      size="md"
+                                    />
                                     <div className="text-xs text-slate-600 whitespace-nowrap">
                                       Preferred: {slot.preferred_staff ?? slot.required_staff} ·
                                       Scheduled: {slot.scheduled_staff}
@@ -1264,12 +1226,7 @@ export default function DashboardClient({
                                 </div>
                               </div>
                               <div className="flex items-center justify-end self-center flex-shrink-0">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className={getButtonColors('teal').base}
-                                  disabled
-                                >
+                                <Button size="sm" variant="teal" disabled>
                                   Assign Coverage
                                 </Button>
                               </div>

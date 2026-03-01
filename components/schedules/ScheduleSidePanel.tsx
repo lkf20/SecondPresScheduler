@@ -1,7 +1,15 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { AlertTriangle, ChevronDown, ChevronUp, CornerDownRight, Pencil, Plus } from 'lucide-react'
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  CornerDownRight,
+  Pencil,
+  Plus,
+  XCircle,
+} from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -48,6 +56,7 @@ import {
   panelBackgrounds,
   staffingColorValues,
 } from '@/lib/utils/colors'
+import { StaffingStatusBadge } from '@/components/ui/staffing-status-badge'
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 import { parseLocalDate } from '@/lib/utils/date'
@@ -300,15 +309,18 @@ export const buildStaffingWarningMessage = ({
     return null // Header badge suffices; no actionable message
   }
 
+  const requiredSuffix = 'extra coverage to meet required target.'
+  const preferredSuffix = 'extra coverage to meet preferred target.'
+
   if (status === 'below_required') {
     if (hasUncoveredAbsences) {
       return {
-        message: 'Assign subs for uncovered absences or assign extra coverage to meet target.',
+        message: `Assign subs for uncovered absences or assign ${requiredSuffix}`,
         status,
       }
     }
     return {
-      message: 'Assign extra coverage to meet target.',
+      message: `Assign ${requiredSuffix}`,
       status,
     }
   }
@@ -316,12 +328,12 @@ export const buildStaffingWarningMessage = ({
   if (status === 'below_preferred') {
     if (hasUncoveredAbsences) {
       return {
-        message: 'Assign subs for uncovered absences or assign extra coverage to meet target.',
+        message: `Assign subs for uncovered absences or assign ${preferredSuffix}`,
         status,
       }
     }
     return {
-      message: 'Assign extra coverage to meet target.',
+      message: `Assign ${preferredSuffix}`,
       status,
     }
   }
@@ -2248,44 +2260,11 @@ export default function ScheduleSidePanel({
               )}
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
                 {staffingSummary.status && (
-                  <span
-                    className="inline-flex items-center rounded-full px-2.5 py-0.5 font-semibold"
-                    style={
-                      staffingSummary.status === 'below_required'
-                        ? {
-                            backgroundColor: staffingColorValues.below_required.bg,
-                            borderStyle: 'solid',
-                            borderWidth: '1px',
-                            borderColor: staffingColorValues.below_required.border,
-                            color: staffingColorValues.below_required.text,
-                          }
-                        : staffingSummary.status === 'below_preferred'
-                          ? {
-                              backgroundColor: staffingColorValues.below_preferred.bg,
-                              borderStyle: 'solid',
-                              borderWidth: '1px',
-                              borderColor: staffingColorValues.below_preferred.border,
-                              color: staffingColorValues.below_preferred.text,
-                            }
-                          : staffingSummary.status === 'above_target'
-                            ? {
-                                backgroundColor: staffingColorValues.above_target.bg,
-                                borderStyle: 'solid',
-                                borderWidth: '1px',
-                                borderColor: staffingColorValues.above_target.border,
-                                color: staffingColorValues.above_target.text,
-                              }
-                            : {
-                                backgroundColor: 'rgb(220, 252, 231)', // green-100
-                                borderStyle: 'solid',
-                                borderWidth: '1px',
-                                borderColor: 'rgb(34, 197, 94)', // green-500
-                                color: 'rgb(22, 101, 52)', // green-800
-                              }
-                    }
-                  >
-                    {staffingSummary.label}
-                  </span>
+                  <StaffingStatusBadge
+                    status={staffingSummary.status}
+                    label={staffingSummary.label}
+                    size="sm"
+                  />
                 )}
                 {!staffingSummary.status && (
                   <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 font-semibold text-slate-600">
@@ -2503,7 +2482,7 @@ export default function ScheduleSidePanel({
                     {isLongTermFlex && (
                       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
                         <div className="flex gap-3">
-                          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+                          <AlertTriangle className="h-5 w-5 text-amber-700 shrink-0" />
                           <div>
                             <h4 className="text-sm font-semibold text-amber-800">
                               Long-term assignment detected
@@ -2530,7 +2509,7 @@ export default function ScheduleSidePanel({
                               flexBelowPreferredCount === 1 ? 'shift' : 'shifts'
                             }`}
                         {!flexAvailabilityLoading && flexBelowPreferredCount > 0 && (
-                          <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-700" />
                         )}
                       </p>
                       <p className="flex items-center gap-1.5 text-xs text-slate-500">
@@ -2541,7 +2520,7 @@ export default function ScheduleSidePanel({
                               flexBelowRequiredCount === 1 ? 'shift' : 'shifts'
                             }`}
                         {!flexAvailabilityLoading && flexBelowRequiredCount > 0 && (
-                          <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                          <XCircle className="h-3.5 w-3.5 text-red-600" />
                         )}
                       </p>
                       {flexAvailabilityLoading && (
@@ -2589,38 +2568,24 @@ export default function ScheduleSidePanel({
                                     </div>
                                     <div className="pt-1 text-right text-xs text-slate-500 space-y-2">
                                       {metric.status !== 'ok' && (
-                                        <span
-                                          className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap"
-                                          style={{
-                                            backgroundColor:
-                                              metric.status === 'below_required'
-                                                ? staffingColorValues.below_required.bg
-                                                : staffingColorValues.below_preferred.bg,
-                                            borderStyle: 'solid',
-                                            borderWidth: '1px',
-                                            borderColor:
-                                              metric.status === 'below_required'
-                                                ? staffingColorValues.below_required.border
-                                                : staffingColorValues.below_preferred.border,
-                                            color:
-                                              metric.status === 'below_required'
-                                                ? staffingColorValues.below_required.text
-                                                : staffingColorValues.below_preferred.text,
-                                          }}
-                                        >
-                                          {metric.status === 'below_required'
-                                            ? `Below Required by ${Math.max(
-                                                0,
-                                                (metric.required_staff ?? 0) -
-                                                  metric.scheduled_staff
-                                              )}`
-                                            : `Below Preferred by ${Math.max(
-                                                0,
-                                                (metric.preferred_staff ??
-                                                  metric.required_staff ??
-                                                  0) - metric.scheduled_staff
-                                              )}`}
-                                        </span>
+                                        <StaffingStatusBadge
+                                          status={metric.status}
+                                          label={
+                                            metric.status === 'below_required'
+                                              ? `Below Required by ${Math.max(
+                                                  0,
+                                                  (metric.required_staff ?? 0) -
+                                                    metric.scheduled_staff
+                                                )}`
+                                              : `Below Preferred by ${Math.max(
+                                                  0,
+                                                  (metric.preferred_staff ??
+                                                    metric.required_staff ??
+                                                    0) - metric.scheduled_staff
+                                                )}`
+                                          }
+                                          size="sm"
+                                        />
                                       )}
                                       <p>
                                         Required: {metric.required_staff ?? '—'} • Preferred:{' '}
@@ -2789,9 +2754,7 @@ export default function ScheduleSidePanel({
                                         <Button
                                           type="button"
                                           size="sm"
-                                          variant="outline"
-                                          className="border bg-white hover:bg-teal-50"
-                                          style={{ borderColor: '#0f766e', color: '#0f766e' }}
+                                          variant="teal"
                                           onClick={() => {
                                             setFlexError(null)
                                             setExpandedFlexStaffId(prev =>
@@ -2895,9 +2858,7 @@ export default function ScheduleSidePanel({
                                             <Button
                                               type="button"
                                               size="sm"
-                                              variant="outline"
-                                              className="border bg-white hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-0"
-                                              style={{ borderColor: '#0f766e', color: '#0f766e' }}
+                                              variant="teal"
                                               disabled={flexSaving || hasInvalidFlexDayRange}
                                               onClick={() => {
                                                 const keys =
@@ -3005,6 +2966,7 @@ export default function ScheduleSidePanel({
                                       {!absence.has_sub && (
                                         <Button
                                           type="button"
+                                          variant="teal"
                                           size="sm"
                                           className="h-8 px-2.5"
                                           onClick={() => router.push(findSubLink)}

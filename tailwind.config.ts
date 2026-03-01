@@ -2,6 +2,14 @@ import type { Config } from 'tailwindcss'
 
 const config: Config = {
   darkMode: ['class'],
+  safelist: [
+    // Button variant="teal" (secondary outline)
+    'border-teal-700',
+    'text-teal-700',
+    'hover:bg-teal-700',
+    'hover:text-white',
+    'hover:border-teal-700',
+  ],
   content: [
     './pages/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',

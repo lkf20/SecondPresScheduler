@@ -42,6 +42,7 @@ For any code change more significant than trivial (e.g. beyond font or color twe
 
 ## User experience and robustness
 
+- **One primary button per page or panel.** Each screen, side panel, or modal should have at most one primary (default-variant) button—the main call-to-action. Use `variant="outline"` or `variant="ghost"` for secondary actions so users can quickly identify the primary action. When multiple actions have equal weight, pick the most important one as primary and demote the rest.
 - **Clear, actionable errors.** User-facing error messages should explain what went wrong and what the user can do (e.g. “Select a date” not “Validation failed”). Do not expose stack traces or internal details.
 - **Accessibility.** Use semantic markup, visible focus states, and labels so the app is usable with keyboard and assistive tech. When adding UI, follow existing patterns that already support this.
 - **Loading and empty states.** Avoid blank or broken-looking screens while data loads or when there is no data; use loading indicators and clear empty-state copy where the app already does.
@@ -57,6 +58,15 @@ For any code change more significant than trivial (e.g. beyond font or color twe
 - **When a color doesn’t appear:** Use inline `style` for that color. Set `backgroundColor`, `color`, and/or `borderColor` as needed (e.g. `style={{ backgroundColor: '#ffe4e6', color: '#db2777', borderColor: '#fb7185' }}`). Keep Tailwind classes for layout and shape (e.g. `rounded-full border border-dashed px-2 py-0.5`).
 - **Do not build color class names dynamically** (e.g. `` `bg-${color}-50` ``); JIT/purge may strip them and the styles will not render.
 - **For new or non-standard colors** (e.g. a new badge or chip color that must always show), use inline `style` for the color values from the start. Optionally add the color to the Tailwind config/safelist later if you want a reusable class.
+
+### Color consistency
+
+- **Use the centralized color system.** All status, coverage, and staffing colors live in `lib/utils/colors.ts`. Import from there instead of hardcoding Tailwind color classes.
+- **Use shared components for staffing badges.** Below Required, Below Preferred, Above Target, and On Target badges must use `StaffingStatusBadge` (`components/ui/staffing-status-badge.tsx`). Do not replicate badge styling in Dashboard, Weekly Schedule panel, or elsewhere.
+- **Semantic palette** (see [docs/COLOR_CONSISTENCY_REVIEW.md](docs/COLOR_CONSISTENCY_REVIEW.md)): Red = critical (below required, errors), Orange = uncovered shifts, Amber = warning (below preferred, validation), Yellow = soft (partial coverage, draft).
+- **Before adding new colors:** Check if an existing constant fits (`staffingColorValues`, `coverageColorValues`, `semanticColors`). If adding a new semantic tier, add it to `lib/utils/colors.ts` and document in `docs/COLOR_CONSISTENCY_REVIEW.md`.
+- **Avoid ad-hoc color classes** for status/warning/error states—use the shared constants or components so the app stays visually consistent.
+- **Secondary outline buttons (turquoise):** For secondary actions like Find Sub, Update Sub, and similar “go to sub-finder” or teal-accent actions, use `variant="teal"` on the Button component. This gives turquoise border and text with teal fill on hover. Do not use `variant="outline"` with custom teal classes—use the built-in `teal` variant for consistency.
 
 ## Workflow
 

@@ -25,10 +25,10 @@ export const semanticColors = {
     icon: 'text-yellow-600',
   },
   error: {
-    bg: 'bg-orange-50',
-    border: 'border-orange-200',
-    text: 'text-orange-700',
-    icon: 'text-orange-600',
+    bg: 'bg-red-50',
+    border: 'border-red-200',
+    text: 'text-red-700',
+    icon: 'text-red-600',
   },
   info: {
     bg: 'bg-blue-50',
@@ -255,17 +255,18 @@ export type StaffingStatus = 'below_required' | 'below_preferred' | 'adequate' |
 
 /**
  * Standardized colors for staffing status badges
+ * Red = critical (below required), Amber = warning (below preferred)
  */
 export const staffingColors = {
   below_required: {
-    bg: 'bg-blue-100',
-    border: 'border-blue-600',
-    text: 'text-blue-600',
+    bg: 'bg-red-50',
+    border: 'border-red-700',
+    text: 'text-red-700',
   },
   below_preferred: {
-    bg: 'bg-blue-100',
-    border: 'border-blue-600',
-    text: 'text-blue-600',
+    bg: 'bg-amber-50',
+    border: 'border-amber-700',
+    text: 'text-amber-700',
   },
   adequate: {
     bg: neutralColors.bgLight,
@@ -285,14 +286,15 @@ export const staffingColors = {
  */
 export const staffingColorValues = {
   below_required: {
-    bg: 'rgb(219, 234, 254)', // blue-100
-    border: 'rgb(37, 99, 235)', // blue-600
-    text: 'rgb(37, 99, 235)', // blue-600
+    bg: 'rgb(254, 242, 242)', // red-50 (softer background)
+    border: 'rgb(185, 28, 28)', // red-700 (muted, less saturated)
+    text: 'rgb(185, 28, 28)', // red-700 (muted, less saturated)
   },
   below_preferred: {
-    bg: 'rgb(219, 234, 254)', // blue-100
-    border: 'rgb(37, 99, 235)', // blue-600
-    text: 'rgb(37, 99, 235)', // blue-600
+    bg: 'rgb(255, 251, 235)', // amber-50 (softer)
+    border: 'rgb(180, 83, 9)', // amber-700 (muted)
+    borderLighter: 'rgb(251, 191, 36)', // amber-400 (softer border option)
+    text: 'rgb(180, 83, 9)', // amber-700 (muted)
   },
   adequate: {
     bg: 'rgb(248, 250, 252)', // slate-50

@@ -350,7 +350,8 @@ describe('ScheduleSidePanel helpers', () => {
         absences: [{ teacher_name: 'Bella W.', has_sub: false }],
       })
     ).toEqual({
-      message: 'Assign subs for uncovered absences or assign extra coverage to meet target.',
+      message:
+        'Assign subs for uncovered absences or assign extra coverage to meet required target.',
       status: 'below_required',
     })
 
@@ -363,7 +364,7 @@ describe('ScheduleSidePanel helpers', () => {
         absences: [],
       })
     ).toEqual({
-      message: 'Assign extra coverage to meet target.',
+      message: 'Assign extra coverage to meet required target.',
       status: 'below_required',
     })
 
@@ -376,7 +377,8 @@ describe('ScheduleSidePanel helpers', () => {
         absences: [{ teacher_name: 'Joe', has_sub: false }],
       })
     ).toEqual({
-      message: 'Assign subs for uncovered absences or assign extra coverage to meet target.',
+      message:
+        'Assign subs for uncovered absences or assign extra coverage to meet preferred target.',
       status: 'below_preferred',
     })
 
@@ -389,7 +391,7 @@ describe('ScheduleSidePanel helpers', () => {
         absences: [{ teacher_name: 'Jane', has_sub: true }],
       })
     ).toEqual({
-      message: 'Assign extra coverage to meet target.',
+      message: 'Assign extra coverage to meet preferred target.',
       status: 'below_preferred',
     })
 

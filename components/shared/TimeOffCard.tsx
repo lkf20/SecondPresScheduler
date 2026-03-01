@@ -17,7 +17,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { parseLocalDate } from '@/lib/utils/date'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
-import { getButtonColors, getNeutralChipClasses, coverageColorValues } from '@/lib/utils/colors'
+import { getNeutralChipClasses, coverageColorValues } from '@/lib/utils/colors'
 
 export type TimeOffCardVariant = 'sub-finder' | 'dashboard' | 'time-off'
 
@@ -321,12 +321,7 @@ export default function TimeOffCard({
             )}
             {uncovered > 0 && (
               <div onClick={e => e.stopPropagation()}>
-                <Button
-                  asChild
-                  size="sm"
-                  variant="outline"
-                  className={getButtonColors('teal').base}
-                >
+                <Button asChild size="sm" variant="teal">
                   <Link href={`/sub-finder?absence_id=${id}`}>Find Sub</Link>
                 </Button>
               </div>
