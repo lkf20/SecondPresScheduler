@@ -202,6 +202,7 @@ export async function GET(request: NextRequest) {
             end_date: request.end_date,
             reason: request.reason,
             notes: request.notes,
+            request_status: request.status,
             teacher: teacher
               ? {
                   first_name: teacher.first_name || null,

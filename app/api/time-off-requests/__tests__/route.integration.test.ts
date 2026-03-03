@@ -53,6 +53,7 @@ describe('GET /api/time-off-requests integration', () => {
         end_date: '2026-02-11',
         reason: null,
         notes: null,
+        status: 'active',
       },
       {
         id: 'req-2',
@@ -61,6 +62,7 @@ describe('GET /api/time-off-requests integration', () => {
         end_date: '2026-02-10',
         reason: null,
         notes: null,
+        status: 'active',
       },
       {
         id: 'req-3',
@@ -69,21 +71,25 @@ describe('GET /api/time-off-requests integration', () => {
         end_date: '2026-02-20',
         reason: null,
         notes: null,
+        status: 'draft',
       },
     ])
-    ;(transformTimeOffCardData as jest.Mock).mockImplementation((request: { id: string }) => ({
-      id: request.id,
-      status: 'needs_coverage',
-      teacher_name: request.id,
-      start_date: '2026-02-10',
-      end_date: '2026-02-10',
-      total: 0,
-      covered: 0,
-      partial: 0,
-      uncovered: 0,
-      classrooms: [],
-      shift_details: [],
-    }))
+    ;(transformTimeOffCardData as jest.Mock).mockImplementation(
+      (request: { id: string; status?: string }) => ({
+        id: request.id,
+        status: 'needs_coverage',
+        request_status: request.status ?? 'active',
+        teacher_name: request.id,
+        start_date: '2026-02-10',
+        end_date: '2026-02-10',
+        total: 0,
+        covered: 0,
+        partial: 0,
+        uncovered: 0,
+        classrooms: [],
+        shift_details: [],
+      })
+    )
 
     const request = {
       nextUrl: new URL(
@@ -111,6 +117,7 @@ describe('GET /api/time-off-requests integration', () => {
         end_date: '2026-02-10',
         reason: null,
         notes: null,
+        status: 'active',
       },
       {
         id: 'req-needs',
@@ -119,21 +126,25 @@ describe('GET /api/time-off-requests integration', () => {
         end_date: '2026-02-10',
         reason: null,
         notes: null,
+        status: 'active',
       },
     ])
-    ;(transformTimeOffCardData as jest.Mock).mockImplementation((request: { id: string }) => ({
-      id: request.id,
-      status: request.id === 'req-covered' ? 'covered' : 'needs_coverage',
-      teacher_name: request.id,
-      start_date: '2026-02-10',
-      end_date: '2026-02-10',
-      total: 0,
-      covered: 0,
-      partial: 0,
-      uncovered: 0,
-      classrooms: [],
-      shift_details: [],
-    }))
+    ;(transformTimeOffCardData as jest.Mock).mockImplementation(
+      (request: { id: string; status?: string }) => ({
+        id: request.id,
+        status: request.id === 'req-covered' ? 'covered' : 'needs_coverage',
+        request_status: request.status ?? 'active',
+        teacher_name: request.id,
+        start_date: '2026-02-10',
+        end_date: '2026-02-10',
+        total: 0,
+        covered: 0,
+        partial: 0,
+        uncovered: 0,
+        classrooms: [],
+        shift_details: [],
+      })
+    )
 
     const request = {
       nextUrl: new URL(

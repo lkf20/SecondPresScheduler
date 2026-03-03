@@ -50,6 +50,7 @@ export interface TimeOffCardProps {
   onEdit?: () => void // Callback for editing (opens panel instead of navigating)
   loading?: boolean
   className?: string
+  isDraft?: boolean
 }
 
 const formatFullDateLabel = (value: string) => {
@@ -81,6 +82,7 @@ export default function TimeOffCard({
   onEdit,
   loading = false,
   className,
+  isDraft = false,
 }: TimeOffCardProps) {
   const router = useRouter()
   const [isExpanded, setIsExpanded] = useState(false)
@@ -236,6 +238,19 @@ export default function TimeOffCard({
             {reason && (
               <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
                 {reason}
+              </span>
+            )}
+            {isDraft && (
+              <span
+                className="rounded border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide"
+                style={{
+                  backgroundColor: '#fffbeb',
+                  borderColor: '#fcd34d',
+                  color: '#92400e',
+                }}
+                aria-label="Draft"
+              >
+                Draft
               </span>
             )}
           </div>

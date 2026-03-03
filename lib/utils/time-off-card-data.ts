@@ -21,8 +21,10 @@ export type TimeOffCardData = {
   partial: number
   uncovered: number
   total: number
-  // Status
+  // Coverage status (for display/filtering)
   status: 'covered' | 'partially_covered' | 'needs_coverage'
+  // Request lifecycle status (draft | active | cancelled)
+  request_status: 'draft' | 'active' | 'cancelled'
   // Shift details - can be simple or detailed
   shift_details?: Array<{
     label: string
@@ -49,6 +51,7 @@ export interface TimeOffRequestInput {
   end_date: string | null
   reason: string | null
   notes: string | null
+  request_status?: 'draft' | 'active' | 'cancelled'
   teacher?: {
     first_name?: string | null
     last_name?: string | null
@@ -287,6 +290,7 @@ export function transformTimeOffCardData(
     uncovered,
     total: shifts.length,
     status,
+    request_status: request.request_status ?? 'active',
     shift_details: shiftDetails.length > 0 ? shiftDetails : undefined,
   }
 }
