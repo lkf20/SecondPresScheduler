@@ -81,6 +81,52 @@ describe('validateAuditLogEntry', () => {
       expect(result.valid).toBe(true)
       expect(result.errors).toHaveLength(0)
     })
+
+    it('passes temporary_coverage assign with teacher and classroom names', () => {
+      const entry: AuditLogEntryInput = {
+        schoolId: 'school-uuid',
+        actorUserId: 'user-uuid',
+        actorDisplayName: 'Jane Admin',
+        action: 'assign',
+        category: 'temporary_coverage',
+        entityType: 'staffing_event',
+        entityId: 'event-uuid',
+        details: {
+          staff_id: 'staff-uuid',
+          teacher_name: 'Maria Garcia',
+          classroom_ids: ['classroom-uuid'],
+          classroom_name: 'Toddler A',
+          start_date: '2025-03-01',
+          end_date: '2025-03-07',
+          shift_count: 12,
+        },
+      }
+      const result = validateAuditLogEntry(entry)
+      expect(result.valid).toBe(true)
+      expect(result.errors).toHaveLength(0)
+    })
+
+    it('passes temporary_coverage cancel with teacher name', () => {
+      const entry: AuditLogEntryInput = {
+        schoolId: 'school-uuid',
+        actorUserId: 'user-uuid',
+        actorDisplayName: 'Jane Admin',
+        action: 'cancel',
+        category: 'temporary_coverage',
+        entityType: 'staffing_event',
+        entityId: 'event-uuid',
+        details: {
+          staff_id: 'staff-uuid',
+          teacher_name: 'Maria Garcia',
+          scope: 'all_shifts',
+          removed_count: 12,
+          remaining_active_shifts: 0,
+        },
+      }
+      const result = validateAuditLogEntry(entry)
+      expect(result.valid).toBe(true)
+      expect(result.errors).toHaveLength(0)
+    })
   })
 
   describe('bad examples (must fail)', () => {

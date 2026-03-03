@@ -63,6 +63,22 @@ function formatDescription(row: ActivityRow) {
     return count ? `Assigned sub coverage (${count} shifts)` : 'Assigned sub coverage'
   }
 
+  if (row.category === 'temporary_coverage') {
+    const teacherName = details.teacher_name || 'staff'
+    if (row.action === 'assign') {
+      const classroom = details.classroom_name
+      return classroom
+        ? `Assigned ${teacherName} for temporary coverage to ${classroom}`
+        : `Assigned ${teacherName} for temporary coverage`
+    }
+    if (row.action === 'cancel') {
+      const count = details.removed_count
+      return count
+        ? `Removed temporary coverage for ${teacherName} (${count} shift${count !== 1 ? 's' : ''})`
+        : `Removed temporary coverage for ${teacherName}`
+    }
+  }
+
   if (row.category === 'coverage') {
     return 'Updated coverage details'
   }

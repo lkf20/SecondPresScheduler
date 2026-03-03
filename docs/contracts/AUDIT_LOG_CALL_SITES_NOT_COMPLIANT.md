@@ -15,6 +15,11 @@ Previously non-compliant call sites were updated to include human-readable names
 - **assign-shifts** – Main assign and director-override logs: now include `teacher_name` and `sub_name`.
 - **unassign-shifts** – Now includes `teacher_name` and `sub_name`.
 
+## Temporary coverage (fixed)
+
+- **staffing-events/flex** – POST create: now logs `assign` with `teacher_name`, `classroom_name`, `shift_count`, and date range.
+- **staffing-events/flex/remove** – POST remove: now logs `cancel` with `teacher_name`, `scope`, `removed_count`, `remaining_active_shifts`.
+
 ---
 
 When adding new audit log call sites, ensure they satisfy the contract and pass `validateAuditLogEntry`. If you discover a call site that no longer complies (e.g. after a refactor), add it to this file with “What’s missing” and fix it.

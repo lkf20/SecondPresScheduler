@@ -449,7 +449,8 @@ export default function ScheduleCell({
                     title = 'Floater assignment'
                   } else if (assignment.is_flexible) {
                     if (assignment.staffing_event_id) {
-                      className += 'bg-pink-50 text-pink-700 border border-pink-400 border-dashed'
+                      className +=
+                        'bg-[#fdf2f8] text-pink-700 border border-[#f9a8d4] border-dashed'
                       title = 'Temporary coverage'
                     } else {
                       className += 'bg-blue-50 text-blue-800 border border-blue-500 border-dashed'
@@ -468,8 +469,8 @@ export default function ScheduleCell({
                         assignment.is_flexible
                           ? assignment.staffing_event_id
                             ? {
-                                borderColor: '#fb7185',
-                                backgroundColor: '#ffe4e6',
+                                borderColor: '#f9a8d4',
+                                backgroundColor: '#fdf2f8',
                                 color: '#db2777',
                               }
                             : { borderColor: '#3b82f6' }

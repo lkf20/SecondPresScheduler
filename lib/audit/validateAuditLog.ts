@@ -92,6 +92,8 @@ const REQUIRES_READABLE: Array<{
   { category: 'time_off', entityType: 'time_off_request', action: 'status_change' },
   { category: 'sub_assignment', entityType: 'coverage_request', action: 'assign' },
   { category: 'sub_assignment', entityType: 'coverage_request', action: 'unassign' },
+  { category: 'temporary_coverage', entityType: 'staffing_event', action: 'assign' },
+  { category: 'temporary_coverage', entityType: 'staffing_event', action: 'cancel' },
 ]
 
 /** Actions that must have non-empty details. */

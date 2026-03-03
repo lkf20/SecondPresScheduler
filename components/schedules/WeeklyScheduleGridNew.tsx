@@ -166,8 +166,8 @@ function ScheduleLegend({
             <span
               className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border border-dashed"
               style={{
-                borderColor: '#fb7185',
-                backgroundColor: '#ffe4e6',
+                borderColor: '#f9a8d4',
+                backgroundColor: '#fdf2f8',
                 color: '#db2777',
               }}
             >

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   AlertTriangle,
+  CheckCircle,
   ChevronDown,
   ChevronUp,
   CornerDownRight,
@@ -58,6 +59,7 @@ import {
 } from '@/lib/utils/colors'
 import { StaffingStatusBadge } from '@/components/ui/staffing-status-badge'
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
+import { cn } from '@/lib/utils'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 import { parseLocalDate } from '@/lib/utils/date'
 import {
@@ -578,11 +580,7 @@ export default function ScheduleSidePanel({
   const [expandedFlexStaffId, setExpandedFlexStaffId] = useState<string | null>(null)
   const [flexAssignModes, setFlexAssignModes] = useState<Record<string, 'all' | 'custom'>>({})
   const [flexSelectedShiftKeys, setFlexSelectedShiftKeys] = useState<Record<string, string[]>>({})
-  const [flexApplyThisDayOnly, setFlexApplyThisDayOnly] = useState(true)
-  const [flexApplyMultipleDays, setFlexApplyMultipleDays] = useState(false)
-  const [flexApplyDayNames, setFlexApplyDayNames] = useState<Set<string>>(
-    new Set([dayName.toLowerCase()])
-  )
+  const [flexApplyDayNames, setFlexApplyDayNames] = useState<Set<string>>(new Set())
   const [isStaffingTargetsExpanded, setIsStaffingTargetsExpanded] = useState(false)
   const [isFullyAvailableExpanded, setIsFullyAvailableExpanded] = useState(true)
   const [isPartiallyAvailableExpanded, setIsPartiallyAvailableExpanded] = useState(true)
@@ -660,8 +658,6 @@ export default function ScheduleSidePanel({
     setIsFullyAvailableExpanded(true)
     setIsPartiallyAvailableExpanded(true)
     setIsNotAvailableExpanded(false)
-    setFlexApplyThisDayOnly(true)
-    setFlexApplyMultipleDays(false)
     setFlexApplyDayNames(new Set([dayName.toLowerCase()]))
   }, [isOpen, classroomId, dayId, timeSlotId])
 
@@ -672,8 +668,6 @@ export default function ScheduleSidePanel({
     setIsFullyAvailableExpanded(true)
     setIsPartiallyAvailableExpanded(true)
     setIsNotAvailableExpanded(false)
-    setFlexApplyThisDayOnly(true)
-    setFlexApplyMultipleDays(false)
     setFlexApplyDayNames(new Set([dayName.toLowerCase()]))
   }, [panelMode, flexStartDate, dayName])
 
@@ -691,16 +685,11 @@ export default function ScheduleSidePanel({
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return []
     const slotsById = new Map(timeSlots.map(slot => [slot.id, slot.code]))
     const shifts: Array<{ key: string; date: string; time_slot_id: string; label: string }> = []
-    const dayNameDateParsed = dayNameDate ? parseLocalDate(dayNameDate) : null
     const cursor = new Date(start.getTime())
     while (cursor <= end) {
       const dateStr = formatLocalDate(cursor)
       const dayNameForDate = cursor.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
-      const shouldIncludeDay =
-        (flexApplyThisDayOnly &&
-          !!dayNameDateParsed &&
-          cursor.getDay() === dayNameDateParsed.getDay()) ||
-        (flexApplyMultipleDays && flexApplyDayNames.has(dayNameForDate))
+      const shouldIncludeDay = flexApplyDayNames.has(dayNameForDate)
       if (shouldIncludeDay) {
         const dayLabel = cursor.toLocaleDateString('en-US', {
           weekday: 'short',
@@ -720,23 +709,14 @@ export default function ScheduleSidePanel({
       cursor.setDate(cursor.getDate() + 1)
     }
     return shifts
-  }, [
-    flexStartDate,
-    flexEndDate,
-    flexTimeSlotIds,
-    timeSlots,
-    flexApplyThisDayOnly,
-    flexApplyMultipleDays,
-    flexApplyDayNames,
-    dayNameDate,
-  ])
+  }, [flexStartDate, flexEndDate, flexTimeSlotIds, timeSlots, flexApplyDayNames])
 
   const totalFlexShiftCount = useMemo(() => {
     return flexShiftOptions.length * Math.max(1, flexClassroomIds.length)
   }, [flexShiftOptions.length, flexClassroomIds.length])
 
   const missingSelectedFlexDays = useMemo(() => {
-    if (!flexApplyMultipleDays || flexApplyDayNames.size === 0) return []
+    if (flexApplyDayNames.size === 0) return []
     if (!flexStartDate || !flexEndDate) return Array.from(flexApplyDayNames)
     const start = parseLocalDate(flexStartDate)
     const end = parseLocalDate(flexEndDate)
@@ -750,7 +730,7 @@ export default function ScheduleSidePanel({
       cursor.setDate(cursor.getDate() + 1)
     }
     return Array.from(flexApplyDayNames).filter(day => !availableDays.has(day))
-  }, [flexApplyMultipleDays, flexApplyDayNames, flexStartDate, flexEndDate])
+  }, [flexApplyDayNames, flexStartDate, flexEndDate])
 
   const hasInvalidFlexDayRange = missingSelectedFlexDays.length > 0
 
@@ -854,11 +834,18 @@ export default function ScheduleSidePanel({
     if (flexRangeDayOptions.length === 0) return
 
     const validDayKeys = new Set(flexRangeDayOptions.map(option => option.name.toLowerCase()))
+    const startDateWeekdayKey = flexStartDate
+      ? parseLocalDate(flexStartDate).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
+      : ''
 
     setFlexApplyDayNames(prev => {
       const next = new Set(Array.from(prev).filter(day => validDayKeys.has(day)))
       if (next.size === 0) {
-        next.add(flexRangeDayOptions[0].name.toLowerCase())
+        if (startDateWeekdayKey && validDayKeys.has(startDateWeekdayKey)) {
+          next.add(startDateWeekdayKey)
+        } else {
+          next.add(flexRangeDayOptions[0].name.toLowerCase())
+        }
       }
 
       const sameSize = next.size === prev.size
@@ -867,12 +854,7 @@ export default function ScheduleSidePanel({
       }
       return next
     })
-
-    if (flexRangeDayOptions.length === 1) {
-      setFlexApplyThisDayOnly(false)
-      setFlexApplyMultipleDays(true)
-    }
-  }, [flexRangeDayOptions])
+  }, [flexRangeDayOptions, flexStartDate])
 
   useEffect(() => {
     if (!isOpen) return
@@ -925,8 +907,20 @@ export default function ScheduleSidePanel({
           setFlexShiftMetrics(Array.isArray(data?.shift_metrics) ? data.shift_metrics : [])
           if (Array.isArray(data?.day_options)) {
             setFlexDayOptions(data.day_options)
-            if (data.day_options.length > 0 && flexApplyDayNames.size === 0) {
-              setFlexApplyDayNames(new Set([String(data.day_options[0].name || '').toLowerCase()]))
+            if (data.day_options.length > 0 && flexApplyDayNames.size === 0 && flexStartDate) {
+              const startWeekdayKey = parseLocalDate(flexStartDate)
+                .toLocaleDateString('en-US', { weekday: 'long' })
+                .toLowerCase()
+              const inOptions = data.day_options.some(
+                (d: { name?: string }) => String(d.name || '').toLowerCase() === startWeekdayKey
+              )
+              setFlexApplyDayNames(
+                new Set([
+                  inOptions
+                    ? startWeekdayKey
+                    : String(data.day_options[0].name || '').toLowerCase(),
+                ])
+              )
             }
           }
         }
@@ -2406,74 +2400,42 @@ export default function ScheduleSidePanel({
                       {showFlexApplySection && (
                         <div className="space-y-3">
                           <Label>Apply to</Label>
-                          <RadioGroup
-                            value={flexApplyMultipleDays ? 'multiple' : 'single'}
-                            onValueChange={value => {
-                              if (value === 'multiple') {
-                                setFlexApplyMultipleDays(true)
-                                setFlexApplyThisDayOnly(false)
-                                const firstRangeDay = flexRangeDayOptions[0]?.name.toLowerCase()
-                                setFlexApplyDayNames(
-                                  firstRangeDay ? new Set([firstRangeDay]) : new Set()
-                                )
-                              } else {
-                                setFlexApplyThisDayOnly(true)
-                                setFlexApplyMultipleDays(false)
-                                setFlexApplyDayNames(new Set([dayName.toLowerCase()]))
-                              }
-                            }}
-                            className="gap-2"
-                          >
-                            <label className="flex items-center gap-2 text-sm">
-                              <RadioGroupItem value="single" id="flex-apply-single" />
-                              {dayName.endsWith('s') ? `${dayName} only` : `${dayName}s only`}
-                            </label>
-                            <label className="flex items-center gap-2 text-sm">
-                              <RadioGroupItem value="multiple" id="flex-apply-multiple" />
-                              Multiple days of the week
-                            </label>
-                          </RadioGroup>
-
-                          {flexApplyMultipleDays && (
-                            <>
-                              <div className="mt-2 ml-6 flex flex-wrap gap-3 text-sm">
-                                {flexRangeDayOptions.map(option => {
-                                  const label = option.name
-                                  const shortLabel = option.short_name || option.name.slice(0, 3)
-                                  const key = label.toLowerCase()
-                                  return (
-                                    <label key={label} className="flex items-center gap-2">
-                                      <Checkbox
-                                        checked={flexApplyDayNames.has(key)}
-                                        onCheckedChange={checked => {
-                                          setFlexApplyDayNames(prev => {
-                                            const next = new Set(prev)
-                                            if (checked) {
-                                              next.add(key)
-                                            } else {
-                                              next.delete(key)
-                                            }
-                                            return next
-                                          })
-                                        }}
-                                      />
-                                      {shortLabel}
-                                    </label>
-                                  )
-                                })}
-                              </div>
-                              {showExpandDateRangeHint && (
-                                <p className="ml-6 text-xs text-slate-500">
-                                  To apply to more days, please select a later End date.
-                                </p>
-                              )}
-                              {hasInvalidFlexDayRange && (
-                                <p className="ml-6 text-xs text-amber-700">
-                                  Multiple days selected. Please choose a date range that contains
-                                  these days.
-                                </p>
-                              )}
-                            </>
+                          <div className="flex flex-wrap gap-3 text-sm">
+                            {flexRangeDayOptions.map(option => {
+                              const label = option.name
+                              const shortLabel = option.short_name || option.name.slice(0, 3)
+                              const key = label.toLowerCase()
+                              return (
+                                <label key={label} className="flex items-center gap-2">
+                                  <Checkbox
+                                    checked={flexApplyDayNames.has(key)}
+                                    onCheckedChange={checked => {
+                                      setFlexApplyDayNames(prev => {
+                                        const next = new Set(prev)
+                                        if (checked) {
+                                          next.add(key)
+                                        } else {
+                                          next.delete(key)
+                                        }
+                                        return next
+                                      })
+                                    }}
+                                  />
+                                  {shortLabel}
+                                </label>
+                              )
+                            })}
+                          </div>
+                          {showExpandDateRangeHint && (
+                            <p className="text-xs text-slate-500">
+                              To apply to more days, please select a later End date.
+                            </p>
+                          )}
+                          {hasInvalidFlexDayRange && (
+                            <p className="text-xs text-amber-700">
+                              Multiple days selected. Please choose a date range that contains these
+                              days.
+                            </p>
                           )}
                         </div>
                       )}
@@ -2497,107 +2459,123 @@ export default function ScheduleSidePanel({
                     )}
 
                     <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-1">
-                      <p className="text-sm font-medium text-slate-900">
-                        {totalFlexShiftCount} {totalFlexShiftCount === 1 ? 'shift' : 'shifts'}{' '}
-                        selected
-                      </p>
-                      <p className="flex items-center gap-1.5 text-xs text-slate-500">
-                        Below preferred:{' '}
-                        {flexAvailabilityLoading
-                          ? '—'
-                          : `${flexBelowPreferredCount} ${
-                              flexBelowPreferredCount === 1 ? 'shift' : 'shifts'
-                            }`}
-                        {!flexAvailabilityLoading && flexBelowPreferredCount > 0 && (
-                          <AlertTriangle className="h-3.5 w-3.5 text-amber-700" />
+                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
+                        {filteredFlexShiftMetrics.length > 0 && (
+                          <button
+                            type="button"
+                            className="flex items-center rounded p-0.5 -m-0.5 hover:bg-slate-100"
+                            onClick={() => setIsStaffingTargetsExpanded(prev => !prev)}
+                            aria-expanded={isStaffingTargetsExpanded}
+                          >
+                            {isStaffingTargetsExpanded ? (
+                              <ChevronUp className="h-4 w-4 text-slate-500 shrink-0" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-slate-500 shrink-0" />
+                            )}
+                          </button>
                         )}
-                      </p>
-                      <p className="flex items-center gap-1.5 text-xs text-slate-500">
-                        Below required:{' '}
-                        {flexAvailabilityLoading
-                          ? '—'
-                          : `${flexBelowRequiredCount} ${
-                              flexBelowRequiredCount === 1 ? 'shift' : 'shifts'
-                            }`}
-                        {!flexAvailabilityLoading && flexBelowRequiredCount > 0 && (
-                          <XCircle className="h-3.5 w-3.5 text-red-600" />
-                        )}
-                      </p>
+                        <span className="font-medium text-slate-900">
+                          {totalFlexShiftCount} {totalFlexShiftCount === 1 ? 'shift' : 'shifts'}{' '}
+                          selected
+                        </span>
+                        <span className="text-slate-400" aria-hidden>
+                          •
+                        </span>
+                        <span className="flex items-center gap-1.5 text-slate-500">
+                          Below required:{' '}
+                          {flexAvailabilityLoading
+                            ? '—'
+                            : `${flexBelowRequiredCount} ${
+                                flexBelowRequiredCount === 1 ? 'shift' : 'shifts'
+                              }`}
+                          {!flexAvailabilityLoading && flexBelowRequiredCount > 0 && (
+                            <XCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />
+                          )}
+                        </span>
+                        <span className="text-slate-400" aria-hidden>
+                          •
+                        </span>
+                        <span className="flex items-center gap-1.5 text-slate-500">
+                          Below preferred:{' '}
+                          {flexAvailabilityLoading
+                            ? '—'
+                            : `${flexBelowPreferredCount} ${
+                                flexBelowPreferredCount === 1 ? 'shift' : 'shifts'
+                              }`}
+                          {!flexAvailabilityLoading && flexBelowPreferredCount > 0 && (
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-700 shrink-0" />
+                          )}
+                        </span>
+                      </div>
                       {flexAvailabilityLoading && (
                         <p className="text-xs text-slate-400">Loading staffing targets...</p>
                       )}
-                      {filteredFlexShiftMetrics.length > 0 && (
-                        <div className="pt-4">
-                          <div className="rounded-md border border-slate-200 bg-white">
-                            <button
-                              type="button"
-                              className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left"
-                              onClick={() => setIsStaffingTargetsExpanded(prev => !prev)}
+                      {filteredFlexShiftMetrics.length > 0 && isStaffingTargetsExpanded && (
+                        <div className="pt-3">
+                          {filteredFlexShiftMetrics.map((metric, index) => (
+                            <div
+                              key={`${metric.date}-${metric.time_slot_id}-${metric.classroom_id}`}
+                              className={`flex items-center justify-between rounded-md px-3 py-2 text-sm ${
+                                index > 0 ? 'border-t border-slate-100' : ''
+                              }`}
                             >
-                              <span className="text-xs uppercase tracking-wide text-slate-500">
-                                Staffing targets
-                              </span>
-                              {isStaffingTargetsExpanded ? (
-                                <ChevronUp className="h-4 w-4 text-slate-500" />
-                              ) : (
-                                <ChevronDown className="h-4 w-4 text-slate-500" />
-                              )}
-                            </button>
-                            {isStaffingTargetsExpanded && (
-                              <div className="border-t border-slate-100 p-2">
-                                {filteredFlexShiftMetrics.map((metric, index) => (
-                                  <div
-                                    key={`${metric.date}-${metric.time_slot_id}-${metric.classroom_id}`}
-                                    className={`flex items-center justify-between rounded-md px-3 py-2 text-sm ${
-                                      index > 0 ? 'border-t border-slate-100' : ''
-                                    }`}
-                                  >
-                                    <div>
-                                      <p className="font-medium text-slate-900">
-                                        {new Date(`${metric.date}T00:00:00`).toLocaleDateString(
-                                          'en-US',
-                                          { weekday: 'short', month: 'short', day: 'numeric' }
-                                        )}{' '}
-                                        • {metric.time_slot_code}
-                                      </p>
-                                      {metric.classroom_name && (
-                                        <p className="text-xs text-slate-500">
-                                          {metric.classroom_name}
-                                        </p>
-                                      )}
-                                    </div>
-                                    <div className="pt-1 text-right text-xs text-slate-500 space-y-2">
-                                      {metric.status !== 'ok' && (
-                                        <StaffingStatusBadge
-                                          status={metric.status}
-                                          label={
-                                            metric.status === 'below_required'
-                                              ? `Below Required by ${Math.max(
-                                                  0,
-                                                  (metric.required_staff ?? 0) -
-                                                    metric.scheduled_staff
-                                                )}`
-                                              : `Below Preferred by ${Math.max(
-                                                  0,
-                                                  (metric.preferred_staff ??
-                                                    metric.required_staff ??
-                                                    0) - metric.scheduled_staff
-                                                )}`
-                                          }
-                                          size="sm"
-                                        />
-                                      )}
-                                      <p>
-                                        Required: {metric.required_staff ?? '—'} • Preferred:{' '}
-                                        {metric.preferred_staff ?? metric.required_staff ?? '—'} •
-                                        Scheduled: {metric.scheduled_staff}
-                                      </p>
-                                    </div>
-                                  </div>
-                                ))}
+                              <div>
+                                <p className="font-medium text-slate-900">
+                                  {new Date(`${metric.date}T00:00:00`).toLocaleDateString('en-US', {
+                                    weekday: 'short',
+                                    month: 'short',
+                                    day: 'numeric',
+                                  })}{' '}
+                                  • {metric.time_slot_code}
+                                </p>
+                                {metric.classroom_name && (
+                                  <p className="text-xs text-slate-500">{metric.classroom_name}</p>
+                                )}
                               </div>
-                            )}
-                          </div>
+                              <div className="pt-1 text-right text-xs text-slate-500 space-y-2">
+                                {(() => {
+                                  const preferred =
+                                    metric.preferred_staff ?? metric.required_staff ?? 0
+                                  const isAboveTarget =
+                                    metric.status === 'ok' && metric.scheduled_staff > preferred
+                                  const badgeStatus =
+                                    metric.status === 'below_required'
+                                      ? ('below_required' as const)
+                                      : metric.status === 'below_preferred'
+                                        ? ('below_preferred' as const)
+                                        : isAboveTarget
+                                          ? ('above_target' as const)
+                                          : ('adequate' as const)
+                                  const badgeLabel =
+                                    metric.status === 'below_required'
+                                      ? `Below Required by ${Math.max(
+                                          0,
+                                          (metric.required_staff ?? 0) - metric.scheduled_staff
+                                        )}`
+                                      : metric.status === 'below_preferred'
+                                        ? `Below Preferred by ${Math.max(
+                                            0,
+                                            preferred - metric.scheduled_staff
+                                          )}`
+                                        : isAboveTarget
+                                          ? 'Above target'
+                                          : 'On target'
+                                  return (
+                                    <StaffingStatusBadge
+                                      status={badgeStatus}
+                                      label={badgeLabel}
+                                      size="sm"
+                                    />
+                                  )
+                                })()}
+                                <p>
+                                  Required: {metric.required_staff ?? '—'} • Preferred:{' '}
+                                  {metric.preferred_staff ?? metric.required_staff ?? '—'} •
+                                  Scheduled: {metric.scheduled_staff}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -2736,6 +2714,10 @@ export default function ScheduleSidePanel({
                                   const assignMode = flexAssignModes[staff.id] || 'all'
                                   const availableSet = new Set(staff.availableShiftKeys)
                                   const selectedKeys = flexSelectedShiftKeys[staff.id] || []
+                                  const matchPercent =
+                                    staff.totalCount > 0
+                                      ? Math.round((staff.availableCount / staff.totalCount) * 100)
+                                      : 0
                                   return (
                                     <div
                                       key={staff.id}
@@ -2743,36 +2725,64 @@ export default function ScheduleSidePanel({
                                     >
                                       <div className="flex items-center justify-between">
                                         <div>
-                                          <p className="text-sm font-medium text-slate-900">
-                                            {staff.name}
-                                          </p>
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <p className="text-sm font-medium text-slate-900">
+                                              {staff.name}
+                                            </p>
+                                            {staff.totalCount > 0 && (
+                                              <span
+                                                className={cn(
+                                                  'inline-flex shrink-0 items-center gap-1.5 text-sm font-medium tabular-nums',
+                                                  matchPercent === 100
+                                                    ? 'text-emerald-800'
+                                                    : 'text-amber-700'
+                                                )}
+                                                aria-label={`Available for ${staff.availableCount} of ${staff.totalCount} shifts`}
+                                              >
+                                                {matchPercent === 100 ? (
+                                                  <CheckCircle
+                                                    className="h-4 w-4 shrink-0 text-emerald-700"
+                                                    aria-hidden
+                                                  />
+                                                ) : (
+                                                  <CheckCircle
+                                                    className="h-4 w-4 shrink-0 text-amber-500"
+                                                    aria-hidden
+                                                  />
+                                                )}
+                                                {matchPercent}% match
+                                              </span>
+                                            )}
+                                          </div>
                                           <p className="text-xs text-slate-500">
                                             Available for {staff.availableCount}/{staff.totalCount}{' '}
                                             shifts
                                           </p>
                                         </div>
-                                        <Button
-                                          type="button"
-                                          size="sm"
-                                          variant="teal"
-                                          onClick={() => {
-                                            setFlexError(null)
-                                            setExpandedFlexStaffId(prev =>
-                                              prev === staff.id ? null : staff.id
-                                            )
-                                            setFlexAssignModes(prev => ({
-                                              ...prev,
-                                              [staff.id]: prev[staff.id] || 'all',
-                                            }))
-                                            setFlexSelectedShiftKeys(prev => ({
-                                              ...prev,
-                                              [staff.id]:
-                                                prev[staff.id] || staff.availableShiftKeys,
-                                            }))
-                                          }}
-                                        >
-                                          Assign
-                                        </Button>
+                                        {!isExpanded && (
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="teal"
+                                            onClick={() => {
+                                              setFlexError(null)
+                                              setExpandedFlexStaffId(prev =>
+                                                prev === staff.id ? null : staff.id
+                                              )
+                                              setFlexAssignModes(prev => ({
+                                                ...prev,
+                                                [staff.id]: prev[staff.id] || 'all',
+                                              }))
+                                              setFlexSelectedShiftKeys(prev => ({
+                                                ...prev,
+                                                [staff.id]:
+                                                  prev[staff.id] || staff.availableShiftKeys,
+                                              }))
+                                            }}
+                                          >
+                                            Assign
+                                          </Button>
+                                        )}
                                       </div>
 
                                       {isExpanded && (
@@ -2854,11 +2864,31 @@ export default function ScheduleSidePanel({
                                             </div>
                                           )}
 
-                                          <div className="flex justify-end">
+                                          <div className="flex justify-end gap-2">
                                             <Button
                                               type="button"
                                               size="sm"
-                                              variant="teal"
+                                              variant="ghost"
+                                              className="text-slate-700 hover:bg-transparent hover:text-slate-900"
+                                              onClick={() => {
+                                                setExpandedFlexStaffId(prev =>
+                                                  prev === staff.id ? null : prev
+                                                )
+                                                setFlexAssignModes(prev => ({
+                                                  ...prev,
+                                                  [staff.id]: 'all',
+                                                }))
+                                                setFlexSelectedShiftKeys(prev => ({
+                                                  ...prev,
+                                                  [staff.id]: staff.availableShiftKeys,
+                                                }))
+                                              }}
+                                            >
+                                              Cancel
+                                            </Button>
+                                            <Button
+                                              type="button"
+                                              size="sm"
                                               disabled={flexSaving || hasInvalidFlexDayRange}
                                               onClick={() => {
                                                 const keys =
@@ -2868,7 +2898,7 @@ export default function ScheduleSidePanel({
                                                 handleCreateFlexAssignment(staff.id, keys)
                                               }}
                                             >
-                                              {flexSaving ? 'Assigning...' : 'Assign'}
+                                              {flexSaving ? 'Confirming...' : 'Confirm assignment'}
                                             </Button>
                                           </div>
                                         </div>
@@ -3084,8 +3114,8 @@ export default function ScheduleSidePanel({
                               key={assignment.id}
                               className="flex items-center justify-between rounded-md border border-dashed px-3 py-2"
                               style={{
-                                borderColor: '#fb7185',
-                                backgroundColor: '#ffe4e6',
+                                borderColor: '#f9a8d4',
+                                backgroundColor: '#fdf2f8',
                               }}
                             >
                               <div className="flex items-center gap-2">
@@ -3098,9 +3128,9 @@ export default function ScheduleSidePanel({
                                 <span
                                   className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium"
                                   style={{
-                                    borderColor: '#fb7185',
-                                    backgroundColor: '#fecdd3',
-                                    color: '#9d174d',
+                                    borderColor: '#f9a8d4',
+                                    backgroundColor: '#fdf2f8',
+                                    color: '#db2777',
                                   }}
                                 >
                                   Temporary

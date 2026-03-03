@@ -19,20 +19,38 @@ If an entry cannot answer these, it fails the contract.
 
 ---
 
+## Scope: what to include in the Activity Feed / audit log
+
+The audit log (and thus the Activity Feed) must include:
+
+- **Time off** — All new time off requests and all changes (status changes, cancellations).
+- **Sub assignments** — All new sub assignments and all unassignments (who was assigned to which shifts).
+- **Baseline staffing** — All changes to baseline schedule: schedule cells (create, update, delete) and teacher assignments (assign, unassign, update), including conflict resolution.
+- **Temporary coverage** — All new temporary coverage assignments and all removals/cancellations (full or partial).
+- **Settings** — All new entries or changes to:
+  - Staff (create, update, deactivate).
+  - Classrooms (create, update).
+  - Class groups (create, update, delete).
+  - Days of week and time slots (create, update, delete).
+- **Coverage** — Coverage request lifecycle (create, status change, cancel) where not already covered by time off or sub assignments.
+- **Other** — Any other user-initiated change that affects scheduling, coverage, or the above settings should be considered for audit logging so the Activity Feed remains a reliable record of what changed and by whom.
+
+---
+
 ## Required Data (top-level)
 
 Every log entry must include:
 
-| Field                | Required           | Notes                                                                                                                   |
-| -------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `school_id`          | Yes                | Scope; never null.                                                                                                      |
-| `action`             | Yes                | One of: `create`, `update`, `delete`, `status_change`, `assign`, `unassign`, `cancel`.                                  |
-| `category`           | Yes                | One of: `time_off`, `sub_assignment`, `baseline_schedule`, `flex_assignment`, `staff`, `coverage`, `system`, `unknown`. |
-| `entity_type`        | Yes                | e.g. `schedule_cell`, `teacher_schedule`, `time_off_request`, `coverage_request`.                                       |
-| `entity_id`          | When applicable    | ID of the primary entity (null for some bulk or cancel-only logs).                                                      |
-| `actor_user_id`      | Preferred          | Who did it; null only for system actions.                                                                               |
-| `actor_display_name` | Preferred          | Human-readable "who"; should be set whenever actor_user_id is set.                                                      |
-| `details`            | Yes for non-system | Must not be empty for `assign`, `unassign`, `update`, `delete`, `create`. See "Metadata by action" and "Quality rules". |
+| Field                | Required           | Notes                                                                                                                      |
+| -------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `school_id`          | Yes                | Scope; never null.                                                                                                         |
+| `action`             | Yes                | One of: `create`, `update`, `delete`, `status_change`, `assign`, `unassign`, `cancel`.                                     |
+| `category`           | Yes                | One of: `time_off`, `sub_assignment`, `baseline_schedule`, `temporary_coverage`, `staff`, `coverage`, `system`, `unknown`. |
+| `entity_type`        | Yes                | e.g. `schedule_cell`, `teacher_schedule`, `time_off_request`, `coverage_request`.                                          |
+| `entity_id`          | When applicable    | ID of the primary entity (null for some bulk or cancel-only logs).                                                         |
+| `actor_user_id`      | Preferred          | Who did it; null only for system actions.                                                                                  |
+| `actor_display_name` | Preferred          | Human-readable "who"; should be set whenever actor_user_id is set.                                                         |
+| `details`            | Yes for non-system | Must not be empty for `assign`, `unassign`, `update`, `delete`, `create`. See "Metadata by action" and "Quality rules".    |
 
 ---
 
@@ -71,6 +89,13 @@ Every log entry must include:
 | ---------- | ------------------------------------------------------ | ----------------------------------------------------------------------------- |
 | `assign`   | `teacher_id` or `sub_id`, assignment/shift identifiers | `teacher_name` and/or sub name; enough to describe "who was assigned to what" |
 | `unassign` | Same as assign                                         | Same names                                                                    |
+
+### `temporary_coverage` + `staffing_event`
+
+| Action   | Required in `details`                                                           | Human-readable required                       |
+| -------- | ------------------------------------------------------------------------------- | --------------------------------------------- |
+| `assign` | `staff_id`, `start_date`, `end_date`, `shift_count`; optionally `classroom_ids` | `teacher_name`, `classroom_name` (or summary) |
+| `cancel` | `staff_id`, `scope`, `removed_count`, `remaining_active_shifts`                 | `teacher_name`                                |
 
 ---
 
@@ -176,6 +201,31 @@ Every log entry must include:
 ```
 
 **Why it's good:** Who, what (bulk update), to what (3 cells), scope (classroom + day + slots), and a short human-readable summary.
+
+### Example 4: Temporary coverage – assign
+
+```json
+{
+  "school_id": "school-uuid",
+  "actor_user_id": "user-uuid",
+  "actor_display_name": "Jane Admin",
+  "action": "assign",
+  "category": "temporary_coverage",
+  "entity_type": "staffing_event",
+  "entity_id": "event-uuid",
+  "details": {
+    "staff_id": "staff-uuid",
+    "teacher_name": "Maria Garcia",
+    "classroom_ids": ["classroom-uuid"],
+    "classroom_name": "Toddler A",
+    "start_date": "2025-03-01",
+    "end_date": "2025-03-07",
+    "shift_count": 12
+  }
+}
+```
+
+**Why it's good:** Who, what (assign temporary coverage), to what (staffing_event; Maria Garcia → Toddler A), when (created_at), what changed (assignment created with date range and shift count), context (teacher and classroom names).
 
 ---
 

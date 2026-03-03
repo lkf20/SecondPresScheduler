@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
+import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 type RemoveScope = 'single_shift' | 'weekday' | 'all_shifts'
 
@@ -134,7 +136,7 @@ export async function POST(request: NextRequest) {
 
     const { data: eventRow, error: eventError } = await supabase
       .from('staffing_events')
-      .select('id')
+      .select('id, staff_id')
       .eq('id', eventId)
       .eq('school_id', schoolId)
       .maybeSingle()
@@ -202,6 +204,36 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: eventCancelError.message }, { status: 500 })
       }
     }
+
+    const staffId = eventRow?.staff_id
+    let teacherName: string | null = null
+    if (staffId) {
+      const { data: staffRow } = await supabase
+        .from('staff')
+        .select('first_name, last_name, display_name')
+        .eq('id', staffId)
+        .eq('school_id', schoolId)
+        .maybeSingle()
+      teacherName = staffRow ? getStaffDisplayName(staffRow) : null
+    }
+
+    const { actorUserId, actorDisplayName } = await getAuditActorContext()
+    await logAuditEvent({
+      schoolId,
+      actorUserId,
+      actorDisplayName,
+      action: 'cancel',
+      category: 'temporary_coverage',
+      entityType: 'staffing_event',
+      entityId: eventId,
+      details: {
+        staff_id: staffId,
+        teacher_name: teacherName,
+        scope,
+        removed_count: cancelledRows.length,
+        remaining_active_shifts: activeShiftCount ?? 0,
+      },
+    })
 
     return NextResponse.json({
       success: true,
