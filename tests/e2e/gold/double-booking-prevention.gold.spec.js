@@ -18,6 +18,10 @@ test('assign-shifts 409 double-booking error is shown in UI @gold', async ({ pag
   const doubleBookMessage =
     'Double booking prevented: this sub already has an active assignment for one or more selected shifts.'
   let assignShiftsCallCount = 0
+  const absenceId = 'abs-1'
+  const shiftDate = '2099-01-12'
+  const shiftCode = 'EM'
+  const shiftKey = `${shiftDate}|${shiftCode}`
 
   await page.route('**/api/teachers', async route => {
     await route.fulfill(
@@ -45,11 +49,11 @@ test('assign-shifts 409 double-booking error is shown in UI @gold', async ({ pag
       await route.fulfill(
         json([
           {
-            id: 'abs-1',
+            id: absenceId,
             teacher_id: 'teacher-1',
             teacher_name: 'Amy P.',
-            start_date: '2099-01-12',
-            end_date: '2099-01-12',
+            start_date: shiftDate,
+            end_date: shiftDate,
             reason: 'Sick',
             status: 'needs_coverage',
             shifts: {
@@ -60,9 +64,9 @@ test('assign-shifts 409 double-booking error is shown in UI @gold', async ({ pag
               shift_details: [
                 {
                   id: 'shift-1',
-                  date: '2099-01-12',
+                  date: shiftDate,
                   day_name: 'Monday',
-                  time_slot_code: 'EM',
+                  time_slot_code: shiftCode,
                   classroom_name: 'Infant Room',
                   status: 'uncovered',
                   assignment_status: 'none',
@@ -74,11 +78,11 @@ test('assign-shifts 409 double-booking error is shown in UI @gold', async ({ pag
       )
       return
     }
-    if (method === 'GET' && pathname === '/api/sub-finder/coverage-request/abs-1') {
+    if (method === 'GET' && pathname === `/api/sub-finder/coverage-request/${absenceId}`) {
       await route.fulfill(
         json({
           coverage_request_id: 'cr-1',
-          shift_map: { '2099-01-12|slot-1': 'shift-1' },
+          shift_map: { [shiftKey]: 'shift-1' },
         })
       )
       return
@@ -94,16 +98,17 @@ test('assign-shifts 409 double-booking error is shown in UI @gold', async ({ pag
           is_contacted: false,
           response_status: 'none',
           coverage_request_id: 'cr-1',
-          selected_shift_keys: ['2099-01-12|slot-1'],
+          selected_shift_keys: [shiftKey],
           override_shift_keys: [],
         })
       )
       return
     }
-    if (method === 'GET' && pathname === '/api/sub-finder/coverage-request/abs-1/assigned-shifts') {
-      await route.fulfill(
-        json({ remaining_shift_keys: ['2099-01-12|slot-1'], remaining_shift_count: 1 })
-      )
+    if (
+      method === 'GET' &&
+      pathname === `/api/sub-finder/coverage-request/${absenceId}/assigned-shifts`
+    ) {
+      await route.fulfill(json({ remaining_shift_keys: [shiftKey], remaining_shift_count: 1 }))
       return
     }
     if (method === 'POST' && pathname === '/api/sub-finder/find-subs') {
@@ -113,11 +118,23 @@ test('assign-shifts 409 double-booking error is shown in UI @gold', async ({ pag
             {
               id: 'sub-1',
               name: 'Sally A.',
+              phone: null,
+              email: null,
+              coverage_percent: 100,
+              shifts_covered: 1,
+              total_shifts: 1,
               can_cover: [
-                { date: '2099-01-12', time_slot_code: 'EM', classroom_name: 'Infant Room' },
+                {
+                  date: shiftDate,
+                  day_name: 'Monday',
+                  time_slot_code: shiftCode,
+                  class_name: null,
+                  classroom_name: 'Infant Room',
+                },
               ],
+              cannot_cover: [],
               assigned_shifts: [],
-              remaining_shift_keys: ['2099-01-12|slot-1'],
+              remaining_shift_keys: [shiftKey],
               remaining_shift_count: 1,
               has_assigned_shifts: false,
               response_status: 'none',
@@ -133,7 +150,11 @@ test('assign-shifts 409 double-booking error is shown in UI @gold', async ({ pag
       await route.fulfill(
         json({
           shift_overrides: [
-            { coverage_request_shift_id: 'shift-1', selected: true, override_availability: false },
+            {
+              coverage_request_shift_id: 'shift-1',
+              selected: true,
+              override_availability: false,
+            },
           ],
           selected_shift_ids: ['shift-1'],
         })
@@ -165,18 +186,37 @@ test('assign-shifts 409 double-booking error is shown in UI @gold', async ({ pag
   await ensureAuthenticated(page, '/sub-finder')
   await expect(page.getByRole('heading', { name: /sub finder/i })).toBeVisible()
 
-  await page
-    .getByRole('button', { name: /find subs/i })
-    .first()
-    .click()
-  await expect(page.getByText('Sally A.').first()).toBeVisible()
+  const [findSubsResponse] = await Promise.all([
+    page.waitForResponse(
+      res => res.url().includes('/api/sub-finder/find-subs') && res.request().method() === 'POST',
+      { timeout: 15000 }
+    ),
+    page
+      .getByRole('button', { name: /find subs/i })
+      .first()
+      .click(),
+  ])
+  expect(findSubsResponse.ok()).toBe(true)
+
+  // Sally A. may appear in multiple places (some hidden); ensure the sub card's Contact & Assign is visible
+  await expect(page.getByRole('button', { name: /contact & assign/i }).first()).toBeVisible({
+    timeout: 10000,
+  })
 
   await page
     .getByRole('button', { name: /contact & assign/i })
     .first()
     .click()
-  await expect(page.getByText(/contact sub/i).first()).toBeVisible()
+  // Wait for Contact Sub panel (sheet) to open; select shift checkbox to enable Assign
+  const shiftCheckbox = page.getByRole('checkbox').first()
+  await expect(shiftCheckbox).toBeVisible({ timeout: 10000 })
+  await shiftCheckbox.check()
+  // Click Assign, then confirm in dialog
   await page.getByRole('button', { name: /^assign$/i }).click()
+  await expect(page.getByRole('button', { name: /assign without confirming/i })).toBeVisible({
+    timeout: 5000,
+  })
+  await page.getByRole('button', { name: /assign without confirming/i }).click()
 
   await expect(page.getByText(/double booking prevented/i)).toBeVisible({ timeout: 10000 })
   expect(assignShiftsCallCount).toBe(1)

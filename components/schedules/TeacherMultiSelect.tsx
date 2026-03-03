@@ -244,9 +244,9 @@ export default function TeacherMultiSelect({
       statusText = `Below required by ${requiredCount - assignedCount}`
       statusColor = 'text-red-600'
     } else if (preferredCount !== undefined && assignedCount < preferredCount) {
-      statusIcon = <AlertTriangle className="h-4 w-4 text-yellow-600" />
+      statusIcon = <AlertTriangle className="h-4 w-4 text-amber-700" />
       statusText = `Below preferred by ${preferredCount - assignedCount}`
-      statusColor = 'text-yellow-600'
+      statusColor = 'text-amber-700'
     }
   }
 

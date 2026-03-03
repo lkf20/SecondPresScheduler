@@ -41,3 +41,17 @@ export const formatAbsenceDateRange = (startDate: string, endDate?: string | nul
   }
   return start
 }
+
+/** Format ISO timestamp for "Last contacted" (e.g. "Monday Feb 4 at 2:15pm"). */
+export function formatLastContactedDateTime(timestamp: string): string {
+  const d = new Date(timestamp)
+  const weekday = FULL_DAY_NAMES[d.getDay()]
+  const month = MONTH_NAMES[d.getMonth()]
+  const day = d.getDate()
+  const hours = d.getHours()
+  const minutes = d.getMinutes()
+  const ampm = hours >= 12 ? 'pm' : 'am'
+  const h = hours % 12 || 12
+  const m = minutes.toString().padStart(2, '0')
+  return `${weekday} ${month} ${day} at ${h}:${m}${ampm}`
+}

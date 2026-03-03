@@ -21,10 +21,68 @@ For the app’s purpose, intended users, and key flows, see [docs/APP_PURPOSE_AN
 
 For any code change more significant than trivial (e.g. beyond font or color tweaks), review existing tests for the affected area: update tests if they are stale, or add a new test if the change introduces behavior that should be covered. Document in the PR what was reviewed and what was updated or added (or why no test change was needed).
 
+## Legends and keys
+
+- **Legends must match implementation.** Whenever a UI includes a legend or key (e.g. shift chip colors, schedule grid overlays), verify that the legend accurately describes the current colors, icons, and labels used in the UI. If you change how something is shown (icon, color, or wording), update the legend in the same change.
+- **When making changes:** If the area you’re editing has an associated legend, double-check that the legend is updated so it stays in sync (e.g. add “legend updated” in the PR or commit message when relevant).
+
+## Code review when requested
+
+When the user asks for a code review (e.g. "Review the Sub recommendations code" or "Complete a review of our code for X after these changes"), conduct a structured review and report findings. Use this checklist:
+
+### Code quality
+
+- **Inefficient code** — Unnecessary loops, redundant fetches, avoidable re-renders, or operations that could be simplified.
+- **Duplicate code** — Logic or UI that appears in multiple places; consider extracting to a shared helper or component.
+- **Error-prone code** — Missing null checks, unhandled edge cases, or lack of defensive coding (e.g. optional chaining, fallbacks).
+- **Dead code** — Unused imports, functions, or components that can be removed.
+
+### Errors and robustness
+
+- **User-friendly error messages** — User-facing errors should be clear and actionable (e.g. "Select a date" not "Validation failed"); no stack traces or internal details exposed.
+- **Safety checks** — Validate input, handle empty/null, and guard against unexpected data shapes where failures could occur.
+
+### Contracts and scenarios
+
+- **Alignment** — Behavior matches contracts in `docs/contracts/` and scenarios in `scenarios/gold/` (including any relevant checklist).
+- **Legends** — If the area has a legend or key, it accurately describes the current UI.
+
+### Checks to run
+
+- **Type check** — `npm run type-check` passes.
+- **Lint** — `npm run lint` passes.
+- **Unit tests** — Run tests for the affected area; all pass.
+- **Gold scenarios** — `npm run test:e2e:gold` or equivalent passes (if gold tests exist for the area).
+
+### Cleanup
+
+- **Remove debug code** — No unnecessary `console.log`, `console.warn`, or temporary debugging code left behind.
+- **Remove commented-out code** — Delete or document why it must stay.
+
+### Other
+
+- **Security** — School scope respected; no PII in logs or client; server-side validation where needed.
+- **Accessibility** — Semantic markup, focus states, and labels where relevant.
+- **AGENTS compliance** — Color system, reusable components, file size, and other rules in this document are followed.
+
+Report what was reviewed, what passed, what was fixed, and what (if anything) needs user decision.
+
 ## Code quality and structure
 
 - **Avoid duplication.** Reuse existing logic and components instead of copying code. Before creating a new component, search the codebase for an existing one that already does the job or can be extended.
 - **Match the app’s UI.** Use the same patterns, tokens, and components as the rest of the app so new work looks and behaves consistently.
+
+### Adding new UI elements
+
+When adding a new UI element (e.g. a chip, badge, or label):
+
+1. **Check for a reusable component first.** Look in `components/ui/` and shared components (e.g. `StaffingStatusBadge`, `Badge`) for something that already implements the element or can be extended.
+2. **If none exists, look for something similar.** Search the codebase for the same or similar concept (e.g. “classroom” chip, “muted label”, “status pill”) to see how it’s implemented elsewhere.
+3. **Decide: reuse, extract, or match.**
+   - If a reusable component fits, use it.
+   - If the same pattern appears in multiple places and would benefit from a single component, consider extracting one.
+   - Otherwise, match the existing style/formatting (colors, shape, typography) of the similar UI so the app stays consistent.
+
 - **Keep files small.** Prefer files under 200–300 lines. Split large files into smaller modules or components; extract shared logic into helpers or hooks.
 - **Keep the codebase clean and organized.** Put new code in the right place (e.g. shared components in `components/`, API logic in `app/api/` or `lib/`). Avoid one-off or dead code.
 - **Organize CSS and design assets.** Use shared styles, design tokens, or a consistent system (e.g. Tailwind, CSS modules) so styles are reusable and easy to maintain.
@@ -42,6 +100,7 @@ For any code change more significant than trivial (e.g. beyond font or color twe
 
 ## User experience and robustness
 
+- **Prefer larger, readable fonts.** Avoid `text-xs` unless it is clearly appropriate (e.g. fine-print, timestamps, or tight secondary labels). Prefer `text-sm` or larger for body copy, labels, and legends so the app stays easy to read.
 - **One primary button per page or panel.** Each screen, side panel, or modal should have at most one primary (default-variant) button—the main call-to-action. Use `variant="outline"` or `variant="ghost"` for secondary actions so users can quickly identify the primary action. When multiple actions have equal weight, pick the most important one as primary and demote the rest.
 - **Clear, actionable errors.** User-facing error messages should explain what went wrong and what the user can do (e.g. “Select a date” not “Validation failed”). Do not expose stack traces or internal details.
 - **Accessibility.** Use semantic markup, visible focus states, and labels so the app is usable with keyboard and assistive tech. When adding UI, follow existing patterns that already support this.
@@ -92,4 +151,5 @@ Run these commands from the project root (`scheduler-app/`). The link script use
 ---
 
 **Agent prompt you can use:**  
-"Follow AGENTS.md. Make changes via PR. Include evidence + tests. Do not ask me unless a contract/spec is ambiguous."
+"Follow AGENTS.md. Make changes via PR. Include evidence + tests. Do not ask me unless a contract/spec is ambiguous."  
+When asking for a code review: "Please complete a review of [area]. Follow the 'Code review when requested' checklist in AGENTS.md."

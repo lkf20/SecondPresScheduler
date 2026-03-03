@@ -180,7 +180,7 @@ export default function ScheduleCell({
                       <CheckCircle2 className="h-4 w-4 text-green-600" />
                     )}
                     {staffingStatus === 'amber' && (
-                      <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                      <AlertTriangle className="h-4 w-4 text-amber-700" />
                     )}
                     {staffingStatus === 'red' && <XCircle className="h-4 w-4 text-red-600" />}
                   </div>
@@ -386,10 +386,10 @@ export default function ScheduleCell({
                             staffingStatus === 'green'
                               ? 'text-gray-400'
                               : staffingStatus === 'amber'
-                                ? 'text-amber-600'
+                                ? 'text-amber-700'
                                 : staffingStatus === 'red'
                                   ? 'text-red-600'
-                                  : 'text-amber-600'
+                                  : 'text-amber-700'
                           }`}
                         />
                       )}

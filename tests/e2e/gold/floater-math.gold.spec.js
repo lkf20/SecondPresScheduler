@@ -95,9 +95,14 @@ test('Floater math correctly calculates staffing status @gold', async ({ page })
   await page.route('**/api/timeslots**', async route => {
     await route.fulfill(json([{ id: 's1', code: 'AM', name: 'Morning', display_order: 1 }]))
   })
+  await page.route('**/api/classrooms**', async route => {
+    await route.fulfill(
+      json([{ id: 'c1', name: 'Toddler Room', color: '#8ec5ff', is_active: true }])
+    )
+  })
 
   await ensureAuthenticated(page, '/schedules/weekly')
-  await expect(page.getByRole('heading', { name: /weekly schedule|schedule/i })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Weekly Schedule' })).toBeVisible({
     timeout: 15000,
   })
 
@@ -108,7 +113,7 @@ test('Floater math correctly calculates staffing status @gold', async ({ page })
 
   // The math should be 1 + 0.5 + 0.5 = 2. Required is 8 / 4 = 2.
   // Should show "Meets preferred staffing (2.0 teachers)" (since preferred is also 2)
-  // Check that the green checkmark is visible
-  const greenCheck = page.locator('svg.text-green-600')
+  // Check that the green checkmark is visible (use .first() to avoid strict mode with multiple matches)
+  const greenCheck = page.locator('svg.text-green-600').first()
   await expect(greenCheck).toBeVisible()
 })

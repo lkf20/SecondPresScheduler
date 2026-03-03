@@ -78,9 +78,14 @@ test('Ghost cell filtering in Substitutes Only mode @gold', async ({ page }) => 
   await page.route('**/api/timeslots**', async route => {
     await route.fulfill(json([{ id: 's1', code: 'AM', name: 'Morning', display_order: 1 }]))
   })
+  await page.route('**/api/classrooms**', async route => {
+    await route.fulfill(
+      json([{ id: 'c1', name: 'Infant Room', color: '#8ec5ff', is_active: true }])
+    )
+  })
 
   await ensureAuthenticated(page, '/schedules/weekly')
-  await expect(page.getByRole('heading', { name: /weekly schedule|schedule/i })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Weekly Schedule' })).toBeVisible({
     timeout: 15000,
   })
 

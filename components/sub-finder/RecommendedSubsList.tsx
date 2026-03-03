@@ -32,6 +32,23 @@ const getUnifiedContactStatus = (sub: RecommendedSub) => {
   return 'not_contacted'
 }
 
+/** Build contact status line for card (e.g. "Not contacted." or "Pending."). Use getContactStatusLine from page for "Last contacted" when available. */
+function getDefaultContactStatusLine(status: string): string {
+  switch (status) {
+    case 'not_contacted':
+      return 'Not contacted.'
+    case 'pending':
+    case 'awaiting_response':
+      return 'Pending.'
+    case 'confirmed':
+      return 'Confirmed.'
+    case 'declined_all':
+      return 'Declined.'
+    default:
+      return 'Not contacted.'
+  }
+}
+
 interface RecommendedSubsListProps {
   subs: SubCandidate[]
   loading: boolean
@@ -55,6 +72,8 @@ interface RecommendedSubsListProps {
   renderFiltersOnly?: boolean
   hideFilterControls?: boolean
   className?: string
+  /** Optional: return contact status line for a sub (e.g. "Not contacted." or "Pending · Last contacted Monday Feb 4 at 2:15pm."). When not provided, a status-only line is used. */
+  getContactStatusLine?: (sub: SubCandidate) => string | null
 }
 
 export default function RecommendedSubsList({
@@ -75,6 +94,7 @@ export default function RecommendedSubsList({
   renderFiltersOnly = false,
   hideFilterControls = false,
   className,
+  getContactStatusLine,
 }: RecommendedSubsListProps) {
   const [isMoreFiltersOpen, setIsMoreFiltersOpen] = useState(false)
   const [expandedSections, setExpandedSections] = useState({
@@ -442,6 +462,7 @@ export default function RecommendedSubsList({
         reason?: string
         classroom_name?: string | null
         class_name?: string | null
+        classroom_color?: string | null
       }>
     >((acc, shift) => {
       const key = `${shift.date}|${shift.time_slot_code}`
@@ -455,6 +476,7 @@ export default function RecommendedSubsList({
           status: 'assigned' as const,
           classroom_name: shift.classroom_name ?? null,
           class_name: shift.class_name ?? null,
+          classroom_color: shift.classroom_color ?? null,
         })
         return acc
       }
@@ -465,6 +487,7 @@ export default function RecommendedSubsList({
           status: 'available' as const,
           classroom_name: shift.classroom_name ?? null,
           class_name: shift.class_name ?? null,
+          classroom_color: shift.classroom_color ?? null,
         })
         return acc
       }
@@ -476,6 +499,7 @@ export default function RecommendedSubsList({
         reason: reason || undefined,
         classroom_name: shift.classroom_name ?? null,
         class_name: shift.class_name ?? null,
+        classroom_color: shift.classroom_color ?? null,
       })
       return acc
     }, [])
@@ -528,6 +552,8 @@ export default function RecommendedSubsList({
           .map(shift => shift.status)
       : filteredShiftChips.map(shift => shift.status)
     const unifiedStatus = getUnifiedContactStatus(sub)
+    const contactStatusLine =
+      getContactStatusLine?.(sub) ?? getDefaultContactStatusLine(unifiedStatus)
     const remainingCoveredCount = derived.hasAssignedShifts
       ? filteredShiftChips.filter(
           shift =>
@@ -542,7 +568,10 @@ export default function RecommendedSubsList({
         id={`sub-card-${sub.id}`}
         name={sub.name}
         phone={sub.phone}
-        email={sub.email ?? null}
+        email={(() => {
+          const e = sub.email ?? (sub as Record<string, unknown>)['email']
+          return typeof e === 'string' ? e : null
+        })()}
         shiftsCovered={remainingCoveredCount}
         totalShifts={
           derived.hasAssignedShifts
@@ -558,6 +587,7 @@ export default function RecommendedSubsList({
         notes={sub.notes}
         isDeclined={unifiedStatus === 'declined_all'}
         isContacted={unifiedStatus === 'pending' || unifiedStatus === 'confirmed'}
+        contactStatusLine={contactStatusLine}
         responseStatus={
           unifiedStatus === 'confirmed'
             ? 'confirmed'

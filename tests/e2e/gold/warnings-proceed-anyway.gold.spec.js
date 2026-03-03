@@ -50,6 +50,11 @@ test('staff form duplicate warning disables submit until Proceed anyway checked 
   await page.route('**/api/staff-role-types**', async route => {
     await route.fulfill(json([{ id: 'r1', code: 'PERMANENT', label: 'Permanent' }]))
   })
+  await page.route('**/api/schedule-settings**', async route => {
+    await route.fulfill(
+      json({ selected_day_ids: [], default_display_name_format: 'first_last_initial' })
+    )
+  })
 
   await ensureAuthenticated(page, '/staff')
   await expect(page.getByRole('heading', { name: /staff/i })).toBeVisible()
@@ -59,13 +64,17 @@ test('staff form duplicate warning disables submit until Proceed anyway checked 
     .first()
     .click()
   await page.waitForURL(/\/staff\/new/)
-  await expect(page.getByLabel(/first name/i)).toBeVisible({ timeout: 8000 })
 
-  await page.getByLabel(/first name/i).fill('Jane')
-  await page.getByLabel(/last name/i).fill('Doe')
-  await page.getByLabel(/email/i).fill('jane@example.com')
+  // Wait for the form to load (StaffForm fetches role types; Overview tab is default)
+  const firstNameField = page.getByRole('textbox', { name: /first name/i })
+  await expect(firstNameField).toBeVisible({ timeout: 10000 })
 
-  await expect(page.getByText(/proceed anyway/i)).toBeVisible({ timeout: 8000 })
+  await firstNameField.fill('Jane')
+  await page.getByRole('textbox', { name: /last name/i }).fill('Doe')
+  await page.getByRole('textbox', { name: /email/i }).fill('jane@example.com')
+
+  // Duplicate check is debounced (500ms); wait for it to run and display the warning
+  await expect(page.getByText(/proceed anyway/i)).toBeVisible({ timeout: 10000 })
   await expect(page.getByText(/already exists|duplicate/i)).toBeVisible()
 
   await page.getByLabel(/proceed anyway/i).click()

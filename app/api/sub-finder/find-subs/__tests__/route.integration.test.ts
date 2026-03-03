@@ -341,6 +341,8 @@ describe('POST /api/sub-finder/find-subs integration', () => {
     expect(json.subs[0]).toMatchObject({
       id: 'sub-1',
       name: 'Sally A.',
+      phone: '555-111-2222',
+      email: 'sally@example.com',
       coverage_percent: 100,
       shifts_covered: 1,
       total_shifts: 1,

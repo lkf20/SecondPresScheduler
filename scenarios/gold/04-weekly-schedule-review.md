@@ -42,6 +42,7 @@ Define “done right” for the **Weekly Schedule** so an AI (or human) can revi
 ### 4. Panel behavior (Weekly = read-only detail)
 
 - [ ] **Right panel is read-only:** In Weekly Schedule, the right panel is the read-only detail panel (not the edit panel).
+- [ ] **Staffing badges:** Below Required, Below Preferred, Above Target, and On Target badges use the shared `StaffingStatusBadge` component. Consistent styling across Dashboard, Weekly Schedule panel, and flex metrics.
 - [ ] **Staffing warning:** When status is below required/preferred or above target, a rectangle above Staff Assignments shows the actionable message only (no redundant status—header badge has that). Below target: suggests assigning subs for uncovered absences or extra coverage. Above target: notes extra coverage can be re-assigned. On target: no rectangle (header badge suffices).
 - [ ] **Class group chips order:** In the Class Groups, Enrollment & Ratios card, class group chips are displayed in the order defined in Class Group settings (same order as drag-and-drop in settings).
 - [ ] **Navigation to edit:** Clicking “Edit baseline staff” or “Edit class groups, enrollment & ratios” in the read-only panel navigates to the Baseline Schedule edit page with the cell pre-selected (via query params).

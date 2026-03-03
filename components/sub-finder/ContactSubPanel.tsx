@@ -38,6 +38,7 @@ import {
   panelBackgrounds,
 } from '@/lib/utils/colors'
 import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
+import { formatUSPhone } from '@/lib/utils/phone'
 import { toast } from 'sonner'
 import { useAssignSubShifts } from '@/lib/hooks/use-sub-assignment-mutations'
 
@@ -1198,6 +1199,7 @@ export default function ContactSubPanel({
         time_slot_code: string
         classroom_name?: string | null
         class_name?: string | null
+        classroom_color?: string | null
         sub_name?: string | null
         sub_id?: string | null
         status?: 'uncovered' | 'partially_covered' | 'fully_covered'
@@ -1215,6 +1217,7 @@ export default function ContactSubPanel({
           time_slot_code: shift.time_slot_code,
           classroom_name: shift.classroom_name ?? null,
           class_name: shift.class_name ?? null,
+          classroom_color: shift.classroom_color ?? null,
           status: 'uncovered',
         })
       }
@@ -1418,7 +1421,7 @@ export default function ContactSubPanel({
               {sub.phone && (
                 <span className="flex items-center gap-1.5">
                   <Phone className="h-3.5 w-3.5" />
-                  <span>{sub.phone}</span>
+                  <span>{formatUSPhone(sub.phone)}</span>
                 </span>
               )}
               {sub.email && (
@@ -1454,7 +1457,7 @@ export default function ContactSubPanel({
               {sub.phone && (
                 <span className="flex items-center gap-1.5">
                   <Phone className="h-3.5 w-3.5" />
-                  <span>{sub.phone}</span>
+                  <span>{formatUSPhone(sub.phone)}</span>
                 </span>
               )}
               {sub.email && (
@@ -1689,6 +1692,7 @@ export default function ContactSubPanel({
                                 assigned_sub_name: null,
                                 classroom_name: shift.classroom_name ?? null,
                                 class_name: shift.class_name ?? null,
+                                classroom_color: shift.classroom_color ?? null,
                               },
                             ]}
                             softAvailableStyle

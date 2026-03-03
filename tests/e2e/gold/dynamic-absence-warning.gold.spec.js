@@ -135,9 +135,17 @@ test('Absence warning icon scales color based on cell staffing status @gold', as
   await page.route('**/api/timeslots**', async route => {
     await route.fulfill(json([{ id: 's1', code: 'AM', name: 'Morning', display_order: 1 }]))
   })
+  await page.route('**/api/classrooms**', async route => {
+    await route.fulfill(
+      json([
+        { id: 'c1', name: 'Room A', color: '#8ec5ff', is_active: true },
+        { id: 'c2', name: 'Room B', color: '#ff8ecc', is_active: true },
+      ])
+    )
+  })
 
   await ensureAuthenticated(page, '/schedules/weekly')
-  await expect(page.getByRole('heading', { name: /weekly schedule|schedule/i })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Weekly Schedule' })).toBeVisible({
     timeout: 15000,
   })
 

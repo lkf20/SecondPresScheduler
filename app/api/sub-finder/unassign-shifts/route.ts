@@ -210,15 +210,6 @@ export async function POST(request: NextRequest) {
           .eq('time_slot_id', targetTimeSlotId)
           .eq('status', 'active')
           .limit(10)
-
-        console.warn('[unassign-shifts Debug] Active assignments remain on target shift', {
-          absence_id: absenceId,
-          sub_id: subId,
-          removed_assignment_id: assignmentId,
-          target_shift_key: targetShiftKey,
-          remaining_active_on_target_shift: remainingActiveOnTargetShift,
-          remaining_assignments: remainingRows || [],
-        })
       }
     }
 

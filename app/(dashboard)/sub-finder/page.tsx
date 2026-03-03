@@ -20,6 +20,7 @@ import AbsenceList from '@/components/sub-finder/AbsenceList'
 import RecommendedSubsList from '@/components/sub-finder/RecommendedSubsList'
 import type { RecommendedSub } from '@/components/sub-finder/ContactSubPanel'
 import RecommendedCombination from '@/components/sub-finder/RecommendedCombination'
+import { ShiftChipsLegend } from '@/components/sub-finder/ShiftChips'
 import ContactSubPanel from '@/components/sub-finder/ContactSubPanel'
 import {
   useSubFinderData,
@@ -29,7 +30,11 @@ import {
 } from '@/components/sub-finder/hooks/useSubFinderData'
 import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
 import DatePickerInput from '@/components/ui/date-picker-input'
-import { formatAbsenceDateRange, formatShortDate } from '@/lib/utils/date-format'
+import {
+  formatAbsenceDateRange,
+  formatShortDate,
+  formatLastContactedDateTime,
+} from '@/lib/utils/date-format'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -138,6 +143,22 @@ export default function SubFinderPage() {
   }
   const [contactDataCache, setContactDataCache] = useState<Map<string, ContactDataCacheEntry>>(
     new Map()
+  )
+  const getContactStatusLine = useCallback(
+    (sub: SubCandidate): string | null => {
+      const absenceId = selectedAbsence?.id
+      if (!absenceId) return null
+      const entry = contactDataCache.get(`${sub.id}-${absenceId}`)
+      if (!entry?.contacted_at) return null
+      const statusLabel =
+        entry.contact_status === 'confirmed'
+          ? 'Confirmed'
+          : entry.contact_status === 'declined_all'
+            ? 'Declined'
+            : 'Pending'
+      return `${statusLabel} · Last contacted ${formatLastContactedDateTime(entry.contacted_at)}`
+    },
+    [selectedAbsence?.id, contactDataCache]
   )
   const [highlightedSubId, setHighlightedSubId] = useState<string | null>(null)
   const [manualTeacherId, setManualTeacherId] = useState<string>('')
@@ -1683,21 +1704,24 @@ export default function SubFinderPage() {
                   ) : loading ? (
                     renderRecommendedPlaceholder()
                   ) : displayRecommendedCombinations.length > 0 ? (
-                    <div className="mt-2">
-                      <RecommendedCombination
-                        combinations={displayRecommendedCombinations}
-                        onContactSub={handleCombinationContact}
-                        totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
-                        useRemainingLabel={
-                          (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
-                          (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
-                        }
-                        allSubs={allSubs}
-                        allShifts={visibleShiftDetails}
-                        includePastShifts={includePastShifts}
-                        onShowAllSubs={openAllSubsPanel}
-                      />
-                    </div>
+                    <>
+                      <ShiftChipsLegend className="mb-3" />
+                      <div className="mt-2">
+                        <RecommendedCombination
+                          combinations={displayRecommendedCombinations}
+                          onContactSub={handleCombinationContact}
+                          totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
+                          useRemainingLabel={
+                            (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
+                            (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
+                          }
+                          allSubs={allSubs}
+                          allShifts={visibleShiftDetails}
+                          includePastShifts={includePastShifts}
+                          onShowAllSubs={openAllSubsPanel}
+                        />
+                      </div>
+                    </>
                   ) : null}
                 </div>
               )}
@@ -1919,6 +1943,7 @@ export default function SubFinderPage() {
                     showAllSubs
                     onContactSub={handleContactSub}
                     onSaveNote={handleSaveSubNote}
+                    getContactStatusLine={getContactStatusLine}
                     hideHeader
                     highlightedSubId={highlightedSubId}
                     includePastShifts={includePastShifts}
@@ -2098,21 +2123,24 @@ export default function SubFinderPage() {
                 ) : loading ? (
                   renderRecommendedPlaceholder()
                 ) : displayRecommendedCombinations.length > 0 ? (
-                  <div className="mt-2">
-                    <RecommendedCombination
-                      combinations={displayRecommendedCombinations}
-                      onContactSub={handleCombinationContact}
-                      totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
-                      useRemainingLabel={
-                        (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
-                        (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
-                      }
-                      allSubs={allSubs}
-                      allShifts={visibleShiftDetails}
-                      includePastShifts={includePastShifts}
-                      onShowAllSubs={openAllSubsPanel}
-                    />
-                  </div>
+                  <>
+                    <ShiftChipsLegend className="mb-3" />
+                    <div className="mt-2">
+                      <RecommendedCombination
+                        combinations={displayRecommendedCombinations}
+                        onContactSub={handleCombinationContact}
+                        totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
+                        useRemainingLabel={
+                          (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
+                          (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
+                        }
+                        allSubs={allSubs}
+                        allShifts={visibleShiftDetails}
+                        includePastShifts={includePastShifts}
+                        onShowAllSubs={openAllSubsPanel}
+                      />
+                    </div>
+                  </>
                 ) : null}
 
                 <div>
@@ -2471,6 +2499,7 @@ export default function SubFinderPage() {
                       absence={absenceForUI ?? selectedAbsence}
                       shiftDetails={shiftDetails}
                       showAllSubs
+                      getContactStatusLine={getContactStatusLine}
                       hideHeader
                       includePastShifts={includePastShifts}
                       selectedShift={selectedShift}
@@ -2496,6 +2525,7 @@ export default function SubFinderPage() {
                     showAllSubs
                     onContactSub={handleContactSub}
                     onSaveNote={handleSaveSubNote}
+                    getContactStatusLine={getContactStatusLine}
                     hideHeader
                     highlightedSubId={highlightedSubId}
                     includePastShifts={includePastShifts}
