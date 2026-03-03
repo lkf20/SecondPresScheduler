@@ -5,6 +5,7 @@ import { createErrorResponse } from '@/lib/utils/errors'
 import { parseLocalDate } from '@/lib/utils/date'
 import { MONTH_NAMES } from '@/lib/utils/date-format'
 import { getStaffDisplayName, type DisplayNameFormat } from '@/lib/utils/staff-display-name'
+import { filterCoverageRequestsToActiveTimeOffOnly } from '@/lib/dashboard/filter-draft-time-off'
 
 export async function GET(request: NextRequest) {
   try {
@@ -116,18 +117,19 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get time_off_requests for coverage requests that have source_request_id
+    // Get time_off_requests for coverage requests that have source_request_id (need status to exclude drafts)
     const sourceRequestIds = deduplicatedRequests
       .filter(cr => cr.request_type === 'time_off' && cr.source_request_id)
       .map(cr => cr.source_request_id)
       .filter((id): id is string => id !== null)
 
     const timeOffRequestsMap = new Map<string, { reason: string | null; notes: string | null }>()
+    const activeTimeOffRequestIds = new Set<string>()
 
     if (sourceRequestIds.length > 0) {
       const { data: timeOffRequests, error: timeOffError } = await supabase
         .from('time_off_requests')
-        .select('id, reason, notes')
+        .select('id, reason, notes, status')
         .in('id', sourceRequestIds)
 
       if (timeOffError) {
@@ -139,12 +141,21 @@ export async function GET(request: NextRequest) {
             reason: tor.reason || null,
             notes: tor.notes || null,
           })
+          if (tor.status === 'active') {
+            activeTimeOffRequestIds.add(tor.id)
+          }
         })
       }
     }
 
+    // Exclude coverage requests whose source time_off_request is draft (dashboard shows only active time off)
+    const deduplicatedRequestsFiltered = filterCoverageRequestsToActiveTimeOffOnly(
+      deduplicatedRequests,
+      activeTimeOffRequestIds
+    )
+
     // Get coverage request shifts for these requests with classroom details
-    const requestIds = deduplicatedRequests.map(cr => cr.id)
+    const requestIds = deduplicatedRequestsFiltered.map(cr => cr.id)
     let coverageRequestShifts: any[] = []
 
     if (requestIds.length > 0) {
@@ -332,13 +343,13 @@ export async function GET(request: NextRequest) {
       return createErrorResponse(teacherSchedulesError, 'Failed to fetch teacher schedules', 500)
     }
 
-    // Process coverage requests (already deduplicated above)
+    // Process coverage requests (already deduplicated and draft time-off excluded above)
     // Use Promise.all since we need to fetch missing classrooms asynchronously
     const processedCoverageRequests = await Promise.all(
-      deduplicatedRequests.map(async request => {
+      deduplicatedRequestsFiltered.map(async request => {
         // Debug: Log if we see duplicates
         if (request.request_type === 'time_off' && request.source_request_id) {
-          const duplicates = deduplicatedRequests.filter(
+          const duplicates = deduplicatedRequestsFiltered.filter(
             r =>
               r.request_type === 'time_off' &&
               r.source_request_id === request.source_request_id &&

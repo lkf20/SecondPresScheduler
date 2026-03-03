@@ -5,6 +5,7 @@ import { createJsonRequest } from '@/tests/helpers/api'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
+import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 
 jest.mock('@/lib/supabase/server', () => ({
   createClient: jest.fn(),
@@ -16,6 +17,11 @@ jest.mock('@/lib/utils/auth', () => ({
 
 jest.mock('@/lib/api/schedule-settings', () => ({
   getScheduleSettings: jest.fn(),
+}))
+
+jest.mock('@/lib/audit/logAuditEvent', () => ({
+  getAuditActorContext: jest.fn(),
+  logAuditEvent: jest.fn(),
 }))
 
 jest.mock('@/lib/utils/date', () => {
@@ -34,8 +40,25 @@ describe('POST /api/staffing-events/flex integration', () => {
   const mockEventSingle = jest.fn()
   const mockShiftInsert = jest.fn()
 
+  const mockStaffMaybeSingle = jest.fn().mockResolvedValue({
+    data: { first_name: 'Test', last_name: 'Staff', display_name: null },
+    error: null,
+  })
+  const mockClassroomsIn = jest.fn().mockResolvedValue({
+    data: [{ id: 'class-1', name: 'Room 1' }],
+    error: null,
+  })
+
   beforeEach(() => {
     jest.clearAllMocks()
+    mockStaffMaybeSingle.mockResolvedValue({
+      data: { first_name: 'Test', last_name: 'Staff', display_name: null },
+      error: null,
+    })
+    mockClassroomsIn.mockResolvedValue({
+      data: [{ id: 'class-1', name: 'Room 1' }],
+      error: null,
+    })
     ;(createClient as jest.Mock).mockResolvedValue({
       from: mockFrom,
     })
@@ -48,6 +71,20 @@ describe('POST /api/staffing-events/flex integration', () => {
       }
       if (table === 'staffing_event_shifts') {
         return { insert: mockShiftInsert }
+      }
+      if (table === 'staff') {
+        return {
+          select: jest.fn().mockReturnThis(),
+          eq: jest.fn().mockReturnThis(),
+          maybeSingle: mockStaffMaybeSingle,
+        }
+      }
+      if (table === 'classrooms') {
+        return {
+          select: jest.fn().mockReturnThis(),
+          eq: jest.fn().mockReturnThis(),
+          in: mockClassroomsIn,
+        }
       }
       return {}
     })
@@ -71,6 +108,11 @@ describe('POST /api/staffing-events/flex integration', () => {
     mockShiftInsert.mockResolvedValue({ error: null })
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
+    ;(getAuditActorContext as jest.Mock).mockResolvedValue({
+      actorUserId: 'user-1',
+      actorDisplayName: 'Test User',
+    })
+    ;(logAuditEvent as jest.Mock).mockResolvedValue(undefined)
   })
 
   it('returns 403 when school context is missing', async () => {

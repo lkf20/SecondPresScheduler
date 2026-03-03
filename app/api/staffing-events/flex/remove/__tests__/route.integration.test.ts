@@ -4,6 +4,7 @@ import { GET, POST } from '@/app/api/staffing-events/flex/remove/route'
 import { createJsonRequest } from '@/tests/helpers/api'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
+import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 
 jest.mock('@/lib/supabase/server', () => ({
   createClient: jest.fn(),
@@ -11,6 +12,11 @@ jest.mock('@/lib/supabase/server', () => ({
 
 jest.mock('@/lib/utils/auth', () => ({
   getUserSchoolId: jest.fn(),
+}))
+
+jest.mock('@/lib/audit/logAuditEvent', () => ({
+  getAuditActorContext: jest.fn(),
+  logAuditEvent: jest.fn(),
 }))
 
 const makeAwaitableBuilder = (result: any) => {
@@ -68,6 +74,16 @@ const buildSupabaseMock = (overrides?: {
     )
   )
 
+  const staffMaybeSingle = jest.fn().mockResolvedValue({
+    data: { first_name: 'Test', last_name: 'Staff', display_name: null },
+    error: null,
+  })
+  const staffChain = {
+    select: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockReturnThis(),
+    maybeSingle: staffMaybeSingle,
+  }
+
   ;(createClient as jest.Mock).mockResolvedValue({
     from: jest.fn((table: string) => {
       if (table === 'staffing_events') {
@@ -87,6 +103,9 @@ const buildSupabaseMock = (overrides?: {
           select: daySelect,
         }
       }
+      if (table === 'staff') {
+        return staffChain
+      }
       throw new Error(`Unexpected table: ${table}`)
     }),
   })
@@ -101,6 +120,11 @@ describe('/api/staffing-events/flex/remove integration', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getAuditActorContext as jest.Mock).mockResolvedValue({
+      actorUserId: 'user-1',
+      actorDisplayName: 'Test User',
+    })
+    ;(logAuditEvent as jest.Mock).mockResolvedValue(undefined)
   })
 
   it('GET returns 400 when event_id is missing', async () => {

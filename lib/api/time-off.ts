@@ -111,6 +111,81 @@ export async function deleteTimeOffRequest(id: string) {
   }
 }
 
+const normalizeDate = (dateStr: string) => {
+  if (!dateStr) return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
+  try {
+    const parsed = new Date(dateStr)
+    return parsed.toISOString().split('T')[0]
+  } catch {
+    return dateStr
+  }
+}
+
+export type OverlappingTimeOffRequest = {
+  id: string
+  start_date: string
+  end_date: string | null
+  status: 'draft' | 'active'
+}
+
+/**
+ * Finds an existing time off request (draft or active) for the same teacher
+ * that overlaps with the given shifts. Overlap = same teacher and at least one
+ * (date, time_slot_id) in common. Used to block creating/updating a request
+ * that would overlap with another.
+ */
+export async function findOverlappingTimeOffRequest(
+  teacherId: string,
+  newShifts: Array<{ date: string; time_slot_id: string }>,
+  excludeRequestId?: string
+): Promise<OverlappingTimeOffRequest | null> {
+  if (newShifts.length === 0) return null
+
+  const supabase = await createClient()
+  const newShiftKeys = new Set(newShifts.map(s => `${normalizeDate(s.date)}::${s.time_slot_id}`))
+
+  let requestsQuery = supabase
+    .from('time_off_requests')
+    .select('id, start_date, end_date, status')
+    .eq('teacher_id', teacherId)
+    .in('status', ['draft', 'active'])
+
+  if (excludeRequestId) {
+    requestsQuery = requestsQuery.neq('id', excludeRequestId)
+  }
+
+  const { data: otherRequests, error: reqError } = await requestsQuery
+
+  if (reqError || !otherRequests?.length) return null
+
+  const requestIds = otherRequests.map(r => r.id)
+
+  const { data: shifts, error: shiftError } = await supabase
+    .from('time_off_shifts')
+    .select('date, time_slot_id, time_off_request_id')
+    .in('time_off_request_id', requestIds)
+
+  if (shiftError || !shifts?.length) return null
+
+  for (const shift of shifts) {
+    const key = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
+    if (newShiftKeys.has(key)) {
+      const request = otherRequests.find(r => r.id === shift.time_off_request_id)
+      if (request) {
+        return {
+          id: request.id,
+          start_date: request.start_date,
+          end_date: request.end_date ?? null,
+          status: request.status as 'draft' | 'active',
+        }
+      }
+    }
+  }
+
+  return null
+}
+
 /**
  * Get active sub assignments for a time off request
  * Finds all active sub assignments linked via coverage_request_shifts
