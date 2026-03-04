@@ -123,6 +123,10 @@ const weeklyFixture = [
 test('Absence warning icon scales color based on cell staffing status @gold', async ({ page }) => {
   test.skip(!hasE2ECredentials(), 'Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD to run gold scenarios.')
 
+  await page.addInitScript(() => {
+    localStorage.removeItem('weekly-schedule-filters')
+  })
+
   await page.route('**/api/weekly-schedule**', async route => {
     await route.fulfill(json(weeklyFixture))
   })
@@ -149,12 +153,12 @@ test('Absence warning icon scales color based on cell staffing status @gold', as
     timeout: 15000,
   })
 
-  // Validate Room A (Red warning)
+  // Validate Room A (Red warning); grid splits "Room A" into "Room" + <br> + "A"
   const roomA = page
     .locator('div')
-    .filter({ hasText: /^Room A$/ })
+    .filter({ hasText: /Room\s*A/ })
     .first()
-  await expect(roomA).toBeVisible()
+  await expect(roomA).toBeVisible({ timeout: 10000 })
 
   // Find the absent chip for Bob and check its warning icon
   const bobChip = page.getByText('Absent Bob').locator('..') // Get parent span
@@ -164,9 +168,9 @@ test('Absence warning icon scales color based on cell staffing status @gold', as
   // Validate Room B (Gray warning because it is covered by Flex Sally)
   const roomB = page
     .locator('div')
-    .filter({ hasText: /^Room B$/ })
+    .filter({ hasText: /Room\s*B/ })
     .first()
-  await expect(roomB).toBeVisible()
+  await expect(roomB).toBeVisible({ timeout: 5000 })
 
   const aliceChip = page.getByText('Absent Alice').locator('..')
   const grayWarningIcon = aliceChip.locator('svg.text-gray-400')

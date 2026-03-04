@@ -278,17 +278,15 @@ describe('ScheduleSidePanel interactions', () => {
 
     render(<ScheduleSidePanel {...buildProps()} />)
 
-    // Wait for the data to load
     await waitFor(() => {
       expect(screen.getByText('Bella W.')).toBeInTheDocument()
     })
 
     fireEvent.click(await screen.findByRole('button', { name: /edit baseline staff/i }))
-    expect(pushMock).toHaveBeenCalledWith(
-      expect.stringContaining(
-        '/settings/baseline-schedule?classroom_id=class-1&day_of_week_id=day-1&time_slot_id=slot-1&return_to_weekly=true'
-      )
-    )
+    expect(screen.getByText('Edit baseline assignment?')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^continue$/i }))
+    expect(screen.getByText('Edit Permanent Staff')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^back$/i })).toBeInTheDocument()
   })
 
   it('hides Remove button for temporary coverage assignments without staffing_event_id', async () => {

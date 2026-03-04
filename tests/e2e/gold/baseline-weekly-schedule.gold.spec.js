@@ -55,6 +55,10 @@ const weeklyFixture = [
 test('weekly schedule loads and shows classroom and assignment @gold', async ({ page }) => {
   test.skip(!hasE2ECredentials(), 'Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD to run gold scenarios.')
 
+  await page.addInitScript(() => {
+    localStorage.removeItem('weekly-schedule-filters')
+  })
+
   await page.route('**/api/weekly-schedule**', async route => {
     await route.fulfill(json(weeklyFixture))
   })
@@ -94,6 +98,7 @@ test('weekly schedule loads and shows classroom and assignment @gold', async ({ 
     timeout: 15000,
   })
 
-  await expect(page.getByText('Infant Room')).toBeVisible({ timeout: 10000 })
-  await expect(page.getByText('Bella W.')).toBeVisible({ timeout: 5000 })
+  // Grid splits "Infant Room" into "Infant" + <br> + "Room"; match the container
+  await expect(page.getByText(/Infant\s*Room/)).toBeVisible({ timeout: 10000 })
+  await expect(page.getByText('Bella W.')).toBeVisible({ timeout: 10000 })
 })

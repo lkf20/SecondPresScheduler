@@ -66,6 +66,10 @@ const weeklyFixture = [
 test('Ghost cell filtering in Substitutes Only mode @gold', async ({ page }) => {
   test.skip(!hasE2ECredentials(), 'Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD to run gold scenarios.')
 
+  await page.addInitScript(() => {
+    localStorage.removeItem('weekly-schedule-filters')
+  })
+
   await page.route('**/api/weekly-schedule**', async route => {
     await route.fulfill(json(weeklyFixture))
   })
@@ -90,8 +94,8 @@ test('Ghost cell filtering in Substitutes Only mode @gold', async ({ page }) => 
   })
 
   // Verify that Perm Teacher and Absent Teacher are initially visible
-  await expect(page.getByText('Perm Teacher')).toBeVisible()
-  await expect(page.getByText('Absent Teacher')).toBeVisible()
+  await expect(page.getByText('Perm Teacher')).toBeVisible({ timeout: 10000 })
+  await expect(page.getByText('Absent Teacher')).toBeVisible({ timeout: 10000 })
 
   // Switch to Substitutes Only mode by clicking the chip that contains 'Subs'
   await page.getByRole('button', { name: /Subs/i }).click()

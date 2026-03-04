@@ -83,6 +83,10 @@ const weeklyFixture = [
 test('Floater math correctly calculates staffing status @gold', async ({ page }) => {
   test.skip(!hasE2ECredentials(), 'Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD to run gold scenarios.')
 
+  await page.addInitScript(() => {
+    localStorage.removeItem('weekly-schedule-filters')
+  })
+
   await page.route('**/api/weekly-schedule**', async route => {
     await route.fulfill(json(weeklyFixture))
   })
@@ -106,10 +110,10 @@ test('Floater math correctly calculates staffing status @gold', async ({ page })
     timeout: 15000,
   })
 
-  // Verify that all 3 teachers are visible
-  await expect(page.getByText('Perm Teacher')).toBeVisible()
-  await expect(page.getByText('Floater One')).toBeVisible()
-  await expect(page.getByText('Floater Two')).toBeVisible()
+  // Verify that all 3 teachers are visible (allow time for grid to render)
+  await expect(page.getByText('Perm Teacher')).toBeVisible({ timeout: 10000 })
+  await expect(page.getByText('Floater One')).toBeVisible({ timeout: 5000 })
+  await expect(page.getByText('Floater Two')).toBeVisible({ timeout: 5000 })
 
   // The math should be 1 + 0.5 + 0.5 = 2. Required is 8 / 4 = 2.
   // Should show "Meets preferred staffing (2.0 teachers)" (since preferred is also 2)

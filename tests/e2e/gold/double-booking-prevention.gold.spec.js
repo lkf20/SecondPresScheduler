@@ -184,7 +184,9 @@ test('assign-shifts 409 double-booking error is shown in UI @gold', async ({ pag
   })
 
   await ensureAuthenticated(page, '/sub-finder')
-  await expect(page.getByRole('heading', { name: /sub finder/i })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /sub finder/i })).toBeVisible({
+    timeout: 15000,
+  })
 
   const [findSubsResponse] = await Promise.all([
     page.waitForResponse(
@@ -218,6 +220,6 @@ test('assign-shifts 409 double-booking error is shown in UI @gold', async ({ pag
   })
   await page.getByRole('button', { name: /assign without confirming/i }).click()
 
-  await expect(page.getByText(/double booking prevented/i)).toBeVisible({ timeout: 10000 })
+  await expect(page.getByText(/double booking prevented/i).first()).toBeVisible({ timeout: 10000 })
   expect(assignShiftsCallCount).toBe(1)
 })

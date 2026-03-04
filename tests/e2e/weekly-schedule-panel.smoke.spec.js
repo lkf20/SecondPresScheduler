@@ -207,12 +207,15 @@ test('weekly schedule baseline handoff and return @smoke', async ({ page }) => {
   await expect(page.getByText('Edit baseline staff')).toBeVisible()
 
   await page.getByText('Edit baseline staff').click()
-  await expect(page.getByText('Edit baseline assignment?')).toBeVisible()
-  await page.getByRole('button', { name: /^continue$/i }).click()
+  const baselineDialog = page.getByRole('dialog')
+  await expect(baselineDialog.getByText('Edit baseline assignment?')).toBeVisible({
+    timeout: 10000,
+  })
+  await baselineDialog.getByRole('button', { name: /^continue$/i }).click()
 
   await expect(page.getByText('Edit Permanent Staff')).toBeVisible()
   await page.getByRole('button', { name: /^back$/i }).click()
-  await expect(page.getByText('Temporary Coverage')).toBeVisible()
+  await expect(page.getByText('Temporary Coverage', { exact: true })).toBeVisible()
 })
 
 test('weekly schedule flex removal scope flow @smoke', async ({ page }) => {
@@ -256,7 +259,11 @@ test('weekly schedule baseline save refreshes schedule data @smoke', async ({ pa
 
   await page.getByText('Bella W.').first().click()
   await page.getByText('Edit baseline staff').click()
-  await page.getByRole('button', { name: /^continue$/i }).click()
+  const baselineDialog = page.getByRole('dialog')
+  await expect(baselineDialog.getByText('Edit baseline assignment?')).toBeVisible({
+    timeout: 10000,
+  })
+  await baselineDialog.getByRole('button', { name: /^continue$/i }).click()
 
   await page
     .getByRole('button', { name: /^save$/i })
