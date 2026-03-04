@@ -119,11 +119,6 @@ const formatShortDateLabel = (value: string) => {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
 }
 
-const formatSlotLabel = (slot: StaffingTargetItem) =>
-  slot.date
-    ? `${formatFullDateLabel(slot.date)} • ${slot.time_slot_code}`
-    : `${slot.day_name || '—'} ${slot.time_slot_code}`
-
 /** Label for a grouped slot: "Mar 9 - 23 • Mon LB" or single "Mon Mar 9 • LB" */
 const formatGroupSlotLabel = (group: StaffingTargetGroup) => {
   const { rep } = group
