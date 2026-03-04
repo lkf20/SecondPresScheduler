@@ -108,6 +108,12 @@ This document outlines best practices for developing and maintaining the Prescho
 - **Test on different screen sizes**: Ensure responsive design works
 - **Test with real data**: Use realistic data when possible
 
+### Staff Editor Invariants
+
+- **Availability tab visibility must be live**: In Staff settings, `Availability` is shown only when the current Overview selections qualify (`Substitute` checked or `Flexible` role selected).
+- **No stale tab state**: If those selections are removed during editing, the `Availability` tab should hide immediately and the UI should return to `Overview` if needed.
+- **Regression tests required**: Any changes to Staff role/sub logic should include a test that verifies tab visibility updates immediately when toggling role/sub checkboxes.
+
 ---
 
 ## ⚠️ Error Handling

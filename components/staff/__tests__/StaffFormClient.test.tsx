@@ -1,5 +1,6 @@
 import React from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import StaffFormClient from '@/components/staff/StaffFormClient'
 
 const pushMock = jest.fn()
@@ -20,9 +21,15 @@ jest.mock('@/lib/contexts/SchoolContext', () => ({
   useSchool: () => 'school-1',
 }))
 
+const staffEditorTabsMock = jest.fn((props: any) => (
+  <div data-testid="staff-editor-tabs" data-show-availability={props.showAvailabilityTab}>
+    {props.overview?.content}
+  </div>
+))
+
 jest.mock('@/components/staff/StaffEditorTabs', () => ({
   __esModule: true,
-  default: () => <div data-testid="staff-editor-tabs" />,
+  default: (props: any) => staffEditorTabsMock(props),
 }))
 
 jest.mock('@/components/staff/StaffUnsavedChangesDialog', () => ({
@@ -122,5 +129,66 @@ describe('StaffFormClient', () => {
         'This staff member is marked as inactive but still appears in the baseline schedule.'
       )
     ).not.toBeInTheDocument()
+  })
+
+  it('hides Availability tab when Substitute is unchecked', async () => {
+    const user = userEvent.setup()
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/staff-role-types')) {
+        return {
+          ok: true,
+          json: async () => [
+            { id: 'role-perm', code: 'PERMANENT', label: 'Permanent' },
+            { id: 'role-flex', code: 'FLEXIBLE', label: 'Flexible' },
+          ],
+        } as Response
+      }
+      if (url.includes('/api/schedule-settings')) {
+        return {
+          ok: true,
+          json: async () => ({ default_display_name_format: 'first_last_initial' }),
+        } as Response
+      }
+      if (url.includes('/api/staff')) {
+        return { ok: true, json: async () => [{ id: 'staff-1' }] } as Response
+      }
+      return { ok: true, json: async () => ({}) } as Response
+    }) as jest.Mock
+
+    render(
+      <StaffFormClient
+        staff={
+          {
+            id: 'staff-1',
+            first_name: 'Amy',
+            last_name: 'P',
+            active: true,
+            is_sub: true,
+            school_id: 'school-1',
+            role_type_ids: [],
+            role_type_codes: [],
+          } as any
+        }
+      />
+    )
+
+    await waitFor(() =>
+      expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute('data-show-availability')
+    )
+    expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute(
+      'data-show-availability',
+      'true'
+    )
+
+    await user.click(screen.getByLabelText('Substitute'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute(
+        'data-show-availability',
+        'false'
+      )
+    })
   })
 })

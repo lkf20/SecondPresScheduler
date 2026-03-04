@@ -66,6 +66,7 @@ interface StaffFormProps {
   roleTypes?: StaffRoleType[]
   draftCacheKey?: string
   onDirtyChange?: (dirty: boolean) => void
+  onRoleContextChange?: (context: { isSub: boolean; roleTypeIds: string[] }) => void
   formId?: string
   externalDirty?: boolean
 }
@@ -91,6 +92,7 @@ export default function StaffForm({
   roleTypes: roleTypesProp = [],
   draftCacheKey,
   onDirtyChange,
+  onRoleContextChange,
   formId,
   externalDirty = false,
 }: StaffFormProps) {
@@ -298,6 +300,13 @@ export default function StaffForm({
   useEffect(() => {
     onDirtyChange?.(isFormDirty)
   }, [isFormDirty, onDirtyChange])
+
+  useEffect(() => {
+    onRoleContextChange?.({
+      isSub: isSub ?? false,
+      roleTypeIds,
+    })
+  }, [isSub, roleTypeIds, onRoleContextChange])
 
   const handleFormSubmit = async (data: StaffFormData) => {
     if (duplicateWarning && !proceedWithDuplicate) {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import StaffForm, { type StaffFormData } from '@/components/staff/StaffForm'
 import ErrorMessage from '@/components/shared/ErrorMessage'
@@ -61,6 +61,10 @@ export default function StaffFormClient({
   const [availabilitySaveSignal, setAvailabilitySaveSignal] = useState(0)
   const [preferencesSaveSignal, setPreferencesSaveSignal] = useState(0)
   const [staffList, setStaffList] = useState<Array<{ id: string }>>([])
+  const [overviewRoleContext, setOverviewRoleContext] = useState<{
+    isSub: boolean
+    roleTypeIds: string[]
+  } | null>(null)
 
   const returnPage = searchParams.get('returnPage') || '1'
   const returnSearch = searchParams.get('returnSearch')
@@ -152,9 +156,36 @@ export default function StaffFormClient({
     return ids.map(id => roleTypes[id]?.code).filter(Boolean) as string[]
   }, [roleTypes, staff.role_type_codes, staff.role_type_ids])
 
-  const showAvailability = staff.is_sub || roleTypeCodes.includes('FLEXIBLE')
+  const overviewRoleCodes = useMemo(() => {
+    if (!overviewRoleContext) return null
+    return overviewRoleContext.roleTypeIds
+      .map(id => roleTypes[id]?.code)
+      .filter(Boolean) as string[]
+  }, [overviewRoleContext, roleTypes])
+
+  const showAvailability =
+    overviewRoleContext !== null
+      ? overviewRoleContext.isSub || (overviewRoleCodes || []).includes('FLEXIBLE')
+      : staff.is_sub || roleTypeCodes.includes('FLEXIBLE')
   const overviewHasUnsavedChanges = isOverviewDirty || isActive !== savedIsActive
   const hasUnsavedChanges = overviewHasUnsavedChanges || isAvailabilityDirty || isPreferencesDirty
+
+  const handleRoleContextChange = useCallback(
+    (context: { isSub: boolean; roleTypeIds: string[] }) => {
+      setOverviewRoleContext(current => {
+        if (
+          current &&
+          current.isSub === context.isSub &&
+          current.roleTypeIds.length === context.roleTypeIds.length &&
+          current.roleTypeIds.every((id, idx) => id === context.roleTypeIds[idx])
+        ) {
+          return current
+        }
+        return context
+      })
+    },
+    []
+  )
 
   const {
     showUnsavedDialog,
@@ -328,6 +359,7 @@ export default function StaffFormClient({
                 roleTypes={Object.values(roleTypes)}
                 draftCacheKey={`staff-form:${staff.id}`}
                 onDirtyChange={setIsOverviewDirty}
+                onRoleContextChange={handleRoleContextChange}
                 formId={`staff-overview-form-${staff.id}`}
                 externalDirty={isActive !== savedIsActive}
               />
