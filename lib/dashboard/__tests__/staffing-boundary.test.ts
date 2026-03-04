@@ -1,0 +1,64 @@
+import {
+  STAFFING_BOUNDARY_DAY,
+  getStaffingEndDate,
+  getStaffingWeeksLabel,
+  getStaffingWeeksNumber,
+} from '../staffing-boundary'
+
+describe('staffing-boundary', () => {
+  describe('STAFFING_BOUNDARY_DAY', () => {
+    it('is May 14, 2026', () => {
+      expect(STAFFING_BOUNDARY_DAY).toBe('2026-05-14')
+    })
+  })
+
+  describe('getStaffingEndDate', () => {
+    it('returns start + 12 weeks when that is before May 14, 2026', () => {
+      expect(getStaffingEndDate('2026-01-01')).toBe('2026-03-26') // 84 days later
+      expect(getStaffingEndDate('2026-02-01')).toBe('2026-04-26')
+    })
+
+    it('returns May 14, 2026 when start + 12 weeks would be after boundary', () => {
+      expect(getStaffingEndDate('2026-03-01')).toBe(STAFFING_BOUNDARY_DAY)
+      expect(getStaffingEndDate('2026-03-09')).toBe(STAFFING_BOUNDARY_DAY)
+      expect(getStaffingEndDate('2026-05-01')).toBe(STAFFING_BOUNDARY_DAY)
+    })
+
+    it('returns start + 12 weeks when exactly on boundary', () => {
+      const twelveWeeksFromFeb27 = '2026-05-22'
+      expect(getStaffingEndDate('2026-02-27')).toBe(STAFFING_BOUNDARY_DAY)
+    })
+  })
+
+  describe('getStaffingWeeksLabel', () => {
+    it('returns "12 or more weeks" when range is not capped and spans 12+ weeks', () => {
+      expect(getStaffingWeeksLabel('2026-01-01', '2026-03-26')).toBe('12 or more weeks')
+      expect(getStaffingWeeksLabel('2026-02-01', '2026-04-20')).toBe('12 or more weeks')
+    })
+
+    it('returns "X weeks" when end is at or after May 14 (capped by boundary)', () => {
+      // Mar 9 to May 14 = 66 days → 10 weeks
+      expect(getStaffingWeeksLabel('2026-03-09', '2026-05-14')).toBe('10 weeks')
+      expect(getStaffingWeeksLabel('2026-03-01', '2026-05-14')).toBe('11 weeks')
+      expect(getStaffingWeeksLabel('2026-05-14', '2026-05-14')).toBe('1 week')
+    })
+
+    it('returns "X weeks" when run is shorter than 12 weeks and before boundary', () => {
+      expect(getStaffingWeeksLabel('2026-03-09', '2026-03-30')).toBe('3 weeks')
+      expect(getStaffingWeeksLabel('2026-03-09', '2026-03-16')).toBe('1 week')
+    })
+  })
+
+  describe('getStaffingWeeksNumber', () => {
+    it('returns weeks from start to end when end is before boundary', () => {
+      expect(getStaffingWeeksNumber('2026-03-09', '2026-04-06')).toBe(4)
+      expect(getStaffingWeeksNumber('2026-03-09', '2026-05-11')).toBe(9)
+    })
+
+    it('returns weeks from start to boundary when end is at or after boundary', () => {
+      // Mar 9 to May 14 = 66 days → 10 weeks
+      expect(getStaffingWeeksNumber('2026-03-09', '2026-05-14')).toBe(10)
+      expect(getStaffingWeeksNumber('2026-03-09', '2026-06-01')).toBe(10)
+    })
+  })
+})

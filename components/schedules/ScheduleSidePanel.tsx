@@ -62,6 +62,7 @@ import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import { cn } from '@/lib/utils'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 import { parseLocalDate } from '@/lib/utils/date'
+import { getStaffingWeeksLabel } from '@/lib/dashboard/staffing-boundary'
 import {
   getSlotInactiveReasons,
   isSlotEffectivelyInactive,
@@ -129,6 +130,17 @@ interface ScheduleSidePanelProps {
   readOnly?: boolean
   /** When true, Save button shows "Save & Return to Weekly Schedule" and parent onSave may navigate back */
   returnToWeekly?: boolean
+  /** When 'flex', panel opens directly in Add Temporary Coverage mode (e.g. from dashboard). Back button becomes Close. */
+  initialPanelMode?: 'cell' | 'flex'
+  /** When provided with initialPanelMode='flex', pre-fill the flex form date range (e.g. from dashboard grouped slot). */
+  initialFlexStartDate?: string
+  initialFlexEndDate?: string
+  /** When provided with initialPanelMode='flex', show run-length message and suggestion (required vs preferred). */
+  initialFlexTargetType?: 'required' | 'preferred'
+  /** When opening from dashboard (initialPanelMode='flex'), pass staffing so header shows target and scheduled. */
+  initialFlexRequiredStaff?: number
+  initialFlexPreferredStaff?: number | null
+  initialFlexScheduledStaff?: number
 }
 
 export const mapAssignmentsToTeachers = (
@@ -501,6 +513,13 @@ export default function ScheduleSidePanel({
   weekStartISO,
   readOnly = false,
   returnToWeekly = false,
+  initialPanelMode = 'cell',
+  initialFlexStartDate,
+  initialFlexEndDate,
+  initialFlexTargetType,
+  initialFlexRequiredStaff,
+  initialFlexPreferredStaff,
+  initialFlexScheduledStaff,
 }: ScheduleSidePanelProps) {
   const [cell, setCell] = useState<
     | (Partial<ScheduleCellWithDetails> & {
@@ -577,6 +596,14 @@ export default function ScheduleSidePanel({
   >([])
   const [flexAvailabilityLoading, setFlexAvailabilityLoading] = useState(false)
   const [flexAvailabilityError, setFlexAvailabilityError] = useState<string | null>(null)
+  const [flexRunInfo, setFlexRunInfo] = useState<{
+    belowTarget: boolean
+    dateStart?: string
+    dateEnd?: string
+    weeksLabel?: string
+    targetType?: 'required' | 'preferred'
+  } | null>(null)
+  const [flexRunInfoLoading, setFlexRunInfoLoading] = useState(false)
   const [expandedFlexStaffId, setExpandedFlexStaffId] = useState<string | null>(null)
   const [flexAssignModes, setFlexAssignModes] = useState<Record<string, 'all' | 'custom'>>({})
   const [flexSelectedShiftKeys, setFlexSelectedShiftKeys] = useState<Record<string, string[]>>({})
@@ -803,13 +830,14 @@ export default function ScheduleSidePanel({
     [filteredFlexShiftMetrics]
   )
 
+  const LONG_TERM_WEEKS = 8
   const isLongTermFlex = useMemo(() => {
     if (!flexStartDate || !flexEndDate) return false
     const start = parseLocalDate(flexStartDate)
     const end = parseLocalDate(flexEndDate)
     const diffTime = Math.abs(end.getTime() - start.getTime())
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    return diffDays >= 60
+    return diffDays >= LONG_TERM_WEEKS * 7
   }, [flexStartDate, flexEndDate])
 
   const flexStaffWithCounts = useMemo(() => {
@@ -858,13 +886,77 @@ export default function ScheduleSidePanel({
 
   useEffect(() => {
     if (!isOpen) return
-    const baseDate = weekStartISO ? parseLocalDate(weekStartISO) : new Date()
-    const startISO = formatLocalDate(baseDate)
-    setFlexStartDate(startISO)
-    setFlexEndDate(startISO)
+    if (initialFlexStartDate && initialFlexEndDate) {
+      setFlexStartDate(initialFlexStartDate)
+      setFlexEndDate(initialFlexEndDate)
+    } else {
+      const baseDate = weekStartISO ? parseLocalDate(weekStartISO) : new Date()
+      const startISO = formatLocalDate(baseDate)
+      setFlexStartDate(startISO)
+      setFlexEndDate(startISO)
+    }
     setFlexClassroomIds([classroomId])
     setFlexTimeSlotIds([timeSlotId])
-  }, [isOpen, weekStartISO, classroomId, timeSlotId])
+  }, [isOpen, weekStartISO, classroomId, timeSlotId, initialFlexStartDate, initialFlexEndDate])
+
+  // When opened from dashboard (or elsewhere) in flex-only mode, show Add Temporary Coverage immediately
+  useEffect(() => {
+    if (isOpen && initialPanelMode === 'flex') {
+      setPanelMode('flex')
+    }
+  }, [isOpen, initialPanelMode])
+
+  // When in flex mode from weekly schedule (no initial flex dates), fetch slot run for run-length message
+  useEffect(() => {
+    if (!isOpen || panelMode !== 'flex' || initialPanelMode === 'flex') {
+      setFlexRunInfo(null)
+      return
+    }
+    const startDate =
+      weekStartISO ||
+      (() => {
+        const d = new Date()
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      })()
+    let cancelled = false
+    setFlexRunInfoLoading(true)
+    setFlexRunInfo(null)
+    fetch(
+      `/api/dashboard/slot-run?classroom_id=${encodeURIComponent(classroomId)}&day_of_week_id=${encodeURIComponent(dayId)}&time_slot_id=${encodeURIComponent(timeSlotId)}&start_date=${encodeURIComponent(startDate)}`
+    )
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        if (
+          data?.belowTarget &&
+          data?.dateStart &&
+          data?.dateEnd &&
+          data?.weeksLabel &&
+          data?.targetType
+        ) {
+          setFlexRunInfo({
+            belowTarget: true,
+            dateStart: data.dateStart,
+            dateEnd: data.dateEnd,
+            weeksLabel: data.weeksLabel,
+            targetType: data.targetType,
+          })
+          setFlexStartDate(data.dateStart)
+          setFlexEndDate(data.dateEnd)
+        } else {
+          setFlexRunInfo({ belowTarget: false })
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setFlexRunInfo(null)
+      })
+      .finally(() => {
+        if (!cancelled) setFlexRunInfoLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, panelMode, initialPanelMode, classroomId, dayId, timeSlotId, weekStartISO])
 
   useEffect(() => {
     if (!flexStartDate) return
@@ -2169,18 +2261,34 @@ export default function ScheduleSidePanel({
     )
   }, [classGroups, classGroupForRatio])
 
-  const { requiredTeachers, preferredTeachers } = calculateTeacherTargets({
-    classGroupForRatio,
-    enrollmentForCalculation,
-  })
+  const { requiredTeachers: calculatedRequired, preferredTeachers: calculatedPreferred } =
+    calculateTeacherTargets({
+      classGroupForRatio,
+      enrollmentForCalculation,
+    })
 
-  const scheduledStaffCount = useMemo(() => {
+  const scheduledStaffCountFromCell = useMemo(() => {
     return calculateScheduledStaffCount({
       readOnly,
       assignments: selectedCellData?.assignments,
       selectedTeacherCount: selectedTeachers.length,
     })
   }, [readOnly, selectedCellData?.assignments, selectedTeachers.length])
+
+  // When opened from dashboard (flex mode), use initial staffing so header shows target and scheduled
+  const useInitialFlexStaffing =
+    initialPanelMode === 'flex' &&
+    (initialFlexRequiredStaff !== undefined || initialFlexScheduledStaff !== undefined)
+
+  const requiredTeachers = useInitialFlexStaffing
+    ? (initialFlexRequiredStaff ?? calculatedRequired)
+    : calculatedRequired
+  const preferredTeachers = useInitialFlexStaffing
+    ? (initialFlexPreferredStaff ?? calculatedPreferred)
+    : calculatedPreferred
+  const scheduledStaffCount = useInitialFlexStaffing
+    ? (initialFlexScheduledStaff ?? scheduledStaffCountFromCell)
+    : scheduledStaffCountFromCell
 
   const staffingSummary = useMemo(() => {
     return buildStaffingSummary({
@@ -2327,10 +2435,61 @@ export default function ScheduleSidePanel({
                           Add Temporary Coverage
                         </h2>
                       </div>
-                      <Button type="button" variant="outline" onClick={() => setPanelMode('cell')}>
-                        Back
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          initialPanelMode === 'flex' ? onClose() : setPanelMode('cell')
+                        }
+                      >
+                        {initialPanelMode === 'flex' ? 'Close' : 'Back'}
                       </Button>
                     </div>
+
+                    {(() => {
+                      const fromDashboard =
+                        initialPanelMode === 'flex' &&
+                        initialFlexStartDate &&
+                        initialFlexEndDate &&
+                        initialFlexTargetType
+                      const fromWeekly =
+                        flexRunInfo?.belowTarget &&
+                        flexRunInfo.dateStart &&
+                        flexRunInfo.dateEnd &&
+                        flexRunInfo.weeksLabel &&
+                        flexRunInfo.targetType
+                      if (!fromDashboard && !fromWeekly) return null
+                      const slotName = [classroomName, dayName, timeSlotCode]
+                        .filter(Boolean)
+                        .join(' ')
+                      const formatShort = (d: string) =>
+                        parseLocalDate(d).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                        })
+                      const weeksLabel = fromDashboard
+                        ? getStaffingWeeksLabel(initialFlexStartDate!, initialFlexEndDate!)
+                        : flexRunInfo!.weeksLabel!
+                      const targetLabel = fromDashboard
+                        ? initialFlexTargetType!
+                        : flexRunInfo!.targetType!
+                      const rangeStart = fromDashboard
+                        ? initialFlexStartDate!
+                        : flexRunInfo!.dateStart!
+                      const rangeEnd = fromDashboard ? initialFlexEndDate! : flexRunInfo!.dateEnd!
+                      return (
+                        <div className="rounded-lg border border-slate-200 bg-white p-4">
+                          <p className="text-xs uppercase tracking-wide text-slate-500 font-medium mb-2">
+                            Summary
+                          </p>
+                          <p className="text-sm text-slate-700">
+                            {slotName} is below {targetLabel} target for the next {weeksLabel}.
+                            Suggested coverage range: {formatShort(rangeStart)} –{' '}
+                            {formatShort(rangeEnd)}.
+                          </p>
+                        </div>
+                      )
+                    })()}
 
                     <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
                       <div className="grid grid-cols-2 gap-4">
@@ -2450,8 +2609,14 @@ export default function ScheduleSidePanel({
                               Long-term assignment detected
                             </h4>
                             <p className="mt-1 text-sm text-amber-700">
-                              Assigning for a whole semester? You might want to do this in the
-                              Baseline Schedule instead.
+                              Assigning for a whole semester? You might want to do this in the{' '}
+                              <Link
+                                href={`/settings/baseline-schedule?classroom_id=${classroomId}&day_of_week_id=${dayId}&time_slot_id=${timeSlotId}`}
+                                className="font-medium text-amber-800 underline hover:text-amber-900"
+                              >
+                                Baseline Schedule
+                              </Link>{' '}
+                              instead.
                             </p>
                           </div>
                         </div>

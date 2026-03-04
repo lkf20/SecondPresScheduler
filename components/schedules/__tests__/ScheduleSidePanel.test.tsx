@@ -138,6 +138,24 @@ const setupFetch = (removeContext: {
         json: async () => removeContext,
       } as Response
     }
+    if (url.includes('/api/schedule-cells?')) {
+      return {
+        ok: true,
+        json: async () => [],
+      } as Response
+    }
+    if (url.includes('/api/dashboard/slot-run?')) {
+      return {
+        ok: true,
+        json: async () => ({
+          belowTarget: true,
+          dateStart: '2026-03-09',
+          dateEnd: '2026-05-11',
+          weeksLabel: '9 weeks',
+          targetType: 'required',
+        }),
+      } as Response
+    }
     return {
       ok: true,
       json: async () => ({}),
@@ -512,5 +530,104 @@ describe('ScheduleSidePanel interactions', () => {
     addTimeOffButtons.forEach(button => {
       expect(button).toBeDisabled()
     })
+  })
+})
+
+describe('ScheduleSidePanel - Add Temporary Coverage', () => {
+  afterEach(() => {
+    jest.clearAllMocks()
+  })
+
+  afterAll(() => {
+    global.fetch = originalFetch
+  })
+
+  const buildPropsFromDashboard = () => {
+    const base = buildProps()
+    return {
+      ...base,
+      selectedCellData: undefined,
+      initialPanelMode: 'flex' as const,
+      initialFlexStartDate: '2026-03-09',
+      initialFlexEndDate: '2026-05-11',
+      initialFlexTargetType: 'required' as const,
+      initialFlexRequiredStaff: 2,
+      initialFlexPreferredStaff: 3,
+      initialFlexScheduledStaff: 1,
+    }
+  }
+
+  it('from dashboard: header shows Required, Preferred, and Scheduled when initial flex staffing is passed', async () => {
+    setupFetch({
+      start_date: '2026-03-09',
+      end_date: '2026-05-11',
+      weekdays: ['Monday'],
+      matching_shift_count: 10,
+    })
+
+    render(<ScheduleSidePanel {...buildPropsFromDashboard()} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Required: 2.*Preferred: 3.*Scheduled: 1/)).toBeInTheDocument()
+    })
+  })
+
+  it('from dashboard: shows Summary card with run-length and suggested coverage range', async () => {
+    setupFetch({
+      start_date: '2026-03-09',
+      end_date: '2026-05-11',
+      weekdays: ['Monday'],
+      matching_shift_count: 10,
+    })
+
+    render(<ScheduleSidePanel {...buildPropsFromDashboard()} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Summary')).toBeInTheDocument()
+    })
+    expect(
+      screen.getByText(/Infant Room Monday EM is below required target for the next/)
+    ).toBeInTheDocument()
+    expect(screen.getByText(/Suggested coverage range: Mar 9 – May 11/)).toBeInTheDocument()
+  })
+
+  it('from dashboard: when date range is 8+ weeks shows Long-term assignment detected', async () => {
+    setupFetch({
+      start_date: '2026-03-09',
+      end_date: '2026-05-11',
+      weekdays: ['Monday'],
+      matching_shift_count: 10,
+    })
+
+    render(<ScheduleSidePanel {...buildPropsFromDashboard()} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Long-term assignment detected')).toBeInTheDocument()
+    })
+    expect(
+      screen.getByText(/Assigning for a whole semester\? You might want to do this in the/)
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Baseline Schedule' })).toBeInTheDocument()
+  })
+
+  it('from weekly: fetches slot-run and shows Summary when slot is below target', async () => {
+    setupFetch({
+      start_date: '2026-03-09',
+      end_date: '2026-05-11',
+      weekdays: ['Monday'],
+      matching_shift_count: 10,
+    })
+
+    render(<ScheduleSidePanel {...buildProps()} weekStartISO="2026-03-09" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Temporary Coverage' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Summary')).toBeInTheDocument()
+    })
+    expect(
+      screen.getByText(/Infant Room Monday EM is below required target for the next 9 weeks/)
+    ).toBeInTheDocument()
+    expect(screen.getByText(/Suggested coverage range: Mar 9 – May 11/)).toBeInTheDocument()
   })
 })

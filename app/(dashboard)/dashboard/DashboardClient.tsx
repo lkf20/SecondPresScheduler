@@ -38,6 +38,7 @@ import { useDashboard } from '@/lib/hooks/use-dashboard'
 import { useProfile } from '@/lib/hooks/use-profile'
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
+import ScheduleSidePanel from '@/components/schedules/ScheduleSidePanel'
 
 type Summary = {
   absences: number
@@ -80,6 +81,7 @@ type ScheduledSubItem = {
 
 type StaffingTargetItem = {
   id: string
+  date?: string
   day_of_week_id: string
   day_name: string
   day_number: number
@@ -103,8 +105,33 @@ type DashboardOverview = {
   scheduled_subs: ScheduledSubItem[]
 }
 
-const formatSlotLabel = (dayName: string, timeSlotCode: string) =>
-  `${dayName || '—'} ${timeSlotCode}`
+/** One card: same classroom + time slot + day and same required/scheduled across dates */
+export type StaffingTargetGroup = {
+  dateStart: string
+  dateEnd: string
+  slots: StaffingTargetItem[]
+  /** First slot for rep fields (classroom, time_slot, day, required, scheduled, status) */
+  rep: StaffingTargetItem
+}
+
+const formatShortDateLabel = (value: string) => {
+  const date = new Date(`${value}T00:00:00`)
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
+}
+
+const formatSlotLabel = (slot: StaffingTargetItem) =>
+  slot.date
+    ? `${formatFullDateLabel(slot.date)} • ${slot.time_slot_code}`
+    : `${slot.day_name || '—'} ${slot.time_slot_code}`
+
+/** Label for a grouped slot: "Mar 9 - 23 • Mon LB" or single "Mon Mar 9 • LB" */
+const formatGroupSlotLabel = (group: StaffingTargetGroup) => {
+  const { rep } = group
+  if (group.dateStart === group.dateEnd) {
+    return `${formatFullDateLabel(group.dateStart)} • ${rep.time_slot_code}`
+  }
+  return `${formatShortDateLabel(group.dateStart)} - ${formatShortDateLabel(group.dateEnd)} • ${rep.day_name || '—'} ${rep.time_slot_code}`
+}
 
 const formatFullDateLabel = (value: string) => {
   const date = new Date(`${value}T00:00:00`)
@@ -118,37 +145,59 @@ const formatFullDateLabel = (value: string) => {
 const formatShortfallValue = (required: number, scheduled: number) =>
   Math.max(0, required - scheduled)
 
-const groupStaffingTargets = (slots: StaffingTargetItem[]) => {
+/** Group by classroom, then by (time_slot + day + required + scheduled). Only merge slots when required and scheduled match. */
+function groupStaffingTargets(slots: StaffingTargetItem[]) {
   const classroomMap = new Map<
     string,
     {
       classroom_name: string
       classroom_color: string | null
-      slots: StaffingTargetItem[]
+      slotGroups: StaffingTargetGroup[]
     }
   >()
 
+  // Group by (classroom_id, time_slot_id, day_of_week_id, required_staff, scheduled_staff)
+  const rawGroups = new Map<string, StaffingTargetItem[]>()
   slots.forEach(slot => {
-    const entry = classroomMap.get(slot.classroom_id) || {
-      classroom_name: slot.classroom_name,
-      classroom_color: slot.classroom_color ?? null,
-      slots: [],
+    const key = `${slot.classroom_id}|${slot.time_slot_id}|${slot.day_of_week_id}|${slot.required_staff}|${slot.scheduled_staff}`
+    const list = rawGroups.get(key) || []
+    list.push(slot)
+    rawGroups.set(key, list)
+  })
+
+  // Build StaffingTargetGroup for each raw group (date range + rep)
+  rawGroups.forEach((groupSlots, key) => {
+    const first = groupSlots[0]
+    if (!first) return
+    const dates = groupSlots.map(s => s.date).filter((d): d is string => !!d)
+    const dateStart = dates.length ? dates.reduce((a, b) => (a < b ? a : b)) : (first.date ?? '')
+    const dateEnd = dates.length ? dates.reduce((a, b) => (a > b ? a : b)) : (first.date ?? '')
+    const group: StaffingTargetGroup = {
+      dateStart,
+      dateEnd,
+      slots: groupSlots.sort((a, b) => {
+        if (a.day_order !== b.day_order) return a.day_order - b.day_order
+        return a.time_slot_order - b.time_slot_order
+      }),
+      rep: first,
     }
-    entry.slots.push(slot)
-    classroomMap.set(slot.classroom_id, entry)
+    const entry = classroomMap.get(first.classroom_id) || {
+      classroom_name: first.classroom_name,
+      classroom_color: first.classroom_color ?? null,
+      slotGroups: [],
+    }
+    entry.slotGroups.push(group)
+    classroomMap.set(first.classroom_id, entry)
   })
 
   const classrooms = Array.from(classroomMap.values()).sort((a, b) =>
     a.classroom_name.localeCompare(b.classroom_name)
   )
-
-  return classrooms.map(classroom => ({
-    ...classroom,
-    slots: classroom.slots.sort((a, b) => {
-      if (a.day_order !== b.day_order) {
-        return a.day_order - b.day_order
-      }
-      return a.time_slot_order - b.time_slot_order
+  return classrooms.map(c => ({
+    ...c,
+    slotGroups: c.slotGroups.sort((a, b) => {
+      if (a.rep.day_order !== b.rep.day_order) return a.rep.day_order - b.rep.day_order
+      return a.rep.time_slot_order - b.rep.time_slot_order
     }),
   }))
 }
@@ -244,6 +293,7 @@ export default function DashboardClient({
   const [scheduledSubsSectionCollapsed, setScheduledSubsSectionCollapsed] = useState(false)
   const [staffingTargetSectionCollapsed, setStaffingTargetSectionCollapsed] = useState(false)
   const [editingRequestId, setEditingRequestId] = useState<string | null>(null)
+  const [assignCoverageSlot, setAssignCoverageSlot] = useState<StaffingTargetGroup | null>(null)
 
   const handleEdit = (id: string) => {
     setEditingRequestId(id)
@@ -901,7 +951,13 @@ export default function DashboardClient({
           <div className={cn('space-y-4', coverageSectionCollapsed && 'hidden xl:block')}>
             {filteredCoverageRequests.length === 0 ? (
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                No upcoming time off in the next {getRangeDaysText(coverageRange)}
+                No upcoming{' '}
+                {coverageFilter === 'needs'
+                  ? 'time off needing a sub'
+                  : coverageFilter === 'covered'
+                    ? 'covered time off'
+                    : 'time off'}{' '}
+                in the next {getRangeDaysText(coverageRange)}
               </div>
             ) : (
               <div className="space-y-3">
@@ -1088,6 +1144,10 @@ export default function DashboardClient({
           </div>
 
           <div className={cn('space-y-4', staffingTargetSectionCollapsed && 'hidden xl:block')}>
+            <p className="text-xs text-slate-500">
+              Counts permanent staff, flex staff, floaters (0.5), and temporary coverage. Subs and
+              absences are excluded from the calculation.
+            </p>
             {overview.staffing_targets.length === 0 ? (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                 ✅ All classrooms meet staffing targets.
@@ -1102,7 +1162,12 @@ export default function DashboardClient({
                   >
                     <span>
                       Below Required (
-                      {belowRequiredGroups.reduce((total, group) => total + group.slots.length, 0)})
+                      {belowRequiredGroups.reduce(
+                        (total, classroom) =>
+                          total + classroom.slotGroups.reduce((s, g) => s + g.slots.length, 0),
+                        0
+                      )}
+                      )
                     </span>
                     {belowRequiredCollapsed ? (
                       <ChevronDown className="h-4 w-4" />
@@ -1124,37 +1189,42 @@ export default function DashboardClient({
                               className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
                               style={getClassroomPillStyle(classroom.classroom_color)}
                             >
-                              {classroom.classroom_name} ({classroom.slots.length})
+                              {classroom.classroom_name} (
+                              {classroom.slotGroups.reduce((s, g) => s + g.slots.length, 0)})
                             </span>
                           </div>
-                          {classroom.slots.map(slot => (
+                          {classroom.slotGroups.map(group => (
                             <div
-                              key={slot.id}
+                              key={`${group.rep.classroom_id}-${group.rep.time_slot_id}-${group.rep.day_of_week_id}-${group.dateStart}-${group.dateEnd}`}
                               className="grid gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 md:grid-cols-[1fr_auto]"
                             >
                               <div className="flex flex-wrap items-center gap-4 min-w-0">
                                 <div className="min-w-[160px] space-y-3 flex-shrink-0">
                                   <div className="text-sm font-semibold text-slate-900">
-                                    {formatSlotLabel(slot.day_name, slot.time_slot_code)}
+                                    {formatGroupSlotLabel(group)}
                                   </div>
                                   <div className="flex flex-col items-start gap-2">
                                     <StaffingStatusBadge
-                                      status={slot.status}
+                                      status={group.rep.status}
                                       label={`Below Required by ${formatShortfallValue(
-                                        slot.required_staff,
-                                        slot.scheduled_staff
+                                        group.rep.required_staff,
+                                        group.rep.scheduled_staff
                                       )}`}
                                       size="md"
                                     />
                                     <div className="text-xs text-slate-600 whitespace-nowrap">
-                                      Required: {slot.required_staff} · Scheduled:{' '}
-                                      {slot.scheduled_staff}
+                                      Required: {group.rep.required_staff} · Scheduled:{' '}
+                                      {group.rep.scheduled_staff}
                                     </div>
                                   </div>
                                 </div>
                               </div>
                               <div className="flex items-center justify-end self-center flex-shrink-0">
-                                <Button size="sm" variant="teal" disabled>
+                                <Button
+                                  size="sm"
+                                  variant="teal"
+                                  onClick={() => setAssignCoverageSlot(group)}
+                                >
                                   Assign Coverage
                                 </Button>
                               </div>
@@ -1173,7 +1243,11 @@ export default function DashboardClient({
                   >
                     <span>
                       Below Preferred (
-                      {belowPreferredGroups.reduce((total, group) => total + group.slots.length, 0)}
+                      {belowPreferredGroups.reduce(
+                        (total, classroom) =>
+                          total + classroom.slotGroups.reduce((s, g) => s + g.slots.length, 0),
+                        0
+                      )}
                       )
                     </span>
                     {belowPreferredCollapsed ? (
@@ -1196,37 +1270,43 @@ export default function DashboardClient({
                               className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
                               style={getClassroomPillStyle(classroom.classroom_color)}
                             >
-                              {classroom.classroom_name} ({classroom.slots.length})
+                              {classroom.classroom_name} (
+                              {classroom.slotGroups.reduce((s, g) => s + g.slots.length, 0)})
                             </span>
                           </div>
-                          {classroom.slots.map(slot => (
+                          {classroom.slotGroups.map(group => (
                             <div
-                              key={slot.id}
+                              key={`${group.rep.classroom_id}-${group.rep.time_slot_id}-${group.rep.day_of_week_id}-${group.dateStart}-${group.dateEnd}`}
                               className="grid gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 md:grid-cols-[1fr_auto]"
                             >
                               <div className="flex flex-wrap items-center gap-4 min-w-0">
                                 <div className="min-w-[160px] space-y-3 flex-shrink-0">
                                   <div className="text-sm font-semibold text-slate-900">
-                                    {formatSlotLabel(slot.day_name, slot.time_slot_code)}
+                                    {formatGroupSlotLabel(group)}
                                   </div>
                                   <div className="flex flex-col items-start gap-2">
                                     <StaffingStatusBadge
-                                      status={slot.status}
+                                      status={group.rep.status}
                                       label={`Below Preferred by ${formatShortfallValue(
-                                        slot.preferred_staff ?? slot.required_staff,
-                                        slot.scheduled_staff
+                                        group.rep.preferred_staff ?? group.rep.required_staff,
+                                        group.rep.scheduled_staff
                                       )}`}
                                       size="md"
                                     />
                                     <div className="text-xs text-slate-600 whitespace-nowrap">
-                                      Preferred: {slot.preferred_staff ?? slot.required_staff} ·
-                                      Scheduled: {slot.scheduled_staff}
+                                      Preferred:{' '}
+                                      {group.rep.preferred_staff ?? group.rep.required_staff} ·
+                                      Scheduled: {group.rep.scheduled_staff}
                                     </div>
                                   </div>
                                 </div>
                               </div>
                               <div className="flex items-center justify-end self-center flex-shrink-0">
-                                <Button size="sm" variant="teal" disabled>
+                                <Button
+                                  size="sm"
+                                  variant="teal"
+                                  onClick={() => setAssignCoverageSlot(group)}
+                                >
                                   Assign Coverage
                                 </Button>
                               </div>
@@ -1241,6 +1321,40 @@ export default function DashboardClient({
           </div>
         </section>
       </div>
+
+      {/* Add Temporary Coverage (reuses ScheduleSidePanel from weekly schedule) */}
+      {assignCoverageSlot && (
+        <ScheduleSidePanel
+          isOpen
+          onClose={() => {
+            setAssignCoverageSlot(null)
+            refetch()
+          }}
+          dayId={assignCoverageSlot.rep.day_of_week_id}
+          dayName={assignCoverageSlot.rep.day_name}
+          timeSlotId={assignCoverageSlot.rep.time_slot_id}
+          timeSlotName={assignCoverageSlot.rep.time_slot_code}
+          timeSlotCode={assignCoverageSlot.rep.time_slot_code}
+          timeSlotStartTime={null}
+          timeSlotEndTime={null}
+          classroomId={assignCoverageSlot.rep.classroom_id}
+          classroomName={assignCoverageSlot.rep.classroom_name}
+          classroomColor={assignCoverageSlot.rep.classroom_color ?? null}
+          selectedDayIds={[]}
+          onSave={() => void refetch()}
+          weekStartISO={assignCoverageSlot.dateStart}
+          readOnly
+          initialPanelMode="flex"
+          initialFlexStartDate={assignCoverageSlot.dateStart}
+          initialFlexEndDate={assignCoverageSlot.dateEnd}
+          initialFlexTargetType={
+            assignCoverageSlot.rep.status === 'below_preferred' ? 'preferred' : 'required'
+          }
+          initialFlexRequiredStaff={assignCoverageSlot.rep.required_staff}
+          initialFlexPreferredStaff={assignCoverageSlot.rep.preferred_staff}
+          initialFlexScheduledStaff={assignCoverageSlot.rep.scheduled_staff}
+        />
+      )}
 
       {/* Edit Time Off Panel */}
       {editingRequestId && (

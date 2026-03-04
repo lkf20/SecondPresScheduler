@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { createErrorResponse } from '@/lib/utils/errors'
-import { parseLocalDate } from '@/lib/utils/date'
+import { parseLocalDate, expandDateRangeWithTimeZone } from '@/lib/utils/date'
+import { getStaffingEndDate } from '@/lib/dashboard/staffing-boundary'
 import { MONTH_NAMES } from '@/lib/utils/date-format'
 import { getStaffDisplayName, type DisplayNameFormat } from '@/lib/utils/staff-display-name'
 import { filterCoverageRequestsToActiveTimeOffOnly } from '@/lib/dashboard/filter-draft-time-off'
@@ -32,20 +33,29 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // 12-week lookahead for staffing targets (run length and suggestions), capped by boundary day
+    const staffingEndDateForFetch = getStaffingEndDate(startDate)
+
     const supabase = await createClient()
 
     const defaultDisplayNameFormat: DisplayNameFormat = 'first_last_initial'
     let displayNameFormat: DisplayNameFormat = defaultDisplayNameFormat
 
+    let timeZone = 'UTC'
     try {
       const { data: settingsData, error: settingsError } = await supabase
         .from('schedule_settings')
-        .select('default_display_name_format')
+        .select('default_display_name_format, time_zone')
         .eq('school_id', schoolId)
         .maybeSingle()
 
-      if (!settingsError && settingsData?.default_display_name_format) {
-        displayNameFormat = settingsData.default_display_name_format as DisplayNameFormat
+      if (!settingsError) {
+        if (settingsData?.default_display_name_format) {
+          displayNameFormat = settingsData.default_display_name_format as DisplayNameFormat
+        }
+        if (settingsData?.time_zone) {
+          timeZone = settingsData.time_zone as string
+        }
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err)
@@ -326,14 +336,16 @@ export async function GET(request: NextRequest) {
           cell.enrollment_for_staffing !== undefined
       )
 
-    // Get teacher schedules to count scheduled staff
+    // Get teacher schedules to count scheduled staff (permanent, flex, floaters)
+    // Include is_floater for 0.5 weighting
     const { data: teacherSchedules, error: teacherSchedulesError } = await supabase
       .from('teacher_schedules')
       .select(
         `
         day_of_week_id,
         time_slot_id,
-        classroom_id
+        classroom_id,
+        is_floater
       `
       )
       .eq('school_id', schoolId)
@@ -341,6 +353,24 @@ export async function GET(request: NextRequest) {
     if (teacherSchedulesError) {
       console.error('Error fetching teacher schedules:', teacherSchedulesError)
       return createErrorResponse(teacherSchedulesError, 'Failed to fetch teacher schedules', 500)
+    }
+
+    // Get staffing_event_shifts (temporary coverage) in date range - use 12-week window for staffing targets
+    const { data: staffingEventShifts, error: staffingEventShiftsError } = await supabase
+      .from('staffing_event_shifts')
+      .select('date, time_slot_id, classroom_id')
+      .eq('school_id', schoolId)
+      .eq('status', 'active')
+      .gte('date', startDate)
+      .lte('date', staffingEndDateForFetch)
+
+    if (staffingEventShiftsError) {
+      console.error('Error fetching staffing event shifts:', staffingEventShiftsError)
+      return createErrorResponse(
+        staffingEventShiftsError,
+        'Failed to fetch staffing event shifts',
+        500
+      )
     }
 
     // Process coverage requests (already deduplicated and draft time-off excluded above)
@@ -526,23 +556,35 @@ export async function GET(request: NextRequest) {
       })
     )
 
-    // Process staffing targets using schedule_cells (same logic as weekly schedule)
-    const processedStaffingTargets = scheduleCells
-      .map((cell: any) => {
+    // Process staffing targets: use 12-week lookahead for run-length and suggestions (coverage range unchanged)
+    const expandedDates = expandDateRangeWithTimeZone(startDate, staffingEndDateForFetch, timeZone)
+    const dayNumberToDayOfWeekId = new Map<number, string>()
+    scheduleCells.forEach((cell: any) => {
+      const dow = cell.day_of_week as any
+      if (dow?.day_number != null && dow?.id) {
+        dayNumberToDayOfWeekId.set(dow.day_number, dow.id)
+      }
+    })
+
+    const staffingTargetResults: any[] = []
+    for (const dateEntry of expandedDates) {
+      const dayOfWeekId = dayNumberToDayOfWeekId.get(dateEntry.day_number)
+      if (!dayOfWeekId) continue
+
+      for (const cell of scheduleCells) {
         const dayOfWeek = cell.day_of_week as any
         const timeSlot = cell.time_slot as any
         const classroom = cell.classroom as any
         const classGroups = cell.class_groups || []
 
-        // Find class group with lowest min_age for ratio calculation (same as weekly schedule)
+        if (cell.day_of_week_id !== dayOfWeekId) continue
+
         const classGroupForRatio = classGroups.reduce((lowest: any, current: any) => {
           const currentMinAge = current.min_age ?? Infinity
           const lowestMinAge = lowest.min_age ?? Infinity
           return currentMinAge < lowestMinAge ? current : lowest
         })
 
-        // Calculate required and preferred teachers based on enrollment and ratios
-        // Formula: Math.ceil(enrollment / ratio) - same as weekly schedule
         const requiredStaff =
           classGroupForRatio.required_ratio && cell.enrollment_for_staffing
             ? Math.ceil(cell.enrollment_for_staffing / classGroupForRatio.required_ratio)
@@ -552,46 +594,43 @@ export async function GET(request: NextRequest) {
             ? Math.ceil(cell.enrollment_for_staffing / classGroupForRatio.preferred_ratio)
             : null
 
-        // Count scheduled staff for this slot (regular teachers)
-        const scheduledStaff = (teacherSchedules || []).filter(
-          ts =>
+        // Count: permanent + flex (1 each) + floaters (0.5 each) + temporary coverage (1 each). Exclude subs.
+        const teacherContrib = (teacherSchedules || []).reduce((sum, ts) => {
+          if (
             ts.day_of_week_id === cell.day_of_week_id &&
             ts.time_slot_id === cell.time_slot_id &&
             ts.classroom_id === cell.classroom_id
+          ) {
+            return sum + (ts.is_floater ? 0.5 : 1)
+          }
+          return sum
+        }, 0)
+        const tempCoverageCount = (staffingEventShifts || []).filter(
+          (ses: any) =>
+            ses.date === dateEntry.date &&
+            ses.time_slot_id === cell.time_slot_id &&
+            ses.classroom_id === cell.classroom_id
         ).length
+        const totalScheduled = teacherContrib + tempCoverageCount
 
-        // Also count sub assignments for this slot
-        const subCount = (subAssignments || []).filter(
-          (sa: any) =>
-            sa.day_of_week_id === cell.day_of_week_id &&
-            sa.time_slot_id === cell.time_slot_id &&
-            sa.classroom_id === cell.classroom_id
-        ).length
-
-        const totalScheduled = scheduledStaff + subCount
-
-        // Determine status - only include if actually below required or below preferred
         let status: 'below_required' | 'below_preferred' | null = null
         if (requiredStaff !== null && totalScheduled < requiredStaff) {
           status = 'below_required'
         } else if (preferredStaff !== null && totalScheduled < preferredStaff) {
           status = 'below_preferred'
         }
+        if (status === null) continue
 
-        // Only return if there's a staffing issue
-        if (status === null) {
-          return null
-        }
-
-        return {
-          id: cell.id,
+        staffingTargetResults.push({
+          id: `${cell.id}|${dateEntry.date}`,
+          date: dateEntry.date,
           day_of_week_id: cell.day_of_week_id,
-          day_name: dayOfWeek?.name || 'Unknown',
-          day_number: dayOfWeek?.day_number || 0,
-          day_order: dayOfWeek?.display_order || 0,
+          day_name: dateEntry.day_name || dayOfWeek?.name || 'Unknown',
+          day_number: dayOfWeek?.day_number ?? 0,
+          day_order: dayOfWeek?.display_order ?? 0,
           time_slot_id: cell.time_slot_id,
           time_slot_code: timeSlot?.code || 'Unknown',
-          time_slot_order: timeSlot?.display_order || 0,
+          time_slot_order: timeSlot?.display_order ?? 0,
           classroom_id: cell.classroom_id || '',
           classroom_name: classroom?.name || 'Unknown',
           classroom_color: classroom?.color || null,
@@ -599,9 +638,10 @@ export async function GET(request: NextRequest) {
           preferred_staff: preferredStaff,
           scheduled_staff: totalScheduled,
           status,
-        }
-      })
-      .filter((target: any): target is NonNullable<typeof target> => target !== null)
+        })
+      }
+    }
+    const processedStaffingTargets = staffingTargetResults
 
     // Process scheduled subs
     const processedScheduledSubs = (subAssignments || []).map((sa: any) => {

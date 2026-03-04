@@ -43,6 +43,7 @@ Features to implement soon (within the next few weeks).
 - [ ] User onboarding UI - create UI flow for onboarding new users, collecting necessary information (name, role, school assignment)
 - [ ] School management UI - add ability to create new schools and manage school settings
 - [ ] Timezone settings - add timezone configuration section to Settings to allow schools to set their timezone, ensuring dates are displayed and processed correctly
+- [ ] School calendar settings - add settings for school year start/end, holidays, teacher work days, etc. (enables "until end of term" messaging and term-based logic)
 - [ ] Standardize warning styles - add a shared WarningText component and migrate existing warnings to it (Time Off, Weekly Schedule, Sub Finder, etc.)
 - [ ] Check and fix UI for different screen sizes - some UI errors noticed in Dashboard for medium size screens
 - [ ] Add tooltip to Understaffed Classrooms summary card icons

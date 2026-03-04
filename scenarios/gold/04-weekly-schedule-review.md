@@ -66,6 +66,7 @@ Define “done right” for the **Weekly Schedule** so an AI (or human) can revi
 - [ ] **Flex in weekly view:** Assigning temporary coverage from the weekly schedule (date range, slot) creates the intended staffing event; double-booking is prevented (409 or equivalent).
 - [ ] **Visibility:** New temporary coverage appears in the grid after save; removal removes it without leaving stale state.
 - [ ] **Remove button only for staffing-event temporary coverage:** The "Remove" button for Baseline Flex staff is shown only when the assignment has a `staffing_event_id` (i.e. it came from a staffing event). Baseline-assigned teachers with the FLEXIBLE role appear in the Baseline Flex Staff section but do not have a Remove button; use "Edit baseline staff" to change those.
+- [ ] **Add Temporary Coverage (run-length, boundary, long-term):** When opening Add Temporary Coverage from Weekly (or Dashboard), see [10-add-temporary-coverage.md](./10-add-temporary-coverage.md) for Summary card, 12-week/May 14 boundary, 8-week long-term card, and header staffing (required, preferred, scheduled).
 
 ### 8. Week selection, refresh, and data consistency
 
