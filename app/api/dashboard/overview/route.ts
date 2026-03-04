@@ -566,6 +566,25 @@ export async function GET(request: NextRequest) {
       }
     })
 
+    // Precompute teacher contribution per (day_of_week_id, time_slot_id, classroom_id).
+    // It is identical for every date with the same day-of-week, so compute once per slot.
+    const teacherContribBySlot = new Map<string, number>()
+    for (const cell of scheduleCells) {
+      const slotKey = `${cell.day_of_week_id}|${cell.time_slot_id}|${cell.classroom_id}`
+      if (teacherContribBySlot.has(slotKey)) continue
+      const contrib = (teacherSchedules || []).reduce((sum, ts) => {
+        if (
+          ts.day_of_week_id === cell.day_of_week_id &&
+          ts.time_slot_id === cell.time_slot_id &&
+          ts.classroom_id === cell.classroom_id
+        ) {
+          return sum + (ts.is_floater ? 0.5 : 1)
+        }
+        return sum
+      }, 0)
+      teacherContribBySlot.set(slotKey, contrib)
+    }
+
     const staffingTargetResults: any[] = []
     for (const dateEntry of expandedDates) {
       const dayOfWeekId = dayNumberToDayOfWeekId.get(dateEntry.day_number)
@@ -594,17 +613,8 @@ export async function GET(request: NextRequest) {
             ? Math.ceil(cell.enrollment_for_staffing / classGroupForRatio.preferred_ratio)
             : null
 
-        // Count: permanent + flex (1 each) + floaters (0.5 each) + temporary coverage (1 each). Exclude subs.
-        const teacherContrib = (teacherSchedules || []).reduce((sum, ts) => {
-          if (
-            ts.day_of_week_id === cell.day_of_week_id &&
-            ts.time_slot_id === cell.time_slot_id &&
-            ts.classroom_id === cell.classroom_id
-          ) {
-            return sum + (ts.is_floater ? 0.5 : 1)
-          }
-          return sum
-        }, 0)
+        const slotKey = `${cell.day_of_week_id}|${cell.time_slot_id}|${cell.classroom_id}`
+        const teacherContrib = teacherContribBySlot.get(slotKey) ?? 0
         const tempCoverageCount = (staffingEventShifts || []).filter(
           (ses: any) =>
             ses.date === dateEntry.date &&
