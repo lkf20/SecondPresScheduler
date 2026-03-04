@@ -290,9 +290,9 @@ export default function BaselineSchedulePage() {
         queryKey: ['weeklySchedule', schoolId],
         type: 'active',
       })
-    }
-    if (returnToWeekly) {
-      router.push('/schedules/weekly')
+      if (returnToWeekly) {
+        router.push('/schedules/weekly')
+      }
     }
   }, [schoolId, queryClient, returnToWeekly, router])
 
