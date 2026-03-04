@@ -670,8 +670,7 @@ export async function POST(request: NextRequest) {
 
           const isFlexibleStaff = flexibleStaffIds.has(sub.id)
 
-          const subRow = sub as Record<string, unknown>
-          const emailValue = subRow.email ?? subRow['email'] ?? sub.email ?? null
+          const emailValue = sub.email ?? null
           return {
             id: sub.id,
             name,
