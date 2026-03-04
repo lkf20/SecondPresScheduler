@@ -130,8 +130,7 @@ When adding a new UI element (e.g. a chip, badge, or label):
 ## Workflow
 
 - Work via pull requests. Follow the repo’s branch and commit rules (see `.cursor/rules` if present).
-- Before merging: run lint, type-check, tests, and smoke E2E; include evidence (screenshots or log rows) and tests for behavioral changes.
-- Use the PR template (Risks, Checks run, Evidence, Tests for non-trivial changes) for every PR.
+- Before creating or merging a PR, complete the [Pre-PR integrity checklist](docs/guides/PRE_PR_CHECKLIST.md). Use the PR template (Risks, Checks run, Evidence, Tests for non-trivial changes) for every PR.
 
 ## Database migrations
 

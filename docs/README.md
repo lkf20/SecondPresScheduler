@@ -15,6 +15,7 @@ Development guides and how-to documentation:
 - **DEVELOPMENT_BEST_PRACTICES.md** - Best practices for development workflow
 - **ERROR_HANDLING_GUIDE.md** - Guide for consistent error handling
 - **SETUP.md** - Project setup and installation instructions
+- **PRE_PR_CHECKLIST.md** - Integrity checklist before creating or merging a PR
 - **TESTING_CHECKLIST.md** - Checklist for testing features
 - **TESTING_GUIDE.md** - Guide for writing and running tests
 
