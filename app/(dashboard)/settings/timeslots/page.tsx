@@ -13,13 +13,7 @@ import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSchool } from '@/lib/contexts/SchoolContext'
-import {
-  invalidateDailySchedule,
-  invalidateDashboard,
-  invalidateSubFinderAbsences,
-  invalidateTimeOffRequests,
-  invalidateWeeklySchedule,
-} from '@/lib/utils/invalidation'
+import { invalidateSchedulingSurfaces } from '@/lib/utils/invalidation'
 import SortableTimeSlotsTable from '@/components/settings/SortableTimeSlotsTable'
 
 type TimeSlot = Database['public']['Tables']['time_slots']['Row']
@@ -79,18 +73,7 @@ export default function TimeSlotsPage() {
   }
 
   const invalidateAfterSave = async () => {
-    await Promise.all([
-      invalidateWeeklySchedule(queryClient, schoolId),
-      invalidateDailySchedule(queryClient, schoolId),
-      invalidateDashboard(queryClient, schoolId),
-      invalidateTimeOffRequests(queryClient, schoolId),
-      invalidateSubFinderAbsences(queryClient, schoolId),
-      queryClient.invalidateQueries({ queryKey: ['filterOptions', schoolId] }),
-      queryClient.invalidateQueries({ queryKey: ['filterOptions'] }),
-      queryClient.invalidateQueries({ queryKey: ['dailySchedule'] }),
-      queryClient.invalidateQueries({ queryKey: ['weeklySchedule'] }),
-      queryClient.invalidateQueries({ queryKey: ['scheduleSettings'] }),
-    ])
+    await invalidateSchedulingSurfaces(queryClient, schoolId)
   }
 
   const handleSaveDays = async () => {

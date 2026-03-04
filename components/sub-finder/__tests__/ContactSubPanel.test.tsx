@@ -516,9 +516,8 @@ describe('ContactSubPanel', () => {
     })
   })
 
-  it('shows alert when save fails while resolving shift overrides', async () => {
+  it('shows toast error when save fails while resolving shift overrides', async () => {
     const user = userEvent.setup()
-    const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
 
     global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
@@ -591,9 +590,9 @@ describe('ContactSubPanel', () => {
     await user.click(screen.getByRole('button', { name: /^save$/i }))
 
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith(
-        expect.stringMatching(/error saving contact: override failed/i)
-      )
+      expect(mockToastError).toHaveBeenCalledWith('Error saving contact', {
+        description: 'override failed',
+      })
     })
   })
 
@@ -674,9 +673,8 @@ describe('ContactSubPanel', () => {
     expect(screen.getByRole('button', { name: /^assign$/i })).toBeInTheDocument()
   })
 
-  it('shows alert when declined-all save cannot get or create contact', async () => {
+  it('shows toast error when declined-all save cannot get or create contact', async () => {
     const user = userEvent.setup()
-    const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
 
     global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
@@ -747,9 +745,9 @@ describe('ContactSubPanel', () => {
     await user.click(screen.getByRole('button', { name: /mark as declined/i }))
 
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith(
-        expect.stringMatching(/error saving declined status: failed to get or create contact/i)
-      )
+      expect(mockToastError).toHaveBeenCalledWith('Error saving declined status', {
+        description: 'Failed to get or create contact',
+      })
     })
   })
 
@@ -920,9 +918,7 @@ describe('ContactSubPanel', () => {
     expect(await screen.findByText(/contact status updated/i)).toHaveTextContent(/2024 at/i)
   })
 
-  it('logs coverage request fetch details when coverage lookup fails', async () => {
-    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
-
+  it('handles coverage request lookup failure without throwing', async () => {
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
       if (url.includes('/api/sub-finder/coverage-request/')) {
@@ -957,9 +953,7 @@ describe('ContactSubPanel', () => {
     )
 
     await waitFor(() => {
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringMatching(/failed to fetch coverage request/i)
-      )
+      expect(screen.getByText('Sally A.')).toBeInTheDocument()
     })
   })
 })

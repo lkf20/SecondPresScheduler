@@ -6,6 +6,15 @@ import { revalidatePath } from 'next/cache'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
+const shouldDebugLog =
+  process.env.NODE_ENV === 'development' || process.env.SUB_FINDER_DEBUG === 'true'
+
+const logAssignShiftsError = (...args: unknown[]) => {
+  if (shouldDebugLog) {
+    console.error(...args)
+  }
+}
+
 // See docs/data-lifecycle.md: sub_assignments lifecycle
 /**
  * POST /api/sub-finder/assign-shifts
@@ -96,7 +105,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (coverageError) {
-      console.error('Error fetching coverage_request:', {
+      logAssignShiftsError('Error fetching coverage_request:', {
         error: coverageError,
         code: coverageError.code,
         message: coverageError.message,
@@ -111,7 +120,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!coverageRequest) {
-      console.error('Coverage request not found:', { coverage_request_id })
+      logAssignShiftsError('Coverage request not found:', { coverage_request_id })
       return createErrorResponse('Coverage request not found', 404)
     }
 
@@ -165,7 +174,7 @@ export async function POST(request: NextRequest) {
       .in('id', uniqueSelectedShiftIds)
 
     if (shiftsError) {
-      console.error('Error fetching coverage_request_shifts:', shiftsError)
+      logAssignShiftsError('Error fetching coverage_request_shifts:', shiftsError)
       return createErrorResponse('Failed to fetch shift details', 500)
     }
 
@@ -279,7 +288,10 @@ export async function POST(request: NextRequest) {
         .eq('teacher_id', teacherId)
 
       if (scheduleError) {
-        console.error('Error fetching teacher schedules for classroom fallback:', scheduleError)
+        logAssignShiftsError(
+          'Error fetching teacher schedules for classroom fallback:',
+          scheduleError
+        )
         return createErrorResponse('Failed to resolve classroom for assignment', 500)
       }
 
@@ -334,7 +346,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (insertError) {
-      console.error('Error creating sub_assignments:', {
+      logAssignShiftsError('Error creating sub_assignments:', {
         code: insertError.code,
         message: insertError.message,
         details: insertError.details,
@@ -460,7 +472,7 @@ export async function POST(request: NextRequest) {
       assigned_count: assignedShiftDetails.length,
     })
   } catch (error) {
-    console.error('Error assigning shifts:', error)
+    logAssignShiftsError('Error assigning shifts:', error)
     return createErrorResponse(getErrorMessage(error), 500)
   }
 }

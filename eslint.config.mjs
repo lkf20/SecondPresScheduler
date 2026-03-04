@@ -3,7 +3,7 @@ import next from 'eslint-config-next'
 const config = [
   ...next,
   {
-    ignores: ['coverage/**'],
+    ignores: ['coverage/**', 'playwright-report/**', 'test-results/**'],
   },
   {
     rules: {

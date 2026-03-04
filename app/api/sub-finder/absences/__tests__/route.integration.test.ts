@@ -41,6 +41,11 @@ jest.mock('@/lib/server/coverage/coverage-summary', () => ({
 }))
 
 describe('GET /api/sub-finder/absences integration', () => {
+  beforeEach(() => {
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    jest.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
   afterEach(() => {
     jest.restoreAllMocks()
   })

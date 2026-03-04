@@ -172,13 +172,23 @@ export default function SortableClassesTable({
 
         if (orderChanged.length > 0) {
           await Promise.all(
-            orderChanged.map(classItem =>
-              fetch(`/api/class-groups/${classItem.id}`, {
+            orderChanged.map(async classItem => {
+              const response = await fetch(`/api/class-groups/${classItem.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ order: classItem.order }),
               })
-            )
+              if (!response.ok) {
+                let message = `Failed to update class group order for ${classItem.name}`
+                try {
+                  const errorData = (await response.json()) as { error?: string }
+                  if (errorData?.error) message = errorData.error
+                } catch {
+                  // Ignore JSON parse issues and keep fallback message.
+                }
+                throw new Error(message)
+              }
+            })
           )
         }
       } catch (error) {

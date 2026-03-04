@@ -194,13 +194,23 @@ export default function SortableClassroomsTable({
 
         if (orderChanged.length > 0) {
           await Promise.all(
-            orderChanged.map(classroom =>
-              fetch(`/api/classrooms/${classroom.id}`, {
+            orderChanged.map(async classroom => {
+              const response = await fetch(`/api/classrooms/${classroom.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ order: classroom.order }),
               })
-            )
+              if (!response.ok) {
+                let message = `Failed to update classroom order for ${classroom.name}`
+                try {
+                  const errorData = (await response.json()) as { error?: string }
+                  if (errorData?.error) message = errorData.error
+                } catch {
+                  // Ignore JSON parse issues and keep fallback message.
+                }
+                throw new Error(message)
+              }
+            })
           )
         }
       } catch (error) {

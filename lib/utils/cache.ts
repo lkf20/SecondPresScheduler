@@ -58,6 +58,13 @@ class SimpleCache {
   }
 
   /**
+   * Return all cache keys
+   */
+  keys(): string[] {
+    return Array.from(this.cache.keys())
+  }
+
+  /**
    * Clear expired entries
    */
   clearExpired(): void {
@@ -107,7 +114,7 @@ export function invalidateCache(pattern: string | RegExp): void {
     cache.delete(pattern)
   } else {
     // Clear all entries matching the regex pattern
-    for (const key of cache['cache'].keys()) {
+    for (const key of cache.keys()) {
       if (pattern.test(key)) {
         cache.delete(key)
       }

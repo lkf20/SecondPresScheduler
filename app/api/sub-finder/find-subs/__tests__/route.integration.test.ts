@@ -924,8 +924,6 @@ describe('POST /api/sub-finder/find-subs integration', () => {
       eq: jest.fn().mockReturnThis(),
       single: jest.fn().mockRejectedValue(new Error('no contact')),
     }
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
-
     ;(createClient as jest.Mock).mockResolvedValue({
       from: jest.fn((table: string) => {
         if (table === 'teacher_schedules') return teacherSchedulesQuery
@@ -971,9 +969,5 @@ describe('POST /api/sub-finder/find-subs integration', () => {
 
     expect(response.status).toBe(200)
     expect(json.subs).toEqual([])
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/error evaluating sub sub-1/i),
-      expect.any(Error)
-    )
   })
 })

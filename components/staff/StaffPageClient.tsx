@@ -29,13 +29,7 @@ import {
 } from '@/lib/utils/staff-display-name'
 import { formatUSPhone } from '@/lib/utils/phone'
 import { useSchool } from '@/lib/contexts/SchoolContext'
-import {
-  invalidateDashboard,
-  invalidateDailySchedule,
-  invalidateSubFinderAbsences,
-  invalidateTimeOffRequests,
-  invalidateWeeklySchedule,
-} from '@/lib/utils/invalidation'
+import { invalidateSchedulingSurfaces } from '@/lib/utils/invalidation'
 
 interface StaffPageClientProps {
   staff: StaffWithRole[]
@@ -217,11 +211,9 @@ export default function StaffPageClient({
       await updateStaffDisplayName(member.id, computed || null)
     }
     await Promise.all([
-      invalidateWeeklySchedule(queryClient, schoolId),
-      invalidateDailySchedule(queryClient, schoolId),
-      invalidateDashboard(queryClient, schoolId),
-      invalidateTimeOffRequests(queryClient, schoolId),
-      invalidateSubFinderAbsences(queryClient, schoolId),
+      invalidateSchedulingSurfaces(queryClient, schoolId, {
+        includeFilterOptions: false,
+      }),
       queryClient.invalidateQueries({ queryKey: ['staff'] }),
     ])
     router.refresh()

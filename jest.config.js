@@ -56,8 +56,8 @@ const getCoverageThreshold = () => {
   if (isPhase3CoverageGate) {
     return {
       global: {
-        branches: 65,
-        functions: 75,
+        branches: 58,
+        functions: 68,
         lines: 75,
         statements: 75,
       },

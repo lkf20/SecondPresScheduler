@@ -5,6 +5,7 @@ import { GET, POST } from '@/app/api/classrooms/route'
 import { getClassrooms, createClassroom, setClassroomAllowedClasses } from '@/lib/api/classrooms'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { NextRequest } from 'next/server'
+import { revalidatePath } from 'next/cache'
 
 jest.mock('@/lib/api/classrooms', () => ({
   getClassrooms: jest.fn(),
@@ -14,6 +15,10 @@ jest.mock('@/lib/api/classrooms', () => ({
 
 jest.mock('@/lib/utils/errors', () => ({
   createErrorResponse: jest.fn(),
+}))
+
+jest.mock('next/cache', () => ({
+  revalidatePath: jest.fn(),
 }))
 
 describe('classrooms collection route integration', () => {
@@ -77,6 +82,7 @@ describe('classrooms collection route integration', () => {
     expect(response.status).toBe(201)
     expect(createClassroom).toHaveBeenCalledWith({ name: 'Infant Room' })
     expect(setClassroomAllowedClasses).toHaveBeenCalledWith('class-1', ['cg-1', 'cg-2'])
+    expect(revalidatePath).toHaveBeenCalled()
     expect(json.id).toBe('class-1')
   })
 
