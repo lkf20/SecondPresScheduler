@@ -355,14 +355,27 @@ export async function GET(request: NextRequest) {
       return createErrorResponse(teacherSchedulesError, 'Failed to fetch teacher schedules', 500)
     }
 
-    // Get staffing_event_shifts (temporary coverage) in date range - use 12-week window for staffing targets
-    const { data: staffingEventShifts, error: staffingEventShiftsError } = await supabase
+    // Get staffing_event_shifts (temporary coverage) in date range - use 12-week window for staffing targets.
+    // We scope by classroom_id when we have schedule cells to avoid fetching shifts for other classrooms.
+    // Matching to cells uses date + time_slot_id + classroom_id (day-of-week is implicit from date).
+    // Unlike slot-run, we do not filter by time_slot_id or day_of_week_id here; in-memory filter is correct.
+    const classroomIdsFromCells = [
+      ...new Set(
+        (scheduleCells as { classroom_id?: string }[]).map(c => c.classroom_id).filter(Boolean)
+      ),
+    ] as string[]
+    let staffingEventShiftsQuery = supabase
       .from('staffing_event_shifts')
       .select('date, time_slot_id, classroom_id')
       .eq('school_id', schoolId)
       .eq('status', 'active')
       .gte('date', startDate)
       .lte('date', staffingEndDateForFetch)
+    if (classroomIdsFromCells.length > 0) {
+      staffingEventShiftsQuery = staffingEventShiftsQuery.in('classroom_id', classroomIdsFromCells)
+    }
+    const { data: staffingEventShifts, error: staffingEventShiftsError } =
+      await staffingEventShiftsQuery
 
     if (staffingEventShiftsError) {
       console.error('Error fetching staffing event shifts:', staffingEventShiftsError)
