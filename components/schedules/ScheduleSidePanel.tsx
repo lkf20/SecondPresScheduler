@@ -3379,11 +3379,7 @@ export default function ScheduleSidePanel({
                             type="button"
                             variant="ghost"
                             className="h-auto px-0 text-sm text-slate-500 hover:text-slate-700 shrink-0"
-                            onClick={() => {
-                              router.push(
-                                `/settings/baseline-schedule?classroom_id=${classroomId}&day_of_week_id=${dayId}&time_slot_id=${timeSlotId}&return_to_weekly=true`
-                              )
-                            }}
+                            onClick={() => setShowBaselineEditDialog(true)}
                             disabled={slotIsInactive}
                           >
                             <Pencil className="mr-1.5 h-3.5 w-3.5" />
