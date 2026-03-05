@@ -248,20 +248,23 @@ export function buildDailySchedulePdfHtml({
             const sortedAbsences = [...absences].sort(sortByName)
 
             const teacherLines = regularTeachers
-              .map(
-                t =>
-                  `<div style="color:${color.permanent}; font-weight:500;">${escapeHtml(
-                    formatTeacherName(
-                      {
-                        teacher_name: t.teacher_name,
-                        teacher_first_name: t.teacher_first_name,
-                        teacher_last_name: t.teacher_last_name,
-                        teacher_display_name: t.teacher_display_name,
-                      },
-                      options.teacherNameFormat
-                    )
-                  )}</div>`
-              )
+              .map(t => {
+                const breakStr =
+                  t.break_start_time && t.break_end_time
+                    ? ` <span style="font-size:10px; opacity:0.8;">☕ ${t.break_start_time.slice(0, 5)} - ${t.break_end_time.slice(0, 5)}</span>`
+                    : ''
+                return `<div style="color:${color.permanent}; font-weight:500;">${escapeHtml(
+                  formatTeacherName(
+                    {
+                      teacher_name: t.teacher_name,
+                      teacher_first_name: t.teacher_first_name,
+                      teacher_last_name: t.teacher_last_name,
+                      teacher_display_name: t.teacher_display_name,
+                    },
+                    options.teacherNameFormat
+                  )
+                )}${breakStr}</div>`
+              })
               .join('')
             const floaterLines = floaters
               .map(
@@ -282,22 +285,27 @@ export function buildDailySchedulePdfHtml({
               )
               .join('')
             const flexLines = flexTeachers
-              .map(
-                f =>
-                  `<div style="color:${color.flex}; font-weight:500;">${
-                    options.colorFriendly ? '' : '◦ '
-                  }${escapeHtml(
-                    formatTeacherName(
-                      {
-                        teacher_name: f.teacher_name,
-                        teacher_first_name: f.teacher_first_name,
-                        teacher_last_name: f.teacher_last_name,
-                        teacher_display_name: f.teacher_display_name,
-                      },
-                      options.teacherNameFormat
-                    )
-                  )}</div>`
-              )
+              .map(f => {
+                const prefix =
+                  f.event_category === 'break'
+                    ? options.colorFriendly
+                      ? '[Break] '
+                      : '☕ '
+                    : options.colorFriendly
+                      ? ''
+                      : '◦ '
+                return `<div style="color:${color.flex}; font-weight:500;">${prefix}${escapeHtml(
+                  formatTeacherName(
+                    {
+                      teacher_name: f.teacher_name,
+                      teacher_first_name: f.teacher_first_name,
+                      teacher_last_name: f.teacher_last_name,
+                      teacher_display_name: f.teacher_display_name,
+                    },
+                    options.teacherNameFormat
+                  )
+                )}</div>`
+              })
               .join('')
             const absenceLines = options.showAbsencesAndSubs
               ? sortedAbsences

@@ -1,16 +1,18 @@
 -- Migration: Refactor Temporary Coverage and Drop is_teacher
+-- Renumbered from 093 (duplicate prefix with 093_set_classroom_allowed_classes_atomic).
+-- When run after 094, we keep 094's constraint (allow both event types) so the DB stays consistent.
 
 -- 1. Update staffing_events event_type
 -- First, drop the existing check constraint on event_type
-DO $$ 
+DO $$
 DECLARE
   r RECORD;
 BEGIN
   FOR r IN (
-    SELECT conname 
-    FROM pg_constraint 
-    WHERE conrelid = 'staffing_events'::regclass 
-      AND contype = 'c' 
+    SELECT conname
+    FROM pg_constraint
+    WHERE conrelid = 'staffing_events'::regclass
+      AND contype = 'c'
       AND conkey @> ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid = 'staffing_events'::regclass AND attname = 'event_type')::smallint]
   ) LOOP
     EXECUTE 'ALTER TABLE staffing_events DROP CONSTRAINT ' || quote_ident(r.conname);
@@ -18,14 +20,14 @@ BEGIN
 END $$;
 
 -- Update existing data
-UPDATE staffing_events 
-SET event_type = 'temporary_coverage' 
+UPDATE staffing_events
+SET event_type = 'temporary_coverage'
 WHERE event_type = 'flex_assignment';
 
--- Add the new check constraint
-ALTER TABLE staffing_events 
-ADD CONSTRAINT staffing_events_event_type_check 
-CHECK (event_type IN ('temporary_coverage'));
+-- Add check constraint allowing both (same as 094; do not restrict to only 'temporary_coverage')
+ALTER TABLE staffing_events
+ADD CONSTRAINT staffing_events_event_type_check
+CHECK (event_type IN ('flex_assignment', 'temporary_coverage'));
 
 
 -- 2. Re-create create_staff_with_role_assignments without is_teacher

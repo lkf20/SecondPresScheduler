@@ -14,6 +14,10 @@ type FlexAssignmentPayload = {
   time_slot_ids: string[]
   day_of_week_ids?: string[]
   notes?: string | null
+  event_category?: 'standard' | 'break'
+  covered_staff_id?: string | null
+  start_time?: string | null
+  end_time?: string | null
   shifts?: Array<{
     date: string
     time_slot_id: string
@@ -44,6 +48,10 @@ export async function POST(request: NextRequest) {
       time_slot_ids,
       day_of_week_ids,
       notes,
+      event_category,
+      covered_staff_id,
+      start_time,
+      end_time,
       shifts,
     } = body
 
@@ -103,6 +111,10 @@ export async function POST(request: NextRequest) {
       .insert({
         school_id: schoolId,
         event_type: 'temporary_coverage',
+        event_category: event_category ?? 'standard',
+        covered_staff_id: covered_staff_id ?? null,
+        start_time: start_time ?? null,
+        end_time: end_time ?? null,
         staff_id,
         start_date,
         end_date,

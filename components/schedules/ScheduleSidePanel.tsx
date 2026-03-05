@@ -34,6 +34,13 @@ import DatePickerInput from '@/components/ui/date-picker-input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import TimeOffForm from '@/components/time-off/TimeOffForm'
 import SlotStatusToggle from './SlotStatusToggle'
 import ClassSelector from '@/components/settings/ClassSelector'
@@ -558,6 +565,10 @@ export default function ScheduleSidePanel({
   const router = useRouter()
   const [flexStartDate, setFlexStartDate] = useState<string>('')
   const [flexEndDate, setFlexEndDate] = useState<string>('')
+  const [flexCategory, setFlexCategory] = useState<'standard' | 'break'>('standard')
+  const [flexCoveredStaffId, setFlexCoveredStaffId] = useState<string>('')
+  const [flexStartTime, setFlexStartTime] = useState<string>('')
+  const [flexEndTime, setFlexEndTime] = useState<string>('')
   const [flexClassroomIds, setFlexClassroomIds] = useState<string[]>([classroomId])
   const [flexTimeSlotIds, setFlexTimeSlotIds] = useState<string[]>([timeSlotId])
   const [flexSaving, setFlexSaving] = useState(false)
@@ -897,6 +908,10 @@ export default function ScheduleSidePanel({
     }
     setFlexClassroomIds([classroomId])
     setFlexTimeSlotIds([timeSlotId])
+    setFlexCategory('standard')
+    setFlexCoveredStaffId('')
+    setFlexStartTime('')
+    setFlexEndTime('')
   }, [isOpen, weekStartISO, classroomId, timeSlotId, initialFlexStartDate, initialFlexEndDate])
 
   // When opened from dashboard (or elsewhere) in flex-only mode, show Add Temporary Coverage immediately
@@ -988,6 +1003,7 @@ export default function ScheduleSidePanel({
             end_date: flexEndDate,
             time_slot_ids: flexTimeSlotIds,
             classroom_ids: flexClassroomIds,
+            event_category: flexCategory,
           }),
         })
         const data = await response.json()
@@ -1037,7 +1053,15 @@ export default function ScheduleSidePanel({
     return () => {
       cancelled = true
     }
-  }, [isOpen, panelMode, flexStartDate, flexEndDate, flexTimeSlotIds, flexClassroomIds])
+  }, [
+    isOpen,
+    panelMode,
+    flexStartDate,
+    flexEndDate,
+    flexTimeSlotIds,
+    flexClassroomIds,
+    flexCategory,
+  ])
 
   const normalizeClassGroup = useCallback(
     (cg: {
@@ -1631,6 +1655,10 @@ export default function ScheduleSidePanel({
           end_date: flexEndDate,
           classroom_ids: flexClassroomIds,
           time_slot_ids: flexTimeSlotIds,
+          event_category: flexCategory,
+          covered_staff_id: flexCategory === 'break' ? flexCoveredStaffId || null : null,
+          start_time: flexCategory === 'break' ? flexStartTime || null : null,
+          end_time: flexCategory === 'break' ? flexEndTime || null : null,
           shifts,
         }),
       })
@@ -2491,7 +2519,85 @@ export default function ScheduleSidePanel({
                       )
                     })()}
 
-                    <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
+                    <div className="space-y-6 rounded-lg border border-slate-200 bg-white p-4">
+                      <div className="space-y-4 pb-6 border-b border-slate-100">
+                        <Label>Coverage Type</Label>
+                        <RadioGroup
+                          value={flexCategory}
+                          onValueChange={(val: string) =>
+                            setFlexCategory(val as 'standard' | 'break')
+                          }
+                          className="flex items-center gap-4"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="standard" id="type-standard" />
+                            <Label htmlFor="type-standard" className="font-normal cursor-pointer">
+                              Extra Coverage
+                            </Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="break" id="type-break" />
+                            <Label htmlFor="type-break" className="font-normal cursor-pointer">
+                              Break Coverage
+                            </Label>
+                          </div>
+                        </RadioGroup>
+
+                        {flexCategory === 'break' && (
+                          <div className="mt-4 pt-4 border-t border-slate-100">
+                            <div className="rounded-md bg-slate-50 border border-slate-200 p-4 space-y-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="covered_staff_id">
+                                  Teacher taking break (optional)
+                                </Label>
+                                <Select
+                                  value={flexCoveredStaffId || 'unspecified'}
+                                  onValueChange={v =>
+                                    setFlexCoveredStaffId(v === 'unspecified' ? '' : v)
+                                  }
+                                >
+                                  <SelectTrigger id="covered_staff_id">
+                                    <SelectValue placeholder="Select teacher..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="unspecified">Unspecified</SelectItem>
+                                    {selectedCellData?.assignments
+                                      ?.filter(a => !a.is_substitute && !a.is_flexible)
+                                      .map(t => (
+                                        <SelectItem key={t.teacher_id} value={t.teacher_id}>
+                                          {t.teacher_name}
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="break_start_time">Start Time (optional)</Label>
+                                  <input
+                                    type="time"
+                                    id="break_start_time"
+                                    className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    value={flexStartTime}
+                                    onChange={e => setFlexStartTime(e.target.value)}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="break_end_time">End Time (optional)</Label>
+                                  <input
+                                    type="time"
+                                    id="break_end_time"
+                                    className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    value={flexEndTime}
+                                    onChange={e => setFlexEndTime(e.target.value)}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="flex_start_date">
@@ -2600,7 +2706,7 @@ export default function ScheduleSidePanel({
                       )}
                     </div>
 
-                    {isLongTermFlex && (
+                    {isLongTermFlex && flexCategory !== 'break' && (
                       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
                         <div className="flex gap-3">
                           <AlertTriangle className="h-5 w-5 text-amber-700 shrink-0" />

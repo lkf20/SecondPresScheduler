@@ -449,9 +449,15 @@ export default function ScheduleCell({
                     title = 'Floater assignment'
                   } else if (assignment.is_flexible) {
                     if (assignment.staffing_event_id) {
-                      className +=
-                        'bg-[#fdf2f8] text-pink-700 border border-[#f9a8d4] border-dashed'
-                      title = 'Temporary coverage'
+                      if (assignment.event_category === 'break') {
+                        className +=
+                          'bg-indigo-50 text-indigo-700 border border-indigo-300 border-dashed'
+                        title = 'Break Coverage'
+                      } else {
+                        className +=
+                          'bg-[#fdf2f8] text-pink-700 border border-[#f9a8d4] border-dashed'
+                        title = 'Temporary coverage'
+                      }
                     } else {
                       className += 'bg-blue-50 text-blue-800 border border-blue-500 border-dashed'
                       title = 'Flex Teacher'
@@ -468,11 +474,17 @@ export default function ScheduleCell({
                       style={
                         assignment.is_flexible
                           ? assignment.staffing_event_id
-                            ? {
-                                borderColor: '#f9a8d4',
-                                backgroundColor: '#fdf2f8',
-                                color: '#db2777',
-                              }
+                            ? assignment.event_category === 'break'
+                              ? {
+                                  borderColor: '#a5b4fc',
+                                  backgroundColor: '#eef2ff',
+                                  color: '#4338ca',
+                                }
+                              : {
+                                  borderColor: '#f9a8d4',
+                                  backgroundColor: '#fdf2f8',
+                                  color: '#db2777',
+                                }
                             : { borderColor: '#3b82f6' }
                           : !assignment.is_floater
                             ? { borderColor: '#93c5fd' }
@@ -480,6 +492,12 @@ export default function ScheduleCell({
                       }
                     >
                       {assignment.teacher_name || 'Unknown'}
+                      {assignment.break_start_time && assignment.break_end_time && (
+                        <span className="ml-1 inline-flex items-center text-[10px] opacity-80 whitespace-nowrap">
+                          ☕ {assignment.break_start_time.slice(0, 5)} -{' '}
+                          {assignment.break_end_time.slice(0, 5)}
+                        </span>
+                      )}
                     </span>
                   )
 

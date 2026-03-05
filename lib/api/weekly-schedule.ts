@@ -116,6 +116,10 @@ type StaffingEventShift = {
   staff_first_name?: string | null
   staff_last_name?: string | null
   staff_display_name?: string | null
+  event_category?: 'standard' | 'break' | null
+  covered_staff_id?: string | null
+  start_time?: string | null
+  end_time?: string | null
 }
 
 type SubAssignmentKeyInput = Pick<
@@ -182,6 +186,9 @@ export interface WeeklyScheduleData {
     teacher_display_name?: string | null
     is_flexible?: boolean
     staffing_event_id?: string
+    event_category?: 'standard' | 'break' | null
+    break_start_time?: string | null
+    break_end_time?: string | null
     class_group_id?: string // Optional: teachers are assigned to classrooms, not specific class groups
     class_name?: string // Optional: teachers are assigned to classrooms, not specific class groups
     classroom_id: string
@@ -342,7 +349,8 @@ export async function getScheduleSnapshotData({
           time_slot_id,
           classroom_id,
           staff_id,
-          staff:staff!staffing_event_shifts_staff_id_fkey(id, first_name, last_name, display_name)
+          staff:staff!staffing_event_shifts_staff_id_fkey(id, first_name, last_name, display_name),
+          staffing_event:staffing_events(event_category, covered_staff_id, start_time, end_time)
         `
         )
         .eq('school_id', schoolId)
@@ -364,6 +372,11 @@ export async function getScheduleSnapshotData({
               }
             : null
           const staffParts = getStaffNameParts(normalizedStaff, displayNameFormat)
+
+          const eventData = Array.isArray(row.staffing_event)
+            ? row.staffing_event[0]
+            : row.staffing_event
+
           return {
             id: row.id,
             staffing_event_id: row.staffing_event_id,
@@ -376,6 +389,10 @@ export async function getScheduleSnapshotData({
             staff_first_name: staffParts.first_name,
             staff_last_name: staffParts.last_name,
             staff_display_name: staffParts.display_name,
+            event_category: eventData?.event_category as 'standard' | 'break' | null,
+            covered_staff_id: eventData?.covered_staff_id,
+            start_time: eventData?.start_time,
+            end_time: eventData?.end_time,
           }
         })
       }
@@ -771,17 +788,6 @@ export async function getScheduleSnapshotData({
           // Get enrollment from schedule_cell (enrollment is for the whole slot, not per class group)
           const enrollment = scheduleCell.enrollment_for_staffing ?? null
 
-          // Add teacher assignments for this slot
-          for (const teacher of teachers) {
-            assignments.push({
-              ...teacher,
-              enrollment: enrollment ?? 0,
-              required_teachers: undefined,
-              preferred_teachers: undefined,
-              assigned_count: teachers.length,
-            })
-          }
-
           const subsForSlot =
             hasDateRange && day.id
               ? subAssignments.filter(
@@ -804,6 +810,23 @@ export async function getScheduleSnapshotData({
               : []
           const uniqueFlexForSlot =
             flexForSlot.length > 0 ? dedupeFlexAssignmentsForSlot(flexForSlot) : []
+
+          // Add teacher assignments for this slot
+          for (const teacher of teachers) {
+            const breakCoverage = uniqueFlexForSlot.find(
+              f => f.event_category === 'break' && f.covered_staff_id === teacher.teacher_id
+            )
+
+            assignments.push({
+              ...teacher,
+              enrollment: enrollment ?? 0,
+              required_teachers: undefined,
+              preferred_teachers: undefined,
+              assigned_count: teachers.length,
+              break_start_time: breakCoverage?.start_time ?? null,
+              break_end_time: breakCoverage?.end_time ?? null,
+            })
+          }
 
           // Track unique absent teachers from sub_assignments (covered absences)
           const absentTeachers = new Map<
@@ -878,6 +901,9 @@ export async function getScheduleSnapshotData({
                 teacher_last_name: flex.staff_last_name ?? null,
                 teacher_display_name: flex.staff_display_name ?? null,
                 staffing_event_id: flex.staffing_event_id,
+                event_category: flex.event_category,
+                break_start_time: flex.start_time,
+                break_end_time: flex.end_time,
                 classroom_id: flex.classroom_id,
                 classroom_name: classroom.name,
                 is_flexible: true,

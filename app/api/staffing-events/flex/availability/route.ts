@@ -12,6 +12,7 @@ type AvailabilityRequest = {
   end_date: string
   time_slot_ids: string[]
   classroom_ids?: string[]
+  event_category?: 'standard' | 'break'
 }
 
 export async function POST(request: NextRequest) {
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as AvailabilityRequest
-    const { start_date, end_date, time_slot_ids } = body
+    const { start_date, end_date, time_slot_ids, event_category } = body
 
     if (!start_date || !end_date || !Array.isArray(time_slot_ids) || time_slot_ids.length === 0) {
       return NextResponse.json(
@@ -98,24 +99,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: staffError.message }, { status: 500 })
     }
 
-    const flexStaff =
+    const isBreakCoverage = event_category === 'break'
+    const eligibleRoleCodes = isBreakCoverage ? ['FLEXIBLE', 'PERMANENT'] : ['FLEXIBLE']
+
+    const eligibleStaff =
       (staffRows || []).filter((member: any) =>
         (member.staff_role_type_assignments || []).some((assignment: any) => {
           const roleType = assignment?.staff_role_types
           const roleCode = Array.isArray(roleType) ? roleType[0]?.code : roleType?.code
-          return roleCode === 'FLEXIBLE'
+          return roleCode && eligibleRoleCodes.includes(roleCode)
         })
       ) ?? []
 
     console.log('[FlexAvailability] staff counts', {
       schoolId,
       total_staff_rows: (staffRows || []).length,
-      flex_staff_rows: flexStaff.length,
+      eligible_staff_rows: eligibleStaff.length,
+      event_category: event_category ?? 'standard',
     })
 
-    const flexIds = flexStaff.map((staff: any) => staff.id)
-    if (flexIds.length === 0) {
-      return NextResponse.json({ staff: [], shifts: [] })
+    const eligibleIds = eligibleStaff.map((staff: any) => staff.id)
+    if (eligibleIds.length === 0) {
+      return NextResponse.json({
+        staff: [],
+        shifts: [],
+        shift_metrics: [],
+        day_options: dayOptions,
+      })
     }
 
     const dates = expandDateRangeWithTimeZone(start_date, end_date, timeZone)
@@ -152,7 +162,7 @@ export async function POST(request: NextRequest) {
     const { data: availabilityRows } = await supabase
       .from('sub_availability')
       .select('sub_id, day_of_week_id, time_slot_id, available')
-      .in('sub_id', flexIds)
+      .in('sub_id', eligibleIds)
 
     ;(availabilityRows || []).forEach(row => {
       if (!row?.sub_id || !row.available) return
@@ -166,7 +176,7 @@ export async function POST(request: NextRequest) {
     const { data: exceptionRows } = await supabase
       .from('sub_availability_exceptions')
       .select('sub_id, date, time_slot_id, available')
-      .in('sub_id', flexIds)
+      .in('sub_id', eligibleIds)
       .gte('date', start_date)
       .lte('date', end_date)
 
@@ -185,7 +195,7 @@ export async function POST(request: NextRequest) {
     const { data: flexConflicts } = await supabase
       .from('staffing_event_shifts')
       .select('staff_id, date, time_slot_id')
-      .in('staff_id', flexIds)
+      .in('staff_id', eligibleIds)
       .eq('status', 'active')
       .gte('date', start_date)
       .lte('date', end_date)
@@ -202,7 +212,7 @@ export async function POST(request: NextRequest) {
     })
 
     const staffAvailability = await Promise.all(
-      flexStaff.map(async (staff: any) => {
+      eligibleStaff.map(async (staff: any) => {
         const availabilityMap = new Map<string, boolean>(availabilityByStaff.get(staff.id) ?? [])
         const exceptions = exceptionsByStaff.get(staff.id) || []
         exceptions.forEach(exception => {
