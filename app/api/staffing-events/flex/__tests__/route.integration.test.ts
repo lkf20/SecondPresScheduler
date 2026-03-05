@@ -388,6 +388,41 @@ describe('POST /api/staffing-events/flex integration', () => {
     ])
   })
 
+  it('creates break coverage event with event_category, covered_staff_id, start_time, end_time', async () => {
+    const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
+      staff_id: 'staff-1',
+      start_date: '2026-03-02',
+      end_date: '2026-03-02',
+      classroom_ids: ['class-1'],
+      time_slot_ids: ['slot-1'],
+      event_category: 'break',
+      covered_staff_id: 'teacher-1',
+      start_time: '11:00',
+      end_time: '11:30',
+      shifts: [{ date: '2026-03-02', classroom_id: 'class-1', time_slot_id: 'slot-1' }],
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json).toEqual({ id: 'event-1', shift_count: 1 })
+    expect(mockEventInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        school_id: 'school-1',
+        event_type: 'temporary_coverage',
+        event_category: 'break',
+        covered_staff_id: 'teacher-1',
+        start_time: '11:00',
+        end_time: '11:30',
+        staff_id: 'staff-1',
+        start_date: '2026-03-02',
+        end_date: '2026-03-02',
+        status: 'active',
+      })
+    )
+  })
+
   it('returns 500 when request parsing throws unexpectedly', async () => {
     const badRequest = {
       json: jest.fn(async () => {

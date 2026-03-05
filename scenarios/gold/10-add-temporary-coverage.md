@@ -43,17 +43,28 @@ Define “done right” for **Add Temporary Coverage** so behavior is consistent
 - [ ] **Dashboard overview:** Uses `getStaffingEndDate(startDate)` for staffing target range; same boundary as panel.
 - [ ] **Slot-run API:** `GET /api/dashboard/slot-run?classroom_id=&day_of_week_id=&time_slot_id=&start_date=` returns run-length and suggested range using the same 12-week / May 14 boundary. Used when opening Add Temporary Coverage from the weekly schedule.
 
+### 6. Break coverage
+
+- [ ] **Coverage type:** User can choose **Extra Coverage** (default) or **Break Coverage**. When Break Coverage is selected, a separate subsection (e.g. in a light gray box) shows optional break details.
+- [ ] **Teacher taking break (optional):** Dropdown lists baseline teachers in the cell plus **Unspecified**. Unspecified means general lunch/break coverage (no specific teacher); break time can still be set and is shown on the covering person’s chip in the grid and daily print.
+- [ ] **Start time / End time (optional):** When provided, shown next to the teacher taking the break (or on the Break Coverage chip when Unspecified) in the weekly grid and daily schedule print (e.g. “☕ 11:00 – 11:30”).
+- [ ] **Long-term card:** The “Long-term assignment detected” card is **not** shown when Break Coverage is selected (break coverage is always weekly, not baseline).
+- [ ] **Staff list for break:** When Break Coverage is selected, the list of staff who can be assigned includes both **Permanent** and **Flex** staff (availability API receives `event_category: 'break'` and returns both roles).
+
 ## Test coverage
 
-| Area                                                           | Covered by test? | Notes                                                                                                                     |
-| -------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Staffing boundary (getStaffingEndDate, getStaffingWeeksLabel)  | Yes              | `lib/dashboard/__tests__/staffing-boundary.test.ts`                                                                       |
-| Dashboard passes initial flex staffing to panel                | Yes              | `DashboardClient.test.tsx`: panel receives initialFlexRequiredStaff, initialFlexPreferredStaff, initialFlexScheduledStaff |
-| From dashboard: header shows Required/Preferred/Scheduled      | Yes              | `ScheduleSidePanel.test.tsx`: Add Temporary Coverage describe                                                             |
-| From dashboard: Summary card with run-length and range         | Yes              | `ScheduleSidePanel.test.tsx`                                                                                              |
-| From dashboard: Long-term card when range ≥ 8 weeks            | Yes              | `ScheduleSidePanel.test.tsx`                                                                                              |
-| From weekly: slot-run fetched, Summary shown when below target | Yes              | `ScheduleSidePanel.test.tsx`                                                                                              |
-| E2E: full flow from Dashboard and from Weekly                  | No               | **Candidate for @gold** Playwright                                                                                        |
+| Area                                                                            | Covered by test? | Notes                                                                                                                     |
+| ------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Staffing boundary (getStaffingEndDate, getStaffingWeeksLabel)                   | Yes              | `lib/dashboard/__tests__/staffing-boundary.test.ts`                                                                       |
+| Dashboard passes initial flex staffing to panel                                 | Yes              | `DashboardClient.test.tsx`: panel receives initialFlexRequiredStaff, initialFlexPreferredStaff, initialFlexScheduledStaff |
+| From dashboard: header shows Required/Preferred/Scheduled                       | Yes              | `ScheduleSidePanel.test.tsx`: Add Temporary Coverage describe                                                             |
+| From dashboard: Summary card with run-length and range                          | Yes              | `ScheduleSidePanel.test.tsx`                                                                                              |
+| From dashboard: Long-term card when range ≥ 8 weeks                             | Yes              | `ScheduleSidePanel.test.tsx`                                                                                              |
+| From weekly: slot-run fetched, Summary shown when below target                  | Yes              | `ScheduleSidePanel.test.tsx`                                                                                              |
+| Break coverage: Coverage Type, Unspecified, optional fields                     | Yes              | `ScheduleSidePanel.test.tsx`                                                                                              |
+| Break coverage: API accepts event_category, covered_staff_id, times             | Yes              | `app/api/staffing-events/flex/__tests__/route.integration.test.ts`                                                        |
+| Break coverage: availability returns Permanent + Flex when event_category break | Yes              | `app/api/staffing-events/flex/availability/__tests__/route.integration.test.ts`                                           |
+| E2E: full flow from Dashboard and from Weekly                                   | No               | **Candidate for @gold** Playwright                                                                                        |
 
 ## References
 

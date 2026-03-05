@@ -65,9 +65,27 @@ jest.mock('@/components/ui/checkbox', () => ({
 }))
 
 jest.mock('@/components/ui/radio-group', () => ({
-  RadioGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  RadioGroup: ({
+    children,
+    onValueChange,
+  }: {
+    children: React.ReactNode
+    onValueChange?: (value: string) => void
+  }) => (
+    <div
+      role="radiogroup"
+      onClick={(e: React.MouseEvent) => {
+        const el = (e.target as HTMLElement).closest?.('[data-value]')
+        if (el && onValueChange) {
+          onValueChange((el as HTMLElement).getAttribute('data-value') ?? '')
+        }
+      }}
+    >
+      {children}
+    </div>
+  ),
   RadioGroupItem: ({ id, value }: { id: string; value: string }) => (
-    <input id={id} value={value} type="radio" readOnly />
+    <input id={id} value={value} type="radio" data-value={value} readOnly />
   ),
 }))
 
@@ -153,6 +171,16 @@ const setupFetch = (removeContext: {
           dateEnd: '2026-05-11',
           weeksLabel: '9 weeks',
           targetType: 'required',
+        }),
+      } as Response
+    }
+    if (url.includes('/api/staffing-events/flex/availability')) {
+      return {
+        ok: true,
+        json: async () => ({
+          staff: [{ id: 's1', name: 'Test Staff', availableShiftKeys: [] }],
+          shift_metrics: [],
+          day_options: [],
         }),
       } as Response
     }
@@ -627,5 +655,30 @@ describe('ScheduleSidePanel - Add Temporary Coverage', () => {
       screen.getByText(/Infant Room Monday EM is below required target for the next 9 weeks/)
     ).toBeInTheDocument()
     expect(screen.getByText(/Suggested coverage range: Mar 9 – May 11/)).toBeInTheDocument()
+  })
+
+  it('shows Break Coverage fields when Break Coverage is selected', async () => {
+    setupFetch({
+      start_date: '2026-03-09',
+      end_date: '2026-05-11',
+      weekdays: ['Monday'],
+      matching_shift_count: 10,
+    })
+
+    render(<ScheduleSidePanel {...buildProps()} weekStartISO="2026-03-09" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Temporary Coverage' }))
+
+    const radios = await screen.findAllByRole('radio')
+    const breakRadio = radios.find((r: HTMLElement) => r.getAttribute('value') === 'break')
+    expect(breakRadio).toBeDefined()
+    fireEvent.click(breakRadio!)
+
+    await waitFor(() => {
+      expect(screen.getByText('Teacher taking break (optional)')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Unspecified')).toBeInTheDocument()
+    expect(screen.getByText('Start Time (optional)')).toBeInTheDocument()
+    expect(screen.getByText('End Time (optional)')).toBeInTheDocument()
   })
 })
