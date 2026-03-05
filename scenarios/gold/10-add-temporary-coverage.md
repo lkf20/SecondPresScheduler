@@ -43,7 +43,14 @@ Define “done right” for **Add Temporary Coverage** so behavior is consistent
 - [ ] **Dashboard overview:** Uses `getStaffingEndDate(startDate)` for staffing target range; same boundary as panel.
 - [ ] **Slot-run API:** `GET /api/dashboard/slot-run?classroom_id=&day_of_week_id=&time_slot_id=&start_date=` returns run-length and suggested range using the same 12-week / May 14 boundary. Used when opening Add Temporary Coverage from the weekly schedule.
 
-### 6. Break coverage
+### 6. Edit temporary coverage (save / confirm)
+
+- [ ] **Edit entry:** In the weekly schedule right panel, temporary coverage assignments (with a staffing event) show an **Edit** button. Clicking it opens the Add Temporary Coverage form pre-filled with the event’s dates, coverage type, staff, and notes.
+- [ ] **Single shift:** When the assignment has only one shift (one day/slot/classroom), saving shows a **Confirm change** dialog that summarizes the change with **context-specific** text: classroom name, day name, time slot code, and date or date range (e.g. “Changed from Natalie A. to Cheyenne A. for Infant Room Monday LB March 2 – March 9.”). The changed part (e.g. staff names or coverage type) is **underlined**. If both staff and coverage type change, two lines are shown. User confirms or cancels; no scope choices.
+- [ ] **Multiple shifts, no past dates:** When the assignment has more than one shift and the date range has no dates in the past, saving shows an **Apply these changes to** dialog with a single option: **All shifts in this assignment**. User confirms or cancels.
+- [ ] **Multiple shifts, with past dates:** When the assignment has more than one shift and the date range includes past dates, the dialog offers: **This shift only**, **This and following shifts**, and **All shifts in this assignment**. User picks one and saves.
+
+### 7. Break coverage
 
 - [ ] **Coverage type:** User can choose **Extra Coverage** (default) or **Break Coverage**. When Break Coverage is selected, a separate subsection (e.g. in a light gray box) shows optional break details.
 - [ ] **Teacher taking break (optional):** Dropdown lists baseline teachers in the cell plus **Unspecified**. Unspecified means general lunch/break coverage (no specific teacher); break time can still be set and is shown on the covering person’s chip in the grid and daily print.
@@ -53,18 +60,19 @@ Define “done right” for **Add Temporary Coverage** so behavior is consistent
 
 ## Test coverage
 
-| Area                                                                            | Covered by test? | Notes                                                                                                                     |
-| ------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Staffing boundary (getStaffingEndDate, getStaffingWeeksLabel)                   | Yes              | `lib/dashboard/__tests__/staffing-boundary.test.ts`                                                                       |
-| Dashboard passes initial flex staffing to panel                                 | Yes              | `DashboardClient.test.tsx`: panel receives initialFlexRequiredStaff, initialFlexPreferredStaff, initialFlexScheduledStaff |
-| From dashboard: header shows Required/Preferred/Scheduled                       | Yes              | `ScheduleSidePanel.test.tsx`: Add Temporary Coverage describe                                                             |
-| From dashboard: Summary card with run-length and range                          | Yes              | `ScheduleSidePanel.test.tsx`                                                                                              |
-| From dashboard: Long-term card when range ≥ 8 weeks                             | Yes              | `ScheduleSidePanel.test.tsx`                                                                                              |
-| From weekly: slot-run fetched, Summary shown when below target                  | Yes              | `ScheduleSidePanel.test.tsx`                                                                                              |
-| Break coverage: Coverage Type, Unspecified, optional fields                     | Yes              | `ScheduleSidePanel.test.tsx`                                                                                              |
-| Break coverage: API accepts event_category, covered_staff_id, times             | Yes              | `app/api/staffing-events/flex/__tests__/route.integration.test.ts`                                                        |
-| Break coverage: availability returns Permanent + Flex when event_category break | Yes              | `app/api/staffing-events/flex/availability/__tests__/route.integration.test.ts`                                           |
-| E2E: full flow from Dashboard and from Weekly                                   | No               | **Candidate for @gold** Playwright                                                                                        |
+| Area                                                                            | Covered by test?  | Notes                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Staffing boundary (getStaffingEndDate, getStaffingWeeksLabel)                   | Yes               | `lib/dashboard/__tests__/staffing-boundary.test.ts`                                                                                                                                               |
+| Dashboard passes initial flex staffing to panel                                 | Yes               | `DashboardClient.test.tsx`: panel receives initialFlexRequiredStaff, initialFlexPreferredStaff, initialFlexScheduledStaff                                                                         |
+| From dashboard: header shows Required/Preferred/Scheduled                       | Yes               | `ScheduleSidePanel.test.tsx`: Add Temporary Coverage describe                                                                                                                                     |
+| From dashboard: Summary card with run-length and range                          | Yes               | `ScheduleSidePanel.test.tsx`                                                                                                                                                                      |
+| From dashboard: Long-term card when range ≥ 8 weeks                             | Yes               | `ScheduleSidePanel.test.tsx`                                                                                                                                                                      |
+| From weekly: slot-run fetched, Summary shown when below target                  | Yes               | `ScheduleSidePanel.test.tsx`                                                                                                                                                                      |
+| Break coverage: Coverage Type, Unspecified, optional fields                     | Yes               | `ScheduleSidePanel.test.tsx`                                                                                                                                                                      |
+| Break coverage: API accepts event_category, covered_staff_id, times             | Yes               | `app/api/staffing-events/flex/__tests__/route.integration.test.ts`                                                                                                                                |
+| Break coverage: availability returns Permanent + Flex when event_category break | Yes               | `app/api/staffing-events/flex/availability/__tests__/route.integration.test.ts`                                                                                                                   |
+| Edit temporary coverage: single-shift confirm vs multi-shift scope dialog       | Manual / scenario | Section 6; single-shift shows context-specific summary (classroom, day, slot, date) with change underlined; multi-shift shows scope (all only when no past dates; three options when past dates). |
+| E2E: full flow from Dashboard and from Weekly                                   | No                | **Candidate for @gold** Playwright                                                                                                                                                                |
 
 ## References
 

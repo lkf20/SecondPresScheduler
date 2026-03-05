@@ -612,8 +612,13 @@ export default function ScheduleSidePanel({
   const [editingFlexEventId, setEditingFlexEventId] = useState<string | null>(null)
   const [editingFlexStaffId, setEditingFlexStaffId] = useState<string | null>(null)
   const [editingFlexStaffName, setEditingFlexStaffName] = useState<string | null>(null)
+  const [editingFlexCategory, setEditingFlexCategory] = useState<'standard' | 'break' | null>(null)
+  const [editFlexShiftCount, setEditFlexShiftCount] = useState<number | null>(null)
   const [showChangeStaffList, setShowChangeStaffList] = useState(false)
   const [showSaveScopeDialog, setShowSaveScopeDialog] = useState(false)
+  const [saveScopeDialogMode, setSaveScopeDialogMode] = useState<'scope' | 'confirm_single'>(
+    'scope'
+  )
   const [pendingFlexSave, setPendingFlexSave] = useState<{
     staffId: string
     shiftKeys: string[]
@@ -951,6 +956,8 @@ export default function ScheduleSidePanel({
     setEditingFlexEventId(null)
     setEditingFlexStaffId(null)
     setEditingFlexStaffName(null)
+    setEditingFlexCategory(null)
+    setEditFlexShiftCount(null)
     setShowChangeStaffList(false)
   }, [isOpen, weekStartISO, classroomId, timeSlotId, initialFlexStartDate, initialFlexEndDate])
 
@@ -1728,8 +1735,26 @@ export default function ScheduleSidePanel({
     }
     if (editingFlexEventId) {
       setPendingFlexSave({ staffId, shiftKeys })
-      setSaveScopeChoice('all_shifts')
-      setShowSaveScopeDialog(true)
+      const isSingleShift = (editFlexShiftCount ?? 0) <= 1
+      if (isSingleShift) {
+        setSaveScopeChoice('single_shift')
+        setSaveScopeDialogMode('confirm_single')
+        setShowSaveScopeDialog(true)
+      } else {
+        const todayLocal = new Date(
+          new Date().getFullYear(),
+          new Date().getMonth(),
+          new Date().getDate()
+        )
+        const hasPastDates = !!flexStartDate && parseLocalDate(flexStartDate) < todayLocal
+        setSaveScopeDialogMode('scope')
+        if (hasPastDates) {
+          setSaveScopeChoice('future_shifts')
+        } else {
+          setSaveScopeChoice('all_shifts')
+        }
+        setShowSaveScopeDialog(true)
+      }
       setFlexError(null)
       return
     }
@@ -1873,6 +1898,8 @@ export default function ScheduleSidePanel({
       setEditingFlexEventId(null)
       setEditingFlexStaffId(null)
       setEditingFlexStaffName(null)
+      setEditingFlexCategory(null)
+      setEditFlexShiftCount(null)
       setShowChangeStaffList(false)
       setPanelMode('cell')
       toast.success(
@@ -1981,6 +2008,8 @@ export default function ScheduleSidePanel({
       setEditingFlexEventId(assignment.staffing_event_id)
       setEditingFlexStaffId(assignment.teacher_id ?? null)
       setEditingFlexStaffName(assignment.teacher_name ?? null)
+      setEditingFlexCategory(data?.event_category === 'break' ? 'break' : 'standard')
+      setEditFlexShiftCount(Number(data?.matching_shift_count ?? 0) || null)
       setFlexError(null)
       setPanelMode('flex')
     } catch (error) {
@@ -2730,6 +2759,8 @@ export default function ScheduleSidePanel({
                           setEditingFlexEventId(null)
                           setEditingFlexStaffId(null)
                           setEditingFlexStaffName(null)
+                          setEditingFlexCategory(null)
+                          setEditFlexShiftCount(null)
                           setShowChangeStaffList(false)
                           initialPanelMode === 'flex' ? onClose() : setPanelMode('cell')
                         }}
@@ -2745,6 +2776,8 @@ export default function ScheduleSidePanel({
                       >
                         Editing coverage for{' '}
                         <span className="font-medium">{editingFlexStaffName}</span>
+                        {' for '}
+                        {[classroomName, dayName, timeSlotCode].filter(Boolean).join(' ')}
                         {flexStartDate && flexEndDate && (
                           <>
                             {' '}
@@ -4563,96 +4596,230 @@ export default function ScheduleSidePanel({
           if (!open) {
             setShowSaveScopeDialog(false)
             setPendingFlexSave(null)
+            setSaveScopeDialogMode('scope')
           }
         }}
       >
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Apply these changes to</DialogTitle>
-            <DialogDescription>
-              Choose how to apply your temporary coverage update.
-            </DialogDescription>
-          </DialogHeader>
-          <RadioGroup
-            value={saveScopeChoice}
-            onValueChange={(v: string) =>
-              setSaveScopeChoice(v as 'single_shift' | 'future_shifts' | 'all_shifts')
-            }
-            className="space-y-3 py-2"
-          >
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="single_shift" id="scope-single" />
-              <Label htmlFor="scope-single" className="font-normal cursor-pointer">
-                This shift only
-                {cellDateISO && (
-                  <span className="block text-xs text-slate-500 mt-0.5">
-                    {parseLocalDate(cellDateISO).toLocaleDateString('en-US', {
-                      weekday: 'short',
-                      month: 'short',
-                      day: 'numeric',
-                    })}{' '}
-                    • {classroomName} • {timeSlotCode}
-                  </span>
-                )}
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="future_shifts" id="scope-future" />
-              <Label htmlFor="scope-future" className="font-normal cursor-pointer">
-                This and following shifts
-                {(cellDateISO ?? flexStartDate) && (
-                  <span className="block text-xs text-slate-500 mt-0.5">
-                    From{' '}
-                    {parseLocalDate(cellDateISO ?? flexStartDate!).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                    })}{' '}
-                    onward
-                  </span>
-                )}
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="all_shifts" id="scope-all" />
-              <Label htmlFor="scope-all" className="font-normal cursor-pointer">
-                All shifts in this assignment
-                {flexStartDate && flexEndDate && (
-                  <span className="block text-xs text-slate-500 mt-0.5">
-                    {parseLocalDate(flexStartDate).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                    })}{' '}
-                    –{' '}
-                    {parseLocalDate(flexEndDate).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </span>
-                )}
-              </Label>
-            </div>
-          </RadioGroup>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowSaveScopeDialog(false)
-                setPendingFlexSave(null)
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                void handleConfirmSaveScope()
-              }}
-              disabled={
-                flexSaving || (saveScopeChoice !== 'all_shifts' && !(cellDateISO ?? flexStartDate))
-              }
-            >
-              {flexSaving ? 'Saving...' : 'Save'}
-            </Button>
-          </DialogFooter>
+          {saveScopeDialogMode === 'confirm_single' ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Confirm change</DialogTitle>
+                <DialogDescription asChild>
+                  <div className="space-y-2">
+                    {(() => {
+                      const newStaffName =
+                        pendingFlexSave &&
+                        (flexAvailability.find(s => s.id === pendingFlexSave.staffId)?.name ??
+                          'selected staff')
+                      const staffChanged =
+                        editingFlexStaffName !== newStaffName &&
+                        (editingFlexStaffName || newStaffName)
+                      const categoryChanged =
+                        editingFlexCategory !== null && editingFlexCategory !== flexCategory
+                      const dateLabel =
+                        flexStartDate && flexEndDate
+                          ? flexStartDate === flexEndDate
+                            ? parseLocalDate(flexStartDate).toLocaleDateString('en-US', {
+                                month: 'long',
+                                day: 'numeric',
+                              })
+                            : `${parseLocalDate(flexStartDate).toLocaleDateString('en-US', {
+                                month: 'long',
+                                day: 'numeric',
+                              })} – ${parseLocalDate(flexEndDate).toLocaleDateString('en-US', {
+                                month: 'long',
+                                day: 'numeric',
+                              })}`
+                          : ''
+                      const locationLabel = [classroomName, dayName, timeSlotCode, dateLabel]
+                        .filter(Boolean)
+                        .join(' ')
+                      if (staffChanged && categoryChanged) {
+                        const oldCat = editingFlexCategory === 'break' ? 'Break' : 'Extra'
+                        const newCat = flexCategory === 'break' ? 'Break' : 'Extra'
+                        return (
+                          <>
+                            <p>
+                              Changed from{' '}
+                              <span className="underline">
+                                {editingFlexStaffName ?? 'unassigned'} to {newStaffName}
+                              </span>{' '}
+                              for {locationLabel}.
+                            </p>
+                            <p>
+                              Changed from{' '}
+                              <span className="underline">
+                                {oldCat} to {newCat}
+                              </span>{' '}
+                              coverage for {locationLabel}.
+                            </p>
+                          </>
+                        )
+                      }
+                      if (staffChanged) {
+                        return (
+                          <p>
+                            Changed from{' '}
+                            <span className="underline">
+                              {editingFlexStaffName ?? 'unassigned'} to {newStaffName}
+                            </span>{' '}
+                            for {locationLabel}.
+                          </p>
+                        )
+                      }
+                      if (categoryChanged) {
+                        const oldLabel = editingFlexCategory === 'break' ? 'Break' : 'Extra'
+                        const newLabel = flexCategory === 'break' ? 'Break' : 'Extra'
+                        return (
+                          <p>
+                            Changed from{' '}
+                            <span className="underline">
+                              {oldLabel} to {newLabel}
+                            </span>{' '}
+                            coverage for {locationLabel}.
+                          </p>
+                        )
+                      }
+                      return (
+                        <p>
+                          Apply your changes to this shift
+                          {locationLabel ? ` for ${locationLabel}` : ''}.
+                        </p>
+                      )
+                    })()}
+                  </div>
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowSaveScopeDialog(false)
+                    setPendingFlexSave(null)
+                    setSaveScopeDialogMode('scope')
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    void handleConfirmSaveScope()
+                  }}
+                  disabled={flexSaving}
+                >
+                  {flexSaving ? 'Saving...' : 'Confirm'}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Apply these changes to</DialogTitle>
+                <DialogDescription>
+                  Choose how to apply your temporary coverage update.
+                </DialogDescription>
+              </DialogHeader>
+              {(() => {
+                const todayLocal = new Date(
+                  new Date().getFullYear(),
+                  new Date().getMonth(),
+                  new Date().getDate()
+                )
+                const hasPastDates = !!flexStartDate && parseLocalDate(flexStartDate) < todayLocal
+                return (
+                  <RadioGroup
+                    value={saveScopeChoice}
+                    onValueChange={(v: string) =>
+                      setSaveScopeChoice(v as 'single_shift' | 'future_shifts' | 'all_shifts')
+                    }
+                    className="space-y-3 py-2"
+                  >
+                    {hasPastDates && (
+                      <>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="single_shift" id="scope-single" />
+                          <Label htmlFor="scope-single" className="font-normal cursor-pointer">
+                            This shift only
+                            {cellDateISO && (
+                              <span className="block text-xs text-slate-500 mt-0.5">
+                                {parseLocalDate(cellDateISO).toLocaleDateString('en-US', {
+                                  weekday: 'short',
+                                  month: 'short',
+                                  day: 'numeric',
+                                })}{' '}
+                                • {classroomName} • {timeSlotCode}
+                              </span>
+                            )}
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="future_shifts" id="scope-future" />
+                          <Label htmlFor="scope-future" className="font-normal cursor-pointer">
+                            This and following shifts
+                            {(cellDateISO ?? flexStartDate) && (
+                              <span className="block text-xs text-slate-500 mt-0.5">
+                                From{' '}
+                                {parseLocalDate(cellDateISO ?? flexStartDate!).toLocaleDateString(
+                                  'en-US',
+                                  {
+                                    month: 'short',
+                                    day: 'numeric',
+                                  }
+                                )}{' '}
+                                onward
+                              </span>
+                            )}
+                          </Label>
+                        </div>
+                      </>
+                    )}
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="all_shifts" id="scope-all" />
+                      <Label htmlFor="scope-all" className="font-normal cursor-pointer">
+                        All shifts in this assignment
+                        {flexStartDate && flexEndDate && (
+                          <span className="block text-xs text-slate-500 mt-0.5">
+                            {parseLocalDate(flexStartDate).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                            })}{' '}
+                            –{' '}
+                            {parseLocalDate(flexEndDate).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </span>
+                        )}
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                )
+              })()}
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowSaveScopeDialog(false)
+                    setPendingFlexSave(null)
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    void handleConfirmSaveScope()
+                  }}
+                  disabled={
+                    flexSaving ||
+                    (saveScopeChoice !== 'all_shifts' && !(cellDateISO ?? flexStartDate))
+                  }
+                >
+                  {flexSaving ? 'Saving...' : 'Save'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </>
