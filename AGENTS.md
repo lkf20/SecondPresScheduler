@@ -132,6 +132,12 @@ When adding a new UI element (e.g. a chip, badge, or label):
 - Work via pull requests. Follow the repo’s branch and commit rules (see `.cursor/rules` if present).
 - Before creating or merging a PR, complete the [Pre-PR integrity checklist](docs/guides/PRE_PR_CHECKLIST.md). Use the PR template (Risks, Checks run, Evidence, Tests for non-trivial changes) for every PR.
 
+## Baseline schedule: enrollment and staffing
+
+- **Per-class-group enrollment:** A schedule cell can store enrollment per class group (e.g. Toddler A: 3, Toddler B: 2) in `schedule_cell_class_groups.enrollment`. When any per-class enrollment is set, the total used for ratio is the sum of those values; otherwise the cell’s `enrollment_for_staffing` is used. The grid shows labels like “Toddler A (3), Toddler B (2)” when per-class enrollment is present.
+- **Staffing overrides:** A cell can override the auto-calculated required/preferred staff with `schedule_cells.required_staff_override` and `preferred_staff_override` (e.g. for nap time or combined groups). When set, these overrides are used instead of the ratio-based calculation. Use the shared helper `getTotalEnrollmentForCalculation` (from `ScheduleSidePanel`) for total enrollment and apply overrides in all places that compute or display required/preferred staff (ScheduleCell, ScheduleSidePanel, dashboard overview, slot-run, flex availability, baseline-schedule filtering).
+- **Legends:** If you add or change how enrollment or staffing targets are shown in the grid or panel, update any related legend or key.
+
 ## Database migrations
 
 To run migrations against the **staging** database:

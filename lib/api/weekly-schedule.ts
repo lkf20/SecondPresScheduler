@@ -80,8 +80,11 @@ export const getStaffNameParts = (
 }
 
 type ScheduleCellRaw = ScheduleCellRow & {
-  schedule_cell_class_groups?: Array<{ class_group: ClassGroupRow | null }>
-  class_groups?: ClassGroupRow[]
+  schedule_cell_class_groups?: Array<{
+    enrollment: number | null
+    class_group: ClassGroupRow | null
+  }>
+  class_groups?: Array<ClassGroupRow & { enrollment?: number | null }>
 }
 
 type WeeklySubAssignment = {
@@ -120,6 +123,7 @@ type StaffingEventShift = {
   covered_staff_id?: string | null
   start_time?: string | null
   end_time?: string | null
+  notes?: string | null
 }
 
 type SubAssignmentKeyInput = Pick<
@@ -196,6 +200,7 @@ export interface WeeklyScheduleData {
     is_floater?: boolean
     is_substitute?: boolean // True if this assignment comes from sub_assignments (week-specific)
     absent_teacher_id?: string // If this is a substitute, the ID of the teacher being replaced
+    notes?: string | null // Temporary coverage notes (staffing_events.notes)
     enrollment?: number
     required_teachers?: number
     preferred_teachers?: number
@@ -236,6 +241,8 @@ export interface WeeklyScheduleDataByClassroom {
         is_active: boolean
         enrollment_for_staffing: number | null
         notes: string | null
+        required_staff_override?: number | null
+        preferred_staff_override?: number | null
         class_groups?: Array<{
           id: string
           name: string
@@ -245,6 +252,7 @@ export interface WeeklyScheduleDataByClassroom {
           max_age: number | null
           required_ratio: number
           preferred_ratio: number | null
+          enrollment?: number | null
         }>
       } | null
     }>
@@ -350,7 +358,7 @@ export async function getScheduleSnapshotData({
           classroom_id,
           staff_id,
           staff:staff!staffing_event_shifts_staff_id_fkey(id, first_name, last_name, display_name),
-          staffing_event:staffing_events(event_category, covered_staff_id, start_time, end_time)
+          staffing_event:staffing_events(event_category, covered_staff_id, start_time, end_time, notes)
         `
         )
         .eq('school_id', schoolId)
@@ -393,6 +401,7 @@ export async function getScheduleSnapshotData({
             covered_staff_id: eventData?.covered_staff_id,
             start_time: eventData?.start_time,
             end_time: eventData?.end_time,
+            notes: eventData?.notes ?? null,
           }
         })
       }
@@ -532,6 +541,7 @@ export async function getScheduleSnapshotData({
         `
         *,
         schedule_cell_class_groups(
+          enrollment,
           class_group:class_groups(id, name, is_active, age_unit, min_age, max_age, required_ratio, preferred_ratio, order)
         )
       `
@@ -553,12 +563,14 @@ export async function getScheduleSnapshotData({
         scheduleCells = null
       }
     } else {
-      // Transform the nested structure to flatten class_groups array
+      // Transform the nested structure to flatten class_groups array (include enrollment per class group)
       scheduleCells = (data || []).map(cell => {
         const raw = cell as ScheduleCellRaw
         const classGroups = raw.schedule_cell_class_groups
           ? raw.schedule_cell_class_groups
-              .map(j => j.class_group)
+              .map(j =>
+                j.class_group ? { ...j.class_group, enrollment: j.enrollment ?? null } : null
+              )
               .filter((cg): cg is NonNullable<typeof cg> => cg !== null)
           : []
         const flattened: ScheduleCellRaw = {
@@ -904,6 +916,7 @@ export async function getScheduleSnapshotData({
                 event_category: flex.event_category,
                 break_start_time: flex.start_time,
                 break_end_time: flex.end_time,
+                notes: flex.notes ?? null,
                 classroom_id: flex.classroom_id,
                 classroom_name: classroom.name,
                 is_flexible: true,
@@ -1037,6 +1050,8 @@ export async function getScheduleSnapshotData({
                 is_active: scheduleCell.is_active,
                 enrollment_for_staffing: scheduleCell.enrollment_for_staffing,
                 notes: scheduleCell.notes,
+                required_staff_override: scheduleCell.required_staff_override ?? null,
+                preferred_staff_override: scheduleCell.preferred_staff_override ?? null,
                 class_groups: classGroups || [],
               }
             : null,

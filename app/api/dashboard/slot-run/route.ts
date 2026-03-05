@@ -74,6 +74,8 @@ export async function GET(request: NextRequest) {
         day_of_week_id,
         time_slot_id,
         enrollment_for_staffing,
+        required_staff_override,
+        preferred_staff_override,
         is_active,
         day_of_week:days_of_week(
           id,
@@ -81,6 +83,7 @@ export async function GET(request: NextRequest) {
           day_number
         ),
         schedule_cell_class_groups(
+          enrollment,
           class_group:class_groups(
             id,
             min_age,
@@ -110,9 +113,17 @@ export async function GET(request: NextRequest) {
     }
 
     const classGroups = (rawCell.schedule_cell_class_groups || [])
-      .map((j: any) => j.class_group)
+      .map((j: any) =>
+        j.class_group ? { ...j.class_group, enrollment: j.enrollment ?? null } : null
+      )
       .filter((cg: any) => cg != null)
-    if (classGroups.length === 0 || rawCell.enrollment_for_staffing == null) {
+    const hasPerClassEnrollment = classGroups.some(
+      (cg: any) => cg.enrollment != null && cg.enrollment !== ''
+    )
+    const totalEnrollment = hasPerClassEnrollment
+      ? classGroups.reduce((sum: number, cg: any) => sum + (Number(cg.enrollment) || 0), 0)
+      : rawCell.enrollment_for_staffing
+    if (classGroups.length === 0 || totalEnrollment == null) {
       return NextResponse.json({
         belowTarget: false,
       })
@@ -127,14 +138,20 @@ export async function GET(request: NextRequest) {
       return currentMinAge < lowestMinAge ? current : lowest
     })
 
+    const calculatedRequired =
+      classGroupForRatio.required_ratio && totalEnrollment
+        ? Math.ceil(totalEnrollment / classGroupForRatio.required_ratio)
+        : null
+    const calculatedPreferred =
+      classGroupForRatio.preferred_ratio && totalEnrollment
+        ? Math.ceil(totalEnrollment / classGroupForRatio.preferred_ratio)
+        : null
     const requiredStaff =
-      classGroupForRatio.required_ratio && rawCell.enrollment_for_staffing
-        ? Math.ceil(rawCell.enrollment_for_staffing / classGroupForRatio.required_ratio)
-        : null
+      rawCell.required_staff_override != null ? rawCell.required_staff_override : calculatedRequired
     const preferredStaff =
-      classGroupForRatio.preferred_ratio && rawCell.enrollment_for_staffing
-        ? Math.ceil(rawCell.enrollment_for_staffing / classGroupForRatio.preferred_ratio)
-        : null
+      rawCell.preferred_staff_override != null
+        ? rawCell.preferred_staff_override
+        : calculatedPreferred
 
     const { data: teacherSchedules, error: tsError } = await supabase
       .from('teacher_schedules')

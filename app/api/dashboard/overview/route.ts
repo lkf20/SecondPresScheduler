@@ -269,6 +269,8 @@ export async function GET(request: NextRequest) {
         day_of_week_id,
         time_slot_id,
         enrollment_for_staffing,
+        required_staff_override,
+        preferred_staff_override,
         is_active,
         classroom:classrooms(
           id,
@@ -287,6 +289,7 @@ export async function GET(request: NextRequest) {
           display_order
         ),
         schedule_cell_class_groups(
+          enrollment,
           class_group:class_groups(
             id,
             name,
@@ -314,17 +317,26 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Transform schedule cells to flatten class_groups array
+    // Transform schedule cells to flatten class_groups array (include enrollment per class group)
     const scheduleCells = (scheduleCellsData || [])
       .map((cell: any) => {
         const classGroups = cell.schedule_cell_class_groups
           ? cell.schedule_cell_class_groups
-              .map((j: any) => j.class_group)
+              .map((j: any) =>
+                j.class_group ? { ...j.class_group, enrollment: j.enrollment ?? null } : null
+              )
               .filter((cg: any): cg is any => cg !== null)
           : []
+        const hasPerClassEnrollment = classGroups.some(
+          (cg: any) => cg.enrollment != null && cg.enrollment !== ''
+        )
+        const totalEnrollment = hasPerClassEnrollment
+          ? classGroups.reduce((sum: number, cg: any) => sum + (Number(cg.enrollment) || 0), 0)
+          : cell.enrollment_for_staffing
         return {
           ...cell,
           class_groups: classGroups,
+          _totalEnrollment: totalEnrollment,
         }
       })
       .filter(
@@ -332,8 +344,7 @@ export async function GET(request: NextRequest) {
           cell.is_active &&
           cell.class_groups &&
           cell.class_groups.length > 0 &&
-          cell.enrollment_for_staffing !== null &&
-          cell.enrollment_for_staffing !== undefined
+          cell._totalEnrollment != null
       )
 
     // Get teacher schedules to count scheduled staff (permanent, flex, floaters)
@@ -617,14 +628,21 @@ export async function GET(request: NextRequest) {
           return currentMinAge < lowestMinAge ? current : lowest
         })
 
+        const totalEnrollment = cell._totalEnrollment ?? cell.enrollment_for_staffing
+        const calculatedRequired =
+          classGroupForRatio.required_ratio && totalEnrollment
+            ? Math.ceil(totalEnrollment / classGroupForRatio.required_ratio)
+            : null
+        const calculatedPreferred =
+          classGroupForRatio.preferred_ratio && totalEnrollment
+            ? Math.ceil(totalEnrollment / classGroupForRatio.preferred_ratio)
+            : null
         const requiredStaff =
-          classGroupForRatio.required_ratio && cell.enrollment_for_staffing
-            ? Math.ceil(cell.enrollment_for_staffing / classGroupForRatio.required_ratio)
-            : null
+          cell.required_staff_override != null ? cell.required_staff_override : calculatedRequired
         const preferredStaff =
-          classGroupForRatio.preferred_ratio && cell.enrollment_for_staffing
-            ? Math.ceil(cell.enrollment_for_staffing / classGroupForRatio.preferred_ratio)
-            : null
+          cell.preferred_staff_override != null
+            ? cell.preferred_staff_override
+            : calculatedPreferred
 
         const slotKey = `${cell.day_of_week_id}|${cell.time_slot_id}|${cell.classroom_id}`
         const teacherContrib = teacherContribBySlot.get(slotKey) ?? 0

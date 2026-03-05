@@ -6,6 +6,7 @@ import ScheduleGridCellCard from './ScheduleGridCellCard'
 import ScheduleSidePanel from './ScheduleSidePanel'
 import type { WeeklyScheduleData, WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
+import { parseLocalDate } from '@/lib/utils/date'
 import { isSlotEffectivelyInactive } from '@/lib/utils/schedule-slot-activity'
 import { SCHEDULE_INACTIVE_LEGEND_DOT_CLASS } from '@/lib/ui/schedule-inactive-tokens'
 
@@ -630,6 +631,17 @@ export default function WeeklyScheduleGridNew({
     ? (selectedCellSnapshot ?? buildSelectedCellData(selectedCell))
     : undefined
 
+  // Calendar date of the selected cell (for Edit Temporary Coverage save-scope dialog)
+  const cellDateISO = useMemo(() => {
+    if (!selectedCell || !weekStartISO || !data.length) return null
+    const classroom = data[0]
+    const day = classroom.days.find(d => d.day_of_week_id === selectedCell.dayId)
+    if (!day) return null
+    const d = parseLocalDate(weekStartISO)
+    d.setDate(d.getDate() + (day.day_number - 1))
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }, [selectedCell, weekStartISO, data])
+
   // Final filter: ensure we only show selected days
   // If selectedDayIds is empty, don't show any days (settings might not be loaded or configured)
   // Only show days if we have explicit selectedDayIds
@@ -1014,6 +1026,7 @@ export default function WeeklyScheduleGridNew({
             weekStartISO={weekStartISO}
             readOnly={readOnly}
             returnToWeekly={returnToWeekly}
+            cellDateISO={cellDateISO}
           />
         )}
       </>
@@ -1334,6 +1347,7 @@ export default function WeeklyScheduleGridNew({
             weekStartISO={weekStartISO}
             readOnly={readOnly}
             returnToWeekly={returnToWeekly}
+            cellDateISO={cellDateISO}
           />
         )}
       </div>

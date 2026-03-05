@@ -4,6 +4,7 @@ import React from 'react'
 import { CheckCircle2, AlertTriangle, XCircle, CornerDownRight } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { WeeklyScheduleData } from '@/lib/api/weekly-schedule'
+import { getTotalEnrollmentForCalculation } from './ScheduleSidePanel'
 import AbsentTeacherPopover from './AbsentTeacherPopover'
 
 interface ScheduleCellProps {
@@ -13,6 +14,8 @@ interface ScheduleCellProps {
       is_active: boolean
       enrollment_for_staffing: number | null
       notes: string | null
+      required_staff_override?: number | null
+      preferred_staff_override?: number | null
       class_groups?: Array<{
         id: string
         name: string
@@ -21,6 +24,7 @@ interface ScheduleCellProps {
         max_age: number | null
         required_ratio: number
         preferred_ratio: number | null
+        enrollment?: number | null
       }>
     } | null
     absences?: Array<{
@@ -72,16 +76,21 @@ export default function ScheduleCell({
     })
   }
 
-  // Get class group names from schedule_cell (comma-separated)
+  // Get class group names from schedule_cell; show "Name (n)" when per-class enrollment is set
   const classGroupNames =
     scheduleCell?.class_groups && scheduleCell.class_groups.length > 0
-      ? scheduleCell.class_groups.map(cg => cg.name).join(', ')
+      ? scheduleCell.class_groups
+          .map(cg => (cg.enrollment != null ? `${cg.name} (${cg.enrollment})` : cg.name))
+          .join(', ')
       : data?.assignments && data.assignments.length > 0
         ? data.assignments.find(a => a.class_name)?.class_name
         : null
 
-  // Get enrollment for display
-  const enrollment = scheduleCell?.enrollment_for_staffing ?? null
+  // Total enrollment: per-class sum if any set, else cell enrollment_for_staffing
+  const enrollment = getTotalEnrollmentForCalculation(
+    scheduleCell?.class_groups ?? [],
+    scheduleCell?.enrollment_for_staffing ?? null
+  )
 
   // Calculate staffing status and tooltip message
   const getStaffingStatus = () => {
@@ -95,15 +104,24 @@ export default function ScheduleCell({
       return currentMinAge < lowestMinAge ? current : lowest
     })
 
-    const requiredTeachers =
-      classGroupForRatio.required_ratio && scheduleCell.enrollment_for_staffing
-        ? Math.ceil(scheduleCell.enrollment_for_staffing / classGroupForRatio.required_ratio)
+    const enrollmentForRatio = enrollment
+    const calculatedRequired =
+      classGroupForRatio.required_ratio && enrollmentForRatio
+        ? Math.ceil(enrollmentForRatio / classGroupForRatio.required_ratio)
+        : undefined
+    const calculatedPreferred =
+      classGroupForRatio.preferred_ratio && enrollmentForRatio
+        ? Math.ceil(enrollmentForRatio / classGroupForRatio.preferred_ratio)
         : undefined
 
+    const requiredTeachers =
+      scheduleCell.required_staff_override != null
+        ? scheduleCell.required_staff_override
+        : calculatedRequired
     const preferredTeachers =
-      classGroupForRatio.preferred_ratio && scheduleCell.enrollment_for_staffing
-        ? Math.ceil(scheduleCell.enrollment_for_staffing / classGroupForRatio.preferred_ratio)
-        : undefined
+      scheduleCell.preferred_staff_override != null
+        ? scheduleCell.preferred_staff_override
+        : calculatedPreferred
 
     // Count assigned teachers for this slot (teachers are assigned to the slot, not individual class groups)
     // Count floaters proportionally (0.5 for 2 classrooms, 0.33 for 3, etc.)

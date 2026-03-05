@@ -9,6 +9,7 @@ import {
   formatDayNameDateLabel,
   formatFlexWeekdayList,
   formatTimeRange,
+  getTotalEnrollmentForCalculation,
   mapAssignmentsToTeachers,
   pickClassGroupForRatio,
   sortAbsencesByTeacherName,
@@ -516,6 +517,50 @@ describe('ScheduleSidePanel helpers', () => {
     ).toEqual({
       requiredTeachers: undefined,
       preferredTeachers: undefined,
+    })
+  })
+
+  describe('getTotalEnrollmentForCalculation', () => {
+    it('returns sum of per-class enrollment when any class group has enrollment set', () => {
+      expect(
+        getTotalEnrollmentForCalculation(
+          [
+            { id: 'cg-1', name: 'Toddler A', enrollment: 3 },
+            { id: 'cg-2', name: 'Toddler B', enrollment: 2 },
+          ],
+          null
+        )
+      ).toBe(5)
+
+      expect(
+        getTotalEnrollmentForCalculation([{ id: 'cg-1', name: 'Toddler A', enrollment: 10 }], 8)
+      ).toBe(10)
+    })
+
+    it('returns fallback when no class group has enrollment set', () => {
+      expect(
+        getTotalEnrollmentForCalculation(
+          [
+            { id: 'cg-1', name: 'Toddler A', enrollment: null },
+            { id: 'cg-2', name: 'Toddler B' },
+          ],
+          10
+        )
+      ).toBe(10)
+
+      expect(getTotalEnrollmentForCalculation([], null)).toBe(null)
+    })
+
+    it('treats zero enrollment as set (uses sum)', () => {
+      expect(
+        getTotalEnrollmentForCalculation(
+          [
+            { id: 'cg-1', name: 'Toddler A', enrollment: 0 },
+            { id: 'cg-2', name: 'Toddler B', enrollment: 5 },
+          ],
+          10
+        )
+      ).toBe(5)
     })
   })
 })

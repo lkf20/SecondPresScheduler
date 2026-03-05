@@ -15,6 +15,7 @@ import { useScheduleSettings } from '@/lib/hooks/use-schedule-settings'
 import { useFilterOptions } from '@/lib/hooks/use-filter-options'
 import { invalidateWeeklySchedule } from '@/lib/utils/invalidation'
 import { isSlotInactive } from '@/lib/utils/schedule-slot-activity'
+import { getTotalEnrollmentForCalculation } from '@/components/schedules/ScheduleSidePanel'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 
 // Calculate Monday of current week as ISO string for query key
@@ -330,17 +331,12 @@ export default function BaselineSchedulePage() {
                 if (!scheduleCell) return false
 
                 // Calculate staffing status
-                if (
-                  !scheduleCell.class_groups ||
-                  scheduleCell.class_groups.length === 0 ||
-                  !scheduleCell.enrollment_for_staffing
-                ) {
-                  return filters.displayFilters.inactive
-                }
-
-                // Get class group data from schedule_cell (use the one with lowest min_age for ratio calculation)
-                const classGroups = scheduleCell.class_groups
-                if (!classGroups || classGroups.length === 0) {
+                const classGroups = scheduleCell.class_groups ?? []
+                const totalEnrollment = getTotalEnrollmentForCalculation(
+                  classGroups,
+                  scheduleCell.enrollment_for_staffing ?? null
+                )
+                if (!classGroups.length || totalEnrollment == null) {
                   return filters.displayFilters.inactive
                 }
 
@@ -351,16 +347,20 @@ export default function BaselineSchedulePage() {
                   return currentMinAge < lowestMinAge ? current : lowest
                 })
 
-                const requiredTeachers = classGroupForRatio.required_ratio
-                  ? Math.ceil(
-                      scheduleCell.enrollment_for_staffing / classGroupForRatio.required_ratio
-                    )
+                const calculatedRequired = classGroupForRatio.required_ratio
+                  ? Math.ceil(totalEnrollment / classGroupForRatio.required_ratio)
                   : undefined
-                const preferredTeachers = classGroupForRatio.preferred_ratio
-                  ? Math.ceil(
-                      scheduleCell.enrollment_for_staffing / classGroupForRatio.preferred_ratio
-                    )
+                const calculatedPreferred = classGroupForRatio.preferred_ratio
+                  ? Math.ceil(totalEnrollment / classGroupForRatio.preferred_ratio)
                   : undefined
+                const requiredTeachers =
+                  scheduleCell.required_staff_override != null
+                    ? scheduleCell.required_staff_override
+                    : calculatedRequired
+                const preferredTeachers =
+                  scheduleCell.preferred_staff_override != null
+                    ? scheduleCell.preferred_staff_override
+                    : calculatedPreferred
 
                 // Count all teachers assigned to this classroom/day/time slot
                 // Teachers are assigned to classrooms, not specific class groups

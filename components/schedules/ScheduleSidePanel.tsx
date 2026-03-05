@@ -32,8 +32,10 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import DatePickerInput from '@/components/ui/date-picker-input'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -95,6 +97,7 @@ type FlexRemovalContext = {
 
 type ClassGroupWithMeta = ClassGroup & {
   is_active?: boolean | null
+  enrollment?: number | null
 }
 
 type SelectedCellData = WeeklyScheduleData & {
@@ -113,6 +116,8 @@ type SelectedCellData = WeeklyScheduleData & {
         is_active: boolean
         enrollment_for_staffing: number | null
         notes: string | null
+        required_staff_override?: number | null
+        preferred_staff_override?: number | null
       })
     | null
 }
@@ -148,6 +153,8 @@ interface ScheduleSidePanelProps {
   initialFlexRequiredStaff?: number
   initialFlexPreferredStaff?: number | null
   initialFlexScheduledStaff?: number
+  /** When opening from weekly schedule, the calendar date of the selected cell (YYYY-MM-DD) for save-scope dialog. */
+  cellDateISO?: string | null
 }
 
 export const mapAssignmentsToTeachers = (
@@ -423,6 +430,18 @@ export const calculateTeacherTargets = ({
       : undefined,
 })
 
+/** Total enrollment for ratio: sum of per-class enrollments if any set, else fallback (e.g. cell enrollment_for_staffing). */
+export const getTotalEnrollmentForCalculation = (
+  classGroups: Array<{ enrollment?: number | null }>,
+  fallbackEnrollment: number | null
+): number | null => {
+  const hasPerClass = classGroups.some(cg => cg.enrollment != null)
+  if (hasPerClass) {
+    return classGroups.reduce((sum, cg) => sum + (Number(cg.enrollment) || 0), 0) || null
+  }
+  return fallbackEnrollment
+}
+
 const compareByTeacherName = (a: { teacher_name: string }, b: { teacher_name: string }) =>
   (a.teacher_name || 'Unknown').localeCompare(b.teacher_name || 'Unknown')
 
@@ -527,6 +546,7 @@ export default function ScheduleSidePanel({
   initialFlexRequiredStaff,
   initialFlexPreferredStaff,
   initialFlexScheduledStaff,
+  cellDateISO = null,
 }: ScheduleSidePanelProps) {
   const [cell, setCell] = useState<
     | (Partial<ScheduleCellWithDetails> & {
@@ -540,6 +560,8 @@ export default function ScheduleSidePanel({
   const [isActive, setIsActive] = useState(true)
   const [classGroupIds, setClassGroupIds] = useState<string[]>([])
   const [enrollment, setEnrollment] = useState<number | null>(null)
+  const [requiredStaffOverride, setRequiredStaffOverride] = useState<number | null>(null)
+  const [preferredStaffOverride, setPreferredStaffOverride] = useState<number | null>(null)
   const [notes, setNotes] = useState<string | null>(null)
   const [selectedTeachers, setSelectedTeachers] = useState<Teacher[]>([])
   const [selectedFlexTeachers, setSelectedFlexTeachers] = useState<Teacher[]>([])
@@ -569,6 +591,7 @@ export default function ScheduleSidePanel({
   const [flexCoveredStaffId, setFlexCoveredStaffId] = useState<string>('')
   const [flexStartTime, setFlexStartTime] = useState<string>('')
   const [flexEndTime, setFlexEndTime] = useState<string>('')
+  const [flexNotes, setFlexNotes] = useState<string>('')
   const [flexClassroomIds, setFlexClassroomIds] = useState<string[]>([classroomId])
   const [flexTimeSlotIds, setFlexTimeSlotIds] = useState<string[]>([timeSlotId])
   const [flexSaving, setFlexSaving] = useState(false)
@@ -586,6 +609,18 @@ export default function ScheduleSidePanel({
   const [flexRemoveLoading, setFlexRemoveLoading] = useState(false)
   const [flexRemoveSubmitting, setFlexRemoveSubmitting] = useState(false)
   const [flexRemoveScope, setFlexRemoveScope] = useState<FlexRemovalScope>('single_shift')
+  const [editingFlexEventId, setEditingFlexEventId] = useState<string | null>(null)
+  const [editingFlexStaffId, setEditingFlexStaffId] = useState<string | null>(null)
+  const [editingFlexStaffName, setEditingFlexStaffName] = useState<string | null>(null)
+  const [showChangeStaffList, setShowChangeStaffList] = useState(false)
+  const [showSaveScopeDialog, setShowSaveScopeDialog] = useState(false)
+  const [pendingFlexSave, setPendingFlexSave] = useState<{
+    staffId: string
+    shiftKeys: string[]
+  } | null>(null)
+  const [saveScopeChoice, setSaveScopeChoice] = useState<
+    'single_shift' | 'future_shifts' | 'all_shifts'
+  >('all_shifts')
   const [flexAvailability, setFlexAvailability] = useState<
     Array<{ id: string; name: string; availableShiftKeys: string[] }>
   >([])
@@ -912,6 +947,11 @@ export default function ScheduleSidePanel({
     setFlexCoveredStaffId('')
     setFlexStartTime('')
     setFlexEndTime('')
+    setFlexNotes('')
+    setEditingFlexEventId(null)
+    setEditingFlexStaffId(null)
+    setEditingFlexStaffName(null)
+    setShowChangeStaffList(false)
   }, [isOpen, weekStartISO, classroomId, timeSlotId, initialFlexStartDate, initialFlexEndDate])
 
   // When opened from dashboard (or elsewhere) in flex-only mode, show Add Temporary Coverage immediately
@@ -923,7 +963,7 @@ export default function ScheduleSidePanel({
 
   // When in flex mode from weekly schedule (no initial flex dates), fetch slot run for run-length message
   useEffect(() => {
-    if (!isOpen || panelMode !== 'flex' || initialPanelMode === 'flex') {
+    if (!isOpen || panelMode !== 'flex' || initialPanelMode === 'flex' || editingFlexEventId) {
       setFlexRunInfo(null)
       return
     }
@@ -971,7 +1011,16 @@ export default function ScheduleSidePanel({
     return () => {
       cancelled = true
     }
-  }, [isOpen, panelMode, initialPanelMode, classroomId, dayId, timeSlotId, weekStartISO])
+  }, [
+    isOpen,
+    panelMode,
+    initialPanelMode,
+    classroomId,
+    dayId,
+    timeSlotId,
+    weekStartISO,
+    editingFlexEventId,
+  ])
 
   useEffect(() => {
     if (!flexStartDate) return
@@ -1011,7 +1060,21 @@ export default function ScheduleSidePanel({
           throw new Error(data?.error || 'Failed to load temporary coverage availability.')
         }
         if (!cancelled) {
-          setFlexAvailability(Array.isArray(data?.staff) ? data.staff : [])
+          let staffList = Array.isArray(data?.staff) ? data.staff : []
+          if (
+            editingFlexStaffId &&
+            !staffList.some((s: { id: string }) => s.id === editingFlexStaffId)
+          ) {
+            staffList = [
+              {
+                id: editingFlexStaffId,
+                name: editingFlexStaffName ?? 'Current assignee',
+                availableShiftKeys: [],
+              },
+              ...staffList,
+            ]
+          }
+          setFlexAvailability(staffList)
           setFlexShiftMetrics(Array.isArray(data?.shift_metrics) ? data.shift_metrics : [])
           if (Array.isArray(data?.day_options)) {
             setFlexDayOptions(data.day_options)
@@ -1061,6 +1124,8 @@ export default function ScheduleSidePanel({
     flexTimeSlotIds,
     flexClassroomIds,
     flexCategory,
+    editingFlexStaffId,
+    editingFlexStaffName,
   ])
 
   const normalizeClassGroup = useCallback(
@@ -1086,6 +1151,7 @@ export default function ScheduleSidePanel({
       preferred_ratio: cg.preferred_ratio ?? null,
       is_active: cg.is_active ?? true,
       order: cg.order ?? null,
+      enrollment: (cg as { enrollment?: number | null }).enrollment ?? null,
     }),
     []
   )
@@ -1097,6 +1163,8 @@ export default function ScheduleSidePanel({
         is_active: boolean
         enrollment_for_staffing: number | null
         notes: string | null
+        required_staff_override?: number | null
+        preferred_staff_override?: number | null
       },
       sourceAssignments?: WeeklyScheduleData['assignments']
     ) => {
@@ -1120,6 +1188,8 @@ export default function ScheduleSidePanel({
         hasLoadedInitialDataRef.current = true
       }
       setEnrollment(cellData.enrollment_for_staffing)
+      setRequiredStaffOverride(cellData.required_staff_override ?? null)
+      setPreferredStaffOverride(cellData.preferred_staff_override ?? null)
       setNotes(cellData.notes)
       const mappedTeachers = mapAssignmentsToTeachers(sourceAssignments)
       if (mappedTeachers.length > 0 && !teachersLoadedRef.current) {
@@ -1196,6 +1266,8 @@ export default function ScheduleSidePanel({
           setClassGroupIds([])
           setClassGroups([])
           setEnrollment(null)
+          setRequiredStaffOverride(null)
+          setPreferredStaffOverride(null)
           setNotes(null)
           hasLoadedInitialDataRef.current = true
           // Store original state - cell was empty and inactive
@@ -1596,15 +1668,33 @@ export default function ScheduleSidePanel({
     }
 
     const cellClassGroupIds = cell?.class_groups?.map(cg => cg.id) || []
+    const classGroupEnrollmentMatch =
+      JSON.stringify(
+        (cell?.class_groups ?? []).map(cg => ({ id: cg.id, e: cg.enrollment ?? null })).sort()
+      ) === JSON.stringify(classGroups.map(cg => ({ id: cg.id, e: cg.enrollment ?? null })).sort())
     const hasChanges =
       cell?.is_active !== isActive ||
       JSON.stringify([...cellClassGroupIds].sort()) !== JSON.stringify([...classGroupIds].sort()) ||
       cell?.enrollment_for_staffing !== enrollment ||
+      !classGroupEnrollmentMatch ||
+      cell?.required_staff_override !== requiredStaffOverride ||
+      cell?.preferred_staff_override !== preferredStaffOverride ||
       cell?.notes !== notes ||
       selectedTeachers.length !== (cell ? selectedTeachers.length : 0)
 
     setHasUnsavedChanges(hasChanges)
-  }, [isOpen, cell, isActive, classGroupIds, enrollment, notes, selectedTeachers])
+  }, [
+    isOpen,
+    cell,
+    isActive,
+    classGroupIds,
+    classGroups,
+    enrollment,
+    notes,
+    requiredStaffOverride,
+    preferredStaffOverride,
+    selectedTeachers,
+  ])
 
   const handleClose = () => {
     if (hasUnsavedChanges) {
@@ -1636,14 +1726,21 @@ export default function ScheduleSidePanel({
       setFlexError('Select at least one shift to assign.')
       return
     }
+    if (editingFlexEventId) {
+      setPendingFlexSave({ staffId, shiftKeys })
+      setSaveScopeChoice('all_shifts')
+      setShowSaveScopeDialog(true)
+      setFlexError(null)
+      return
+    }
     setFlexSaving(true)
     try {
       const shifts = shiftKeys.flatMap(key => {
         const [date, timeSlotId] = key.split('|')
-        return flexClassroomIds.map(classroomId => ({
+        return flexClassroomIds.map(cid => ({
           date,
           time_slot_id: timeSlotId,
-          classroom_id: classroomId,
+          classroom_id: cid,
         }))
       })
       const response = await fetch('/api/staffing-events/flex', {
@@ -1659,6 +1756,7 @@ export default function ScheduleSidePanel({
           covered_staff_id: flexCategory === 'break' ? flexCoveredStaffId || null : null,
           start_time: flexCategory === 'break' ? flexStartTime || null : null,
           end_time: flexCategory === 'break' ? flexEndTime || null : null,
+          notes: flexNotes?.trim() || null,
           shifts,
         }),
       })
@@ -1681,12 +1779,107 @@ export default function ScheduleSidePanel({
           ? assignedClassroomNames.join(', ')
           : classroomName || 'selected classroom'
       setExpandedFlexStaffId(null)
+      setEditingFlexEventId(null)
+      setEditingFlexStaffId(null)
+      setEditingFlexStaffName(null)
       setPanelMode('cell')
       toast.success(
         `${assignedStaffName} assigned for temporary coverage to ${assignedClassroomLabel}`
       )
     } catch (error) {
       setFlexError(error instanceof Error ? error.message : 'Failed to add temporary coverage.')
+    } finally {
+      setFlexSaving(false)
+    }
+  }
+
+  const handleConfirmSaveScope = async () => {
+    if (!pendingFlexSave || !editingFlexEventId) return
+    const { staffId, shiftKeys } = pendingFlexSave
+    const scopeDate = cellDateISO ?? flexStartDate
+    setFlexSaving(true)
+    setFlexError(null)
+    try {
+      const removeBody: {
+        event_id: string
+        scope: 'single_shift' | 'future_shifts' | 'all_shifts'
+        date?: string
+        classroom_id?: string
+        time_slot_id?: string
+      } = {
+        event_id: editingFlexEventId,
+        scope: saveScopeChoice,
+      }
+      if (saveScopeChoice === 'single_shift' || saveScopeChoice === 'future_shifts') {
+        removeBody.date = scopeDate ?? undefined
+        removeBody.classroom_id = classroomId
+        removeBody.time_slot_id = timeSlotId
+      }
+      const removeResponse = await fetch('/api/staffing-events/flex/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(removeBody),
+      })
+      if (!removeResponse.ok) {
+        const errorData = await removeResponse.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to remove existing temporary coverage.')
+      }
+      const shifts = shiftKeys.flatMap(key => {
+        const [date, slotId] = key.split('|')
+        return flexClassroomIds.map(cid => ({
+          date,
+          time_slot_id: slotId,
+          classroom_id: cid,
+        }))
+      })
+      const response = await fetch('/api/staffing-events/flex', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          staff_id: staffId,
+          start_date: flexStartDate,
+          end_date: flexEndDate,
+          classroom_ids: flexClassroomIds,
+          time_slot_ids: flexTimeSlotIds,
+          event_category: flexCategory,
+          covered_staff_id: flexCategory === 'break' ? flexCoveredStaffId || null : null,
+          start_time: flexCategory === 'break' ? flexStartTime || null : null,
+          end_time: flexCategory === 'break' ? flexEndTime || null : null,
+          notes: flexNotes?.trim() || null,
+          shifts,
+        }),
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to add temporary coverage.')
+      }
+      try {
+        await onSave?.()
+      } catch (refreshError) {
+        console.error('Failed to refresh after temporary coverage assignment:', refreshError)
+      }
+      const assignedStaffName =
+        flexAvailability.find(staff => staff.id === staffId)?.name || 'Staff member'
+      const assignedClassroomNames = classrooms
+        .filter(room => flexClassroomIds.includes(room.id))
+        .map(room => room.name)
+      const assignedClassroomLabel =
+        assignedClassroomNames.length > 0
+          ? assignedClassroomNames.join(', ')
+          : classroomName || 'selected classroom'
+      setShowSaveScopeDialog(false)
+      setPendingFlexSave(null)
+      setExpandedFlexStaffId(null)
+      setEditingFlexEventId(null)
+      setEditingFlexStaffId(null)
+      setEditingFlexStaffName(null)
+      setShowChangeStaffList(false)
+      setPanelMode('cell')
+      toast.success(
+        `Temporary coverage updated. ${assignedStaffName} assigned to ${assignedClassroomLabel}`
+      )
+    } catch (error) {
+      setFlexError(error instanceof Error ? error.message : 'Failed to update temporary coverage.')
     } finally {
       setFlexSaving(false)
     }
@@ -1748,6 +1941,52 @@ export default function ScheduleSidePanel({
       )
     } finally {
       setFlexRemoveLoading(false)
+    }
+  }
+
+  const handleOpenEditFlex = async (assignment: WeeklyScheduleData['assignments'][number]) => {
+    if (!assignment.staffing_event_id) {
+      toast.error('Unable to edit this temporary coverage. Missing event id.')
+      return
+    }
+    try {
+      const params = new URLSearchParams({
+        event_id: assignment.staffing_event_id,
+        for_edit: '1',
+      })
+      const response = await fetch(`/api/staffing-events/flex/remove?${params.toString()}`)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to load temporary coverage for editing.')
+      }
+      const data = await response.json()
+      setFlexStartDate(data?.start_date ?? '')
+      setFlexEndDate(data?.end_date ?? '')
+      setFlexCategory(data?.event_category === 'break' ? 'break' : 'standard')
+      setFlexCoveredStaffId(data?.covered_staff_id ?? '')
+      setFlexStartTime(data?.start_time ?? '')
+      setFlexEndTime(data?.end_time ?? '')
+      setFlexNotes(data?.notes ?? '')
+      const classroomIds = Array.isArray(data?.classroom_ids) ? data.classroom_ids : [classroomId]
+      const timeSlotIds = Array.isArray(data?.time_slot_ids) ? data.time_slot_ids : [timeSlotId]
+      setFlexClassroomIds(classroomIds.length > 0 ? classroomIds : [classroomId])
+      setFlexTimeSlotIds(timeSlotIds.length > 0 ? timeSlotIds : [timeSlotId])
+      setFlexApplyDayNames(
+        new Set(
+          (Array.isArray(data?.weekdays) ? data.weekdays : []).map((d: string) =>
+            String(d).toLowerCase()
+          )
+        )
+      )
+      setEditingFlexEventId(assignment.staffing_event_id)
+      setEditingFlexStaffId(assignment.teacher_id ?? null)
+      setEditingFlexStaffName(assignment.teacher_name ?? null)
+      setFlexError(null)
+      setPanelMode('flex')
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to load temporary coverage for editing.'
+      )
     }
   }
 
@@ -1817,14 +2056,23 @@ export default function ScheduleSidePanel({
         return
       }
 
-      // Prepare cell data
+      // Total for DB: per-class sum if any set, else single enrollment
+      const totalForDb = getTotalEnrollmentForCalculation(classGroups, enrollment)
+
+      // Prepare cell data (enrollment_by_class_group for per-class display; overrides for staffing)
       const cellData = {
         classroom_id: classroomId,
         day_of_week_id: dayId,
         time_slot_id: timeSlotId,
         is_active: isActive,
         class_group_ids: classGroupIds,
-        enrollment_for_staffing: enrollment,
+        enrollment_for_staffing: totalForDb,
+        enrollment_by_class_group: classGroups.reduce(
+          (acc, cg) => (cg.enrollment != null ? { ...acc, [cg.id]: cg.enrollment } : acc),
+          {} as Record<string, number>
+        ),
+        required_staff_override: requiredStaffOverride,
+        preferred_staff_override: preferredStaffOverride,
         notes: notes,
       }
 
@@ -1855,6 +2103,9 @@ export default function ScheduleSidePanel({
         is_active: boolean
         class_group_ids: string[]
         enrollment_for_staffing: number | null
+        enrollment_by_class_group: Record<string, number>
+        required_staff_override: number | null
+        preferred_staff_override: number | null
         notes: string | null
       }> = []
 
@@ -1867,6 +2118,9 @@ export default function ScheduleSidePanel({
             is_active: cellData.is_active,
             class_group_ids: classGroupIds,
             enrollment_for_staffing: cellData.enrollment_for_staffing,
+            enrollment_by_class_group: cellData.enrollment_by_class_group,
+            required_staff_override: cellData.required_staff_override,
+            preferred_staff_override: cellData.preferred_staff_override,
             notes: cellData.notes,
           })
         }
@@ -2243,8 +2497,8 @@ export default function ScheduleSidePanel({
     setConflictResolutions(new Map())
   }
 
-  // Calculate staffing requirements from current enrollment state so Required/Preferred update live as user types
-  const enrollmentForCalculation = enrollment
+  // Total enrollment for ratio: per-class sum if any class group has enrollment, else single enrollment field
+  const enrollmentForCalculation = getTotalEnrollmentForCalculation(classGroups, enrollment)
 
   // Find class group with lowest min_age for ratio calculation
   const classGroupForRatio = pickClassGroupForRatio(classGroups)
@@ -2310,10 +2564,14 @@ export default function ScheduleSidePanel({
 
   const requiredTeachers = useInitialFlexStaffing
     ? (initialFlexRequiredStaff ?? calculatedRequired)
-    : calculatedRequired
+    : requiredStaffOverride != null
+      ? requiredStaffOverride
+      : calculatedRequired
   const preferredTeachers = useInitialFlexStaffing
     ? (initialFlexPreferredStaff ?? calculatedPreferred)
-    : calculatedPreferred
+    : preferredStaffOverride != null
+      ? preferredStaffOverride
+      : calculatedPreferred
   const scheduledStaffCount = useInitialFlexStaffing
     ? (initialFlexScheduledStaff ?? scheduledStaffCountFromCell)
     : scheduledStaffCountFromCell
@@ -2460,19 +2718,51 @@ export default function ScheduleSidePanel({
                           Temporary Coverage
                         </p>
                         <h2 className="text-xl font-semibold text-slate-900">
-                          Add Temporary Coverage
+                          {editingFlexEventId
+                            ? 'Edit Temporary Coverage'
+                            : 'Add Temporary Coverage'}
                         </h2>
                       </div>
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() =>
+                        onClick={() => {
+                          setEditingFlexEventId(null)
+                          setEditingFlexStaffId(null)
+                          setEditingFlexStaffName(null)
+                          setShowChangeStaffList(false)
                           initialPanelMode === 'flex' ? onClose() : setPanelMode('cell')
-                        }
+                        }}
                       >
                         {initialPanelMode === 'flex' ? 'Close' : 'Back'}
                       </Button>
                     </div>
+
+                    {editingFlexEventId && editingFlexStaffName && (
+                      <div
+                        className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-slate-800"
+                        role="status"
+                      >
+                        Editing coverage for{' '}
+                        <span className="font-medium">{editingFlexStaffName}</span>
+                        {flexStartDate && flexEndDate && (
+                          <>
+                            {' '}
+                            (
+                            {parseLocalDate(flexStartDate).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                            {' – '}
+                            {parseLocalDate(flexEndDate).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                            )
+                          </>
+                        )}
+                      </div>
+                    )}
 
                     {(() => {
                       const fromDashboard =
@@ -2704,6 +2994,18 @@ export default function ScheduleSidePanel({
                           )}
                         </div>
                       )}
+
+                      <div className="space-y-2">
+                        <Label htmlFor="flex_notes">Notes (optional)</Label>
+                        <Textarea
+                          id="flex_notes"
+                          placeholder="e.g. Covering for Sarah's appointment"
+                          value={flexNotes}
+                          onChange={e => setFlexNotes(e.target.value)}
+                          className="min-h-[80px] resize-y"
+                          rows={2}
+                        />
+                      </div>
                     </div>
 
                     {isLongTermFlex && flexCategory !== 'break' && (
@@ -2856,7 +3158,30 @@ export default function ScheduleSidePanel({
                     )}
                     {flexError && <p className="text-sm text-destructive">{flexError}</p>}
 
-                    {flexAvailabilityLoading ? (
+                    {editingFlexEventId && !showChangeStaffList ? (
+                      <div className="rounded-lg border border-slate-200 bg-white p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-slate-500">
+                              Currently assigned
+                            </p>
+                            <p className="text-sm font-medium text-slate-900 mt-0.5">
+                              {editingFlexStaffName ?? 'Unknown'}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="teal"
+                            size="sm"
+                            onClick={() => setShowChangeStaffList(true)}
+                          >
+                            Change Staff
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {(!editingFlexEventId || showChangeStaffList) && flexAvailabilityLoading ? (
                       <div className="space-y-3">
                         <p className="text-sm text-muted-foreground">
                           Loading staff for temporary coverage...
@@ -2900,11 +3225,12 @@ export default function ScheduleSidePanel({
                           </div>
                         ))}
                       </div>
-                    ) : flexStaffWithCounts.length === 0 ? (
+                    ) : (!editingFlexEventId || showChangeStaffList) &&
+                      flexStaffWithCounts.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
                         No staff found for temporary coverage.
                       </p>
-                    ) : (
+                    ) : !editingFlexEventId || showChangeStaffList ? (
                       <div className="space-y-6">
                         {[
                           {
@@ -3182,7 +3508,7 @@ export default function ScheduleSidePanel({
                           ) : null
                         )}
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 )}
                 {panelMode === 'cell' && readOnly && (
@@ -3389,23 +3715,33 @@ export default function ScheduleSidePanel({
                                 backgroundColor: '#fdf2f8',
                               }}
                             >
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className="text-sm font-semibold"
-                                  style={{ color: '#db2777' }}
-                                >
-                                  {assignment.teacher_name}
-                                </span>
-                                <span
-                                  className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium"
-                                  style={{
-                                    borderColor: '#f9a8d4',
-                                    backgroundColor: '#fdf2f8',
-                                    color: '#db2777',
-                                  }}
-                                >
-                                  Temporary
-                                </span>
+                              <div className="flex flex-col gap-0.5">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className="text-sm font-semibold"
+                                    style={{ color: '#db2777' }}
+                                  >
+                                    {assignment.teacher_name}
+                                  </span>
+                                  <span
+                                    className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                                    style={{
+                                      borderColor: '#f9a8d4',
+                                      backgroundColor: '#fdf2f8',
+                                      color: '#db2777',
+                                    }}
+                                  >
+                                    Temporary
+                                  </span>
+                                </div>
+                                {assignment.notes?.trim() ? (
+                                  <p
+                                    className="text-xs italic text-slate-600"
+                                    title={assignment.notes}
+                                  >
+                                    {assignment.notes}
+                                  </p>
+                                ) : null}
                               </div>
                               <div className="flex items-center gap-2">
                                 <Button
@@ -3418,6 +3754,18 @@ export default function ScheduleSidePanel({
                                   disabled={slotIsInactive}
                                 >
                                   Remove
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  className="h-8 gap-1.5 border-0 bg-transparent px-2.5 text-teal-700 shadow-none hover:bg-teal-50 hover:text-teal-800"
+                                  onClick={() => {
+                                    void handleOpenEditFlex(assignment)
+                                  }}
+                                  disabled={slotIsInactive}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                  Edit
                                 </Button>
                                 <Button
                                   type="button"
@@ -3750,35 +4098,149 @@ export default function ScheduleSidePanel({
                     <div
                       className={`rounded-lg bg-white border border-gray-200 p-6 space-y-2 ${fieldsDisabled ? 'opacity-60' : ''}`}
                     >
+                      {classGroupsSortedForDisplay.length > 0 && (
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Enrollment by class group</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Optional. Enter per group for &quot;Toddler A (3), Toddler B (2)&quot;
+                            display.
+                          </p>
+                          <div className="grid gap-2">
+                            {classGroupsSortedForDisplay.map(group => (
+                              <div key={group.id} className="flex items-center gap-3">
+                                <Label
+                                  htmlFor={`enrollment-${group.id}`}
+                                  className="min-w-[120px] text-sm"
+                                >
+                                  {group.name}
+                                </Label>
+                                <Input
+                                  id={`enrollment-${group.id}`}
+                                  type="number"
+                                  min={0}
+                                  value={group.enrollment ?? ''}
+                                  onChange={e => {
+                                    const raw = e.target.value
+                                    const value =
+                                      raw === '' ? null : Math.max(0, parseInt(raw, 10) || 0)
+                                    setClassGroups(prev =>
+                                      prev.map(cg =>
+                                        cg.id === group.id ? { ...cg, enrollment: value } : cg
+                                      )
+                                    )
+                                  }}
+                                  disabled={fieldsDisabled}
+                                  placeholder="—"
+                                  className="w-20"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                          <div className="text-sm text-muted-foreground pt-1">
+                            Total for ratio: {enrollmentForCalculation ?? '—'}
+                          </div>
+                          <div className="pt-2 border-b border-gray-200"></div>
+                        </div>
+                      )}
+                      <Label className="text-sm font-medium">Total enrollment</Label>
                       <EnrollmentInput
                         value={enrollment}
                         onChange={setEnrollment}
                         disabled={fieldsDisabled}
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Use total when not splitting by class group. When per-class values are set,
+                        they are used for ratio and display.
+                      </p>
                       <div className="pt-2 pb-3 border-b border-gray-200"></div>
 
-                      {/* Required Teachers Preview */}
-                      {classGroupForRatio && enrollment !== null && enrollment > 0 && (
-                        <div className="text-base pt-1">
-                          <div className="flex items-center gap-2">
-                            <div className="text-muted-foreground">Based on enrollment:</div>
-                            <div className="flex flex-wrap gap-2">
-                              {requiredTeachers !== undefined && (
+                      {/* Staffing requirements: auto-calculated + optional override */}
+                      {classGroupForRatio &&
+                        enrollmentForCalculation != null &&
+                        enrollmentForCalculation > 0 && (
+                          <div className="space-y-3 pt-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-muted-foreground">Auto-calculated:</span>
+                              {calculatedRequired !== undefined && (
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
-                                  Required: {requiredTeachers} Teacher
-                                  {requiredTeachers !== 1 ? 's' : ''}
+                                  Required: {calculatedRequired} Teacher
+                                  {calculatedRequired !== 1 ? 's' : ''}
                                 </span>
                               )}
-                              {preferredTeachers !== undefined && (
+                              {calculatedPreferred !== undefined && (
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
-                                  Preferred: {preferredTeachers} Teacher
-                                  {preferredTeachers !== 1 ? 's' : ''}
+                                  Preferred: {calculatedPreferred} Teacher
+                                  {calculatedPreferred !== 1 ? 's' : ''}
                                 </span>
                               )}
                             </div>
+                            <div className="flex items-center gap-3">
+                              <Switch
+                                id="override-staffing"
+                                checked={
+                                  requiredStaffOverride != null || preferredStaffOverride != null
+                                }
+                                onCheckedChange={checked => {
+                                  if (!checked) {
+                                    setRequiredStaffOverride(null)
+                                    setPreferredStaffOverride(null)
+                                  } else {
+                                    setRequiredStaffOverride(calculatedRequired ?? null)
+                                    setPreferredStaffOverride(calculatedPreferred ?? null)
+                                  }
+                                }}
+                              />
+                              <Label
+                                htmlFor="override-staffing"
+                                className="text-sm font-normal cursor-pointer"
+                              >
+                                Override calculated staffing requirements
+                              </Label>
+                            </div>
+                            {(requiredStaffOverride != null || preferredStaffOverride != null) && (
+                              <div className="flex flex-wrap items-center gap-4 pl-2">
+                                <div className="flex items-center gap-2">
+                                  <Label htmlFor="override-required" className="text-sm">
+                                    Required
+                                  </Label>
+                                  <Input
+                                    id="override-required"
+                                    type="number"
+                                    min={0}
+                                    value={requiredStaffOverride ?? ''}
+                                    onChange={e => {
+                                      const raw = e.target.value
+                                      setRequiredStaffOverride(
+                                        raw === '' ? null : Math.max(0, parseInt(raw, 10) || 0)
+                                      )
+                                    }}
+                                    disabled={fieldsDisabled}
+                                    className="w-20"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Label htmlFor="override-preferred" className="text-sm">
+                                    Preferred
+                                  </Label>
+                                  <Input
+                                    id="override-preferred"
+                                    type="number"
+                                    min={0}
+                                    value={preferredStaffOverride ?? ''}
+                                    onChange={e => {
+                                      const raw = e.target.value
+                                      setPreferredStaffOverride(
+                                        raw === '' ? null : Math.max(0, parseInt(raw, 10) || 0)
+                                      )
+                                    }}
+                                    disabled={fieldsDisabled}
+                                    className="w-20"
+                                  />
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      )}
+                        )}
                     </div>
 
                     {/* Section E: Assigned Teachers */}
@@ -3865,8 +4327,8 @@ export default function ScheduleSidePanel({
                       {/* Warning if below required staffing */}
                       {isActive &&
                         classGroups.length > 0 &&
-                        enrollment !== null &&
-                        enrollment > 0 &&
+                        enrollmentForCalculation != null &&
+                        enrollmentForCalculation > 0 &&
                         requiredTeachers !== undefined &&
                         selectedTeachers.length < requiredTeachers && (
                           <p className="text-xs text-muted-foreground italic text-right">
@@ -4091,6 +4553,104 @@ export default function ScheduleSidePanel({
               disabled={flexRemoveLoading || flexRemoveSubmitting || !flexRemoveTarget}
             >
               {flexRemoveSubmitting ? 'Removing...' : 'Remove'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={showSaveScopeDialog}
+        onOpenChange={open => {
+          if (!open) {
+            setShowSaveScopeDialog(false)
+            setPendingFlexSave(null)
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Apply these changes to</DialogTitle>
+            <DialogDescription>
+              Choose how to apply your temporary coverage update.
+            </DialogDescription>
+          </DialogHeader>
+          <RadioGroup
+            value={saveScopeChoice}
+            onValueChange={(v: string) =>
+              setSaveScopeChoice(v as 'single_shift' | 'future_shifts' | 'all_shifts')
+            }
+            className="space-y-3 py-2"
+          >
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="single_shift" id="scope-single" />
+              <Label htmlFor="scope-single" className="font-normal cursor-pointer">
+                This shift only
+                {cellDateISO && (
+                  <span className="block text-xs text-slate-500 mt-0.5">
+                    {parseLocalDate(cellDateISO).toLocaleDateString('en-US', {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                    })}{' '}
+                    • {classroomName} • {timeSlotCode}
+                  </span>
+                )}
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="future_shifts" id="scope-future" />
+              <Label htmlFor="scope-future" className="font-normal cursor-pointer">
+                This and following shifts
+                {(cellDateISO ?? flexStartDate) && (
+                  <span className="block text-xs text-slate-500 mt-0.5">
+                    From{' '}
+                    {parseLocalDate(cellDateISO ?? flexStartDate!).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })}{' '}
+                    onward
+                  </span>
+                )}
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="all_shifts" id="scope-all" />
+              <Label htmlFor="scope-all" className="font-normal cursor-pointer">
+                All shifts in this assignment
+                {flexStartDate && flexEndDate && (
+                  <span className="block text-xs text-slate-500 mt-0.5">
+                    {parseLocalDate(flexStartDate).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })}{' '}
+                    –{' '}
+                    {parseLocalDate(flexEndDate).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </span>
+                )}
+              </Label>
+            </div>
+          </RadioGroup>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowSaveScopeDialog(false)
+                setPendingFlexSave(null)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                void handleConfirmSaveScope()
+              }}
+              disabled={
+                flexSaving || (saveScopeChoice !== 'all_shifts' && !(cellDateISO ?? flexStartDate))
+              }
+            >
+              {flexSaving ? 'Saving...' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>

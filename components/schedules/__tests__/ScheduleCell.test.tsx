@@ -362,4 +362,126 @@ describe('ScheduleCell', () => {
 
     expect(screen.getByText(/meets preferred staffing \(3.0 teachers\)/i)).toBeInTheDocument()
   })
+
+  it('shows class group names with enrollment when per-class enrollment is set', () => {
+    render(
+      <ScheduleCell
+        data={{
+          ...baseData,
+          schedule_cell: {
+            ...baseData.schedule_cell,
+            class_groups: [
+              {
+                id: 'cg-1',
+                name: 'Toddler A',
+                age_unit: 'months',
+                min_age: 24,
+                max_age: 36,
+                required_ratio: 8,
+                preferred_ratio: 6,
+                enrollment: 3,
+              },
+              {
+                id: 'cg-2',
+                name: 'Toddler B',
+                age_unit: 'months',
+                min_age: 36,
+                max_age: 48,
+                required_ratio: 8,
+                preferred_ratio: 6,
+                enrollment: 2,
+              },
+            ],
+          },
+        }}
+      />
+    )
+
+    expect(screen.getByText('Toddler A (3), Toddler B (2)')).toBeInTheDocument()
+  })
+
+  it('uses required_staff_override when set for staffing status', () => {
+    render(
+      <ScheduleCell
+        data={{
+          ...baseData,
+          schedule_cell: {
+            ...baseData.schedule_cell,
+            enrollment_for_staffing: 24, // calculated required would be ceil(24/8) = 3
+            required_staff_override: 1,
+            preferred_staff_override: 1, // 1 teacher meets preferred
+            class_groups: [
+              {
+                id: 'cg-1',
+                name: 'Toddler A',
+                age_unit: 'months',
+                min_age: 24,
+                max_age: 36,
+                required_ratio: 8,
+                preferred_ratio: 6,
+              },
+            ],
+          },
+          assignments: [
+            {
+              id: 'teacher-1',
+              teacher_id: 'teacher-1',
+              teacher_name: 'Teacher A.',
+              classroom_id: 'class-1',
+              classroom_name: 'Infant Room',
+            },
+          ],
+        }}
+      />
+    )
+
+    expect(screen.getByText(/meets preferred staffing \(1.0 teachers\)/i)).toBeInTheDocument()
+  })
+
+  it('uses total from per-class enrollment when present for ratio calculation', () => {
+    render(
+      <ScheduleCell
+        data={{
+          ...baseData,
+          schedule_cell: {
+            ...baseData.schedule_cell,
+            enrollment_for_staffing: 20,
+            class_groups: [
+              {
+                id: 'cg-1',
+                name: 'Toddler A',
+                age_unit: 'months',
+                min_age: 24,
+                max_age: 36,
+                required_ratio: 8,
+                preferred_ratio: 6,
+                enrollment: 5,
+              },
+              {
+                id: 'cg-2',
+                name: 'Toddler B',
+                age_unit: 'months',
+                min_age: 36,
+                max_age: 48,
+                required_ratio: 8,
+                preferred_ratio: 6,
+                enrollment: 4,
+              },
+            ],
+          },
+          assignments: [
+            {
+              id: 'teacher-1',
+              teacher_id: 'teacher-1',
+              teacher_name: 'Teacher A.',
+              classroom_id: 'class-1',
+              classroom_name: 'Infant Room',
+            },
+          ],
+        }}
+      />
+    )
+
+    expect(screen.getByText(/below required staffing by 1.0/i)).toBeInTheDocument()
+  })
 })
