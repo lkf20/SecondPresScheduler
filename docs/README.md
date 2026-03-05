@@ -21,6 +21,10 @@ Reference documentation for APIs and schemas:
 - **API_ROUTE_PATTERNS.md** - API route patterns and conventions
 - **DATABASE_SCHEMA.md** - Database schema documentation
 
+## Additional Docs
+
+- **database_migration_workflow.md** - Rules for draft vs approved migrations, numbering, safety checks, and approval workflow
+
 ## Root Documentation
 
 The following documentation files remain in the project root:
