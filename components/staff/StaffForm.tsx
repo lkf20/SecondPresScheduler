@@ -73,6 +73,32 @@ interface StaffFormProps {
 
 const staffFormDraftCache = new Map<string, StaffFormData>()
 const normalizeRoleTypeIds = (ids: string[] = []) => [...ids].sort((a, b) => a.localeCompare(b))
+const getStaffBaselineValues = (staff?: StaffWithRoleIds): StaffFormData => {
+  if (staff) {
+    return {
+      first_name: staff.first_name,
+      last_name: staff.last_name,
+      display_name: staff.display_name || '',
+      phone: formatUSPhoneDashed(staff.phone),
+      email: staff.email || '',
+      role_type_ids: normalizeRoleTypeIds(staff.role_type_ids || []),
+      active: staff.active ?? true,
+      is_sub: staff.is_sub ?? false,
+    }
+  }
+
+  return {
+    first_name: '',
+    last_name: '',
+    display_name: '',
+    phone: '',
+    email: '',
+    role_type_ids: normalizeRoleTypeIds([]),
+    active: true,
+    is_sub: false,
+  }
+}
+
 const normalizeStaffFormData = (data: StaffFormData): StaffFormData => ({
   first_name: data.first_name || '',
   last_name: data.last_name || '',
@@ -103,30 +129,9 @@ export default function StaffForm({
     existingTeacher: { first_name: string; last_name: string; email: string | null }
   } | null>(null)
   const [proceedWithDuplicate, setProceedWithDuplicate] = useState(false)
+  const baselineValues = useMemo(() => getStaffBaselineValues(staff), [staff])
   const cachedDraft = draftCacheKey ? staffFormDraftCache.get(draftCacheKey) : undefined
-  const initialValues: StaffFormData = cachedDraft
-    ? cachedDraft
-    : staff
-      ? {
-          first_name: staff.first_name,
-          last_name: staff.last_name,
-          display_name: staff.display_name || '',
-          phone: formatUSPhoneDashed(staff.phone),
-          email: staff.email || '',
-          role_type_ids: normalizeRoleTypeIds(staff.role_type_ids || []),
-          active: staff.active ?? true,
-          is_sub: staff.is_sub ?? false,
-        }
-      : {
-          first_name: '',
-          last_name: '',
-          display_name: '',
-          phone: '',
-          email: '',
-          role_type_ids: normalizeRoleTypeIds([]),
-          active: true,
-          is_sub: false,
-        }
+  const initialValues: StaffFormData = cachedDraft ? cachedDraft : baselineValues
 
   const {
     register,
@@ -152,7 +157,7 @@ export default function StaffForm({
     () => normalizeRoleTypeIds(watchedRoleTypeIds || []),
     [watchedRoleTypeIds]
   )
-  const baselineForDirtyRef = useRef<StaffFormData>(normalizeStaffFormData(initialValues))
+  const baselineForDirtyRef = useRef<StaffFormData>(normalizeStaffFormData(baselineValues))
   const duplicateCheckRequestIdRef = useRef(0)
   const currentForDirty = useMemo(
     () =>
@@ -183,6 +188,10 @@ export default function StaffForm({
     },
     defaultDisplayNameFormat
   )
+
+  useEffect(() => {
+    baselineForDirtyRef.current = normalizeStaffFormData(baselineValues)
+  }, [baselineValues])
 
   useEffect(() => {
     if (!useDefaultDisplayName) return
