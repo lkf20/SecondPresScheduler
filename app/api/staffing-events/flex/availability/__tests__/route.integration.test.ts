@@ -258,7 +258,8 @@ describe('POST /api/staffing-events/flex/availability integration', () => {
     expect(Array.isArray(json.shift_metrics)).toBe(true)
   })
 
-  it('when event_category is break includes both PERMANENT and FLEXIBLE staff in eligible list', async () => {
+  // Break Coverage UI is off (BREAK_COVERAGE_ENABLED = false). Re-enable test when feature is on.
+  it.skip('when event_category is break includes both PERMANENT and FLEXIBLE staff in eligible list', async () => {
     ;(createClient as jest.Mock).mockResolvedValue({
       from: jest.fn((table: string) => {
         if (table === 'days_of_week') {

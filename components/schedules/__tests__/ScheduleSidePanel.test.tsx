@@ -657,7 +657,9 @@ describe('ScheduleSidePanel - Add Temporary Coverage', () => {
     expect(screen.getByText(/Suggested coverage range: Mar 9 – May 11/)).toBeInTheDocument()
   })
 
-  it('shows Break Coverage fields when Break Coverage is selected', async () => {
+  // Break Coverage UI is hidden when BREAK_COVERAGE_ENABLED is false (see lib/feature-flags.ts).
+  // Re-enable this test when the feature is turned back on.
+  it.skip('shows Break Coverage fields when Break Coverage is selected', async () => {
     setupFetch({
       start_date: '2026-03-09',
       end_date: '2026-05-11',

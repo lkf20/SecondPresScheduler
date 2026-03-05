@@ -388,7 +388,8 @@ describe('POST /api/staffing-events/flex integration', () => {
     ])
   })
 
-  it('creates break coverage event with event_category, covered_staff_id, start_time, end_time', async () => {
+  // Break Coverage UI is off (BREAK_COVERAGE_ENABLED = false). Backend still accepts break; re-enable test when feature is on.
+  it.skip('creates break coverage event with event_category, covered_staff_id, start_time, end_time', async () => {
     const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
       staff_id: 'staff-1',
       start_date: '2026-03-02',

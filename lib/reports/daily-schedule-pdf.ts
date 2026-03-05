@@ -1,4 +1,5 @@
 import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
+import { BREAK_COVERAGE_ENABLED } from '@/lib/feature-flags'
 import { formatDateISOInTimeZone } from '@/lib/utils/date'
 
 type PdfOptions = {
@@ -286,8 +287,9 @@ export function buildDailySchedulePdfHtml({
               .join('')
             const flexLines = flexTeachers
               .map(f => {
+                // When Break Coverage feature is off, do not show break prefix in PDF.
                 const prefix =
-                  f.event_category === 'break'
+                  f.event_category === 'break' && BREAK_COVERAGE_ENABLED
                     ? options.colorFriendly
                       ? '[Break] '
                       : '☕ '

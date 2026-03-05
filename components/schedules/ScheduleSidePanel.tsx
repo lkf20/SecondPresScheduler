@@ -76,6 +76,7 @@ import {
   getSlotInactiveReasons,
   isSlotEffectivelyInactive,
 } from '@/lib/utils/schedule-slot-activity'
+import { BREAK_COVERAGE_ENABLED } from '@/lib/feature-flags'
 import { toast } from 'sonner'
 
 interface Teacher {
@@ -2641,7 +2642,7 @@ export default function ScheduleSidePanel({
           >
             <SheetHeader>
               <SheetTitle>
-                {classroomName} • {dayName} • {timeSlotCode}
+                {classroomName} • {dayName} {timeSlotCode}
                 {dayNameDateLabel ? ` • ${dayNameDateLabel}` : ''} {timeRange && `(${timeRange})`}
               </SheetTitle>
               <SheetDescription>
@@ -2843,83 +2844,86 @@ export default function ScheduleSidePanel({
                     })()}
 
                     <div className="space-y-6 rounded-lg border border-slate-200 bg-white p-4">
-                      <div className="space-y-4 pb-6 border-b border-slate-100">
-                        <Label>Coverage Type</Label>
-                        <RadioGroup
-                          value={flexCategory}
-                          onValueChange={(val: string) =>
-                            setFlexCategory(val as 'standard' | 'break')
-                          }
-                          className="flex items-center gap-4"
-                        >
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="standard" id="type-standard" />
-                            <Label htmlFor="type-standard" className="font-normal cursor-pointer">
-                              Extra Coverage
-                            </Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="break" id="type-break" />
-                            <Label htmlFor="type-break" className="font-normal cursor-pointer">
-                              Break Coverage
-                            </Label>
-                          </div>
-                        </RadioGroup>
+                      {/* Feature flag: Break Coverage UI hidden when BREAK_COVERAGE_ENABLED is false. */}
+                      {BREAK_COVERAGE_ENABLED && (
+                        <div className="space-y-4 pb-6 border-b border-slate-100">
+                          <Label>Coverage Type</Label>
+                          <RadioGroup
+                            value={flexCategory}
+                            onValueChange={(val: string) =>
+                              setFlexCategory(val as 'standard' | 'break')
+                            }
+                            className="flex items-center gap-4"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="standard" id="type-standard" />
+                              <Label htmlFor="type-standard" className="font-normal cursor-pointer">
+                                Extra Coverage
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="break" id="type-break" />
+                              <Label htmlFor="type-break" className="font-normal cursor-pointer">
+                                Break Coverage
+                              </Label>
+                            </div>
+                          </RadioGroup>
 
-                        {flexCategory === 'break' && (
-                          <div className="mt-4 pt-4 border-t border-slate-100">
-                            <div className="rounded-md bg-slate-50 border border-slate-200 p-4 space-y-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="covered_staff_id">
-                                  Teacher taking break (optional)
-                                </Label>
-                                <Select
-                                  value={flexCoveredStaffId || 'unspecified'}
-                                  onValueChange={v =>
-                                    setFlexCoveredStaffId(v === 'unspecified' ? '' : v)
-                                  }
-                                >
-                                  <SelectTrigger id="covered_staff_id">
-                                    <SelectValue placeholder="Select teacher..." />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="unspecified">Unspecified</SelectItem>
-                                    {selectedCellData?.assignments
-                                      ?.filter(a => !a.is_substitute && !a.is_flexible)
-                                      .map(t => (
-                                        <SelectItem key={t.teacher_id} value={t.teacher_id}>
-                                          {t.teacher_name}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="grid grid-cols-2 gap-4">
+                          {flexCategory === 'break' && (
+                            <div className="mt-4 pt-4 border-t border-slate-100">
+                              <div className="rounded-md bg-slate-50 border border-slate-200 p-4 space-y-4">
                                 <div className="space-y-2">
-                                  <Label htmlFor="break_start_time">Start Time (optional)</Label>
-                                  <input
-                                    type="time"
-                                    id="break_start_time"
-                                    className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                    value={flexStartTime}
-                                    onChange={e => setFlexStartTime(e.target.value)}
-                                  />
+                                  <Label htmlFor="covered_staff_id">
+                                    Teacher taking break (optional)
+                                  </Label>
+                                  <Select
+                                    value={flexCoveredStaffId || 'unspecified'}
+                                    onValueChange={v =>
+                                      setFlexCoveredStaffId(v === 'unspecified' ? '' : v)
+                                    }
+                                  >
+                                    <SelectTrigger id="covered_staff_id">
+                                      <SelectValue placeholder="Select teacher..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="unspecified">Unspecified</SelectItem>
+                                      {selectedCellData?.assignments
+                                        ?.filter(a => !a.is_substitute && !a.is_flexible)
+                                        .map(t => (
+                                          <SelectItem key={t.teacher_id} value={t.teacher_id}>
+                                            {t.teacher_name}
+                                          </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                  </Select>
                                 </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor="break_end_time">End Time (optional)</Label>
-                                  <input
-                                    type="time"
-                                    id="break_end_time"
-                                    className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                    value={flexEndTime}
-                                    onChange={e => setFlexEndTime(e.target.value)}
-                                  />
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="space-y-2">
+                                    <Label htmlFor="break_start_time">Start Time (optional)</Label>
+                                    <input
+                                      type="time"
+                                      id="break_start_time"
+                                      className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                      value={flexStartTime}
+                                      onChange={e => setFlexStartTime(e.target.value)}
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label htmlFor="break_end_time">End Time (optional)</Label>
+                                    <input
+                                      type="time"
+                                      id="break_end_time"
+                                      className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                      value={flexEndTime}
+                                      onChange={e => setFlexEndTime(e.target.value)}
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        )}
-                      </div>
+                          )}
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -4615,8 +4619,11 @@ export default function ScheduleSidePanel({
                       const staffChanged =
                         editingFlexStaffName !== newStaffName &&
                         (editingFlexStaffName || newStaffName)
+                      // When Break Coverage is disabled, do not show coverage-type change in confirm dialog.
                       const categoryChanged =
-                        editingFlexCategory !== null && editingFlexCategory !== flexCategory
+                        BREAK_COVERAGE_ENABLED &&
+                        editingFlexCategory !== null &&
+                        editingFlexCategory !== flexCategory
                       const dateLabel =
                         flexStartDate && flexEndDate
                           ? flexStartDate === flexEndDate

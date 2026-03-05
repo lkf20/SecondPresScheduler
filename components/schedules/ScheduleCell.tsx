@@ -4,6 +4,7 @@ import React from 'react'
 import { CheckCircle2, AlertTriangle, XCircle, CornerDownRight } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { WeeklyScheduleData } from '@/lib/api/weekly-schedule'
+import { BREAK_COVERAGE_ENABLED } from '@/lib/feature-flags'
 import { getTotalEnrollmentForCalculation } from './ScheduleSidePanel'
 import AbsentTeacherPopover from './AbsentTeacherPopover'
 
@@ -467,7 +468,8 @@ export default function ScheduleCell({
                     title = 'Floater assignment'
                   } else if (assignment.is_flexible) {
                     if (assignment.staffing_event_id) {
-                      if (assignment.event_category === 'break') {
+                      // When Break Coverage feature is off, show all temp coverage as standard.
+                      if (assignment.event_category === 'break' && BREAK_COVERAGE_ENABLED) {
                         className +=
                           'bg-indigo-50 text-indigo-700 border border-indigo-300 border-dashed'
                         title = 'Break Coverage'
@@ -492,7 +494,7 @@ export default function ScheduleCell({
                       style={
                         assignment.is_flexible
                           ? assignment.staffing_event_id
-                            ? assignment.event_category === 'break'
+                            ? assignment.event_category === 'break' && BREAK_COVERAGE_ENABLED
                               ? {
                                   borderColor: '#a5b4fc',
                                   backgroundColor: '#eef2ff',
@@ -510,12 +512,14 @@ export default function ScheduleCell({
                       }
                     >
                       {assignment.teacher_name || 'Unknown'}
-                      {assignment.break_start_time && assignment.break_end_time && (
-                        <span className="ml-1 inline-flex items-center text-[10px] opacity-80 whitespace-nowrap">
-                          ☕ {assignment.break_start_time.slice(0, 5)} -{' '}
-                          {assignment.break_end_time.slice(0, 5)}
-                        </span>
-                      )}
+                      {BREAK_COVERAGE_ENABLED &&
+                        assignment.break_start_time &&
+                        assignment.break_end_time && (
+                          <span className="ml-1 inline-flex items-center text-[10px] opacity-80 whitespace-nowrap">
+                            ☕ {assignment.break_start_time.slice(0, 5)} -{' '}
+                            {assignment.break_end_time.slice(0, 5)}
+                          </span>
+                        )}
                     </span>
                   )
 
