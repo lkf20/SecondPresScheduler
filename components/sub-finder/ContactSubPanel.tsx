@@ -1707,8 +1707,12 @@ export default function ContactSubPanel({
                               time_slot_code: shift.time_slot_code,
                               status:
                                 canCoverThisShift || isOverridden ? 'available' : 'unavailable',
-                              assignment_owner: assignedToThisSub ? 'this_sub' : undefined,
-                              assigned_sub_name: null,
+                              assignment_owner: assignedToThisSub
+                                ? 'this_sub'
+                                : assignedElsewhere
+                                  ? 'other_sub'
+                                  : undefined,
+                              assigned_sub_name: assignedElsewhere ? shift.sub_name : null,
                               classroom_name: shift.classroom_name ?? null,
                               class_name: shift.class_name ?? null,
                               classroom_color: shift.classroom_color ?? null,
