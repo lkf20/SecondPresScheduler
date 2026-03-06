@@ -1738,19 +1738,20 @@ export default function ContactSubPanel({
                       </div>
 
                       <div className="mt-auto pt-3 border-t border-slate-200">
-                        <div className="flex items-center justify-center gap-2">
+                        <div className="flex items-center justify-center gap-4">
                           {assignedToThisSub && (
                             <>
                               <Button
-                                variant="outline"
+                                variant="ghost"
                                 size="sm"
                                 onClick={() => setRemoveDialogShift(assignedToThisSub)}
-                                className="w-full text-rose-700 border-rose-200 hover:bg-rose-50"
+                                className="text-rose-700 hover:text-rose-800 hover:bg-transparent px-0 h-auto font-medium hover:underline"
                               >
                                 Remove
                               </Button>
+                              <div className="w-px h-4 bg-slate-300" />
                               <Button
-                                variant="outline"
+                                variant="ghost"
                                 size="sm"
                                 onClick={() =>
                                   setChangeDialogShift({
@@ -1759,7 +1760,7 @@ export default function ContactSubPanel({
                                     fromSubName: sub.name,
                                   })
                                 }
-                                className="w-full text-teal-700 border-teal-200 hover:bg-teal-50"
+                                className="text-teal-700 hover:text-teal-800 hover:bg-transparent px-0 h-auto font-medium hover:underline"
                               >
                                 Change Sub
                               </Button>
@@ -1769,18 +1770,21 @@ export default function ContactSubPanel({
                           {!assignedToThisSub && assignedElsewhere && (
                             <>
                               {!canSwapToThisSub && canOverrideThisRow && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleToggleOverride(shiftKey)}
-                                  disabled={isSubInactive || responseStatus === 'declined_all'}
-                                  className={isOverridden ? 'bg-slate-100 w-full' : 'w-full'}
-                                >
-                                  {isOverridden ? 'Override on' : 'Override'}
-                                </Button>
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleToggleOverride(shiftKey)}
+                                    disabled={isSubInactive || responseStatus === 'declined_all'}
+                                    className="text-teal-700 hover:text-teal-800 hover:bg-transparent px-0 h-auto font-medium hover:underline"
+                                  >
+                                    {isOverridden ? 'Override on' : 'Override'}
+                                  </Button>
+                                  <div className="w-px h-4 bg-slate-300" />
+                                </>
                               )}
                               <Button
-                                variant="outline"
+                                variant="ghost"
                                 size="sm"
                                 onClick={() =>
                                   setChangeDialogShift({
@@ -1791,7 +1795,7 @@ export default function ContactSubPanel({
                                   })
                                 }
                                 disabled={!canSwapToThisSub}
-                                className="w-full text-teal-700 border-teal-200 hover:bg-teal-50"
+                                className="text-teal-700 hover:text-teal-800 hover:bg-transparent px-0 h-auto font-medium hover:underline disabled:opacity-50"
                               >
                                 Change Sub
                               </Button>
@@ -1801,32 +1805,35 @@ export default function ContactSubPanel({
                           {!assignedToThisSub && !assignedElsewhere && (
                             <>
                               {cannotCoverReason && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleToggleOverride(shiftKey)}
-                                  disabled={
-                                    isSubInactive ||
-                                    responseStatus === 'declined_all' ||
-                                    !canOverrideThisRow
-                                  }
-                                  className={isOverridden ? 'bg-slate-100 flex-1' : 'flex-1'}
-                                >
-                                  {isOverridden
-                                    ? 'Override on'
-                                    : canOverrideThisRow
-                                      ? 'Override'
-                                      : 'Locked'}
-                                </Button>
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleToggleOverride(shiftKey)}
+                                    disabled={
+                                      isSubInactive ||
+                                      responseStatus === 'declined_all' ||
+                                      !canOverrideThisRow
+                                    }
+                                    className="text-teal-700 hover:text-teal-800 hover:bg-transparent px-0 h-auto font-medium hover:underline disabled:opacity-50"
+                                  >
+                                    {isOverridden
+                                      ? 'Override on'
+                                      : canOverrideThisRow
+                                        ? 'Override'
+                                        : 'Locked'}
+                                  </Button>
+                                  <div className="w-px h-4 bg-slate-300" />
+                                </>
                               )}
                               <label
-                                className={`inline-flex items-center justify-center gap-2 text-sm flex-1 h-9 rounded-md border ${
+                                className={`inline-flex items-center justify-center gap-2 text-sm ${
                                   canAssignFromCheckbox
-                                    ? 'cursor-pointer text-teal-700 bg-teal-50/50 hover:bg-teal-50 border-teal-200'
-                                    : 'cursor-not-allowed text-slate-400 bg-slate-50 border-slate-200'
+                                    ? 'cursor-pointer text-teal-700 hover:text-teal-800'
+                                    : 'cursor-not-allowed text-slate-400'
                                 }`}
                               >
-                                <span className="font-medium">Assign</span>
+                                <span className="font-medium hover:underline">Assign</span>
                                 <Checkbox
                                   checked={isSelected}
                                   onCheckedChange={() =>
