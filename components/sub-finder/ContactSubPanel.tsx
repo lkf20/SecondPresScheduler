@@ -1685,7 +1685,7 @@ export default function ContactSubPanel({
                     !assignedToThisSub && !assignedElsewhere && !canCoverThisShift
                   const cannotCoverMeta = getCannotCoverMeta(cannotCoverReason || null)
                   const canOverrideThisRow = cannotCoverMeta.canOverride
-                  const cardTopBorderColor = canAssignFromCheckbox
+                  const cardLeftBorderColor = canAssignFromCheckbox
                     ? 'rgb(110, 231, 183)' // emerald-300
                     : needsOverride
                       ? 'rgb(203, 213, 225)' // slate-300
@@ -1694,8 +1694,8 @@ export default function ContactSubPanel({
                   return (
                     <div
                       key={shiftKey}
-                      className="flex flex-col justify-between rounded-lg border border-t-4 border-slate-200 bg-slate-50 p-4 shadow-sm"
-                      style={{ borderTopColor: cardTopBorderColor }}
+                      className="flex flex-col justify-between rounded-lg border border-l-4 border-slate-200 bg-slate-50 p-4 shadow-sm"
+                      style={{ borderLeftColor: cardLeftBorderColor }}
                     >
                       <div className="flex justify-center -mr-3 -mb-3 mb-2">
                         <ShiftChips
@@ -1726,17 +1726,6 @@ export default function ContactSubPanel({
                         ) : assignedElsewhere ? (
                           <div className="flex flex-col items-center gap-1.5">
                             <p className="text-sm text-slate-600">Assigned to {shift.sub_name}</p>
-                            <span
-                              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${
-                                canSwapToThisSub
-                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                  : 'border-slate-300 bg-slate-100 text-slate-600'
-                              }`}
-                            >
-                              {canSwapToThisSub
-                                ? 'Available to swap'
-                                : 'Unavailable for this shift'}
-                            </span>
                             {!canSwapToThisSub && (
                               <span className="inline-flex items-center rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">
                                 {cannotCoverMeta.label}
@@ -1745,9 +1734,7 @@ export default function ContactSubPanel({
                           </div>
                         ) : cannotCoverReason && !isOverridden ? (
                           <p className="text-sm text-slate-500">{cannotCoverReason}</p>
-                        ) : (
-                          <p className="text-sm text-teal-700 font-medium">Can assign this sub</p>
-                        )}
+                        ) : null}
                       </div>
 
                       <div className="mt-auto pt-3 border-t border-slate-200">
