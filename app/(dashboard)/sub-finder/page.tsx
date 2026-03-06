@@ -55,6 +55,7 @@ export default function SubFinderPage() {
   const searchParams = useSearchParams()
   const requestedAbsenceId = searchParams.get('absence_id')
   const requestedTeacherId = searchParams.get('teacher_id')
+  const requestedSubId = searchParams.get('sub_id')
   const [mode, setMode] = useState<Mode>('existing')
   const [includePastShifts, setIncludePastShifts] = useState(false)
   const [shiftFilters, setShiftFilters] = useState<string[]>(['all'])
@@ -1245,6 +1246,28 @@ export default function SubFinderPage() {
       setSelectedAbsence(match)
     }
   }, [absences, mode, selectedAbsence, setSelectedAbsence])
+
+  // Auto-open Sub Contact Panel if requestedSubId is present
+  const hasAutoOpenedSubPanelRef = useRef(false)
+  useEffect(() => {
+    if (
+      requestedSubId &&
+      selectedAbsence &&
+      selectedAbsence.id === requestedAbsenceId &&
+      !hasAutoOpenedSubPanelRef.current &&
+      (recommendedSubs.length > 0 || allSubs.length > 0)
+    ) {
+      const subCandidate =
+        recommendedSubs.find(s => s.id === requestedSubId) ||
+        allSubs.find(s => s.id === requestedSubId)
+
+      if (subCandidate) {
+        setSelectedSub(subCandidate)
+        setIsContactPanelOpen(true)
+        hasAutoOpenedSubPanelRef.current = true
+      }
+    }
+  }, [requestedSubId, requestedAbsenceId, selectedAbsence, recommendedSubs, allSubs])
 
   // Restore manual mode results after form data is restored
   useEffect(() => {

@@ -245,6 +245,9 @@ export async function GET(request: NextRequest) {
         time_slot:time_slots(
           id,
           code
+        ),
+        coverage_request_shift:coverage_request_shifts(
+          coverage_request_id
         )
       `
       )
@@ -737,7 +740,9 @@ export async function GET(request: NextRequest) {
         classroom_color: classroom?.color || null,
         notes: sa.notes,
         sub_name: subName,
+        sub_id: sub?.id,
         teacher_name: teacherName,
+        coverage_request_id: sa.coverage_request_shift?.coverage_request_id || null,
       }
     })
 

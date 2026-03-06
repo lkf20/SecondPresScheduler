@@ -67,7 +67,7 @@ type CoverageRequestItem = {
   shift_details?: Array<{ label: string; status: 'covered' | 'partial' | 'uncovered' }>
 }
 
-type ScheduledSubItem = {
+export type ScheduledSubItem = {
   id: string
   date: string
   day_name: string
@@ -76,7 +76,9 @@ type ScheduledSubItem = {
   classroom_color: string | null
   notes: string | null
   sub_name: string
+  sub_id?: string
   teacher_name: string
+  coverage_request_id?: string | null
 }
 
 type StaffingTargetItem = {
@@ -1097,7 +1099,13 @@ export default function DashboardClient({
                     </div>
                     <div className="flex w-full justify-end self-end sm:w-auto">
                       <Button asChild size="sm" variant="teal">
-                        <Link href={`/schedules/weekly?sub_assignment_id=${assignment.id}`}>
+                        <Link
+                          href={
+                            assignment.coverage_request_id
+                              ? `/sub-finder?absence_id=${assignment.coverage_request_id}&sub_id=${assignment.sub_id || ''}`
+                              : '/sub-finder'
+                          }
+                        >
                           Update Sub
                         </Link>
                       </Button>

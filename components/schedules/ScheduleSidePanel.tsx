@@ -3619,7 +3619,7 @@ export default function ScheduleSidePanel({
                                     <div className="flex items-center gap-2">
                                       <Button
                                         type="button"
-                                        variant="ghost"
+                                        variant="teal"
                                         size="sm"
                                         className="h-8 px-2.5 text-sm"
                                         onClick={() => router.push('/time-off')}
@@ -3658,7 +3658,7 @@ export default function ScheduleSidePanel({
                                         </div>
                                         <Button
                                           type="button"
-                                          variant="ghost"
+                                          variant="teal"
                                           size="sm"
                                           className="h-8 px-2.5"
                                           onClick={() => router.push(findSubLink)}

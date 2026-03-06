@@ -2071,7 +2071,9 @@ export default function ContactSubPanel({
             )}
             {responseStatus !== 'declined_all' && !hasPendingAssignmentChanges && (
               <p className="text-xs text-slate-500 mb-1">
-                No pending assignment changes. Select a shift to enable Assign.
+                {hasAssignedToThisSub
+                  ? 'To remove or swap existing assignments, use the buttons next to each assigned shift above. Select a new shift to enable Assign.'
+                  : 'No pending assignment changes. Select a shift to enable Assign.'}
               </p>
             )}
             {showConfirmedNoShiftWarning && (
@@ -2154,11 +2156,17 @@ export default function ContactSubPanel({
                       loading ||
                       fetching ||
                       !coverageRequestId ||
-                      (responseStatus !== 'declined_all' && selectedShiftsCount === 0) ||
+                      (responseStatus !== 'declined_all' &&
+                        selectedShiftsCount === 0 &&
+                        !hasAssignedToThisSub) ||
                       isSubInactive
                     }
                   >
-                    {responseStatus === 'declined_all' ? 'Mark as Declined' : 'Assign'}
+                    {responseStatus === 'declined_all'
+                      ? 'Mark as Declined'
+                      : selectedShiftsCount === 0 && hasAssignedToThisSub
+                        ? 'Update Assignment'
+                        : 'Assign'}
                   </Button>
                 )}
               </div>
