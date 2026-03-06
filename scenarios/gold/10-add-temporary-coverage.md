@@ -4,11 +4,11 @@
 
 ## Intent
 
-Define “done right” for **Add Temporary Coverage** so behavior is consistent whether the user opens from the **Dashboard** (Below Staffing Target → Assign Coverage) or from the **Weekly Schedule** (cell → Add Temporary Coverage). Covers staffing lookahead boundary (12 weeks vs May 14, 2026), run-length Summary card, 8-week long-term suggestion, and header staffing (required, preferred, scheduled).
+Define “done right” for **Add Temporary Coverage** so behavior is consistent whether the user opens from the **Dashboard** (Below Staffing Target → Add Coverage) or from the **Weekly Schedule** (cell → Add Temporary Coverage). Covers staffing lookahead boundary (12 weeks vs May 14, 2026), run-length Summary card, 8-week long-term suggestion, and header staffing (required, preferred, scheduled).
 
 ## Entry points
 
-- **From Dashboard:** User clicks “Assign Coverage” on a Below Required or Below Preferred card. Add Temporary Coverage panel opens in flex mode with pre-filled date range and staffing from the selected group.
+- **From Dashboard:** User clicks "Add Coverage" on a Below Required or Below Preferred card. Add Temporary Coverage panel opens in flex mode with pre-filled date range and staffing from the selected group.
 - **From Weekly Schedule:** User opens a cell and clicks “Add Temporary Coverage.” Panel fetches slot-run for that (classroom, day, time slot) and shows the same Summary card when the slot is below target; date range is pre-filled from the run.
 
 ## Review dimensions

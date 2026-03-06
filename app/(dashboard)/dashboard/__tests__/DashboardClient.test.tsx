@@ -180,7 +180,7 @@ describe('DashboardClient - Below Staffing Target', () => {
     expect(screen.getByText(/mon mar 9 • lb/i)).toBeInTheDocument()
     expect(screen.getByText(/below required by 1/i)).toBeInTheDocument()
     expect(screen.getByText(/required: 2 · scheduled: 1/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /assign coverage/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /add coverage/i })).toBeInTheDocument()
   })
 
   it('groups slots with same classroom, time slot, day, required and scheduled into one card with date range label', () => {
@@ -238,7 +238,7 @@ describe('DashboardClient - Below Staffing Target', () => {
     expect(screen.getByText('Infant Room (2)')).toBeInTheDocument()
     // Grouped: date range label "Mar 9 - Mar 16 • Monday LB"
     expect(screen.getByText(/mar 9 - mar 16 • monday lb/i)).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /assign coverage/i }).length).toBe(1)
+    expect(screen.getAllByRole('button', { name: /add coverage/i }).length).toBe(1)
   })
 
   it('shows separate cards when required or scheduled differ for same classroom/time slot/day', () => {
@@ -294,8 +294,8 @@ describe('DashboardClient - Below Staffing Target', () => {
 
     expect(screen.getByText(/below required \(2\)/i)).toBeInTheDocument()
     expect(screen.getByText('Infant Room (2)')).toBeInTheDocument()
-    // Two groups (different scheduled_staff): two Assign Coverage buttons
-    const assignButtons = screen.getAllByRole('button', { name: /assign coverage/i })
+    // Two groups (different scheduled_staff): two Add Coverage buttons
+    const assignButtons = screen.getAllByRole('button', { name: /add coverage/i })
     expect(assignButtons.length).toBe(2)
   })
 
@@ -338,7 +338,7 @@ describe('DashboardClient - Below Staffing Target', () => {
     expect(screen.getByText(/preferred: 2 · scheduled: 1/i)).toBeInTheDocument()
   })
 
-  it('opens ScheduleSidePanel when Assign Coverage is clicked', async () => {
+  it('opens ScheduleSidePanel when Add Coverage is clicked', async () => {
     const user = userEvent.setup()
     const overviewWithSlot = {
       ...defaultOverview,
@@ -374,7 +374,7 @@ describe('DashboardClient - Below Staffing Target', () => {
 
     expect(screen.queryByTestId('schedule-side-panel')).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /assign coverage/i }))
+    await user.click(screen.getByRole('button', { name: /add coverage/i }))
 
     expect(screen.getByTestId('schedule-side-panel')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /close panel/i })).toBeInTheDocument()

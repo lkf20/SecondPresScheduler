@@ -1095,7 +1095,7 @@ export default function DashboardClient({
                         </span>
                       </div>
                     </div>
-                    <div className="flex w-full justify-end sm:w-auto">
+                    <div className="flex w-full justify-end self-end sm:w-auto">
                       <Button asChild size="sm" variant="teal">
                         <Link href={`/schedules/weekly?sub_assignment_id=${assignment.id}`}>
                           Update Sub
@@ -1214,13 +1214,13 @@ export default function DashboardClient({
                                   </div>
                                 </div>
                               </div>
-                              <div className="flex items-center justify-end self-center flex-shrink-0">
+                              <div className="flex items-center justify-end self-end flex-shrink-0">
                                 <Button
                                   size="sm"
                                   variant="teal"
                                   onClick={() => setAssignCoverageSlot(group)}
                                 >
-                                  Assign Coverage
+                                  Add Coverage
                                 </Button>
                               </div>
                             </div>
@@ -1296,13 +1296,13 @@ export default function DashboardClient({
                                   </div>
                                 </div>
                               </div>
-                              <div className="flex items-center justify-end self-center flex-shrink-0">
+                              <div className="flex items-center justify-end self-end flex-shrink-0">
                                 <Button
                                   size="sm"
                                   variant="teal"
                                   onClick={() => setAssignCoverageSlot(group)}
                                 >
-                                  Assign Coverage
+                                  Add Coverage
                                 </Button>
                               </div>
                             </div>

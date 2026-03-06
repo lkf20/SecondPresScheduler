@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
-  Search,
+  UserSearch,
   Calendar,
   FileText,
   Settings,
@@ -30,7 +30,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Weekly Schedule', href: '/schedules/weekly', icon: Calendar },
   { name: 'Time Off', href: '/time-off', icon: CalendarOff },
-  { name: 'Sub Finder', href: '/sub-finder', icon: Search },
+  { name: 'Sub Finder', href: '/sub-finder', icon: UserSearch },
   { name: 'Reports', href: '/reports', icon: FileText },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
