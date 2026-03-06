@@ -447,7 +447,7 @@ export default function ShiftChips({
                 {/* Corner indicator: AFTER Badge so it paints on top; outside Badge to avoid overflow-hidden */}
                 {indicatorToShow && (
                   <div
-                    className="absolute z-[200]"
+                    className="absolute z-10"
                     style={{
                       top: 5,
                       left: 5,
