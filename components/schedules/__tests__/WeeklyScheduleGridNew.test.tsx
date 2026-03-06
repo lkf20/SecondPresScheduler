@@ -207,6 +207,40 @@ describe('WeeklyScheduleGridNew interactions', () => {
     expect(screen.getByText('Slot: Monday EM')).toBeInTheDocument()
   })
 
+  it('hides Temporary Coverage from legend when showLegendTemporaryCoverage is false (Baseline)', () => {
+    render(
+      <WeeklyScheduleGridNew
+        data={scheduleData}
+        selectedDayIds={['day-mon']}
+        layout="days-x-classrooms"
+        showLegendSubstitutes={false}
+        showLegendTemporaryCoverage={false}
+        readOnly
+      />
+    )
+
+    expect(screen.getByText('Key:')).toBeInTheDocument()
+    expect(screen.getByText('Flex Teacher')).toBeInTheDocument()
+    expect(screen.getByText('Floater')).toBeInTheDocument()
+    expect(screen.queryByText('Temporary Coverage')).not.toBeInTheDocument()
+    expect(screen.queryByText('Substitute')).not.toBeInTheDocument()
+  })
+
+  it('shows Temporary Coverage in legend when showLegendTemporaryCoverage is true (Weekly)', () => {
+    render(
+      <WeeklyScheduleGridNew
+        data={scheduleData}
+        selectedDayIds={['day-mon']}
+        layout="days-x-classrooms"
+        showLegendSubstitutes
+        showLegendTemporaryCoverage
+        readOnly
+      />
+    )
+
+    expect(screen.getByText('Temporary Coverage')).toBeInTheDocument()
+  })
+
   it('registers panel manager lifecycle on open and close', async () => {
     render(
       <WeeklyScheduleGridNew

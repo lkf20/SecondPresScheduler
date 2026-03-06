@@ -59,6 +59,6 @@ Use this checklist when adding or reviewing feature work.
 
 ## Settings + Platform (Phase 3)
 
-- [ ] CRUD + validation for classes/classrooms/timeslots/settings
+- [ ] CRUD + validation for classes/classrooms/timeslots/settings (including optional notes on class groups and classrooms)
 - [ ] Search/filter/sort behavior
 - [ ] Error handling for failed writes/reads

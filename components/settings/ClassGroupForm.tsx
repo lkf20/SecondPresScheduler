@@ -40,6 +40,7 @@ const nullableNumberSchema = (min?: number, max?: number) =>
 
 const classSchema = z.object({
   name: z.string().min(1, 'Class group name is required'),
+  notes: z.string().optional(),
   age_unit: z.enum(['months', 'years']).default('years'),
   min_age: nullableNumberSchema(0, 18),
   max_age: nullableNumberSchema(0, 18),
@@ -62,6 +63,7 @@ interface ClassGroupFormProps {
 
 type ClassGroupFormSnapshot = {
   name: string
+  notes: string
   age_unit: 'months' | 'years'
   min_age: number | null
   max_age: number | null
@@ -107,6 +109,7 @@ export default function ClassGroupForm({
     resolver: zodResolver(classSchema),
     defaultValues: {
       name: classData?.name ?? '',
+      notes: classData?.notes ?? '',
       age_unit: classData?.age_unit ?? 'years',
       min_age: classData?.min_age ?? undefined,
       max_age: classData?.max_age ?? undefined,
@@ -120,6 +123,7 @@ export default function ClassGroupForm({
   })
 
   const name = watch('name')
+  const notes = watch('notes')
   const minAge = watch('min_age')
   const ageUnit = watch('age_unit')
   const maxAge = watch('max_age')
@@ -133,6 +137,7 @@ export default function ClassGroupForm({
   const currentSnapshot = useMemo<ClassGroupFormSnapshot>(
     () => ({
       name: name?.trim() ?? '',
+      notes: notes?.trim() ?? '',
       age_unit: ageUnit ?? 'years',
       min_age: normalizeNumberish(minAge),
       max_age: normalizeNumberish(maxAge),
@@ -145,6 +150,7 @@ export default function ClassGroupForm({
     }),
     [
       name,
+      notes,
       minAge,
       ageUnit,
       maxAge,
@@ -159,6 +165,7 @@ export default function ClassGroupForm({
 
   const baselineSnapshotRef = useRef<ClassGroupFormSnapshot>({
     name: classData?.name?.trim() ?? '',
+    notes: classData?.notes?.trim() ?? '',
     age_unit: classData?.age_unit ?? 'years',
     min_age: classData?.min_age ?? null,
     max_age: classData?.max_age ?? null,
@@ -173,6 +180,7 @@ export default function ClassGroupForm({
   useEffect(() => {
     baselineSnapshotRef.current = {
       name: classData?.name?.trim() ?? '',
+      notes: classData?.notes?.trim() ?? '',
       age_unit: classData?.age_unit ?? 'years',
       min_age: classData?.min_age ?? null,
       max_age: classData?.max_age ?? null,
@@ -205,6 +213,7 @@ export default function ClassGroupForm({
       const payload = {
         ...data,
         age_unit: data.age_unit ?? 'years',
+        notes: data.notes?.trim() || null,
         min_age: data.min_age === undefined || data.min_age === null ? null : Number(data.min_age),
         max_age: data.max_age === undefined || data.max_age === null ? null : Number(data.max_age),
         required_ratio: Number(data.required_ratio),
@@ -445,6 +454,15 @@ export default function ClassGroupForm({
               </div>
             </div>
           </div>
+
+          <FormField label="Notes" error={errors.notes?.message}>
+            <textarea
+              {...register('notes')}
+              rows={3}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="e.g. special requirements, reminders"
+            />
+          </FormField>
 
           <div className="flex justify-end gap-4">
             <Button

@@ -9,6 +9,7 @@ import {
   updateTeacherSchedule,
 } from '@/lib/api/schedules'
 import { createTeacherScheduleAuditLog } from '@/lib/api/audit-logs'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 import type { TeacherSchedule } from '@/types/api'
 
 export async function POST(request: NextRequest) {
@@ -46,6 +47,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No conflicting schedules found' }, { status: 400 })
     }
 
+    const first = conflictingSchedules[0] as {
+      classroom?: { name?: string }
+      day_of_week?: { name?: string }
+      time_slot?: { code?: string }
+    }
+    const dayName = first?.day_of_week?.name ?? null
+    const timeSlotCode = first?.time_slot?.code ?? null
+
+    const { data: staffRow } = await supabase
+      .from('staff')
+      .select('first_name, last_name, display_name')
+      .eq('id', teacher_id)
+      .maybeSingle()
+    const teacherName = staffRow ? getStaffDisplayName(staffRow) : null
+
+    const { data: targetClassroom } = await supabase
+      .from('classrooms')
+      .select('name')
+      .eq('id', target_classroom_id)
+      .maybeSingle()
+    const targetClassroomName = targetClassroom?.name ?? null
+
     const results: {
       created?: TeacherSchedule
       deleted?: string[]
@@ -62,21 +85,29 @@ export async function POST(request: NextRequest) {
           deletedIds.push(conflictingSchedule.id)
 
           // Log the deletion
-          await createTeacherScheduleAuditLog({
-            teacher_schedule_id: conflictingSchedule.id,
-            teacher_id,
-            action: 'deleted',
-            action_details: {
-              before: {
-                classroom_id: conflictingSchedule.classroom_id,
-                is_floater: conflictingSchedule.is_floater,
+          const conflictClass = conflictingSchedule as { classroom?: { name?: string } }
+          await createTeacherScheduleAuditLog(
+            {
+              teacher_schedule_id: conflictingSchedule.id,
+              teacher_id,
+              teacher_name: teacherName ?? undefined,
+              action: 'deleted',
+              action_details: {
+                before: {
+                  classroom_id: conflictingSchedule.classroom_id,
+                  is_floater: conflictingSchedule.is_floater,
+                },
               },
+              removed_from_classroom_id: conflictingSchedule.classroom_id,
+              removed_from_classroom_name: conflictClass?.classroom?.name ?? undefined,
+              removed_from_day_id: day_of_week_id,
+              removed_from_day_name: dayName ?? undefined,
+              removed_from_time_slot_id: time_slot_id,
+              removed_from_time_slot_code: timeSlotCode ?? undefined,
+              reason: 'conflict_resolution_remove_other',
             },
-            removed_from_classroom_id: conflictingSchedule.classroom_id,
-            removed_from_day_id: day_of_week_id,
-            removed_from_time_slot_id: time_slot_id,
-            reason: 'conflict_resolution_remove_other',
-          })
+            { category: 'baseline_schedule' }
+          )
         }
 
         // Create new schedule
@@ -89,21 +120,28 @@ export async function POST(request: NextRequest) {
         })
 
         // Log the creation
-        await createTeacherScheduleAuditLog({
-          teacher_schedule_id: newSchedule.id,
-          teacher_id,
-          action: 'created',
-          action_details: {
-            after: {
-              classroom_id: target_classroom_id,
-              is_floater: false,
+        await createTeacherScheduleAuditLog(
+          {
+            teacher_schedule_id: newSchedule.id,
+            teacher_id,
+            teacher_name: teacherName ?? undefined,
+            action: 'created',
+            action_details: {
+              after: {
+                classroom_id: target_classroom_id,
+                is_floater: false,
+              },
             },
+            added_to_classroom_id: target_classroom_id,
+            added_to_classroom_name: targetClassroomName ?? undefined,
+            added_to_day_id: day_of_week_id,
+            added_to_day_name: dayName ?? undefined,
+            added_to_time_slot_id: time_slot_id,
+            added_to_time_slot_code: timeSlotCode ?? undefined,
+            reason: 'conflict_resolution_remove_other',
           },
-          added_to_classroom_id: target_classroom_id,
-          added_to_day_id: day_of_week_id,
-          added_to_time_slot_id: time_slot_id,
-          reason: 'conflict_resolution_remove_other',
-        })
+          { category: 'baseline_schedule' }
+        )
 
         results.deleted = deletedIds
         results.created = newSchedule
@@ -112,18 +150,25 @@ export async function POST(request: NextRequest) {
 
       case 'cancel': {
         // Just log that we canceled adding the teacher
-        await createTeacherScheduleAuditLog({
-          teacher_id,
-          action: 'conflict_resolved',
-          action_details: {
-            canceled: true,
-            would_have_added_to_classroom_id: target_classroom_id,
+        await createTeacherScheduleAuditLog(
+          {
+            teacher_id,
+            teacher_name: teacherName ?? undefined,
+            action: 'conflict_resolved',
+            action_details: {
+              canceled: true,
+              would_have_added_to_classroom_id: target_classroom_id,
+            },
+            added_to_classroom_id: target_classroom_id,
+            added_to_classroom_name: targetClassroomName ?? undefined,
+            added_to_day_id: day_of_week_id,
+            added_to_day_name: dayName ?? undefined,
+            added_to_time_slot_id: time_slot_id,
+            added_to_time_slot_code: timeSlotCode ?? undefined,
+            reason: 'conflict_resolution_cancel',
           },
-          added_to_classroom_id: target_classroom_id,
-          added_to_day_id: day_of_week_id,
-          added_to_time_slot_id: time_slot_id,
-          reason: 'conflict_resolution_cancel',
-        })
+          { category: 'baseline_schedule' }
+        )
         break
       }
 
@@ -140,22 +185,30 @@ export async function POST(request: NextRequest) {
           }
 
           // Log the update
-          await createTeacherScheduleAuditLog({
-            teacher_schedule_id: conflictingSchedule.id,
-            teacher_id,
-            action: 'updated',
-            action_details: {
-              before: {
-                classroom_id: conflictingSchedule.classroom_id,
-                is_floater: false,
+          const conflictClass = conflictingSchedule as { classroom?: { name?: string } }
+          await createTeacherScheduleAuditLog(
+            {
+              teacher_schedule_id: conflictingSchedule.id,
+              teacher_id,
+              teacher_name: teacherName ?? undefined,
+              action: 'updated',
+              action_details: {
+                before: {
+                  classroom_id: conflictingSchedule.classroom_id,
+                  is_floater: false,
+                },
+                after: {
+                  classroom_id: conflictingSchedule.classroom_id,
+                  is_floater: true,
+                },
               },
-              after: {
-                classroom_id: conflictingSchedule.classroom_id,
-                is_floater: true,
-              },
+              removed_from_classroom_name: conflictClass?.classroom?.name ?? undefined,
+              removed_from_day_name: dayName ?? undefined,
+              removed_from_time_slot_code: timeSlotCode ?? undefined,
+              reason: 'conflict_resolution_mark_floater',
             },
-            reason: 'conflict_resolution_mark_floater',
-          })
+            { category: 'baseline_schedule' }
+          )
         }
 
         // Create new schedule as floater
@@ -168,21 +221,28 @@ export async function POST(request: NextRequest) {
         })
 
         // Log the creation
-        await createTeacherScheduleAuditLog({
-          teacher_schedule_id: newSchedule.id,
-          teacher_id,
-          action: 'created',
-          action_details: {
-            after: {
-              classroom_id: target_classroom_id,
-              is_floater: true,
+        await createTeacherScheduleAuditLog(
+          {
+            teacher_schedule_id: newSchedule.id,
+            teacher_id,
+            teacher_name: teacherName ?? undefined,
+            action: 'created',
+            action_details: {
+              after: {
+                classroom_id: target_classroom_id,
+                is_floater: true,
+              },
             },
+            added_to_classroom_id: target_classroom_id,
+            added_to_classroom_name: targetClassroomName ?? undefined,
+            added_to_day_id: day_of_week_id,
+            added_to_day_name: dayName ?? undefined,
+            added_to_time_slot_id: time_slot_id,
+            added_to_time_slot_code: timeSlotCode ?? undefined,
+            reason: 'conflict_resolution_mark_floater',
           },
-          added_to_classroom_id: target_classroom_id,
-          added_to_day_id: day_of_week_id,
-          added_to_time_slot_id: time_slot_id,
-          reason: 'conflict_resolution_mark_floater',
-        })
+          { category: 'baseline_schedule' }
+        )
 
         results.created = newSchedule
         results.updated = updatedSchedules

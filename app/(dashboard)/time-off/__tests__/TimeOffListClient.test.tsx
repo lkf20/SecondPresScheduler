@@ -28,8 +28,17 @@ jest.mock('@/components/time-off/AddTimeOffButton', () => {
 })
 
 jest.mock('@/components/shared/TimeOffCard', () => {
-  const MockTimeOffCard = ({ teacherName }: { teacherName: string }) => (
-    <div data-testid="time-off-card">{teacherName}</div>
+  const MockTimeOffCard = ({
+    teacherName,
+    isDraft,
+  }: {
+    teacherName: string
+    isDraft?: boolean
+  }) => (
+    <div data-testid="time-off-card">
+      {teacherName}
+      {isDraft && <span aria-label="Draft">Draft</span>}
+    </div>
   )
   MockTimeOffCard.displayName = 'MockTimeOffCard'
   return MockTimeOffCard
@@ -76,6 +85,39 @@ describe('TimeOffListClient', () => {
     expect(screen.getByText(/failed to load time off requests/i)).toBeInTheDocument()
   })
 
+  it('shows Draft badge for draft requests (request_status from API)', () => {
+    mockUseTimeOffRequests.mockReturnValue({
+      data: {
+        data: [
+          {
+            id: 'req-draft-1',
+            teacher_name: 'Bella W.',
+            start_date: '2026-02-09',
+            end_date: '2026-02-09',
+            status: 'needs_coverage',
+            request_status: 'draft',
+            coverage_status: 'needs_coverage',
+            total: 1,
+            covered: 0,
+            partial: 0,
+            uncovered: 1,
+            shift_details: [],
+            classrooms: [],
+          },
+        ],
+      },
+      isLoading: false,
+      error: null,
+      refetch: jest.fn(),
+      isFetching: false,
+    })
+
+    render(<TimeOffListClient view="drafts" />)
+
+    expect(screen.getByLabelText('Draft')).toBeInTheDocument()
+    expect(screen.getByText('Bella W.')).toBeInTheDocument()
+  })
+
   it('updates URL query when editing a draft row', async () => {
     const user = userEvent.setup()
 
@@ -87,7 +129,8 @@ describe('TimeOffListClient', () => {
             teacher_name: 'Bella W.',
             start_date: '2026-02-09',
             end_date: '2026-02-09',
-            status: 'draft',
+            status: 'needs_coverage',
+            request_status: 'draft',
             coverage_status: 'needs_coverage',
             total: 1,
             covered: 0,

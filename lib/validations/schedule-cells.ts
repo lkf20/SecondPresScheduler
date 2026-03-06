@@ -21,6 +21,9 @@ export const createScheduleCellSchema = z.object({
   is_active: z.boolean().optional().default(true),
   class_group_ids: z.array(z.string().uuid()).optional(),
   enrollment_for_staffing: z.number().int().positive().nullable().optional(),
+  enrollment_by_class_group: z.record(z.string().uuid(), z.number().int().min(0)).optional(),
+  required_staff_override: z.number().int().min(0).nullable().optional(),
+  preferred_staff_override: z.number().int().min(0).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
 })
 
@@ -28,6 +31,9 @@ export const updateScheduleCellSchema = z.object({
   is_active: z.boolean().optional(),
   class_group_ids: z.array(z.string().uuid()).optional(),
   enrollment_for_staffing: z.number().int().positive().nullable().optional(),
+  enrollment_by_class_group: z.record(z.string().uuid(), z.number().int().min(0)).optional(),
+  required_staff_override: z.number().int().min(0).nullable().optional(),
+  preferred_staff_override: z.number().int().min(0).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
 })
 

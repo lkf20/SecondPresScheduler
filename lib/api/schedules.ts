@@ -103,7 +103,9 @@ export async function getTeacherSchedules(
   const supabase = await createClient()
   let query = supabase
     .from('teacher_schedules')
-    .select('*, day_of_week:days_of_week(*), time_slot:time_slots(*), classroom:classrooms(*)')
+    .select(
+      '*, day_of_week:days_of_week(*), time_slot:time_slots(*), classroom:classrooms(*), teacher:staff(*, staff_role_type_assignments(role_type_id, staff_role_types(*)))'
+    )
     .eq('teacher_id', teacherId)
 
   const effectiveSchoolId = schoolId || (await getUserSchoolId())
@@ -176,7 +178,7 @@ export async function getTeacherScheduleById(
   let query = supabase
     .from('teacher_schedules')
     .select(
-      '*, day_of_week:days_of_week(*), time_slot:time_slots(*), classroom:classrooms(*), teacher:staff(*)'
+      '*, day_of_week:days_of_week(*), time_slot:time_slots(*), classroom:classrooms(*), teacher:staff(*, staff_role_type_assignments(role_type_id, staff_role_types(*)))'
     )
     .eq('id', id)
 
@@ -250,7 +252,7 @@ export async function getAllTeacherSchedules(
   let query = supabase
     .from('teacher_schedules')
     .select(
-      '*, day_of_week:days_of_week(*), time_slot:time_slots(*), classroom:classrooms(*), teacher:staff(*)'
+      '*, day_of_week:days_of_week(*), time_slot:time_slots(*), classroom:classrooms(*), teacher:staff(*, staff_role_type_assignments(role_type_id, staff_role_types(*)))'
     )
     .order('teacher_id', { ascending: true })
     .order('day_of_week_id', { ascending: true })

@@ -47,7 +47,12 @@ export async function updateSession(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (error) {
-      console.error('Supabase auth error:', error.message)
+      // "Auth session missing" is expected when not logged in; don't log as error
+      const isSessionMissing =
+        error.name === 'AuthSessionMissingError' || error.message === 'Auth session missing!'
+      if (!isSessionMissing) {
+        console.error('Supabase auth error:', error.message)
+      }
       // If it's a network error, allow access to login page
       if (
         request.nextUrl.pathname.startsWith('/login') ||

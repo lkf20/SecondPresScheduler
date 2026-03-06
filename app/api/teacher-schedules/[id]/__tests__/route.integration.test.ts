@@ -13,6 +13,18 @@ jest.mock('@/lib/api/schedules', () => ({
   deleteTeacherSchedule: jest.fn(),
 }))
 
+jest.mock('@/lib/utils/auth', () => ({
+  getUserSchoolId: jest.fn().mockResolvedValue('school-1'),
+}))
+
+jest.mock('@/lib/audit/logAuditEvent', () => ({
+  getAuditActorContext: jest.fn().mockResolvedValue({
+    actorUserId: 'user-1',
+    actorDisplayName: 'Test User',
+  }),
+  logAuditEvent: jest.fn().mockResolvedValue(true),
+}))
+
 describe('teacher schedules id route integration', () => {
   beforeEach(() => {
     jest.clearAllMocks()
@@ -49,7 +61,16 @@ describe('teacher schedules id route integration', () => {
   it('PUT returns updated schedule', async () => {
     ;(updateTeacherSchedule as jest.Mock).mockResolvedValue({
       id: 'schedule-1',
+      school_id: 'school-1',
       is_floater: true,
+    })
+    ;(getTeacherScheduleById as jest.Mock).mockResolvedValue({
+      id: 'schedule-1',
+      school_id: 'school-1',
+      teacher: { first_name: 'T', last_name: 'Name', display_name: null },
+      classroom: { name: 'Room 1' },
+      day_of_week: { name: 'Monday' },
+      time_slot: { code: 'AM' },
     })
 
     const response = await PUT(
@@ -65,7 +86,7 @@ describe('teacher schedules id route integration', () => {
 
     expect(response.status).toBe(200)
     expect(updateTeacherSchedule).toHaveBeenCalledWith('schedule-1', { is_floater: true })
-    expect(json).toEqual({ id: 'schedule-1', is_floater: true })
+    expect(json).toMatchObject({ id: 'schedule-1', is_floater: true })
   })
 
   it('PUT returns 404 when schedule cannot be updated', async () => {
@@ -105,6 +126,15 @@ describe('teacher schedules id route integration', () => {
   })
 
   it('DELETE returns success payload', async () => {
+    ;(getTeacherScheduleById as jest.Mock).mockResolvedValue({
+      id: 'schedule-1',
+      school_id: 'school-1',
+      teacher_id: 'teacher-1',
+      teacher: { first_name: 'T', last_name: 'Name', display_name: null },
+      classroom: { name: 'Room 1' },
+      day_of_week: { name: 'Monday' },
+      time_slot: { code: 'AM' },
+    })
     ;(deleteTeacherSchedule as jest.Mock).mockResolvedValue(undefined)
 
     const response = await DELETE(
@@ -121,6 +151,14 @@ describe('teacher schedules id route integration', () => {
   })
 
   it('DELETE returns 500 when delete throws', async () => {
+    ;(getTeacherScheduleById as jest.Mock).mockResolvedValue({
+      id: 'schedule-1',
+      school_id: 'school-1',
+      teacher: {},
+      classroom: {},
+      day_of_week: {},
+      time_slot: {},
+    })
     ;(deleteTeacherSchedule as jest.Mock).mockRejectedValue(new Error('delete failed'))
 
     const response = await DELETE(

@@ -2,15 +2,13 @@
 
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react'
 import { CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
-import ScheduleCell from './ScheduleCell'
+import ScheduleGridCellCard from './ScheduleGridCellCard'
 import ScheduleSidePanel from './ScheduleSidePanel'
 import type { WeeklyScheduleData, WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
+import { parseLocalDate } from '@/lib/utils/date'
 import { isSlotEffectivelyInactive } from '@/lib/utils/schedule-slot-activity'
-import {
-  SCHEDULE_INACTIVE_CARD_CLASS,
-  SCHEDULE_INACTIVE_LEGEND_DOT_CLASS,
-} from '@/lib/ui/schedule-inactive-tokens'
+import { SCHEDULE_INACTIVE_LEGEND_DOT_CLASS } from '@/lib/ui/schedule-inactive-tokens'
 
 interface WeeklyScheduleGridNewProps {
   data: WeeklyScheduleDataByClassroom[]
@@ -53,8 +51,14 @@ interface WeeklyScheduleGridNewProps {
   }
   slotCounts?: { shown: number; total: number } // Slot counts for display
   showLegendSubstitutes?: boolean
+  /** When false (e.g. Baseline), legend omits overlay items: Substitute, Absent, Temporary Coverage. Default true for Weekly. */
+  showLegendTemporaryCoverage?: boolean
   showFilterChips?: boolean
   readOnly?: boolean
+  /** When true, Save button shows "Save & Return to Weekly Schedule" and parent onRefresh may navigate back */
+  returnToWeekly?: boolean
+  /** Renders to the left of filter chips (e.g. Views & Filters button). Only used when showFilterChips is true. */
+  leadingFilterContent?: React.ReactNode
 }
 
 type WeeklyScheduleCellData = WeeklyScheduleData & {
@@ -129,7 +133,13 @@ export function generateClassroomsXDaysGridTemplate(
   return { columns, rows }
 }
 
-function ScheduleLegend({ showLegendSubstitutes }: { showLegendSubstitutes: boolean }) {
+function ScheduleLegend({
+  showLegendSubstitutes,
+  showLegendTemporaryCoverage = true,
+}: {
+  showLegendSubstitutes: boolean
+  showLegendTemporaryCoverage?: boolean
+}) {
   return (
     <div className="mb-6 p-3 bg-gray-100 rounded-md border border-gray-200">
       <div className="flex flex-wrap items-center gap-4 text-sm">
@@ -152,6 +162,20 @@ function ScheduleLegend({ showLegendSubstitutes }: { showLegendSubstitutes: bool
             Flex Teacher
           </span>
         </div>
+        {showLegendTemporaryCoverage && (
+          <div className="flex items-center gap-2">
+            <span
+              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border border-dashed"
+              style={{
+                borderColor: '#f9a8d4',
+                backgroundColor: '#fdf2f8',
+                color: '#db2777',
+              }}
+            >
+              Temporary Coverage
+            </span>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-300 border-dashed">
             Floater
@@ -176,7 +200,7 @@ function ScheduleLegend({ showLegendSubstitutes }: { showLegendSubstitutes: bool
           <span className="text-gray-600">Meets preferred</span>
         </div>
         <div className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+          <AlertTriangle className="h-4 w-4 text-amber-700" />
           <span className="text-gray-600">Below preferred</span>
         </div>
         <div className="flex items-center gap-2">
@@ -409,8 +433,11 @@ export default function WeeklyScheduleGridNew({
   displayModeCounts,
   slotCounts,
   showLegendSubstitutes = true,
+  showLegendTemporaryCoverage = true,
   showFilterChips = true,
   readOnly = false,
+  returnToWeekly = false,
+  leadingFilterContent,
 }: WeeklyScheduleGridNewProps) {
   const [selectedCell, setSelectedCell] = useState<{
     dayId: string
@@ -604,6 +631,17 @@ export default function WeeklyScheduleGridNew({
     ? (selectedCellSnapshot ?? buildSelectedCellData(selectedCell))
     : undefined
 
+  // Calendar date of the selected cell (for Edit Temporary Coverage save-scope dialog)
+  const cellDateISO = useMemo(() => {
+    if (!selectedCell || !weekStartISO || !data.length) return null
+    const classroom = data[0]
+    const day = classroom.days.find(d => d.day_of_week_id === selectedCell.dayId)
+    if (!day) return null
+    const d = parseLocalDate(weekStartISO)
+    d.setDate(d.getDate() + (day.day_number - 1))
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }, [selectedCell, weekStartISO, data])
+
   // Final filter: ensure we only show selected days
   // If selectedDayIds is empty, don't show any days (settings might not be loaded or configured)
   // Only show days if we have explicit selectedDayIds
@@ -695,10 +733,14 @@ export default function WeeklyScheduleGridNew({
     return (
       <>
         {/* Legend */}
-        <ScheduleLegend showLegendSubstitutes={showLegendSubstitutes} />
+        <ScheduleLegend
+          showLegendSubstitutes={showLegendSubstitutes}
+          showLegendTemporaryCoverage={showLegendTemporaryCoverage}
+        />
         {/* Filter chips - separate row below legend */}
         {showFilterChips && (
           <div className="mb-4 flex flex-wrap items-center gap-2">
+            {leadingFilterContent}
             {[
               { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
               {
@@ -845,7 +887,7 @@ export default function WeeklyScheduleGridNew({
 
                   {/* Day Section Header */}
                   <div
-                    className="sticky px-4 rounded-lg flex items-center"
+                    className="sticky rounded-lg flex items-center"
                     style={{
                       position: 'sticky',
                       top: '30px',
@@ -864,10 +906,14 @@ export default function WeeklyScheduleGridNew({
                       paddingBottom: '6px',
                       height: '36px',
                       maxHeight: '36px',
-                      overflow: 'hidden',
                     }}
                   >
-                    <div className="text-base font-bold text-gray-800">{day.name}</div>
+                    <div
+                      className="text-base font-bold text-gray-800 px-4"
+                      style={{ position: 'sticky', left: 0 }}
+                    >
+                      {day.name}
+                    </div>
                   </div>
 
                   {/* Time Slot Rows for this day */}
@@ -932,37 +978,22 @@ export default function WeeklyScheduleGridNew({
                                 minHeight: '120px', // Ensure minimum height for Safari compatibility (matches grid row minmax)
                               }}
                             >
-                              <div
-                                className={`rounded-lg border border-gray-200 bg-white shadow-sm transition-all duration-200 min-h-[120px] flex-shrink-0 ${
-                                  allowCardClick
-                                    ? 'hover:shadow-md cursor-pointer'
-                                    : 'cursor-default'
-                                } ${isInactive ? SCHEDULE_INACTIVE_CARD_CLASS : ''}`}
-                                style={{
-                                  width: '220px',
-                                  minWidth: '220px',
-                                  maxWidth: '220px',
-                                  marginTop: '6px',
-                                  marginBottom: '6px',
-                                  marginLeft: '10px',
-                                  marginRight: '10px',
-                                }}
-                                onClick={
-                                  allowCardClick
-                                    ? () =>
-                                        handleCellClick(
-                                          day.id,
-                                          day.name,
-                                          timeSlot.id,
-                                          item.timeSlot.name || timeSlot.code,
-                                          classroom.classroomId,
-                                          classroom.classroomName
-                                        )
-                                    : undefined
+                              <ScheduleGridCellCard
+                                data={classroom.cellData}
+                                displayMode={displayMode}
+                                allowCardClick={allowCardClick}
+                                isInactive={isInactive}
+                                onClick={() =>
+                                  handleCellClick(
+                                    day.id,
+                                    day.name,
+                                    timeSlot.id,
+                                    item.timeSlot.name || timeSlot.code,
+                                    classroom.classroomId,
+                                    classroom.classroomName
+                                  )
                                 }
-                              >
-                                <ScheduleCell data={classroom.cellData} displayMode={displayMode} />
-                              </div>
+                              />
                             </div>
                           )
                         })}
@@ -994,6 +1025,8 @@ export default function WeeklyScheduleGridNew({
             onSave={handleSave}
             weekStartISO={weekStartISO}
             readOnly={readOnly}
+            returnToWeekly={returnToWeekly}
+            cellDateISO={cellDateISO}
           />
         )}
       </>
@@ -1005,10 +1038,14 @@ export default function WeeklyScheduleGridNew({
     return (
       <div className="space-y-4">
         {/* Legend */}
-        <ScheduleLegend showLegendSubstitutes={showLegendSubstitutes} />
+        <ScheduleLegend
+          showLegendSubstitutes={showLegendSubstitutes}
+          showLegendTemporaryCoverage={showLegendTemporaryCoverage}
+        />
         {/* Filter chips - separate row below legend */}
         {showFilterChips && (
           <div className="mb-4 flex flex-wrap items-center gap-2">
+            {leadingFilterContent}
             {[
               { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
               {
@@ -1264,39 +1301,22 @@ export default function WeeklyScheduleGridNew({
                             minHeight: '120px', // Ensure minimum height for Safari compatibility (matches grid row minmax)
                           }}
                         >
-                          <div
-                            className={`rounded-lg border border-gray-200 bg-white shadow-sm transition-all duration-200 ${
-                              allowCardClick ? 'hover:shadow-md cursor-pointer' : 'cursor-default'
-                            } ${isInactive ? SCHEDULE_INACTIVE_CARD_CLASS : ''}`}
-                            style={{
-                              width: '220px',
-                              minWidth: '220px',
-                              maxWidth: '220px',
-                              minHeight: '120px',
-                              boxSizing: 'border-box',
-                              flexShrink: 0,
-                              flexGrow: 0,
-                              marginTop: '10px',
-                              marginBottom: '10px',
-                              marginLeft: '10px',
-                              marginRight: '10px',
-                            }}
-                            onClick={
-                              allowCardClick
-                                ? () =>
-                                    handleCellClick(
-                                      day.id,
-                                      day.name,
-                                      slot.id,
-                                      slot.name || slot.code,
-                                      classroom.classroom_id,
-                                      classroom.classroom_name
-                                    )
-                                : undefined
+                          <ScheduleGridCellCard
+                            data={cellData}
+                            displayMode={displayMode}
+                            allowCardClick={allowCardClick}
+                            isInactive={isInactive}
+                            onClick={() =>
+                              handleCellClick(
+                                day.id,
+                                day.name,
+                                slot.id,
+                                slot.name || slot.code,
+                                classroom.classroom_id,
+                                classroom.classroom_name
+                              )
                             }
-                          >
-                            <ScheduleCell data={cellData} displayMode={displayMode} />
-                          </div>
+                          />
                         </div>
                       )
                     })
@@ -1324,6 +1344,10 @@ export default function WeeklyScheduleGridNew({
             selectedDayIds={selectedDayIds}
             selectedCellData={selectedCellData}
             onSave={handleSave}
+            weekStartISO={weekStartISO}
+            readOnly={readOnly}
+            returnToWeekly={returnToWeekly}
+            cellDateISO={cellDateISO}
           />
         )}
       </div>

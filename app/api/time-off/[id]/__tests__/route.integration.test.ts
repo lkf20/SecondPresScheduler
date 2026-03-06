@@ -4,6 +4,7 @@ import { DELETE, GET, PUT } from '@/app/api/time-off/[id]/route'
 import { createJsonRequest } from '@/tests/helpers/api'
 import {
   cancelTimeOffRequest,
+  findOverlappingTimeOffRequest,
   getActiveSubAssignmentsForTimeOffRequest,
   getTimeOffRequestById,
 } from '@/lib/api/time-off'
@@ -26,6 +27,7 @@ jest.mock('@/lib/api/time-off', () => ({
   updateTimeOffRequest: jest.fn(),
   getActiveSubAssignmentsForTimeOffRequest: jest.fn(),
   cancelTimeOffRequest: jest.fn(),
+  findOverlappingTimeOffRequest: jest.fn(),
 }))
 
 jest.mock('@/lib/utils/auth', () => ({
@@ -72,6 +74,7 @@ jest.mock('@/lib/audit/logAuditEvent', () => ({
 describe('PUT /api/time-off/[id] integration', () => {
   beforeEach(() => {
     jest.spyOn(console, 'log').mockImplementation(() => {})
+    ;(findOverlappingTimeOffRequest as jest.Mock).mockResolvedValue(null)
     ;(getTimeOffShifts as jest.Mock).mockResolvedValue([])
     ;(getAuditActorContext as jest.Mock).mockResolvedValue({
       actorUserId: 'user-1',

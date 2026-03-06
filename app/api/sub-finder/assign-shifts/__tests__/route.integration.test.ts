@@ -31,6 +31,10 @@ const createStaffQuery = () => ({
     data: { id: 'sub-1', school_id: 'school-1' },
     error: null,
   }),
+  maybeSingle: jest.fn().mockResolvedValue({
+    data: { first_name: 'Teacher', last_name: 'Name', display_name: null },
+    error: null,
+  }),
 })
 
 const createSubAssignmentsQuery = ({

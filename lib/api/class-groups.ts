@@ -47,6 +47,7 @@ export async function getClassGroupById(id: string, schoolId?: string) {
 
 export async function createClassGroup(classGroupData: {
   name: string
+  notes?: string | null
   age_unit?: 'months' | 'years'
   parent_class_id?: string
   order?: number | null

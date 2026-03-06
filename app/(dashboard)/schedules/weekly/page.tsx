@@ -678,45 +678,33 @@ export default function WeeklySchedulePage() {
   return (
     <div>
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Weekly Schedule</h1>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleRefresh}
-                      disabled={isFetchingSchedule}
-                      className="h-10 w-10 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-60"
-                    >
-                      <RefreshCw
-                        className={`h-4 w-4 ${isFetchingSchedule ? 'animate-spin' : ''}`}
-                      />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Refresh schedule</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <WeekPicker
-              weekStartISO={weekStartISO}
-              onWeekChange={setWeekStartISO}
-              onTodayClick={handleTodayClick}
-            />
+        <div className="flex items-center gap-4 mb-2">
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Weekly Schedule</h1>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleRefresh}
+                    disabled={isFetchingSchedule}
+                    className="h-10 w-10 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isFetchingSchedule ? 'animate-spin' : ''}`} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Refresh schedule</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
-          <Button
-            variant="outline"
-            onClick={() => setFilterPanelOpen(true)}
-            className="flex items-center gap-2"
-          >
-            <Filter className="h-4 w-4" />
-            Views & Filters
-          </Button>
+          <WeekPicker
+            weekStartISO={weekStartISO}
+            onWeekChange={setWeekStartISO}
+            onTodayClick={handleTodayClick}
+          />
         </div>
         <p className="text-muted-foreground">View staffing by classroom, day, and time slot</p>
       </div>
@@ -737,6 +725,16 @@ export default function WeeklySchedulePage() {
             filterPanelOpen={filterPanelOpen}
             allowCardClick
             readOnly
+            leadingFilterContent={
+              <Button
+                variant="outline"
+                onClick={() => setFilterPanelOpen(true)}
+                className="flex items-center gap-2"
+              >
+                <Filter className="h-4 w-4" />
+                Views & Filters
+              </Button>
+            }
             displayModeCounts={displayModeCounts}
             displayMode={filters?.displayMode ?? 'all-scheduled-staff'}
             onDisplayModeChange={mode => {

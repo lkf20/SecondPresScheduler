@@ -1,5 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 
+/** Expected when no session (e.g. not logged in); avoid logging as error. */
+function isSessionMissingError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const e = error as { name?: string; message?: string }
+  return e.name === 'AuthSessionMissingError' || e.message === 'Auth session missing!'
+}
+
 /**
  * Get the current user's school_id from their profile
  * @returns school_id or null if not found
@@ -13,7 +20,9 @@ export async function getUserSchoolId(): Promise<string | null> {
   } = await supabase.auth.getUser()
 
   if (userError || !user) {
-    console.error('Error getting user:', userError)
+    if (!isSessionMissingError(userError)) {
+      console.error('Error getting user:', userError)
+    }
     return null
   }
 
@@ -44,7 +53,9 @@ export async function getCurrentUserId(): Promise<string | null> {
   } = await supabase.auth.getUser()
 
   if (userError || !user) {
-    console.error('Error getting user:', userError)
+    if (!isSessionMissingError(userError)) {
+      console.error('Error getting user:', userError)
+    }
     return null
   }
 

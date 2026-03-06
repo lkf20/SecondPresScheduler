@@ -66,6 +66,7 @@ export type Database = {
           max_age: number | null
           min_age: number | null
           name: string
+          notes: string | null
           order: number | null
           parent_class_id: string | null
           preferred_ratio: number | null
@@ -84,6 +85,7 @@ export type Database = {
           max_age?: number | null
           min_age?: number | null
           name: string
+          notes?: string | null
           order?: number | null
           parent_class_id?: string | null
           preferred_ratio?: number | null
@@ -102,6 +104,7 @@ export type Database = {
           max_age?: number | null
           min_age?: number | null
           name?: string
+          notes?: string | null
           order?: number | null
           parent_class_id?: string | null
           preferred_ratio?: number | null
@@ -174,6 +177,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          notes: string | null
           order: number | null
           school_id: string
           updated_at: string | null
@@ -185,6 +189,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          notes?: string | null
           order?: number | null
           school_id: string
           updated_at?: string | null
@@ -196,6 +201,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          notes?: string | null
           order?: number | null
           school_id?: string
           updated_at?: string | null
@@ -518,6 +524,7 @@ export type Database = {
         Row: {
           class_group_id: string
           created_at: string | null
+          enrollment: number | null
           id: string
           schedule_cell_id: string
           school_id: string | null
@@ -525,6 +532,7 @@ export type Database = {
         Insert: {
           class_group_id: string
           created_at?: string | null
+          enrollment?: number | null
           id?: string
           schedule_cell_id: string
           school_id?: string | null
@@ -532,6 +540,7 @@ export type Database = {
         Update: {
           class_group_id?: string
           created_at?: string | null
+          enrollment?: number | null
           id?: string
           schedule_cell_id?: string
           school_id?: string | null
@@ -562,6 +571,8 @@ export type Database = {
           id: string
           is_active: boolean
           notes: string | null
+          preferred_staff_override: number | null
+          required_staff_override: number | null
           school_id: string
           time_slot_id: string
           updated_at: string | null
@@ -574,6 +585,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           notes?: string | null
+          preferred_staff_override?: number | null
+          required_staff_override?: number | null
           school_id: string
           time_slot_id: string
           updated_at?: string | null
@@ -586,6 +599,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           notes?: string | null
+          preferred_staff_override?: number | null
+          required_staff_override?: number | null
           school_id?: string
           time_slot_id?: string
           updated_at?: string | null
@@ -690,7 +705,6 @@ export type Database = {
           first_name: string
           id: string
           is_sub: boolean | null
-          is_teacher: boolean | null
           last_name: string
           phone: string | null
           school_id: string | null
@@ -708,7 +722,6 @@ export type Database = {
           first_name: string
           id?: string
           is_sub?: boolean | null
-          is_teacher?: boolean | null
           last_name: string
           phone?: string | null
           school_id?: string | null
@@ -726,7 +739,6 @@ export type Database = {
           first_name?: string
           id?: string
           is_sub?: boolean | null
-          is_teacher?: boolean | null
           last_name?: string
           phone?: string | null
           school_id?: string | null

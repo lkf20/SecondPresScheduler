@@ -3,7 +3,11 @@
 import { GET, POST } from '@/app/api/time-off/route'
 import { createJsonRequest } from '@/tests/helpers/api'
 import { getUserSchoolId } from '@/lib/utils/auth'
-import { getTimeOffRequests, createTimeOffRequest } from '@/lib/api/time-off'
+import {
+  getTimeOffRequests,
+  createTimeOffRequest,
+  findOverlappingTimeOffRequest,
+} from '@/lib/api/time-off'
 import {
   createTimeOffShifts,
   getTeacherScheduledShifts,
@@ -21,6 +25,7 @@ jest.mock('@/lib/utils/auth', () => ({
 jest.mock('@/lib/api/time-off', () => ({
   getTimeOffRequests: jest.fn(),
   createTimeOffRequest: jest.fn(),
+  findOverlappingTimeOffRequest: jest.fn(),
 }))
 
 jest.mock('@/lib/api/time-off-shifts', () => ({
@@ -137,9 +142,46 @@ describe('GET /api/time-off integration', () => {
     expect(json.error).toMatch(/fetch failed/i)
   })
 
+  it('POST returns 409 when new request overlaps another draft or active request', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
+    ;(findOverlappingTimeOffRequest as jest.Mock).mockResolvedValue({
+      id: 'existing-request-1',
+      start_date: '2026-02-04',
+      end_date: '2026-02-10',
+      status: 'active',
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/time-off', 'POST', {
+      teacher_id: 'teacher-1',
+      start_date: '2026-02-09',
+      end_date: '2026-02-10',
+      shift_selection_mode: 'select_shifts',
+      shifts: [
+        {
+          date: '2026-02-09',
+          day_of_week_id: 'day-1',
+          time_slot_id: 'slot-1',
+        },
+      ],
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(json.code).toBe('TIME_OFF_OVERLAP')
+    expect(json.existingRequestId).toBe('existing-request-1')
+    expect(json.existingStartDate).toBe('2026-02-04')
+    expect(json.existingEndDate).toBe('2026-02-10')
+    expect(json.existingStatus).toBe('active')
+    expect(createTimeOffRequest).not.toHaveBeenCalled()
+  })
+
   it('POST creates request + shifts and returns 201', async () => {
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
+    ;(findOverlappingTimeOffRequest as jest.Mock).mockResolvedValue(null)
     ;(getTeacherTimeOffShifts as jest.Mock).mockResolvedValue([])
     ;(createTimeOffRequest as jest.Mock).mockResolvedValue({
       id: 'request-1',

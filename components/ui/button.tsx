@@ -15,6 +15,8 @@ const buttonVariants = cva(
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
+        /** Secondary outline: turquoise border and text (Find Sub, Update Sub, etc.) */
+        teal: 'border border-teal-700 text-teal-700 bg-background hover:bg-teal-700 hover:text-white hover:border-teal-700',
       },
       size: {
         default: 'h-10 px-4 py-2',

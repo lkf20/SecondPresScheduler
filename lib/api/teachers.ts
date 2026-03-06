@@ -20,13 +20,13 @@ export async function getTeachers() {
     .select(
       `
       *,
-      staff_role_type_assignments (
+      staff_role_type_assignments!inner (
         role_type_id,
-        staff_role_types (*)
+        staff_role_types!inner (*)
       )
     `
     )
-    .eq('is_teacher', true)
+    .in('staff_role_type_assignments.staff_role_types.code', ['PERMANENT', 'FLEXIBLE'])
     .order('last_name', { ascending: true })
 
   if (error) throw error
@@ -40,13 +40,14 @@ export async function getTeacherById(id: string) {
     .select(
       `
       *,
-      staff_role_type_assignments (
-        role_type_id
+      staff_role_type_assignments!inner (
+        role_type_id,
+        staff_role_types!inner (code)
       )
     `
     )
     .eq('id', id)
-    .eq('is_teacher', true)
+    .in('staff_role_type_assignments.staff_role_types.code', ['PERMANENT', 'FLEXIBLE'])
     .single()
 
   if (error) throw error
@@ -65,7 +66,6 @@ export async function createTeacher(teacher: {
   phone?: string
   email?: string
   role_type_ids?: string[]
-  is_teacher: boolean
   is_sub?: boolean
   active?: boolean
   school_id?: string
@@ -88,7 +88,6 @@ export async function createTeacher(teacher: {
     id: teacherId,
     phone: normalizeUSPhoneForStorage(teacher.phone),
     email: normalizedEmail ?? undefined,
-    is_teacher: true,
     is_sub: teacher.is_sub ?? false,
     school_id: teacher.school_id,
   }

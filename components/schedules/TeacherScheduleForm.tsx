@@ -25,7 +25,6 @@ type StaffOption = {
   first_name: string
   last_name: string
   display_name: string | null
-  is_teacher?: boolean | null
 }
 
 type DayOfWeek = {
@@ -144,20 +143,18 @@ export default function TeacherScheduleForm({
               <SelectValue placeholder="Select a teacher" />
             </SelectTrigger>
             <SelectContent>
-              {teachers
-                .filter(t => t.is_teacher)
-                .map(teacher => (
-                  <SelectItem key={teacher.id} value={teacher.id}>
-                    {getStaffDisplayName(
-                      {
-                        first_name: teacher.first_name ?? '',
-                        last_name: teacher.last_name ?? '',
-                        display_name: teacher.display_name ?? null,
-                      },
-                      displayNameFormat
-                    )}
-                  </SelectItem>
-                ))}
+              {teachers.map(teacher => (
+                <SelectItem key={teacher.id} value={teacher.id}>
+                  {getStaffDisplayName(
+                    {
+                      first_name: teacher.first_name ?? '',
+                      last_name: teacher.last_name ?? '',
+                      display_name: teacher.display_name ?? null,
+                    },
+                    displayNameFormat
+                  )}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </FormField>

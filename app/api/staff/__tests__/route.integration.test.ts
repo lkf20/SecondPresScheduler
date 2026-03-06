@@ -60,7 +60,7 @@ describe('staff collection route integration', () => {
     const response = await POST(
       new Request('http://localhost/api/staff', {
         method: 'POST',
-        body: JSON.stringify({ first_name: 'Amy', last_name: 'P', is_teacher: true }),
+        body: JSON.stringify({ first_name: 'Amy', last_name: 'P' }),
       }) as any
     )
     const json = await response.json()
@@ -69,7 +69,6 @@ describe('staff collection route integration', () => {
     expect(createStaff).toHaveBeenCalledWith({
       first_name: 'Amy',
       last_name: 'P',
-      is_teacher: true,
       school_id: 'school-1',
     })
     expect(json.id).toBe('staff-1')
@@ -82,7 +81,7 @@ describe('staff collection route integration', () => {
     const response = await POST(
       new Request('http://localhost/api/staff', {
         method: 'POST',
-        body: JSON.stringify({ first_name: 'Amy', last_name: 'P', is_teacher: true }),
+        body: JSON.stringify({ first_name: 'Amy', last_name: 'P' }),
       }) as any
     )
 

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
-import { getTimeOffRequests, createTimeOffRequest } from '@/lib/api/time-off'
+import {
+  getTimeOffRequests,
+  createTimeOffRequest,
+  findOverlappingTimeOffRequest,
+} from '@/lib/api/time-off'
 import {
   createTimeOffShifts,
   getTeacherScheduledShifts,
@@ -101,6 +105,46 @@ export async function POST(request: NextRequest) {
         date: shift.date,
         time_slot_id: shift.time_slot_id,
       }))
+    }
+
+    // Block if new request would overlap another draft/active request for this teacher
+    if (requestedShifts.length > 0) {
+      const overlapping = await findOverlappingTimeOffRequest(
+        requestData.teacher_id,
+        requestedShifts
+      )
+      if (overlapping) {
+        const overlapStart =
+          requestData.start_date && overlapping.start_date
+            ? [requestData.start_date, overlapping.start_date].sort()[1]
+            : overlapping.start_date
+        const overlapEnd =
+          effectiveEndDate && overlapping.end_date
+            ? [effectiveEndDate, overlapping.end_date].sort()[0]
+            : overlapping.end_date
+        const supabaseOverlap = await createClient()
+        const { data: teacherRow } = await supabaseOverlap
+          .from('staff')
+          .select('first_name, last_name, display_name')
+          .eq('id', requestData.teacher_id)
+          .maybeSingle()
+        const teacherName = teacherRow ? getStaffDisplayName(teacherRow) : null
+        return NextResponse.json(
+          {
+            code: 'TIME_OFF_OVERLAP',
+            existingRequestId: overlapping.id,
+            existingStartDate: overlapping.start_date,
+            existingEndDate: overlapping.end_date,
+            existingStatus: overlapping.status,
+            teacherName,
+            newRequestStartDate: requestData.start_date,
+            newRequestEndDate: effectiveEndDate,
+            overlapStartDate: overlapStart ?? overlapping.start_date,
+            overlapEndDate: overlapEnd ?? overlapping.end_date,
+          },
+          { status: 409 }
+        )
+      }
     }
 
     // Filter out conflicting shifts (but still allow the request to be created)

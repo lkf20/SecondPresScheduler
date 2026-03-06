@@ -70,7 +70,7 @@ export default function RecommendedCombination({
   const visibleTotalShifts = visibleRemainingShifts.length || totalShifts
 
   return (
-    <Card className="mb-6 border border-amber-100 bg-amber-50/40 border-l-4 border-l-amber-400 shadow-md">
+    <Card className="mb-6 border border-slate-200 bg-white border-l-4 border-l-amber-400 shadow-sm">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex flex-wrap items-center gap-3">
@@ -79,11 +79,13 @@ export default function RecommendedCombination({
               {isSingleSub ? 'Recommended Sub' : 'Recommended Combination'}
             </CardTitle>
             <span className="h-4 w-px bg-slate-300" aria-hidden="true" />
-            <div className="flex items-center gap-1.5 text-sm">
+            <div className="flex items-center gap-1.5 text-base">
               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
               <span className="text-muted-foreground">
                 {currentCombination.totalShiftsCovered} of {currentCombination.totalShiftsNeeded}{' '}
                 shifts covered
+                {!isSingleSub &&
+                  ` by ${currentCombination.subs.length} sub${currentCombination.subs.length !== 1 ? 's' : ''}`}
               </span>
             </div>
           </div>
@@ -92,28 +94,21 @@ export default function RecommendedCombination({
               size="sm"
               variant="ghost"
               onClick={onShowAllSubs}
-              className="px-0 text-slate-700 hover:bg-transparent hover:text-slate-900"
+              className="px-0 text-base text-slate-700 hover:bg-transparent hover:text-slate-900"
             >
               Show all subs <ArrowRight className="ml-1 h-3.5 w-3.5" />
             </Button>
           )}
         </div>
-        <div className="mt-1 flex flex-wrap items-center gap-3 text-sm">
-          <span className="text-muted-foreground">
-            Best combination using {currentCombination.subs.length} sub
-            {currentCombination.subs.length !== 1 ? 's' : ''} to cover{' '}
-            {currentCombination.coveragePercent}% of shifts
-          </span>
-          {currentCombination.totalConflicts > 0 && (
-            <div className="flex items-center gap-1.5">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <span className="text-amber-700">
-                {currentCombination.totalConflicts} conflict
-                {currentCombination.totalConflicts !== 1 ? 's' : ''}
-              </span>
-            </div>
-          )}
-        </div>
+        {currentCombination.totalConflicts > 0 && (
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <span className="text-amber-700">
+              {currentCombination.totalConflicts} conflict
+              {currentCombination.totalConflicts !== 1 ? 's' : ''}
+            </span>
+          </div>
+        )}
       </CardHeader>
       <div className="space-y-4 px-6 pb-6">
         {currentCombination.subs.map(assignment => {
@@ -173,14 +168,17 @@ export default function RecommendedCombination({
               id={`sub-card-${assignment.subId}`}
               name={assignment.subName}
               phone={assignment.phone}
+              email={assignment.email ?? subData?.email ?? null}
               shiftsCovered={shiftsCovered}
               totalShifts={visibleTotalShifts}
               useRemainingLabel={useRemainingLabel}
-              canCover={visibleRecommendedShifts}
+              canCover={visibleCanCoverAll}
               cannotCover={[]}
               assigned={[]}
               conflicts={assignment.conflicts}
+              contactStatusLine="Not contacted."
               onContact={() => onContactSub(assignment.subId)}
+              recommendedShifts={visibleRecommendedShifts}
               recommendedShiftCount={visibleRecommendedShifts.length}
               allShifts={visibleAllShifts}
               allCanCover={visibleCanCoverAll}
@@ -189,6 +187,7 @@ export default function RecommendedCombination({
               coverageSegments={coverageSegments}
               useStatusBadgeOnly
               showPrimaryShiftChips={false}
+              className="shadow-lg"
             />
           )
         })}

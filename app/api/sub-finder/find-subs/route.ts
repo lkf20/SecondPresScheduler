@@ -298,8 +298,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 3. Get all active subs + flexible staff
-    let staffQuery = supabase.from('staff').select('*').eq('school_id', schoolId)
+    // 3. Get all active subs + flexible staff (explicit columns so email/phone are always returned)
+    let staffQuery = supabase
+      .from('staff')
+      .select(
+        'id, first_name, last_name, display_name, phone, email, is_sub, active, school_id, can_change_diapers, can_lift_children'
+      )
+      .eq('school_id', schoolId)
     if (flexibleStaffIds.size > 0) {
       staffQuery = staffQuery.or(`is_sub.eq.true,id.in.(${Array.from(flexibleStaffIds).join(',')})`)
     } else {
@@ -665,11 +670,12 @@ export async function POST(request: NextRequest) {
 
           const isFlexibleStaff = flexibleStaffIds.has(sub.id)
 
+          const emailValue = sub.email ?? null
           return {
             id: sub.id,
             name,
-            phone: sub.phone,
-            email: sub.email,
+            phone: sub.phone ?? null,
+            email: emailValue != null ? String(emailValue) : null,
             is_sub: sub.is_sub,
             coverage_percent: coveragePercentage,
             shifts_covered: availableShifts,

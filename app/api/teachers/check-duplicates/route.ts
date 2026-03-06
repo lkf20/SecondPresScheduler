@@ -10,7 +10,6 @@ interface TeacherImport {
   role_type_ids?: string[]
   active: boolean
   is_sub: boolean
-  is_teacher: boolean
 }
 
 interface DuplicateMatch {
@@ -43,11 +42,10 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
     const duplicates: DuplicateMatch[] = []
 
-    // Get all existing teachers
+    // Get all existing staff to check for duplicates
     const { data: existingTeachers } = await supabase
       .from('staff')
       .select('id, first_name, last_name, display_name, email, phone')
-      .eq('is_teacher', true)
 
     // Check for duplicates within CSV
     const csvEmailMap = new Map<string, number[]>()

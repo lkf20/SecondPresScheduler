@@ -3,7 +3,8 @@
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { parseLocalDate } from '@/lib/utils/date'
-import { shiftStatusColorValues } from '@/lib/utils/colors'
+import { cn } from '@/lib/utils'
+import { coverageColorValues, shiftStatusColorValues } from '@/lib/utils/colors'
 import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
 
 interface Shift {
@@ -13,26 +14,37 @@ interface Shift {
   reason?: string // Reason for unavailable shifts
   classroom_name?: string | null
   class_name?: string | null
+  classroom_color?: string | null
 }
 
+/** Shift status for sub-finder (can cover / cannot cover / assigned) */
+export type ShiftChipSubFinderStatus = 'assigned' | 'available' | 'unavailable'
+/** Shift status for dashboard coverage (time off chips) */
+export type ShiftChipCoverageStatus = 'covered' | 'partial' | 'uncovered'
+
 interface ShiftChipsProps {
-  canCover: Shift[]
-  cannotCover: Shift[] // Includes reason field for unavailable shifts
+  canCover?: Shift[]
+  cannotCover?: Shift[] // Includes reason field for unavailable shifts
   assigned?: Shift[] // Optional list of assigned shifts
   shifts?: Array<{
     date: string
     time_slot_code: string
-    status: 'assigned' | 'available' | 'unavailable'
+    status: ShiftChipSubFinderStatus | ShiftChipCoverageStatus
     assignment_owner?: 'this_sub' | 'other_sub'
     assigned_sub_name?: string | null
     reason?: string
     classroom_name?: string | null
     class_name?: string | null
+    classroom_color?: string | null
   }>
+  /** When true, shifts use status covered|partial|uncovered and show coverage pill (Dashboard Upcoming Time off) */
+  coverageVariant?: boolean
   showLegend?: boolean // Whether to show the color legend
   isDeclined?: boolean // If true, all chips will be gray
   recommendedShifts?: Shift[] // Optional list of recommended shifts (for showing checkmarks)
   softAvailableStyle?: boolean // If true, use lower-saturation available chip colors
+  /** When a shift is assigned to "this sub", show this name on the chip (e.g. the card's sub name) */
+  thisSubName?: string | null
 }
 
 // Format shift label as "Mon AM • Feb 9"
@@ -44,6 +56,21 @@ export function formatShiftLabel(dateString: string, timeSlotCode: string): stri
   return `${dayName} ${timeSlotCode} • ${month} ${day}`
 }
 
+// Parts for stacked chip display: "Mon AM" on first line, "March 16" on second
+function getShiftLabelParts(
+  dateString: string,
+  timeSlotCode: string
+): { daySlot: string; datePart: string } {
+  const date = parseLocalDate(dateString)
+  const dayName = DAY_NAMES[date.getDay()]
+  const month = MONTH_NAMES[date.getMonth()]
+  const day = date.getDate()
+  return {
+    daySlot: `${dayName} ${timeSlotCode}`,
+    datePart: `${month} ${day}`,
+  }
+}
+
 const formatShiftTooltipLabel = (dateString: string, timeSlotCode: string): string => {
   const date = parseLocalDate(dateString)
   const dayName = DAY_NAMES[date.getDay()]
@@ -52,15 +79,118 @@ const formatShiftTooltipLabel = (dateString: string, timeSlotCode: string): stri
   return `${dayName} ${timeSlotCode} • ${month} ${day}`
 }
 
+/** Pill styles shared by Recommended Subs and Dashboard (single source of truth) */
+const assignedPillStyles = {
+  thisSub: {
+    backgroundColor: 'rgb(204, 251, 241)' as const,
+    color: 'rgb(15, 118, 110)' as const,
+    borderColor: 'rgb(153, 246, 228)' as const,
+  },
+  otherSub: {
+    backgroundColor: 'rgb(226, 232, 240)' as const,
+    color: 'rgb(71, 85, 105)' as const,
+    borderColor: 'rgb(203, 213, 225)' as const,
+  },
+  uncovered: {
+    backgroundColor: coverageColorValues.uncovered.bg,
+    borderColor: coverageColorValues.uncovered.border,
+    color: coverageColorValues.uncovered.text,
+  },
+} as const
+
+/** Normalize shift key so recommendedShifts (from combination) and shifts (from absence) match */
+function normalizeShiftKey(dateString: string, timeSlotCode: string): string {
+  try {
+    const d = parseLocalDate(dateString)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}|${timeSlotCode}`
+  } catch {
+    return `${dateString}|${timeSlotCode}`
+  }
+}
+
+/** Standalone legend for shift chip colors (e.g. above Recommended subs card). Matches weekly schedule legend: light gray box, text-sm. */
+export function ShiftChipsLegend({ className }: { className?: string }) {
+  const legendAvailableColors = {
+    bg: 'rgb(246, 253, 251)',
+    border: 'rgb(196, 234, 226)',
+  }
+  return (
+    <div
+      className={cn('p-3 bg-white rounded-md border border-gray-200', className)}
+      role="img"
+      aria-label="Legend: green = can cover, gray = cannot cover, Assigned Sub = chip with checkmark, amber dot = recommended assignment"
+    >
+      <div className="flex flex-wrap items-center gap-4 text-sm">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-gray-700">Key:</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div
+            className="w-3 h-3 rounded"
+            style={{
+              backgroundColor: legendAvailableColors.bg,
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderColor: legendAvailableColors.border,
+            }}
+          />
+          <span className="text-gray-600">Can cover</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div
+            className="w-3 h-3 rounded"
+            style={{
+              backgroundColor: shiftStatusColorValues.unavailable.bg,
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderColor: shiftStatusColorValues.unavailable.border,
+            }}
+          />
+          <span className="text-gray-600">Cannot cover</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            aria-hidden="true"
+            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium"
+            style={{
+              backgroundColor: 'rgb(204, 251, 241)',
+              color: 'rgb(15, 118, 110)',
+              borderColor: 'rgb(153, 246, 228)',
+            }}
+          >
+            <span className="font-bold leading-none" style={{ fontSize: '10px' }}>
+              ✓
+            </span>
+            Assigned Sub
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: '#fde68a' }}
+            aria-hidden="true"
+          />
+          <span className="text-gray-600">Recommended assignment</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ShiftChips({
   canCover = [],
   cannotCover = [],
   assigned = [],
   shifts,
+  coverageVariant = false,
   showLegend = false,
   isDeclined = false,
   recommendedShifts = [],
   softAvailableStyle = true,
+  thisSubName = null,
 }: ShiftChipsProps) {
   if (
     canCover.length === 0 &&
@@ -74,12 +204,13 @@ export default function ShiftChips({
   type ShiftItem = {
     date: string
     time_slot_code: string
-    status: 'assigned' | 'available' | 'unavailable'
+    status: ShiftChipSubFinderStatus | ShiftChipCoverageStatus
     assignment_owner?: 'this_sub' | 'other_sub'
     assigned_sub_name?: string | null
-    reason?: string // Reason for unavailable shifts
+    reason?: string
     classroom_name?: string | null
     class_name?: string | null
+    classroom_color?: string | null
   }
 
   const allShiftsMap = new Map<string, ShiftItem>()
@@ -94,6 +225,7 @@ export default function ShiftChips({
       assignment_owner: 'this_sub',
       classroom_name: shift.classroom_name || null,
       class_name: shift.class_name || null,
+      classroom_color: shift.classroom_color ?? null,
     })
   })
 
@@ -107,6 +239,7 @@ export default function ShiftChips({
         status: 'available',
         classroom_name: shift.classroom_name || null,
         class_name: shift.class_name || null,
+        classroom_color: shift.classroom_color ?? null,
       })
     }
   })
@@ -122,6 +255,7 @@ export default function ShiftChips({
         reason: shift.reason, // Store reason for tooltip
         classroom_name: shift.classroom_name || null,
         class_name: shift.class_name || null,
+        classroom_color: shift.classroom_color ?? null,
       })
     }
   })
@@ -137,9 +271,9 @@ export default function ShiftChips({
         return a.time_slot_code.localeCompare(b.time_slot_code)
       })
 
-  // Create a Set of recommended shift keys for quick lookup
+  // Create a Set of recommended shift keys for quick lookup (normalize dates so combination + absence formats match)
   const recommendedShiftKeys = new Set(
-    recommendedShifts.map(shift => `${shift.date}|${shift.time_slot_code}`)
+    recommendedShifts.map(shift => normalizeShiftKey(shift.date, shift.time_slot_code))
   )
   const legendAvailableColors = softAvailableStyle
     ? {
@@ -154,9 +288,10 @@ export default function ShiftChips({
   return (
     <TooltipProvider>
       <div className="space-y-2">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap" style={{ overflow: 'visible' }}>
           {allShifts.map((shift, idx) => {
             const shiftLabel = formatShiftLabel(shift.date, shift.time_slot_code)
+            const { daySlot, datePart } = getShiftLabelParts(shift.date, shift.time_slot_code)
             const tooltipLabel = formatShiftTooltipLabel(shift.date, shift.time_slot_code)
             const classroomName = shift.classroom_name
             const classGroupName = shift.class_name
@@ -166,55 +301,164 @@ export default function ShiftChips({
                 : classroomName
               : classGroupName || 'Classroom unavailable'
             const status = isDeclined ? 'declined' : shift.status
+            const isCoverageStatus = (s: string): s is ShiftChipCoverageStatus =>
+              s === 'covered' || s === 'partial' || s === 'uncovered'
+            const useCoverageVariant = coverageVariant && isCoverageStatus(shift.status)
             const twoToneStatus =
               status === 'unavailable' || status === 'declined' ? 'unavailable' : 'available'
             const baseColorValues = shiftStatusColorValues[twoToneStatus]
             const colorValues =
-              softAvailableStyle && twoToneStatus === 'available'
-                ? {
-                    ...baseColorValues,
-                    bg: 'rgb(246, 253, 251)', // softer than teal-50
-                    border: 'rgb(196, 234, 226)', // softer teal border
-                    text: 'rgb(15, 118, 110)', // teal-700
-                  }
-                : baseColorValues
-            const shiftKey = `${shift.date}|${shift.time_slot_code}`
-            const isRecommended = recommendedShiftKeys.has(shiftKey)
-            const badge = (
-              <Badge
-                key={`shift-${shift.date}-${shift.time_slot_code}-${idx}`}
-                variant="outline"
-                className="text-xs"
-                style={
-                  {
-                    backgroundColor: colorValues.bg,
-                    borderWidth: '1px',
-                    borderStyle: 'solid',
-                    borderColor: colorValues.border,
-                    color: colorValues.text,
-                  } as React.CSSProperties
-                }
+              useCoverageVariant && isCoverageStatus(shift.status)
+                ? shift.status === 'uncovered'
+                  ? shiftStatusColorValues.unavailable
+                  : {
+                      bg: coverageColorValues[shift.status].bg,
+                      border: coverageColorValues[shift.status].border,
+                      text: coverageColorValues[shift.status].text,
+                    }
+                : softAvailableStyle && twoToneStatus === 'available'
+                  ? {
+                      ...baseColorValues,
+                      bg: 'rgb(246, 253, 251)' as const,
+                      border: 'rgb(196, 234, 226)' as const,
+                      text: 'rgb(15, 118, 110)' as const,
+                    }
+                  : baseColorValues
+            const shiftKey = normalizeShiftKey(shift.date, shift.time_slot_code)
+            const isRecommended = !useCoverageVariant && recommendedShiftKeys.has(shiftKey)
+            const cornerIndicator = useCoverageVariant ? null : isRecommended ? (
+              <div
+                aria-hidden="true"
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  backgroundColor: '#fde68a',
+                  flexShrink: 0,
+                }}
+              />
+            ) : shift.assignment_owner === 'this_sub' ? (
+              <div
+                aria-hidden="true"
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                  backgroundColor: 'rgb(204, 251, 241)',
+                  color: 'rgb(15, 118, 110)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 8,
+                  fontWeight: 700,
+                  flexShrink: 0,
+                }}
               >
-                <span className="inline-flex items-center gap-1.5">
-                  {isRecommended && (
-                    <span
-                      className="inline-flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full border border-amber-500 bg-amber-300"
-                      aria-hidden="true"
-                    />
-                  )}
-                  {shiftLabel}
-                  {shift.assignment_owner === 'this_sub' && (
-                    <span className="inline-flex items-center rounded-sm bg-white/70 px-1 text-[10px] font-medium text-teal-700">
-                      ✓
+                ✓
+              </div>
+            ) : null
+
+            const indicatorToShow = cornerIndicator
+
+            const badge = (
+              <div
+                key={`shift-${shift.date}-${shift.time_slot_code}-${idx}`}
+                className="relative inline-block shrink-0 mr-3 mb-3"
+                style={{ overflow: 'visible' }}
+              >
+                <Badge
+                  variant="outline"
+                  className="relative box-border flex h-28 w-36 shrink-0 overflow-hidden rounded-lg text-sm px-2 py-1.5"
+                  style={
+                    {
+                      backgroundColor: colorValues.bg,
+                      borderWidth: '1px',
+                      borderStyle: 'solid',
+                      borderColor: colorValues.border,
+                      color: colorValues.text,
+                      height: '7rem',
+                      minHeight: '7rem',
+                      maxHeight: '7rem',
+                      width: '9rem',
+                      minWidth: '9rem',
+                      maxWidth: '9rem',
+                    } as React.CSSProperties
+                  }
+                >
+                  {/* Text: centered; overflow hidden keeps uniform height with nested chip. Order: classroom, day/slot, date, sub/uncovered. Classroom: temporary plain text (was colored chip via getClassroomPillStyle). */}
+                  <span className="inline-flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 overflow-hidden leading-tight text-center">
+                    <span className="shrink-0 truncate text-[10px] font-medium uppercase text-slate-400">
+                      {classroomLabel}
                     </span>
-                  )}
-                  {shift.assignment_owner === 'other_sub' && (
-                    <span className="inline-flex items-center rounded-sm bg-white/70 px-1 text-[10px] font-medium text-slate-600">
-                      {shift.assigned_sub_name || 'Other sub'}
-                    </span>
-                  )}
-                </span>
-              </Badge>
+                    <span className="shrink-0 text-base font-medium">{daySlot}</span>
+                    <span className="shrink-0 text-sm opacity-90">{datePart}</span>
+                    {(() => {
+                      const showOtherSubPill =
+                        shift.assignment_owner === 'other_sub' ||
+                        (useCoverageVariant &&
+                          isCoverageStatus(shift.status) &&
+                          (shift.status === 'covered' || shift.status === 'partial') &&
+                          !!shift.assigned_sub_name)
+                      const pillClassName =
+                        'mt-2 inline-flex min-w-0 max-w-full shrink-0 items-center truncate rounded-full border px-1.5 py-0.5 text-xs font-medium'
+                      if (shift.assignment_owner === 'this_sub') {
+                        return (
+                          <span className={pillClassName} style={assignedPillStyles.thisSub}>
+                            {thisSubName || 'This sub'}
+                          </span>
+                        )
+                      }
+                      if (showOtherSubPill) {
+                        return (
+                          <span className={pillClassName} style={assignedPillStyles.thisSub}>
+                            {shift.assigned_sub_name || 'Other sub'}
+                          </span>
+                        )
+                      }
+                      if (useCoverageVariant && isCoverageStatus(shift.status)) {
+                        return (
+                          <span
+                            className={`${pillClassName} min-h-[1.5rem] justify-center`}
+                            style={{
+                              backgroundColor: coverageColorValues[shift.status].bg,
+                              borderColor: coverageColorValues[shift.status].border,
+                              color: coverageColorValues[shift.status].text,
+                            }}
+                          >
+                            {shift.status === 'covered'
+                              ? 'Covered'
+                              : shift.status === 'partial'
+                                ? 'Partial'
+                                : 'Uncovered'}
+                          </span>
+                        )
+                      }
+                      return (
+                        <span
+                          className={`${pillClassName} min-h-[1.5rem] justify-center`}
+                          style={assignedPillStyles.uncovered}
+                        >
+                          Uncovered
+                        </span>
+                      )
+                    })()}
+                  </span>
+                </Badge>
+                {/* Corner indicator: AFTER Badge so it paints on top; outside Badge to avoid overflow-hidden */}
+                {indicatorToShow && (
+                  <div
+                    className="absolute z-10"
+                    style={{
+                      top: 5,
+                      left: 5,
+                      pointerEvents: 'none',
+                      overflow: 'visible',
+                    }}
+                  >
+                    {indicatorToShow}
+                  </div>
+                )}
+              </div>
             )
 
             return (
@@ -232,7 +476,8 @@ export default function ShiftChips({
                     {shift.assignment_owner === 'this_sub' && (
                       <div className="text-muted-foreground">Assigned to this sub</div>
                     )}
-                    {shift.assignment_owner === 'other_sub' && (
+                    {(shift.assignment_owner === 'other_sub' ||
+                      (useCoverageVariant && shift.assigned_sub_name)) && (
                       <div className="text-muted-foreground">
                         Assigned to {shift.assigned_sub_name || 'another sub'}
                       </div>
@@ -244,49 +489,59 @@ export default function ShiftChips({
           })}
         </div>
         {showLegend && (
-          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1 pb-4">
-            <div className="flex items-center gap-1.5">
-              <div
-                className="w-3 h-3 rounded"
-                style={{
-                  backgroundColor: legendAvailableColors.bg,
-                  borderWidth: '1px',
-                  borderStyle: 'solid',
-                  borderColor: legendAvailableColors.border,
-                }}
-              />
-              <span>Can cover</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div
-                className="w-3 h-3 rounded"
-                style={{
-                  backgroundColor: shiftStatusColorValues.unavailable.bg,
-                  borderWidth: '1px',
-                  borderStyle: 'solid',
-                  borderColor: shiftStatusColorValues.unavailable.border,
-                }}
-              />
-              <span>Cannot cover</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="inline-flex items-center rounded-sm bg-slate-100 px-1 text-[10px] font-medium text-teal-700">
-                ✓
-              </span>
-              <span>Assigned to this sub</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="inline-flex items-center rounded-sm bg-slate-100 px-1 text-[10px] font-medium text-slate-600">
-                Other sub
-              </span>
-              <span>Assigned elsewhere</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span
-                className="inline-flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full border border-amber-500 bg-amber-300"
-                aria-hidden="true"
-              />
-              <span>Recommended</span>
+          <div className="mt-2 p-3 bg-white rounded-md border border-gray-200">
+            <div className="flex flex-wrap items-center gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-gray-700">Key:</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded"
+                  style={{
+                    backgroundColor: legendAvailableColors.bg,
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    borderColor: legendAvailableColors.border,
+                  }}
+                />
+                <span className="text-gray-600">Can cover</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded"
+                  style={{
+                    backgroundColor: shiftStatusColorValues.unavailable.bg,
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    borderColor: shiftStatusColorValues.unavailable.border,
+                  }}
+                />
+                <span className="text-gray-600">Cannot cover</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium"
+                  style={{
+                    backgroundColor: 'rgb(204, 251, 241)',
+                    color: 'rgb(15, 118, 110)',
+                    borderColor: 'rgb(153, 246, 228)',
+                  }}
+                >
+                  <span className="font-bold leading-none" style={{ fontSize: '10px' }}>
+                    ✓
+                  </span>
+                  Assigned Sub
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: '#fde68a' }}
+                  aria-hidden="true"
+                />
+                <span className="text-gray-600">Recommended assignment</span>
+              </div>
             </div>
           </div>
         )}

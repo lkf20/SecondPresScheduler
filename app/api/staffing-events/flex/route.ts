@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { expandDateRangeWithTimeZone, parseLocalDate } from '@/lib/utils/date'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
+import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 type FlexAssignmentPayload = {
   staff_id: string
@@ -12,6 +14,10 @@ type FlexAssignmentPayload = {
   time_slot_ids: string[]
   day_of_week_ids?: string[]
   notes?: string | null
+  event_category?: 'standard' | 'break'
+  covered_staff_id?: string | null
+  start_time?: string | null
+  end_time?: string | null
   shifts?: Array<{
     date: string
     time_slot_id: string
@@ -42,6 +48,10 @@ export async function POST(request: NextRequest) {
       time_slot_ids,
       day_of_week_ids,
       notes,
+      event_category,
+      covered_staff_id,
+      start_time,
+      end_time,
       shifts,
     } = body
 
@@ -100,7 +110,11 @@ export async function POST(request: NextRequest) {
       .from('staffing_events')
       .insert({
         school_id: schoolId,
-        event_type: 'flex_assignment',
+        event_type: 'temporary_coverage',
+        event_category: event_category ?? 'standard',
+        covered_staff_id: covered_staff_id ?? null,
+        start_time: start_time ?? null,
+        end_time: end_time ?? null,
         staff_id,
         start_date,
         end_date,
@@ -190,6 +204,43 @@ export async function POST(request: NextRequest) {
       }
       return NextResponse.json({ error: shiftsError.message }, { status: 500 })
     }
+
+    const { data: staffRow } = await supabase
+      .from('staff')
+      .select('first_name, last_name, display_name')
+      .eq('id', staff_id)
+      .eq('school_id', schoolId)
+      .maybeSingle()
+    const teacherName = staffRow ? getStaffDisplayName(staffRow) : null
+
+    const uniqueClassroomIds = Array.from(new Set(classroom_ids))
+    const { data: classroomRows } = await supabase
+      .from('classrooms')
+      .select('id, name')
+      .eq('school_id', schoolId)
+      .in('id', uniqueClassroomIds)
+    const classroomNames = (classroomRows || []).map(r => r.name).filter(Boolean)
+    const classroomName = classroomNames.length > 0 ? classroomNames.join(', ') : null
+
+    const { actorUserId, actorDisplayName } = await getAuditActorContext()
+    await logAuditEvent({
+      schoolId,
+      actorUserId,
+      actorDisplayName,
+      action: 'assign',
+      category: 'temporary_coverage',
+      entityType: 'staffing_event',
+      entityId: eventRow.id,
+      details: {
+        staff_id,
+        teacher_name: teacherName,
+        classroom_ids: uniqueClassroomIds,
+        classroom_name: classroomName,
+        start_date,
+        end_date,
+        shift_count: shiftRows.length,
+      },
+    })
 
     return NextResponse.json({
       id: eventRow.id,
