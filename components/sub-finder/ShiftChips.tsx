@@ -17,14 +17,19 @@ interface Shift {
   classroom_color?: string | null
 }
 
+/** Shift status for sub-finder (can cover / cannot cover / assigned) */
+export type ShiftChipSubFinderStatus = 'assigned' | 'available' | 'unavailable'
+/** Shift status for dashboard coverage (time off chips) */
+export type ShiftChipCoverageStatus = 'covered' | 'partial' | 'uncovered'
+
 interface ShiftChipsProps {
-  canCover: Shift[]
-  cannotCover: Shift[] // Includes reason field for unavailable shifts
+  canCover?: Shift[]
+  cannotCover?: Shift[] // Includes reason field for unavailable shifts
   assigned?: Shift[] // Optional list of assigned shifts
   shifts?: Array<{
     date: string
     time_slot_code: string
-    status: 'assigned' | 'available' | 'unavailable'
+    status: ShiftChipSubFinderStatus | ShiftChipCoverageStatus
     assignment_owner?: 'this_sub' | 'other_sub'
     assigned_sub_name?: string | null
     reason?: string
@@ -32,6 +37,8 @@ interface ShiftChipsProps {
     class_name?: string | null
     classroom_color?: string | null
   }>
+  /** When true, shifts use status covered|partial|uncovered and show coverage pill (Dashboard Upcoming Time off) */
+  coverageVariant?: boolean
   showLegend?: boolean // Whether to show the color legend
   isDeclined?: boolean // If true, all chips will be gray
   recommendedShifts?: Shift[] // Optional list of recommended shifts (for showing checkmarks)
@@ -71,6 +78,25 @@ const formatShiftTooltipLabel = (dateString: string, timeSlotCode: string): stri
   const day = date.getDate()
   return `${dayName} ${timeSlotCode} • ${month} ${day}`
 }
+
+/** Pill styles shared by Recommended Subs and Dashboard (single source of truth) */
+const assignedPillStyles = {
+  thisSub: {
+    backgroundColor: 'rgb(204, 251, 241)' as const,
+    color: 'rgb(15, 118, 110)' as const,
+    borderColor: 'rgb(153, 246, 228)' as const,
+  },
+  otherSub: {
+    backgroundColor: 'rgb(226, 232, 240)' as const,
+    color: 'rgb(71, 85, 105)' as const,
+    borderColor: 'rgb(203, 213, 225)' as const,
+  },
+  uncovered: {
+    backgroundColor: coverageColorValues.uncovered.bg,
+    borderColor: coverageColorValues.uncovered.border,
+    color: coverageColorValues.uncovered.text,
+  },
+} as const
 
 /** Normalize shift key so recommendedShifts (from combination) and shifts (from absence) match */
 function normalizeShiftKey(dateString: string, timeSlotCode: string): string {
@@ -159,6 +185,7 @@ export default function ShiftChips({
   cannotCover = [],
   assigned = [],
   shifts,
+  coverageVariant = false,
   showLegend = false,
   isDeclined = false,
   recommendedShifts = [],
@@ -177,10 +204,10 @@ export default function ShiftChips({
   type ShiftItem = {
     date: string
     time_slot_code: string
-    status: 'assigned' | 'available' | 'unavailable'
+    status: ShiftChipSubFinderStatus | ShiftChipCoverageStatus
     assignment_owner?: 'this_sub' | 'other_sub'
     assigned_sub_name?: string | null
-    reason?: string // Reason for unavailable shifts
+    reason?: string
     classroom_name?: string | null
     class_name?: string | null
     classroom_color?: string | null
@@ -274,21 +301,32 @@ export default function ShiftChips({
                 : classroomName
               : classGroupName || 'Classroom unavailable'
             const status = isDeclined ? 'declined' : shift.status
+            const isCoverageStatus = (s: string): s is ShiftChipCoverageStatus =>
+              s === 'covered' || s === 'partial' || s === 'uncovered'
+            const useCoverageVariant = coverageVariant && isCoverageStatus(shift.status)
             const twoToneStatus =
               status === 'unavailable' || status === 'declined' ? 'unavailable' : 'available'
             const baseColorValues = shiftStatusColorValues[twoToneStatus]
             const colorValues =
-              softAvailableStyle && twoToneStatus === 'available'
-                ? {
-                    ...baseColorValues,
-                    bg: 'rgb(246, 253, 251)', // softer than teal-50
-                    border: 'rgb(196, 234, 226)', // softer teal border
-                    text: 'rgb(15, 118, 110)', // teal-700
-                  }
-                : baseColorValues
+              useCoverageVariant && isCoverageStatus(shift.status)
+                ? shift.status === 'uncovered'
+                  ? shiftStatusColorValues.unavailable
+                  : {
+                      bg: coverageColorValues[shift.status].bg,
+                      border: coverageColorValues[shift.status].border,
+                      text: coverageColorValues[shift.status].text,
+                    }
+                : softAvailableStyle && twoToneStatus === 'available'
+                  ? {
+                      ...baseColorValues,
+                      bg: 'rgb(246, 253, 251)' as const,
+                      border: 'rgb(196, 234, 226)' as const,
+                      text: 'rgb(15, 118, 110)' as const,
+                    }
+                  : baseColorValues
             const shiftKey = normalizeShiftKey(shift.date, shift.time_slot_code)
-            const isRecommended = recommendedShiftKeys.has(shiftKey)
-            const cornerIndicator = isRecommended ? (
+            const isRecommended = !useCoverageVariant && recommendedShiftKeys.has(shiftKey)
+            const cornerIndicator = useCoverageVariant ? null : isRecommended ? (
               <div
                 aria-hidden="true"
                 style={{
@@ -354,40 +392,56 @@ export default function ShiftChips({
                     </span>
                     <span className="shrink-0 text-base font-medium">{daySlot}</span>
                     <span className="shrink-0 text-sm opacity-90">{datePart}</span>
-                    {shift.assignment_owner === 'this_sub' ? (
-                      <span
-                        className="mt-2 inline-flex min-w-0 max-w-full shrink-0 items-center truncate rounded-full border px-1.5 py-0.5 text-xs font-medium"
-                        style={{
-                          backgroundColor: 'rgb(204, 251, 241)',
-                          color: 'rgb(15, 118, 110)',
-                          borderColor: 'rgb(153, 246, 228)',
-                        }}
-                      >
-                        {thisSubName || 'This sub'}
-                      </span>
-                    ) : shift.assignment_owner === 'other_sub' ? (
-                      <span
-                        className="mt-2 inline-flex min-w-0 max-w-full shrink-0 items-center truncate rounded-full border px-1.5 py-0.5 text-xs font-medium"
-                        style={{
-                          backgroundColor: 'rgb(226, 232, 240)',
-                          color: 'rgb(71, 85, 105)',
-                          borderColor: 'rgb(203, 213, 225)',
-                        }}
-                      >
-                        {shift.assigned_sub_name || 'Other sub'}
-                      </span>
-                    ) : (
-                      <span
-                        className="mt-2 inline-flex min-h-[1.5rem] min-w-0 max-w-full shrink-0 items-center justify-center truncate rounded-full border px-1.5 py-0.5 text-xs font-medium"
-                        style={{
-                          backgroundColor: coverageColorValues.uncovered.bg,
-                          borderColor: coverageColorValues.uncovered.border,
-                          color: coverageColorValues.uncovered.text,
-                        }}
-                      >
-                        Uncovered
-                      </span>
-                    )}
+                    {(() => {
+                      const showOtherSubPill =
+                        shift.assignment_owner === 'other_sub' ||
+                        (useCoverageVariant &&
+                          isCoverageStatus(shift.status) &&
+                          (shift.status === 'covered' || shift.status === 'partial') &&
+                          !!shift.assigned_sub_name)
+                      const pillClassName =
+                        'mt-2 inline-flex min-w-0 max-w-full shrink-0 items-center truncate rounded-full border px-1.5 py-0.5 text-xs font-medium'
+                      if (shift.assignment_owner === 'this_sub') {
+                        return (
+                          <span className={pillClassName} style={assignedPillStyles.thisSub}>
+                            {thisSubName || 'This sub'}
+                          </span>
+                        )
+                      }
+                      if (showOtherSubPill) {
+                        return (
+                          <span className={pillClassName} style={assignedPillStyles.thisSub}>
+                            {shift.assigned_sub_name || 'Other sub'}
+                          </span>
+                        )
+                      }
+                      if (useCoverageVariant && isCoverageStatus(shift.status)) {
+                        return (
+                          <span
+                            className={`${pillClassName} min-h-[1.5rem] justify-center`}
+                            style={{
+                              backgroundColor: coverageColorValues[shift.status].bg,
+                              borderColor: coverageColorValues[shift.status].border,
+                              color: coverageColorValues[shift.status].text,
+                            }}
+                          >
+                            {shift.status === 'covered'
+                              ? 'Covered'
+                              : shift.status === 'partial'
+                                ? 'Partial'
+                                : 'Uncovered'}
+                          </span>
+                        )
+                      }
+                      return (
+                        <span
+                          className={`${pillClassName} min-h-[1.5rem] justify-center`}
+                          style={assignedPillStyles.uncovered}
+                        >
+                          Uncovered
+                        </span>
+                      )
+                    })()}
                   </span>
                 </Badge>
                 {/* Corner indicator: AFTER Badge so it paints on top; outside Badge to avoid overflow-hidden */}
@@ -422,7 +476,8 @@ export default function ShiftChips({
                     {shift.assignment_owner === 'this_sub' && (
                       <div className="text-muted-foreground">Assigned to this sub</div>
                     )}
-                    {shift.assignment_owner === 'other_sub' && (
+                    {(shift.assignment_owner === 'other_sub' ||
+                      (useCoverageVariant && shift.assigned_sub_name)) && (
                       <div className="text-muted-foreground">
                         Assigned to {shift.assigned_sub_name || 'another sub'}
                       </div>

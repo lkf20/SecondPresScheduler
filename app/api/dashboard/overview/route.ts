@@ -446,6 +446,7 @@ export async function GET(request: NextRequest) {
         const totalShifts = requestShifts.length
 
         const assignmentMap = new Map<string, { hasFull: boolean; hasPartial: boolean }>()
+        const subNameByShiftId = new Map<string, string>()
 
         assignedSubs.forEach((assignment: any) => {
           const key =
@@ -460,6 +461,10 @@ export async function GET(request: NextRequest) {
             existing.hasFull = true
           }
           assignmentMap.set(key, existing)
+          if (assignment.coverage_request_shift_id && assignment.sub) {
+            const subName = getStaffDisplayName(assignment.sub as any, displayNameFormat) || 'Sub'
+            subNameByShiftId.set(assignment.coverage_request_shift_id, subName)
+          }
         })
 
         const assignedShifts = Array.from(assignmentMap.values()).filter(
@@ -525,9 +530,17 @@ export async function GET(request: NextRequest) {
 
         const classrooms = Array.from(classroomsMap.values())
 
-        // Format shift details for dropdown
-        const shiftDetails: Array<{ label: string; status: 'covered' | 'partial' | 'uncovered' }> =
-          []
+        // Format shift details for dropdown and for large shift chips (Dashboard uses same as Recommended Subs)
+        const shiftDetails: Array<{
+          label: string
+          status: 'covered' | 'partial' | 'uncovered'
+          date: string
+          time_slot_code: string
+          day_name?: string
+          classroom_name?: string | null
+          classroom_color?: string | null
+          assigned_sub_name?: string | null
+        }> = []
 
         requestShifts.forEach((shift: any) => {
           const assignment = assignmentMap.get(shift.id)
@@ -539,7 +552,6 @@ export async function GET(request: NextRequest) {
             status = 'partial'
           }
 
-          // Format label: "Mon AM • Jan 2"
           const dayOfWeek = shift.day_of_week as any
           const timeSlot = shift.time_slot as any
           const dayName = dayOfWeek?.name
@@ -554,7 +566,23 @@ export async function GET(request: NextRequest) {
           const day = date.getDate()
           const label = `${dayName} ${timeCode} • ${month} ${day}`
 
-          shiftDetails.push({ label, status })
+          const classroom = shift.classroom_id ? classroomsMap.get(shift.classroom_id) : null
+
+          const assignedSubName =
+            status === 'covered' || status === 'partial'
+              ? (subNameByShiftId.get(shift.id) ?? null)
+              : null
+
+          shiftDetails.push({
+            label,
+            status,
+            date: shift.date,
+            time_slot_code: timeCode,
+            day_name: dayName,
+            classroom_name: classroom?.name ?? null,
+            classroom_color: classroom?.color ?? null,
+            assigned_sub_name: assignedSubName,
+          })
         })
 
         return {
