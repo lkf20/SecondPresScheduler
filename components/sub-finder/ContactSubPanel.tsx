@@ -1658,7 +1658,7 @@ export default function ContactSubPanel({
               style={{ order: 10 }}
             >
               <h3 className="text-sm font-medium">Shift assignments</h3>
-              <div className="space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {actionableShifts.map(shift => {
                   const shiftKey = `${shift.date}|${shift.time_slot_code}`
                   const assignedToThisSub = assignedShiftByKey.get(shiftKey)
@@ -1685,7 +1685,7 @@ export default function ContactSubPanel({
                     !assignedToThisSub && !assignedElsewhere && !canCoverThisShift
                   const cannotCoverMeta = getCannotCoverMeta(cannotCoverReason || null)
                   const canOverrideThisRow = cannotCoverMeta.canOverride
-                  const rowLeftBorderColor = canAssignFromCheckbox
+                  const cardTopBorderColor = canAssignFromCheckbox
                     ? 'rgb(110, 231, 183)' // emerald-300
                     : needsOverride
                       ? 'rgb(203, 213, 225)' // slate-300
@@ -1694,45 +1694,40 @@ export default function ContactSubPanel({
                   return (
                     <div
                       key={shiftKey}
-                      className="flex items-center gap-2 rounded-md border border-l-4 border-slate-200 bg-slate-50 px-2 py-2"
-                      style={{ borderLeftColor: rowLeftBorderColor }}
+                      className="flex flex-col justify-between rounded-lg border border-t-4 border-slate-200 bg-slate-50 p-4 shadow-sm"
+                      style={{ borderTopColor: cardTopBorderColor }}
                     >
-                      <div className="flex-1 min-w-0">
-                        <div className="inline-flex flex-wrap items-center gap-2">
-                          <ShiftChips
-                            canCover={[]}
-                            cannotCover={[]}
-                            shifts={[
-                              {
-                                date: shift.date,
-                                time_slot_code: shift.time_slot_code,
-                                status:
-                                  canCoverThisShift || isOverridden ? 'available' : 'unavailable',
-                                assignment_owner: assignedToThisSub ? 'this_sub' : undefined,
-                                assigned_sub_name: null,
-                                classroom_name: shift.classroom_name ?? null,
-                                class_name: shift.class_name ?? null,
-                                classroom_color: shift.classroom_color ?? null,
-                              },
-                            ]}
-                            softAvailableStyle
-                          />
-                        </div>
+                      <div className="flex justify-center -mr-3 -mb-3 mb-2">
+                        <ShiftChips
+                          canCover={[]}
+                          cannotCover={[]}
+                          shifts={[
+                            {
+                              date: shift.date,
+                              time_slot_code: shift.time_slot_code,
+                              status:
+                                canCoverThisShift || isOverridden ? 'available' : 'unavailable',
+                              assignment_owner: assignedToThisSub ? 'this_sub' : undefined,
+                              assigned_sub_name: null,
+                              classroom_name: shift.classroom_name ?? null,
+                              class_name: shift.class_name ?? null,
+                              classroom_color: shift.classroom_color ?? null,
+                            },
+                          ]}
+                          softAvailableStyle
+                        />
+                      </div>
+
+                      <div className="text-center flex-grow flex flex-col justify-center mb-4 mt-2">
                         {assignedToThisSub ? (
-                          <p
-                            className="mt-1 text-xs text-emerald-700"
-                            style={{ marginLeft: '10px' }}
-                          >
+                          <p className="text-sm text-emerald-700 font-medium">
                             Assigned to this sub
                           </p>
                         ) : assignedElsewhere ? (
-                          <div
-                            className="mt-1 flex items-center gap-2 overflow-x-auto whitespace-nowrap"
-                            style={{ marginLeft: '10px' }}
-                          >
-                            <p className="text-xs text-slate-600">Assigned to {shift.sub_name}</p>
+                          <div className="flex flex-col items-center gap-1.5">
+                            <p className="text-sm text-slate-600">Assigned to {shift.sub_name}</p>
                             <span
-                              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${
                                 canSwapToThisSub
                                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                                   : 'border-slate-300 bg-slate-100 text-slate-600'
@@ -1749,135 +1744,119 @@ export default function ContactSubPanel({
                             )}
                           </div>
                         ) : cannotCoverReason && !isOverridden ? (
-                          <p className="mt-1 text-xs text-slate-500" style={{ marginLeft: '10px' }}>
-                            {cannotCoverReason}
-                          </p>
+                          <p className="text-sm text-slate-500">{cannotCoverReason}</p>
                         ) : (
-                          <p className="mt-1 text-xs text-teal-700" style={{ marginLeft: '10px' }}>
-                            Can assign this sub
-                          </p>
+                          <p className="text-sm text-teal-700 font-medium">Can assign this sub</p>
                         )}
                       </div>
-                      <TooltipProvider>
-                        <div className="flex items-center gap-1">
+
+                      <div className="mt-auto pt-3 border-t border-slate-200">
+                        <div className="flex items-center justify-center gap-2">
                           {assignedToThisSub && (
                             <>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    aria-label={`Remove ${sub.name} from ${formatShiftLabel(shift.date, shift.time_slot_code)}`}
-                                    onClick={() => setRemoveDialogShift(assignedToThisSub)}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
-                                    style={{ color: '#9f1239', backgroundColor: '#fff7f8' }}
-                                  >
-                                    <XCircle className="h-4 w-4" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent>Remove sub</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    aria-label={`Change sub for ${formatShiftLabel(shift.date, shift.time_slot_code)}`}
-                                    onClick={() =>
-                                      setChangeDialogShift({
-                                        date: shift.date,
-                                        time_slot_code: shift.time_slot_code,
-                                        fromSubName: sub.name,
-                                      })
-                                    }
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200"
-                                    style={{ backgroundColor: '#f5fbfa' }}
-                                  >
-                                    <ArrowRightLeft className="h-4 w-4" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent>Change sub</TooltipContent>
-                              </Tooltip>
-                            </>
-                          )}
-                          {!assignedToThisSub && assignedElsewhere && canSwapToThisSub && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  aria-label={`Change sub for ${formatShiftLabel(shift.date, shift.time_slot_code)}`}
-                                  onClick={() =>
-                                    setChangeDialogShift({
-                                      date: shift.date,
-                                      time_slot_code: shift.time_slot_code,
-                                      fromSubName: shift.sub_name || null,
-                                      toSubName: sub.name,
-                                    })
-                                  }
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200"
-                                  style={{ backgroundColor: '#f5fbfa' }}
-                                >
-                                  <ArrowRightLeft className="h-4 w-4" />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent>Swap to this sub</TooltipContent>
-                            </Tooltip>
-                          )}
-                          {!assignedToThisSub &&
-                            assignedElsewhere &&
-                            !canSwapToThisSub &&
-                            canOverrideThisRow && (
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleToggleOverride(shiftKey)}
-                                disabled={isSubInactive || responseStatus === 'declined_all'}
+                                onClick={() => setRemoveDialogShift(assignedToThisSub)}
+                                className="w-full text-rose-700 border-rose-200 hover:bg-rose-50"
                               >
-                                {isOverridden ? 'Override on' : 'Override'}
+                                Remove
                               </Button>
-                            )}
-                          {!assignedToThisSub &&
-                            assignedElsewhere &&
-                            !canSwapToThisSub &&
-                            !canOverrideThisRow && (
-                              <span className="text-xs text-slate-500 px-1">Cannot override</span>
-                            )}
-                          {!assignedToThisSub && !assignedElsewhere && cannotCoverReason && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleToggleOverride(shiftKey)}
-                              disabled={
-                                isSubInactive ||
-                                responseStatus === 'declined_all' ||
-                                !canOverrideThisRow
-                              }
-                            >
-                              {isOverridden
-                                ? 'Override on'
-                                : canOverrideThisRow
-                                  ? 'Override'
-                                  : 'Locked'}
-                            </Button>
-                          )}
-                          {!assignedToThisSub && !assignedElsewhere && (
-                            <label
-                              className={`inline-flex items-center gap-2 pl-1 text-sm ${
-                                canAssignFromCheckbox
-                                  ? 'cursor-pointer text-teal-700'
-                                  : 'cursor-not-allowed text-slate-400'
-                              }`}
-                            >
-                              <span className="font-semibold">Assign</span>
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={() =>
-                                  handleShiftToggle(shiftKey, canCoverThisShift || isOverridden)
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  setChangeDialogShift({
+                                    date: shift.date,
+                                    time_slot_code: shift.time_slot_code,
+                                    fromSubName: sub.name,
+                                  })
                                 }
-                                disabled={!canAssignFromCheckbox}
-                              />
-                            </label>
+                                className="w-full text-teal-700 border-teal-200 hover:bg-teal-50"
+                              >
+                                Change Sub
+                              </Button>
+                            </>
+                          )}
+
+                          {!assignedToThisSub && assignedElsewhere && (
+                            <>
+                              {!canSwapToThisSub && canOverrideThisRow && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleToggleOverride(shiftKey)}
+                                  disabled={isSubInactive || responseStatus === 'declined_all'}
+                                  className={isOverridden ? 'bg-slate-100 w-full' : 'w-full'}
+                                >
+                                  {isOverridden ? 'Override on' : 'Override'}
+                                </Button>
+                              )}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  setChangeDialogShift({
+                                    date: shift.date,
+                                    time_slot_code: shift.time_slot_code,
+                                    fromSubName: shift.sub_name || null,
+                                    toSubName: sub.name,
+                                  })
+                                }
+                                disabled={!canSwapToThisSub}
+                                className="w-full text-teal-700 border-teal-200 hover:bg-teal-50"
+                              >
+                                Change Sub
+                              </Button>
+                            </>
+                          )}
+
+                          {!assignedToThisSub && !assignedElsewhere && (
+                            <>
+                              {cannotCoverReason && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleToggleOverride(shiftKey)}
+                                  disabled={
+                                    isSubInactive ||
+                                    responseStatus === 'declined_all' ||
+                                    !canOverrideThisRow
+                                  }
+                                  className={isOverridden ? 'bg-slate-100 flex-1' : 'flex-1'}
+                                >
+                                  {isOverridden
+                                    ? 'Override on'
+                                    : canOverrideThisRow
+                                      ? 'Override'
+                                      : 'Locked'}
+                                </Button>
+                              )}
+                              <label
+                                className={`inline-flex items-center justify-center gap-2 text-sm flex-1 h-9 rounded-md border ${
+                                  canAssignFromCheckbox
+                                    ? 'cursor-pointer text-teal-700 bg-teal-50/50 hover:bg-teal-50 border-teal-200'
+                                    : 'cursor-not-allowed text-slate-400 bg-slate-50 border-slate-200'
+                                }`}
+                              >
+                                <span className="font-medium">Assign</span>
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() =>
+                                    handleShiftToggle(shiftKey, canCoverThisShift || isOverridden)
+                                  }
+                                  disabled={!canAssignFromCheckbox}
+                                  className={
+                                    canAssignFromCheckbox
+                                      ? 'border-teal-500 data-[state=checked]:bg-teal-600 data-[state=checked]:border-teal-600'
+                                      : ''
+                                  }
+                                />
+                              </label>
+                            </>
                           )}
                         </div>
-                      </TooltipProvider>
+                      </div>
                     </div>
                   )
                 })}
