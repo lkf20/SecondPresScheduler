@@ -8,8 +8,8 @@ The database schema consists of 19 tables organized into logical groups:
 
 ### Core Reference Tables (4)
 
-1. **classrooms** - Physical room locations with capacity
-2. **classes** - Logical class names with parent-child relationships
+1. **classrooms** - Physical room locations with capacity and optional notes
+2. **classes** / **class_groups** - Logical class names with parent-child relationships; class_groups table includes optional notes
 3. **time_slots** - Time periods (EM, AM, LB, AC) with default start/end times
 4. **days_of_week** - Days of the week (Monday-Friday)
 

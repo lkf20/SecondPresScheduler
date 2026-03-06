@@ -66,6 +66,7 @@ export type Database = {
           max_age: number | null
           min_age: number | null
           name: string
+          notes: string | null
           order: number | null
           parent_class_id: string | null
           preferred_ratio: number | null
@@ -84,6 +85,7 @@ export type Database = {
           max_age?: number | null
           min_age?: number | null
           name: string
+          notes?: string | null
           order?: number | null
           parent_class_id?: string | null
           preferred_ratio?: number | null
@@ -102,6 +104,7 @@ export type Database = {
           max_age?: number | null
           min_age?: number | null
           name?: string
+          notes?: string | null
           order?: number | null
           parent_class_id?: string | null
           preferred_ratio?: number | null
@@ -174,6 +177,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          notes: string | null
           order: number | null
           school_id: string
           updated_at: string | null
@@ -185,6 +189,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          notes?: string | null
           order?: number | null
           school_id: string
           updated_at?: string | null
@@ -196,6 +201,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          notes?: string | null
           order?: number | null
           school_id?: string
           updated_at?: string | null

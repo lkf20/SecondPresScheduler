@@ -106,6 +106,33 @@ describe('classrooms collection route integration', () => {
     expect(json.id).toBe('class-2')
   })
 
+  it('POST passes notes to createClassroom when provided', async () => {
+    ;(createClassroom as jest.Mock).mockResolvedValue({
+      id: 'class-1',
+      name: 'Infant Room',
+      notes: 'Near entrance',
+    })
+    ;(setClassroomAllowedClasses as jest.Mock).mockResolvedValue(undefined)
+
+    const response = await POST(
+      new Request('http://localhost/api/classrooms', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Infant Room',
+          notes: 'Near entrance',
+        }),
+      }) as any
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(createClassroom).toHaveBeenCalledWith({
+      name: 'Infant Room',
+      notes: 'Near entrance',
+    })
+    expect(json.id).toBe('class-1')
+  })
+
   it('POST routes failures through createErrorResponse', async () => {
     ;(createClassroom as jest.Mock).mockRejectedValue(new Error('insert failed'))
 

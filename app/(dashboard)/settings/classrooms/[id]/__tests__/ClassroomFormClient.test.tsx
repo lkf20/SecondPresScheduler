@@ -131,6 +131,7 @@ describe('ClassroomForm (edit)', () => {
           {
             id: 'class-1',
             name: 'Infant Room',
+            notes: null,
             capacity: 10,
             is_active: true,
             color: null,
@@ -166,9 +167,45 @@ describe('ClassroomForm (edit)', () => {
       color: '#AABBCC',
       is_active: true,
     })
+    expect(body).toHaveProperty('notes')
 
     expect(pushMock).toHaveBeenCalledWith('/settings/classrooms')
     expect(refreshMock).toHaveBeenCalled()
+  })
+
+  it('submits notes when provided', async () => {
+    render(
+      <ClassroomForm
+        mode="edit"
+        classroom={
+          {
+            id: 'class-1',
+            name: 'Infant Room',
+            notes: null,
+            capacity: 10,
+            is_active: true,
+            color: null,
+          } as never
+        }
+      />
+    )
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/api/classrooms/class-1/allowed-classes')
+    })
+    const notesField = screen.getByPlaceholderText(/location|equipment/i)
+    fireEvent.change(notesField, { target: { value: 'Room 101' } })
+    fireEvent.click(screen.getByRole('button', { name: /update/i }))
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/classrooms/class-1',
+        expect.objectContaining({ method: 'PUT' })
+      )
+    })
+    const putCall = (global.fetch as jest.Mock).mock.calls.find(
+      call => call[0] === '/api/classrooms/class-1'
+    )
+    const body = JSON.parse(putCall[1].body)
+    expect(body.notes).toBe('Room 101')
   })
 
   it('shows an error when update fails', async () => {
@@ -190,6 +227,7 @@ describe('ClassroomForm (edit)', () => {
           {
             id: 'class-1',
             name: 'Infant Room',
+            notes: null,
             capacity: 10,
             is_active: true,
             color: null,
@@ -212,6 +250,7 @@ describe('ClassroomForm (edit)', () => {
           {
             id: 'class-2',
             name: 'Toddler Room',
+            notes: null,
             capacity: 8,
             is_active: false,
             color: null,
