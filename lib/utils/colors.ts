@@ -80,6 +80,29 @@ export const coverageColorValues = {
   },
 } as const
 
+// ============================================================================
+// CONTACT STATUS COLORS (sub-finder: contacted / pending / declined)
+// ============================================================================
+
+/**
+ * RGB color values for contact status (ContactSubPanel, ShiftStatusCard counts, etc.).
+ * Use these for pending = sky blue, contacted = slate, declined = rose so the app is consistent.
+ */
+export const contactStatusColorValues = {
+  contacted: {
+    circleBg: 'rgb(241, 245, 249)', // slate-100
+    icon: 'rgb(71, 85, 105)', // slate-600
+  },
+  pending: {
+    circleBg: 'rgb(240, 249, 255)', // sky-50 (matches ContactSubPanel)
+    icon: 'rgb(3, 105, 161)', // sky-700
+  },
+  declined: {
+    circleBg: 'rgb(255, 241, 242)', // rose-50
+    icon: 'rgb(190, 24, 93)', // rose-700
+  },
+} as const
+
 export const coverageColors = {
   covered: {
     bg: 'bg-teal-50',

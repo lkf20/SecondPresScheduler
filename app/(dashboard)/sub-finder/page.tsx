@@ -348,6 +348,52 @@ export default function SubFinderPage() {
     })
     return summaryMap
   }, [responseCountsByShift])
+
+  /**
+   * Per-shift list of contacted subs with status for detail shift cards (uncovered).
+   * A sub is shown as confirmed only for the shift they are assigned to; if they
+   * confirmed for a different shift, they are shown as declined for all other shifts.
+   */
+  const contactedSubsByShift = useMemo(() => {
+    const map = new Map<
+      string,
+      Array<{ id: string; name: string; status: 'pending' | 'confirmed' | 'declined' }>
+    >()
+    const assignedShiftKeysBySub = new Map<string, Set<string>>()
+    allSubs.forEach(sub => {
+      const keys = new Set<string>()
+      ;(sub.assigned_shifts || []).forEach(s => {
+        keys.add(`${s.date}|${s.time_slot_code}`)
+      })
+      assignedShiftKeysBySub.set(sub.id, keys)
+    })
+    allSubs.forEach(sub => {
+      const isContacted =
+        sub.is_contacted === true ||
+        sub.response_status === 'pending' ||
+        sub.response_status === 'confirmed' ||
+        sub.response_status === 'declined_all'
+      if (!isContacted) return
+      const assignedKeys = assignedShiftKeysBySub.get(sub.id) || new Set<string>()
+      const name = getDisplayName(sub)
+      ;(sub.can_cover || []).forEach(shift => {
+        const key = `${shift.date}|${shift.time_slot_code}`
+        const isAssignedToThisShift = assignedKeys.has(key)
+        let status: 'pending' | 'confirmed' | 'declined'
+        if (sub.response_status === 'declined_all') {
+          status = 'declined'
+        } else if (sub.response_status === 'confirmed') {
+          status = isAssignedToThisShift ? 'confirmed' : 'declined'
+        } else {
+          status = 'pending'
+        }
+        const list = map.get(key) || []
+        list.push({ id: sub.id, name, status })
+        map.set(key, list)
+      })
+    })
+    return map
+  }, [allSubs, getDisplayName])
   const shiftFilterCounts = useMemo(() => {
     const counts = {
       all: sortedVisibleShifts.length,
@@ -1787,6 +1833,9 @@ export default function SubFinderPage() {
                             `${shift.date}|${shift.time_slot_code}`
                           ) || 0
                         }
+                        contactedSubsForShift={
+                          contactedSubsByShift.get(`${shift.date}|${shift.time_slot_code}`) || []
+                        }
                         responseSummary={
                           responseSummaryByShift.get(`${shift.date}|${shift.time_slot_code}`) ||
                           'No response'
@@ -1794,6 +1843,7 @@ export default function SubFinderPage() {
                         onSelectShift={handleSelectShift}
                         onChangeSub={handleOpenChangeDialog}
                         onRemoveSub={handleOpenRemoveDialog}
+                        onSelectSubForContact={handleCombinationContact}
                       />
                     ))
                   ) : (
@@ -2308,6 +2358,9 @@ export default function SubFinderPage() {
                               `${shift.date}|${shift.time_slot_code}`
                             ) || 0
                           }
+                          contactedSubsForShift={
+                            contactedSubsByShift.get(`${shift.date}|${shift.time_slot_code}`) || []
+                          }
                           responseSummary={
                             responseSummaryByShift.get(`${shift.date}|${shift.time_slot_code}`) ||
                             'No response'
@@ -2315,6 +2368,7 @@ export default function SubFinderPage() {
                           onSelectShift={handleSelectShift}
                           onChangeSub={handleOpenChangeDialog}
                           onRemoveSub={handleOpenRemoveDialog}
+                          onSelectSubForContact={handleCombinationContact}
                         />
                       ))
                     ) : (

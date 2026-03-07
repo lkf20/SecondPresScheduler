@@ -30,4 +30,36 @@ describe('ShiftStatusCard', () => {
     expect(screen.getByText(/covered/i)).toBeInTheDocument()
     expect(screen.getByText(/bella w\./i)).toBeInTheDocument()
   })
+
+  it('shows contacted counts and Find Sub button for uncovered shift', () => {
+    const shift = buildSubFinderShift({
+      status: 'uncovered',
+      day_name: 'Wednesday',
+      date: '2026-03-18',
+      time_slot_code: 'AM',
+    })
+    const onSelectShift = jest.fn()
+
+    render(
+      <ShiftStatusCard
+        shift={shift}
+        teacherName="Anne M."
+        contactedSubsForShift={[
+          { id: 'sub-1', name: 'Sally A.', status: 'pending' },
+          { id: 'sub-2', name: 'Bella W.', status: 'confirmed' },
+          { id: 'sub-3', name: 'Test S.', status: 'declined' },
+        ]}
+        onSelectShift={onSelectShift}
+      />
+    )
+
+    expect(screen.getByText(/uncovered/i)).toBeInTheDocument()
+    expect(screen.getByText(/3 contacted/i)).toBeInTheDocument()
+    expect(screen.getByText(/1 pending/i)).toBeInTheDocument()
+    expect(screen.getByText(/1 declined/i)).toBeInTheDocument()
+    const findSubButton = screen.getByRole('button', { name: /find sub for this shift/i })
+    expect(findSubButton).toBeInTheDocument()
+    findSubButton.click()
+    expect(onSelectShift).toHaveBeenCalledWith(shift)
+  })
 })

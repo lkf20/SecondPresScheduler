@@ -146,6 +146,18 @@ Use `StaffingStatusBadge` (`components/ui/staffing-status-badge.tsx`) for all Be
 
 Do not replicate badge styling—import and use the shared component.
 
+## Contact status colors (sub-finder)
+
+**Pending contact status** uses **sky blue** throughout the app so it is visually distinct from amber/warning and matches the Contact Sub panel. Use `contactStatusColorValues` in `lib/utils/colors.ts`:
+
+- **Contacted:** slate (circle bg + icon) — `contactStatusColorValues.contacted`
+- **Pending:** sky blue (circle bg + icon) — `contactStatusColorValues.pending` (sky-50 bg, sky-700 icon)
+- **Declined:** rose (circle bg + icon) — `contactStatusColorValues.declined`
+
+Use these values for any UI that shows contact status (e.g. ShiftStatusCard counts, ContactSubPanel badges, detail cards). Prefer a **filled circle behind the icon** (rounded-full, circle bg from the constant, icon color from the constant) to match the Contact Sub panel pattern.
+
+---
+
 ## Going forward
 
 When adding or changing UI that conveys status, urgency, or warnings:

@@ -124,7 +124,8 @@ When adding a new UI element (e.g. a chip, badge, or label):
 - **Use the centralized color system.** All status, coverage, and staffing colors live in `lib/utils/colors.ts`. Import from there instead of hardcoding Tailwind color classes.
 - **Use shared components for staffing badges.** Below Required, Below Preferred, Above Target, and On Target badges must use `StaffingStatusBadge` (`components/ui/staffing-status-badge.tsx`). Do not replicate badge styling in Dashboard, Weekly Schedule panel, or elsewhere.
 - **Semantic palette** (see [docs/COLOR_CONSISTENCY_REVIEW.md](docs/COLOR_CONSISTENCY_REVIEW.md)): Red = critical (below required, errors), Orange = uncovered shifts, Amber = warning (below preferred, validation), Yellow = soft (partial coverage, draft).
-- **Before adding new colors:** Check if an existing constant fits (`staffingColorValues`, `coverageColorValues`, `semanticColors`). If adding a new semantic tier, add it to `lib/utils/colors.ts` and document in `docs/COLOR_CONSISTENCY_REVIEW.md`.
+- **Contact status (pending, contacted, declined):** Use `contactStatusColorValues` in `lib/utils/colors.ts`. Pending = sky blue throughout the app; use the same filled-circle-behind-icon pattern as in Contact Sub panel. See [docs/COLOR_CONSISTENCY_REVIEW.md](docs/COLOR_CONSISTENCY_REVIEW.md) (Contact status colors).
+- **Before adding new colors:** Check if an existing constant fits (`staffingColorValues`, `coverageColorValues`, `semanticColors`, `contactStatusColorValues`). If adding a new semantic tier, add it to `lib/utils/colors.ts` and document in `docs/COLOR_CONSISTENCY_REVIEW.md`.
 - **Avoid ad-hoc color classes** for status/warning/error states—use the shared constants or components so the app stays visually consistent.
 - **Secondary outline buttons (turquoise):** For secondary actions like Find Sub, Update Sub, and similar “go to sub-finder” or teal-accent actions, use `variant="teal"` on the Button component. This gives turquoise border and text with teal fill on hover. Do not use `variant="outline"` with custom teal classes—use the built-in `teal` variant for consistency.
 
@@ -139,10 +140,11 @@ When adding a new UI element (e.g. a chip, badge, or label):
 - **Staffing overrides:** A cell can override the auto-calculated required/preferred staff with `schedule_cells.required_staff_override` and `preferred_staff_override` (e.g. for nap time or combined groups). When set, these overrides are used instead of the ratio-based calculation. Use the shared helper `getTotalEnrollmentForCalculation` (from `ScheduleSidePanel`) for total enrollment and apply overrides in all places that compute or display required/preferred staff (ScheduleCell, ScheduleSidePanel, dashboard overview, slot-run, flex availability, baseline-schedule filtering).
 - **Legends:** If you add or change how enrollment or staffing targets are shown in the grid or panel, update any related legend or key.
 
-## Sub Finder: declined-all contact status
+## Sub Finder: contact status and per-shift display
 
 - **Do not show declined subs as available.** When a sub’s contact status is “Declined all” (`response_status` / `declined_all`), the Contact Sub panel must not show them as available for any shift: the request summary and shift-assignment cards should show them as unavailable (e.g. gray card border, “Unavailable” chip, no match %). Use the copy “This sub has declined all shifts.” instead of “This sub is available for X of Y remaining shifts.”
 - **Refresh when moving off declined.** When the user changes contact status from “Declined all” to “Not contacted”, “Pending”, or “Confirmed”, refresh the contact panel (e.g. via `onAssignmentComplete`) so availability and shift coverage are shown again.
+- **Confirmed per shift only.** When showing contacted subs on detail shift cards (e.g. “Show shifts detail”), show a sub as **confirmed** only for the specific shift they are assigned to. If a sub is confirmed/assigned for a different shift in the same absence, treat them as **declined** for all other shifts (they are no longer available for those). Pending and declined_all apply per contact, not per shift.
 - **Tests.** ContactSubPanel tests should cover: request summary shows “This sub has declined all shifts.” when status is declined_all; shift cards show unavailable when declined_all; changing from declined to another status triggers refresh.
 
 ## Database migrations
