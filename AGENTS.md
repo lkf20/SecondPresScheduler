@@ -139,6 +139,12 @@ When adding a new UI element (e.g. a chip, badge, or label):
 - **Staffing overrides:** A cell can override the auto-calculated required/preferred staff with `schedule_cells.required_staff_override` and `preferred_staff_override` (e.g. for nap time or combined groups). When set, these overrides are used instead of the ratio-based calculation. Use the shared helper `getTotalEnrollmentForCalculation` (from `ScheduleSidePanel`) for total enrollment and apply overrides in all places that compute or display required/preferred staff (ScheduleCell, ScheduleSidePanel, dashboard overview, slot-run, flex availability, baseline-schedule filtering).
 - **Legends:** If you add or change how enrollment or staffing targets are shown in the grid or panel, update any related legend or key.
 
+## Sub Finder: declined-all contact status
+
+- **Do not show declined subs as available.** When a sub’s contact status is “Declined all” (`response_status` / `declined_all`), the Contact Sub panel must not show them as available for any shift: the request summary and shift-assignment cards should show them as unavailable (e.g. gray card border, “Unavailable” chip, no match %). Use the copy “This sub has declined all shifts.” instead of “This sub is available for X of Y remaining shifts.”
+- **Refresh when moving off declined.** When the user changes contact status from “Declined all” to “Not contacted”, “Pending”, or “Confirmed”, refresh the contact panel (e.g. via `onAssignmentComplete`) so availability and shift coverage are shown again.
+- **Tests.** ContactSubPanel tests should cover: request summary shows “This sub has declined all shifts.” when status is declined_all; shift cards show unavailable when declined_all; changing from declined to another status triggers refresh.
+
 ## Database migrations
 
 To run migrations against the **staging** database:

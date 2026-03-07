@@ -24,7 +24,7 @@ When the director opens Sub Finder and selects an absence, the recommended sub c
 ### 3. Contact info (phone and email)
 
 - [ ] **Source:** Phone and email come from the staff table (same source). Both are returned by the find-subs API and displayed on cards.
-- [ ] **Placement:** Phone and email appear at the bottom of the card (in the contact row with "Contact & Assign"). Contact block in the header is hidden (`hideContactInHeader`).
+- [ ] **Placement:** Phone and email appear at the bottom of the card (in the contact row with an action button). Contact block in the header is hidden (`hideContactInHeader`). Recommended/available cards use "Contact & Assign"; declined cards use "Update" (teal-style button, background matches card on declined).
 - [ ] **Formatting:** Phone is formatted with `formatUSPhone`. Email is shown as-is with mailto link when present.
 - [ ] **Recommended combination:** Recommended subs (top section) receive email from `SubAssignment` or fallback to full sub data from `allSubs`; email displays when present in the database.
 

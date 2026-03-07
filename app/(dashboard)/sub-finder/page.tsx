@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { ChevronDown, ChevronLeft, ChevronUp, RefreshCw, Search, X } from 'lucide-react'
+import { ArrowRight, ChevronDown, ChevronLeft, ChevronUp, RefreshCw, Search, X } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Dialog,
@@ -168,6 +168,12 @@ export default function SubFinderPage() {
   const [manualSelectedShifts, setManualSelectedShifts] = useState<
     Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
   >([])
+  const onManualShiftsChange = useCallback(
+    (shifts: Array<{ date: string; day_of_week_id: string; time_slot_id: string }>) => {
+      setManualSelectedShifts(shifts)
+    },
+    []
+  )
   const [manualTeacherSearch, setManualTeacherSearch] = useState('')
   const [isManualTeacherSearchOpen, setIsManualTeacherSearchOpen] = useState(false)
   const subSearchRef = useRef<HTMLDivElement | null>(null)
@@ -1631,9 +1637,7 @@ export default function SubFinderPage() {
                       startDate={manualStartDate}
                       endDate={manualEndDate || manualStartDate}
                       selectedShifts={manualSelectedShifts}
-                      onShiftsChange={shifts => {
-                        setManualSelectedShifts(shifts)
-                      }}
+                      onShiftsChange={onManualShiftsChange}
                       autoSelectScheduled
                       tableClassName="text-xs [&_th]:px-2 [&_td]:px-2"
                     />
@@ -1741,7 +1745,6 @@ export default function SubFinderPage() {
                           allSubs={allSubs}
                           allShifts={visibleShiftDetails}
                           includePastShifts={includePastShifts}
-                          onShowAllSubs={openAllSubsPanel}
                         />
                       </div>
                     </>
@@ -2034,7 +2037,7 @@ export default function SubFinderPage() {
                 >
                   <div className="pt-10 pb-0">
                     {/* Header Row */}
-                    <div className="mb-5">
+                    <div className="mb-2">
                       <h2 className="text-xl font-semibold flex flex-wrap items-center gap-2">
                         <span>Sub Finder</span>
                         <span className="text-muted-foreground">→</span>
@@ -2068,7 +2071,7 @@ export default function SubFinderPage() {
                     </div>
 
                     {visibleShiftSummary && visibleShiftSummary.total > 0 && (
-                      <div className="mt-4 mb-2 flex flex-wrap items-end justify-between gap-4">
+                      <div className="mt-1 mb-2 flex flex-wrap items-end justify-between gap-4">
                         <CoverageSummary
                           shifts={visibleShiftSummary}
                           onShiftClick={handleShiftClick}
@@ -2160,27 +2163,36 @@ export default function SubFinderPage() {
                         allSubs={allSubs}
                         allShifts={visibleShiftDetails}
                         includePastShifts={includePastShifts}
-                        onShowAllSubs={openAllSubsPanel}
                       />
                     </div>
                   </>
                 ) : null}
 
-                <div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => setIsMiddleShiftListExpanded(prev => !prev)}
-                    className="inline-flex items-center gap-2 rounded-full border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    className="inline-flex items-center gap-2 rounded-full border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50"
                   >
-                    {isMiddleShiftListExpanded ? 'Hide shifts' : 'Show all shifts'}
+                    {isMiddleShiftListExpanded ? 'Hide shifts detail' : 'Show shifts detail'}
                     {isMiddleShiftListExpanded ? (
                       <ChevronUp className="h-3.5 w-3.5" />
                     ) : (
                       <ChevronDown className="h-3.5 w-3.5" />
                     )}
                   </Button>
+                  {displayRecommendedCombinations.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={openAllSubsPanel}
+                      className="inline-flex shrink-0 items-center gap-2 rounded-full border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Show all subs <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
 
                 {isMiddleShiftListExpanded && (
@@ -2327,7 +2339,7 @@ export default function SubFinderPage() {
               'shrink-0 flex-none border-l bg-white transition-all h-full overflow-hidden',
               SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-rose-500'
             )}
-            style={{ width: '540px' }}
+            style={{ width: '580px' }}
           >
             {selectedAbsence ? (
               <div

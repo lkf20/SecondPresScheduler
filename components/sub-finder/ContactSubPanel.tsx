@@ -19,6 +19,7 @@ import {
   ArrowRightLeft,
   X,
   XCircle,
+  Calendar,
 } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 import ShiftChips, { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
@@ -38,6 +39,7 @@ import {
   panelBackgrounds,
 } from '@/lib/utils/colors'
 import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
+import { cn } from '@/lib/utils'
 import { formatUSPhone } from '@/lib/utils/phone'
 import { toast } from 'sonner'
 import { useAssignSubShifts } from '@/lib/hooks/use-sub-assignment-mutations'
@@ -253,6 +255,7 @@ export default function ContactSubPanel({
   } | null>(null)
   const [timeSlotOrderByCode, setTimeSlotOrderByCode] = useState<Record<string, number>>({})
   const applyContactStatusChange = (nextStatus: ContactStatus) => {
+    const wasDeclinedAll = responseStatus === 'declined_all'
     const mapped = mapContactStatusToLegacy(nextStatus)
     setIsContacted(mapped.is_contacted)
     setResponseStatus(mapped.response_status)
@@ -262,6 +265,10 @@ export default function ContactSubPanel({
     if (nextStatus === 'declined_all') {
       setSelectedShifts(new Set())
       setOverriddenShiftIds(new Set())
+    }
+    // When changing from declined to confirmed/pending/not contacted, refresh so availability is shown again.
+    if (wasDeclinedAll && nextStatus !== 'declined_all' && onAssignmentComplete) {
+      onAssignmentComplete()
     }
   }
   useEffect(() => {
@@ -419,38 +426,12 @@ export default function ContactSubPanel({
     }
   }, [responseStatus])
 
-  // Use cached contact data if available, otherwise fetch
-  // Coverage Summary and Shift Assignments can display immediately using sub prop
+  // When panel opens, use cached data for immediate paint but always refetch so we never show stale contact status (e.g. after marking as declined).
+  // Depend only on stable primitives (isOpen, sub.id, absence.id) to avoid "Maximum update depth exceeded" when parent re-renders with new object references.
+  const subId = sub?.id
+  const absenceId = absence?.id
   useEffect(() => {
     if (!isOpen || !sub || !absence) return
-
-    // If we have cached data, use it immediately
-    if (initialContactData) {
-      setContactId(initialContactData.id)
-      setIsContacted(initialContactData.is_contacted ?? false)
-      setContactedAt(initialContactData.contacted_at)
-      setResponseStatus(normalizeResponseStatus(initialContactData.response_status))
-      setNotes(initialContactData.notes || '')
-      setCoverageRequestId(initialContactData.coverage_request_id || null)
-
-      applyShiftSelections(initialContactData)
-      // If no shift_overrides, keep the initial selection from can_cover (unless declined_all)
-
-      // Still check if sub is inactive (this is quick and doesn't block UI)
-      fetch(`/api/subs/${sub.id}`)
-        .then(res => (res.ok ? res.json() : null))
-        .then(subData => {
-          if (subData) {
-            setIsSubInactive(!subData.active)
-          }
-        })
-        .catch(() => {
-          // Ignore errors for inactive check
-        })
-
-      setFetching(false)
-      return
-    }
 
     if (absence.id.startsWith('manual-')) {
       setCoverageRequestId(null)
@@ -458,14 +439,29 @@ export default function ContactSubPanel({
       return
     }
 
-    // No cached data - fetch it
+    // Optional: use cached data for immediate display to avoid loading flash
+    if (initialContactData) {
+      setContactId(initialContactData.id)
+      setIsContacted(initialContactData.is_contacted ?? false)
+      setContactedAt(initialContactData.contacted_at)
+      setResponseStatus(normalizeResponseStatus(initialContactData.response_status))
+      setNotes(initialContactData.notes || '')
+      setCoverageRequestId(initialContactData.coverage_request_id || null)
+      applyShiftSelections(initialContactData)
+      fetch(`/api/subs/${sub.id}`)
+        .then(res => (res.ok ? res.json() : null))
+        .then(subData => {
+          if (subData) setIsSubInactive(!subData.active)
+        })
+        .catch(() => {})
+    }
+
     const fetchContactData = async () => {
-      setFetching(true)
+      if (!initialContactData) setFetching(true)
       try {
-        // Fetch coverage_request_id and shift map in parallel with contact data
         const [coverageResponse, subResponse] = await Promise.all([
           fetch(`/api/sub-finder/coverage-request/${absence.id}`),
-          fetch(`/api/subs/${sub.id}`).catch(() => null), // Optional: check if sub is inactive
+          fetch(`/api/subs/${sub.id}`).catch(() => null),
         ])
 
         if (!coverageResponse.ok) {
@@ -479,13 +475,11 @@ export default function ContactSubPanel({
         const coverageData = await coverageResponse.json()
         setCoverageRequestId(coverageData.coverage_request_id)
 
-        // Check if sub is inactive
         if (subResponse?.ok) {
           const subData = await subResponse.json()
           setIsSubInactive(!subData.active)
         }
 
-        // Get or create substitute contact
         const contactResponse = await fetch(
           `/api/sub-finder/substitute-contacts?coverage_request_id=${coverageData.coverage_request_id}&sub_id=${sub.id}`
         )
@@ -497,9 +491,7 @@ export default function ContactSubPanel({
             setContactedAt(contactData.contacted_at)
             setResponseStatus(normalizeResponseStatus(contactData.response_status))
             setNotes(contactData.notes || '')
-
             applyShiftSelections(contactData)
-            // If no shift_overrides, keep the initial selection from can_cover (unless declined_all)
           }
         }
       } catch (error) {
@@ -510,7 +502,7 @@ export default function ContactSubPanel({
     }
 
     fetchContactData()
-  }, [isOpen, sub, absence, initialContactData])
+  }, [isOpen, subId, absenceId])
 
   // Fetch remaining shifts for the coverage request (computed server-side)
   useEffect(() => {
@@ -1046,20 +1038,16 @@ export default function ContactSubPanel({
         // Build empty shift overrides array
         const shiftOverrides: ShiftOverride[] = []
 
-        // Get or create contact first if we don't have contactId
-        let currentContactId = contactId
-        if (!currentContactId) {
-          const getContactResponse = await fetch(
-            `/api/sub-finder/substitute-contacts?coverage_request_id=${coverageRequestId}&sub_id=${sub.id}`
-          )
-          if (getContactResponse.ok) {
-            const contactData = await getContactResponse.json()
-            currentContactId = contactData.id
-            setContactId(currentContactId)
-          } else {
-            throw new Error('Failed to get or create contact')
-          }
+        // Always resolve contact by current coverage request so we never PUT a stale id (e.g. from another absence).
+        const getContactResponse = await fetch(
+          `/api/sub-finder/substitute-contacts?coverage_request_id=${coverageRequestId}&sub_id=${sub.id}`
+        )
+        if (!getContactResponse.ok) {
+          throw new Error('Failed to get or create contact')
         }
+        const contactData = await getContactResponse.json()
+        const currentContactId = contactData.id
+        setContactId(currentContactId)
 
         // Update contact with declined status and empty shift overrides
         const updateResponse = await fetch('/api/sub-finder/substitute-contacts', {
@@ -1166,6 +1154,10 @@ export default function ContactSubPanel({
       return derivedShiftKeys.has(shiftKey)
     }) || []
 
+  // When sub has declined all, do not show them as available for any shift (display only).
+  const effectiveRemainingShiftsCovered =
+    responseStatus === 'declined_all' ? 0 : remainingCanCover.length
+
   const remainingShifts =
     remainingShiftCount !== null
       ? remainingShiftCount
@@ -1173,6 +1165,10 @@ export default function ContactSubPanel({
         ? sub.remaining_shift_count
         : sub.total_shifts
   const remainingShiftsCovered = remainingCanCover.length
+  const matchPercent =
+    remainingShifts > 0 && responseStatus !== 'declined_all'
+      ? Math.round((remainingShiftsCovered / remainingShifts) * 100)
+      : null
   const requestShiftDetails = (() => {
     const details = absence.shifts?.shift_details || []
     return [...details].sort((a, b) => {
@@ -1189,9 +1185,21 @@ export default function ContactSubPanel({
       return a.time_slot_code.localeCompare(b.time_slot_code)
     })
   })()
+  // When sub has declined all, do not show them as covering any shift in the request summary.
+  const requestShiftDetailsForDisplay =
+    responseStatus === 'declined_all'
+      ? requestShiftDetails.map(shift => {
+          const s = shift as typeof shift & { sub_id?: string | null }
+          const assignedToThisSub = s.sub_id === sub.id || shift.sub_name === sub.name
+          if (assignedToThisSub) {
+            return { ...shift, status: 'uncovered' as const, sub_name: null, sub_id: null }
+          }
+          return shift
+        })
+      : requestShiftDetails
   const requestTotalShifts = requestShiftDetails.length || remainingShifts
-  const requestAssignedCount = requestShiftDetails.length
-    ? requestShiftDetails.filter(shift => shift.status !== 'uncovered').length
+  const requestAssignedCount = requestShiftDetailsForDisplay.length
+    ? requestShiftDetailsForDisplay.filter(shift => shift.status !== 'uncovered').length
     : assignedShifts.length
   const requestUncoveredCount = Math.max(0, requestTotalShifts - requestAssignedCount)
   const assignedShiftByKey = (() => {
@@ -1201,8 +1209,21 @@ export default function ContactSubPanel({
     })
     return map
   })()
+  const toShiftKeyNormalized = (date: string, time_slot_code: string) => {
+    try {
+      const d = parseLocalDate(String(date).trim())
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${y}-${m}-${day}|${String(time_slot_code).trim()}`
+    } catch {
+      return `${String(date).trim()}|${String(time_slot_code).trim()}`
+    }
+  }
   const canCoverShiftKeys = (() => {
-    return new Set((sub.can_cover || []).map(shift => `${shift.date}|${shift.time_slot_code}`))
+    return new Set(
+      (sub.can_cover || []).map(shift => toShiftKeyNormalized(shift.date, shift.time_slot_code))
+    )
   })()
   const cannotCoverReasonByKey = (() => {
     const map = new Map<string, string>()
@@ -1355,7 +1376,7 @@ export default function ContactSubPanel({
       return {
         label: 'Pending',
         icon: Clock,
-        className: 'border-amber-200 bg-amber-50 text-amber-700',
+        className: 'border-sky-200 bg-sky-50 text-sky-700',
         style: undefined as React.CSSProperties | undefined,
       }
     }
@@ -1424,8 +1445,18 @@ export default function ContactSubPanel({
         )}
         {isInline ? (
           <div className="text-left">
-            <div className="text-2xl font-semibold text-slate-900 mb-1">{sub.name}</div>
-            <div className="mt-2">
+            <div className="text-2xl font-semibold text-slate-900 mb-1">
+              Assign {sub.name} to sub for {absence.teacher_name}
+            </div>
+            <p className="text-base text-muted-foreground mt-1 mb-0 inline-flex flex-wrap items-center gap-1.5">
+              {formatDateRange() && (
+                <>
+                  <Calendar className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <span>{formatDateRange()}</span>
+                </>
+              )}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 onClick={scrollToContactSummary}
@@ -1436,32 +1467,36 @@ export default function ContactSubPanel({
                 <statusBadge.icon className="h-3.5 w-3.5" />
                 <span>{statusBadge.label}</span>
               </button>
+              <span className="flex items-center gap-4 text-sm text-muted-foreground">
+                {sub.phone && (
+                  <span className="flex items-center gap-1.5">
+                    <Phone className="h-3.5 w-3.5" />
+                    <span>{formatUSPhone(sub.phone)}</span>
+                  </span>
+                )}
+                {sub.email && (
+                  <span className="flex items-center gap-1.5">
+                    <Mail className="h-3.5 w-3.5" />
+                    <span>{sub.email}</span>
+                  </span>
+                )}
+              </span>
             </div>
-            <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-              {sub.phone && (
-                <span className="flex items-center gap-1.5">
-                  <Phone className="h-3.5 w-3.5" />
-                  <span>{formatUSPhone(sub.phone)}</span>
-                </span>
-              )}
-              {sub.email && (
-                <span className="flex items-center gap-1.5">
-                  <Mail className="h-3.5 w-3.5" />
-                  <span>{sub.email}</span>
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground mt-2">
-              {formatDateRange() && <>{formatDateRange()} | </>}
-              {responseStatus === 'declined_all'
-                ? 'Declined all shifts'
-                : `Available for ${remainingShiftsCovered} of ${remainingShifts} remaining shifts`}
-            </p>
           </div>
         ) : (
           <SheetHeader className="text-left">
-            <SheetTitle className="text-2xl mb-1">{sub.name}</SheetTitle>
-            <div className="mt-2">
+            <SheetTitle className="text-2xl mb-1">
+              Assign {sub.name} to sub for {absence.teacher_name}
+            </SheetTitle>
+            <p className="text-base text-muted-foreground mt-1 mb-0 inline-flex flex-wrap items-center gap-1.5">
+              {formatDateRange() && (
+                <>
+                  <Calendar className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <span>{formatDateRange()}</span>
+                </>
+              )}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 onClick={scrollToContactSummary}
@@ -1472,50 +1507,49 @@ export default function ContactSubPanel({
                 <statusBadge.icon className="h-3.5 w-3.5" />
                 <span>{statusBadge.label}</span>
               </button>
+              <span className="flex items-center gap-4 text-sm text-muted-foreground">
+                {sub.phone && (
+                  <span className="flex items-center gap-1.5">
+                    <Phone className="h-3.5 w-3.5" />
+                    <span>{formatUSPhone(sub.phone)}</span>
+                  </span>
+                )}
+                {sub.email && (
+                  <span className="flex items-center gap-1.5">
+                    <Mail className="h-3.5 w-3.5" />
+                    <span>{sub.email}</span>
+                  </span>
+                )}
+              </span>
             </div>
-            <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-              {sub.phone && (
-                <span className="flex items-center gap-1.5">
-                  <Phone className="h-3.5 w-3.5" />
-                  <span>{formatUSPhone(sub.phone)}</span>
-                </span>
-              )}
-              {sub.email && (
-                <span className="flex items-center gap-1.5">
-                  <Mail className="h-3.5 w-3.5" />
-                  <span>{sub.email}</span>
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground mt-2">
-              {formatDateRange() && <>{formatDateRange()} | </>}
-              {responseStatus === 'declined_all'
-                ? 'Declined all shifts'
-                : `Available for ${remainingShiftsCovered} of ${remainingShifts} remaining shifts`}
-            </p>
           </SheetHeader>
         )}
       </div>
 
       <div className="px-6">
-        <div className="mt-6 flex flex-col gap-10">
-          {/* Declined Message */}
-          {responseStatus === 'declined_all' && (
-            <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
-              <p className="text-sm text-amber-800">
-                This sub has declined all shifts. Change response status to enable assignment.
-              </p>
-            </div>
-          )}
-
+        <div className="mt-6 flex flex-col">
           {/* Request Summary */}
           <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-2">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium">Request summary</h3>
-              <span className="text-sm text-muted-foreground">
-                {remainingShiftsCovered} of {remainingShifts} remaining shift
-                {remainingShifts === 1 ? '' : 's'}
-              </span>
+              <h3 className="text-base font-semibold text-slate-800">Request summary</h3>
+              {matchPercent !== null ? (
+                <span
+                  className={`inline-flex shrink-0 items-center gap-1.5 text-base font-medium tabular-nums ${matchPercent === 100 ? 'text-emerald-800' : 'text-amber-700'}`}
+                  aria-label={`${matchPercent}% match`}
+                >
+                  <CheckCircle
+                    className={`h-4 w-4 shrink-0 ${matchPercent === 100 ? 'text-emerald-700' : 'text-amber-500'}`}
+                    aria-hidden
+                  />
+                  {matchPercent}% match
+                </span>
+              ) : (
+                <span className="text-sm text-muted-foreground">
+                  {responseStatus === 'declined_all'
+                    ? 'Declined all'
+                    : `${effectiveRemainingShiftsCovered} of ${remainingShifts} remaining shift${remainingShifts === 1 ? '' : 's'}`}
+                </span>
+              )}
             </div>
             <div className="space-y-2 border-t pt-3">
               {requestShiftDetails.length > 0 ? (
@@ -1531,7 +1565,7 @@ export default function ContactSubPanel({
                     fully_covered: requestShiftDetails.filter(
                       shift => shift.status === 'fully_covered'
                     ).length,
-                    shift_details: requestShiftDetails.map((shift, index) => ({
+                    shift_details: requestShiftDetailsForDisplay.map((shift, index) => ({
                       id: `${shift.date}-${shift.time_slot_code}-${index}`,
                       date: shift.date,
                       day_name: shift.day_name || '',
@@ -1543,133 +1577,51 @@ export default function ContactSubPanel({
                   }}
                 />
               ) : null}
-              <p className="text-sm text-muted-foreground">
-                This sub is available for{' '}
-                <span className="font-semibold">{remainingShiftsCovered}</span> of{' '}
-                <span className="font-semibold">{remainingShifts}</span> remaining shift
-                {remainingShifts === 1 ? '' : 's'}.
+              <p className="text-lg text-muted-foreground">
+                {responseStatus === 'declined_all' ? (
+                  'This sub has declined all shifts.'
+                ) : (
+                  <>
+                    This sub is available for{' '}
+                    <span className="font-semibold">{effectiveRemainingShiftsCovered}</span> of{' '}
+                    <span className="font-semibold">{remainingShifts}</span> remaining shift
+                    {remainingShifts === 1 ? '' : 's'}.
+                  </>
+                )}
               </p>
             </div>
           </div>
 
-          {/* Contextual Warnings */}
-          {warnings.length > 0 && (
-            <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 space-y-1">
-              <div className="flex items-center gap-2 text-sm font-medium text-amber-800 mb-2">
-                <AlertTriangle className="h-4 w-4" />
-                <span>Important Information</span>
-              </div>
-              {warnings.map((warning, idx) => (
-                <p key={idx} className="text-sm text-amber-700">
-                  • {warning}
-                </p>
-              ))}
-            </div>
-          )}
-
-          {/* Contact Summary & Notes */}
-          <div
-            ref={contactSummaryRef}
-            className="order-2 mt-6 rounded-lg bg-white border border-gray-200 p-6 space-y-6"
-            style={{ order: 20 }}
-          >
-            <h3 className="text-sm font-medium mb-4">Contact Status</h3>
-            {fetching ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">Loading contact information...</p>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-4">
-                  {/* Contact Status */}
-                  <div className="space-y-2 pt-[5px] mt-[30px]">
-                    <RadioGroup
-                      value={currentContactStatus}
-                      onValueChange={(value: ContactStatus) => applyContactStatusChange(value)}
-                    >
-                      <div className="space-y-2">
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="not_contacted" id="contact_not_contacted" />
-                          <Label
-                            htmlFor="contact_not_contacted"
-                            className="font-normal cursor-pointer"
-                          >
-                            Not contacted
-                          </Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="pending" id="contact_pending" />
-                          <Label htmlFor="contact_pending" className="font-normal cursor-pointer">
-                            Pending
-                          </Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="confirmed" id="contact_confirmed" />
-                          <Label htmlFor="contact_confirmed" className="font-normal cursor-pointer">
-                            Confirmed (some or all shifts)
-                          </Label>
-                        </div>
-                        <div className="mt-3 pt-2">
-                          <div className="mb-2 w-1/3 border-t border-slate-200" />
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="declined_all" id="contact_declined_all" />
-                            <Label
-                              htmlFor="contact_declined_all"
-                              className={`font-normal cursor-pointer ${currentContactStatus === 'declined_all' ? 'text-rose-700' : 'text-slate-900'}`}
-                            >
-                              Declined all
-                            </Label>
-                          </div>
-                        </div>
-                      </div>
-                    </RadioGroup>
-                    {currentContactStatus !== 'not_contacted' && contactedAt && (
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Contact status updated {formatContactedTimestamp(contactedAt)}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-2 border-t pt-6">
-                  <Label htmlFor="notes" className="text-sm font-medium mb-2 block">
-                    Notes
-                  </Label>
-                  <Textarea
-                    id="notes"
-                    placeholder="Left voicemail… can do mornings only… prefers Orange room…"
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    rows={4}
-                    className="resize-none"
-                  />
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Shift Assignments */}
+          {/* Shift Assignments — mt-8 for consistent 2rem spacing from Request Summary */}
           {actionableShifts.length > 0 && (
-            <div
-              className="order-1 mt-6 rounded-lg bg-white border border-gray-200 p-6 space-y-6"
-              style={{ order: 10 }}
-            >
-              <h3 className="text-sm font-medium">Shift assignments</h3>
+            <div className="mt-8 rounded-lg bg-white border border-gray-200 p-6 space-y-6">
+              <h3 className="text-base font-semibold text-slate-800">Shift assignments</h3>
+              {responseStatus === 'declined_all' && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" aria-hidden />
+                  <p className="text-sm text-amber-800">
+                    This sub has declined all shifts. Change contact status below to enable
+                    assignment.
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {actionableShifts.map(shift => {
                   const shiftKey = `${shift.date}|${shift.time_slot_code}`
+                  const shiftKeyNorm = toShiftKeyNormalized(shift.date, shift.time_slot_code)
                   const assignedToThisSub = assignedShiftByKey.get(shiftKey)
                   const assignedElsewhere = !assignedToThisSub && Boolean(shift.sub_name)
                   const canCoverThisShift =
-                    canCoverShiftKeys.has(shiftKey) || Boolean(assignedToThisSub)
+                    (responseStatus === 'declined_all'
+                      ? false
+                      : canCoverShiftKeys.has(shiftKeyNorm)) || Boolean(assignedToThisSub)
                   const isOverridden = overriddenShiftIds.has(shiftKey)
                   const isSelected = selectedShifts.has(shiftKey)
                   const cannotCoverReason =
-                    cannotCoverReasonByKey.get(shiftKey) ||
-                    (!canCoverThisShift ? 'Unavailable for this shift' : null)
+                    responseStatus === 'declined_all'
+                      ? 'Declined this shift'
+                      : cannotCoverReasonByKey.get(shiftKey) ||
+                        (!canCoverThisShift ? 'Unavailable for this shift' : null)
                   const canAssignFromCheckbox =
                     !assignedToThisSub &&
                     !assignedElsewhere &&
@@ -1685,11 +1637,10 @@ export default function ContactSubPanel({
                     !assignedToThisSub && !assignedElsewhere && !canCoverThisShift
                   const cannotCoverMeta = getCannotCoverMeta(cannotCoverReason || null)
                   const canOverrideThisRow = cannotCoverMeta.canOverride
-                  const cardLeftBorderColor = canAssignFromCheckbox
-                    ? 'rgb(110, 231, 183)' // emerald-300
-                    : needsOverride
-                      ? 'rgb(203, 213, 225)' // slate-300
-                      : 'rgb(226, 232, 240)' // slate-200
+                  const isAvailableForShift = canCoverThisShift || assignedToThisSub || isOverridden
+                  const cardLeftBorderColor = isAvailableForShift
+                    ? 'rgb(110, 231, 183)' // emerald-300 (green when sub is available for this shift)
+                    : 'rgb(226, 232, 240)' // slate-200 (gray when not available)
 
                   return (
                     <div
@@ -1697,7 +1648,11 @@ export default function ContactSubPanel({
                       className="flex flex-col justify-between rounded-lg border border-l-4 border-slate-200 bg-slate-50 p-4 shadow-sm"
                       style={{ borderLeftColor: cardLeftBorderColor }}
                     >
-                      <div className="flex justify-center -mr-3 -mb-3 mb-2">
+                      <div
+                        className={`flex justify-center -mr-3 ${
+                          responseStatus === 'declined_all' ? '-mb-3 mb-0' : '-mb-3 mb-1'
+                        }`}
+                      >
                         <ShiftChips
                           canCover={[]}
                           cannotCover={[]}
@@ -1722,26 +1677,31 @@ export default function ContactSubPanel({
                         />
                       </div>
 
-                      <div className="text-center flex-grow flex flex-col justify-center mb-4 mt-2">
+                      <div
+                        className={`text-center flex-grow flex flex-col justify-center mb-1 ${
+                          responseStatus === 'declined_all' ? 'mt-0' : 'mt-1'
+                        }`}
+                      >
                         {assignedToThisSub ? (
                           <p className="text-sm text-emerald-700 font-medium">
                             Assigned to this sub
                           </p>
-                        ) : assignedElsewhere ? (
-                          <div className="flex flex-col items-center gap-1.5">
-                            <p className="text-sm text-slate-600">Assigned to {shift.sub_name}</p>
-                            {!canSwapToThisSub && (
-                              <span className="inline-flex items-center rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">
-                                {cannotCoverMeta.label}
-                              </span>
-                            )}
-                          </div>
-                        ) : cannotCoverReason && !isOverridden ? (
-                          <p className="text-sm text-slate-500">{cannotCoverReason}</p>
+                        ) : !assignedElsewhere &&
+                          (cannotCoverReason || responseStatus === 'declined_all') &&
+                          !isOverridden ? (
+                          <p
+                            className={`text-sm text-slate-500 ${
+                              responseStatus === 'declined_all' ? 'mt-0 mb-3' : ''
+                            }`}
+                          >
+                            {responseStatus === 'declined_all'
+                              ? 'Declined this shift'
+                              : cannotCoverReason}
+                          </p>
                         ) : null}
                       </div>
 
-                      <div className="mt-auto pt-3 border-t border-slate-200">
+                      <div className="mt-auto pt-2 border-t border-slate-200">
                         <div className="flex items-center justify-center gap-4">
                           {assignedToThisSub && (
                             <>
@@ -1766,7 +1726,7 @@ export default function ContactSubPanel({
                                 }
                                 className="text-teal-700 hover:text-teal-800 hover:bg-transparent px-0 h-auto font-medium hover:underline"
                               >
-                                Change Sub
+                                Replace with {sub.name}
                               </Button>
                             </>
                           )}
@@ -1775,15 +1735,21 @@ export default function ContactSubPanel({
                             <>
                               {!canSwapToThisSub && canOverrideThisRow && (
                                 <>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleToggleOverride(shiftKey)}
-                                    disabled={isSubInactive || responseStatus === 'declined_all'}
-                                    className="text-teal-700 hover:text-teal-800 hover:bg-transparent px-0 h-auto font-medium hover:underline"
-                                  >
-                                    {isOverridden ? 'Override on' : 'Override'}
-                                  </Button>
+                                  {responseStatus === 'declined_all' ? (
+                                    <span className="text-sm font-medium text-slate-500">
+                                      Locked
+                                    </span>
+                                  ) : (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleToggleOverride(shiftKey)}
+                                      disabled={isSubInactive}
+                                      className="text-teal-700 hover:text-teal-800 hover:bg-transparent px-0 h-auto font-medium hover:underline"
+                                    >
+                                      {isOverridden ? 'Override on' : 'Override'}
+                                    </Button>
+                                  )}
                                   <div className="w-px h-4 bg-slate-300" />
                                 </>
                               )}
@@ -1801,56 +1767,66 @@ export default function ContactSubPanel({
                                 disabled={!canSwapToThisSub}
                                 className="text-teal-700 hover:text-teal-800 hover:bg-transparent px-0 h-auto font-medium hover:underline disabled:opacity-50"
                               >
-                                Change Sub
+                                Replace with {sub.name}
                               </Button>
                             </>
                           )}
 
                           {!assignedToThisSub && !assignedElsewhere && (
                             <>
-                              {cannotCoverReason && (
+                              {responseStatus === 'declined_all' ? (
+                                <span className="text-sm font-medium text-slate-500">Locked</span>
+                              ) : (
                                 <>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleToggleOverride(shiftKey)}
-                                    disabled={
-                                      isSubInactive ||
-                                      responseStatus === 'declined_all' ||
-                                      !canOverrideThisRow
-                                    }
-                                    className="text-teal-700 hover:text-teal-800 hover:bg-transparent px-0 h-auto font-medium hover:underline disabled:opacity-50"
+                                  {cannotCoverReason && (
+                                    <>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleToggleOverride(shiftKey)}
+                                        disabled={isSubInactive || !canOverrideThisRow}
+                                        className="text-teal-700 hover:text-teal-800 hover:bg-transparent px-0 h-auto font-medium hover:underline disabled:opacity-50"
+                                      >
+                                        {isOverridden
+                                          ? 'Override on'
+                                          : canOverrideThisRow
+                                            ? 'Override'
+                                            : 'Locked'}
+                                      </Button>
+                                      <div className="w-px h-4 bg-slate-300" />
+                                    </>
+                                  )}
+                                  <label
+                                    className={`inline-flex items-center justify-center gap-2 text-sm ${
+                                      canAssignFromCheckbox
+                                        ? 'cursor-pointer text-teal-700 hover:text-teal-800'
+                                        : 'cursor-not-allowed text-slate-400'
+                                    }`}
                                   >
-                                    {isOverridden
-                                      ? 'Override on'
-                                      : canOverrideThisRow
-                                        ? 'Override'
-                                        : 'Locked'}
-                                  </Button>
-                                  <div className="w-px h-4 bg-slate-300" />
+                                    <span className="font-medium hover:underline">Assign</span>
+                                    <Checkbox
+                                      checked={isSelected}
+                                      onCheckedChange={() =>
+                                        handleShiftToggle(
+                                          shiftKey,
+                                          canCoverThisShift || isOverridden
+                                        )
+                                      }
+                                      disabled={!canAssignFromCheckbox}
+                                      className={
+                                        canAssignFromCheckbox
+                                          ? '!border focus-visible:!ring-2 focus-visible:!ring-[#0d9488] data-[state=checked]:!bg-[#0d9488] data-[state=checked]:!border-[#0d9488] data-[state=checked]:text-white'
+                                          : ''
+                                      }
+                                      style={
+                                        canAssignFromCheckbox
+                                          ? { borderColor: '#0d9488', borderWidth: 1 }
+                                          : undefined
+                                      }
+                                    />
+                                  </label>
                                 </>
                               )}
-                              <label
-                                className={`inline-flex items-center justify-center gap-2 text-sm ${
-                                  canAssignFromCheckbox
-                                    ? 'cursor-pointer text-teal-700 hover:text-teal-800'
-                                    : 'cursor-not-allowed text-slate-400'
-                                }`}
-                              >
-                                <span className="font-medium hover:underline">Assign</span>
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={() =>
-                                    handleShiftToggle(shiftKey, canCoverThisShift || isOverridden)
-                                  }
-                                  disabled={!canAssignFromCheckbox}
-                                  className={
-                                    canAssignFromCheckbox
-                                      ? 'border-teal-500 data-[state=checked]:bg-teal-600 data-[state=checked]:border-teal-600'
-                                      : ''
-                                  }
-                                />
-                              </label>
                             </>
                           )}
                         </div>
@@ -1861,6 +1837,178 @@ export default function ContactSubPanel({
               </div>
             </div>
           )}
+
+          {/* Contextual Warnings — mt-8 for consistent 2rem spacing */}
+          {warnings.length > 0 && (
+            <div className="mt-8 rounded-lg bg-amber-50 border border-amber-200 p-4 space-y-1">
+              <div className="flex items-center gap-2 text-sm font-medium text-amber-800 mb-2">
+                <AlertTriangle className="h-4 w-4" />
+                <span>Important Information</span>
+              </div>
+              {warnings.map((warning, idx) => (
+                <p key={idx} className="text-sm text-amber-700">
+                  • {warning}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {/* Contact Summary & Notes — mt-8 for consistent 2rem spacing */}
+          <div
+            ref={contactSummaryRef}
+            className="mt-8 rounded-lg bg-white border border-gray-200 p-6 space-y-6"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+              <h3 className="text-base font-semibold text-slate-800">Contact Status</h3>
+              {!fetching && currentContactStatus !== 'not_contacted' && contactedAt && (
+                <span className="text-sm text-muted-foreground">
+                  Updated {formatContactedTimestamp(contactedAt)}
+                </span>
+              )}
+            </div>
+            {fetching ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">Loading contact information...</p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1">
+                  <RadioGroup
+                    value={currentContactStatus}
+                    onValueChange={(value: ContactStatus) => applyContactStatusChange(value)}
+                    className="space-y-1"
+                  >
+                    <Label
+                      htmlFor="contact_not_contacted"
+                      onClick={() => applyContactStatusChange('not_contacted')}
+                      className={cn(
+                        'flex w-full cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-shadow hover:shadow-sm',
+                        currentContactStatus === 'not_contacted'
+                          ? 'border-slate-400 bg-slate-100 shadow-sm'
+                          : 'border-slate-200 bg-transparent hover:bg-slate-100'
+                      )}
+                    >
+                      <RadioGroupItem
+                        value="not_contacted"
+                        id="contact_not_contacted"
+                        className="shrink-0"
+                      />
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100">
+                        <PhoneOff className="h-5 w-5 text-slate-600" aria-hidden />
+                      </span>
+                      <span
+                        className={cn(
+                          'text-base text-slate-800',
+                          currentContactStatus === 'not_contacted' ? 'font-medium' : 'font-normal'
+                        )}
+                      >
+                        Not contacted
+                      </span>
+                    </Label>
+
+                    <Label
+                      htmlFor="contact_pending"
+                      onClick={() => applyContactStatusChange('pending')}
+                      className={cn(
+                        'flex w-full cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-shadow hover:shadow-sm',
+                        currentContactStatus === 'pending'
+                          ? 'border-sky-400 bg-sky-50 shadow-sm'
+                          : 'border-slate-200 bg-transparent hover:bg-sky-50'
+                      )}
+                    >
+                      <RadioGroupItem value="pending" id="contact_pending" className="shrink-0" />
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-50">
+                        <Clock className="h-5 w-5 text-sky-700" aria-hidden />
+                      </span>
+                      <span
+                        className={cn(
+                          'text-base text-slate-800',
+                          currentContactStatus === 'pending' ? 'font-medium' : 'font-normal'
+                        )}
+                      >
+                        Pending
+                      </span>
+                    </Label>
+
+                    <Label
+                      htmlFor="contact_confirmed"
+                      onClick={() => applyContactStatusChange('confirmed')}
+                      className={cn(
+                        'flex w-full cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-shadow hover:shadow-sm',
+                        currentContactStatus === 'confirmed'
+                          ? 'border-emerald-400 bg-emerald-50 shadow-sm'
+                          : 'border-slate-200 bg-transparent hover:bg-emerald-50'
+                      )}
+                    >
+                      <RadioGroupItem
+                        value="confirmed"
+                        id="contact_confirmed"
+                        className="shrink-0"
+                      />
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50">
+                        <CheckCircle className="h-5 w-5 text-emerald-700" aria-hidden />
+                      </span>
+                      <span
+                        className={cn(
+                          'text-base text-slate-800',
+                          currentContactStatus === 'confirmed' ? 'font-medium' : 'font-normal'
+                        )}
+                      >
+                        Confirmed (some or all shifts)
+                      </span>
+                    </Label>
+
+                    <Label
+                      htmlFor="contact_declined_all"
+                      onClick={() => applyContactStatusChange('declined_all')}
+                      className={cn(
+                        'flex w-full cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-shadow hover:shadow-sm',
+                        currentContactStatus === 'declined_all'
+                          ? 'border-rose-400 bg-rose-50 shadow-sm'
+                          : 'border-slate-200 bg-transparent hover:bg-rose-50'
+                      )}
+                    >
+                      <RadioGroupItem
+                        value="declined_all"
+                        id="contact_declined_all"
+                        className="shrink-0"
+                      />
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-50">
+                        <XCircle className="h-5 w-5 text-rose-700" aria-hidden />
+                      </span>
+                      <span
+                        className={cn(
+                          'text-base',
+                          currentContactStatus === 'declined_all'
+                            ? 'font-medium text-rose-800'
+                            : 'font-normal text-slate-800'
+                        )}
+                      >
+                        Declined all
+                      </span>
+                    </Label>
+                  </RadioGroup>
+                </div>
+
+                <div className="space-y-2 border-t pt-6">
+                  <Label htmlFor="notes" className="text-sm font-medium mb-2 block">
+                    Notes
+                  </Label>
+                  <Textarea
+                    id="notes"
+                    placeholder="e.g. Left a voicemail"
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    rows={4}
+                    className="resize-none text-lg md:text-lg focus-visible:ring-0 focus-visible:ring-offset-0"
+                  />
+                </div>
+              </>
+            )}
+          </div>
 
           <Dialog
             open={Boolean(removeDialogShift)}

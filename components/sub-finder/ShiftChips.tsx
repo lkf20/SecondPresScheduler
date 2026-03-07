@@ -119,7 +119,8 @@ export function ShiftChipsLegend({ className }: { className?: string }) {
   }
   return (
     <div
-      className={cn('p-3 bg-white rounded-md border border-gray-200', className)}
+      className={cn('p-3 rounded-md border border-gray-200', className)}
+      style={{ backgroundColor: 'rgb(249, 250, 251)' }}
       role="img"
       aria-label="Legend: green = can cover, gray = cannot cover, Assigned Sub = chip with checkmark, amber dot = recommended assignment"
     >
@@ -128,28 +129,34 @@ export function ShiftChipsLegend({ className }: { className?: string }) {
           <span className="font-semibold text-gray-700">Key:</span>
         </div>
         <div className="flex items-center gap-2">
-          <div
-            className="w-3 h-3 rounded"
+          <span
+            aria-hidden="true"
+            className="inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium"
             style={{
               backgroundColor: legendAvailableColors.bg,
+              color: 'rgb(15, 118, 110)',
               borderWidth: '1px',
               borderStyle: 'solid',
               borderColor: legendAvailableColors.border,
             }}
-          />
-          <span className="text-gray-600">Can cover</span>
+          >
+            Can cover
+          </span>
         </div>
         <div className="flex items-center gap-2">
-          <div
-            className="w-3 h-3 rounded"
+          <span
+            aria-hidden="true"
+            className="inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium"
             style={{
               backgroundColor: shiftStatusColorValues.unavailable.bg,
+              color: shiftStatusColorValues.unavailable.text,
               borderWidth: '1px',
               borderStyle: 'solid',
               borderColor: shiftStatusColorValues.unavailable.border,
             }}
-          />
-          <span className="text-gray-600">Cannot cover</span>
+          >
+            Cannot cover
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <span
@@ -400,18 +407,30 @@ export default function ShiftChips({
                           (shift.status === 'covered' || shift.status === 'partial') &&
                           !!shift.assigned_sub_name)
                       const pillClassName =
-                        'mt-2 inline-flex min-w-0 max-w-full shrink-0 items-center truncate rounded-full border px-1.5 py-0.5 text-xs font-medium'
+                        'mt-2 inline-flex min-w-0 max-w-full shrink-0 items-center gap-1 truncate rounded-full border px-1.5 py-0.5 text-xs font-medium'
+                      const checkmarkSpan = (
+                        <span
+                          className="shrink-0 font-bold leading-none"
+                          style={{ fontSize: '10px' }}
+                        >
+                          ✓
+                        </span>
+                      )
                       if (shift.assignment_owner === 'this_sub') {
                         return (
                           <span className={pillClassName} style={assignedPillStyles.thisSub}>
-                            {thisSubName || 'This sub'}
+                            {checkmarkSpan}
+                            <span className="min-w-0 truncate">{thisSubName || 'This sub'}</span>
                           </span>
                         )
                       }
                       if (showOtherSubPill) {
                         return (
                           <span className={pillClassName} style={assignedPillStyles.thisSub}>
-                            {shift.assigned_sub_name || 'Other sub'}
+                            {checkmarkSpan}
+                            <span className="min-w-0 truncate">
+                              {shift.assigned_sub_name || 'Other sub'}
+                            </span>
                           </span>
                         )
                       }
@@ -495,28 +514,34 @@ export default function ShiftChips({
                 <span className="font-semibold text-gray-700">Key:</span>
               </div>
               <div className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded"
+                <span
+                  aria-hidden="true"
+                  className="inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium"
                   style={{
                     backgroundColor: legendAvailableColors.bg,
+                    color: 'rgb(15, 118, 110)',
                     borderWidth: '1px',
                     borderStyle: 'solid',
                     borderColor: legendAvailableColors.border,
                   }}
-                />
-                <span className="text-gray-600">Can cover</span>
+                >
+                  Can cover
+                </span>
               </div>
               <div className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded"
+                <span
+                  aria-hidden="true"
+                  className="inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium"
                   style={{
                     backgroundColor: shiftStatusColorValues.unavailable.bg,
+                    color: shiftStatusColorValues.unavailable.text,
                     borderWidth: '1px',
                     borderStyle: 'solid',
                     borderColor: shiftStatusColorValues.unavailable.border,
                   }}
-                />
-                <span className="text-gray-600">Cannot cover</span>
+                >
+                  Cannot cover
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <span

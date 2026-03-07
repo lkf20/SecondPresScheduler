@@ -93,7 +93,7 @@ export default function CoverageSummary({
   ) as string[]
   const headerLabel = headerText ?? `${uncovered} of ${totalShifts} Shifts Require Subs`
   const headerClass =
-    variant === 'compact' ? 'text-lg font-semibold text-slate-800' : getHeaderClasses('xl')
+    variant === 'compact' ? 'text-lg font-semibold text-slate-700' : getHeaderClasses('xl')
   return (
     <div
       className={cn(
@@ -103,7 +103,7 @@ export default function CoverageSummary({
       )}
     >
       {/* Header */}
-      <div className="mb-0 flex flex-wrap items-center gap-3">
+      <div className={cn('flex flex-wrap items-center gap-3', coveredCount > 0 ? 'mb-2' : 'mb-0')}>
         <div className={headerClass}>{headerLabel}</div>
         <div className="h-2 rounded-full overflow-hidden flex gap-0.5">
           {(
@@ -151,8 +151,8 @@ export default function CoverageSummary({
       </div>
 
       {coveredCount > 0 && (
-        <div className="mt-1 mb-0 text-lg text-muted-foreground">
-          {coveredCount} Shift{coveredCount === 1 ? '' : 's'} covered by{' '}
+        <div className="mt-0 mb-2 text-lg text-muted-foreground">
+          {coveredCount} shift{coveredCount === 1 ? '' : 's'} covered by{' '}
           {coveredSubNames.join(', ')}
         </div>
       )}

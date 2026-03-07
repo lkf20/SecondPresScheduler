@@ -3,6 +3,8 @@ import type { Config } from 'tailwindcss'
 const config: Config = {
   darkMode: ['class'],
   safelist: [
+    // Contact sub panel section spacing (explicit margin so spacing is reliable)
+    'mt-8',
     // Button variant="teal" (secondary outline)
     'border-teal-700',
     'text-teal-700',

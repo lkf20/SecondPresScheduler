@@ -5,7 +5,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
   AlertTriangle,
-  ArrowRight,
   CheckCircle,
   ChevronDown,
   ChevronUp,
@@ -150,23 +149,29 @@ export default function SubFinderCard({
     resolvedResponseStatus === 'pending' ||
     resolvedResponseStatus === 'confirmed' ||
     resolvedResponseStatus === 'declined_all'
-  const statusBadge = isAssigned
+  const statusBadge = isDeclined
     ? {
-        label: 'Assigned',
-        icon: CheckCircle,
-        className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+        label: 'Declined',
+        icon: XCircle,
+        className: 'border-rose-200 bg-rose-50 text-rose-600',
       }
-    : isContacted
+    : isAssigned
       ? {
-          label: 'Contacted',
-          icon: Phone,
-          className: 'border-sky-200 bg-sky-50 text-sky-700',
+          label: 'Assigned',
+          icon: CheckCircle,
+          className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
         }
-      : {
-          label: 'Not contacted',
-          icon: PhoneOff,
-          className: 'border-slate-200 bg-slate-100 text-slate-500',
-        }
+      : isContacted
+        ? {
+            label: 'Contacted',
+            icon: Phone,
+            className: 'border-sky-200 bg-sky-50 text-sky-700',
+          }
+        : {
+            label: 'Not contacted',
+            icon: PhoneOff,
+            className: 'border-slate-200 bg-slate-100 text-slate-500',
+          }
   const showCompactStatusBadge = condensedStatus || useStatusBadgeOnly
   const isCompactLayout = condensedStatus || useStatusBadgeOnly
   const hasRecommendedSubset = recommendedShiftCount !== undefined && recommendedShiftCount > 0
@@ -251,6 +256,33 @@ export default function SubFinderCard({
           </div>
         </div>
 
+        {/* Shifts dropdown: own row below sub name, left (declined / non-recommended cards only) */}
+        {!hasRecommendedSubset &&
+          allShifts &&
+          allShifts.length > 0 &&
+          (allCanCover.length > 0 || allCannotCover.length > 0) && (
+            <div className="flex items-center">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={event => {
+                  event.stopPropagation()
+                  setIsAllShiftsExpanded(!isAllShiftsExpanded)
+                }}
+                className="flex items-center gap-1.5 p-2 -ml-2 hover:bg-transparent hover:text-slate-700 text-sm font-medium text-slate-700 justify-start"
+              >
+                <span className="text-slate-400">Shifts</span>
+                <span className="inline-flex items-center">
+                  {isAllShiftsExpanded ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </span>
+              </Button>
+            </div>
+          )}
+
         {hasRecommendedSubset && orderedShiftsForStrip.length > 0 && (
           <div className="w-full mt-3 mb-2">
             <ShiftChips
@@ -274,10 +306,11 @@ export default function SubFinderCard({
                   }
                 }
                 if (assignedElsewhere) {
+                  const canCoverThisShift = thisSubCanCoverKeys.has(key)
                   return {
                     date: shift.date,
                     time_slot_code: shift.time_slot_code,
-                    status: 'unavailable' as const,
+                    status: canCoverThisShift ? ('available' as const) : ('unavailable' as const),
                     assignment_owner: 'other_sub' as const,
                     assigned_sub_name: shift.sub_name ?? null,
                     classroom_name: shift.classroom_name ?? null,
@@ -331,7 +364,7 @@ export default function SubFinderCard({
                     onContact?.()
                   }}
                 >
-                  Contact & Assign <ArrowRight className="h-3.5 w-3.5 ml-0.5" />
+                  Contact & Assign
                 </Button>
               </div>
             )}
@@ -456,82 +489,62 @@ export default function SubFinderCard({
           </div>
         )}
 
-        {/* View all shifts collapsible section and Contact & Assign button - hidden when all shifts already on card (recommended view) */}
-        {!hasRecommendedSubset &&
-          allShifts &&
+        {allShifts &&
           allShifts.length > 0 &&
-          (allCanCover.length > 0 || allCannotCover.length > 0) && (
-            <div
-              className={cn(
-                'mb-0 border-t border-slate-200 pt-4 flex flex-wrap items-center justify-between gap-4',
-                isCompactLayout ? '-mt-2' : '-mt-1'
+          (allCanCover.length > 0 || allCannotCover.length > 0) &&
+          isAllShiftsExpanded && (
+            <div className="mb-4 mt-1 border-t border-slate-200 pt-2">
+              {hasRecommendedSubset && (
+                <p className="mb-2 text-xs text-slate-500">
+                  Recommended shifts are marked with an amber dot.
+                </p>
               )}
-            >
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={event => {
-                    event.stopPropagation()
-                    setIsAllShiftsExpanded(!isAllShiftsExpanded)
-                  }}
-                  className="flex items-center gap-1.5 p-2 hover:bg-transparent hover:text-slate-700 text-sm font-medium text-slate-700 justify-start"
-                >
-                  <span className="text-slate-400">Shifts</span>
-                  <span className="inline-flex items-center">
-                    {isAllShiftsExpanded ? (
-                      <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </span>
-                </Button>
-                <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                  {phone && (
-                    <a
-                      href={`tel:+1${getPhoneDigits(phone).replace(/^1/, '')}`}
-                      className="inline-flex items-center gap-1.5 font-medium hover:text-slate-800 hover:underline"
-                      onClick={e => e.stopPropagation()}
-                    >
-                      <Phone className="h-4 w-4 text-slate-500 shrink-0" />
-                      {formatUSPhone(phone)}
-                    </a>
-                  )}
-                  {email && (
-                    <a
-                      href={`mailto:${email}`}
-                      className="inline-flex items-center gap-1.5 font-medium hover:text-slate-800 hover:underline"
-                      onClick={e => e.stopPropagation()}
-                    >
-                      <Mail className="h-4 w-4 text-slate-500 shrink-0" />
-                      {email}
-                    </a>
-                  )}
-                </div>
-              </div>
-              {onContact && (
-                <Button
-                  size="sm"
-                  variant="default"
-                  className="-mr-2 text-base shrink-0"
-                  onClick={event => {
-                    event.stopPropagation()
-                    onContact?.()
-                  }}
-                >
-                  Contact & Assign <ArrowRight className="h-3.5 w-3.5 ml-0.5" />
-                </Button>
-              )}
+              <ShiftChips
+                canCover={allCanCover}
+                cannotCover={allCannotCover}
+                thisSubName={name}
+                shifts={allShifts.map(shift => {
+                  const key = `${shift.date}|${shift.time_slot_code}`
+                  const canCoverThisSub =
+                    thisSubAssignedKeys.has(key) || thisSubCanCoverKeys.has(key)
+                  const assignedToThisSub = thisSubAssignedKeys.has(key)
+                  const assignedToOtherSub = shift.status !== 'uncovered' && !assignedToThisSub
+                  // Chip color reflects whether this sub can cover; if assigned elsewhere but sub can cover, show green
+                  const status = assignedToThisSub
+                    ? 'assigned'
+                    : canCoverThisSub
+                      ? 'available'
+                      : 'unavailable'
+                  return {
+                    date: shift.date,
+                    time_slot_code: shift.time_slot_code,
+                    status: status as 'assigned' | 'available' | 'unavailable',
+                    assignment_owner: assignedToThisSub
+                      ? ('this_sub' as const)
+                      : assignedToOtherSub
+                        ? ('other_sub' as const)
+                        : undefined,
+                    assigned_sub_name: assignedToOtherSub ? shift.sub_name || null : null,
+                    reason: thisSubCannotCoverReason.get(key),
+                    classroom_name: shift.classroom_name || null,
+                    class_name: shift.class_name || null,
+                    classroom_color: shift.classroom_color ?? null,
+                  }
+                })}
+                isDeclined={isDeclined}
+                recommendedShifts={hasRecommendedSubset ? (recommendedShifts ?? canCover) : []}
+                softAvailableStyle={softChipColors}
+                showLegend
+              />
             </div>
           )}
 
-        {/* Contact & Assign button when View all shifts is not shown (and not in recommended view; recommended has its own button below chips) */}
-        {!hasRecommendedSubset &&
-          (!allShifts ||
-            allShifts.length === 0 ||
-            (allCanCover.length === 0 && allCannotCover.length === 0)) &&
-          onContact && (
-            <div className="mt-4 mb-3 border-t border-slate-200 pt-4 flex flex-wrap items-center justify-between gap-3">
+        {/* Bottom section: divider above, then phone/email bottom left, Update / Contact & Assign right */}
+        {!hasRecommendedSubset && onContact && (
+          <div
+            className={cn('mt-6 border-t border-slate-200 pt-4 pb-4', isCompactLayout && '-mt-2')}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
                 {phone && (
                   <a
@@ -556,68 +569,21 @@ export default function SubFinderCard({
               </div>
               <Button
                 size="sm"
-                variant="default"
-                className="-mr-2 text-base shrink-0"
+                variant="teal"
+                className={cn(
+                  'text-base shrink-0',
+                  isDeclined && 'bg-slate-100 hover:bg-teal-700 hover:text-white'
+                )}
                 onClick={event => {
                   event.stopPropagation()
                   onContact?.()
                 }}
               >
-                Contact & Assign <ArrowRight className="h-3.5 w-3.5 ml-0.5" />
+                {isDeclined ? 'Update' : 'Contact & Assign'}
               </Button>
             </div>
-          )}
-
-        {allShifts &&
-          allShifts.length > 0 &&
-          (allCanCover.length > 0 || allCannotCover.length > 0) &&
-          isAllShiftsExpanded && (
-            <div className="mb-4 mt-1 border-t border-slate-200 pt-2">
-              {hasRecommendedSubset && (
-                <p className="mb-2 text-xs text-slate-500">
-                  Recommended shifts are marked with an amber dot.
-                </p>
-              )}
-              <ShiftChips
-                canCover={allCanCover}
-                cannotCover={allCannotCover}
-                thisSubName={name}
-                shifts={allShifts.map(shift => {
-                  const key = `${shift.date}|${shift.time_slot_code}`
-                  const canCoverThisSub =
-                    thisSubAssignedKeys.has(key) || thisSubCanCoverKeys.has(key)
-                  const assignedToThisSub = thisSubAssignedKeys.has(key)
-                  const assignedToOtherSub = shift.status !== 'uncovered' && !assignedToThisSub
-                  const status = assignedToThisSub
-                    ? 'assigned'
-                    : assignedToOtherSub
-                      ? 'unavailable'
-                      : canCoverThisSub
-                        ? 'available'
-                        : 'unavailable'
-                  return {
-                    date: shift.date,
-                    time_slot_code: shift.time_slot_code,
-                    status: status as 'assigned' | 'available' | 'unavailable',
-                    assignment_owner: assignedToThisSub
-                      ? ('this_sub' as const)
-                      : assignedToOtherSub
-                        ? ('other_sub' as const)
-                        : undefined,
-                    assigned_sub_name: assignedToOtherSub ? shift.sub_name || null : null,
-                    reason: thisSubCannotCoverReason.get(key),
-                    classroom_name: shift.classroom_name || null,
-                    class_name: shift.class_name || null,
-                    classroom_color: shift.classroom_color ?? null,
-                  }
-                })}
-                isDeclined={isDeclined}
-                recommendedShifts={hasRecommendedSubset ? (recommendedShifts ?? canCover) : []}
-                softAvailableStyle={softChipColors}
-                showLegend
-              />
-            </div>
-          )}
+          </div>
+        )}
       </CardContent>
     </Card>
   )

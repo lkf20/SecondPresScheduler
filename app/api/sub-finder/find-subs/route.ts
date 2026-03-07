@@ -173,8 +173,39 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Get coverage_request_id to fetch class group info
-    const coverageRequestId = (timeOffRequest as any).coverage_request_id
+    // Get coverage_request_id to fetch class group info and contact status.
+    // If missing on the time_off_request, resolve via coverage-request API (get-or-create) so we use the same id as the contact panel.
+    let coverageRequestId = (timeOffRequest as any).coverage_request_id
+    if (!coverageRequestId) {
+      try {
+        const base = new URL(request.url).origin
+        const res = await fetch(`${base}/api/sub-finder/coverage-request/${absence_id}`, {
+          headers: { cookie: request.headers.get('cookie') || '' },
+        })
+        if (res.ok) {
+          const data = await res.json()
+          coverageRequestId = data.coverage_request_id ?? null
+          if (shouldDebugLog && coverageRequestId) {
+            console.debug(
+              '[find-subs] resolved coverage_request_id=',
+              coverageRequestId,
+              'for absence_id=',
+              absence_id
+            )
+          }
+        }
+      } catch (e) {
+        logFindSubsError('Failed to resolve coverage_request_id for absence', absence_id, e)
+      }
+    }
+    if (shouldDebugLog) {
+      console.debug(
+        '[find-subs] absence_id=',
+        body.absence_id,
+        'coverage_request_id=',
+        coverageRequestId ?? '(null)'
+      )
+    }
 
     // Get coverage_request_shifts with class group info and create shift ID map
     const classGroupInfoMap = new Map<
@@ -662,6 +693,13 @@ export async function POST(request: NextRequest) {
                     : null
                 contactNotes = contact.notes ?? null
                 isContacted = contact.is_contacted === true
+                if (shouldDebugLog && contact.response_status === 'declined_all') {
+                  console.debug(
+                    '[find-subs] sub_id=',
+                    sub.id,
+                    'response_status=declined_all (from DB)'
+                  )
+                }
               }
             } catch {
               // Contact doesn't exist yet, which is fine

@@ -285,6 +285,16 @@ describe('ContactSubPanel', () => {
           teacher_name: 'Teacher One',
           start_date: '2026-02-09',
           end_date: '2026-02-09',
+          shifts: {
+            shift_details: [
+              {
+                date: '2026-02-09',
+                day_name: 'Monday',
+                time_slot_code: 'EM',
+                status: 'uncovered' as const,
+              },
+            ],
+          },
         }}
         initialContactData={{
           id: 'contact-1',
@@ -302,6 +312,119 @@ describe('ContactSubPanel', () => {
     await waitFor(() => {
       expect(screen.getByText(/declining all shifts/i)).toBeInTheDocument()
     })
+    expect(screen.getByText('This sub has declined all shifts.')).toBeInTheDocument()
+    expect(
+      screen.queryByText(/this sub is available for \d+ of \d+ remaining shift/)
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows Notes textarea with placeholder "e.g. Left a voicemail"', async () => {
+    render(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        variant="inline"
+        sub={baseSub}
+        absence={baseAbsence}
+        initialContactData={{
+          id: 'contact-1',
+          is_contacted: false,
+          contacted_at: null,
+          response_status: 'none',
+          notes: '',
+          coverage_request_id: 'coverage-1',
+          selected_shift_keys: [],
+          override_shift_keys: [],
+        }}
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Contact Status')).toBeInTheDocument()
+    })
+
+    const notesField = screen.getByPlaceholderText('e.g. Left a voicemail')
+    expect(notesField).toBeInTheDocument()
+  })
+
+  it('calls onAssignmentComplete when contact status changes from Declined all to Not contacted', async () => {
+    const user = userEvent.setup()
+    const onAssignmentComplete = jest.fn()
+
+    const declinedContact = {
+      id: 'contact-1',
+      is_contacted: true,
+      contacted_at: '2026-02-09T12:00:00.000Z',
+      response_status: 'declined_all',
+      notes: '',
+      coverage_request_id: 'coverage-1',
+      selected_shift_keys: [] as string[],
+      override_shift_keys: [] as string[],
+    }
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/subs/')) {
+        return { ok: true, json: async () => ({ active: true }) } as Response
+      }
+      if (url.includes('/api/sub-finder/coverage-request/')) {
+        return {
+          ok: true,
+          json: async () => ({ coverage_request_id: 'coverage-1' }),
+        } as Response
+      }
+      if (url.includes('/api/sub-finder/substitute-contacts?')) {
+        return { ok: true, json: async () => declinedContact } as Response
+      }
+      return { ok: true, json: async () => ({}) } as Response
+    }) as jest.Mock
+
+    render(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        onAssignmentComplete={onAssignmentComplete}
+        variant="inline"
+        sub={{
+          id: 'sub-1',
+          name: 'Sally A.',
+          phone: '555-111-2222',
+          email: 'sally@example.com',
+          coverage_percent: 100,
+          shifts_covered: 1,
+          total_shifts: 1,
+          can_cover: [
+            { date: '2026-02-09', day_name: 'Monday', time_slot_code: 'EM', class_name: 'Infant' },
+          ],
+          cannot_cover: [],
+          assigned_shifts: [],
+        }}
+        absence={{
+          id: 'absence-1',
+          teacher_name: 'Teacher One',
+          start_date: '2026-02-09',
+          end_date: '2026-02-09',
+          shifts: {
+            shift_details: [
+              {
+                date: '2026-02-09',
+                day_name: 'Monday',
+                time_slot_code: 'EM',
+                status: 'uncovered' as const,
+              },
+            ],
+          },
+        }}
+        initialContactData={declinedContact}
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('This sub has declined all shifts.')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByLabelText(/not contacted/i))
+
+    expect(onAssignmentComplete).toHaveBeenCalled()
   })
 
   it('saves declined-all status and closes panel', async () => {
@@ -309,6 +432,16 @@ describe('ContactSubPanel', () => {
     const onClose = jest.fn()
     const onAssignmentComplete = jest.fn()
 
+    const declinedContact = {
+      id: 'contact-1',
+      is_contacted: true,
+      contacted_at: '2026-02-09T12:00:00.000Z',
+      response_status: 'declined_all',
+      notes: '',
+      coverage_request_id: 'coverage-1',
+      selected_shift_keys: [] as string[],
+      override_shift_keys: [] as string[],
+    }
     global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
 
@@ -319,10 +452,17 @@ describe('ContactSubPanel', () => {
         } as Response
       }
 
+      if (url.includes('/api/sub-finder/coverage-request/')) {
+        return {
+          ok: true,
+          json: async () => ({ coverage_request_id: 'coverage-1' }),
+        } as Response
+      }
+
       if (url.includes('/api/sub-finder/substitute-contacts?')) {
         return {
           ok: true,
-          json: async () => ({ id: 'contact-1' }),
+          json: async () => declinedContact,
         } as Response
       }
 
@@ -375,16 +515,7 @@ describe('ContactSubPanel', () => {
           start_date: '2026-02-09',
           end_date: '2026-02-09',
         }}
-        initialContactData={{
-          id: 'contact-1',
-          is_contacted: true,
-          contacted_at: '2026-02-09T12:00:00.000Z',
-          response_status: 'declined_all',
-          notes: '',
-          coverage_request_id: 'coverage-1',
-          selected_shift_keys: [],
-          override_shift_keys: [],
-        }}
+        initialContactData={declinedContact}
       />
     )
 
@@ -396,6 +527,71 @@ describe('ContactSubPanel', () => {
       expect(mockRefresh).toHaveBeenCalled()
       expect(onClose).toHaveBeenCalled()
     })
+  })
+
+  it('shows declined status when panel reopens after refetch (stale cache fix)', async () => {
+    // Simulate reopening the panel with stale initialContactData (e.g. not_contacted).
+    // The panel should refetch and then show declined_all when the API returns it.
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/subs/')) {
+        return { ok: true, json: async () => ({ active: true }) } as Response
+      }
+      if (url.includes('/api/sub-finder/coverage-request/')) {
+        return {
+          ok: true,
+          json: async () => ({ coverage_request_id: 'coverage-1' }),
+        } as Response
+      }
+      if (url.includes('/api/sub-finder/substitute-contacts?')) {
+        return {
+          ok: true,
+          json: async () => ({
+            id: 'contact-1',
+            is_contacted: true,
+            contacted_at: '2026-02-09T12:00:00.000Z',
+            response_status: 'declined_all',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: [],
+            override_shift_keys: [],
+          }),
+        } as Response
+      }
+      return { ok: true, json: async () => ({}) } as Response
+    }) as jest.Mock
+
+    render(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        variant="inline"
+        sub={baseSub}
+        absence={baseAbsence}
+        initialContactData={{
+          id: 'contact-1',
+          is_contacted: false,
+          contacted_at: null,
+          response_status: 'none',
+          notes: '',
+          coverage_request_id: 'coverage-1',
+          selected_shift_keys: [],
+          override_shift_keys: [],
+        }}
+      />
+    )
+
+    // Initially we may show stale "Not contacted" from cache, then refetch runs
+    await waitFor(
+      () => {
+        expect(screen.getByText('This sub has declined all shifts.')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+    expect(screen.getByRole('radio', { name: /declined all/i })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    )
   })
 
   it('assigns selected shifts when confirmed', async () => {
@@ -415,6 +611,28 @@ describe('ContactSubPanel', () => {
         return {
           ok: true,
           json: async () => ({ active: true }),
+        } as Response
+      }
+
+      if (url.includes('/api/sub-finder/coverage-request/')) {
+        return {
+          ok: true,
+          json: async () => ({ coverage_request_id: 'coverage-1' }),
+        } as Response
+      }
+      if (url.includes('/api/sub-finder/substitute-contacts?')) {
+        return {
+          ok: true,
+          json: async () => ({
+            id: 'contact-1',
+            is_contacted: true,
+            contacted_at: '2026-02-09T12:00:00.000Z',
+            response_status: 'pending',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: [],
+            override_shift_keys: [],
+          }),
         } as Response
       }
 
@@ -504,6 +722,8 @@ describe('ContactSubPanel', () => {
     const shiftCheckboxes = await screen.findAllByRole('checkbox')
     await user.click(shiftCheckboxes[0])
     await user.click(screen.getByRole('button', { name: /^assign$/i }))
+    // Refetch returns pending, so Assign opens confirmation dialog; confirm to proceed
+    await user.click(screen.getByRole('button', { name: /assign without confirming/i }))
 
     await waitFor(() => {
       expect(mockAssignMutateAsync).toHaveBeenCalledWith({
@@ -529,7 +749,29 @@ describe('ContactSubPanel', () => {
         } as Response
       }
 
-      if (url === '/api/sub-finder/shift-overrides' && init?.method === 'POST') {
+      if (url.includes('/api/sub-finder/coverage-request/')) {
+        return {
+          ok: true,
+          json: async () => ({ coverage_request_id: 'coverage-1' }),
+        } as Response
+      }
+      if (url.includes('/api/sub-finder/substitute-contacts?')) {
+        return {
+          ok: true,
+          json: async () => ({
+            id: 'contact-1',
+            is_contacted: true,
+            contacted_at: '2026-02-09T12:00:00.000Z',
+            response_status: 'confirmed',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: ['2026-02-09|EM'],
+            override_shift_keys: [],
+          }),
+        } as Response
+      }
+
+      if (url.includes('shift-overrides') && init?.method === 'POST') {
         return {
           ok: false,
           status: 500,
@@ -576,9 +818,9 @@ describe('ContactSubPanel', () => {
         }}
         initialContactData={{
           id: 'contact-1',
-          is_contacted: false,
-          contacted_at: null,
-          response_status: 'pending',
+          is_contacted: true,
+          contacted_at: '2026-02-09T12:00:00.000Z',
+          response_status: 'confirmed',
           notes: '',
           coverage_request_id: 'coverage-1',
           selected_shift_keys: ['2026-02-09|EM'],
@@ -587,6 +829,9 @@ describe('ContactSubPanel', () => {
       />
     )
 
+    // Refetch leaves us confirmed; select a shift then Save (triggers resolveShiftOverrides POST which fails)
+    const shiftCheckboxes = await screen.findAllByRole('checkbox')
+    await user.click(shiftCheckboxes[0])
     await user.click(screen.getByRole('button', { name: /^save$/i }))
 
     await waitFor(() => {
@@ -607,6 +852,28 @@ describe('ContactSubPanel', () => {
         return {
           ok: true,
           json: async () => ({ active: true }),
+        } as Response
+      }
+
+      if (url.includes('/api/sub-finder/coverage-request/')) {
+        return {
+          ok: true,
+          json: async () => ({ coverage_request_id: 'coverage-1' }),
+        } as Response
+      }
+      if (url.includes('/api/sub-finder/substitute-contacts?')) {
+        return {
+          ok: true,
+          json: async () => ({
+            id: 'contact-1',
+            is_contacted: true,
+            contacted_at: '2026-02-09T12:00:00.000Z',
+            response_status: 'confirmed',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: ['2026-02-09|EM'],
+            override_shift_keys: [],
+          }),
         } as Response
       }
 
@@ -676,6 +943,16 @@ describe('ContactSubPanel', () => {
   it('shows toast error when declined-all save cannot get or create contact', async () => {
     const user = userEvent.setup()
 
+    const declinedContactNoId = {
+      id: '',
+      is_contacted: true,
+      contacted_at: '2026-02-09T12:00:00.000Z',
+      response_status: 'declined_all',
+      notes: '',
+      coverage_request_id: 'coverage-1',
+      selected_shift_keys: [] as string[],
+      override_shift_keys: [] as string[],
+    }
     global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
 
@@ -683,6 +960,13 @@ describe('ContactSubPanel', () => {
         return {
           ok: true,
           json: async () => ({ active: true }),
+        } as Response
+      }
+
+      if (url.includes('/api/sub-finder/coverage-request/')) {
+        return {
+          ok: true,
+          json: async () => ({ coverage_request_id: 'coverage-1' }),
         } as Response
       }
 
@@ -729,16 +1013,7 @@ describe('ContactSubPanel', () => {
           start_date: '2026-02-09',
           end_date: '2026-02-09',
         }}
-        initialContactData={{
-          id: '',
-          is_contacted: true,
-          contacted_at: '2026-02-09T12:00:00.000Z',
-          response_status: 'declined_all',
-          notes: '',
-          coverage_request_id: 'coverage-1',
-          selected_shift_keys: [],
-          override_shift_keys: [],
-        }}
+        initialContactData={declinedContactNoId}
       />
     )
 
@@ -805,6 +1080,28 @@ describe('ContactSubPanel', () => {
         return {
           ok: true,
           json: async () => ({ active: true }),
+        } as Response
+      }
+
+      if (url.includes('/api/sub-finder/coverage-request/')) {
+        return {
+          ok: true,
+          json: async () => ({ coverage_request_id: 'coverage-1' }),
+        } as Response
+      }
+      if (url.includes('/api/sub-finder/substitute-contacts?')) {
+        return {
+          ok: true,
+          json: async () => ({
+            id: 'contact-1',
+            is_contacted: true,
+            contacted_at: '2026-02-09T12:00:00.000Z',
+            response_status: 'confirmed',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: [],
+            override_shift_keys: [],
+          }),
         } as Response
       }
 
@@ -915,7 +1212,7 @@ describe('ContactSubPanel', () => {
       />
     )
 
-    expect(await screen.findByText(/contact status updated/i)).toHaveTextContent(/2024 at/i)
+    expect(await screen.findByText(/updated/i)).toHaveTextContent(/2024/i)
   })
 
   it('handles coverage request lookup failure without throwing', async () => {
@@ -953,7 +1250,403 @@ describe('ContactSubPanel', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('Sally A.')).toBeInTheDocument()
+      expect(screen.getByText(/Sally A\./)).toBeInTheDocument()
+    })
+  })
+
+  describe('shift assignment cards', () => {
+    const absenceWithTwoShifts = {
+      id: 'absence-1',
+      teacher_name: 'Teacher One',
+      start_date: '2026-02-09',
+      end_date: '2026-02-10',
+      shifts: {
+        shift_details: [
+          {
+            date: '2026-02-09',
+            day_name: 'Monday',
+            time_slot_code: 'EM',
+            status: 'uncovered' as const,
+          },
+          {
+            date: '2026-02-10',
+            day_name: 'Tuesday',
+            time_slot_code: 'EM',
+            status: 'uncovered' as const,
+          },
+        ],
+      },
+    }
+
+    it('shows green left border when sub can cover shift, gray when cannot', async () => {
+      const greenBorder = 'rgb(110, 231, 183)'
+      const grayBorder = 'rgb(226, 232, 240)'
+
+      render(
+        <ContactSubPanel
+          isOpen
+          onClose={jest.fn()}
+          variant="inline"
+          sub={{
+            ...baseSub,
+            can_cover: [
+              { date: '2026-02-09', day_name: 'Monday', time_slot_code: 'EM', class_name: null },
+            ],
+            cannot_cover: [
+              {
+                date: '2026-02-10',
+                day_name: 'Tuesday',
+                time_slot_code: 'EM',
+                reason: 'Unavailable',
+              },
+            ],
+          }}
+          absence={absenceWithTwoShifts}
+          initialContactData={{
+            id: 'contact-1',
+            is_contacted: true,
+            contacted_at: '2026-02-09T12:00:00.000Z',
+            response_status: 'confirmed',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: [],
+            override_shift_keys: [],
+          }}
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Shift assignments')).toBeInTheDocument()
+      })
+
+      const monEm = screen.getByText('Mon EM')
+      const tueEm = screen.getByText('Tue EM')
+      const cardWithMon = monEm.closest('.border-l-4')
+      const cardWithTue = tueEm.closest('.border-l-4')
+
+      expect(cardWithMon).toBeInTheDocument()
+      expect(cardWithTue).toBeInTheDocument()
+      expect((cardWithMon as HTMLElement).style.borderLeftColor).toBe(greenBorder)
+      expect((cardWithTue as HTMLElement).style.borderLeftColor).toBe(grayBorder)
+    })
+
+    it('shows available (teal) chip border when sub can cover, gray when cannot', async () => {
+      const tealBorder = 'rgb(196, 234, 226)'
+      const grayBorder = 'rgb(209, 213, 219)'
+
+      render(
+        <ContactSubPanel
+          isOpen
+          onClose={jest.fn()}
+          variant="inline"
+          sub={{
+            ...baseSub,
+            can_cover: [
+              { date: '2026-02-09', day_name: 'Monday', time_slot_code: 'EM', class_name: null },
+            ],
+            cannot_cover: [
+              {
+                date: '2026-02-10',
+                day_name: 'Tuesday',
+                time_slot_code: 'EM',
+                reason: 'Unavailable',
+              },
+            ],
+          }}
+          absence={absenceWithTwoShifts}
+          initialContactData={{
+            id: 'contact-1',
+            is_contacted: true,
+            contacted_at: '2026-02-09T12:00:00.000Z',
+            response_status: 'confirmed',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: [],
+            override_shift_keys: [],
+          }}
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Shift assignments')).toBeInTheDocument()
+      })
+
+      const monEm = screen.getByText('Mon EM')
+      const tueEm = screen.getByText('Tue EM')
+      // Chip Badge is the div with inline style containing the teal/gray border color
+      const chipWithMon = monEm.closest('div[style*="196, 234, 226"]')
+      const chipWithTue = tueEm.closest('div[style*="209, 213, 219"]')
+
+      expect(chipWithMon).toBeInTheDocument()
+      expect(chipWithTue).toBeInTheDocument()
+      expect((chipWithMon as HTMLElement).style.borderColor).toBe(tealBorder)
+      expect((chipWithTue as HTMLElement).style.borderColor).toBe(grayBorder)
+    })
+
+    it('shows gray card border for all shifts when contact status is Declined all', async () => {
+      const grayBorder = 'rgb(226, 232, 240)'
+      const declinedContact = {
+        id: 'contact-1',
+        is_contacted: true,
+        contacted_at: '2026-02-09T12:00:00.000Z',
+        response_status: 'declined_all',
+        notes: '',
+        coverage_request_id: 'coverage-1',
+        selected_shift_keys: [] as string[],
+        override_shift_keys: [] as string[],
+      }
+      global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes('/api/subs/')) {
+          return { ok: true, json: async () => ({ active: true }) } as Response
+        }
+        if (url.includes('/api/sub-finder/coverage-request/')) {
+          return {
+            ok: true,
+            json: async () => ({ coverage_request_id: 'coverage-1' }),
+          } as Response
+        }
+        if (url.includes('/api/sub-finder/substitute-contacts?')) {
+          return { ok: true, json: async () => declinedContact } as Response
+        }
+        return { ok: true, json: async () => ({}) } as Response
+      }) as jest.Mock
+
+      render(
+        <ContactSubPanel
+          isOpen
+          onClose={jest.fn()}
+          variant="inline"
+          sub={{
+            ...baseSub,
+            can_cover: [
+              { date: '2026-02-09', day_name: 'Monday', time_slot_code: 'EM', class_name: null },
+              { date: '2026-02-10', day_name: 'Tuesday', time_slot_code: 'EM', class_name: null },
+            ],
+            cannot_cover: [],
+          }}
+          absence={absenceWithTwoShifts}
+          initialContactData={declinedContact}
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Shift assignments')).toBeInTheDocument()
+      })
+
+      const monEm = screen.getByText('Mon EM')
+      const tueEm = screen.getByText('Tue EM')
+      const cardWithMon = monEm.closest('.border-l-4')
+      const cardWithTue = tueEm.closest('.border-l-4')
+
+      expect((cardWithMon as HTMLElement).style.borderLeftColor).toBe(grayBorder)
+      expect((cardWithTue as HTMLElement).style.borderLeftColor).toBe(grayBorder)
+
+      expect(screen.getAllByText('Declined this shift').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Locked').length).toBeGreaterThanOrEqual(1)
+    })
+
+    it('shows Uncovered in chip when shift is uncovered; shows assigned sub name when assigned to another sub', async () => {
+      render(
+        <ContactSubPanel
+          isOpen
+          onClose={jest.fn()}
+          variant="inline"
+          sub={{
+            ...baseSub,
+            can_cover: [
+              { date: '2026-02-09', day_name: 'Monday', time_slot_code: 'EM', class_name: null },
+              { date: '2026-02-10', day_name: 'Tuesday', time_slot_code: 'EM', class_name: null },
+            ],
+            cannot_cover: [],
+          }}
+          absence={{
+            ...absenceWithTwoShifts,
+            shifts: {
+              shift_details: [
+                {
+                  date: '2026-02-09',
+                  day_name: 'Monday',
+                  time_slot_code: 'EM',
+                  status: 'uncovered',
+                },
+                {
+                  date: '2026-02-10',
+                  day_name: 'Tuesday',
+                  time_slot_code: 'EM',
+                  status: 'fully_covered',
+                  sub_name: 'Bella W.',
+                },
+              ],
+            },
+          }}
+          initialContactData={{
+            id: 'contact-1',
+            is_contacted: true,
+            contacted_at: '2026-02-09T12:00:00.000Z',
+            response_status: 'confirmed',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: [],
+            override_shift_keys: [],
+          }}
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Shift assignments')).toBeInTheDocument()
+      })
+
+      expect(screen.getByText('Uncovered')).toBeInTheDocument()
+      expect(screen.getByText('Bella W.')).toBeInTheDocument()
+    })
+
+    it('shows Assign checkbox when shift is uncovered and sub can cover', async () => {
+      render(
+        <ContactSubPanel
+          isOpen
+          onClose={jest.fn()}
+          variant="inline"
+          sub={{
+            ...baseSub,
+            can_cover: [
+              { date: '2026-02-09', day_name: 'Monday', time_slot_code: 'EM', class_name: null },
+            ],
+            cannot_cover: [],
+          }}
+          absence={{
+            ...baseAbsence,
+            shifts: {
+              shift_details: [
+                {
+                  date: '2026-02-09',
+                  day_name: 'Monday',
+                  time_slot_code: 'EM',
+                  status: 'uncovered',
+                },
+              ],
+            },
+          }}
+          initialContactData={{
+            id: 'contact-1',
+            is_contacted: true,
+            contacted_at: '2026-02-09T12:00:00.000Z',
+            response_status: 'confirmed',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: [],
+            override_shift_keys: [],
+          }}
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Shift assignments')).toBeInTheDocument()
+      })
+
+      expect(screen.getByText('Assign', { selector: 'span' })).toBeInTheDocument()
+      const checkboxes = screen.getAllByRole('checkbox')
+      const assignCheckbox = checkboxes.find(cb => cb.closest('.border-l-4') != null)
+      expect(assignCheckbox).toBeDefined()
+      expect(assignCheckbox).toBeInTheDocument()
+    })
+
+    it('shows Replace button when shift is assigned to another sub', async () => {
+      render(
+        <ContactSubPanel
+          isOpen
+          onClose={jest.fn()}
+          variant="inline"
+          sub={{
+            ...baseSub,
+            can_cover: [
+              { date: '2026-02-09', day_name: 'Monday', time_slot_code: 'EM', class_name: null },
+            ],
+            cannot_cover: [],
+          }}
+          absence={{
+            ...baseAbsence,
+            shifts: {
+              shift_details: [
+                {
+                  date: '2026-02-09',
+                  day_name: 'Monday',
+                  time_slot_code: 'EM',
+                  status: 'fully_covered',
+                  sub_name: 'Bella W.',
+                },
+              ],
+            },
+          }}
+          initialContactData={{
+            id: 'contact-1',
+            is_contacted: true,
+            contacted_at: '2026-02-09T12:00:00.000Z',
+            response_status: 'confirmed',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: [],
+            override_shift_keys: [],
+          }}
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Shift assignments')).toBeInTheDocument()
+      })
+
+      expect(screen.getByRole('button', { name: /replace with sally a\./i })).toBeInTheDocument()
+    })
+
+    it('shows Override button when sub cannot cover but reason is overridable', async () => {
+      render(
+        <ContactSubPanel
+          isOpen
+          onClose={jest.fn()}
+          variant="inline"
+          sub={{
+            ...baseSub,
+            can_cover: [],
+            cannot_cover: [
+              {
+                date: '2026-02-09',
+                day_name: 'Monday',
+                time_slot_code: 'EM',
+                reason: 'Marked as unavailable',
+              },
+            ],
+          }}
+          absence={{
+            ...baseAbsence,
+            shifts: {
+              shift_details: [
+                {
+                  date: '2026-02-09',
+                  day_name: 'Monday',
+                  time_slot_code: 'EM',
+                  status: 'uncovered',
+                },
+              ],
+            },
+          }}
+          initialContactData={{
+            id: 'contact-1',
+            is_contacted: true,
+            contacted_at: '2026-02-09T12:00:00.000Z',
+            response_status: 'confirmed',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: [],
+            override_shift_keys: [],
+          }}
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Shift assignments')).toBeInTheDocument()
+      })
+
+      expect(screen.getByRole('button', { name: /^override$/i })).toBeInTheDocument()
     })
   })
 })

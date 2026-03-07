@@ -68,6 +68,14 @@ export async function PUT(request: NextRequest) {
       return createErrorResponse('Missing required parameter: id', 400)
     }
 
+    if (shouldDebugLog) {
+      console.debug('[sub-finder/substitute-contacts] PUT', {
+        id,
+        contact_status: body.contact_status,
+        response_status: body.response_status,
+      })
+    }
+
     // Update contact
     const updates: {
       contact_status?:
@@ -86,6 +94,14 @@ export async function PUT(request: NextRequest) {
     if (notes !== undefined) updates.notes = notes
 
     const updatedContact = await updateSubstituteContact(id, updates)
+
+    if (shouldDebugLog) {
+      console.debug('[sub-finder/substitute-contacts] PUT result', {
+        id: updatedContact.id,
+        response_status: updatedContact.response_status,
+        contact_status: (updatedContact as { contact_status?: string }).contact_status,
+      })
+    }
 
     // If decline_all and selected_shift_keys provided, enforce no selected shifts
     if (
