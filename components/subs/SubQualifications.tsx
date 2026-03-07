@@ -46,7 +46,6 @@ interface SubQualificationsProps {
     can_change_diapers: boolean | null
     can_lift_children: boolean | null
     can_assist_with_toileting: boolean | null
-    capabilities_notes: string | null
   }
   onQualificationsChange: (
     qualifications: Array<{
@@ -61,7 +60,6 @@ interface SubQualificationsProps {
     can_change_diapers: boolean
     can_lift_children: boolean
     can_assist_with_toileting: boolean
-    capabilities_notes: string | null
   }) => void
 }
 
@@ -77,7 +75,6 @@ export default function SubQualifications({
     can_change_diapers: capabilities.can_change_diapers ?? false,
     can_lift_children: capabilities.can_lift_children ?? false,
     can_assist_with_toileting: capabilities.can_assist_with_toileting ?? false,
-    capabilities_notes: capabilities.capabilities_notes || '',
   })
   const [definitions, setDefinitions] = useState<QualificationDefinition[]>(
     () => cachedQualificationDefinitions || []
@@ -128,7 +125,6 @@ export default function SubQualifications({
       can_change_diapers: capabilities.can_change_diapers ?? false,
       can_lift_children: capabilities.can_lift_children ?? false,
       can_assist_with_toileting: capabilities.can_assist_with_toileting ?? false,
-      capabilities_notes: capabilities.capabilities_notes || '',
     })
   }, [capabilities])
 
@@ -194,13 +190,11 @@ export default function SubQualifications({
     can_change_diapers: boolean
     can_lift_children: boolean
     can_assist_with_toileting: boolean
-    capabilities_notes: string | null
   }) => {
     setCapabilitiesState({
       can_change_diapers: next.can_change_diapers,
       can_lift_children: next.can_lift_children,
       can_assist_with_toileting: next.can_assist_with_toileting,
-      capabilities_notes: next.capabilities_notes || '',
     })
     onCapabilitiesChange(next)
   }
@@ -210,21 +204,7 @@ export default function SubQualifications({
       ...capabilitiesState,
       [field]: checked,
     }
-    handleCapabilitiesUpdate({
-      ...updated,
-      capabilities_notes: updated.capabilities_notes.trim() || null,
-    })
-  }
-
-  const handleCapabilitiesNotesChange = (notes: string) => {
-    setCapabilitiesState(prev => {
-      const next = {
-        ...prev,
-        capabilities_notes: notes,
-      }
-      onCapabilitiesChange(next)
-      return next
-    })
+    handleCapabilitiesUpdate(updated)
   }
 
   // Group qualifications by category
@@ -438,19 +418,6 @@ export default function SubQualifications({
           ))}
         </div>
       )}
-
-      <div>
-        <Label htmlFor="capabilities_notes" className="text-sm">
-          Notes (optional)
-        </Label>
-        <Textarea
-          id="capabilities_notes"
-          value={capabilitiesState.capabilities_notes}
-          onChange={e => handleCapabilitiesNotesChange(e.target.value)}
-          className="mt-2 min-h-[80px]"
-          placeholder="Any additional notes"
-        />
-      </div>
     </div>
   )
 }

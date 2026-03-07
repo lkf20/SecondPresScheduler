@@ -29,6 +29,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     revalidateTimeSlotDependentPaths()
     return NextResponse.json(timeslot)
   } catch (error) {
+    const message = error instanceof Error ? error.message : ''
+    if (
+      message === 'Start time and end time are required' ||
+      message === 'End time must be after start time'
+    ) {
+      return NextResponse.json({ error: message }, { status: 400 })
+    }
     return createErrorResponse(error, 'Failed to update time slot', 500, 'PUT /api/timeslots/[id]')
   }
 }

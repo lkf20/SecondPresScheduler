@@ -49,6 +49,9 @@ export default function SubClassPreferences({
 
   const filteredClasses = classes
   const hasSelections = selectedIds.size > 0
+  const allSelected =
+    filteredClasses.length > 0 &&
+    filteredClasses.every(classGroup => selectedIds.has(classGroup.id))
 
   const handleToggle = (classId: string) => {
     const newSelected = new Set(selectedIds)
@@ -84,19 +87,21 @@ export default function SubClassPreferences({
           <div className="mb-3 flex items-center justify-between gap-2">
             <Label>Prefers working with (Class Groups):</Label>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleSelectAll}
-                disabled={filteredClasses.length === 0}
-                className="inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors hover:!bg-transparent disabled:cursor-not-allowed disabled:opacity-50"
-                style={{
-                  color: isSelectAllHovered ? 'rgb(15, 118, 110)' : 'rgb(71, 85, 105)',
-                }}
-                onMouseEnter={() => setIsSelectAllHovered(true)}
-                onMouseLeave={() => setIsSelectAllHovered(false)}
-              >
-                Select all
-              </button>
+              {!allSelected && (
+                <button
+                  type="button"
+                  onClick={handleSelectAll}
+                  disabled={filteredClasses.length === 0}
+                  className="inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors hover:!bg-transparent disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{
+                    color: isSelectAllHovered ? 'rgb(15, 118, 110)' : 'rgb(71, 85, 105)',
+                  }}
+                  onMouseEnter={() => setIsSelectAllHovered(true)}
+                  onMouseLeave={() => setIsSelectAllHovered(false)}
+                >
+                  Select all
+                </button>
+              )}
               {hasSelections && (
                 <button
                   type="button"

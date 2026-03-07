@@ -8,6 +8,7 @@ import StaffEditorTabs from '@/components/staff/StaffEditorTabs'
 import StaffUnsavedChangesDialog from '@/components/staff/StaffUnsavedChangesDialog'
 import SubAvailabilitySection from '@/components/subs/SubAvailabilitySection'
 import SubPreferencesSection from '@/components/subs/SubPreferencesSection'
+import SubNotesSection from '@/components/subs/SubNotesSection'
 import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Database } from '@/types/database'
 import type { DisplayNameFormat } from '@/lib/utils/staff-display-name'
@@ -46,7 +47,12 @@ export default function StaffFormClient({
   const requestedTab = searchParams.get('tab')
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState(() => {
-    if (requestedTab === 'availability' || requestedTab === 'preferences') return requestedTab
+    if (
+      requestedTab === 'availability' ||
+      requestedTab === 'preferences' ||
+      requestedTab === 'notes'
+    )
+      return requestedTab
     return 'overview'
   })
   const [roleTypes, setRoleTypes] = useState<RoleTypeLookup>({})
@@ -58,20 +64,23 @@ export default function StaffFormClient({
   const [isOverviewDirty, setIsOverviewDirty] = useState(false)
   const [isAvailabilityDirty, setIsAvailabilityDirty] = useState(false)
   const [isPreferencesDirty, setIsPreferencesDirty] = useState(false)
+  const [isNotesDirty, setIsNotesDirty] = useState(false)
   const [availabilitySaveSignal, setAvailabilitySaveSignal] = useState(0)
   const [preferencesSaveSignal, setPreferencesSaveSignal] = useState(0)
+  const [notesSaveSignal, setNotesSaveSignal] = useState(0)
   const [staffList, setStaffList] = useState<Array<{ id: string }>>([])
   const [overviewResetKey, setOverviewResetKey] = useState(0)
   const [availabilityResetKey, setAvailabilityResetKey] = useState(0)
   const [preferencesResetKey, setPreferencesResetKey] = useState(0)
+  const [notesResetKey, setNotesResetKey] = useState(0)
   const [showTabSwitchDialog, setShowTabSwitchDialog] = useState(false)
   const [pendingTabSwitch, setPendingTabSwitch] = useState<{
-    sourceTab: 'overview' | 'availability' | 'preferences'
-    targetTab: 'overview' | 'availability' | 'preferences'
+    sourceTab: 'overview' | 'availability' | 'preferences' | 'notes'
+    targetTab: 'overview' | 'availability' | 'preferences' | 'notes'
   } | null>(null)
   const [pendingTabAfterSave, setPendingTabAfterSave] = useState<{
-    sourceTab: 'overview' | 'availability' | 'preferences'
-    targetTab: 'overview' | 'availability' | 'preferences'
+    sourceTab: 'overview' | 'availability' | 'preferences' | 'notes'
+    targetTab: 'overview' | 'availability' | 'preferences' | 'notes'
   } | null>(null)
   const [overviewRoleContext, setOverviewRoleContext] = useState<{
     isSub: boolean
@@ -171,10 +180,11 @@ export default function StaffFormClient({
   const showAvailability =
     overviewRoleContext !== null ? overviewRoleContext.isSub : Boolean(staff.is_sub)
   const overviewHasUnsavedChanges = isOverviewDirty || isActive !== savedIsActive
-  const hasUnsavedChanges = overviewHasUnsavedChanges || isAvailabilityDirty || isPreferencesDirty
+  const hasUnsavedChanges =
+    overviewHasUnsavedChanges || isAvailabilityDirty || isPreferencesDirty || isNotesDirty
 
   const resolveTargetTab = useCallback(
-    (tab: 'overview' | 'availability' | 'preferences') => {
+    (tab: 'overview' | 'availability' | 'preferences' | 'notes') => {
       if (tab === 'availability' && !showAvailability) return 'preferences' as const
       return tab
     },
@@ -182,12 +192,13 @@ export default function StaffFormClient({
   )
 
   const isTabDirty = useCallback(
-    (tab: 'overview' | 'availability' | 'preferences') => {
+    (tab: 'overview' | 'availability' | 'preferences' | 'notes') => {
       if (tab === 'overview') return overviewHasUnsavedChanges
       if (tab === 'availability') return isAvailabilityDirty
+      if (tab === 'notes') return isNotesDirty
       return isPreferencesDirty
     },
-    [overviewHasUnsavedChanges, isAvailabilityDirty, isPreferencesDirty]
+    [overviewHasUnsavedChanges, isAvailabilityDirty, isPreferencesDirty, isNotesDirty]
   )
 
   const handleRoleContextChange = useCallback(
@@ -246,6 +257,10 @@ export default function StaffFormClient({
     }
     if (requestedTab === 'preferences') {
       setActiveTab('preferences')
+      return
+    }
+    if (requestedTab === 'notes') {
+      setActiveTab('notes')
     }
   }, [requestedTab, showAvailability])
 
@@ -264,12 +279,16 @@ export default function StaffFormClient({
   const handleTabChange = useCallback(
     (nextTab: string) => {
       const normalizedNextTab =
-        nextTab === 'availability' || nextTab === 'preferences' ? nextTab : 'overview'
+        nextTab === 'availability' || nextTab === 'preferences' || nextTab === 'notes'
+          ? nextTab
+          : 'overview'
       const resolvedNextTab = resolveTargetTab(normalizedNextTab)
       if (resolvedNextTab === activeTab) return
 
       const currentTab =
-        activeTab === 'availability' || activeTab === 'preferences' ? activeTab : 'overview'
+        activeTab === 'availability' || activeTab === 'preferences' || activeTab === 'notes'
+          ? activeTab
+          : 'overview'
       if (!isTabDirty(currentTab)) {
         setActiveTab(resolvedNextTab)
         return
@@ -301,8 +320,13 @@ export default function StaffFormClient({
       setAvailabilityResetKey(v => v + 1)
       setIsAvailabilityDirty(false)
     } else {
-      setPreferencesResetKey(v => v + 1)
-      setIsPreferencesDirty(false)
+      if (pendingTabSwitch.sourceTab === 'preferences') {
+        setPreferencesResetKey(v => v + 1)
+        setIsPreferencesDirty(false)
+      } else {
+        setNotesResetKey(v => v + 1)
+        setIsNotesDirty(false)
+      }
     }
 
     setActiveTab(resolveTargetTab(pendingTabSwitch.targetTab))
@@ -333,7 +357,12 @@ export default function StaffFormClient({
       return
     }
 
-    setPreferencesSaveSignal(v => v + 1)
+    if (pendingTabSwitch.sourceTab === 'preferences') {
+      setPreferencesSaveSignal(v => v + 1)
+      return
+    }
+
+    setNotesSaveSignal(v => v + 1)
   }, [pendingTabSwitch, staff.id])
 
   const handleSubmit = async (data: StaffFormData) => {
@@ -470,9 +499,9 @@ export default function StaffFormClient({
           dirty: overviewHasUnsavedChanges,
           actionLabel: 'Save',
           actionFormId: `staff-overview-form-${staff.id}`,
-          cardClassName: 'max-w-2xl',
+          cardClassName: 'max-w-[56rem]',
           content: (
-            <div className="max-w-2xl" key={`overview-form-${overviewResetKey}`}>
+            <div className="max-w-[56rem]" key={`overview-form-${overviewResetKey}`}>
               <StaffForm
                 staff={staff}
                 onSubmit={handleSubmit}
@@ -493,7 +522,7 @@ export default function StaffFormClient({
           dirty: isAvailabilityDirty,
           actionLabel: 'Save',
           onAction: () => setAvailabilitySaveSignal(v => v + 1),
-          cardClassName: 'max-w-3xl',
+          cardClassName: 'max-w-[56rem]',
           content: (
             <div key={`availability-section-${availabilityResetKey}`}>
               <SubAvailabilitySection
@@ -509,7 +538,7 @@ export default function StaffFormClient({
           dirty: isPreferencesDirty,
           actionLabel: 'Save',
           onAction: () => setPreferencesSaveSignal(v => v + 1),
-          cardClassName: 'max-w-2xl',
+          cardClassName: 'max-w-[56rem]',
           content: (
             <div key={`preferences-section-${preferencesResetKey}`}>
               <SubPreferencesSection
@@ -518,10 +547,26 @@ export default function StaffFormClient({
                   can_change_diapers: staff.can_change_diapers,
                   can_lift_children: staff.can_lift_children,
                   can_assist_with_toileting: staff.can_assist_with_toileting,
-                  capabilities_notes: staff.capabilities_notes,
                 }}
                 onDirtyChange={setIsPreferencesDirty}
                 externalSaveSignal={preferencesSaveSignal}
+              />
+            </div>
+          ),
+        }}
+        notes={{
+          title: 'Notes',
+          dirty: isNotesDirty,
+          actionLabel: 'Save',
+          onAction: () => setNotesSaveSignal(v => v + 1),
+          cardClassName: 'max-w-[56rem]',
+          content: (
+            <div key={`notes-section-${notesResetKey}`}>
+              <SubNotesSection
+                subId={staff.id}
+                initialNotes={staff.capabilities_notes}
+                onDirtyChange={setIsNotesDirty}
+                externalSaveSignal={notesSaveSignal}
               />
             </div>
           ),
@@ -539,7 +584,9 @@ export default function StaffFormClient({
             ? 'Overview'
             : pendingTabSwitch?.sourceTab === 'availability'
               ? 'Availability'
-              : 'Preferences & Qualifications'
+              : pendingTabSwitch?.sourceTab === 'preferences'
+                ? 'Preferences & Qualifications'
+                : 'Notes'
         }. What would you like to do?`}
         keepEditingLabel="Stay here"
         discardLabel="Discard and continue"

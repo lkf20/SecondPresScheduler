@@ -23,13 +23,28 @@ import { invalidateSchedulingSurfaces } from '@/lib/utils/invalidation'
 
 type TimeSlot = Database['public']['Tables']['time_slots']['Row']
 
-const timeSlotSchema = z.object({
-  code: z.string().min(1, 'Code is required'),
-  name: z.string().optional(),
-  default_start_time: z.string().optional(),
-  default_end_time: z.string().optional(),
-  is_active: z.boolean().default(true),
-})
+const timeSlotSchema = z
+  .object({
+    code: z.string().min(1, 'Code is required'),
+    name: z.string().optional(),
+    default_start_time: z.string().trim().min(1, 'Start time is required'),
+    default_end_time: z.string().trim().min(1, 'End time is required'),
+    is_active: z.boolean().default(true),
+  })
+  .superRefine((values, ctx) => {
+    const start = values.default_start_time?.trim() ?? ''
+    const end = values.default_end_time?.trim() ?? ''
+
+    if (!start || !end) return
+
+    if (end <= start) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['default_end_time'],
+        message: 'End time must be after start time',
+      })
+    }
+  })
 
 type TimeSlotFormInput = z.input<typeof timeSlotSchema>
 
@@ -52,6 +67,19 @@ const normalizeTimeValue = (value: unknown): string => {
   const trimmed = value.trim()
   // Normalize DB-style HH:mm:ss to input-style HH:mm for reliable dirty checking.
   return trimmed.length >= 5 ? trimmed.slice(0, 5) : trimmed
+}
+
+function clearScheduleFilterCaches() {
+  if (typeof window === 'undefined') return
+  const keys = [
+    'weekly-schedule-filters',
+    'baseline-schedule-filters',
+    'weekly-schedule-available-classroom-ids',
+    'baseline-schedule-available-classroom-ids',
+    'weekly-schedule-available-time-slot-ids',
+    'baseline-schedule-available-time-slot-ids',
+  ]
+  keys.forEach(key => window.localStorage.removeItem(key))
 }
 
 export default function TimeSlotForm({
@@ -82,8 +110,8 @@ export default function TimeSlotForm({
     defaultValues: {
       code: timeSlot?.code ?? '',
       name: timeSlot?.name ?? '',
-      default_start_time: normalizeTimeValue(timeSlot?.default_start_time),
-      default_end_time: normalizeTimeValue(timeSlot?.default_end_time),
+      default_start_time: isEdit ? normalizeTimeValue(timeSlot?.default_start_time) : '12:00',
+      default_end_time: isEdit ? normalizeTimeValue(timeSlot?.default_end_time) : '13:00',
       is_active: timeSlot?.is_active ?? true,
     },
   })
@@ -148,8 +176,8 @@ export default function TimeSlotForm({
       const payload = {
         code: data.code,
         name: data.name || null,
-        default_start_time: data.default_start_time || null,
-        default_end_time: data.default_end_time || null,
+        default_start_time: data.default_start_time,
+        default_end_time: data.default_end_time,
         is_active: data.is_active ?? true,
       }
 
@@ -170,6 +198,7 @@ export default function TimeSlotForm({
       const timeSlotName = (payload.name && payload.name.trim()) || payload.code || 'Time slot'
       toast.success(isEdit ? `${timeSlotName} updated.` : `${timeSlotName} created.`)
       await invalidateAfterSave()
+      clearScheduleFilterCaches()
       router.push('/settings/timeslots')
       router.refresh()
     } catch (err: unknown) {
@@ -193,30 +222,30 @@ export default function TimeSlotForm({
       </div>
 
       <div className="mb-8 max-w-2xl">
-        <div className="flex items-center justify-between gap-6">
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2">
+            <h1 className="min-w-0 flex-[1_1_18rem] break-words text-3xl font-bold tracking-tight text-slate-900">
               {isEdit ? name?.trim() || code?.trim() || 'Time Slot' : 'Add Time Slot'}
             </h1>
             {hasUnsavedChanges && (
-              <>
-                <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+              <div className="mt-1 flex shrink-0 items-start gap-2 self-start">
+                <span className="mt-1 inline-flex shrink-0 whitespace-nowrap items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
                   Unsaved changes
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 px-2 text-teal-700 hover:bg-transparent hover:text-teal-800"
+                  className="h-8 shrink-0 px-2 text-teal-700 hover:bg-transparent hover:text-teal-800"
                   type="submit"
                   form={formId}
                 >
                   Save
                 </Button>
-              </>
+              </div>
             )}
           </div>
-          <div className="flex items-center gap-3">
-            <Label htmlFor="is_active" className="font-normal cursor-pointer">
+          <div className="mt-2 flex shrink-0 self-start items-start gap-3">
+            <Label htmlFor="is_active" className="mt-1 cursor-pointer font-normal leading-none">
               {isActive ? 'Active' : 'Inactive'}
             </Label>
             <Switch
@@ -254,12 +283,12 @@ export default function TimeSlotForm({
               <Input {...register('name')} placeholder="Optional" />
             </FormField>
 
-            <FormField label="Default Start Time" error={errors.default_start_time?.message}>
-              <Input type="time" {...register('default_start_time')} placeholder="Optional" />
+            <FormField label="Start Time" error={errors.default_start_time?.message} required>
+              <Input type="time" {...register('default_start_time')} />
             </FormField>
 
-            <FormField label="Default End Time" error={errors.default_end_time?.message}>
-              <Input type="time" {...register('default_end_time')} placeholder="Optional" />
+            <FormField label="End Time" error={errors.default_end_time?.message} required>
+              <Input type="time" {...register('default_end_time')} />
             </FormField>
 
             <div className="flex justify-end gap-4">

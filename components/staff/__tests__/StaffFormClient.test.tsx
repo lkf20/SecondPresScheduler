@@ -33,6 +33,9 @@ const staffEditorTabsMock = jest.fn((props: any) => (
     <button type="button" onClick={() => props.onActiveTabChange('preferences')}>
       Go Preferences
     </button>
+    <button type="button" onClick={() => props.onActiveTabChange('notes')}>
+      Go Notes
+    </button>
     {props.overview?.content}
   </div>
 ))
@@ -68,6 +71,11 @@ jest.mock('@/components/subs/SubAvailabilitySection', () => ({
 }))
 
 jest.mock('@/components/subs/SubPreferencesSection', () => ({
+  __esModule: true,
+  default: () => null,
+}))
+
+jest.mock('@/components/subs/SubNotesSection', () => ({
   __esModule: true,
   default: () => null,
 }))
