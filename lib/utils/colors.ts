@@ -369,7 +369,7 @@ export const shiftStatusColorValues = {
   },
   unavailable: {
     bg: 'rgb(243, 244, 246)', // gray-100
-    border: 'rgb(209, 213, 219)', // gray-300
+    border: 'rgb(229, 231, 235)', // gray-200 (lighter left highlight for uncovered)
     text: 'rgb(55, 65, 81)', // gray-700
   },
   declined: {

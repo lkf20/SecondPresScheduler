@@ -291,7 +291,7 @@ export default function ShiftStatusCard({
   return (
     <div
       className={cn(
-        'flex w-full max-w-none self-stretch min-w-0 items-start justify-between gap-6 rounded-lg border border-l-4 border-slate-200 bg-white px-4 py-3 shadow transition-all hover:shadow-lg hover:scale-[1.01]',
+        'flex w-full max-w-none self-stretch min-w-0 items-start justify-between gap-6 rounded-lg border border-l-4 border-slate-200 bg-white px-4 py-3 shadow-md transition-all hover:shadow-lg hover:scale-[1.01]',
         isCovered && 'opacity-80',
         onSelectShift && 'cursor-pointer'
       )}

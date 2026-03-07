@@ -240,7 +240,7 @@ export default function SubFinderCard({
               statusBadge={showCompactStatusBadge ? statusBadge : null}
               statusLine={
                 contactStatusLine ? (
-                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-sm font-medium text-slate-600">
                     {contactStatusLine}
                   </span>
                 ) : undefined

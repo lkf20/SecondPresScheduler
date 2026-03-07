@@ -87,6 +87,52 @@ export default function SubCardHeader({
                   {statusLine}
                 </>
               )}
+              {showBadge && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        className={cn(
+                          'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm font-medium tabular-nums',
+                          matchPercent !== 100 && 'bg-amber-50'
+                        )}
+                        style={
+                          matchPercent === 100
+                            ? {
+                                borderWidth: '1px',
+                                borderStyle: 'solid',
+                                // Match ShiftChips soft available (Can cover) colors exactly
+                                borderColor: 'rgb(196, 234, 226)',
+                                backgroundColor: 'rgb(246, 253, 251)',
+                                color: 'rgb(15, 118, 110)',
+                              }
+                            : { borderColor: 'rgba(180, 83, 9, 0.25)', color: 'rgb(180, 83, 9)' }
+                        }
+                        aria-label={`Available for ${shiftsCovered} of ${totalShifts} remaining shifts`}
+                      >
+                        {matchPercent === 100 ? (
+                          <CheckCircle
+                            className="h-3.5 w-3.5 shrink-0"
+                            style={{ color: 'rgb(15, 118, 110)' }}
+                            aria-hidden
+                          />
+                        ) : (
+                          <CheckCircle
+                            className="h-3.5 w-3.5 shrink-0 text-amber-500"
+                            aria-hidden
+                          />
+                        )}
+                        {matchPercent}% match
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>
+                        Available for {shiftsCovered} of {totalShifts} remaining shifts
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
             {!hideContactInHeader && (phone || email) && (
               <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0 text-base text-muted-foreground">
@@ -104,35 +150,8 @@ export default function SubCardHeader({
           </div>
         </div>
       </div>
-      {(showBadge || rightContent || (showCoverage && !showCoverageBadge)) && (
+      {(rightContent || (showCoverage && !showCoverageBadge)) && (
         <div className="flex items-center gap-2 shrink-0">
-          {showBadge && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    className={cn(
-                      'inline-flex shrink-0 items-center gap-1.5 text-base font-medium tabular-nums',
-                      matchPercent === 100 ? 'text-emerald-800' : 'text-amber-700'
-                    )}
-                    aria-label={`Available for ${shiftsCovered} of ${totalShifts} remaining shifts`}
-                  >
-                    {matchPercent === 100 ? (
-                      <CheckCircle className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden />
-                    ) : (
-                      <CheckCircle className="h-4 w-4 shrink-0 text-amber-500" aria-hidden />
-                    )}
-                    {matchPercent}% match
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>
-                    Available for {shiftsCovered} of {totalShifts} remaining shifts
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
           {rightContent}
           {showCoverage && !showCoverageBadge && (
             <div className="text-right flex flex-col items-end">
