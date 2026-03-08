@@ -318,14 +318,12 @@ export function buildSubAvailabilityPdfHtml({
   generatedAt,
   reportContext,
   colorFriendly = true,
-  footerNotes = '',
   footerNotesHtml = '',
   topHeaderHtml = '',
 }: {
   generatedAt: string
   reportContext: SubAvailabilityReportContext
   colorFriendly?: boolean
-  footerNotes?: string
   footerNotesHtml?: string
   topHeaderHtml?: string
 }) {
@@ -350,7 +348,6 @@ export function buildSubAvailabilityPdfHtml({
     })
     return acc
   }, [])
-  const footerNoteDisplay = footerNotes.trim()
   const footerNoteRichHtml = sanitizeRichTextHtml(footerNotesHtml)
   const topHeaderRichHtml = sanitizeRichTextHtml(topHeaderHtml, 2000)
 
@@ -653,13 +650,7 @@ export function buildSubAvailabilityPdfHtml({
           )
           .join('')}
       </div>
-      ${
-        footerNoteRichHtml
-          ? `<div class="footer-note">${footerNoteRichHtml}</div>`
-          : footerNoteDisplay
-            ? `<div class="footer-note">${escapeHtml(truncateForCell(footerNoteDisplay, 1500))}</div>`
-            : ''
-      }
+      ${footerNoteRichHtml ? `<div class="footer-note">${footerNoteRichHtml}</div>` : ''}
 
       ${
         showTruncatedWarning

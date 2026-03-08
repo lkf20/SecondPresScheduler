@@ -464,7 +464,7 @@ export default function SubAvailabilityReportPage() {
                         {(reportData.report_context.columns.length === 0
                           ? [{ dayName: 'Weekly availability', colSpan: 1, dayId: 'none' }]
                           : reportData.report_context.dayHeaders
-                        ).map((header, headerIndex) => (
+                        ).map(header => (
                           <th
                             key={header.dayId}
                             colSpan={header.colSpan}

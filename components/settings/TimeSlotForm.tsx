@@ -72,10 +72,6 @@ const normalizeTimeValue = (value: unknown): string => {
 function clearScheduleFilterCaches() {
   if (typeof window === 'undefined') return
   const keys = [
-    'weekly-schedule-filters',
-    'baseline-schedule-filters',
-    'weekly-schedule-available-classroom-ids',
-    'baseline-schedule-available-classroom-ids',
     'weekly-schedule-available-time-slot-ids',
     'baseline-schedule-available-time-slot-ids',
   ]

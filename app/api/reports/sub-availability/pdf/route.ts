@@ -21,7 +21,6 @@ const parseBoolean = (value: string | null, fallback: boolean) => {
 }
 const parseNameFormat = (value: string | null): 'display' | 'full' =>
   value === 'full' ? 'full' : 'display'
-const parseFooterNotes = (value: string | null) => (value ? value.slice(0, 1500) : '')
 const parseFooterNotesHtml = (value: string | null) => (value ? value.slice(0, 4000) : '')
 const parseTopHeaderHtml = (value: string | null) => (value ? value.slice(0, 2000) : '')
 
@@ -93,7 +92,6 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const colorFriendly = parseBoolean(searchParams.get('colorFriendly'), true)
     const nameFormat = parseNameFormat(searchParams.get('nameFormat'))
-    const footerNotes = parseFooterNotes(searchParams.get('footerNotes'))
     const footerNotesHtml = parseFooterNotesHtml(searchParams.get('footerNotesHtml'))
     const topHeaderHtml = parseTopHeaderHtml(searchParams.get('topHeaderHtml'))
 
@@ -201,7 +199,6 @@ export async function GET(request: Request) {
       generatedAt: formatGeneratedAt(now, timeZone),
       reportContext: model,
       colorFriendly,
-      footerNotes,
       footerNotesHtml,
       topHeaderHtml,
     })
