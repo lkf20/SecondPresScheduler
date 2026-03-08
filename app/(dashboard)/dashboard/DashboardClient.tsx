@@ -986,7 +986,7 @@ export default function DashboardClient({
                 {overview.scheduled_subs.map(assignment => (
                   <div
                     key={assignment.id}
-                    className="group relative flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3"
+                    className="group relative flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-md transition-shadow hover:shadow-lg"
                   >
                     {assignment.notes ? (
                       <span
@@ -1113,7 +1113,7 @@ export default function DashboardClient({
                           {classroom.slots.map(slot => (
                             <div
                               key={slot.id}
-                              className="grid gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 md:grid-cols-[1fr_auto]"
+                              className="grid gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-md transition-shadow hover:shadow-lg md:grid-cols-[1fr_auto]"
                             >
                               <div className="flex flex-wrap items-center gap-4 min-w-0">
                                 <div className="min-w-[160px] space-y-3 flex-shrink-0">
@@ -1216,7 +1216,7 @@ export default function DashboardClient({
                           {classroom.slots.map(slot => (
                             <div
                               key={slot.id}
-                              className="grid gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 md:grid-cols-[1fr_auto]"
+                              className="grid gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-md transition-shadow hover:shadow-lg md:grid-cols-[1fr_auto]"
                             >
                               <div className="flex flex-wrap items-center gap-4 min-w-0">
                                 <div className="min-w-[160px] space-y-3 flex-shrink-0">
