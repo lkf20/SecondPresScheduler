@@ -5,7 +5,7 @@ import { createErrorResponse } from '@/lib/utils/errors'
 import { expandDateRangeWithTimeZone } from '@/lib/utils/date'
 import {
   getStaffingEndDate,
-  getStaffingWeeksLabel,
+  getStaffingWeeksLabelFromCount,
   STAFFING_BOUNDARY_DAY,
 } from '@/lib/dashboard/staffing-boundary'
 
@@ -220,8 +220,11 @@ export async function GET(request: NextRequest) {
 
     const dateStart = belowDates[0].date
     const dateEnd = belowDates[belowDates.length - 1].date
-    const weeksLabel = getStaffingWeeksLabel(dateStart, dateEnd)
+    // Use count of dates that need coverage so we don't overcount when there are gaps
+    // (dates that meet target due to temp coverage are excluded from belowDates).
+    const weeksLabel = getStaffingWeeksLabelFromCount(belowDates.length)
     const targetType = belowDates[0].status === 'below_required' ? 'required' : 'preferred'
+    const datesNeedingCoverage = belowDates.map(d => d.date)
 
     return NextResponse.json({
       belowTarget: true,
@@ -229,6 +232,7 @@ export async function GET(request: NextRequest) {
       dateEnd,
       weeksLabel,
       targetType,
+      datesNeedingCoverage,
       cappedByBoundary: dateEnd >= STAFFING_BOUNDARY_DAY,
     })
   } catch (error) {

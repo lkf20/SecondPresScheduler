@@ -25,6 +25,16 @@ export function getStaffingEndDate(startDate: string): string {
 }
 
 /**
+ * Returns a label for the number of occurrence-weeks (e.g. number of dates that need coverage).
+ * Use this when the shortfall is not continuous so calendar span would overcount.
+ */
+export function getStaffingWeeksLabelFromCount(occurrenceCount: number): string {
+  if (occurrenceCount <= 0) return '0 weeks'
+  if (occurrenceCount >= 12) return '12 or more weeks'
+  return occurrenceCount === 1 ? '1 week' : `${occurrenceCount} weeks`
+}
+
+/**
  * Returns a label for the run length: "12 or more weeks" when the range is not capped by the boundary
  * and spans 12+ weeks; "X weeks" when capped by the boundary (weeks to May 14) or when the run is shorter.
  */

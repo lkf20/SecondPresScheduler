@@ -2,6 +2,7 @@ import {
   STAFFING_BOUNDARY_DAY,
   getStaffingEndDate,
   getStaffingWeeksLabel,
+  getStaffingWeeksLabelFromCount,
   getStaffingWeeksNumber,
 } from '../staffing-boundary'
 
@@ -46,6 +47,24 @@ describe('staffing-boundary', () => {
     it('returns "X weeks" when run is shorter than 12 weeks and before boundary', () => {
       expect(getStaffingWeeksLabel('2026-03-09', '2026-03-30')).toBe('3 weeks')
       expect(getStaffingWeeksLabel('2026-03-09', '2026-03-16')).toBe('1 week')
+    })
+  })
+
+  describe('getStaffingWeeksLabelFromCount', () => {
+    it('returns "0 weeks" for 0', () => {
+      expect(getStaffingWeeksLabelFromCount(0)).toBe('0 weeks')
+    })
+    it('returns "1 week" for 1', () => {
+      expect(getStaffingWeeksLabelFromCount(1)).toBe('1 week')
+    })
+    it('returns "X weeks" for 2–11', () => {
+      expect(getStaffingWeeksLabelFromCount(2)).toBe('2 weeks')
+      expect(getStaffingWeeksLabelFromCount(5)).toBe('5 weeks')
+      expect(getStaffingWeeksLabelFromCount(11)).toBe('11 weeks')
+    })
+    it('returns "12 or more weeks" for 12+', () => {
+      expect(getStaffingWeeksLabelFromCount(12)).toBe('12 or more weeks')
+      expect(getStaffingWeeksLabelFromCount(20)).toBe('12 or more weeks')
     })
   })
 
