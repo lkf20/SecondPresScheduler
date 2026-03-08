@@ -15,6 +15,7 @@ import { useWeeklySchedule } from '@/lib/hooks/use-weekly-schedule'
 import { useScheduleSettings } from '@/lib/hooks/use-schedule-settings'
 import { useFilterOptions } from '@/lib/hooks/use-filter-options'
 import Link from 'next/link'
+import { toast } from 'sonner'
 import { invalidateWeeklySchedule } from '@/lib/utils/invalidation'
 import { isSlotInactive } from '@/lib/utils/schedule-slot-activity'
 import { useSchool } from '@/lib/contexts/SchoolContext'
@@ -291,6 +292,77 @@ export default function WeeklySchedulePage() {
       queryKey: ['weeklySchedule', schoolId],
       type: 'active',
     })
+  }
+
+  const handleClosureMarkOpen = async (closureId: string) => {
+    try {
+      const res = await fetch('/api/settings/calendar', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delete_closure_ids: [closureId] }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to mark open')
+      }
+      toast.success('Closure removed. School is open for this time.')
+      await handleRefresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update')
+    }
+  }
+
+  const handleClosureMarkOpenForDay = async (date: string) => {
+    const wholeDayClosure = schoolClosures.find(
+      (c: { date: string; time_slot_id: string | null }) =>
+        c.date === date && c.time_slot_id === null
+    )
+    if (!wholeDayClosure) {
+      toast.info('No whole-day closure for this date.')
+      return
+    }
+    try {
+      const res = await fetch('/api/settings/calendar', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delete_closure_ids: [wholeDayClosure.id] }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to mark open')
+      }
+      toast.success('Closure removed. School is open for this day.')
+      await handleRefresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update')
+    }
+  }
+
+  const handleClosureChangeReason = async (closureId: string, newReason: string) => {
+    const closure = schoolClosures.find((c: { id: string }) => c.id === closureId)
+    if (!closure) return
+    try {
+      const res = await fetch('/api/settings/calendar', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          delete_closure_ids: [closureId],
+          add_closure: {
+            date: closure.date,
+            time_slot_id: closure.time_slot_id ?? null,
+            reason: newReason.trim() || null,
+          },
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to update reason')
+      }
+      toast.success('Closure reason updated.')
+      await handleRefresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update')
+    }
   }
 
   // Apply filters to data
@@ -729,22 +801,23 @@ export default function WeeklySchedulePage() {
             allowCardClick
             readOnly
             leadingFilterContent={
-              <div className="flex items-center gap-2">
-                <Link href="/settings/calendar">
-                  <Button variant="teal" className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    Manage Calendar
-                  </Button>
-                </Link>
-                <Button
-                  variant="outline"
-                  onClick={() => setFilterPanelOpen(true)}
-                  className="flex items-center gap-2"
-                >
-                  <Filter className="h-4 w-4" />
-                  Views & Filters
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                onClick={() => setFilterPanelOpen(true)}
+                className="flex items-center gap-2"
+              >
+                <Filter className="h-4 w-4" />
+                Views & Filters
+              </Button>
+            }
+            trailingFilterContent={
+              <Link
+                href="/settings/calendar"
+                className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors"
+              >
+                <Calendar className="h-4 w-4" />
+                Manage Calendar
+              </Link>
             }
             displayModeCounts={displayModeCounts}
             displayMode={filters?.displayMode ?? 'all-scheduled-staff'}
@@ -781,6 +854,9 @@ export default function WeeklySchedulePage() {
                 : null
             }
             schoolClosures={schoolClosures}
+            onClosureMarkOpen={handleClosureMarkOpen}
+            onClosureMarkOpenForDay={handleClosureMarkOpenForDay}
+            onClosureChangeReason={handleClosureChangeReason}
           />
           <FilterPanel
             isOpen={filterPanelOpen}

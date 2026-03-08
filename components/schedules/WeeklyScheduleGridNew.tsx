@@ -7,7 +7,7 @@ import ScheduleSidePanel from './ScheduleSidePanel'
 import type { WeeklyScheduleData, WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 import { parseLocalDate } from '@/lib/utils/date'
-import { isCellClosed } from '@/lib/utils/school-closures'
+import { isCellClosed, getMatchingClosure } from '@/lib/utils/school-closures'
 import { isSlotEffectivelyInactive } from '@/lib/utils/schedule-slot-activity'
 import { SCHEDULE_INACTIVE_LEGEND_DOT_CLASS } from '@/lib/ui/schedule-inactive-tokens'
 
@@ -65,8 +65,21 @@ interface WeeklyScheduleGridNewProps {
   returnToWeekly?: boolean
   /** Renders to the left of filter chips (e.g. Views & Filters button). Only used when showFilterChips is true. */
   leadingFilterContent?: React.ReactNode
+  /** Renders on the right side of the filter row (e.g. Manage Calendar). Only used when showFilterChips is true. */
+  trailingFilterContent?: React.ReactNode
   /** School closures for the displayed week; used to render "School Closed" on closed cells. */
-  schoolClosures?: Array<{ date: string; time_slot_id: string | null }>
+  schoolClosures?: Array<{
+    id: string
+    date: string
+    time_slot_id: string | null
+    reason?: string | null
+  }>
+  /** Called when user marks a closure as open (deletes it). */
+  onClosureMarkOpen?: (closureId: string) => void | Promise<void>
+  /** Called when user marks the whole day open (deletes whole-day closure for date). */
+  onClosureMarkOpenForDay?: (date: string) => void | Promise<void>
+  /** Called when user changes a closure's reason. */
+  onClosureChangeReason?: (closureId: string, newReason: string) => void | Promise<void>
 }
 
 type WeeklyScheduleCellData = WeeklyScheduleData & {
@@ -455,7 +468,11 @@ export default function WeeklyScheduleGridNew({
   readOnly = false,
   returnToWeekly = false,
   leadingFilterContent,
+  trailingFilterContent,
   schoolClosures = [],
+  onClosureMarkOpen,
+  onClosureMarkOpenForDay,
+  onClosureChangeReason,
 }: WeeklyScheduleGridNewProps) {
   const [selectedCell, setSelectedCell] = useState<{
     dayId: string
@@ -758,43 +775,46 @@ export default function WeeklyScheduleGridNew({
         />
         {/* Filter chips - separate row below legend */}
         {showFilterChips && (
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            {leadingFilterContent}
-            {[
-              { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
-              {
-                value: 'coverage-issues' as const,
-                label: `Coverage Issues (${countsForChips.coverageIssues})`,
-              },
-              { value: 'substitutes-only' as const, label: `Subs (${countsForChips.subs})` },
-              { value: 'absences' as const, label: `Absences (${countsForChips.absences})` },
-              {
-                value: 'permanent-only' as const,
-                label: `Permanent staff (${countsForChips.permanent})`,
-              },
-            ].map(option => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={e => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  onDisplayModeChange?.(option.value)
-                }}
-                className={
-                  displayMode === option.value
-                    ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
-                    : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
-                }
-              >
-                {option.label}
-              </button>
-            ))}
-            {slotCounts && (
-              <p className="ml-4 text-sm text-muted-foreground italic">
-                Showing {slotCounts.shown} of {slotCounts.total} slots
-              </p>
-            )}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {leadingFilterContent}
+              {[
+                { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
+                {
+                  value: 'coverage-issues' as const,
+                  label: `Coverage Issues (${countsForChips.coverageIssues})`,
+                },
+                { value: 'substitutes-only' as const, label: `Subs (${countsForChips.subs})` },
+                { value: 'absences' as const, label: `Absences (${countsForChips.absences})` },
+                {
+                  value: 'permanent-only' as const,
+                  label: `Permanent staff (${countsForChips.permanent})`,
+                },
+              ].map(option => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={e => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    onDisplayModeChange?.(option.value)
+                  }}
+                  className={
+                    displayMode === option.value
+                      ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
+                      : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
+                  }
+                >
+                  {option.label}
+                </button>
+              ))}
+              {slotCounts && (
+                <p className="ml-4 text-sm text-muted-foreground italic">
+                  Showing {slotCounts.shown} of {slotCounts.total} slots
+                </p>
+              )}
+            </div>
+            {trailingFilterContent}
           </div>
         )}
 
@@ -1012,6 +1032,24 @@ export default function WeeklyScheduleGridNew({
                                       )
                                     : false
                                 }
+                                closureMetadata={
+                                  weekStartISO
+                                    ? getMatchingClosure(
+                                        weekStartISO,
+                                        day.number,
+                                        timeSlot.id,
+                                        schoolClosures as Array<{
+                                          id: string
+                                          date: string
+                                          time_slot_id: string | null
+                                          reason: string | null
+                                        }>
+                                      )
+                                    : null
+                                }
+                                onClosureMarkOpen={onClosureMarkOpen}
+                                onClosureMarkOpenForDay={onClosureMarkOpenForDay}
+                                onClosureChangeReason={onClosureChangeReason}
                                 onClick={() =>
                                   handleCellClick(
                                     day.id,
@@ -1074,43 +1112,46 @@ export default function WeeklyScheduleGridNew({
         />
         {/* Filter chips - separate row below legend */}
         {showFilterChips && (
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            {leadingFilterContent}
-            {[
-              { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
-              {
-                value: 'coverage-issues' as const,
-                label: `Coverage Issues (${countsForChips.coverageIssues})`,
-              },
-              { value: 'substitutes-only' as const, label: `Subs (${countsForChips.subs})` },
-              { value: 'absences' as const, label: `Absences (${countsForChips.absences})` },
-              {
-                value: 'permanent-only' as const,
-                label: `Permanent staff (${countsForChips.permanent})`,
-              },
-            ].map(option => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={e => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  onDisplayModeChange?.(option.value)
-                }}
-                className={
-                  displayMode === option.value
-                    ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
-                    : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
-                }
-              >
-                {option.label}
-              </button>
-            ))}
-            {slotCounts && (
-              <p className="ml-4 text-sm text-muted-foreground italic">
-                Showing {slotCounts.shown} of {slotCounts.total} slots
-              </p>
-            )}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {leadingFilterContent}
+              {[
+                { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
+                {
+                  value: 'coverage-issues' as const,
+                  label: `Coverage Issues (${countsForChips.coverageIssues})`,
+                },
+                { value: 'substitutes-only' as const, label: `Subs (${countsForChips.subs})` },
+                { value: 'absences' as const, label: `Absences (${countsForChips.absences})` },
+                {
+                  value: 'permanent-only' as const,
+                  label: `Permanent staff (${countsForChips.permanent})`,
+                },
+              ].map(option => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={e => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    onDisplayModeChange?.(option.value)
+                  }}
+                  className={
+                    displayMode === option.value
+                      ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
+                      : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
+                  }
+                >
+                  {option.label}
+                </button>
+              ))}
+              {slotCounts && (
+                <p className="ml-4 text-sm text-muted-foreground italic">
+                  Showing {slotCounts.shown} of {slotCounts.total} slots
+                </p>
+              )}
+            </div>
+            {trailingFilterContent}
           </div>
         )}
 
@@ -1341,6 +1382,24 @@ export default function WeeklyScheduleGridNew({
                                 ? isCellClosed(weekStartISO, day.number, slot.id, schoolClosures)
                                 : false
                             }
+                            closureMetadata={
+                              weekStartISO
+                                ? getMatchingClosure(
+                                    weekStartISO,
+                                    day.number,
+                                    slot.id,
+                                    schoolClosures as Array<{
+                                      id: string
+                                      date: string
+                                      time_slot_id: string | null
+                                      reason: string | null
+                                    }>
+                                  )
+                                : null
+                            }
+                            onClosureMarkOpen={onClosureMarkOpen}
+                            onClosureMarkOpenForDay={onClosureMarkOpenForDay}
+                            onClosureChangeReason={onClosureChangeReason}
                             onClick={() =>
                               handleCellClick(
                                 day.id,
