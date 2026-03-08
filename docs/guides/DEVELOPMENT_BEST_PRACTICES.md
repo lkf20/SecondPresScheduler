@@ -116,7 +116,7 @@ This document outlines best practices for developing and maintaining the Prescho
 
 ### Staff Editor Invariants
 
-- **Availability tab visibility must be live**: In Staff settings, `Availability` is shown only when the current Overview selections qualify (`Substitute` checked or `Flexible` role selected).
+- **Availability tab visibility must be live**: In Staff settings, `Availability` is shown only when `Substitute` is checked in the current Overview selections.
 - **No stale tab state**: If those selections are removed during editing, the `Availability` tab should hide immediately and the UI should return to `Overview` if needed.
 - **Regression tests required**: Any changes to Staff role/sub logic should include a test that verifies tab visibility updates immediately when toggling role/sub checkboxes.
 
