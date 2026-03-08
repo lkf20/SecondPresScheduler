@@ -223,7 +223,10 @@ export async function GET(request: NextRequest) {
     // Use count of dates that need coverage so we don't overcount when there are gaps
     // (dates that meet target due to temp coverage are excluded from belowDates).
     const weeksLabel = getStaffingWeeksLabelFromCount(belowDates.length)
-    const targetType = belowDates[0].status === 'below_required' ? 'required' : 'preferred'
+    // Use worst status in range so Add Temporary Coverage form pre-fills correctly
+    // (e.g. if any date is below_required, default to required target).
+    const hasBelowRequired = belowDates.some(d => d.status === 'below_required')
+    const targetType = hasBelowRequired ? 'required' : 'preferred'
     const datesNeedingCoverage = belowDates.map(d => d.date)
 
     return NextResponse.json({
