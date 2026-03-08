@@ -88,7 +88,7 @@ test('Floater math correctly calculates staffing status @gold', async ({ page })
   })
 
   await page.route('**/api/weekly-schedule**', async route => {
-    await route.fulfill(json(weeklyFixture))
+    await route.fulfill(json({ classrooms: weeklyFixture, school_closures: [] }))
   })
   await page.route('**/api/schedule-settings**', async route => {
     await route.fulfill(json({ selected_day_ids: ['d1'] }))

@@ -3,9 +3,12 @@
 import { useQuery } from '@tanstack/react-query'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 import { weeklyScheduleKey } from '@/lib/utils/query-keys'
-import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
+import type {
+  WeeklyScheduleDataByClassroom,
+  WeeklyScheduleApiResponse,
+} from '@/lib/api/weekly-schedule'
 
-async function fetchWeeklySchedule(weekStartISO: string): Promise<WeeklyScheduleDataByClassroom[]> {
+async function fetchWeeklySchedule(weekStartISO: string): Promise<WeeklyScheduleApiResponse> {
   const url = new URL('/api/weekly-schedule', window.location.origin)
   if (weekStartISO) {
     url.searchParams.set('weekStartISO', weekStartISO)
@@ -22,13 +25,11 @@ async function fetchWeeklySchedule(weekStartISO: string): Promise<WeeklySchedule
 
 /**
  * Hook for fetching weekly schedule data
- * The API fetches recurring teacher schedules and date-specific substitute assignments for the selected week
+ * The API fetches recurring teacher schedules, date-specific substitute assignments,
+ * and school closures for the selected week.
  * weekStartISO should be the Monday of the week in ISO format (YYYY-MM-DD)
  */
-export function useWeeklySchedule(
-  weekStartISO: string,
-  initialData?: WeeklyScheduleDataByClassroom[]
-) {
+export function useWeeklySchedule(weekStartISO: string, initialData?: WeeklyScheduleApiResponse) {
   const schoolId = useSchool()
 
   return useQuery({

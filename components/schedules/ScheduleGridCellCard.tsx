@@ -12,6 +12,7 @@ interface ScheduleGridCellCardProps {
   displayMode?: DisplayMode
   allowCardClick: boolean
   isInactive: boolean
+  isClosed?: boolean
   onClick?: () => void
 }
 
@@ -24,8 +25,28 @@ export default function ScheduleGridCellCard({
   displayMode = 'all-scheduled-staff',
   allowCardClick,
   isInactive,
+  isClosed = false,
   onClick,
 }: ScheduleGridCellCardProps) {
+  if (isClosed) {
+    return (
+      <div
+        className="rounded-lg border border-gray-200 shadow-sm min-h-[120px] flex-shrink-0 bg-slate-50 flex items-center justify-center"
+        style={{
+          width: '220px',
+          minWidth: '220px',
+          maxWidth: '220px',
+          marginTop: '6px',
+          marginBottom: '6px',
+          marginLeft: '10px',
+          marginRight: '10px',
+        }}
+      >
+        <span className="text-sm font-medium text-slate-500">School Closed</span>
+      </div>
+    )
+  }
+
   return (
     <div
       className={`rounded-lg border border-gray-200 shadow-sm transition-all duration-200 min-h-[120px] flex-shrink-0 ${

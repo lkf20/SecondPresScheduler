@@ -7,8 +7,14 @@ import ScheduleSidePanel from './ScheduleSidePanel'
 import type { WeeklyScheduleData, WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 import { parseLocalDate } from '@/lib/utils/date'
+import { isCellClosed } from '@/lib/utils/school-closures'
 import { isSlotEffectivelyInactive } from '@/lib/utils/schedule-slot-activity'
 import { SCHEDULE_INACTIVE_LEGEND_DOT_CLASS } from '@/lib/ui/schedule-inactive-tokens'
+
+interface SchoolClosureForGrid {
+  date: string
+  time_slot_id: string | null
+}
 
 interface WeeklyScheduleGridNewProps {
   data: WeeklyScheduleDataByClassroom[]
@@ -59,6 +65,8 @@ interface WeeklyScheduleGridNewProps {
   returnToWeekly?: boolean
   /** Renders to the left of filter chips (e.g. Views & Filters button). Only used when showFilterChips is true. */
   leadingFilterContent?: React.ReactNode
+  /** School closures for the displayed week; used to render "School Closed" on closed cells. */
+  schoolClosures?: Array<{ date: string; time_slot_id: string | null }>
 }
 
 type WeeklyScheduleCellData = WeeklyScheduleData & {
@@ -136,9 +144,11 @@ export function generateClassroomsXDaysGridTemplate(
 function ScheduleLegend({
   showLegendSubstitutes,
   showLegendTemporaryCoverage = true,
+  showSchoolClosed = false,
 }: {
   showLegendSubstitutes: boolean
   showLegendTemporaryCoverage?: boolean
+  showSchoolClosed?: boolean
 }) {
   return (
     <div className="mb-6 p-3 bg-gray-100 rounded-md border border-gray-200">
@@ -211,6 +221,13 @@ function ScheduleLegend({
           <span className={SCHEDULE_INACTIVE_LEGEND_DOT_CLASS} />
           <span className="text-gray-600">Inactive</span>
         </div>
+        {showSchoolClosed && (
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+              School Closed
+            </span>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -438,6 +455,7 @@ export default function WeeklyScheduleGridNew({
   readOnly = false,
   returnToWeekly = false,
   leadingFilterContent,
+  schoolClosures = [],
 }: WeeklyScheduleGridNewProps) {
   const [selectedCell, setSelectedCell] = useState<{
     dayId: string
@@ -736,6 +754,7 @@ export default function WeeklyScheduleGridNew({
         <ScheduleLegend
           showLegendSubstitutes={showLegendSubstitutes}
           showLegendTemporaryCoverage={showLegendTemporaryCoverage}
+          showSchoolClosed={schoolClosures.length > 0}
         />
         {/* Filter chips - separate row below legend */}
         {showFilterChips && (
@@ -983,6 +1002,16 @@ export default function WeeklyScheduleGridNew({
                                 displayMode={displayMode}
                                 allowCardClick={allowCardClick}
                                 isInactive={isInactive}
+                                isClosed={
+                                  weekStartISO
+                                    ? isCellClosed(
+                                        weekStartISO,
+                                        day.number,
+                                        timeSlot.id,
+                                        schoolClosures
+                                      )
+                                    : false
+                                }
                                 onClick={() =>
                                   handleCellClick(
                                     day.id,
@@ -1041,6 +1070,7 @@ export default function WeeklyScheduleGridNew({
         <ScheduleLegend
           showLegendSubstitutes={showLegendSubstitutes}
           showLegendTemporaryCoverage={showLegendTemporaryCoverage}
+          showSchoolClosed={schoolClosures.length > 0}
         />
         {/* Filter chips - separate row below legend */}
         {showFilterChips && (
@@ -1306,6 +1336,11 @@ export default function WeeklyScheduleGridNew({
                             displayMode={displayMode}
                             allowCardClick={allowCardClick}
                             isInactive={isInactive}
+                            isClosed={
+                              weekStartISO
+                                ? isCellClosed(weekStartISO, day.number, slot.id, schoolClosures)
+                                : false
+                            }
                             onClick={() =>
                               handleCellClick(
                                 day.id,

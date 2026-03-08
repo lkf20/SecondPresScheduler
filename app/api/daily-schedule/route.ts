@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getScheduleSnapshotData } from '@/lib/api/weekly-schedule'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
 import { expandDateRangeWithTimeZone } from '@/lib/utils/date'
@@ -60,18 +61,22 @@ export async function GET(request: Request) {
 
     const day = daysData[0]
 
-    const data = await getScheduleSnapshotData({
-      schoolId,
-      selectedDayIds: [day.id],
-      startDateISO: dateParam,
-      endDateISO: dateParam,
-    })
+    const [data, schoolClosures] = await Promise.all([
+      getScheduleSnapshotData({
+        schoolId,
+        selectedDayIds: [day.id],
+        startDateISO: dateParam,
+        endDateISO: dateParam,
+      }),
+      getSchoolClosuresForDateRange(schoolId, dateParam, dateParam),
+    ])
 
     return NextResponse.json({
       date: dateParam,
       day_of_week_id: day.id,
       day_name: day.name,
       data,
+      school_closures: schoolClosures,
     })
   } catch (error: any) {
     console.error('Error fetching daily schedule:', error)

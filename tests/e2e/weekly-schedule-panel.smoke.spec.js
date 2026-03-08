@@ -73,7 +73,7 @@ async function mockWeeklyScheduleApis(page) {
 
   await page.route('**/api/weekly-schedule**', async route => {
     weeklyScheduleRequestCount += 1
-    await route.fulfill(json(weeklyScheduleFixture))
+    await route.fulfill(json({ classrooms: weeklyScheduleFixture, school_closures: [] }))
   })
 
   await page.route('**/api/schedule-settings**', async route => {

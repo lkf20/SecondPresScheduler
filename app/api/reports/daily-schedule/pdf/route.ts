@@ -5,6 +5,7 @@ import path from 'node:path'
 import puppeteer from 'puppeteer'
 import { createClient } from '@/lib/supabase/server'
 import { getScheduleSnapshotData } from '@/lib/api/weekly-schedule'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import {
   buildDailyScheduleFilename,
@@ -108,12 +109,15 @@ export async function GET(request: Request) {
     }
 
     const day = daysData[0]
-    const data = await getScheduleSnapshotData({
-      schoolId,
-      selectedDayIds: [day.id],
-      startDateISO: dateParam,
-      endDateISO: dateParam,
-    })
+    const [data, schoolClosures] = await Promise.all([
+      getScheduleSnapshotData({
+        schoolId,
+        selectedDayIds: [day.id],
+        startDateISO: dateParam,
+        endDateISO: dateParam,
+      }),
+      getSchoolClosuresForDateRange(schoolId, dateParam, dateParam),
+    ])
 
     const html = buildDailySchedulePdfHtml({
       dateISO: dateParam,
@@ -126,6 +130,7 @@ export async function GET(request: Request) {
         teacherNameFormat,
       },
       timeZone,
+      schoolClosures,
     })
 
     const resolveExecutablePath = () => {

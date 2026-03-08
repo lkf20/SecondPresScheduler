@@ -134,11 +134,30 @@ When adding a new UI element (e.g. a chip, badge, or label):
 - Work via pull requests. Follow the repo’s branch and commit rules (see `.cursor/rules` if present).
 - Before creating or merging a PR, complete the [Pre-PR integrity checklist](docs/guides/PRE_PR_CHECKLIST.md). Use the PR template (Risks, Checks run, Evidence, Tests for non-trivial changes) for every PR.
 
+## School Calendar
+
+- **First and last day of school:** Stored in `schedule_settings.first_day_of_school` and `last_day_of_school`. Managed on the School Calendar settings page (`/settings/calendar`).
+- **School closures:** Stored in `school_closures` (date, optional `time_slot_id`, reason). When `time_slot_id` is null, the whole day is closed; when set, only that time slot is closed on that date.
+- **Where closures appear:** Weekly schedule grid and baseline schedule show "School Closed" for closed cells. Printable Today's Schedule (on-screen and PDF) shows "School Closed" for closed cells. The weekly schedule legend includes "School Closed" when closures exist.
+- **Manage Calendar link:** The weekly schedule page has a "Manage Calendar" button (teal variant) that links to `/settings/calendar`.
+- **Helpers:** Use `isCellClosed` (from `lib/utils/school-closures.ts`) for weekly grid cells (needs `weekStartISO`, `dayNumber`, `timeSlotId`). Use `isSlotClosedOnDate` for single-date contexts (daily schedule, PDF). Use `getCellDateISO` (from `lib/utils/date.ts`) to compute the calendar date for a cell given week start and day number.
+- **Legends:** If you change how closed cells are shown (e.g. styling or wording), update the "School Closed" legend in the weekly schedule grid.
+
 ## Baseline schedule: enrollment and staffing
 
 - **Per-class-group enrollment:** A schedule cell can store enrollment per class group (e.g. Toddler A: 3, Toddler B: 2) in `schedule_cell_class_groups.enrollment`. When any per-class enrollment is set, the total used for ratio is the sum of those values; otherwise the cell’s `enrollment_for_staffing` is used. The grid shows labels like “Toddler A (3), Toddler B (2)” when per-class enrollment is present.
 - **Staffing overrides:** A cell can override the auto-calculated required/preferred staff with `schedule_cells.required_staff_override` and `preferred_staff_override` (e.g. for nap time or combined groups). When set, these overrides are used instead of the ratio-based calculation. Use the shared helper `getTotalEnrollmentForCalculation` (from `ScheduleSidePanel`) for total enrollment and apply overrides in all places that compute or display required/preferred staff (ScheduleCell, ScheduleSidePanel, dashboard overview, slot-run, flex availability, baseline-schedule filtering).
 - **Legends:** If you add or change how enrollment or staffing targets are shown in the grid or panel, update any related legend or key.
+
+## School Calendar
+
+- **Purpose:** School Calendar lets admins set the first and last day of school and manage closed days (holidays, snow days, etc.). Closed days or time slots appear as “School Closed” across the app.
+- **Settings:** `/settings/calendar` — School Year (first/last day) and Closed Days (add/remove closures). Closures can apply to all time slots (whole day) or specific time slots.
+- **Data:** `schedule_settings.first_day_of_school`, `schedule_settings.last_day_of_school`; `school_closures` table (`date`, `time_slot_id` nullable — null = whole day, non-null = that slot only).
+- **APIs:** `GET/PATCH /api/settings/calendar` (query params `startDate`/`endDate` for closures); weekly-schedule and daily-schedule APIs return `school_closures` for the requested range.
+- **Where closures appear:** Weekly Schedule grid (closed cells show “School Closed”); Printable Today’s Schedule (on-screen and PDF); Manage Calendar link on the weekly schedule page.
+- **Helpers:** `lib/utils/school-closures.ts` — `isCellClosed(weekStartISO, dayNumber, timeSlotId, closures)` for weekly grid; `isSlotClosedOnDate(dateISO, timeSlotId, closures)` for daily schedule/PDF. `lib/utils/date.ts` — `getCellDateISO(weekStartISO, dayNumber)` for mapping week + day to date.
+- **Legends:** When closures exist in the displayed week, the Weekly Schedule legend includes “School Closed.” Keep it in sync if closure styling changes.
 
 ## Sub Finder: contact status and per-shift display
 

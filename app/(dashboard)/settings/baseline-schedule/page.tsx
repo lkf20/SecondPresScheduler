@@ -51,10 +51,12 @@ export default function BaselineSchedulePage() {
 
   // React Query hooks
   const {
-    data: scheduleData = [],
+    data: scheduleResponse,
     isLoading: isLoadingSchedule,
     error: scheduleError,
   } = useWeeklySchedule(weekStartISO)
+  const scheduleData = scheduleResponse?.classrooms ?? []
+  const schoolClosures = scheduleResponse?.school_closures ?? []
   const { data: scheduleSettings, isLoading: isLoadingSettings } = useScheduleSettings()
   const { data: filterOptions, isLoading: isLoadingFilters } = useFilterOptions()
 
@@ -472,6 +474,7 @@ export default function BaselineSchedulePage() {
             showLegendTemporaryCoverage={false}
             showFilterChips={false}
             returnToWeekly={returnToWeekly}
+            schoolClosures={schoolClosures}
           />
           <FilterPanel
             isOpen={filterPanelOpen}

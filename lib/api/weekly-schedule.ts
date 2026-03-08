@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import type { SchoolClosure } from '@/lib/api/school-calendar'
 import { getStaffDisplayName as formatDisplayName } from '@/lib/utils/staff-display-name'
 import type { DisplayNameFormat } from '@/lib/utils/staff-display-name'
 import { Database } from '@/types/database'
@@ -208,6 +209,19 @@ export interface WeeklyScheduleData {
   }>
 }
 
+/** API response shape for GET /api/weekly-schedule */
+export interface WeeklyScheduleApiResponse {
+  classrooms: WeeklyScheduleDataByClassroom[]
+  school_closures: Array<{
+    id: string
+    school_id: string
+    date: string
+    time_slot_id: string | null
+    reason: string | null
+    created_at: string
+  }>
+}
+
 export interface WeeklyScheduleDataByClassroom {
   classroom_id: string
   classroom_name: string
@@ -257,6 +271,12 @@ export interface WeeklyScheduleDataByClassroom {
       } | null
     }>
   }>
+}
+
+/** Response shape from GET /api/weekly-schedule */
+export interface WeeklyScheduleApiResponse {
+  classrooms: WeeklyScheduleDataByClassroom[]
+  school_closures: SchoolClosure[]
 }
 
 export async function getScheduleSnapshotData({

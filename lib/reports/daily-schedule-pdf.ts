@@ -1,6 +1,7 @@
 import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 import { BREAK_COVERAGE_ENABLED } from '@/lib/feature-flags'
 import { formatDateISOInTimeZone } from '@/lib/utils/date'
+import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 
 type PdfOptions = {
   showAbsencesAndSubs: boolean
@@ -155,12 +156,14 @@ export function buildDailySchedulePdfHtml({
   data,
   options,
   timeZone,
+  schoolClosures = [],
 }: {
   dateISO: string
   generatedAt: string
   data: WeeklyScheduleDataByClassroom[]
   options: PdfOptions
   timeZone: string
+  schoolClosures?: Array<{ date: string; time_slot_id: string | null }>
 }) {
   const timeSlots = buildTimeSlots(data)
   const title = formatDateISOInTimeZone(dateISO, timeZone, {
@@ -213,6 +216,10 @@ export function buildDailySchedulePdfHtml({
         const cells = classrooms
           .map(classroom => {
             const slotData = getSlotForClassroom(classroom, slot.id)
+            if (isSlotClosedOnDate(dateISO, slot.id, schoolClosures)) {
+              return `
+            <td style="border:1px solid ${color.grid}; padding:6px; font-size:${fontSize}px; vertical-align:middle; color:#64748B; text-align:center;">School Closed</td>`
+            }
             const assignments = slotData?.assignments ?? []
             const absences = slotData?.absences ?? []
             const absentTeacherIds = new Set(absences.map(absence => absence.teacher_id))

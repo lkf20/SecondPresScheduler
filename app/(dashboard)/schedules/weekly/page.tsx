@@ -9,11 +9,12 @@ import WeekPicker from '@/components/schedules/WeekPicker'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
 import { Button } from '@/components/ui/button'
-import { Filter, RefreshCw } from 'lucide-react'
+import { Calendar, Filter, RefreshCw } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useWeeklySchedule } from '@/lib/hooks/use-weekly-schedule'
 import { useScheduleSettings } from '@/lib/hooks/use-schedule-settings'
 import { useFilterOptions } from '@/lib/hooks/use-filter-options'
+import Link from 'next/link'
 import { invalidateWeeklySchedule } from '@/lib/utils/invalidation'
 import { isSlotInactive } from '@/lib/utils/schedule-slot-activity'
 import { useSchool } from '@/lib/contexts/SchoolContext'
@@ -42,11 +43,13 @@ export default function WeeklySchedulePage() {
 
   // React Query hooks
   const {
-    data: scheduleData = [],
+    data: scheduleResponse,
     isLoading: isLoadingSchedule,
     isFetching: isFetchingSchedule,
     error: scheduleError,
   } = useWeeklySchedule(weekStartISO)
+  const scheduleData = scheduleResponse?.classrooms ?? []
+  const schoolClosures = scheduleResponse?.school_closures ?? []
   const { data: scheduleSettings, isLoading: isLoadingSettings } = useScheduleSettings()
   const { data: filterOptions, isLoading: isLoadingFilters } = useFilterOptions()
 
@@ -726,14 +729,22 @@ export default function WeeklySchedulePage() {
             allowCardClick
             readOnly
             leadingFilterContent={
-              <Button
-                variant="outline"
-                onClick={() => setFilterPanelOpen(true)}
-                className="flex items-center gap-2"
-              >
-                <Filter className="h-4 w-4" />
-                Views & Filters
-              </Button>
+              <div className="flex items-center gap-2">
+                <Link href="/settings/calendar">
+                  <Button variant="teal" className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Manage Calendar
+                  </Button>
+                </Link>
+                <Button
+                  variant="outline"
+                  onClick={() => setFilterPanelOpen(true)}
+                  className="flex items-center gap-2"
+                >
+                  <Filter className="h-4 w-4" />
+                  Views & Filters
+                </Button>
+              </div>
             }
             displayModeCounts={displayModeCounts}
             displayMode={filters?.displayMode ?? 'all-scheduled-staff'}
@@ -769,6 +780,7 @@ export default function WeeklySchedulePage() {
                   }
                 : null
             }
+            schoolClosures={schoolClosures}
           />
           <FilterPanel
             isOpen={filterPanelOpen}

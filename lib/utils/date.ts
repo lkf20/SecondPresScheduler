@@ -81,6 +81,19 @@ export function expandDateRangeWithTimeZone(
   return results
 }
 
+/**
+ * Get ISO date (YYYY-MM-DD) for a schedule cell given week start (Monday) and day_number.
+ * day_number: 1 = Monday, 2 = Tuesday, ..., 7 = Sunday.
+ */
+export function getCellDateISO(weekStartISO: string, dayNumber: number): string {
+  const d = parseLocalDate(weekStartISO)
+  d.setDate(d.getDate() + (dayNumber - 1))
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 export function formatDateISOInTimeZone(
   dateISO: string,
   timeZone: string,
