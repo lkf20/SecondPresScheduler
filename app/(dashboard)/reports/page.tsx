@@ -5,18 +5,6 @@ import { getHeaderClasses } from '@/lib/utils/colors'
 
 const reports = [
   {
-    name: 'Weekly Schedule',
-    description: 'Generate regular weekly schedule',
-    href: '/reports/weekly-schedule',
-    icon: Calendar,
-  },
-  {
-    name: 'Weekly Schedule with Subs',
-    description: 'Weekly schedule including sub assignments',
-    href: '/reports/weekly-schedule-subs',
-    icon: Calendar,
-  },
-  {
     name: "Today's Schedule",
     description: 'Printable daily schedule snapshot',
     href: '/reports/daily-schedule',

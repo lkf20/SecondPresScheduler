@@ -35,7 +35,7 @@ export default async function ClassesPage() {
         <div className="flex-1">
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Class Groups</h1>
           <p className="text-muted-foreground mt-2">
-            Manage class group names. Drag rows to reorder.
+            Manage class groups and ratios. Drag rows to reorder.
           </p>
         </div>
         <div className="flex-shrink-0">

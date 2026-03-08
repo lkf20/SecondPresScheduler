@@ -222,11 +222,13 @@ export default function TimeOffCard({
 
   // Dashboard and Time Off variants - similar layout
   const isTimeOffVariant = variant === 'time-off'
+  const isDashboardVariant = variant === 'dashboard'
 
   return (
     <div
       className={cn(
         'group relative rounded-lg border border-slate-200 bg-white px-4 py-4',
+        isDashboardVariant && 'shadow-md transition-shadow hover:shadow-lg',
         isTimeOffVariant && 'cursor-pointer transition-all hover:shadow-md hover:border-slate-300',
         className
       )}

@@ -139,8 +139,10 @@ export default function NewStaffPage() {
       const nextTab = data.is_sub ? 'availability' : 'preferences'
       router.push(`/staff/${createdStaff.id}?tab=${nextTab}`)
       router.refresh()
+      return true
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create staff')
+      return false
     }
   }
 
@@ -172,9 +174,9 @@ export default function NewStaffPage() {
           dirty: isOverviewDirty,
           actionLabel: 'Create',
           actionFormId: 'staff-new-overview-form',
-          cardClassName: 'max-w-2xl',
+          cardClassName: 'max-w-[56rem]',
           content: (
-            <div className="max-w-2xl">
+            <div className="max-w-[56rem]">
               <StaffForm
                 onSubmit={handleSubmit}
                 onCancel={() => navigateWithUnsavedGuard('/staff')}
@@ -200,11 +202,21 @@ export default function NewStaffPage() {
         preferences={{
           title: 'Preferences & Qualifications',
           triggerDisabled: true,
-          cardClassName: 'max-w-2xl',
+          cardClassName: 'max-w-[56rem]',
           content: (
             <p className="text-sm text-muted-foreground">
               Create this staff member first. Preferences and qualifications can be managed on their
               staff detail page.
+            </p>
+          ),
+        }}
+        notes={{
+          title: 'Notes',
+          triggerDisabled: true,
+          cardClassName: 'max-w-[56rem]',
+          content: (
+            <p className="text-sm text-muted-foreground">
+              Create this staff member first. Notes can be managed on their staff detail page.
             </p>
           ),
         }}

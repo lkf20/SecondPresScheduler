@@ -28,6 +28,13 @@ export async function POST(request: NextRequest) {
     revalidateTimeSlotDependentPaths()
     return NextResponse.json(timeslot, { status: 201 })
   } catch (error) {
+    const message = error instanceof Error ? error.message : ''
+    if (
+      message === 'Start time and end time are required' ||
+      message === 'End time must be after start time'
+    ) {
+      return NextResponse.json({ error: message }, { status: 400 })
+    }
     return createErrorResponse(error, 'Failed to create time slot', 500, 'POST /api/timeslots')
   }
 }

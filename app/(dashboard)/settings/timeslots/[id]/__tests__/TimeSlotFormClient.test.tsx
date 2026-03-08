@@ -138,7 +138,7 @@ describe('TimeSlotForm (edit)', () => {
     global.fetch = originalFetch
   })
 
-  it('submits updates and normalizes optional text/time fields to null', async () => {
+  it('requires start and end time before submitting', async () => {
     render(
       <TimeSlotForm
         mode="edit"
@@ -160,28 +160,40 @@ describe('TimeSlotForm (edit)', () => {
     fireEvent.change(screen.getByDisplayValue('10:00'), { target: { value: '' } })
     fireEvent.click(screen.getByRole('button', { name: /update/i }))
 
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/timeslots/slot-1',
-        expect.objectContaining({ method: 'PUT' })
-      )
-    })
-
-    const putCall = (global.fetch as jest.Mock).mock.calls.find(
-      call => call[0] === '/api/timeslots/slot-1'
+    expect(await screen.findByText('Start time is required')).toBeInTheDocument()
+    expect(await screen.findByText('End time is required')).toBeInTheDocument()
+    expect(global.fetch).not.toHaveBeenCalledWith(
+      '/api/timeslots/slot-1',
+      expect.objectContaining({ method: 'PUT' })
     )
-    expect(JSON.parse(putCall[1].body)).toMatchObject({
-      code: 'EM',
-      name: null,
-      default_start_time: null,
-      default_end_time: null,
-      is_active: true,
-    })
-    const { toast } = await import('sonner')
-    expect(toast.success).toHaveBeenCalledWith('EM updated.')
-    expect(invalidateSchedulingSurfacesMock).toHaveBeenCalled()
-    expect(pushMock).toHaveBeenCalledWith('/settings/timeslots')
-    expect(refreshMock).toHaveBeenCalled()
+  })
+
+  it('shows validation error when end time is not after start time', async () => {
+    render(
+      <TimeSlotForm
+        mode="edit"
+        timeSlot={
+          {
+            id: 'slot-1',
+            code: 'EM',
+            name: 'Early Morning',
+            default_start_time: '08:00:00',
+            default_end_time: '10:00:00',
+            is_active: true,
+          } as never
+        }
+      />
+    )
+
+    fireEvent.change(screen.getByDisplayValue('08:00'), { target: { value: '11:00' } })
+    fireEvent.change(screen.getByDisplayValue('10:00'), { target: { value: '10:30' } })
+    fireEvent.click(screen.getByRole('button', { name: /update/i }))
+
+    expect(await screen.findByText('End time must be after start time')).toBeInTheDocument()
+    expect(global.fetch).not.toHaveBeenCalledWith(
+      '/api/timeslots/slot-1',
+      expect.objectContaining({ method: 'PUT' })
+    )
   })
 
   it('shows an error when update fails', async () => {
@@ -200,6 +212,8 @@ describe('TimeSlotForm (edit)', () => {
             id: 'slot-1',
             code: 'EM',
             name: 'Early Morning',
+            default_start_time: '08:00:00',
+            default_end_time: '10:00:00',
             is_active: true,
           } as never
         }
@@ -234,5 +248,39 @@ describe('TimeSlotForm (edit)', () => {
         'This time slot is marked as inactive but still appears in the baseline schedule.'
       )
     ).toBeInTheDocument()
+  })
+
+  it('clears only time-slot availability caches after successful save', async () => {
+    const removeItemSpy = jest.spyOn(window.localStorage.__proto__, 'removeItem')
+
+    render(
+      <TimeSlotForm
+        mode="edit"
+        timeSlot={
+          {
+            id: 'slot-1',
+            code: 'EM',
+            name: 'Early Morning',
+            default_start_time: '08:00:00',
+            default_end_time: '10:00:00',
+            is_active: true,
+          } as never
+        }
+      />
+    )
+
+    fireEvent.change(screen.getByDisplayValue('Early Morning'), { target: { value: 'Late AM' } })
+    fireEvent.click(screen.getByRole('button', { name: /update/i }))
+
+    await waitFor(() => {
+      expect(removeItemSpy).toHaveBeenCalledWith('weekly-schedule-available-time-slot-ids')
+      expect(removeItemSpy).toHaveBeenCalledWith('baseline-schedule-available-time-slot-ids')
+      expect(removeItemSpy).not.toHaveBeenCalledWith('weekly-schedule-filters')
+      expect(removeItemSpy).not.toHaveBeenCalledWith('baseline-schedule-filters')
+      expect(removeItemSpy).not.toHaveBeenCalledWith('weekly-schedule-available-classroom-ids')
+      expect(removeItemSpy).not.toHaveBeenCalledWith('baseline-schedule-available-classroom-ids')
+    })
+
+    removeItemSpy.mockRestore()
   })
 })

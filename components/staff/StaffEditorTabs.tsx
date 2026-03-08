@@ -23,6 +23,7 @@ interface StaffEditorTabsProps {
   overview: EditorSectionConfig
   availability?: EditorSectionConfig
   preferences: EditorSectionConfig
+  notes: EditorSectionConfig
 }
 
 function renderTitle(config: EditorSectionConfig) {
@@ -59,12 +60,12 @@ export default function StaffEditorTabs({
   overview,
   availability,
   preferences,
+  notes,
 }: StaffEditorTabsProps) {
+  const tabColumns = showAvailabilityTab ? 'grid-cols-4' : 'grid-cols-3'
   return (
     <Tabs value={activeTab} onValueChange={onActiveTabChange} className="w-full">
-      <TabsList
-        className={`grid w-full max-w-2xl ${showAvailabilityTab ? 'grid-cols-3' : 'grid-cols-2'}`}
-      >
+      <TabsList className={`grid w-full max-w-[56rem] ${tabColumns}`}>
         <TabsTrigger value="overview" disabled={overview.triggerDisabled}>
           Overview
         </TabsTrigger>
@@ -75,6 +76,9 @@ export default function StaffEditorTabs({
         )}
         <TabsTrigger value="preferences" disabled={preferences.triggerDisabled}>
           Preferences & Qualifications
+        </TabsTrigger>
+        <TabsTrigger value="notes" disabled={notes.triggerDisabled}>
+          Notes
         </TabsTrigger>
       </TabsList>
 
@@ -98,6 +102,13 @@ export default function StaffEditorTabs({
         <Card className={preferences.cardClassName}>
           <CardHeader>{renderTitle(preferences)}</CardHeader>
           <CardContent>{preferences.content}</CardContent>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="notes" className="mt-6">
+        <Card className={notes.cardClassName}>
+          <CardHeader>{renderTitle(notes)}</CardHeader>
+          <CardContent>{notes.content}</CardContent>
         </Card>
       </TabsContent>
     </Tabs>
