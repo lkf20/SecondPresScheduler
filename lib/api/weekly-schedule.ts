@@ -212,14 +212,7 @@ export interface WeeklyScheduleData {
 /** API response shape for GET /api/weekly-schedule */
 export interface WeeklyScheduleApiResponse {
   classrooms: WeeklyScheduleDataByClassroom[]
-  school_closures: Array<{
-    id: string
-    school_id: string
-    date: string
-    time_slot_id: string | null
-    reason: string | null
-    created_at: string
-  }>
+  school_closures: SchoolClosure[]
 }
 
 export interface WeeklyScheduleDataByClassroom {
@@ -271,12 +264,6 @@ export interface WeeklyScheduleDataByClassroom {
       } | null
     }>
   }>
-}
-
-/** Response shape from GET /api/weekly-schedule */
-export interface WeeklyScheduleApiResponse {
-  classrooms: WeeklyScheduleDataByClassroom[]
-  school_closures: SchoolClosure[]
 }
 
 export async function getScheduleSnapshotData({
