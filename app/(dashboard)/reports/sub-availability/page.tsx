@@ -612,15 +612,15 @@ export default function SubAvailabilityReportPage() {
                     dangerouslySetInnerHTML={{ __html: previewFooterNotesHtml }}
                   />
                 ) : null}
-                <style jsx>{`
-                  [contenteditable][data-placeholder]:empty:before {
-                    content: attr(data-placeholder);
-                    color: #94a3b8;
-                  }
-                `}</style>
               </div>
             ) : null}
           </div>
+          <style jsx>{`
+            [contenteditable][data-placeholder]:empty:before {
+              content: attr(data-placeholder);
+              color: #94a3b8;
+            }
+          `}</style>
         </CardContent>
       </Card>
     </div>
