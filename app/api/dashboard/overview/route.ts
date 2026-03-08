@@ -137,7 +137,9 @@ export async function GET(request: NextRequest) {
 
       if (timeOffError) {
         console.error('Error fetching time_off_requests:', timeOffError)
-        // Don't fail the whole request, just log the error
+        // Don't fail the whole request. Treat all requested IDs as active so we don't
+        // silently filter out every time-off item from the dashboard.
+        sourceRequestIds.forEach(id => activeTimeOffRequestIds.add(id))
       } else {
         ;(timeOffRequests || []).forEach(tor => {
           timeOffRequestsMap.set(tor.id, {
