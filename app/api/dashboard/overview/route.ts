@@ -710,6 +710,14 @@ export async function GET(request: NextRequest) {
     }
     const processedStaffingTargets = staffingTargetResults
 
+    // Resolve coverage_request_id from embed: Supabase may return coverage_request_shift as
+    // many-to-one (object) or one-to-many (array); handle both so "Update Sub" link works.
+    const getCoverageRequestId = (sa: any): string | null => {
+      const crs = sa.coverage_request_shift
+      const row = Array.isArray(crs) ? crs[0] : crs
+      return row?.coverage_request_id ?? null
+    }
+
     // Process scheduled subs
     const processedScheduledSubs = (subAssignments || []).map((sa: any) => {
       const sub = sa.sub as any
@@ -737,7 +745,7 @@ export async function GET(request: NextRequest) {
         sub_name: subName,
         sub_id: sub?.id,
         teacher_name: teacherName,
-        coverage_request_id: sa.coverage_request_shift?.coverage_request_id || null,
+        coverage_request_id: getCoverageRequestId(sa),
       }
     })
 
