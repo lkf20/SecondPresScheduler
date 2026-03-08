@@ -56,27 +56,6 @@ export default function ScheduleCell({
   const isInactive = scheduleCell && !scheduleCell.is_active
   const isActive = scheduleCell?.is_active ?? false
 
-  // Targeted client-side debug for floater rendering issue.
-  if (
-    data?.classroom_name === 'Toddler A Room' &&
-    data?.day_name === 'Monday' &&
-    data?.time_slot_code === 'AC'
-  ) {
-    const bellaAssignments =
-      data?.assignments?.filter(a => (a.teacher_name || '').toLowerCase().includes('bella')) || []
-    console.log('[ScheduleCell][FloaterDebug]', {
-      classroom: data.classroom_name,
-      day: data.day_name,
-      time_slot: data.time_slot_code,
-      bella_assignments: bellaAssignments.map(a => ({
-        teacher_name: a.teacher_name,
-        is_floater: a.is_floater ?? false,
-        is_flexible: a.is_flexible ?? false,
-        is_substitute: a.is_substitute ?? false,
-      })),
-    })
-  }
-
   // Get class group names from schedule_cell; show "Name (n)" when per-class enrollment is set
   const classGroupNames =
     scheduleCell?.class_groups && scheduleCell.class_groups.length > 0
@@ -220,23 +199,6 @@ export default function ScheduleCell({
               const classGroupIds = scheduleCell.class_groups?.map(cg => cg.id) ?? []
               const allAssignments = data?.assignments || []
 
-              // Debug: Log all assignments before filtering
-              if (allAssignments.some(a => a.is_substitute === true)) {
-                console.log('[ScheduleCell] All assignments before filtering:', {
-                  totalAssignments: allAssignments.length,
-                  substitutes: allAssignments
-                    .filter(a => a.is_substitute === true)
-                    .map(a => ({
-                      teacher_id: a.teacher_id,
-                      teacher_name: a.teacher_name,
-                      class_group_id: a.class_group_id,
-                      is_substitute: a.is_substitute,
-                    })),
-                  classGroupIds,
-                  classroom: data?.classroom_name || 'Unknown',
-                })
-              }
-
               // Filter assignments: Teachers are assigned to classrooms, not specific class groups
               // All teachers in the assignments array are already filtered by classroom_id in the API
               // Include all teachers assigned to this classroom/day/time slot
@@ -247,27 +209,6 @@ export default function ScheduleCell({
                   // They're already filtered by classroom_id in the API
                   return true
                 }) || []
-
-              // Debug: Log filtered assignments
-              if (allAssignments.some(a => a.is_substitute === true)) {
-                console.log('[ScheduleCell] Filtered assignments:', {
-                  filteredCount: filteredAssignments.length,
-                  substitutes: filteredAssignments
-                    .filter(a => a.is_substitute === true)
-                    .map(a => ({
-                      teacher_id: a.teacher_id,
-                      teacher_name: a.teacher_name,
-                      class_group_id: a.class_group_id,
-                      is_substitute: a.is_substitute,
-                    })),
-                  allAssignments: allAssignments.map(a => ({
-                    teacher_name: a.teacher_name,
-                    class_group_id: a.class_group_id,
-                    is_substitute: a.is_substitute,
-                    is_floater: a.is_floater,
-                  })),
-                })
-              }
 
               // Determine what to show based on displayMode
               const showAbsences = displayMode !== 'permanent-only'

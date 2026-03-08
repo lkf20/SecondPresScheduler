@@ -390,22 +390,6 @@ export default function WeeklySchedulePage() {
                 // "let through" lots of inactive/missing slots via displayFilters.inactive.
                 if (filters.displayMode === 'absences') {
                   const hasAbsence = slot.absences && slot.absences.length > 0
-
-                  if (hasAbsence) {
-                    console.log('[WeeklySchedulePage] Absences filter - Slot passed:', {
-                      weekStartISO,
-                      classroom: classroom.classroom_name,
-                      day: day.day_name,
-                      timeSlot: slot.time_slot_code || slot.time_slot_id,
-                      absencesCount: slot.absences?.length || 0,
-                      absences: slot.absences?.map(a => ({
-                        teacher_id: a.teacher_id,
-                        teacher_name: a.teacher_name,
-                        has_sub: a.has_sub,
-                      })),
-                    })
-                  }
-
                   return hasAbsence
                 }
 
@@ -542,66 +526,8 @@ export default function WeeklySchedulePage() {
       }))
       .filter(classroom => classroom.days.length > 0)
 
-    // Debug: Log filtered results for substitutes mode
-    if (filters.displayMode === 'substitutes-only') {
-      const totalFilteredSlots = result.reduce((sum, classroom) => {
-        return (
-          sum +
-          classroom.days.reduce((daySum, day) => {
-            return daySum + day.time_slots.length
-          }, 0)
-        )
-      }, 0)
-      console.log('[WeeklySchedulePage] Filtered results for substitutes-only:', {
-        totalFilteredClassrooms: result.length,
-        totalFilteredSlots,
-        classrooms: result.map(c => ({
-          name: c.classroom_name,
-          days: c.days.map(d => ({
-            day: d.day_name,
-            timeSlots: d.time_slots.map(ts => ({
-              code: ts.time_slot_code,
-              hasSubstitute: ts.assignments?.some(a => a.is_substitute === true) || false,
-              substituteNames:
-                ts.assignments?.filter(a => a.is_substitute === true).map(a => a.teacher_name) ||
-                [],
-            })),
-          })),
-        })),
-      })
-    }
-
     return result
   }, [scheduleData, filters, weekStartISO])
-
-  // Temporary debug logs for classroom visibility issues after creating a classroom.
-  useEffect(() => {
-    if (!filters) return
-
-    const scheduleClassroomIds = scheduleData.map(c => c.classroom_id)
-    const selectedClassroomIds = filters.selectedClassroomIds
-    const filteredClassroomIds = filteredData.map(c => c.classroom_id)
-
-    const availableNotSelected = availableClassroomIds.filter(
-      id => !selectedClassroomIds.includes(id)
-    )
-    const availableNotInSchedule = availableClassroomIds.filter(
-      id => !scheduleClassroomIds.includes(id)
-    )
-
-    console.log('[WeeklySchedulePage][ClassroomDebug] visibility snapshot', {
-      availableClassroomCount: availableClassroomIds.length,
-      selectedClassroomCount: selectedClassroomIds.length,
-      scheduleClassroomCount: scheduleClassroomIds.length,
-      filteredClassroomCount: filteredClassroomIds.length,
-      availableClassroomIds,
-      selectedClassroomIds,
-      scheduleClassroomIds,
-      filteredClassroomIds,
-      availableNotSelected,
-      availableNotInSchedule,
-    })
-  }, [availableClassroomIds, filters, filteredData, scheduleData])
 
   // Base data for chip counts: apply only day/time/classroom selections, but NOT displayMode.
   // This keeps chip counts stable and non-confusing when a displayMode is selected.

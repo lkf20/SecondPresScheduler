@@ -315,7 +315,6 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
             notes: currentValues.notes || undefined,
             selectedShifts: [...selectedShifts],
           }
-          console.log('[TimeOffForm] Captured initial state:', initialFormStateRef.current)
           setIsInitialStateCaptured(true)
         }
       }, 150) // Small delay to ensure all initialization is complete
@@ -530,10 +529,6 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         // Invalidate drafts older than 24 hours
         const DRAFT_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 hours
         if (draft.updatedAt && Date.now() - draft.updatedAt > DRAFT_EXPIRY_MS) {
-          console.log('[TimeOffForm] Draft expired, clearing:', {
-            age: Date.now() - draft.updatedAt,
-            expiry: DRAFT_EXPIRY_MS,
-          })
           window.sessionStorage.removeItem(draftKey)
           hasHydratedDraftRef.current = true
           setIsDraftRestored(true)

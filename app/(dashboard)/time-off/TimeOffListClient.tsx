@@ -369,14 +369,6 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
         shiftDetails={row.shift_details}
         notes={row.notes || null}
         onEdit={() => {
-          console.log('[TimeOffList Debug] opening row', {
-            id: row.id,
-            teacher_name: row.teacher_name,
-            start_date: row.start_date,
-            end_date: row.end_date,
-            shifts_display: row.shifts_display,
-            coverage_total: row.coverage_total,
-          })
           handleEdit(row.id)
         }}
       />

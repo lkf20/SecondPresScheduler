@@ -216,14 +216,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         updated_at: new Date().toISOString(),
       }
 
-      console.log(
-        `[TimeOff Update] Updating coverage_request ${timeOffRequestWithCoverage.coverage_request_id} with dates:`,
-        {
-          start_date: effectiveStartDate,
-          end_date: effectiveEndDate,
-        }
-      )
-
       const { error: coverageUpdateError, data: updatedCoverageRequest } = await supabase
         .from('coverage_requests')
         .update(coverageUpdate)
@@ -237,11 +229,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           coverageUpdateError
         )
         // Don't fail the request, just log the error
-      } else {
-        console.log(
-          '[TimeOff Update] Successfully updated coverage_request dates:',
-          updatedCoverageRequest
-        )
       }
     }
 
@@ -484,17 +471,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           .eq('time_off_request_id', id)
 
         if (shiftCountError) {
-          console.error('[TimeOff Update Debug] Failed to count persisted shifts:', shiftCountError)
-        } else {
-          console.log('[TimeOff Update Debug]', {
-            requestId: id,
-            mode: effectiveShiftSelectionMode,
-            requestedShifts: requestedShifts.length,
-            shiftsToCreate: shiftsToCreate.length,
-            persistedShiftCount: persistedShiftCount ?? 0,
-            startDate: effectiveStartDate,
-            endDate: effectiveRequestEndDate,
-          })
+          console.error('[TimeOff Update] Failed to count persisted shifts:', shiftCountError)
         }
       }
 

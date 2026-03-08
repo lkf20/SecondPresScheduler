@@ -393,25 +393,6 @@ export default function DashboardClient({
 
       const isXl = window.innerWidth >= 1280
       if (!isXl) return
-
-      const styles = window.getComputedStyle(el)
-      const sections = el.querySelectorAll('section')
-
-      console.log('[Dashboard Grid Debug]', {
-        windowWidth: window.innerWidth,
-        gridWidth: el.offsetWidth,
-        gridTemplateColumns: styles.gridTemplateColumns,
-        gridTemplateColumnsComputed: styles.getPropertyValue('grid-template-columns'),
-        parentWidth: el.parentElement?.offsetWidth,
-        parentMaxWidth: window.getComputedStyle(el.parentElement!).maxWidth,
-        sections: Array.from(sections).map((section, i) => ({
-          index: i,
-          width: section.offsetWidth,
-          minWidth: window.getComputedStyle(section).minWidth,
-          maxWidth: window.getComputedStyle(section).maxWidth,
-          computedWidth: window.getComputedStyle(section).width,
-        })),
-      })
     }
 
     // Check on mount and resize

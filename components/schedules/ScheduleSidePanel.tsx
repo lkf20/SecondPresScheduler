@@ -2187,18 +2187,6 @@ export default function ScheduleSidePanel({
         }))
       )
       log('[ScheduleSidePanel] classGroupIds:', classGroupIds)
-      if (classroomName === 'Toddler A Room' && dayName === 'Monday' && timeSlotCode === 'AC') {
-        console.log('[ScheduleSidePanel][FloaterDebug][SaveInput]', {
-          classroom: classroomName,
-          day: dayName,
-          time_slot: timeSlotCode,
-          selected_teachers: selectedTeachers.map(t => ({
-            name: t.name,
-            teacher_id: t.teacher_id,
-            is_floater: t.is_floater ?? false,
-          })),
-        })
-      }
 
       for (const updateDayId of daysToUpdate) {
         for (const updateTimeSlotId of timeSlotsToUpdate) {
@@ -2320,19 +2308,6 @@ export default function ScheduleSidePanel({
               } else {
                 // Teacher already has a schedule - update floater status if needed
                 if (teacherScheduleForThisSlot.is_floater !== (teacher.is_floater ?? false)) {
-                  if (
-                    classroomName === 'Toddler A Room' &&
-                    dayName === 'Monday' &&
-                    timeSlotCode === 'AC'
-                  ) {
-                    console.log('[ScheduleSidePanel][FloaterDebug][UpdateRequest]', {
-                      teacher_name: teacher.name,
-                      teacher_id: teacher.teacher_id,
-                      schedule_id: teacherScheduleForThisSlot.id,
-                      before_is_floater: teacherScheduleForThisSlot.is_floater ?? false,
-                      after_is_floater: teacher.is_floater ?? false,
-                    })
-                  }
                   createPromises.push(
                     fetch(`/api/teacher-schedules/${teacherScheduleForThisSlot.id}`, {
                       method: 'PUT',
@@ -2355,18 +2330,6 @@ export default function ScheduleSidePanel({
                         throw new Error(
                           `Failed to update teacher schedule ${teacherScheduleForThisSlot.id}: empty response`
                         )
-                      }
-                      if (
-                        classroomName === 'Toddler A Room' &&
-                        dayName === 'Monday' &&
-                        timeSlotCode === 'AC'
-                      ) {
-                        console.log('[ScheduleSidePanel][FloaterDebug][UpdateResponse]', {
-                          teacher_name: teacher.name,
-                          teacher_id: teacher.teacher_id,
-                          schedule_id: teacherScheduleForThisSlot.id,
-                          response_is_floater: updatedSchedule.is_floater ?? false,
-                        })
                       }
                     })
                   )

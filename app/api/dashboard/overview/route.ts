@@ -120,13 +120,6 @@ export async function GET(request: NextRequest) {
     })
     const deduplicatedRequests = Array.from(uniqueCoverageRequests.values())
 
-    // Log if we filtered out any duplicates
-    if (deduplicatedRequests.length < (coverageRequests || []).length) {
-      console.log(
-        `Filtered ${(coverageRequests || []).length - deduplicatedRequests.length} duplicate coverage requests`
-      )
-    }
-
     // Get time_off_requests for coverage requests that have source_request_id (need status to exclude drafts)
     const sourceRequestIds = deduplicatedRequests
       .filter(cr => cr.request_type === 'time_off' && cr.source_request_id)

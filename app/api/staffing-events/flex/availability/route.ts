@@ -111,13 +111,6 @@ export async function POST(request: NextRequest) {
         })
       ) ?? []
 
-    console.log('[FlexAvailability] staff counts', {
-      schoolId,
-      total_staff_rows: (staffRows || []).length,
-      eligible_staff_rows: eligibleStaff.length,
-      event_category: event_category ?? 'standard',
-    })
-
     const eligibleIds = eligibleStaff.map((staff: any) => staff.id)
     if (eligibleIds.length === 0) {
       return NextResponse.json({
