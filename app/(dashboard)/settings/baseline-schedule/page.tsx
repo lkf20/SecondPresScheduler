@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import WeeklyScheduleGridNew from '@/components/schedules/WeeklyScheduleGridNew'
 import FilterPanel, { type FilterState } from '@/components/schedules/FilterPanel'
@@ -36,7 +36,6 @@ function getWeekStartISO(): string {
 }
 
 export default function BaselineSchedulePage() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
   const schoolId = useSchool()
@@ -284,7 +283,8 @@ export default function BaselineSchedulePage() {
     }
   }, [availableClassroomIds, filters?.selectedClassroomIds])
 
-  // Handle refresh - invalidate React Query cache; when returnToWeekly, navigate back to Weekly Schedule
+  // Handle refresh - invalidate React Query cache and refetch (used by header refresh button).
+  // Navigation to weekly when returnToWeekly is true is handled by a separate "Back to Weekly" control, not by refresh.
   const handleRefresh = useCallback(async () => {
     if (schoolId) {
       invalidateWeeklySchedule(queryClient, schoolId)
@@ -293,11 +293,8 @@ export default function BaselineSchedulePage() {
         queryKey: ['weeklySchedule', schoolId],
         type: 'active',
       })
-      if (returnToWeekly) {
-        router.push('/schedules/weekly')
-      }
     }
-  }, [schoolId, queryClient, returnToWeekly, router])
+  }, [schoolId, queryClient])
 
   // Handle filter changes - ensure displayMode is always permanent-only for baseline schedule
   const handleFiltersChange = useCallback((newFilters: FilterState) => {
