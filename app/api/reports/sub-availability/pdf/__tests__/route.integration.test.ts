@@ -141,7 +141,6 @@ describe('GET /api/reports/sub-availability/pdf', () => {
             last_name: 'M',
             display_name: 'Anne M.',
             phone: '5025551212',
-            capabilities_notes: 'Can open',
             school_id: 'school-1',
             is_sub: true,
             active: true,
@@ -278,7 +277,6 @@ describe('GET /api/reports/sub-availability/pdf', () => {
             last_name: 'M',
             display_name: 'Anne Teacher',
             phone: null,
-            capabilities_notes: null,
             school_id: 'school-1',
             is_sub: true,
             active: true,
@@ -329,5 +327,42 @@ describe('GET /api/reports/sub-availability/pdf', () => {
     expect(renderedHtml).toContain('class="header-center"')
     expect(renderedHtml).toContain('Hello')
     expect(renderedHtml).toContain('Footer')
+  })
+
+  it('truncates oversized rich text query values before rendering', async () => {
+    ;(createClient as jest.Mock).mockResolvedValue(
+      makeSupabaseMock({
+        days_of_week: [{ id: 'day-mon', name: 'Mon', display_order: 1 }],
+        time_slots: [
+          {
+            id: 'slot-am',
+            code: 'AM',
+            name: 'Morning',
+            display_order: 1,
+            school_id: 'school-1',
+            is_active: true,
+          },
+        ],
+        class_groups: [],
+        staff: [],
+        sub_availability: [],
+        sub_class_preferences: [],
+      })
+    )
+
+    const longTopHeader = 'A'.repeat(2500)
+    const longFooter = 'B'.repeat(5000)
+    const response = await GET(
+      new Request(
+        `http://localhost/api/reports/sub-availability/pdf?topHeaderHtml=${longTopHeader}&footerNotesHtml=${longFooter}`
+      )
+    )
+
+    expect(response.status).toBe(200)
+    const renderedHtml = setContentMock.mock.calls.at(-1)?.[0] as string
+    expect(renderedHtml).toContain('A'.repeat(2000))
+    expect(renderedHtml).not.toContain('A'.repeat(2001))
+    expect(renderedHtml).toContain('B'.repeat(4000))
+    expect(renderedHtml).not.toContain('B'.repeat(4001))
   })
 })

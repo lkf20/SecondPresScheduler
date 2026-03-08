@@ -134,7 +134,7 @@ export async function GET(request: Request) {
 
     const { data: subs, error: subsError } = await supabase
       .from('staff')
-      .select('id, first_name, last_name, display_name, phone, capabilities_notes')
+      .select('id, first_name, last_name, display_name, phone')
       .eq('school_id', schoolId)
       .eq('is_sub', true)
       .eq('active', true)

@@ -18,14 +18,6 @@ const formatGeneratedAt = (date: Date, timeZone: string) =>
     hour12: true,
   }).format(date)
 
-const formatAsOfLabel = (date: Date, timeZone: string) =>
-  new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(date)
-
 export async function GET(request: Request) {
   try {
     const schoolId = await getUserSchoolId()
@@ -79,7 +71,7 @@ export async function GET(request: Request) {
 
     const { data: subs, error: subsError } = await supabase
       .from('staff')
-      .select('id, first_name, last_name, display_name, phone, capabilities_notes')
+      .select('id, first_name, last_name, display_name, phone')
       .eq('school_id', schoolId)
       .eq('is_sub', true)
       .eq('active', true)
@@ -143,7 +135,6 @@ export async function GET(request: Request) {
 
     const now = new Date()
     return NextResponse.json({
-      as_of_label: formatAsOfLabel(now, timeZone),
       generated_at: formatGeneratedAt(now, timeZone),
       sub_count: reportContext.rows.length,
       report_context: reportContext,

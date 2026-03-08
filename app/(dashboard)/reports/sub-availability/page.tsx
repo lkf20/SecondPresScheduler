@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { sanitizeRichTextHtml } from '@/lib/reports/sub-availability-pdf'
 import { getHeaderClasses } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
 
@@ -32,9 +33,9 @@ type ReportData = {
     }>
     dayHeaders: Array<{ dayId: string; dayName: string; colSpan: number }>
     rows: Array<{
+      id: string
       subName: string
       phone: string
-      notes: string
       canTeach: string[]
       matrix: Array<{ key: string; available: boolean }>
     }>
@@ -117,6 +118,14 @@ export default function SubAvailabilityReportPage() {
   const evenRowStyle = colorFriendly
     ? { backgroundColor: '#ffffff' }
     : { backgroundColor: '#ffffff' }
+  const previewTopHeaderHtml = useMemo(
+    () => sanitizeRichTextHtml(topHeaderHtml, 2000),
+    [topHeaderHtml]
+  )
+  const previewFooterNotesHtml = useMemo(
+    () => sanitizeRichTextHtml(footerNotesHtml, 4000),
+    [footerNotesHtml]
+  )
 
   const openPdf = () => {
     const popup = window.open(pdfUrl, '_blank', 'noopener,noreferrer')
@@ -417,11 +426,11 @@ export default function SubAvailabilityReportPage() {
                     </div>
                   </div>
                   <div className="mx-auto w-[650px] max-w-full justify-self-center rounded-md bg-white px-3 py-2 text-center text-sm text-slate-700">
-                    {topHeaderHtml
+                    {previewTopHeaderHtml
                       .replace(/<[^>]*>/g, ' ')
                       .replace(/&nbsp;/g, ' ')
                       .trim() ? (
-                      <div dangerouslySetInnerHTML={{ __html: topHeaderHtml }} />
+                      <div dangerouslySetInnerHTML={{ __html: previewTopHeaderHtml }} />
                     ) : (
                       <span className="text-slate-400">Optional top header</span>
                     )}
@@ -508,10 +517,7 @@ export default function SubAvailabilityReportPage() {
                     </thead>
                     <tbody>
                       {reportData.report_context.rows.map((row, rowIndex) => (
-                        <tr
-                          key={row.subName}
-                          style={rowIndex % 2 === 0 ? evenRowStyle : oddRowStyle}
-                        >
+                        <tr key={row.id} style={rowIndex % 2 === 0 ? evenRowStyle : oddRowStyle}>
                           <td
                             className="sticky left-0 z-10 border border-slate-200 px-2 py-1.5 text-base font-bold text-slate-800"
                             style={rowIndex % 2 === 0 ? evenRowStyle : oddRowStyle}
@@ -565,8 +571,20 @@ export default function SubAvailabilityReportPage() {
                     </tbody>
                   </table>
                 </div>
+                {reportData.report_context.dayHeaders.length === 0 ? (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    No schedule days are selected in settings. Availability matrix is empty.
+                  </div>
+                ) : reportData.report_context.columns.length === 0 ? (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    No active time slots found. Availability matrix is empty.
+                  </div>
+                ) : null}
                 <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <span>
+                      <strong>✓</strong> = Available
+                    </span>
                     {reportData.report_context.columns
                       .reduce<Array<{ code: string; name: string }>>((acc, column) => {
                         if (acc.find(item => item.code === column.timeSlotCode)) return acc
@@ -583,13 +601,13 @@ export default function SubAvailabilityReportPage() {
                       ))}
                   </div>
                 </div>
-                {footerNotesHtml
+                {previewFooterNotesHtml
                   .replace(/<[^>]*>/g, ' ')
                   .replace(/&nbsp;/g, ' ')
                   .trim() ? (
                   <div
                     className="rounded-md bg-white px-3 py-2 text-sm text-slate-700"
-                    dangerouslySetInnerHTML={{ __html: footerNotesHtml }}
+                    dangerouslySetInnerHTML={{ __html: previewFooterNotesHtml }}
                   />
                 ) : null}
                 <style jsx>{`

@@ -1,6 +1,7 @@
 import {
   buildSubAvailabilityPdfHtml,
   buildSubAvailabilityReportModel,
+  sanitizeRichTextHtml,
 } from '@/lib/reports/sub-availability-pdf'
 
 describe('sub availability pdf report helpers', () => {
@@ -12,7 +13,7 @@ describe('sub availability pdf report helpers', () => {
           first_name: 'Anne',
           last_name: 'M',
           display_name: null,
-          capabilities_notes: null,
+          phone: null,
         },
       ],
       days: [
@@ -44,7 +45,7 @@ describe('sub availability pdf report helpers', () => {
           first_name: 'Anne',
           last_name: 'M',
           display_name: null,
-          capabilities_notes: null,
+          phone: null,
         },
       ],
       days: [{ id: 'day-mon', name: 'Mon', display_order: 1 }],
@@ -65,7 +66,7 @@ describe('sub availability pdf report helpers', () => {
           first_name: 'Anne',
           last_name: 'M',
           display_name: null,
-          capabilities_notes: null,
+          phone: null,
         },
       ],
       days: [],
@@ -90,8 +91,7 @@ describe('sub availability pdf report helpers', () => {
           first_name: 'Anne',
           last_name: 'M',
           display_name: null,
-          capabilities_notes:
-            'Very long note that should be truncated to keep the printed report within a one page layout and remain readable.',
+          phone: null,
         },
       ],
       days: [{ id: 'day-mon', name: 'Mon', display_order: 1 }],
@@ -110,7 +110,6 @@ describe('sub availability pdf report helpers', () => {
     })
 
     const html = buildSubAvailabilityPdfHtml({
-      asOfLabel: 'January 25, 2026',
       generatedAt: 'Jan 25, 2026, 8:00 AM',
       reportContext: model,
     })
@@ -128,7 +127,7 @@ describe('sub availability pdf report helpers', () => {
           first_name: 'Anne',
           last_name: 'M',
           display_name: null,
-          capabilities_notes: null,
+          phone: null,
         },
       ],
       days: [],
@@ -193,6 +192,20 @@ describe('sub availability pdf report helpers', () => {
     expect(html).toContain('Important note')
     expect(html).toContain('text-align: center')
     expect(html).toContain('font-size: 16px')
+    expect(html).not.toContain('<script')
+  })
+
+  it('sanitizes rich text by removing scripts and unsafe attributes while preserving allowed style', () => {
+    const html = sanitizeRichTextHtml(
+      `<div onclick="alert(1)" style="text-align:center;position:absolute">` +
+        `<font size="4" color="#1d4ed8"><mark>Safe</mark></font>` +
+        `<script>alert("xss")</script></div>`
+    )
+
+    expect(html).toContain('<div style="text-align: center">')
+    expect(html).toContain('<span style="font-size: 16px; color: #1d4ed8">')
+    expect(html).toContain('<mark>Safe</mark>')
+    expect(html).not.toContain('onclick')
     expect(html).not.toContain('<script')
   })
 })

@@ -6,7 +6,6 @@ type SubRow = {
   last_name: string
   display_name: string | null
   phone: string | null
-  capabilities_notes: string | null
 }
 
 type DayRow = {
@@ -62,9 +61,9 @@ export type MatrixColumn = {
 }
 
 type SubAvailabilityReportRow = {
+  id: string
   subName: string
   phone: string
-  notes: string
   canTeach: string[]
   matrix: Array<{ key: string; available: boolean }>
 }
@@ -89,7 +88,7 @@ const truncateForCell = (value: string, max: number) => {
   return `${trimmed.slice(0, Math.max(0, max - 1)).trimEnd()}…`
 }
 
-const sanitizeFooterHtml = (raw: string, maxLength = 4000) => {
+export const sanitizeRichTextHtml = (raw: string, maxLength = 4000) => {
   if (!raw) return ''
   const trimmed = raw.slice(0, maxLength)
   const withoutScripts = trimmed
@@ -301,9 +300,9 @@ export function buildSubAvailabilityReportModel(
           : summarizedCanTeach
 
     return {
+      id: sub.id,
       subName: getSubName(sub, nameFormat),
       phone: formatUSPhone(sub.phone || '') || '—',
-      notes: sub.capabilities_notes ?? '',
       canTeach: canTeachDisplay,
       matrix: columns.map(column => ({
         key: `${column.dayId}|${column.timeSlotId}`,
@@ -352,8 +351,8 @@ export function buildSubAvailabilityPdfHtml({
     return acc
   }, [])
   const footerNoteDisplay = footerNotes.trim()
-  const footerNoteRichHtml = sanitizeFooterHtml(footerNotesHtml)
-  const topHeaderRichHtml = sanitizeFooterHtml(topHeaderHtml, 2000)
+  const footerNoteRichHtml = sanitizeRichTextHtml(footerNotesHtml)
+  const topHeaderRichHtml = sanitizeRichTextHtml(topHeaderHtml, 2000)
 
   const dayHeaderHtml =
     columnCount === 0

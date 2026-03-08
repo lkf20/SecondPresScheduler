@@ -25,7 +25,6 @@ describe('Sub Availability report page', () => {
         ({
           ok: true,
           json: async () => ({
-            as_of_label: 'March 7, 2026',
             generated_at: 'Mar 7, 2026, 4:35 PM',
             sub_count: 1,
             report_context: {
@@ -41,9 +40,9 @@ describe('Sub Availability report page', () => {
               dayHeaders: [{ dayId: 'day-mon', dayName: 'Monday', colSpan: 1 }],
               rows: [
                 {
+                  id: 'sub-1',
                   subName: 'Test S.',
                   phone: '(502) 555-1212',
-                  notes: 'Some note',
                   canTeach: ['Orange', "3's", "4's", 'Kindergarten'],
                   matrix: [{ key: 'day-mon|slot-am', available: true }],
                 },
@@ -124,5 +123,68 @@ describe('Sub Availability report page', () => {
         'noopener,noreferrer'
       )
     })
+  })
+
+  it('renders duplicate names safely when ids are unique', async () => {
+    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        generated_at: 'Mar 7, 2026, 4:35 PM',
+        sub_count: 2,
+        report_context: {
+          columns: [],
+          dayHeaders: [],
+          rows: [
+            {
+              id: 'sub-1',
+              subName: 'Alex P.',
+              phone: '(502) 555-1111',
+              canTeach: ['All'],
+              matrix: [],
+            },
+            {
+              id: 'sub-2',
+              subName: 'Alex P.',
+              phone: '(502) 555-2222',
+              canTeach: ['All'],
+              matrix: [],
+            },
+          ],
+        },
+      }),
+    })
+
+    render(<SubAvailabilityReportPage />)
+    expect(await screen.findAllByText('Alex P.')).toHaveLength(2)
+  })
+
+  it('shows empty matrix guidance when no schedule days are selected', async () => {
+    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        generated_at: 'Mar 7, 2026, 4:35 PM',
+        sub_count: 1,
+        report_context: {
+          columns: [],
+          dayHeaders: [],
+          rows: [
+            {
+              id: 'sub-1',
+              subName: 'Test S.',
+              phone: '(502) 555-1212',
+              canTeach: ['All'],
+              matrix: [],
+            },
+          ],
+        },
+      }),
+    })
+
+    render(<SubAvailabilityReportPage />)
+    expect(
+      await screen.findByText(
+        'No schedule days are selected in settings. Availability matrix is empty.'
+      )
+    ).toBeInTheDocument()
   })
 })
