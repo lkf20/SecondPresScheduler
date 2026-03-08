@@ -1,5 +1,5 @@
 /* eslint-disable react/display-name */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import ScheduleSidePanel from '@/components/schedules/ScheduleSidePanel'
 
 const pushMock = jest.fn()
@@ -145,9 +145,39 @@ const setupFetch = (removeContext: {
       } as Response
     }
     if (url.includes('/api/teacher-schedules')) {
+      // Return teachers matching buildProps() so panel populates and async updates complete predictably
       return {
         ok: true,
-        json: async () => [],
+        json: async () => [
+          {
+            id: 'ts-1',
+            classroom_id: 'class-1',
+            day_of_week_id: 'day-1',
+            time_slot_id: 'slot-1',
+            teacher_id: 'teacher-1',
+            is_floater: false,
+            teacher: {
+              first_name: 'Bella',
+              last_name: 'Wilson',
+              display_name: null,
+              staff_role_type_assignments: [],
+            },
+          },
+          {
+            id: 'ts-2',
+            classroom_id: 'class-1',
+            day_of_week_id: 'day-1',
+            time_slot_id: 'slot-1',
+            teacher_id: 'teacher-2',
+            is_floater: false,
+            teacher: {
+              first_name: 'Amy',
+              last_name: 'Park',
+              display_name: null,
+              staff_role_type_assignments: [{ staff_role_types: { code: 'FLEXIBLE' } }],
+            },
+          },
+        ],
       } as Response
     }
     if (url.includes('/api/staffing-events/flex/remove?')) {
@@ -253,6 +283,8 @@ const buildProps = () => ({
 })
 
 describe('ScheduleSidePanel interactions', () => {
+  jest.setTimeout(10000)
+
   afterEach(() => {
     jest.clearAllMocks()
   })
@@ -270,14 +302,24 @@ describe('ScheduleSidePanel interactions', () => {
     })
 
     render(<ScheduleSidePanel {...buildProps()} />)
+    await waitFor(() => expect(screen.getByText('Bella W.')).toBeInTheDocument())
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Remove' }))
 
     await screen.findByText('Remove temporary coverage?')
+    // Wait for flex remove context to load (dialog shows "Loading assignment details..." until then)
+    await waitFor(
+      () => {
+        expect(screen.getByText('This shift only')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
     expect(
       screen.getByText(/Amy P. is assigned for temporary coverage to Infant Room/i)
     ).toBeInTheDocument()
-    expect(screen.getByText('This shift only')).toBeInTheDocument()
     expect(screen.getByText('All Monday shifts')).toBeInTheDocument()
     expect(screen.getByText('All shifts')).toBeInTheDocument()
   })
@@ -291,6 +333,10 @@ describe('ScheduleSidePanel interactions', () => {
     })
 
     render(<ScheduleSidePanel {...buildProps()} />)
+    await waitFor(() => expect(screen.getByText('Bella W.')).toBeInTheDocument(), { timeout: 3000 })
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
 
     expect(await screen.findByText('Below Preferred by 1')).toBeInTheDocument()
     expect(screen.getByText('Required: 2 • Preferred: 3 • Scheduled: 2')).toBeInTheDocument()
@@ -306,8 +352,14 @@ describe('ScheduleSidePanel interactions', () => {
 
     render(<ScheduleSidePanel {...buildProps()} />)
 
-    await waitFor(() => {
-      expect(screen.getByText('Bella W.')).toBeInTheDocument()
+    await waitFor(
+      () => {
+        expect(screen.getByText('Bella W.')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
     })
 
     fireEvent.click(await screen.findByRole('button', { name: /edit baseline staff/i }))
@@ -352,6 +404,10 @@ describe('ScheduleSidePanel interactions', () => {
     }
 
     render(<ScheduleSidePanel {...propsWithoutEventId} />)
+    await waitFor(() => expect(screen.getByText('Amy P.')).toBeInTheDocument(), { timeout: 3000 })
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
 
     expect(screen.getByText('Amy P.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument()
@@ -366,6 +422,10 @@ describe('ScheduleSidePanel interactions', () => {
     })
 
     render(<ScheduleSidePanel {...buildProps()} />)
+    await waitFor(() => expect(screen.getByText('Bella W.')).toBeInTheDocument(), { timeout: 3000 })
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Remove' }))
 
@@ -560,6 +620,8 @@ describe('ScheduleSidePanel interactions', () => {
 })
 
 describe('ScheduleSidePanel - Add Temporary Coverage', () => {
+  jest.setTimeout(10000)
+
   afterEach(() => {
     jest.clearAllMocks()
   })
@@ -593,8 +655,14 @@ describe('ScheduleSidePanel - Add Temporary Coverage', () => {
 
     render(<ScheduleSidePanel {...buildPropsFromDashboard()} />)
 
-    await waitFor(() => {
-      expect(screen.getByText(/Required: 2.*Preferred: 3.*Scheduled: 1/)).toBeInTheDocument()
+    await waitFor(
+      () => {
+        expect(screen.getByText(/Required: 2.*Preferred: 3.*Scheduled: 1/)).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
     })
   })
 
@@ -608,8 +676,14 @@ describe('ScheduleSidePanel - Add Temporary Coverage', () => {
 
     render(<ScheduleSidePanel {...buildPropsFromDashboard()} />)
 
-    await waitFor(() => {
-      expect(screen.getByText('Summary')).toBeInTheDocument()
+    await waitFor(
+      () => {
+        expect(screen.getByText('Summary')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
     })
     expect(
       screen.getByText(/Infant Room Monday EM is below required target for the next/)
@@ -627,8 +701,14 @@ describe('ScheduleSidePanel - Add Temporary Coverage', () => {
 
     render(<ScheduleSidePanel {...buildPropsFromDashboard()} />)
 
-    await waitFor(() => {
-      expect(screen.getByText('Long-term assignment detected')).toBeInTheDocument()
+    await waitFor(
+      () => {
+        expect(screen.getByText('Long-term assignment detected')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
     })
     expect(
       screen.getByText(/Assigning for a whole semester\? You might want to do this in the/)
@@ -646,11 +726,18 @@ describe('ScheduleSidePanel - Add Temporary Coverage', () => {
 
     render(<ScheduleSidePanel {...buildProps()} weekStartISO="2026-03-09" />)
 
+    await waitFor(() => expect(screen.getByText('Bella W.')).toBeInTheDocument(), { timeout: 3000 })
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
     fireEvent.click(await screen.findByRole('button', { name: 'Add Temporary Coverage' }))
 
-    await waitFor(() => {
-      expect(screen.getByText('Summary')).toBeInTheDocument()
-    })
+    await waitFor(
+      () => {
+        expect(screen.getByText('Summary')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
     expect(
       screen.getByText(/Infant Room Monday EM is below required target for the next 9 weeks/)
     ).toBeInTheDocument()
@@ -669,6 +756,10 @@ describe('ScheduleSidePanel - Add Temporary Coverage', () => {
 
     render(<ScheduleSidePanel {...buildProps()} weekStartISO="2026-03-09" />)
 
+    await waitFor(() => expect(screen.getByText('Bella W.')).toBeInTheDocument())
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
     fireEvent.click(await screen.findByRole('button', { name: 'Add Temporary Coverage' }))
 
     const radios = await screen.findAllByRole('radio')

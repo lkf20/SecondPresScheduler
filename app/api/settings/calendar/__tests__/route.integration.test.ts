@@ -5,6 +5,7 @@ import {
   getCalendarSettings,
   updateCalendarSettings,
   getSchoolClosuresForDateRange,
+  getSchoolClosuresByIds,
   createSchoolClosure,
   createSchoolClosureRange,
   deleteSchoolClosure,
@@ -15,6 +16,7 @@ jest.mock('@/lib/api/school-calendar', () => ({
   getCalendarSettings: jest.fn(),
   updateCalendarSettings: jest.fn(),
   getSchoolClosuresForDateRange: jest.fn(),
+  getSchoolClosuresByIds: jest.fn(),
   createSchoolClosure: jest.fn(),
   createSchoolClosureRange: jest.fn(),
   deleteSchoolClosure: jest.fn(),
@@ -22,6 +24,11 @@ jest.mock('@/lib/api/school-calendar', () => ({
 
 jest.mock('@/lib/utils/auth', () => ({
   getUserSchoolId: jest.fn(),
+}))
+
+jest.mock('@/lib/audit/logAuditEvent', () => ({
+  getAuditActorContext: jest.fn().mockResolvedValue({ actorUserId: null, actorDisplayName: null }),
+  logAuditEvent: jest.fn().mockResolvedValue(true),
 }))
 
 describe('calendar settings route integration', () => {
@@ -129,6 +136,10 @@ describe('calendar settings route integration', () => {
 
     it('deletes closures by ids', async () => {
       ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
+      ;(getSchoolClosuresByIds as jest.Mock).mockResolvedValue([
+        { id: 'c-1', date: '2024-12-25', time_slot_id: null, reason: 'Holiday' },
+        { id: 'c-2', date: '2024-12-26', time_slot_id: null, reason: 'Holiday' },
+      ])
 
       const response = await PATCH(
         new Request('http://localhost/api/settings/calendar', {

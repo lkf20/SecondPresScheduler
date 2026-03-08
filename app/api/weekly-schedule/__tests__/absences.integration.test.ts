@@ -132,8 +132,10 @@ describe('GET /api/weekly-schedule integration - Absences', () => {
     const json = await response.json()
 
     expect(response.status).toBe(200)
+    const classrooms = json.classrooms ?? []
+    expect(Array.isArray(classrooms)).toBe(true)
 
-    const roomA = json.find((c: any) => c.classroom_id === 'c1')
+    const roomA = classrooms.find((c: any) => c.classroom_id === 'c1')
     expect(roomA).toBeDefined()
 
     const monday = roomA.days.find((d: any) => d.day_of_week_id === 'd1')

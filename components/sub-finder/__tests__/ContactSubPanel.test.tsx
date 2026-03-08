@@ -1332,7 +1332,8 @@ describe('ContactSubPanel', () => {
 
     it('shows available (teal) chip border when sub can cover, gray when cannot', async () => {
       const tealBorder = 'rgb(196, 234, 226)'
-      const grayBorder = 'rgb(209, 213, 219)'
+      // ShiftChips uses shiftStatusColorValues.unavailable.border (gray-200)
+      const grayBorder = 'rgb(229, 231, 235)'
 
       render(
         <ContactSubPanel
@@ -1373,9 +1374,9 @@ describe('ContactSubPanel', () => {
 
       const monEm = screen.getByText('Mon EM')
       const tueEm = screen.getByText('Tue EM')
-      // Chip Badge is the div with inline style containing the teal/gray border color
+      // Chip Badge is the div with inline style containing the teal/gray border color (ShiftChips softAvailableStyle + shiftStatusColorValues.unavailable)
       const chipWithMon = monEm.closest('div[style*="196, 234, 226"]')
-      const chipWithTue = tueEm.closest('div[style*="209, 213, 219"]')
+      const chipWithTue = tueEm.closest('div[style*="229, 231, 235"]')
 
       expect(chipWithMon).toBeInTheDocument()
       expect(chipWithTue).toBeInTheDocument()
