@@ -108,7 +108,7 @@ type DashboardOverview = {
   scheduled_subs: ScheduledSubItem[]
 }
 
-/** One card: same classroom + time slot + day and same required/scheduled across dates */
+/** One card: same classroom + time slot + day and same required/scheduled/preferred across dates */
 export type StaffingTargetGroup = {
   dateStart: string
   dateEnd: string
@@ -143,7 +143,7 @@ const formatFullDateLabel = (value: string) => {
 const formatShortfallValue = (required: number, scheduled: number) =>
   Math.max(0, required - scheduled)
 
-/** Group by classroom, then by (time_slot + day + required + scheduled). Only merge slots when required and scheduled match. */
+/** Group by classroom, then by (time_slot + day + required + scheduled + preferred). Only merge slots when required, scheduled, and preferred match. */
 function groupStaffingTargets(slots: StaffingTargetItem[]) {
   const classroomMap = new Map<
     string,
@@ -154,10 +154,11 @@ function groupStaffingTargets(slots: StaffingTargetItem[]) {
     }
   >()
 
-  // Group by (classroom_id, time_slot_id, day_of_week_id, required_staff, scheduled_staff)
+  // Group by (classroom_id, time_slot_id, day_of_week_id, required_staff, scheduled_staff, preferred_staff)
   const rawGroups = new Map<string, StaffingTargetItem[]>()
   slots.forEach(slot => {
-    const key = `${slot.classroom_id}|${slot.time_slot_id}|${slot.day_of_week_id}|${slot.required_staff}|${slot.scheduled_staff}`
+    const preferredKey = slot.preferred_staff ?? 'n'
+    const key = `${slot.classroom_id}|${slot.time_slot_id}|${slot.day_of_week_id}|${slot.required_staff}|${slot.scheduled_staff}|${preferredKey}`
     const list = rawGroups.get(key) || []
     list.push(slot)
     rawGroups.set(key, list)
