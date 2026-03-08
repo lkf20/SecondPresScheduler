@@ -313,25 +313,29 @@ export default function WeeklySchedulePage() {
   }
 
   const handleClosureMarkOpenForDay = async (date: string) => {
-    const wholeDayClosure = schoolClosures.find(
-      (c: { date: string; time_slot_id: string | null }) =>
-        c.date === date && c.time_slot_id === null
+    const closuresForDate = schoolClosures.filter(
+      (c: { date: string; id: string }) => c.date === date
     )
-    if (!wholeDayClosure) {
-      toast.info('No whole-day closure for this date.')
+    if (closuresForDate.length === 0) {
+      toast.info('No closures for this date.')
       return
     }
+    const ids = closuresForDate.map((c: { id: string }) => c.id)
     try {
       const res = await fetch('/api/settings/calendar', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ delete_closure_ids: [wholeDayClosure.id] }),
+        body: JSON.stringify({ delete_closure_ids: ids }),
       })
       if (!res.ok) {
         const err = await res.json()
         throw new Error(err.error || 'Failed to mark open')
       }
-      toast.success('Closure removed. School is open for this day.')
+      toast.success(
+        ids.length === 1
+          ? 'Closure removed. School is open for this day.'
+          : 'Closures removed. School is open for this day.'
+      )
       await handleRefresh()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to update')
