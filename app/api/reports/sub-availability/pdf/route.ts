@@ -10,6 +10,7 @@ import {
   buildSubAvailabilityFilename,
   buildSubAvailabilityPdfHtml,
   buildSubAvailabilityReportModel,
+  formatGeneratedAt,
 } from '@/lib/reports/sub-availability-pdf'
 
 export const runtime = 'nodejs'
@@ -23,17 +24,6 @@ const parseNameFormat = (value: string | null): 'display' | 'full' =>
   value === 'full' ? 'full' : 'display'
 const parseFooterNotesHtml = (value: string | null) => (value ? value.slice(0, 4000) : '')
 const parseTopHeaderHtml = (value: string | null) => (value ? value.slice(0, 2000) : '')
-
-const formatGeneratedAt = (date: Date, timeZone: string) =>
-  new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  }).format(date)
 
 const resolveExecutablePath = () => {
   const envPath = process.env.PUPPETEER_EXECUTABLE_PATH

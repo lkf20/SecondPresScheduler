@@ -2,21 +2,13 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
-import { buildSubAvailabilityReportModel } from '@/lib/reports/sub-availability-pdf'
+import {
+  buildSubAvailabilityReportModel,
+  formatGeneratedAt,
+} from '@/lib/reports/sub-availability-pdf'
 
 const parseNameFormat = (value: string | null): 'display' | 'full' =>
   value === 'full' ? 'full' : 'display'
-
-const formatGeneratedAt = (date: Date, timeZone: string) =>
-  new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  }).format(date)
 
 export async function GET(request: Request) {
   try {

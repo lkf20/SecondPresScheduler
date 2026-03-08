@@ -306,6 +306,7 @@ export default function StaffFormClient({
   const handleTabSwitchKeepEditing = useCallback(() => {
     setShowTabSwitchDialog(false)
     setPendingTabSwitch(null)
+    setPendingTabAfterSave(null)
   }, [])
 
   const handleTabSwitchDiscard = useCallback(() => {
@@ -575,7 +576,10 @@ export default function StaffFormClient({
         open={showTabSwitchDialog}
         onOpenChange={open => {
           setShowTabSwitchDialog(open)
-          if (!open) setPendingTabSwitch(null)
+          if (!open) {
+            setPendingTabSwitch(null)
+            setPendingTabAfterSave(null)
+          }
         }}
         title="Unsaved Changes"
         description={`You have unsaved changes in ${

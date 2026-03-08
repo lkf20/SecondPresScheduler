@@ -205,6 +205,17 @@ const getSubName = (sub: SubRow, nameFormat: NameFormat) => {
 const matrixKey = (subId: string, dayId: string, timeSlotId: string) =>
   `${subId}|${dayId}|${timeSlotId}`
 
+export const formatGeneratedAt = (date: Date, timeZone: string) =>
+  new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(date)
+
 const normalizeClassGroupBucket = (name: string): string | null => {
   const lower = name.toLowerCase()
   if (/\binfant/.test(lower)) return 'Infants'
