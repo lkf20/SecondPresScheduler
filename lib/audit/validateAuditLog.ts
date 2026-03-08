@@ -19,6 +19,7 @@ export type AuditCategory =
   | 'temporary_coverage'
   | 'staff'
   | 'coverage'
+  | 'school_calendar'
   | 'system'
   | 'unknown'
 
@@ -54,6 +55,7 @@ const CATEGORIES: AuditCategory[] = [
   'temporary_coverage',
   'staff',
   'coverage',
+  'school_calendar',
   'system',
   'unknown',
 ]
@@ -67,6 +69,8 @@ const HUMAN_READABLE_KEYS = [
   'time_slot_code',
   'time_slot_codes',
   'summary',
+  'reason',
+  'date',
   'added_to_classroom_name',
   'removed_from_classroom_name',
   'added_to_day_name',
@@ -94,6 +98,9 @@ const REQUIRES_READABLE: Array<{
   { category: 'sub_assignment', entityType: 'coverage_request', action: 'unassign' },
   { category: 'temporary_coverage', entityType: 'staffing_event', action: 'assign' },
   { category: 'temporary_coverage', entityType: 'staffing_event', action: 'cancel' },
+  { category: 'school_calendar', entityType: 'calendar_settings', action: 'update' },
+  { category: 'school_calendar', entityType: 'school_closure', action: 'create' },
+  { category: 'school_calendar', entityType: 'school_closure', action: 'delete' },
 ]
 
 /** Actions that must have non-empty details. */

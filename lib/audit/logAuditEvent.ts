@@ -9,6 +9,7 @@ export type AuditCategory =
   | 'temporary_coverage'
   | 'staff'
   | 'coverage'
+  | 'school_calendar'
   | 'system'
   | 'unknown'
 

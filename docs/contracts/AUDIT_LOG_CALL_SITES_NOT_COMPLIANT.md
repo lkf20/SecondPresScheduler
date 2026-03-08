@@ -20,6 +20,10 @@ Previously non-compliant call sites were updated to include human-readable names
 - **staffing-events/flex** – POST create: now logs `assign` with `teacher_name`, `classroom_name`, `shift_count`, and date range.
 - **staffing-events/flex/remove** – POST remove: now logs `cancel` with `teacher_name`, `scope`, `removed_count`, `remaining_active_shifts`.
 
+## School calendar (added)
+
+- **settings/calendar** – PATCH: logs `school_calendar` + `calendar_settings` update (first/last day of school) with before/after and summary; logs `school_closure` create (single and range) and delete with date, reason, whole_day, summary.
+
 ---
 
 When adding new audit log call sites, ensure they satisfy the contract and pass `validateAuditLogEntry`. If you discover a call site that no longer complies (e.g. after a refactor), add it to this file with “What’s missing” and fix it.

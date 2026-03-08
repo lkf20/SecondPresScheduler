@@ -127,6 +127,76 @@ describe('validateAuditLogEntry', () => {
       expect(result.valid).toBe(true)
       expect(result.errors).toHaveLength(0)
     })
+
+    it('passes school_calendar calendar_settings update with before/after and summary', () => {
+      const entry: AuditLogEntryInput = {
+        schoolId: 'school-uuid',
+        actorUserId: 'user-uuid',
+        actorDisplayName: 'Jane Admin',
+        action: 'update',
+        category: 'school_calendar',
+        entityType: 'calendar_settings',
+        entityId: null,
+        details: {
+          updated_fields: ['first_day_of_school', 'last_day_of_school'],
+          before: {
+            first_day_of_school: '2024-08-01',
+            last_day_of_school: '2025-06-15',
+          },
+          after: {
+            first_day_of_school: '2025-08-01',
+            last_day_of_school: '2026-06-15',
+          },
+          summary: 'First day: 2025-08-01, Last day: 2026-06-15',
+        },
+      }
+      const result = validateAuditLogEntry(entry)
+      expect(result.valid).toBe(true)
+      expect(result.errors).toHaveLength(0)
+    })
+
+    it('passes school_calendar school_closure create with date, reason, summary', () => {
+      const entry: AuditLogEntryInput = {
+        schoolId: 'school-uuid',
+        actorUserId: 'user-uuid',
+        actorDisplayName: 'Jane Admin',
+        action: 'create',
+        category: 'school_calendar',
+        entityType: 'school_closure',
+        entityId: 'closure-uuid',
+        details: {
+          date: '2025-11-28',
+          time_slot_id: null,
+          reason: 'Thanksgiving',
+          whole_day: true,
+          summary: '2025-11-28 (whole day): Thanksgiving',
+        },
+      }
+      const result = validateAuditLogEntry(entry)
+      expect(result.valid).toBe(true)
+      expect(result.errors).toHaveLength(0)
+    })
+
+    it('passes school_calendar school_closure delete with date, reason, summary', () => {
+      const entry: AuditLogEntryInput = {
+        schoolId: 'school-uuid',
+        actorUserId: 'user-uuid',
+        actorDisplayName: 'Jane Admin',
+        action: 'delete',
+        category: 'school_calendar',
+        entityType: 'school_closure',
+        entityId: 'closure-uuid',
+        details: {
+          date: '2025-11-28',
+          reason: 'Thanksgiving',
+          whole_day: true,
+          summary: '2025-11-28 (whole day): Thanksgiving',
+        },
+      }
+      const result = validateAuditLogEntry(entry)
+      expect(result.valid).toBe(true)
+      expect(result.errors).toHaveLength(0)
+    })
   })
 
   describe('bad examples (must fail)', () => {

@@ -32,6 +32,7 @@ The audit log (and thus the Activity Feed) must include:
   - Classrooms (create, update).
   - Class groups (create, update, delete).
   - Days of week and time slots (create, update, delete).
+  - School calendar: first/last day of school (update); school closures (create, update, delete).
 - **Coverage** — Coverage request lifecycle (create, status change, cancel) where not already covered by time off or sub assignments.
 - **Other** — Any other user-initiated change that affects scheduling, coverage, or the above settings should be considered for audit logging so the Activity Feed remains a reliable record of what changed and by whom.
 
@@ -41,16 +42,16 @@ The audit log (and thus the Activity Feed) must include:
 
 Every log entry must include:
 
-| Field                | Required           | Notes                                                                                                                      |
-| -------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `school_id`          | Yes                | Scope; never null.                                                                                                         |
-| `action`             | Yes                | One of: `create`, `update`, `delete`, `status_change`, `assign`, `unassign`, `cancel`.                                     |
-| `category`           | Yes                | One of: `time_off`, `sub_assignment`, `baseline_schedule`, `temporary_coverage`, `staff`, `coverage`, `system`, `unknown`. |
-| `entity_type`        | Yes                | e.g. `schedule_cell`, `teacher_schedule`, `time_off_request`, `coverage_request`.                                          |
-| `entity_id`          | When applicable    | ID of the primary entity (null for some bulk or cancel-only logs).                                                         |
-| `actor_user_id`      | Preferred          | Who did it; null only for system actions.                                                                                  |
-| `actor_display_name` | Preferred          | Human-readable "who"; should be set whenever actor_user_id is set.                                                         |
-| `details`            | Yes for non-system | Must not be empty for `assign`, `unassign`, `update`, `delete`, `create`. See "Metadata by action" and "Quality rules".    |
+| Field                | Required           | Notes                                                                                                                                         |
+| -------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `school_id`          | Yes                | Scope; never null.                                                                                                                            |
+| `action`             | Yes                | One of: `create`, `update`, `delete`, `status_change`, `assign`, `unassign`, `cancel`.                                                        |
+| `category`           | Yes                | One of: `time_off`, `sub_assignment`, `baseline_schedule`, `temporary_coverage`, `staff`, `coverage`, `school_calendar`, `system`, `unknown`. |
+| `entity_type`        | Yes                | e.g. `schedule_cell`, `teacher_schedule`, `time_off_request`, `coverage_request`.                                                             |
+| `entity_id`          | When applicable    | ID of the primary entity (null for some bulk or cancel-only logs).                                                                            |
+| `actor_user_id`      | Preferred          | Who did it; null only for system actions.                                                                                                     |
+| `actor_display_name` | Preferred          | Human-readable "who"; should be set whenever actor_user_id is set.                                                                            |
+| `details`            | Yes for non-system | Must not be empty for `assign`, `unassign`, `update`, `delete`, `create`. See "Metadata by action" and "Quality rules".                       |
 
 ---
 
@@ -96,6 +97,19 @@ Every log entry must include:
 | -------- | ------------------------------------------------------------------------------- | --------------------------------------------- |
 | `assign` | `staff_id`, `start_date`, `end_date`, `shift_count`; optionally `classroom_ids` | `teacher_name`, `classroom_name` (or summary) |
 | `cancel` | `staff_id`, `scope`, `removed_count`, `remaining_active_shifts`                 | `teacher_name`                                |
+
+### `school_calendar` + `calendar_settings`
+
+| Action   | Required in `details`                                                             | Human-readable required                      |
+| -------- | --------------------------------------------------------------------------------- | -------------------------------------------- |
+| `update` | `updated_fields` (e.g. `first_day_of_school`, `last_day_of_school`), before/after | `summary` (e.g. "First day: …, Last day: …") |
+
+### `school_calendar` + `school_closure`
+
+| Action   | Required in `details`                                                               | Human-readable required                                                      |
+| -------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `create` | `date`, `time_slot_id` or `whole_day`; optionally `reason`, `start_date`/`end_date` | `summary` or `date` + `reason` (e.g. "2025-03-15 (whole day): Thanksgiving") |
+| `delete` | `date`, `time_slot_id` or `whole_day`; optionally `reason`                          | `summary` or `date` + `reason`                                               |
 
 ---
 
@@ -226,6 +240,51 @@ Every log entry must include:
 ```
 
 **Why it's good:** Who, what (assign temporary coverage), to what (staffing_event; Maria Garcia → Toddler A), when (created_at), what changed (assignment created with date range and shift count), context (teacher and classroom names).
+
+### Example 5: School calendar – update first/last day of school
+
+```json
+{
+  "school_id": "school-uuid",
+  "actor_user_id": "user-uuid",
+  "actor_display_name": "Jane Admin",
+  "action": "update",
+  "category": "school_calendar",
+  "entity_type": "calendar_settings",
+  "entity_id": null,
+  "details": {
+    "updated_fields": ["first_day_of_school", "last_day_of_school"],
+    "before": { "first_day_of_school": "2024-08-01", "last_day_of_school": "2025-06-15" },
+    "after": { "first_day_of_school": "2025-08-01", "last_day_of_school": "2026-06-15" },
+    "summary": "First day: 2025-08-01, Last day: 2026-06-15"
+  }
+}
+```
+
+**Why it's good:** Who, what (update calendar settings), what changed (before/after and updated_fields), context (summary of new dates).
+
+### Example 6: School calendar – create closure
+
+```json
+{
+  "school_id": "school-uuid",
+  "actor_user_id": "user-uuid",
+  "actor_display_name": "Jane Admin",
+  "action": "create",
+  "category": "school_calendar",
+  "entity_type": "school_closure",
+  "entity_id": "closure-uuid",
+  "details": {
+    "date": "2025-11-28",
+    "time_slot_id": null,
+    "reason": "Thanksgiving",
+    "whole_day": true,
+    "summary": "2025-11-28 (whole day): Thanksgiving"
+  }
+}
+```
+
+**Why it's good:** Who, what (create closure), to what (date + reason), context (summary readable without DB).
 
 ---
 

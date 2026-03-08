@@ -156,6 +156,36 @@ export async function getSchoolClosures(schoolId: string): Promise<SchoolClosure
   }))
 }
 
+/** Fetch closures by IDs (e.g. for audit log before delete). */
+export async function getSchoolClosuresByIds(
+  schoolId: string,
+  closureIds: string[]
+): Promise<SchoolClosure[]> {
+  if (closureIds.length === 0) return []
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('school_closures')
+    .select('id, school_id, date, time_slot_id, reason, created_at')
+    .eq('school_id', schoolId)
+    .in('id', closureIds)
+
+  if (error) {
+    if (error.code === '42P01' || error.message?.includes('does not exist')) {
+      return []
+    }
+    throw error
+  }
+
+  return (data ?? []).map(row => ({
+    id: row.id,
+    school_id: row.school_id,
+    date: row.date,
+    time_slot_id: row.time_slot_id,
+    reason: row.reason,
+    created_at: row.created_at,
+  }))
+}
+
 export async function createSchoolClosure(
   schoolId: string,
   closure: { date: string; time_slot_id?: string | null; reason?: string | null }
