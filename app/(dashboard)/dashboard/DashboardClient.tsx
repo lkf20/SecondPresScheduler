@@ -143,6 +143,8 @@ const formatFullDateLabel = (value: string) => {
 const formatShortfallValue = (required: number, scheduled: number) =>
   Math.max(0, required - scheduled)
 
+const VALID_DATE_ISO = /^\d{4}-\d{2}-\d{2}$/
+
 /** Group by classroom, then by (time_slot + day + required + scheduled + preferred). Only merge slots when required, scheduled, and preferred match. */
 function groupStaffingTargets(slots: StaffingTargetItem[]) {
   const classroomMap = new Map<
@@ -165,12 +167,21 @@ function groupStaffingTargets(slots: StaffingTargetItem[]) {
   })
 
   // Build StaffingTargetGroup for each raw group (date range + rep)
-  rawGroups.forEach((groupSlots, key) => {
+  rawGroups.forEach(groupSlots => {
     const first = groupSlots[0]
     if (!first) return
     const dates = groupSlots.map(s => s.date).filter((d): d is string => !!d)
     const dateStart = dates.length ? dates.reduce((a, b) => (a < b ? a : b)) : (first.date ?? '')
     const dateEnd = dates.length ? dates.reduce((a, b) => (a > b ? a : b)) : (first.date ?? '')
+    // Exclude groups with no valid date range so we never pass empty date to getWeekStartISOFromDate or ScheduleSidePanel
+    if (
+      !dateStart ||
+      !VALID_DATE_ISO.test(dateStart) ||
+      !dateEnd ||
+      !VALID_DATE_ISO.test(dateEnd)
+    ) {
+      return
+    }
     const group: StaffingTargetGroup = {
       dateStart,
       dateEnd,
@@ -1291,38 +1302,40 @@ export default function DashboardClient({
       </div>
 
       {/* Add Temporary Coverage (reuses ScheduleSidePanel from weekly schedule) */}
-      {assignCoverageSlot && (
-        <ScheduleSidePanel
-          isOpen
-          onClose={() => {
-            setAssignCoverageSlot(null)
-            refetch()
-          }}
-          dayId={assignCoverageSlot.rep.day_of_week_id}
-          dayName={assignCoverageSlot.rep.day_name}
-          timeSlotId={assignCoverageSlot.rep.time_slot_id}
-          timeSlotName={assignCoverageSlot.rep.time_slot_code}
-          timeSlotCode={assignCoverageSlot.rep.time_slot_code}
-          timeSlotStartTime={null}
-          timeSlotEndTime={null}
-          classroomId={assignCoverageSlot.rep.classroom_id}
-          classroomName={assignCoverageSlot.rep.classroom_name}
-          classroomColor={assignCoverageSlot.rep.classroom_color ?? null}
-          selectedDayIds={[]}
-          onSave={() => void refetch()}
-          weekStartISO={getWeekStartISOFromDate(assignCoverageSlot.dateStart)}
-          readOnly
-          initialPanelMode="flex"
-          initialFlexStartDate={assignCoverageSlot.dateStart}
-          initialFlexEndDate={assignCoverageSlot.dateEnd}
-          initialFlexTargetType={
-            assignCoverageSlot.rep.status === 'below_preferred' ? 'preferred' : 'required'
-          }
-          initialFlexRequiredStaff={assignCoverageSlot.rep.required_staff}
-          initialFlexPreferredStaff={assignCoverageSlot.rep.preferred_staff}
-          initialFlexScheduledStaff={assignCoverageSlot.rep.scheduled_staff}
-        />
-      )}
+      {assignCoverageSlot &&
+        VALID_DATE_ISO.test(assignCoverageSlot.dateStart) &&
+        VALID_DATE_ISO.test(assignCoverageSlot.dateEnd) && (
+          <ScheduleSidePanel
+            isOpen
+            onClose={() => {
+              setAssignCoverageSlot(null)
+              refetch()
+            }}
+            dayId={assignCoverageSlot.rep.day_of_week_id}
+            dayName={assignCoverageSlot.rep.day_name}
+            timeSlotId={assignCoverageSlot.rep.time_slot_id}
+            timeSlotName={assignCoverageSlot.rep.time_slot_code}
+            timeSlotCode={assignCoverageSlot.rep.time_slot_code}
+            timeSlotStartTime={null}
+            timeSlotEndTime={null}
+            classroomId={assignCoverageSlot.rep.classroom_id}
+            classroomName={assignCoverageSlot.rep.classroom_name}
+            classroomColor={assignCoverageSlot.rep.classroom_color ?? null}
+            selectedDayIds={[]}
+            onSave={() => void refetch()}
+            weekStartISO={getWeekStartISOFromDate(assignCoverageSlot.dateStart)}
+            readOnly
+            initialPanelMode="flex"
+            initialFlexStartDate={assignCoverageSlot.dateStart}
+            initialFlexEndDate={assignCoverageSlot.dateEnd}
+            initialFlexTargetType={
+              assignCoverageSlot.rep.status === 'below_preferred' ? 'preferred' : 'required'
+            }
+            initialFlexRequiredStaff={assignCoverageSlot.rep.required_staff}
+            initialFlexPreferredStaff={assignCoverageSlot.rep.preferred_staff}
+            initialFlexScheduledStaff={assignCoverageSlot.rep.scheduled_staff}
+          />
+        )}
 
       {/* Edit Time Off Panel */}
       {editingRequestId && (
