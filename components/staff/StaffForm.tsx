@@ -60,7 +60,7 @@ export type StaffFormData = z.infer<typeof staffSchema>
 
 interface StaffFormProps {
   staff?: StaffWithRoleIds
-  onSubmit: (data: StaffFormData) => Promise<void>
+  onSubmit: (data: StaffFormData) => Promise<boolean | void>
   onCancel?: () => void
   defaultDisplayNameFormat?: DisplayNameFormat
   roleTypes?: StaffRoleType[]
@@ -321,7 +321,8 @@ export default function StaffForm({
     if (duplicateWarning && !proceedWithDuplicate) {
       return
     }
-    await onSubmit(data)
+    const submitResult = await onSubmit(data)
+    if (submitResult === false) return
     onDirtyChange?.(false)
     if (draftCacheKey) {
       staffFormDraftCache.delete(draftCacheKey)

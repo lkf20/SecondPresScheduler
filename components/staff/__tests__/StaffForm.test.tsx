@@ -52,4 +52,27 @@ describe('StaffForm dirty tracking', () => {
       expect(screen.getByRole('button', { name: 'Update' })).toBeEnabled()
     })
   })
+
+  it('does not clear dirty state when submit fails', async () => {
+    const user = userEvent.setup()
+    const onDirtyChange = jest.fn()
+    const onSubmit = jest.fn(async () => false)
+
+    const roleTypes = [{ id: 'role-perm', code: 'PERMANENT', label: 'Permanent' }] as any
+
+    render(<StaffForm roleTypes={roleTypes} onSubmit={onSubmit} onDirtyChange={onDirtyChange} />)
+
+    await user.type(screen.getByLabelText(/First Name/i), 'Anne')
+    await user.type(screen.getByLabelText(/Last Name/i), 'M')
+    await user.click(screen.getByLabelText(/Permanent/i))
+    const falseCallsBeforeSubmit = onDirtyChange.mock.calls.filter(call => call[0] === false).length
+    await user.click(screen.getByRole('button', { name: 'Create' }))
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalled()
+    })
+
+    const falseCallsAfterSubmit = onDirtyChange.mock.calls.filter(call => call[0] === false).length
+    expect(falseCallsAfterSubmit).toBe(falseCallsBeforeSubmit)
+  })
 })

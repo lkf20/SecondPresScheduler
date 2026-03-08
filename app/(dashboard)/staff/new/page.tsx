@@ -139,8 +139,10 @@ export default function NewStaffPage() {
       const nextTab = data.is_sub ? 'availability' : 'preferences'
       router.push(`/staff/${createdStaff.id}?tab=${nextTab}`)
       router.refresh()
+      return true
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create staff')
+      return false
     }
   }
 

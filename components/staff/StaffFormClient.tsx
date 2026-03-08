@@ -406,8 +406,10 @@ export default function StaffFormClient({
         [data.first_name?.trim(), data.last_name?.trim()].filter(Boolean).join(' ') ||
         'Staff member'
       toast.success(`${staffNameForToast} has been updated.`)
+      return true
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to update staff')
+      return false
     }
   }
 
