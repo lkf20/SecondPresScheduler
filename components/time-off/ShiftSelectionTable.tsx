@@ -143,21 +143,12 @@ export default function ShiftSelectionTable({
     const effectiveEndDate = endDate || startDate
 
     setLoading(true)
-    console.log('[ShiftSelectionTable] Fetching shifts:', {
-      teacherId,
-      startDate,
-      effectiveEndDate,
-    })
     fetch(
       `/api/teachers/${teacherId}/scheduled-shifts?start_date=${startDate}&end_date=${effectiveEndDate}`
     )
-      .then(r => {
-        console.log('[ShiftSelectionTable] Response status:', r.status)
-        return r.json()
-      })
+      .then(r => r.json())
       .then(data => {
         const shifts = data || []
-        console.log('[ShiftSelectionTable] Received shifts:', shifts.length, shifts)
         setScheduledShifts(shifts)
       })
       .catch(error => {

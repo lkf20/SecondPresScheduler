@@ -6,8 +6,8 @@ describe('SubCardHeader', () => {
     render(<SubCardHeader name="Sally A." phone="555-111-2222" shiftsCovered={2} totalShifts={3} />)
 
     expect(screen.getByText('Sally A.')).toBeInTheDocument()
-    expect(screen.getByText('555-111-2222')).toBeInTheDocument()
-    expect(screen.getByText('2/3 remaining shifts')).toBeInTheDocument()
+    expect(screen.getByText(/\(555\) 111-2222/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Available for 2 of 3 remaining shifts/)).toBeInTheDocument()
   })
 
   it('renders declined state when marked declined', () => {
@@ -30,5 +30,22 @@ describe('SubCardHeader', () => {
     )
 
     expect(screen.queryByText(/remaining shifts/i)).not.toBeInTheDocument()
+  })
+
+  it('shows coverage as badge next to name when showCoverageBadge is true', () => {
+    render(
+      <SubCardHeader
+        name="Jane D."
+        phone={null}
+        shiftsCovered={7}
+        totalShifts={8}
+        showCoverage={false}
+        showCoverageBadge
+      />
+    )
+
+    expect(screen.getByText('Jane D.')).toBeInTheDocument()
+    expect(screen.getByText('88% match')).toBeInTheDocument()
+    expect(screen.getByLabelText(/Available for 7 of 8 remaining shifts/)).toBeInTheDocument()
   })
 })

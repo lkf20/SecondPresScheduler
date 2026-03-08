@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useDailySchedule } from '@/lib/hooks/use-daily-schedule'
 import { getHeaderClasses } from '@/lib/utils/colors'
+import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 import { cn } from '@/lib/utils'
 import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 
@@ -288,6 +289,7 @@ export default function DailyScheduleReportPage() {
   }, [router, selectedDate])
 
   const scheduleData = useMemo(() => data?.data ?? [], [data])
+  const schoolClosures = useMemo(() => data?.school_closures ?? [], [data])
   const timeSlots = useMemo(() => buildTimeSlots(scheduleData), [scheduleData])
   const displayShowAbsencesAndSubs = true
   const displayColorFriendly = colorFriendly
@@ -690,6 +692,20 @@ export default function DailyScheduleReportPage() {
                       </td>
                       {scheduleData.map(classroom => {
                         const slotData = getSlotForClassroom(classroom, slot.id)
+                        const isClosed = isSlotClosedOnDate(selectedDate, slot.id, schoolClosures)
+                        if (isClosed) {
+                          return (
+                            <td
+                              key={classroom.classroom_id}
+                              className={cn(
+                                'border px-3 py-2 text-center text-sm text-slate-500',
+                                displayCondensedLayout && 'px-2 py-1'
+                              )}
+                            >
+                              School Closed
+                            </td>
+                          )
+                        }
                         const assignments = slotData?.assignments ?? []
                         const absences = slotData?.absences ?? []
                         const absentTeacherIds = new Set(

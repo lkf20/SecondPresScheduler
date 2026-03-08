@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import type { SchoolClosure } from '@/lib/api/school-calendar'
 import { getStaffDisplayName as formatDisplayName } from '@/lib/utils/staff-display-name'
 import type { DisplayNameFormat } from '@/lib/utils/staff-display-name'
 import { Database } from '@/types/database'
@@ -80,8 +81,11 @@ export const getStaffNameParts = (
 }
 
 type ScheduleCellRaw = ScheduleCellRow & {
-  schedule_cell_class_groups?: Array<{ class_group: ClassGroupRow | null }>
-  class_groups?: ClassGroupRow[]
+  schedule_cell_class_groups?: Array<{
+    enrollment: number | null
+    class_group: ClassGroupRow | null
+  }>
+  class_groups?: Array<ClassGroupRow & { enrollment?: number | null }>
 }
 
 type WeeklySubAssignment = {
@@ -116,6 +120,11 @@ type StaffingEventShift = {
   staff_first_name?: string | null
   staff_last_name?: string | null
   staff_display_name?: string | null
+  event_category?: 'standard' | 'break' | null
+  covered_staff_id?: string | null
+  start_time?: string | null
+  end_time?: string | null
+  notes?: string | null
 }
 
 type SubAssignmentKeyInput = Pick<
@@ -182,6 +191,9 @@ export interface WeeklyScheduleData {
     teacher_display_name?: string | null
     is_flexible?: boolean
     staffing_event_id?: string
+    event_category?: 'standard' | 'break' | null
+    break_start_time?: string | null
+    break_end_time?: string | null
     class_group_id?: string // Optional: teachers are assigned to classrooms, not specific class groups
     class_name?: string // Optional: teachers are assigned to classrooms, not specific class groups
     classroom_id: string
@@ -189,11 +201,18 @@ export interface WeeklyScheduleData {
     is_floater?: boolean
     is_substitute?: boolean // True if this assignment comes from sub_assignments (week-specific)
     absent_teacher_id?: string // If this is a substitute, the ID of the teacher being replaced
+    notes?: string | null // Temporary coverage notes (staffing_events.notes)
     enrollment?: number
     required_teachers?: number
     preferred_teachers?: number
     assigned_count?: number
   }>
+}
+
+/** API response shape for GET /api/weekly-schedule */
+export interface WeeklyScheduleApiResponse {
+  classrooms: WeeklyScheduleDataByClassroom[]
+  school_closures: SchoolClosure[]
 }
 
 export interface WeeklyScheduleDataByClassroom {
@@ -229,6 +248,8 @@ export interface WeeklyScheduleDataByClassroom {
         is_active: boolean
         enrollment_for_staffing: number | null
         notes: string | null
+        required_staff_override?: number | null
+        preferred_staff_override?: number | null
         class_groups?: Array<{
           id: string
           name: string
@@ -238,6 +259,7 @@ export interface WeeklyScheduleDataByClassroom {
           max_age: number | null
           required_ratio: number
           preferred_ratio: number | null
+          enrollment?: number | null
         }>
       } | null
     }>
@@ -342,7 +364,8 @@ export async function getScheduleSnapshotData({
           time_slot_id,
           classroom_id,
           staff_id,
-          staff:staff!staffing_event_shifts_staff_id_fkey(id, first_name, last_name, display_name)
+          staff:staff!staffing_event_shifts_staff_id_fkey(id, first_name, last_name, display_name),
+          staffing_event:staffing_events(event_category, covered_staff_id, start_time, end_time, notes)
         `
         )
         .eq('school_id', schoolId)
@@ -364,6 +387,11 @@ export async function getScheduleSnapshotData({
               }
             : null
           const staffParts = getStaffNameParts(normalizedStaff, displayNameFormat)
+
+          const eventData = Array.isArray(row.staffing_event)
+            ? row.staffing_event[0]
+            : row.staffing_event
+
           return {
             id: row.id,
             staffing_event_id: row.staffing_event_id,
@@ -376,6 +404,11 @@ export async function getScheduleSnapshotData({
             staff_first_name: staffParts.first_name,
             staff_last_name: staffParts.last_name,
             staff_display_name: staffParts.display_name,
+            event_category: eventData?.event_category as 'standard' | 'break' | null,
+            covered_staff_id: eventData?.covered_staff_id,
+            start_time: eventData?.start_time,
+            end_time: eventData?.end_time,
+            notes: eventData?.notes ?? null,
           }
         })
       }
@@ -515,7 +548,8 @@ export async function getScheduleSnapshotData({
         `
         *,
         schedule_cell_class_groups(
-          class_group:class_groups(id, name, is_active, age_unit, min_age, max_age, required_ratio, preferred_ratio)
+          enrollment,
+          class_group:class_groups(id, name, is_active, age_unit, min_age, max_age, required_ratio, preferred_ratio, order)
         )
       `
       )
@@ -536,12 +570,14 @@ export async function getScheduleSnapshotData({
         scheduleCells = null
       }
     } else {
-      // Transform the nested structure to flatten class_groups array
+      // Transform the nested structure to flatten class_groups array (include enrollment per class group)
       scheduleCells = (data || []).map(cell => {
         const raw = cell as ScheduleCellRaw
         const classGroups = raw.schedule_cell_class_groups
           ? raw.schedule_cell_class_groups
-              .map(j => j.class_group)
+              .map(j =>
+                j.class_group ? { ...j.class_group, enrollment: j.enrollment ?? null } : null
+              )
               .filter((cg): cg is NonNullable<typeof cg> => cg !== null)
           : []
         const flattened: ScheduleCellRaw = {
@@ -696,11 +732,11 @@ export async function getScheduleSnapshotData({
           time_off_request_id?: string
         }> = []
 
-        // Only process if schedule_cell exists and is active with class groups
-        // Handle both class_groups (from transformed data) and schedule_cell_class_groups (from raw query)
+        // Build assignments when schedule_cell exists and has class groups and/or we have teacher assignments.
+        // Include inactive slots so the UI can display assigned teachers (with gray styling).
         const classGroups = scheduleCell?.class_groups || []
 
-        if (scheduleCell && classGroups && classGroups.length > 0 && scheduleCell.is_active) {
+        if (scheduleCell && (classGroups.length > 0 || assignmentsForSlot.length > 0)) {
           const classGroupIds = classGroups.map(cg => cg.id)
 
           // Get teachers assigned to this slot
@@ -735,52 +771,8 @@ export async function getScheduleSnapshotData({
             }
           })
 
-          // Targeted debug logging for floater investigation.
-          // Slot: Toddler A Room / Monday / AC / Bella W.
-          const isDebugSlot =
-            classroom.name === 'Toddler A Room' && day.name === 'Monday' && timeSlot.code === 'AC'
-          if (isDebugSlot) {
-            const rawSchedules = assignmentsForSlot.map(assignment => ({
-              teacher_id: assignment.teacher_id,
-              teacher_name: assignment.teacher
-                ? formatDisplayName(
-                    {
-                      first_name: assignment.teacher.first_name ?? '',
-                      last_name: assignment.teacher.last_name ?? '',
-                      display_name: assignment.teacher.display_name ?? null,
-                    },
-                    displayNameFormat
-                  )
-                : 'Unknown',
-              is_floater: assignment.is_floater ?? false,
-            }))
-
-            const mappedBella = teachers.filter(t =>
-              (t.teacher_name || '').toLowerCase().includes('bella')
-            )
-
-            console.log('[WeeklySchedule][FloaterDebug]', {
-              classroom: classroom.name,
-              day: day.name,
-              time_slot: timeSlot.code,
-              raw_schedules: rawSchedules,
-              mapped_bella: mappedBella,
-            })
-          }
-
           // Get enrollment from schedule_cell (enrollment is for the whole slot, not per class group)
           const enrollment = scheduleCell.enrollment_for_staffing ?? null
-
-          // Add teacher assignments for this slot
-          for (const teacher of teachers) {
-            assignments.push({
-              ...teacher,
-              enrollment: enrollment ?? 0,
-              required_teachers: undefined,
-              preferred_teachers: undefined,
-              assigned_count: teachers.length,
-            })
-          }
 
           const subsForSlot =
             hasDateRange && day.id
@@ -804,6 +796,23 @@ export async function getScheduleSnapshotData({
               : []
           const uniqueFlexForSlot =
             flexForSlot.length > 0 ? dedupeFlexAssignmentsForSlot(flexForSlot) : []
+
+          // Add teacher assignments for this slot
+          for (const teacher of teachers) {
+            const breakCoverage = uniqueFlexForSlot.find(
+              f => f.event_category === 'break' && f.covered_staff_id === teacher.teacher_id
+            )
+
+            assignments.push({
+              ...teacher,
+              enrollment: enrollment ?? 0,
+              required_teachers: undefined,
+              preferred_teachers: undefined,
+              assigned_count: teachers.length,
+              break_start_time: breakCoverage?.start_time ?? null,
+              break_end_time: breakCoverage?.end_time ?? null,
+            })
+          }
 
           // Track unique absent teachers from sub_assignments (covered absences)
           const absentTeachers = new Map<
@@ -878,6 +887,10 @@ export async function getScheduleSnapshotData({
                 teacher_last_name: flex.staff_last_name ?? null,
                 teacher_display_name: flex.staff_display_name ?? null,
                 staffing_event_id: flex.staffing_event_id,
+                event_category: flex.event_category,
+                break_start_time: flex.start_time,
+                break_end_time: flex.end_time,
+                notes: flex.notes ?? null,
                 classroom_id: flex.classroom_id,
                 classroom_name: classroom.name,
                 is_flexible: true,
@@ -988,6 +1001,13 @@ export async function getScheduleSnapshotData({
           }
         }
 
+        // Omit absent permanent teachers from assignments so frontend math doesn't double-count them
+        const filteredAssignments = assignments.filter(a => {
+          if (a.is_substitute || a.is_flexible) return true
+          if (absences.some(absence => absence.teacher_id === a.teacher_id)) return false
+          return true
+        })
+
         dayTimeSlots.push({
           time_slot_id: timeSlot.id,
           time_slot_code: timeSlot.code,
@@ -996,7 +1016,7 @@ export async function getScheduleSnapshotData({
           time_slot_start_time: timeSlot.default_start_time,
           time_slot_end_time: timeSlot.default_end_time,
           time_slot_is_active: timeSlot.is_active !== false,
-          assignments,
+          assignments: filteredAssignments,
           ...(absences.length > 0 ? { absences } : {}),
           schedule_cell: scheduleCell
             ? {
@@ -1004,6 +1024,8 @@ export async function getScheduleSnapshotData({
                 is_active: scheduleCell.is_active,
                 enrollment_for_staffing: scheduleCell.enrollment_for_staffing,
                 notes: scheduleCell.notes,
+                required_staff_override: scheduleCell.required_staff_override ?? null,
+                preferred_staff_override: scheduleCell.preferred_staff_override ?? null,
                 class_groups: classGroups || [],
               }
             : null,

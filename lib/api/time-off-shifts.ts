@@ -124,8 +124,6 @@ export async function getTeacherScheduledShifts(
 ) {
   const supabase = await createClient()
 
-  console.log('[getTeacherScheduledShifts] Input:', { teacherId, startDate, endDate })
-
   // Get teacher's schedule (day_of_week + time_slot combinations)
   // Try without !inner first to see if that's the issue
   const { data: schedule, error: scheduleError } = await supabase
@@ -160,11 +158,7 @@ export async function getTeacherScheduledShifts(
     (daysOfWeekRows || []).map(row => [row.id, { name: row.name, day_number: row.day_number }])
   )
 
-  console.log('[getTeacherScheduledShifts] Raw schedule data:', schedule)
-  console.log('[getTeacherScheduledShifts] Schedule count:', schedule?.length || 0)
-
   if (!schedule || schedule.length === 0) {
-    console.log('[getTeacherScheduledShifts] No schedule found for teacher')
     return []
   }
 
@@ -227,12 +221,6 @@ export async function getTeacherScheduledShifts(
     })
     .filter((entry): entry is TeacherScheduleEntry => entry !== null)
 
-  console.log(
-    '[getTeacherScheduledShifts] Transformed schedule entries:',
-    transformedSchedule.length
-  )
-  console.log('[getTeacherScheduledShifts] Sample transformed entry:', transformedSchedule[0])
-
   // Create a map of day_number to schedule entries for quick lookup
   const scheduleByDayNumber = new Map<number, TeacherScheduleEntry[]>()
   transformedSchedule.forEach(entry => {
@@ -244,12 +232,6 @@ export async function getTeacherScheduledShifts(
       scheduleByDayNumber.get(dayNumber)!.push(entry)
     }
   })
-
-  console.log('[getTeacherScheduledShifts] Transformed schedule:', transformedSchedule)
-  console.log(
-    '[getTeacherScheduledShifts] Schedule by day number:',
-    Array.from(scheduleByDayNumber.entries())
-  )
 
   // Generate all dates in the range (inclusive of both start and end dates)
   const result: Array<{
@@ -263,13 +245,9 @@ export async function getTeacherScheduledShifts(
   }> = []
 
   const expandedDates = expandDateRangeWithTimeZone(startDate, endDate, timeZone)
-  console.log('[getTeacherScheduledShifts] Starting date iteration from', startDate, 'to', endDate)
 
-  expandedDates.forEach((entry, index) => {
+  expandedDates.forEach(entry => {
     const shiftsForDay = scheduleByDayNumber.get(entry.day_number)
-    console.log(
-      `[getTeacherScheduledShifts] Date ${index + 1}: ${entry.date}, day_number: ${entry.day_number}, Found shifts: ${shiftsForDay?.length || 0}`
-    )
 
     if (shiftsForDay && shiftsForDay.length > 0) {
       shiftsForDay.forEach(shift => {
@@ -285,9 +263,6 @@ export async function getTeacherScheduledShifts(
       })
     }
   })
-
-  console.log('[getTeacherScheduledShifts] Final result count:', result.length)
-  console.log('[getTeacherScheduledShifts] Final result:', result)
 
   return result
 }

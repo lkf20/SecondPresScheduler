@@ -56,6 +56,29 @@ describe('SubFinderCard', () => {
     expect(onContact).toHaveBeenCalledTimes(1)
   })
 
+  it('shows Update button and calls onContact when declined', async () => {
+    const user = userEvent.setup()
+    const onContact = jest.fn()
+
+    render(
+      <SubFinderCard
+        name="Sally A."
+        phone="555-111-2222"
+        shiftsCovered={1}
+        totalShifts={2}
+        canCover={[]}
+        cannotCover={[]}
+        assigned={[]}
+        onContact={onContact}
+        isDeclined
+      />
+    )
+
+    expect(screen.getByRole('button', { name: /^update$/i })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /^update$/i }))
+    expect(onContact).toHaveBeenCalledTimes(1)
+  })
+
   it('supports note editing and save callback', async () => {
     const user = userEvent.setup()
     const onSaveNote = jest.fn(async () => undefined)

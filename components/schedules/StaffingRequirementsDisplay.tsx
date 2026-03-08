@@ -80,10 +80,10 @@ export default function StaffingRequirementsDisplay({
             {meetsPreferred ? (
               <CheckCircle2 className="h-4 w-4 text-green-600" />
             ) : (
-              <AlertTriangle className="h-4 w-4 text-yellow-600" />
+              <AlertTriangle className="h-4 w-4 text-amber-700" />
             )}
             <span
-              className={`text-sm font-medium ${meetsPreferred ? 'text-green-600' : 'text-yellow-600'}`}
+              className={`text-sm font-medium ${meetsPreferred ? 'text-green-600' : 'text-amber-700'}`}
             >
               {meetsPreferred
                 ? 'Meets preferred'

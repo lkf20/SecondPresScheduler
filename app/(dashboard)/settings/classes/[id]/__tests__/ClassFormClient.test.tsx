@@ -95,6 +95,7 @@ describe('ClassGroupForm (edit)', () => {
           {
             id: 'cg-1',
             name: 'Infant A',
+            notes: null,
             min_age: 1,
             max_age: 2,
             required_ratio: 4,
@@ -128,8 +129,41 @@ describe('ClassGroupForm (edit)', () => {
       max_age: 2,
       required_ratio: 4,
     })
+    expect(JSON.parse(request.body)).toHaveProperty('notes')
     expect(pushMock).toHaveBeenCalledWith('/settings/classes')
     expect(refreshMock).toHaveBeenCalled()
+  })
+
+  it('submits notes when provided', async () => {
+    render(
+      <ClassGroupForm
+        mode="edit"
+        classData={
+          {
+            id: 'cg-1',
+            name: 'Infant A',
+            notes: null,
+            required_ratio: 4,
+            is_active: true,
+          } as never
+        }
+      />
+    )
+    const notesField = screen.getByPlaceholderText(/special requirements|reminders/i)
+    fireEvent.change(notesField, { target: { value: 'Updated notes' } })
+    fireEvent.click(screen.getByRole('button', { name: /update/i }))
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/class-groups/cg-1',
+        expect.objectContaining({ method: 'PUT' })
+      )
+    })
+    const body = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls.find(
+        (c: unknown[]) => c[0] === '/api/class-groups/cg-1'
+      )[1].body
+    )
+    expect(body.notes).toBe('Updated notes')
   })
 
   it('shows backend error message when update fails', async () => {

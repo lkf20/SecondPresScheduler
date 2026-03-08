@@ -5,6 +5,7 @@ import { createJsonRequest } from '@/tests/helpers/api'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
+import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 
 jest.mock('@/lib/supabase/server', () => ({
   createClient: jest.fn(),
@@ -16,6 +17,11 @@ jest.mock('@/lib/utils/auth', () => ({
 
 jest.mock('@/lib/api/schedule-settings', () => ({
   getScheduleSettings: jest.fn(),
+}))
+
+jest.mock('@/lib/audit/logAuditEvent', () => ({
+  getAuditActorContext: jest.fn(),
+  logAuditEvent: jest.fn(),
 }))
 
 jest.mock('@/lib/utils/date', () => {
@@ -34,8 +40,25 @@ describe('POST /api/staffing-events/flex integration', () => {
   const mockEventSingle = jest.fn()
   const mockShiftInsert = jest.fn()
 
+  const mockStaffMaybeSingle = jest.fn().mockResolvedValue({
+    data: { first_name: 'Test', last_name: 'Staff', display_name: null },
+    error: null,
+  })
+  const mockClassroomsIn = jest.fn().mockResolvedValue({
+    data: [{ id: 'class-1', name: 'Room 1' }],
+    error: null,
+  })
+
   beforeEach(() => {
     jest.clearAllMocks()
+    mockStaffMaybeSingle.mockResolvedValue({
+      data: { first_name: 'Test', last_name: 'Staff', display_name: null },
+      error: null,
+    })
+    mockClassroomsIn.mockResolvedValue({
+      data: [{ id: 'class-1', name: 'Room 1' }],
+      error: null,
+    })
     ;(createClient as jest.Mock).mockResolvedValue({
       from: mockFrom,
     })
@@ -48,6 +71,20 @@ describe('POST /api/staffing-events/flex integration', () => {
       }
       if (table === 'staffing_event_shifts') {
         return { insert: mockShiftInsert }
+      }
+      if (table === 'staff') {
+        return {
+          select: jest.fn().mockReturnThis(),
+          eq: jest.fn().mockReturnThis(),
+          maybeSingle: mockStaffMaybeSingle,
+        }
+      }
+      if (table === 'classrooms') {
+        return {
+          select: jest.fn().mockReturnThis(),
+          eq: jest.fn().mockReturnThis(),
+          in: mockClassroomsIn,
+        }
       }
       return {}
     })
@@ -71,6 +108,11 @@ describe('POST /api/staffing-events/flex integration', () => {
     mockShiftInsert.mockResolvedValue({ error: null })
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
+    ;(getAuditActorContext as jest.Mock).mockResolvedValue({
+      actorUserId: 'user-1',
+      actorDisplayName: 'Test User',
+    })
+    ;(logAuditEvent as jest.Mock).mockResolvedValue(undefined)
   })
 
   it('returns 403 when school context is missing', async () => {
@@ -344,6 +386,42 @@ describe('POST /api/staffing-events/flex integration', () => {
         classroom_id: 'class-2',
       }),
     ])
+  })
+
+  // Break Coverage UI is off (BREAK_COVERAGE_ENABLED = false). Backend still accepts break; re-enable test when feature is on.
+  it.skip('creates break coverage event with event_category, covered_staff_id, start_time, end_time', async () => {
+    const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
+      staff_id: 'staff-1',
+      start_date: '2026-03-02',
+      end_date: '2026-03-02',
+      classroom_ids: ['class-1'],
+      time_slot_ids: ['slot-1'],
+      event_category: 'break',
+      covered_staff_id: 'teacher-1',
+      start_time: '11:00',
+      end_time: '11:30',
+      shifts: [{ date: '2026-03-02', classroom_id: 'class-1', time_slot_id: 'slot-1' }],
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json).toEqual({ id: 'event-1', shift_count: 1 })
+    expect(mockEventInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        school_id: 'school-1',
+        event_type: 'temporary_coverage',
+        event_category: 'break',
+        covered_staff_id: 'teacher-1',
+        start_time: '11:00',
+        end_time: '11:30',
+        staff_id: 'staff-1',
+        start_date: '2026-03-02',
+        end_date: '2026-03-02',
+        status: 'active',
+      })
+    )
   })
 
   it('returns 500 when request parsing throws unexpectedly', async () => {

@@ -10,8 +10,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const startDate = searchParams.get('start_date')
     const endDate = searchParams.get('end_date')
 
-    console.log('[API /teachers/[id]/scheduled-shifts] Request:', { id, startDate, endDate })
-
     if (!startDate || !endDate) {
       return NextResponse.json(
         { error: 'start_date and end_date query parameters are required' },
@@ -23,7 +21,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const scheduleSettings = schoolId ? await getScheduleSettings(schoolId) : null
     const timeZone = scheduleSettings?.time_zone || 'UTC'
     const shifts = await getTeacherScheduledShifts(id, startDate, endDate, timeZone)
-    console.log('[API /teachers/[id]/scheduled-shifts] Returning shifts:', shifts.length)
     return NextResponse.json(shifts)
   } catch (error: any) {
     console.error('[API /teachers/[id]/scheduled-shifts] Error:', error)

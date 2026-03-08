@@ -15,6 +15,7 @@ import { useScheduleSettings } from '@/lib/hooks/use-schedule-settings'
 import { useFilterOptions } from '@/lib/hooks/use-filter-options'
 import { invalidateWeeklySchedule } from '@/lib/utils/invalidation'
 import { isSlotInactive } from '@/lib/utils/schedule-slot-activity'
+import { getTotalEnrollmentForCalculation } from '@/components/schedules/ScheduleSidePanel'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 
 // Calculate Monday of current week as ISO string for query key
@@ -38,6 +39,7 @@ export default function BaselineSchedulePage() {
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
   const schoolId = useSchool()
+  const returnToWeekly = searchParams.get('return_to_weekly') === 'true'
   const focusClassroomId = searchParams.get('classroom_id')
   const focusDayId = searchParams.get('day_of_week_id')
   const focusTimeSlotId = searchParams.get('time_slot_id')
@@ -48,10 +50,12 @@ export default function BaselineSchedulePage() {
 
   // React Query hooks
   const {
-    data: scheduleData = [],
+    data: scheduleResponse,
     isLoading: isLoadingSchedule,
     error: scheduleError,
   } = useWeeklySchedule(weekStartISO)
+  const scheduleData = scheduleResponse?.classrooms ?? []
+  const schoolClosures = scheduleResponse?.school_closures ?? []
   const { data: scheduleSettings, isLoading: isLoadingSettings } = useScheduleSettings()
   const { data: filterOptions, isLoading: isLoadingFilters } = useFilterOptions()
 
@@ -279,13 +283,18 @@ export default function BaselineSchedulePage() {
     }
   }, [availableClassroomIds, filters?.selectedClassroomIds])
 
-  // Handle refresh - invalidate React Query cache
-  const handleRefresh = () => {
+  // Handle refresh - invalidate React Query cache and refetch (used by header refresh button).
+  // Navigation to weekly when returnToWeekly is true is handled by a separate "Back to Weekly" control, not by refresh.
+  const handleRefresh = useCallback(async () => {
     if (schoolId) {
       invalidateWeeklySchedule(queryClient, schoolId)
       queryClient.invalidateQueries({ queryKey: ['scheduleSettings', schoolId] })
+      await queryClient.refetchQueries({
+        queryKey: ['weeklySchedule', schoolId],
+        type: 'active',
+      })
     }
-  }
+  }, [schoolId, queryClient])
 
   // Handle filter changes - ensure displayMode is always permanent-only for baseline schedule
   const handleFiltersChange = useCallback((newFilters: FilterState) => {
@@ -321,17 +330,12 @@ export default function BaselineSchedulePage() {
                 if (!scheduleCell) return false
 
                 // Calculate staffing status
-                if (
-                  !scheduleCell.class_groups ||
-                  scheduleCell.class_groups.length === 0 ||
-                  !scheduleCell.enrollment_for_staffing
-                ) {
-                  return filters.displayFilters.inactive
-                }
-
-                // Get class group data from schedule_cell (use the one with lowest min_age for ratio calculation)
-                const classGroups = scheduleCell.class_groups
-                if (!classGroups || classGroups.length === 0) {
+                const classGroups = scheduleCell.class_groups ?? []
+                const totalEnrollment = getTotalEnrollmentForCalculation(
+                  classGroups,
+                  scheduleCell.enrollment_for_staffing ?? null
+                )
+                if (!classGroups.length || totalEnrollment == null) {
                   return filters.displayFilters.inactive
                 }
 
@@ -342,16 +346,20 @@ export default function BaselineSchedulePage() {
                   return currentMinAge < lowestMinAge ? current : lowest
                 })
 
-                const requiredTeachers = classGroupForRatio.required_ratio
-                  ? Math.ceil(
-                      scheduleCell.enrollment_for_staffing / classGroupForRatio.required_ratio
-                    )
+                const calculatedRequired = classGroupForRatio.required_ratio
+                  ? Math.ceil(totalEnrollment / classGroupForRatio.required_ratio)
                   : undefined
-                const preferredTeachers = classGroupForRatio.preferred_ratio
-                  ? Math.ceil(
-                      scheduleCell.enrollment_for_staffing / classGroupForRatio.preferred_ratio
-                    )
+                const calculatedPreferred = classGroupForRatio.preferred_ratio
+                  ? Math.ceil(totalEnrollment / classGroupForRatio.preferred_ratio)
                   : undefined
+                const requiredTeachers =
+                  scheduleCell.required_staff_override != null
+                    ? scheduleCell.required_staff_override
+                    : calculatedRequired
+                const preferredTeachers =
+                  scheduleCell.preferred_staff_override != null
+                    ? scheduleCell.preferred_staff_override
+                    : calculatedPreferred
 
                 // Count all teachers assigned to this classroom/day/time slot
                 // Teachers are assigned to classrooms, not specific class groups
@@ -460,7 +468,10 @@ export default function BaselineSchedulePage() {
                 : null
             }
             showLegendSubstitutes={false}
+            showLegendTemporaryCoverage={false}
             showFilterChips={false}
+            returnToWeekly={returnToWeekly}
+            schoolClosures={schoolClosures}
           />
           <FilterPanel
             isOpen={filterPanelOpen}

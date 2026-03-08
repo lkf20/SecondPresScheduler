@@ -40,10 +40,9 @@ describe('RecommendedCombination', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it('renders combinations, supports paging, contact, and show-all callback', async () => {
+  it('renders combinations, supports paging and contact', async () => {
     const user = userEvent.setup()
     const onContactSub = jest.fn()
-    const onShowAllSubs = jest.fn()
 
     const combinations = [
       {
@@ -115,7 +114,6 @@ describe('RecommendedCombination', () => {
         totalShifts={2}
         allSubs={[] as any}
         allShifts={[{ date: '2099-02-10', time_slot_code: 'EM', status: 'uncovered' }] as any}
-        onShowAllSubs={onShowAllSubs}
       />
     )
 
@@ -127,9 +125,6 @@ describe('RecommendedCombination', () => {
 
     await user.click(screen.getByRole('button', { name: /next recommended combination/i }))
     expect(screen.getByText('Bella W.')).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: /show all subs/i }))
-    expect(onShowAllSubs).toHaveBeenCalled()
   })
 
   it('uses remaining-label filtering, includes past shifts when requested, and renders conflicts', () => {
@@ -200,6 +195,7 @@ describe('RecommendedCombination', () => {
     expect(screen.getByText('Covered 1/2')).toBeInTheDocument()
     expect(screen.getByText('Recommended 1')).toBeInTheDocument()
     expect(screen.getByText(/Segments assigned,unavailable/i)).toBeInTheDocument()
+    // Show all subs is rendered by the page, not by RecommendedCombination
     expect(screen.queryByRole('button', { name: /show all subs/i })).not.toBeInTheDocument()
   })
 })

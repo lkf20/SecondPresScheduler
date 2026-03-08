@@ -12,7 +12,6 @@ interface TeacherImport {
   role_type_ids?: string[]
   active: boolean
   is_sub: boolean
-  is_teacher: boolean
 }
 
 interface Resolution {
@@ -78,7 +77,6 @@ export async function POST(request: NextRequest) {
             .from('staff')
             .select('id')
             .eq('email', teacher.email.trim().toLowerCase())
-            .eq('is_teacher', true)
             .single()
 
           if (existing) {
@@ -93,7 +91,6 @@ export async function POST(request: NextRequest) {
             .select('id')
             .eq('first_name', teacher.first_name.trim())
             .eq('last_name', teacher.last_name.trim())
-            .eq('is_teacher', true)
             .single()
 
           if (existing) {
@@ -127,7 +124,6 @@ export async function POST(request: NextRequest) {
               email: teacher.email || undefined,
               phone: teacher.phone || undefined,
               role_type_ids: teacher.role_type_ids || [],
-              is_teacher: true,
               is_sub: teacher.is_sub,
               active: teacher.active,
               school_id: schoolId,
@@ -157,7 +153,6 @@ export async function POST(request: NextRequest) {
             email: teacher.email || undefined,
             phone: teacher.phone || undefined,
             role_type_ids: teacher.role_type_ids || [],
-            is_teacher: true,
             is_sub: teacher.is_sub,
             active: teacher.active,
             school_id: schoolId,
@@ -176,7 +171,6 @@ export async function POST(request: NextRequest) {
               email: teacher.email || undefined,
               phone: teacher.phone || undefined,
               role_type_ids: teacher.role_type_ids || [],
-              is_teacher: true,
               is_sub: teacher.is_sub,
               active: teacher.active,
               school_id: schoolId,

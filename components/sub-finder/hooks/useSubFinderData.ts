@@ -299,7 +299,12 @@ export function useSubFinderData({
   // Update recommended subs and combinations when recommendations data changes
   useEffect(() => {
     if (subRecommendationsData && selectedAbsenceId) {
-      const subs = (subRecommendationsData.subs || []) as unknown as SubCandidate[]
+      const rawSubs = subRecommendationsData.subs || []
+      // Normalize so email is always read from response (API sends 'email'; ensure it's not lost)
+      const subs = rawSubs.map((s: Record<string, unknown>) => ({
+        ...s,
+        email: s.email ?? s['email'] ?? null,
+      })) as SubCandidate[]
       const combinations =
         (subRecommendationsData as { recommended_combinations?: RecommendedCombination[] })
           .recommended_combinations ||

@@ -52,6 +52,16 @@ write paths.
 - **Derived vs stored:**
   - **Stored:** `date`, `time_slot_id`, `is_partial`, `start_time`, `end_time`
 
+### Dashboard and time off
+
+- **Dashboard "Upcoming Time Off & Coverage"** shows only **active** time off requests. Coverage requests whose source `time_off_request` has `status = 'draft'` are excluded from the dashboard overview API response.
+
+### Time off overlap rule
+
+- **No overlapping time off (draft or active) per teacher.** Overlap = same teacher and at least one (date, time_slot_id) in common with another draft or active request.
+- **Enforcement:** Before creating (POST) or updating (PUT) a time off request, the API calls `findOverlappingTimeOffRequest`. If an overlap is found, the API returns **409 Conflict** with a JSON body the client uses to show a resolution modal: `code: 'TIME_OFF_OVERLAP'`, `existingRequestId`, `existingStartDate`, `existingEndDate`, `existingStatus` (`'draft' | 'active'`), `teacherName`, `newRequestStartDate`, `newRequestEndDate`, `overlapStartDate`, `overlapEndDate`.
+- **Client:** On 409 with `TIME_OFF_OVERLAP`, the form shows a modal offering "Edit existing request" (navigate to that request) or "Cancel new request". If the existing request is a draft, the modal copy says "draft time off request".
+
 ## Status Transition Rules (Code-Enforced)
 
 These are enforced in API routes using `lib/lifecycle/status-transitions.ts`.

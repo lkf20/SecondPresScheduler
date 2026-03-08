@@ -421,10 +421,6 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
       return
     }
     setSelectedShiftIds(new Set())
-    console.log('[AssignSubPanel Debug] cleared selected shifts on load', {
-      totalShifts: shifts.length,
-      selectedCount: 0,
-    })
   }, [subId, shifts])
 
   // Calculate summary stats
@@ -469,20 +465,6 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
       // First, create time off requests for shifts without time off if checkbox is checked
       const selectedShifts = shifts.filter(s => selectedShiftIds.has(s.id))
       const shiftsWithoutTimeOff = selectedShifts.filter(s => !s.has_time_off)
-      console.log('[AssignSubPanel Debug] submit payload', {
-        coverageRequestId,
-        subId,
-        selectedShiftIds: Array.from(selectedShiftIds),
-        selectedShiftCount: selectedShifts.length,
-        selectedShifts: selectedShifts.map(shift => ({
-          id: shift.id,
-          date: shift.date,
-          time_slot_id: shift.time_slot_id,
-          time_slot_code: shift.time_slot_code,
-          has_time_off: shift.has_time_off,
-          status: shift.status ?? 'available',
-        })),
-      })
 
       if (createTimeOffForMissing && shiftsWithoutTimeOff.length > 0 && teacherId) {
         // Create time off request
@@ -540,7 +522,6 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
         throw new Error(errorData.error || 'Failed to assign shifts')
       }
       const assignResult = await assignResponse.json()
-      console.log('[AssignSubPanel Debug] assign response', assignResult)
 
       const sub = subs.find(s => s.id === subId)
       const teacher = teachers.find(t => t.id === teacherId)

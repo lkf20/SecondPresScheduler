@@ -21,6 +21,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import ErrorMessage from '@/components/shared/ErrorMessage'
+import { formatUSPhone } from '@/lib/utils/phone'
 import DuplicateResolutionDialog, {
   type DuplicateMatch,
   type TeacherImport,
@@ -356,7 +357,6 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
           role_type_ids: roleTypeId ? [roleTypeId] : [],
           active: parseStatus(row.status),
           is_sub: parseIsSub(row.is_sub),
-          is_teacher: true,
         }
       })
 
@@ -574,7 +574,7 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
                         <TableCell className="font-medium">{row.rowNumber}</TableCell>
                         <TableCell>{row.name}</TableCell>
                         <TableCell>{row.email || '—'}</TableCell>
-                        <TableCell>{row.phone || '—'}</TableCell>
+                        <TableCell>{row.phone ? formatUSPhone(row.phone) : '—'}</TableCell>
                         <TableCell>{row.staff_role || '—'}</TableCell>
                         <TableCell>{row.status || 'Active (default)'}</TableCell>
                         <TableCell>

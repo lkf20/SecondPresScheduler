@@ -93,7 +93,7 @@ export default function CoverageSummary({
   ) as string[]
   const headerLabel = headerText ?? `${uncovered} of ${totalShifts} Shifts Require Subs`
   const headerClass =
-    variant === 'compact' ? 'text-sm font-medium text-slate-600' : getHeaderClasses('lg')
+    variant === 'compact' ? 'text-lg font-semibold text-slate-700' : getHeaderClasses('xl')
   return (
     <div
       className={cn(
@@ -103,7 +103,7 @@ export default function CoverageSummary({
       )}
     >
       {/* Header */}
-      <div className="mb-0 flex flex-wrap items-center gap-3">
+      <div className={cn('flex flex-wrap items-center gap-3', coveredCount > 0 ? 'mb-2' : 'mb-0')}>
         <div className={headerClass}>{headerLabel}</div>
         <div className="h-2 rounded-full overflow-hidden flex gap-0.5">
           {(
@@ -112,36 +112,47 @@ export default function CoverageSummary({
               id: shift.id,
               status: shift.status,
             }))
-          ).map(segment => {
-            const getSegmentColor = () => {
-              switch (segment.status) {
-                case 'fully_covered':
-                  return 'rgb(186, 225, 210)' // green-blue tone used in sub card coverage bars
-                case 'partially_covered':
-                  return 'rgb(200, 232, 219)' // lighter green-blue for partial
-                case 'uncovered':
-                  return 'rgb(229, 231, 235)' // same as SubFinderCard unavailable
+          )
+            .slice()
+            .sort((a, b) => {
+              // Covered first, then need coverage (green then grey)
+              const order: Record<ShiftDetail['status'], number> = {
+                fully_covered: 0,
+                partially_covered: 1,
+                uncovered: 2,
               }
-            }
+              return order[a.status] - order[b.status]
+            })
+            .map(segment => {
+              const getSegmentColor = () => {
+                switch (segment.status) {
+                  case 'fully_covered':
+                    return 'rgb(186, 225, 210)' // green-blue tone used in sub card coverage bars
+                  case 'partially_covered':
+                    return 'rgb(200, 232, 219)' // lighter green-blue for partial
+                  case 'uncovered':
+                    return 'rgb(253, 218, 185)' // light orange (softer than uncovered text)
+                }
+              }
 
-            return (
-              <div
-                key={segment.id}
-                className="h-full rounded border"
-                style={{
-                  width: '14px', // 14px (between 12-16px)
-                  backgroundColor: getSegmentColor(),
-                  borderColor: getSegmentColor(),
-                }}
-              />
-            )
-          })}
+              return (
+                <div
+                  key={segment.id}
+                  className="h-full rounded border"
+                  style={{
+                    width: '14px', // 14px (between 12-16px)
+                    backgroundColor: getSegmentColor(),
+                    borderColor: getSegmentColor(),
+                  }}
+                />
+              )
+            })}
         </div>
       </div>
 
       {coveredCount > 0 && (
-        <div className="mt-1 mb-0 text-sm text-muted-foreground">
-          {coveredCount} Shift{coveredCount === 1 ? '' : 's'} covered by{' '}
+        <div className="mt-0 mb-2 text-lg text-muted-foreground">
+          {coveredCount} shift{coveredCount === 1 ? '' : 's'} covered by{' '}
           {coveredSubNames.join(', ')}
         </div>
       )}

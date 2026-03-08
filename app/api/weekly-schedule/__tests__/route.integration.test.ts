@@ -3,14 +3,25 @@
 import { GET } from '@/app/api/weekly-schedule/route'
 import { getWeeklyScheduleData } from '@/lib/api/weekly-schedule'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import { getUserSchoolId } from '@/lib/utils/auth'
 
 jest.mock('@/lib/api/weekly-schedule', () => ({
   getWeeklyScheduleData: jest.fn(),
+  getWeekEndISO: jest.fn((d: string) => {
+    const start = new Date(d + 'T00:00:00')
+    const end = new Date(start)
+    end.setDate(end.getDate() + 6)
+    return end.toISOString().split('T')[0]
+  }),
 }))
 
 jest.mock('@/lib/api/schedule-settings', () => ({
   getScheduleSettings: jest.fn(),
+}))
+
+jest.mock('@/lib/api/school-calendar', () => ({
+  getSchoolClosuresForDateRange: jest.fn().mockResolvedValue([]),
 }))
 
 jest.mock('@/lib/utils/auth', () => ({
@@ -51,7 +62,10 @@ describe('GET /api/weekly-schedule integration', () => {
       ['day-mon', 'day-wed'],
       '2026-03-02'
     )
-    expect(json).toEqual([{ classroom_id: 'class-1' }])
+    expect(json).toEqual({
+      classrooms: [{ classroom_id: 'class-1' }],
+      school_closures: [],
+    })
   })
 
   it('falls back to all days when settings lookup fails', async () => {
@@ -66,6 +80,10 @@ describe('GET /api/weekly-schedule integration', () => {
 
     expect(response.status).toBe(200)
     expect(getWeeklyScheduleData).toHaveBeenCalledWith('school-1', undefined, '2026-03-09')
+    expect(await response.json()).toEqual({
+      classrooms: [{ classroom_id: 'class-1' }],
+      school_closures: [],
+    })
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringMatching(/could not load schedule settings/i),
       'table missing'
@@ -105,7 +123,10 @@ describe('GET /api/weekly-schedule integration', () => {
 
     expect(response.status).toBe(200)
     expect(getWeeklyScheduleData).toHaveBeenCalledWith('school-1', undefined, '2026-03-16')
-    expect(json).toEqual([{ classroom_id: 'class-2' }])
+    expect(json).toEqual({
+      classrooms: [{ classroom_id: 'class-2' }],
+      school_closures: [],
+    })
   })
 
   it('returns 500 without stack details outside development', async () => {

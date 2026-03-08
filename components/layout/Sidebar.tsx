@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
-  Search,
+  UserSearch,
   Calendar,
   FileText,
   Settings,
@@ -30,7 +30,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Weekly Schedule', href: '/schedules/weekly', icon: Calendar },
   { name: 'Time Off', href: '/time-off', icon: CalendarOff },
-  { name: 'Sub Finder', href: '/sub-finder', icon: Search },
+  { name: 'Sub Finder', href: '/sub-finder', icon: UserSearch },
   { name: 'Reports', href: '/reports', icon: FileText },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
@@ -133,7 +133,11 @@ export default function Sidebar() {
           <nav className="flex-1 px-2 space-y-1">
             {navigation.map(item => {
               const isSettingsItem = item.name === 'Settings'
-              const itemHref = isSettingsItem ? settingsDestination : item.href
+              const itemHref = isSettingsItem
+                ? pathname && isSettingsAreaPath(pathname)
+                  ? '/settings'
+                  : settingsDestination
+                : item.href
               const isActive = isSettingsItem
                 ? Boolean(pathname && isSettingsAreaPath(pathname))
                 : pathname === item.href || pathname?.startsWith(item.href + '/')

@@ -229,14 +229,29 @@ test('sub finder find and assign flow @smoke', async ({ page }) => {
     .getByRole('button', { name: /find subs/i })
     .first()
     .click()
-  await expect(page.getByText('Sally A.').first()).toBeVisible()
+  // Sally A. may appear in multiple places (e.g. hidden in ContactSubPanel); wait for the visible card's action
+  await expect(page.getByRole('button', { name: /contact & assign/i }).first()).toBeVisible({
+    timeout: 10000,
+  })
 
   await page
     .getByRole('button', { name: /contact & assign/i })
     .first()
     .click()
-  await expect(page.getByText(/contact sub/i).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: /^assign$/i })).toBeVisible({
+    timeout: 10000,
+  })
+  const shiftCheckbox = page.getByRole('checkbox').first()
+  await expect(shiftCheckbox).toBeVisible({ timeout: 5000 })
+  await shiftCheckbox.check()
   await page.getByRole('button', { name: /^assign$/i }).click()
-
-  await expect(page.getByText(/assigned sally a\./i)).toBeVisible()
+  const assignWithoutConfirm = page.getByRole('button', {
+    name: /assign without confirming/i,
+  })
+  if (await assignWithoutConfirm.isVisible().catch(() => false)) {
+    await assignWithoutConfirm.click()
+  }
+  await expect(page.getByText(/assigned sally a\./i)).toBeVisible({
+    timeout: 10000,
+  })
 })

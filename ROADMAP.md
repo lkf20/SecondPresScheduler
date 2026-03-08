@@ -167,6 +167,11 @@ The Scheduler App is a comprehensive substitute teacher scheduling system that r
 
 ## Phase 8: Advanced Features 🌟 FUTURE
 
+### Baseline Evolution
+
+- [ ] Add Support for Multiple Baseline Templates/Terms (v1.5)
+- [ ] Add Effective Dates (`start_date`, `end_date`) to Baseline Assignments (v2)
+
 ### Preferences & Rules
 
 - [ ] Classroom preferences (staff preferences)

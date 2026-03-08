@@ -73,6 +73,7 @@ export async function getClassroomById(id: string, schoolId?: string) {
 
 export async function createClassroom(classroom: {
   name: string
+  notes?: string | null
   capacity?: number | null
   order?: number | null
   is_active?: boolean

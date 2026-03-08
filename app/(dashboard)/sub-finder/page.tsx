@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { ChevronDown, ChevronLeft, ChevronUp, RefreshCw, Search, X } from 'lucide-react'
+import { ArrowRight, ChevronDown, ChevronLeft, ChevronUp, RefreshCw, Search, X } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Dialog,
@@ -20,6 +20,7 @@ import AbsenceList from '@/components/sub-finder/AbsenceList'
 import RecommendedSubsList from '@/components/sub-finder/RecommendedSubsList'
 import type { RecommendedSub } from '@/components/sub-finder/ContactSubPanel'
 import RecommendedCombination from '@/components/sub-finder/RecommendedCombination'
+import { ShiftChipsLegend } from '@/components/sub-finder/ShiftChips'
 import ContactSubPanel from '@/components/sub-finder/ContactSubPanel'
 import {
   useSubFinderData,
@@ -29,7 +30,11 @@ import {
 } from '@/components/sub-finder/hooks/useSubFinderData'
 import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
 import DatePickerInput from '@/components/ui/date-picker-input'
-import { formatAbsenceDateRange, formatShortDate } from '@/lib/utils/date-format'
+import {
+  formatAbsenceDateRange,
+  formatShortDate,
+  formatLastContactedDateTime,
+} from '@/lib/utils/date-format'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -50,6 +55,7 @@ export default function SubFinderPage() {
   const searchParams = useSearchParams()
   const requestedAbsenceId = searchParams.get('absence_id')
   const requestedTeacherId = searchParams.get('teacher_id')
+  const requestedSubId = searchParams.get('sub_id')
   const [mode, setMode] = useState<Mode>('existing')
   const [includePastShifts, setIncludePastShifts] = useState(false)
   const [shiftFilters, setShiftFilters] = useState<string[]>(['all'])
@@ -139,6 +145,22 @@ export default function SubFinderPage() {
   const [contactDataCache, setContactDataCache] = useState<Map<string, ContactDataCacheEntry>>(
     new Map()
   )
+  const getContactStatusLine = useCallback(
+    (sub: SubCandidate): string | null => {
+      const absenceId = selectedAbsence?.id
+      if (!absenceId) return null
+      const entry = contactDataCache.get(`${sub.id}-${absenceId}`)
+      if (!entry?.contacted_at) return null
+      const statusLabel =
+        entry.contact_status === 'confirmed'
+          ? 'Confirmed'
+          : entry.contact_status === 'declined_all'
+            ? 'Declined'
+            : 'Pending'
+      return `${statusLabel} · Last contacted ${formatLastContactedDateTime(entry.contacted_at)}`
+    },
+    [selectedAbsence?.id, contactDataCache]
+  )
   const [highlightedSubId, setHighlightedSubId] = useState<string | null>(null)
   const [manualTeacherId, setManualTeacherId] = useState<string>('')
   const [manualStartDate, setManualStartDate] = useState<string>('')
@@ -146,6 +168,12 @@ export default function SubFinderPage() {
   const [manualSelectedShifts, setManualSelectedShifts] = useState<
     Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
   >([])
+  const onManualShiftsChange = useCallback(
+    (shifts: Array<{ date: string; day_of_week_id: string; time_slot_id: string }>) => {
+      setManualSelectedShifts(shifts)
+    },
+    []
+  )
   const [manualTeacherSearch, setManualTeacherSearch] = useState('')
   const [isManualTeacherSearchOpen, setIsManualTeacherSearchOpen] = useState(false)
   const subSearchRef = useRef<HTMLDivElement | null>(null)
@@ -320,6 +348,52 @@ export default function SubFinderPage() {
     })
     return summaryMap
   }, [responseCountsByShift])
+
+  /**
+   * Per-shift list of contacted subs with status for detail shift cards (uncovered).
+   * A sub is shown as confirmed only for the shift they are assigned to; if they
+   * confirmed for a different shift, they are shown as declined for all other shifts.
+   */
+  const contactedSubsByShift = useMemo(() => {
+    const map = new Map<
+      string,
+      Array<{ id: string; name: string; status: 'pending' | 'confirmed' | 'declined' }>
+    >()
+    const assignedShiftKeysBySub = new Map<string, Set<string>>()
+    allSubs.forEach(sub => {
+      const keys = new Set<string>()
+      ;(sub.assigned_shifts || []).forEach(s => {
+        keys.add(`${s.date}|${s.time_slot_code}`)
+      })
+      assignedShiftKeysBySub.set(sub.id, keys)
+    })
+    allSubs.forEach(sub => {
+      const isContacted =
+        sub.is_contacted === true ||
+        sub.response_status === 'pending' ||
+        sub.response_status === 'confirmed' ||
+        sub.response_status === 'declined_all'
+      if (!isContacted) return
+      const assignedKeys = assignedShiftKeysBySub.get(sub.id) || new Set<string>()
+      const name = getDisplayName(sub)
+      ;(sub.can_cover || []).forEach(shift => {
+        const key = `${shift.date}|${shift.time_slot_code}`
+        const isAssignedToThisShift = assignedKeys.has(key)
+        let status: 'pending' | 'confirmed' | 'declined'
+        if (sub.response_status === 'declined_all') {
+          status = 'declined'
+        } else if (sub.response_status === 'confirmed') {
+          status = isAssignedToThisShift ? 'confirmed' : 'declined'
+        } else {
+          status = 'pending'
+        }
+        const list = map.get(key) || []
+        list.push({ id: sub.id, name, status })
+        map.set(key, list)
+      })
+    })
+    return map
+  }, [allSubs, getDisplayName])
   const shiftFilterCounts = useMemo(() => {
     const counts = {
       all: sortedVisibleShifts.length,
@@ -1225,6 +1299,28 @@ export default function SubFinderPage() {
     }
   }, [absences, mode, selectedAbsence, setSelectedAbsence])
 
+  // Auto-open Sub Contact Panel if requestedSubId is present
+  const hasAutoOpenedSubPanelRef = useRef(false)
+  useEffect(() => {
+    if (
+      requestedSubId &&
+      selectedAbsence &&
+      selectedAbsence.id === requestedAbsenceId &&
+      !hasAutoOpenedSubPanelRef.current &&
+      (recommendedSubs.length > 0 || allSubs.length > 0)
+    ) {
+      const subCandidate =
+        recommendedSubs.find(s => s.id === requestedSubId) ||
+        allSubs.find(s => s.id === requestedSubId)
+
+      if (subCandidate) {
+        setSelectedSub(subCandidate)
+        setIsContactPanelOpen(true)
+        hasAutoOpenedSubPanelRef.current = true
+      }
+    }
+  }, [requestedSubId, requestedAbsenceId, selectedAbsence, recommendedSubs, allSubs])
+
   // Restore manual mode results after form data is restored
   useEffect(() => {
     if (
@@ -1587,9 +1683,7 @@ export default function SubFinderPage() {
                       startDate={manualStartDate}
                       endDate={manualEndDate || manualStartDate}
                       selectedShifts={manualSelectedShifts}
-                      onShiftsChange={shifts => {
-                        setManualSelectedShifts(shifts)
-                      }}
+                      onShiftsChange={onManualShiftsChange}
                       autoSelectScheduled
                       tableClassName="text-xs [&_th]:px-2 [&_td]:px-2"
                     />
@@ -1683,21 +1777,23 @@ export default function SubFinderPage() {
                   ) : loading ? (
                     renderRecommendedPlaceholder()
                   ) : displayRecommendedCombinations.length > 0 ? (
-                    <div className="mt-2">
-                      <RecommendedCombination
-                        combinations={displayRecommendedCombinations}
-                        onContactSub={handleCombinationContact}
-                        totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
-                        useRemainingLabel={
-                          (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
-                          (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
-                        }
-                        allSubs={allSubs}
-                        allShifts={visibleShiftDetails}
-                        includePastShifts={includePastShifts}
-                        onShowAllSubs={openAllSubsPanel}
-                      />
-                    </div>
+                    <>
+                      <ShiftChipsLegend className="mb-3" />
+                      <div className="mt-2">
+                        <RecommendedCombination
+                          combinations={displayRecommendedCombinations}
+                          onContactSub={handleCombinationContact}
+                          totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
+                          useRemainingLabel={
+                            (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
+                            (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
+                          }
+                          allSubs={allSubs}
+                          allShifts={visibleShiftDetails}
+                          includePastShifts={includePastShifts}
+                        />
+                      </div>
+                    </>
                   ) : null}
                 </div>
               )}
@@ -1737,6 +1833,9 @@ export default function SubFinderPage() {
                             `${shift.date}|${shift.time_slot_code}`
                           ) || 0
                         }
+                        contactedSubsForShift={
+                          contactedSubsByShift.get(`${shift.date}|${shift.time_slot_code}`) || []
+                        }
                         responseSummary={
                           responseSummaryByShift.get(`${shift.date}|${shift.time_slot_code}`) ||
                           'No response'
@@ -1744,6 +1843,7 @@ export default function SubFinderPage() {
                         onSelectShift={handleSelectShift}
                         onChangeSub={handleOpenChangeDialog}
                         onRemoveSub={handleOpenRemoveDialog}
+                        onSelectSubForContact={handleCombinationContact}
                       />
                     ))
                   ) : (
@@ -1919,6 +2019,7 @@ export default function SubFinderPage() {
                     showAllSubs
                     onContactSub={handleContactSub}
                     onSaveNote={handleSaveSubNote}
+                    getContactStatusLine={getContactStatusLine}
                     hideHeader
                     highlightedSubId={highlightedSubId}
                     includePastShifts={includePastShifts}
@@ -1986,7 +2087,7 @@ export default function SubFinderPage() {
                 >
                   <div className="pt-10 pb-0">
                     {/* Header Row */}
-                    <div className="mb-5">
+                    <div className="mb-2">
                       <h2 className="text-xl font-semibold flex flex-wrap items-center gap-2">
                         <span>Sub Finder</span>
                         <span className="text-muted-foreground">→</span>
@@ -2020,7 +2121,7 @@ export default function SubFinderPage() {
                     </div>
 
                     {visibleShiftSummary && visibleShiftSummary.total > 0 && (
-                      <div className="mt-4 mb-2 flex flex-wrap items-end justify-between gap-4">
+                      <div className="mt-1 mb-2 flex flex-wrap items-end justify-between gap-4">
                         <CoverageSummary
                           shifts={visibleShiftSummary}
                           onShiftClick={handleShiftClick}
@@ -2098,38 +2199,50 @@ export default function SubFinderPage() {
                 ) : loading ? (
                   renderRecommendedPlaceholder()
                 ) : displayRecommendedCombinations.length > 0 ? (
-                  <div className="mt-2">
-                    <RecommendedCombination
-                      combinations={displayRecommendedCombinations}
-                      onContactSub={handleCombinationContact}
-                      totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
-                      useRemainingLabel={
-                        (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
-                        (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
-                      }
-                      allSubs={allSubs}
-                      allShifts={visibleShiftDetails}
-                      includePastShifts={includePastShifts}
-                      onShowAllSubs={openAllSubsPanel}
-                    />
-                  </div>
+                  <>
+                    <ShiftChipsLegend className="mb-3" />
+                    <div className="mt-2">
+                      <RecommendedCombination
+                        combinations={displayRecommendedCombinations}
+                        onContactSub={handleCombinationContact}
+                        totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
+                        useRemainingLabel={
+                          (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
+                          (visibleShiftSummary?.uncovered ?? selectedAbsence.shifts.uncovered)
+                        }
+                        allSubs={allSubs}
+                        allShifts={visibleShiftDetails}
+                        includePastShifts={includePastShifts}
+                      />
+                    </div>
+                  </>
                 ) : null}
 
-                <div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => setIsMiddleShiftListExpanded(prev => !prev)}
-                    className="inline-flex items-center gap-2 rounded-full border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    className="inline-flex items-center gap-2 rounded-full border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50"
                   >
-                    {isMiddleShiftListExpanded ? 'Hide shifts' : 'Show all shifts'}
+                    {isMiddleShiftListExpanded ? 'Hide shifts detail' : 'Show shifts detail'}
                     {isMiddleShiftListExpanded ? (
                       <ChevronUp className="h-3.5 w-3.5" />
                     ) : (
                       <ChevronDown className="h-3.5 w-3.5" />
                     )}
                   </Button>
+                  {displayRecommendedCombinations.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={openAllSubsPanel}
+                      className="inline-flex shrink-0 items-center gap-2 rounded-full border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Show all subs <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
 
                 {isMiddleShiftListExpanded && (
@@ -2245,6 +2358,9 @@ export default function SubFinderPage() {
                               `${shift.date}|${shift.time_slot_code}`
                             ) || 0
                           }
+                          contactedSubsForShift={
+                            contactedSubsByShift.get(`${shift.date}|${shift.time_slot_code}`) || []
+                          }
                           responseSummary={
                             responseSummaryByShift.get(`${shift.date}|${shift.time_slot_code}`) ||
                             'No response'
@@ -2252,6 +2368,7 @@ export default function SubFinderPage() {
                           onSelectShift={handleSelectShift}
                           onChangeSub={handleOpenChangeDialog}
                           onRemoveSub={handleOpenRemoveDialog}
+                          onSelectSubForContact={handleCombinationContact}
                         />
                       ))
                     ) : (
@@ -2276,7 +2393,7 @@ export default function SubFinderPage() {
               'shrink-0 flex-none border-l bg-white transition-all h-full overflow-hidden',
               SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-rose-500'
             )}
-            style={{ width: '540px' }}
+            style={{ width: '580px' }}
           >
             {selectedAbsence ? (
               <div
@@ -2471,6 +2588,7 @@ export default function SubFinderPage() {
                       absence={absenceForUI ?? selectedAbsence}
                       shiftDetails={shiftDetails}
                       showAllSubs
+                      getContactStatusLine={getContactStatusLine}
                       hideHeader
                       includePastShifts={includePastShifts}
                       selectedShift={selectedShift}
@@ -2496,6 +2614,7 @@ export default function SubFinderPage() {
                     showAllSubs
                     onContactSub={handleContactSub}
                     onSaveNote={handleSaveSubNote}
+                    getContactStatusLine={getContactStatusLine}
                     hideHeader
                     highlightedSubId={highlightedSubId}
                     includePastShifts={includePastShifts}

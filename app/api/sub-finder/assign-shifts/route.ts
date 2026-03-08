@@ -4,6 +4,7 @@ import { createErrorResponse, getErrorMessage } from '@/lib/utils/errors'
 import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 import { revalidatePath } from 'next/cache'
 import { getUserSchoolId } from '@/lib/utils/auth'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 const shouldDebugLog =
   process.env.NODE_ENV === 'development' || process.env.SUB_FINDER_DEBUG === 'true'
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
 
     const { data: subRecord, error: subError } = await supabase
       .from('staff')
-      .select('id, school_id')
+      .select('id, school_id, first_name, last_name, display_name')
       .eq('id', sub_id)
       .single()
 
@@ -150,17 +151,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const subName = getStaffDisplayName(subRecord)
+    const { data: teacherRow } = await supabase
+      .from('staff')
+      .select('first_name, last_name, display_name')
+      .eq('id', teacherId)
+      .maybeSingle()
+    const teacherName = teacherRow ? getStaffDisplayName(teacherRow) : null
+
     const uniqueSelectedShiftIds = Array.from(
       new Set(
         selected_shift_ids.filter((value: unknown): value is string => typeof value === 'string')
       )
     )
-    console.log('[assign-shifts Debug] incoming request', {
-      coverage_request_id,
-      sub_id,
-      selected_shift_ids,
-      unique_selected_shift_ids: uniqueSelectedShiftIds,
-    })
 
     // Get active coverage_request_shifts for the selected shifts
     const { data: coverageRequestShifts, error: shiftsError } = await supabase
@@ -178,10 +181,6 @@ export async function POST(request: NextRequest) {
     if (!coverageRequestShifts || coverageRequestShifts.length === 0) {
       return createErrorResponse('No valid shifts found for assignment', 404)
     }
-    console.log('[assign-shifts Debug] resolved active shifts', {
-      resolved_count: coverageRequestShifts.length,
-      resolved_shift_ids: coverageRequestShifts.map((shift: any) => shift.id),
-    })
 
     // Prevent duplicate/overlapping active assignments on the same shift.
     // Scope to resolved active shifts for this coverage request to avoid stale client payloads.
@@ -207,12 +206,6 @@ export async function POST(request: NextRequest) {
     const assignableCoverageRequestShifts = coverageRequestShifts.filter(
       (shift: any) => !blockedShiftIds.has(shift.id)
     )
-    console.log('[assign-shifts Debug] dedupe + blocking', {
-      blocked_shift_ids: Array.from(blockedShiftIds),
-      blocked_count: blockedShiftIds.size,
-      assignable_shift_ids: assignableCoverageRequestShifts.map((shift: any) => shift.id),
-      assignable_count: assignableCoverageRequestShifts.length,
-    })
 
     if (assignableCoverageRequestShifts.length === 0) {
       const blockedCount = blockedShiftIds.size
@@ -364,10 +357,6 @@ export async function POST(request: NextRequest) {
         500
       )
     }
-    console.log('[assign-shifts Debug] insert result', {
-      created_count: createdAssignments?.length || 0,
-      created_assignment_ids: (createdAssignments || []).map((assignment: any) => assignment.id),
-    })
 
     // Get substitute contact ID to check for overrides
     const { data: substituteContact } = await supabase
@@ -401,6 +390,9 @@ export async function POST(request: NextRequest) {
                 changed_fields: ['override_availability'],
                 coverage_request_id: coverage_request_id,
                 sub_id: sub_id,
+                sub_name: subName ?? undefined,
+                teacher_id: teacherId,
+                teacher_name: teacherName ?? undefined,
                 coverage_request_shift_id: override.coverage_request_shift_id,
                 reason: 'Director override for unavailable shift',
               },
@@ -464,7 +456,9 @@ export async function POST(request: NextRequest) {
       details: {
         changed_fields: ['sub_assignments'],
         sub_id,
+        sub_name: subName ?? undefined,
         teacher_id: teacherId,
+        teacher_name: teacherName ?? undefined,
         assignment_ids: (createdAssignments || []).map((assignment: any) => assignment.id),
         shift_ids: uniqueSelectedShiftIds,
       },

@@ -2,6 +2,7 @@ interface Sub {
   id: string
   name: string
   phone: string | null
+  email?: string | null
   coverage_percent: number
   response_status?: string | null
   shifts_covered?: number
@@ -38,6 +39,7 @@ export interface SubAssignment {
   subId: string
   subName: string
   phone: string | null
+  email?: string | null
   shifts: Shift[]
   shiftsCovered: number
   totalShifts: number
@@ -242,6 +244,7 @@ function buildCombinationFromSubs(
       subId: sub.id,
       subName: sub.name,
       phone: sub.phone || null,
+      email: sub.email ?? null,
       shifts,
       shiftsCovered: shifts.length,
       totalShifts,

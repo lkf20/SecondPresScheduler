@@ -154,9 +154,13 @@ test('time off create and edit flow @smoke', async ({ page }) => {
 
   await expect(page.getByRole('heading', { name: /time off requests/i })).toBeVisible()
 
-  await page.getByRole('button', { name: /add time off/i }).click()
+  await page
+    .getByRole('main')
+    .getByRole('button', { name: /add time off/i })
+    .click()
   await page.getByPlaceholder('Select a teacher').click()
-  await page.getByRole('button', { name: /bella wilbanks/i }).click()
+  await expect(page.getByRole('button', { name: /bella/i }).first()).toBeVisible({ timeout: 10000 })
+  await page.getByRole('button', { name: /bella/i }).first().click()
   await page.locator('#time-off-start-date').click()
   await page.getByRole('button', { name: /^10$/ }).first().click()
   await page.getByRole('button', { name: /^create$/i }).click()
@@ -164,8 +168,18 @@ test('time off create and edit flow @smoke', async ({ page }) => {
   await expect(page.getByText(/time off added for/i)).toBeVisible()
   await expect(page.getByText('Bella Wilbanks').first()).toBeVisible()
 
+  // Wait for the Add Time Off sheet to close so the list and its Edit button are visible
+  await expect(page.getByPlaceholder('Select a teacher')).toBeHidden({ timeout: 10000 })
+
+  await expect(
+    page
+      .getByRole('main')
+      .getByRole('button', { name: /^edit$/i })
+      .first()
+  ).toBeVisible({ timeout: 10000 })
   await page
-    .getByRole('link', { name: /^edit$/i })
+    .getByRole('main')
+    .getByRole('button', { name: /^edit$/i })
     .first()
     .click()
   await expect(page.getByRole('heading', { name: /edit time off request/i })).toBeVisible()

@@ -56,7 +56,9 @@ type DashboardOverview = {
     classroom_color: string | null
     notes: string | null
     sub_name: string
+    sub_id?: string
     teacher_name: string
+    coverage_request_id?: string | null
   }>
 }
 

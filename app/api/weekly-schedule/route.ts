@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { getWeeklyScheduleData } from '@/lib/api/weekly-schedule'
+import { getWeeklyScheduleData, getWeekEndISO } from '@/lib/api/weekly-schedule'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import { getUserSchoolId } from '@/lib/utils/auth'
 
 export async function GET(request: Request) {
@@ -32,12 +33,27 @@ export async function GET(request: Request) {
     }
 
     // If no days selected, use all days (fallback)
-    const data = await getWeeklyScheduleData(
+    const classrooms = await getWeeklyScheduleData(
       schoolId,
       selectedDayIds.length > 0 ? selectedDayIds : undefined,
       weekStartISO || undefined
     )
-    return NextResponse.json(data)
+
+    // Fetch school closures for the week when we have a date range
+    let schoolClosures: Awaited<ReturnType<typeof getSchoolClosuresForDateRange>> = []
+    if (weekStartISO) {
+      try {
+        const weekEndISO = getWeekEndISO(weekStartISO)
+        schoolClosures = await getSchoolClosuresForDateRange(schoolId, weekStartISO, weekEndISO)
+      } catch (closuresError: unknown) {
+        console.warn(
+          'Could not load school closures for week:',
+          closuresError instanceof Error ? closuresError.message : closuresError
+        )
+      }
+    }
+
+    return NextResponse.json({ classrooms, school_closures: schoolClosures })
   } catch (error: any) {
     console.error('Error fetching weekly schedule:', error)
     console.error('Error stack:', error.stack)

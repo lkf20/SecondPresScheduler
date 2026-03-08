@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Building2, Clock, Users, CalendarCheck, UsersRound } from 'lucide-react'
+import { Building2, Calendar, CalendarCheck, Clock, Users, UsersRound } from 'lucide-react'
 import { getHeaderClasses } from '@/lib/utils/colors'
 
 const settingsSections = [
@@ -25,6 +25,15 @@ const settingsSections = [
         description: 'Configure which days appear in the weekly schedule and manage time periods',
         href: '/settings/timeslots',
         icon: Clock,
+        iconCircled: false,
+        accent: false,
+      },
+      {
+        name: 'School Calendar',
+        description:
+          'Set first and last day of school and manage closed days (holidays, snow days)',
+        href: '/settings/calendar',
+        icon: Calendar,
         iconCircled: false,
         accent: false,
       },

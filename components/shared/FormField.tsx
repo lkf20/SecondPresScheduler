@@ -1,6 +1,6 @@
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { ReactNode } from 'react'
+import { ReactNode, useId, cloneElement, isValidElement } from 'react'
 
 interface FormFieldProps {
   label: string
@@ -19,14 +19,19 @@ export default function FormField({
   className,
   description,
 }: FormFieldProps) {
+  const id = useId()
+  const labelledChild = isValidElement(children)
+    ? cloneElement(children as React.ReactElement<{ id?: string }>, { id })
+    : children
+
   return (
     <div className={cn('space-y-2', className)}>
-      <Label htmlFor={undefined}>
+      <Label htmlFor={id}>
         {label}
         {required && <span className="text-destructive ml-1">*</span>}
       </Label>
       {description && <p className="text-sm text-muted-foreground">{description}</p>}
-      {children}
+      {labelledChild}
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   )
