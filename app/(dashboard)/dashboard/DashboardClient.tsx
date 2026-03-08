@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { getWeekStartISOFromDate } from '@/lib/utils/date'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import {
   getCoverageColors,
@@ -1308,7 +1309,7 @@ export default function DashboardClient({
           classroomColor={assignCoverageSlot.rep.classroom_color ?? null}
           selectedDayIds={[]}
           onSave={() => void refetch()}
-          weekStartISO={assignCoverageSlot.dateStart}
+          weekStartISO={getWeekStartISOFromDate(assignCoverageSlot.dateStart)}
           readOnly
           initialPanelMode="flex"
           initialFlexStartDate={assignCoverageSlot.dateStart}

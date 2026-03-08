@@ -82,6 +82,21 @@ export function expandDateRangeWithTimeZone(
 }
 
 /**
+ * Return the Monday of the week containing the given date (ISO YYYY-MM-DD).
+ * Used when weekStartISO must be a Monday for week-boundary and grid calculations.
+ */
+export function getWeekStartISOFromDate(dateISO: string): string {
+  const d = parseLocalDate(dateISO)
+  const day = d.getDay() // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  const daysBack = day === 0 ? 6 : day - 1
+  d.setDate(d.getDate() - daysBack)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dayStr = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dayStr}`
+}
+
+/**
  * Get ISO date (YYYY-MM-DD) for a schedule cell given week start (Monday) and day_number.
  * day_number: 1 = Monday, 2 = Tuesday, ..., 7 = Sunday.
  */
