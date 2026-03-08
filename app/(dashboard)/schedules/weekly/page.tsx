@@ -263,7 +263,7 @@ export default function WeeklySchedulePage() {
       previousAvailableIds,
       availableClassroomIds
     )
-    if (nextSelected.length !== filters.selectedClassroomIds.length) {
+    if (nextSelected !== filters.selectedClassroomIds) {
       setFilters(prev => {
         if (!prev) return prev
         return { ...prev, selectedClassroomIds: nextSelected }
@@ -311,7 +311,7 @@ export default function WeeklySchedulePage() {
       previousAvailableIds,
       availableTimeSlotIds
     )
-    if (nextSelected.length !== filters.selectedTimeSlotIds.length) {
+    if (nextSelected !== filters.selectedTimeSlotIds) {
       setFilters(prev => {
         if (!prev) return prev
         return { ...prev, selectedTimeSlotIds: nextSelected }

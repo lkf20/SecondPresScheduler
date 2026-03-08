@@ -162,15 +162,21 @@ export default function SubAvailabilityReportPage() {
           : footerEditorRef
   }
 
+  const syncEditorStateFromRef = (
+    editorRef: React.RefObject<HTMLDivElement | null> | { current: HTMLDivElement | null }
+  ) => {
+    if (editorRef === topHeaderEditorRef) {
+      setTopHeaderHtml(topHeaderEditorRef.current?.innerHTML || '')
+      return
+    }
+    setFooterNotesHtml(footerEditorRef.current?.innerHTML || '')
+  }
+
   const runEditorCommand = (command: string, value?: string) => {
     const editorRef = getActiveEditorRef()
     editorRef.current?.focus()
     document.execCommand(command, false, value)
-    if (activeEditor === 'top') {
-      setTopHeaderHtml(topHeaderEditorRef.current?.innerHTML || '')
-    } else {
-      setFooterNotesHtml(footerEditorRef.current?.innerHTML || '')
-    }
+    syncEditorStateFromRef(editorRef)
   }
 
   const runHighlightCommand = () => {
@@ -206,11 +212,7 @@ export default function SubAvailabilityReportPage() {
       document.execCommand('hiliteColor', false, '#fff59d')
     }
 
-    if (activeEditor === 'top') {
-      setTopHeaderHtml(topHeaderEditorRef.current?.innerHTML || '')
-    } else {
-      setFooterNotesHtml(footerEditorRef.current?.innerHTML || '')
-    }
+    syncEditorStateFromRef(editorRef)
   }
 
   return (
