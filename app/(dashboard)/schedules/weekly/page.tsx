@@ -362,9 +362,6 @@ export default function WeeklySchedulePage() {
   const filteredData = useMemo(() => {
     if (!filters) return scheduleData
 
-    console.log('[WeeklySchedulePage] Filtering with displayMode:', filters.displayMode)
-    console.log('[WeeklySchedulePage] Total scheduleData classrooms:', scheduleData.length)
-
     const result = scheduleData
       .filter(
         classroom =>
