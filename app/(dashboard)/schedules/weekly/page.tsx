@@ -339,19 +339,12 @@ export default function WeeklySchedulePage() {
   }
 
   const handleClosureChangeReason = async (closureId: string, newReason: string) => {
-    const closure = schoolClosures.find((c: { id: string }) => c.id === closureId)
-    if (!closure) return
     try {
       const res = await fetch('/api/settings/calendar', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          delete_closure_ids: [closureId],
-          add_closure: {
-            date: closure.date,
-            time_slot_id: closure.time_slot_id ?? null,
-            reason: newReason.trim() || null,
-          },
+          update_closure: { id: closureId, reason: newReason.trim() || null },
         }),
       })
       if (!res.ok) {

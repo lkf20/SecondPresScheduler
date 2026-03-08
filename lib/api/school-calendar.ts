@@ -277,6 +277,31 @@ export async function createSchoolClosureRange(
   return { created, skipped }
 }
 
+export async function updateSchoolClosure(
+  schoolId: string,
+  closureId: string,
+  updates: { reason?: string | null }
+): Promise<SchoolClosure> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('school_closures')
+    .update({ reason: updates.reason ?? null })
+    .eq('id', closureId)
+    .eq('school_id', schoolId)
+    .select('id, school_id, date, time_slot_id, reason, created_at')
+    .single()
+
+  if (error) throw error
+  return {
+    id: data.id,
+    school_id: data.school_id,
+    date: data.date,
+    time_slot_id: data.time_slot_id,
+    reason: data.reason,
+    created_at: data.created_at,
+  }
+}
+
 export async function deleteSchoolClosure(schoolId: string, closureId: string): Promise<void> {
   const supabase = await createClient()
   const { error } = await supabase

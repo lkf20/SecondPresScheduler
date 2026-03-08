@@ -357,41 +357,24 @@ export default function SchoolCalendarPage() {
     }
     setEditSaving(true)
     try {
+      const reason = editReason.trim() || null
+      const addClosures =
+        editAppliesTo === 'all'
+          ? [{ date: editDate, time_slot_id: null, reason }]
+          : editTimeSlotIds.map(time_slot_id => ({
+              date: editDate,
+              time_slot_id,
+              reason,
+            }))
       const res = await fetch('/api/settings/calendar', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ delete_closure_ids: editClosureIds }),
+        body: JSON.stringify({
+          delete_closure_ids: editClosureIds,
+          add_closures: addClosures,
+        }),
       })
       if (!res.ok) throw new Error('Failed to update')
-      if (editAppliesTo === 'all') {
-        const addRes = await fetch('/api/settings/calendar', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            add_closure: {
-              date: editDate,
-              time_slot_id: null,
-              reason: editReason.trim() || null,
-            },
-          }),
-        })
-        if (!addRes.ok) throw new Error('Failed to update')
-      } else {
-        for (const timeSlotId of editTimeSlotIds) {
-          const addRes = await fetch('/api/settings/calendar', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              add_closure: {
-                date: editDate,
-                time_slot_id: timeSlotId,
-                reason: editReason.trim() || null,
-              },
-            }),
-          })
-          if (!addRes.ok) throw new Error('Failed to update')
-        }
-      }
       toast.success('Closure updated.')
       setEditPanelOpen(false)
       await fetchData()
