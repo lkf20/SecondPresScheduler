@@ -250,7 +250,7 @@ describe('TimeSlotForm (edit)', () => {
     ).toBeInTheDocument()
   })
 
-  it('clears weekly and baseline filter caches after successful save', async () => {
+  it('clears only time-slot availability caches after successful save', async () => {
     const removeItemSpy = jest.spyOn(window.localStorage.__proto__, 'removeItem')
 
     render(
@@ -273,10 +273,12 @@ describe('TimeSlotForm (edit)', () => {
     fireEvent.click(screen.getByRole('button', { name: /update/i }))
 
     await waitFor(() => {
-      expect(removeItemSpy).toHaveBeenCalledWith('weekly-schedule-filters')
-      expect(removeItemSpy).toHaveBeenCalledWith('baseline-schedule-filters')
       expect(removeItemSpy).toHaveBeenCalledWith('weekly-schedule-available-time-slot-ids')
       expect(removeItemSpy).toHaveBeenCalledWith('baseline-schedule-available-time-slot-ids')
+      expect(removeItemSpy).not.toHaveBeenCalledWith('weekly-schedule-filters')
+      expect(removeItemSpy).not.toHaveBeenCalledWith('baseline-schedule-filters')
+      expect(removeItemSpy).not.toHaveBeenCalledWith('weekly-schedule-available-classroom-ids')
+      expect(removeItemSpy).not.toHaveBeenCalledWith('baseline-schedule-available-classroom-ids')
     })
 
     removeItemSpy.mockRestore()
