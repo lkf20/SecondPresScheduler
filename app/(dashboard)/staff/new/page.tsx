@@ -111,11 +111,6 @@ export default function NewStaffPage() {
   const handleSubmit = async (data: StaffFormData) => {
     try {
       setError(null)
-      const roleCodes = (data.role_type_ids || [])
-        .map(id => roleTypes.find(role => role.id === id)?.code)
-        .filter(Boolean) as string[]
-      const isTeacherRole = roleCodes.includes('PERMANENT') || roleCodes.includes('FLEXIBLE')
-
       const payload = {
         ...data,
         email: data.email && data.email.trim() !== '' ? data.email : null,
