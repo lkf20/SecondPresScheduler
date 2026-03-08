@@ -383,24 +383,6 @@ export default function DashboardClient({
     return () => window.removeEventListener('resize', checkScreenSize)
   }, [])
 
-  // Debug grid layout on xl screens
-  useEffect(() => {
-    if (typeof window === 'undefined' || !gridRef.current) return
-
-    const checkLayout = () => {
-      const el = gridRef.current
-      if (!el) return
-
-      const isXl = window.innerWidth >= 1280
-      if (!isXl) return
-    }
-
-    // Check on mount and resize
-    checkLayout()
-    window.addEventListener('resize', checkLayout)
-    return () => window.removeEventListener('resize', checkLayout)
-  }, [])
-
   const belowRequiredClassrooms = useMemo(() => {
     const classrooms = new Set<string>()
     overview.staffing_targets
