@@ -139,7 +139,9 @@ export function useSubFinderData({
   skipInitialFetch?: boolean
   subRecommendationParams?: SubRecommendationsQueryParams
 }) {
-  const hasAppliedAbsenceRef = useRef(false)
+  // Track which absence_id we applied from the URL so we re-apply when the param changes
+  // (e.g. user on Sub Finder clicks Find Sub and selects a different existing absence)
+  const appliedAbsenceIdRef = useRef<string | null>(null)
   const [selectedAbsence, setSelectedAbsence] = useState<Absence | null>(null)
   const [recommendedSubs, setRecommendedSubs] = useState<SubCandidate[]>([])
   const [allSubs, setAllSubs] = useState<SubCandidate[]>([])
@@ -430,8 +432,12 @@ export function useSubFinderData({
   // No manual useEffect needed
 
   useEffect(() => {
-    if (!requestedAbsenceId) return
-    if (hasAppliedAbsenceRef.current) return
+    if (!requestedAbsenceId) {
+      appliedAbsenceIdRef.current = null
+      return
+    }
+    // Only skip if we already applied this exact absence_id (avoids re-running when deps change)
+    if (appliedAbsenceIdRef.current === requestedAbsenceId) return
 
     // Ensure absences are loaded
     if (isLoadingAbsences) {
@@ -439,20 +445,18 @@ export function useSubFinderData({
       return
     }
 
-    // If absences haven't loaded yet and we have a requested absence, fetch them
-    if (absences.length === 0 && !isLoadingAbsences) {
+    // If absences haven't loaded yet, or requested absence isn't in the list, fetch so we have fresh data
+    const match = absences.find(absence => absence.id === requestedAbsenceId)
+    if (absences.length === 0 || !match) {
       refetchAbsences()
       return
     }
 
-    // Once absences are loaded, find and select the requested absence
-    const match = absences.find(absence => absence.id === requestedAbsenceId)
-    if (match) {
-      handleFindSubs(match).catch(error => {
-        console.error('Failed to load requested absence:', error)
-      })
-      hasAppliedAbsenceRef.current = true
-    }
+    // Select the requested absence and run the finder
+    handleFindSubs(match).catch(error => {
+      console.error('Failed to load requested absence:', error)
+    })
+    appliedAbsenceIdRef.current = requestedAbsenceId
   }, [requestedAbsenceId, absences, isLoadingAbsences, handleFindSubs, refetchAbsences])
 
   useEffect(() => {

@@ -12,8 +12,14 @@ export default function NewTimeOffPage() {
   const initialStartDate = searchParams.get('start_date') || undefined
   const initialEndDate = searchParams.get('end_date') || undefined
   const initialTeacherId = searchParams.get('teacher_id') || undefined
+  const returnTo = searchParams.get('return_to') || undefined
 
-  const handleSuccess = (teacherName: string, startDate: string, endDate: string) => {
+  const handleSuccess = (
+    teacherName: string,
+    startDate: string,
+    endDate: string,
+    requestId?: string
+  ) => {
     // Format date range for toast
     const formatDateForToast = (dateStr: string) => {
       const [year, month, day] = dateStr.split('-').map(Number)
@@ -27,12 +33,15 @@ export default function NewTimeOffPage() {
         ? startDateFormatted
         : `${startDateFormatted}-${endDateFormatted}`
 
-    // Show toast
     toast.success(`Time off added for ${teacherName} (${dateRange})`)
 
-    // Navigate and refresh
-    router.push('/time-off')
-    router.refresh()
+    if (returnTo === 'sub-finder' && requestId) {
+      router.push(`/sub-finder?absence_id=${requestId}`)
+      router.refresh()
+    } else {
+      router.push('/time-off')
+      router.refresh()
+    }
   }
 
   return (

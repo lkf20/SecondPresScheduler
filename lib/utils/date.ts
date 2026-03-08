@@ -119,3 +119,26 @@ export function formatDateISOInTimeZone(
   const date = utcMidday(year, month, day)
   return new Intl.DateTimeFormat('en-US', { timeZone, ...options }).format(date)
 }
+
+/**
+ * Today's date in local time as YYYY-MM-DD.
+ */
+export function getTodayISO(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/**
+ * Tomorrow's date in local time as YYYY-MM-DD.
+ */
+export function getTomorrowISO(): string {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}

@@ -56,6 +56,9 @@ export default function SubFinderPage() {
   const requestedAbsenceId = searchParams.get('absence_id')
   const requestedTeacherId = searchParams.get('teacher_id')
   const requestedSubId = searchParams.get('sub_id')
+  const requestedMode = searchParams.get('mode')
+  const requestedStartDate = searchParams.get('start_date')
+  const requestedEndDate = searchParams.get('end_date')
   const [mode, setMode] = useState<Mode>('existing')
   const [includePastShifts, setIncludePastShifts] = useState(false)
   const [shiftFilters, setShiftFilters] = useState<string[]>(['all'])
@@ -176,6 +179,17 @@ export default function SubFinderPage() {
   )
   const [manualTeacherSearch, setManualTeacherSearch] = useState('')
   const [isManualTeacherSearchOpen, setIsManualTeacherSearchOpen] = useState(false)
+  const [manualConflictSummary, setManualConflictSummary] = useState({
+    conflictCount: 0,
+    totalScheduled: 0,
+  })
+  const [manualConflictingRequests, setManualConflictingRequests] = useState<
+    Array<{ id: string; start_date: string; end_date: string | null; reason: string | null }>
+  >([])
+  /** 'unset' = show banner; 'browsing' = user chose just browsing; 'create' = user chose to create (or created) */
+  const [manualTimeOffChoice, setManualTimeOffChoice] = useState<'unset' | 'browsing' | 'create'>(
+    'unset'
+  )
   const subSearchRef = useRef<HTMLDivElement | null>(null)
   const rightPanelRef = useRef<HTMLDivElement | null>(null)
   const manualEndDateRef = useRef<HTMLButtonElement | null>(null)
@@ -1077,16 +1091,16 @@ export default function SubFinderPage() {
     }
   }
 
-  // Set selected teachers when teacher_id is provided from URL
+  // Set selected teachers when teacher_id is provided from URL (only for existing-absences mode, not manual)
   useEffect(() => {
+    if (requestedMode === 'manual') return
     if (requestedTeacherId && !selectedTeacherIds.includes(requestedTeacherId)) {
       setSelectedTeacherIds([requestedTeacherId])
-      // Clear teacher_id from URL after adding to selection
       const newSearchParams = new URLSearchParams(searchParams.toString())
       newSearchParams.delete('teacher_id')
       router.replace(`/sub-finder?${newSearchParams.toString()}`)
     }
-  }, [requestedTeacherId, selectedTeacherIds, searchParams, router])
+  }, [requestedMode, requestedTeacherId, selectedTeacherIds, searchParams, router])
 
   // Filter absences based on selected teachers
   const filteredAbsences = useMemo(() => {
@@ -1123,11 +1137,57 @@ export default function SubFinderPage() {
     }
   }, [selectedTeacherIds, filteredAbsences, selectedAbsence, setSelectedAbsence])
 
+  // Apply manual-mode URL params from Find Sub popover (mode=manual&teacher_id&start_date&end_date).
+  // Run whenever these params are present so that using the Find Sub hot button while already on
+  // Sub Finder (e.g. changing to a different date range) updates the page and recommended subs.
+  useEffect(() => {
+    if (requestedMode !== 'manual' || !requestedTeacherId || !requestedStartDate) return
+    hasRestoredStateRef.current = true
+    setMode('manual')
+    setManualTeacherId(requestedTeacherId)
+    setManualStartDate(requestedStartDate)
+    setManualEndDate(requestedEndDate || requestedStartDate)
+    setManualSelectedShifts([])
+    setSelectedAbsence(null)
+    setManualTimeOffChoice('unset')
+    const teacher = teachers.find(t => t.id === requestedTeacherId)
+    if (teacher) {
+      setManualTeacherSearch(getDisplayName(teacher))
+    }
+    const newSearchParams = new URLSearchParams(searchParams.toString())
+    newSearchParams.delete('mode')
+    newSearchParams.delete('teacher_id')
+    newSearchParams.delete('start_date')
+    newSearchParams.delete('end_date')
+    const newUrl = newSearchParams.toString()
+      ? `/sub-finder?${newSearchParams.toString()}`
+      : '/sub-finder'
+    router.replace(newUrl)
+  }, [
+    requestedMode,
+    requestedTeacherId,
+    requestedStartDate,
+    requestedEndDate,
+    searchParams,
+    router,
+    teachers,
+    getDisplayName,
+  ])
+
+  // When manual teacher was prefilled from URL, set display name once teachers load
+  useEffect(() => {
+    if (mode !== 'manual' || !manualTeacherId || manualTeacherSearch) return
+    const teacher = teachers.find(t => t.id === manualTeacherId)
+    if (teacher) {
+      setManualTeacherSearch(getDisplayName(teacher))
+    }
+  }, [mode, manualTeacherId, manualTeacherSearch, teachers, getDisplayName])
+
   // Load saved state on mount (only if no URL params override)
   useEffect(() => {
     if (hasRestoredStateRef.current) return
     // Only restore if we don't have URL params that override
-    if (requestedAbsenceId || requestedTeacherId) {
+    if (requestedAbsenceId || requestedTeacherId || requestedMode === 'manual') {
       hasRestoredStateRef.current = true // Mark as complete even if we skip restoration
       return // URL params take precedence
     }
@@ -1678,12 +1738,32 @@ export default function SubFinderPage() {
                     )}
                   </div>
                   <div className="pt-3 mt-2 border-t border-slate-200">
+                    {manualConflictSummary.conflictCount > 0 && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 mb-3 space-y-2">
+                        <p className="text-sm text-amber-800">
+                          This teacher already has time off for{' '}
+                          {manualConflictSummary.conflictCount} of the shifts in this range. Those
+                          shifts are excluded; we&apos;ll find subs for the remaining shifts only.
+                        </p>
+                        {manualConflictingRequests.length > 0 && (
+                          <div className="text-xs text-amber-700">
+                            <span className="font-medium">Existing time off: </span>
+                            {manualConflictingRequests
+                              .map(req => formatAbsenceDateRange(req.start_date, req.end_date))
+                              .join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <ShiftSelectionTable
                       teacherId={manualTeacherId || null}
                       startDate={manualStartDate}
                       endDate={manualEndDate || manualStartDate}
                       selectedShifts={manualSelectedShifts}
                       onShiftsChange={onManualShiftsChange}
+                      onConflictSummaryChange={setManualConflictSummary}
+                      onConflictRequestsChange={setManualConflictingRequests}
+                      validateConflicts
                       autoSelectScheduled
                       tableClassName="text-xs [&_th]:px-2 [&_td]:px-2"
                     />
@@ -1702,6 +1782,42 @@ export default function SubFinderPage() {
                   >
                     Find Subs
                   </Button>
+                  {selectedAbsence?.id?.startsWith('manual-') &&
+                    !loading &&
+                    manualTimeOffChoice === 'unset' && (
+                      <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50/80 p-3 space-y-2">
+                        <p className="text-sm text-slate-700">
+                          No time off request for this range yet. Create one so you can contact and
+                          assign subs?
+                        </p>
+                        <div className="flex flex-col gap-2">
+                          <Button
+                            size="sm"
+                            className="w-full"
+                            onClick={() => {
+                              const params = new URLSearchParams()
+                              if (manualTeacherId) params.set('teacher_id', manualTeacherId)
+                              if (manualStartDate) params.set('start_date', manualStartDate)
+                              if (manualEndDate)
+                                params.set('end_date', manualEndDate || manualStartDate)
+                              params.set('return_to', 'sub-finder')
+                              router.push(`/time-off/new?${params.toString()}`)
+                              setManualTimeOffChoice('create')
+                            }}
+                          >
+                            Create time off for this range
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="w-full text-slate-600"
+                            onClick={() => setManualTimeOffChoice('browsing')}
+                          >
+                            Just browsing
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                 </div>
               )}
             </>
@@ -2750,6 +2866,28 @@ export default function SubFinderPage() {
                 await runFinderForAbsence(selectedAbsence)
               }
             }}
+            onCreateTimeOffRequest={
+              selectedAbsence?.id?.startsWith('manual-')
+                ? () => {
+                    const params = new URLSearchParams()
+                    if (manualTeacherId) params.set('teacher_id', manualTeacherId)
+                    if (manualStartDate) params.set('start_date', manualStartDate)
+                    if (manualEndDate) params.set('end_date', manualEndDate || manualStartDate)
+                    params.set('return_to', 'sub-finder')
+                    router.push(`/time-off/new?${params.toString()}`)
+                    setManualTimeOffChoice('create')
+                  }
+                : undefined
+            }
+            onAddExtraCoverage={
+              selectedAbsence?.id?.startsWith('manual-')
+                ? () => {
+                    const params = new URLSearchParams()
+                    if (manualStartDate) params.set('date', manualStartDate)
+                    router.push(`/schedules/weekly?${params.toString()}`)
+                  }
+                : undefined
+            }
           />
         )}
       </div>

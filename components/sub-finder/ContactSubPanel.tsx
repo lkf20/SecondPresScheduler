@@ -201,6 +201,10 @@ interface ContactSubPanelProps {
   initialContactData?: ContactData // Cached contact data from parent
   onAssignmentComplete?: () => void // Callback to refresh data after assignment
   onChangeShift?: (shift: { date: string; time_slot_code: string }) => void
+  /** When in manual mode with no time off request, called when user clicks "Create time off for this range" */
+  onCreateTimeOffRequest?: () => void
+  /** When in manual mode, called when user clicks "Add extra coverage" (temp coverage, no absence) */
+  onAddExtraCoverage?: () => void
 }
 
 export default function ContactSubPanel({
@@ -212,6 +216,8 @@ export default function ContactSubPanel({
   initialContactData,
   onAssignmentComplete,
   onChangeShift,
+  onCreateTimeOffRequest,
+  onAddExtraCoverage,
 }: ContactSubPanelProps) {
   const router = useRouter()
   const contactSummaryRef = useRef<HTMLDivElement | null>(null)
@@ -2207,6 +2213,28 @@ export default function ContactSubPanel({
                   This sub is marked as confirmed. Please assign at least one shift or mark this sub
                   as Pending.
                 </p>
+              </div>
+            )}
+            {absence?.id?.startsWith('manual-') && !coverageRequestId && onCreateTimeOffRequest && (
+              <div className="rounded-lg border border-sky-200 bg-sky-50/80 p-3 mb-2">
+                <p className="text-sm text-slate-700 mb-2">
+                  Assigning requires a time off request for this range.
+                </p>
+                <div className="flex flex-col gap-2">
+                  <Button size="sm" className="w-full" onClick={onCreateTimeOffRequest}>
+                    Create time off for this range
+                  </Button>
+                  {onAddExtraCoverage && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="w-full text-slate-600"
+                      onClick={onAddExtraCoverage}
+                    >
+                      I meant to add extra coverage (no absence)
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
             <TooltipProvider>

@@ -255,6 +255,107 @@ describe('ContactSubPanel', () => {
     )
   })
 
+  it('when manual absence and no time off: shows create time off message and disables Assign (scenarios 2–3)', async () => {
+    const onCreateTimeOffRequest = jest.fn()
+    const onAddExtraCoverage = jest.fn()
+
+    render(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        variant="inline"
+        sub={{
+          ...baseSub,
+          can_cover: [
+            {
+              date: '2026-02-09',
+              day_name: 'Monday',
+              time_slot_code: 'EM',
+              class_name: 'Infant',
+            },
+          ],
+        }}
+        absence={{
+          id: 'manual-teacher-1',
+          teacher_name: 'Teacher One',
+          start_date: '2026-02-09',
+          end_date: '2026-02-09',
+          shifts: {
+            total: 1,
+            uncovered: 1,
+            partially_covered: 0,
+            fully_covered: 0,
+            shift_details: [
+              {
+                date: '2026-02-09',
+                day_name: 'Monday',
+                time_slot_code: 'EM',
+                status: 'uncovered',
+              },
+            ],
+          },
+        }}
+        onCreateTimeOffRequest={onCreateTimeOffRequest}
+        onAddExtraCoverage={onAddExtraCoverage}
+      />
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/assigning requires a time off request for this range/i)
+      ).toBeInTheDocument()
+    })
+    expect(
+      screen.getByRole('button', { name: /create time off for this range/i })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /i meant to add extra coverage/i })
+    ).toBeInTheDocument()
+
+    const assignButton = screen.getByRole('button', { name: /^assign$/i })
+    expect(assignButton).toBeDisabled()
+
+    await userEvent.click(screen.getByRole('button', { name: /create time off for this range/i }))
+    expect(onCreateTimeOffRequest).toHaveBeenCalledTimes(1)
+
+    await userEvent.click(screen.getByRole('button', { name: /i meant to add extra coverage/i }))
+    expect(onAddExtraCoverage).toHaveBeenCalledTimes(1)
+  })
+
+  it('when manual absence without onAddExtraCoverage: does not show extra coverage button', async () => {
+    render(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        variant="inline"
+        sub={baseSub}
+        absence={{
+          id: 'manual-teacher-1',
+          teacher_name: 'Teacher One',
+          start_date: '2026-02-09',
+          end_date: '2026-02-09',
+          shifts: {
+            total: 0,
+            uncovered: 0,
+            partially_covered: 0,
+            fully_covered: 0,
+            shift_details: [],
+          },
+        }}
+        onCreateTimeOffRequest={jest.fn()}
+      />
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/assigning requires a time off request for this range/i)
+      ).toBeInTheDocument()
+    })
+    expect(
+      screen.queryByRole('button', { name: /i meant to add extra coverage/i })
+    ).not.toBeInTheDocument()
+  })
+
   it('shows declining-all state from cached contact data', async () => {
     render(
       <ContactSubPanel

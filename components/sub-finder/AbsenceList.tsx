@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { AlertCircle, ChevronDown } from 'lucide-react'
 import TimeOffCard from '@/components/shared/TimeOffCard'
@@ -55,6 +55,7 @@ export default function AbsenceList({
 }: AbsenceListProps) {
   const [showNeedsCoverage, setShowNeedsCoverage] = useState(true)
   const [showFullyCovered, setShowFullyCovered] = useState(false)
+  const selectedCardRef = useRef<HTMLDivElement | null>(null)
 
   const { openAbsences, fullyCoveredAbsences } = useMemo(() => {
     const open: Absence[] = []
@@ -91,6 +92,17 @@ export default function AbsenceList({
     }
   }, [fullyCoveredAbsences, selectedAbsence])
 
+  // Scroll selected absence into view (e.g. after selecting from Find Sub hot button).
+  // Re-run when section visibility changes so we scroll after a collapsed section expands.
+  useEffect(() => {
+    if (!selectedAbsence?.id) return
+    const timer = window.setTimeout(() => {
+      const el = selectedCardRef.current
+      el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }, 150)
+    return () => window.clearTimeout(timer)
+  }, [selectedAbsence?.id, showNeedsCoverage, showFullyCovered])
+
   const renderAbsenceCard = (absence: Absence) => {
     const { uncovered, partially_covered, fully_covered } = absence.shifts
     const isSelected = selectedAbsence?.id === absence.id
@@ -106,27 +118,32 @@ export default function AbsenceList({
       ).map(name => ({ id: name, name, color: null }))
 
     return (
-      <TimeOffCard
+      <div
         key={absence.id}
-        id={absence.id}
-        teacherName={absence.teacher_name}
-        startDate={absence.start_date}
-        endDate={absence.end_date}
-        reason={absence.reason}
-        classrooms={classrooms}
-        variant="sub-finder"
-        covered={fully_covered}
-        uncovered={uncovered}
-        partial={partially_covered}
-        isSelected={isSelected}
-        onSelect={() => {
-          onSelectAbsence(absence)
-          onFindSubs(absence)
-        }}
-        onFindSubs={() => onFindSubs(absence)}
-        loading={loading}
-        notes={absence.notes || null}
-      />
+        ref={isSelected ? selectedCardRef : undefined}
+        data-absence-id={absence.id}
+      >
+        <TimeOffCard
+          id={absence.id}
+          teacherName={absence.teacher_name}
+          startDate={absence.start_date}
+          endDate={absence.end_date}
+          reason={absence.reason}
+          classrooms={classrooms}
+          variant="sub-finder"
+          covered={fully_covered}
+          uncovered={uncovered}
+          partial={partially_covered}
+          isSelected={isSelected}
+          onSelect={() => {
+            onSelectAbsence(absence)
+            onFindSubs(absence)
+          }}
+          onFindSubs={() => onFindSubs(absence)}
+          loading={loading}
+          notes={absence.notes || null}
+        />
+      </div>
     )
   }
 

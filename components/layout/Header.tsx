@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { CalendarPlus, History, LogOut, Printer, UserPlus, UserSearch } from 'lucide-react'
@@ -26,10 +27,16 @@ import { toast } from 'sonner'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 import TimeOffForm from '@/components/time-off/TimeOffForm'
 import AssignSubPanel from '@/components/assign-sub/AssignSubPanel'
-import { getPanelBackgroundClasses } from '@/lib/utils/colors'
+import { getPanelBackgroundClasses, coverageColorValues } from '@/lib/utils/colors'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import DatePickerInput from '@/components/ui/date-picker-input'
 import { Database } from '@/types/database'
+import type { TimeOffCardData } from '@/lib/utils/time-off-card-data'
+import { getTodayISO, getTomorrowISO } from '@/lib/utils/date'
+import { formatAbsenceDateRange } from '@/lib/utils/date-format'
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 import { ActivityFeed } from '@/components/activity/ActivityFeed'
@@ -65,6 +72,17 @@ export default function Header({ userEmail }: HeaderProps) {
   const { format: displayNameFormat } = useDisplayNameFormat()
   const [isTeacherDropdownOpen, setIsTeacherDropdownOpen] = useState(false)
   const teacherSearchRef = useRef<HTMLDivElement | null>(null)
+  // Find Sub: upcoming time off and date choice
+  const [upcomingTimeOff, setUpcomingTimeOff] = useState<TimeOffCardData[] | null>(null)
+  const [timeOffLoading, setTimeOffLoading] = useState(false)
+  const [timeOffError, setTimeOffError] = useState(false)
+  const [findSubDateChoice, setFindSubDateChoice] = useState<
+    '' | 'today' | 'tomorrow' | 'custom' | 'existing'
+  >('')
+  const [findSubExistingAbsenceId, setFindSubExistingAbsenceId] = useState<string | null>(null)
+  const [findSubCustomStart, setFindSubCustomStart] = useState('')
+  const [findSubCustomEnd, setFindSubCustomEnd] = useState('')
+  const findSubFetchedTeacherIdRef = useRef<string | null>(null)
   const formatISODate = (date: Date) => {
     const year = date.getFullYear()
     const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -178,10 +196,34 @@ export default function Header({ userEmail }: HeaderProps) {
       toast.error('Please select a teacher')
       return
     }
+    const today = getTodayISO()
+    const tomorrow = getTomorrowISO()
+    let startDate = today
+    let endDate = today
+    if (findSubDateChoice === 'existing' && findSubExistingAbsenceId) {
+      setIsFindSubPopoverOpen(false)
+      setTeacherSearch('')
+      setSelectedTeacherId('')
+      router.push(`/sub-finder?absence_id=${findSubExistingAbsenceId}`)
+      return
+    }
+    if (findSubDateChoice === 'tomorrow') {
+      startDate = tomorrow
+      endDate = tomorrow
+    } else if (findSubDateChoice === 'custom') {
+      if (!findSubCustomStart) {
+        toast.error('Please select a start date')
+        return
+      }
+      startDate = findSubCustomStart
+      endDate = findSubCustomEnd || findSubCustomStart
+    }
     setIsFindSubPopoverOpen(false)
     setTeacherSearch('')
     setSelectedTeacherId('')
-    router.push(`/sub-finder?teacher_id=${selectedTeacherId}`)
+    router.push(
+      `/sub-finder?mode=manual&teacher_id=${selectedTeacherId}&start_date=${startDate}&end_date=${endDate}`
+    )
   }
 
   const getTeacherDisplayName = useCallback(
@@ -213,6 +255,18 @@ export default function Header({ userEmail }: HeaderProps) {
     return teachers.find(t => t.id === selectedTeacherId)
   }, [teachers, selectedTeacherId])
 
+  const sortedUpcomingTimeOff = useMemo(() => {
+    if (!upcomingTimeOff || upcomingTimeOff.length === 0) return []
+    return [...upcomingTimeOff].sort((a, b) => a.start_date.localeCompare(b.start_date))
+  }, [upcomingTimeOff])
+
+  const hasValidFindSubDateChoice = useMemo(() => {
+    if (findSubDateChoice === 'existing') return Boolean(findSubExistingAbsenceId)
+    if (findSubDateChoice === 'today' || findSubDateChoice === 'tomorrow') return true
+    if (findSubDateChoice === 'custom') return Boolean(findSubCustomStart)
+    return false
+  }, [findSubDateChoice, findSubExistingAbsenceId, findSubCustomStart])
+
   // Handle click outside to close dropdown
   useEffect(() => {
     if (!isTeacherDropdownOpen) return
@@ -232,8 +286,49 @@ export default function Header({ userEmail }: HeaderProps) {
     if (!isFindSubPopoverOpen) {
       setTeacherSearch('')
       setIsTeacherDropdownOpen(false)
+      setUpcomingTimeOff(null)
+      setTimeOffLoading(false)
+      setTimeOffError(false)
+      findSubFetchedTeacherIdRef.current = null
     }
   }, [isFindSubPopoverOpen])
+
+  // Fetch upcoming time off when a teacher is selected in Find Sub popover
+  useEffect(() => {
+    if (!selectedTeacherId || !isFindSubPopoverOpen) return
+    if (findSubFetchedTeacherIdRef.current === selectedTeacherId) return
+
+    findSubFetchedTeacherIdRef.current = selectedTeacherId
+    setFindSubDateChoice('')
+    setFindSubExistingAbsenceId(null)
+    setFindSubCustomStart('')
+    setFindSubCustomEnd('')
+    setTimeOffError(false)
+    setTimeOffLoading(true)
+    const todayISO = getTodayISO()
+    const oneYearLater = new Date()
+    oneYearLater.setFullYear(oneYearLater.getFullYear() + 1)
+    const endISO = oneYearLater.toISOString().slice(0, 10)
+
+    fetch(
+      `/api/time-off-requests?teacher_id=${selectedTeacherId}&start_date=${todayISO}&end_date=${endISO}&status=active`
+    )
+      .then(r => r.json())
+      .then((body: { data?: TimeOffCardData[] }) => {
+        const list = Array.isArray(body?.data) ? body.data : []
+        const today = todayISO
+        const upcoming = list.filter(item => {
+          const end = item.end_date || item.start_date
+          return end >= today
+        })
+        setUpcomingTimeOff(upcoming)
+      })
+      .catch(() => {
+        setTimeOffError(true)
+        setUpcomingTimeOff(null)
+      })
+      .finally(() => setTimeOffLoading(false))
+  }, [selectedTeacherId, isFindSubPopoverOpen])
 
   // Set mounted state after component mounts to prevent hydration errors with Radix UI
   useEffect(() => {
@@ -282,84 +377,281 @@ export default function Header({ userEmail }: HeaderProps) {
               Add Time Off
             </Button>
             {isMounted ? (
-              <Popover open={isFindSubPopoverOpen} onOpenChange={setIsFindSubPopoverOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-slate-300 text-slate-700 hover:bg-slate-100"
-                  >
-                    <UserSearch className="h-4 w-4 mr-2" />
-                    Find Sub
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80" align="start">
-                  <div className="space-y-4">
-                    <h3 className="font-semibold text-sm">Find sub for:</h3>
+              <>
+                {isFindSubPopoverOpen &&
+                  createPortal(
                     <div
-                      ref={teacherSearchRef}
-                      className="rounded-md border border-slate-200 bg-white"
+                      className="fixed top-16 left-0 right-0 bottom-0 z-40 bg-black/20"
+                      aria-hidden
+                      onClick={() => setIsFindSubPopoverOpen(false)}
+                    />,
+                    document.body
+                  )}
+                <Popover open={isFindSubPopoverOpen} onOpenChange={setIsFindSubPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-slate-300 text-slate-700 hover:bg-slate-100"
                     >
-                      <div className="border-b border-slate-100 px-2 py-1">
-                        <Input
-                          placeholder="Search or select a teacher..."
-                          value={
-                            selectedTeacher ? getTeacherDisplayName(selectedTeacher) : teacherSearch
-                          }
-                          onChange={event => {
-                            const value = event.target.value
-                            setTeacherSearch(value)
-                            setIsTeacherDropdownOpen(true)
-                            // Clear selection if user is typing
-                            if (selectedTeacherId) {
-                              setSelectedTeacherId('')
+                      <UserSearch className="h-4 w-4 mr-2" />
+                      Find Sub
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-[28rem] min-w-80 max-w-[calc(100vw-2rem)]"
+                    align="start"
+                  >
+                    <div className="space-y-4">
+                      <h3 className="font-semibold text-sm">Find sub for:</h3>
+                      <div
+                        ref={teacherSearchRef}
+                        className="rounded-md border border-slate-200 bg-white"
+                      >
+                        <div className="border-b border-slate-100 px-2 py-1">
+                          <Input
+                            placeholder="Search or select a teacher..."
+                            value={
+                              selectedTeacher
+                                ? getTeacherDisplayName(selectedTeacher)
+                                : teacherSearch
                             }
-                          }}
-                          onFocus={() => setIsTeacherDropdownOpen(true)}
-                          onBlur={() => {
-                            setTimeout(() => setIsTeacherDropdownOpen(false), 150)
-                          }}
-                          className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
-                        />
-                      </div>
-                      {isTeacherDropdownOpen && (
-                        <div className="max-h-52 overflow-y-auto p-2">
-                          {filteredTeachers.length === 0 ? (
-                            <div className="p-2 text-xs text-muted-foreground">No matches</div>
-                          ) : (
-                            <div className="space-y-1">
-                              {filteredTeachers.map(teacher => {
-                                const name = getTeacherDisplayName(teacher)
-                                return (
-                                  <button
-                                    key={teacher.id}
-                                    type="button"
-                                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
-                                    onClick={() => {
-                                      setSelectedTeacherId(teacher.id)
-                                      setTeacherSearch('')
-                                      setIsTeacherDropdownOpen(false)
-                                    }}
-                                  >
-                                    {name}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          )}
+                            onChange={event => {
+                              const value = event.target.value
+                              setTeacherSearch(value)
+                              setIsTeacherDropdownOpen(true)
+                              if (selectedTeacherId) setSelectedTeacherId('')
+                            }}
+                            onFocus={() => setIsTeacherDropdownOpen(true)}
+                            onBlur={() => {
+                              setTimeout(() => setIsTeacherDropdownOpen(false), 150)
+                            }}
+                            className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
+                          />
                         </div>
+                        {isTeacherDropdownOpen && (
+                          <div className="max-h-52 overflow-y-auto p-2">
+                            {filteredTeachers.length === 0 ? (
+                              <div className="p-2 text-xs text-muted-foreground">No matches</div>
+                            ) : (
+                              <div className="space-y-1">
+                                {filteredTeachers.map(teacher => {
+                                  const name = getTeacherDisplayName(teacher)
+                                  return (
+                                    <button
+                                      key={teacher.id}
+                                      type="button"
+                                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
+                                      onClick={() => {
+                                        setSelectedTeacherId(teacher.id)
+                                        setTeacherSearch('')
+                                        setIsTeacherDropdownOpen(false)
+                                      }}
+                                    >
+                                      {name}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {selectedTeacherId && (
+                        <>
+                          {timeOffLoading && (
+                            <p className="text-sm text-muted-foreground">Checking time off…</p>
+                          )}
+                          {!timeOffLoading && selectedTeacher && (
+                            <>
+                              <div
+                                className="rounded-md border border-slate-200 bg-slate-100 px-3 py-2"
+                                role="status"
+                              >
+                                <p className="text-sm text-slate-700" aria-live="polite">
+                                  {timeOffError
+                                    ? "Couldn't load time off. You can still find subs for today."
+                                    : upcomingTimeOff && upcomingTimeOff.length > 0
+                                      ? `${getTeacherDisplayName(selectedTeacher)} has existing upcoming time off`
+                                      : `${getTeacherDisplayName(selectedTeacher)} has no upcoming time off`}
+                                </p>
+                              </div>
+                              <p className="font-semibold text-sm text-slate-800">
+                                Select dates for sub
+                              </p>
+                              <RadioGroup
+                                value={
+                                  findSubDateChoice === 'existing'
+                                    ? (findSubExistingAbsenceId ?? '')
+                                    : findSubDateChoice === ''
+                                      ? ''
+                                      : findSubDateChoice
+                                }
+                                onValueChange={value => {
+                                  if (
+                                    value === 'today' ||
+                                    value === 'tomorrow' ||
+                                    value === 'custom'
+                                  ) {
+                                    setFindSubDateChoice(value)
+                                    setFindSubExistingAbsenceId(null)
+                                    if (value === 'today' || value === 'tomorrow') {
+                                      setFindSubCustomStart('')
+                                      setFindSubCustomEnd('')
+                                    }
+                                    if (value === 'custom' && !findSubCustomStart) {
+                                      setFindSubCustomStart(getTodayISO())
+                                      setFindSubCustomEnd(getTodayISO())
+                                    }
+                                  } else {
+                                    setFindSubDateChoice('existing')
+                                    setFindSubExistingAbsenceId(value)
+                                  }
+                                }}
+                                className="space-y-2"
+                                aria-label="Find sub for"
+                              >
+                                {upcomingTimeOff && upcomingTimeOff.length > 0 && (
+                                  <>
+                                    <p className="text-xs font-medium text-slate-500 pt-1 pb-0.5">
+                                      Existing time off
+                                    </p>
+                                    {sortedUpcomingTimeOff.slice(0, 5).map(absence => (
+                                      <div
+                                        key={absence.id}
+                                        className="flex items-center gap-2 space-y-0 flex-wrap"
+                                      >
+                                        <RadioGroupItem
+                                          value={absence.id}
+                                          id={`find-sub-absence-${absence.id}`}
+                                        />
+                                        <Label
+                                          htmlFor={`find-sub-absence-${absence.id}`}
+                                          className="cursor-pointer text-sm font-normal flex-1 min-w-0"
+                                        >
+                                          {formatAbsenceDateRange(
+                                            absence.start_date,
+                                            absence.end_date
+                                          )}
+                                        </Label>
+                                        {absence.uncovered === 0 ? (
+                                          <span
+                                            className="shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium"
+                                            style={{
+                                              backgroundColor: coverageColorValues.covered.bg,
+                                              color: coverageColorValues.covered.text,
+                                              borderColor: coverageColorValues.covered.border,
+                                              borderWidth: 1,
+                                              borderStyle: 'solid',
+                                            }}
+                                          >
+                                            Covered
+                                          </span>
+                                        ) : (
+                                          <span
+                                            className="shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium"
+                                            style={{
+                                              backgroundColor: coverageColorValues.uncovered.bg,
+                                              color: coverageColorValues.uncovered.text,
+                                              borderColor: coverageColorValues.uncovered.border,
+                                              borderWidth: 1,
+                                              borderStyle: 'solid',
+                                            }}
+                                          >
+                                            {absence.uncovered}/{absence.total} uncovered
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
+                                    {sortedUpcomingTimeOff.length > 5 && (
+                                      <p className="text-xs text-muted-foreground pl-6">
+                                        +{sortedUpcomingTimeOff.length - 5} more
+                                      </p>
+                                    )}
+                                    <p className="text-xs font-medium text-slate-500 pt-1 pb-0.5">
+                                      Different dates
+                                    </p>
+                                  </>
+                                )}
+                                <div className="flex items-center gap-2 space-y-0">
+                                  <RadioGroupItem value="today" id="find-sub-today" />
+                                  <Label
+                                    htmlFor="find-sub-today"
+                                    className="cursor-pointer text-sm font-normal"
+                                  >
+                                    Today
+                                  </Label>
+                                </div>
+                                <div className="flex items-center gap-2 space-y-0">
+                                  <RadioGroupItem value="tomorrow" id="find-sub-tomorrow" />
+                                  <Label
+                                    htmlFor="find-sub-tomorrow"
+                                    className="cursor-pointer text-sm font-normal"
+                                  >
+                                    Tomorrow
+                                  </Label>
+                                </div>
+                                <div className="flex items-center gap-2 space-y-0">
+                                  <RadioGroupItem value="custom" id="find-sub-custom" />
+                                  <Label
+                                    htmlFor="find-sub-custom"
+                                    className="cursor-pointer text-sm font-normal"
+                                  >
+                                    Custom date range
+                                  </Label>
+                                </div>
+                                {findSubDateChoice === 'custom' && (
+                                  <div className="pl-6 space-y-2 border-l-2 border-slate-200 ml-1">
+                                    <div>
+                                      <Label className="text-xs">Start date</Label>
+                                      <DatePickerInput
+                                        value={findSubCustomStart}
+                                        onChange={v => {
+                                          setFindSubCustomStart(v)
+                                          if (findSubCustomEnd && v > findSubCustomEnd) {
+                                            setFindSubCustomEnd(v)
+                                          }
+                                        }}
+                                        placeholder="Select start date"
+                                        className="mt-1 h-8 text-sm"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs">End date</Label>
+                                      <DatePickerInput
+                                        value={findSubCustomEnd}
+                                        onChange={setFindSubCustomEnd}
+                                        placeholder="Select end date"
+                                        className="mt-1 h-8 text-sm"
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </RadioGroup>
+                            </>
+                          )}
+                          <Button
+                            onClick={handleFindSubGo}
+                            disabled={
+                              !selectedTeacherId || timeOffLoading || !hasValidFindSubDateChoice
+                            }
+                            className="w-full"
+                          >
+                            Go
+                          </Button>
+                        </>
+                      )}
+
+                      {!selectedTeacherId && (
+                        <Button disabled className="w-full">
+                          Go
+                        </Button>
                       )}
                     </div>
-                    <Button
-                      onClick={handleFindSubGo}
-                      disabled={!selectedTeacherId}
-                      className="w-full"
-                    >
-                      Go
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
+                  </PopoverContent>
+                </Popover>
+              </>
             ) : (
               <Button
                 size="sm"

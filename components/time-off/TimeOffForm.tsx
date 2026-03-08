@@ -50,7 +50,7 @@ const timeOffSchema = z.object({
 type TimeOffFormData = z.infer<typeof timeOffSchema>
 
 interface TimeOffFormProps {
-  onSuccess?: (teacherName: string, startDate: string, endDate: string) => void
+  onSuccess?: (teacherName: string, startDate: string, endDate: string, requestId?: string) => void
   onCancel?: () => void
   onHasUnsavedChanges?: (hasChanges: boolean) => void
   clearDraftOnMount?: boolean // Force clear draft when component mounts
@@ -686,7 +686,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         }
 
         if (onSuccess) {
-          onSuccess(teacherName, data.start_date, effectiveEndDate)
+          onSuccess(teacherName, data.start_date, effectiveEndDate, responseData?.id ?? undefined)
         } else {
           router.push('/time-off')
           router.refresh()
