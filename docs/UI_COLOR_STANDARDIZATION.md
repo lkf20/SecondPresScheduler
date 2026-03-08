@@ -74,9 +74,13 @@ This document tracks the standardization of UI colors across the application. We
 
 ### Staffing Colors
 
-- **Below Required**: `bg-amber-100 border-amber-200 text-amber-900`
-- **Below Preferred**: `bg-amber-50 border-amber-200 text-amber-800`
-- **Adequate**: Uses neutral colors
+- **Use `StaffingStatusBadge`** (`components/ui/staffing-status-badge.tsx`) for all Below Required, Below Preferred, Above Target, and On Target badges. Do not recreate badge styling elsewhere.
+- **Below Required**: Red (red-100, red-600) — critical
+- **Below Preferred**: Amber muted (amber-50 bg, amber-700 border/text; optional lighter border) — warning
+- **Adequate**: Green (on target)
+- **Above Target**: Teal
+
+See [docs/COLOR_CONSISTENCY_REVIEW.md](COLOR_CONSISTENCY_REVIEW.md) for the full palette and guidelines.
 
 ## Usage Guidelines
 
@@ -133,6 +137,26 @@ const bgClass = neutralColors.bgLight // 'bg-slate-50'
 const textClass = neutralColors.textMedium // 'text-slate-700'
 ```
 
+### Using StaffingStatusBadge
+
+```typescript
+import { StaffingStatusBadge } from '@/components/ui/staffing-status-badge'
+
+// Compact badge (header, inline list)
+<StaffingStatusBadge
+  status="below_preferred"
+  label="Below Preferred by 1"
+  size="sm"
+/>
+
+// Larger badge (dashboard cards)
+<StaffingStatusBadge
+  status="below_required"
+  label="Below Required by 2"
+  size="md"
+/>
+```
+
 ## Migration Checklist
 
 When updating a component to use standardized colors:
@@ -146,8 +170,9 @@ When updating a component to use standardized colors:
 
 ## Notes
 
+- **Staffing badges:** Use `StaffingStatusBadge` for Below Required, Below Preferred, Above Target, and On Target—do not recreate badge styling.
 - All coverage-related components should use `getCoverageColors()` or `getCoverageColorClasses()`
 - Status pills should use `getStatusColors()` or `getStatusColorClasses()`
 - Light gray chips should use `getNeutralChipClasses()`
 - Button colors should use `getButtonColors()` for custom buttons, or Button component variants for standard buttons
-- Always prefer using utility functions over hardcoded color classes
+- Always prefer using utility functions or shared components over hardcoded color classes

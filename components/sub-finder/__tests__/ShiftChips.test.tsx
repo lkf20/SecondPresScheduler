@@ -20,7 +20,8 @@ describe('ShiftChips', () => {
       />
     )
 
-    expect(screen.getAllByText('Mon EM • Feb 9')).toHaveLength(1)
+    expect(screen.getByText('Mon EM')).toBeInTheDocument()
+    expect(screen.getByText('Feb 9')).toBeInTheDocument()
   })
 
   it('shows legend when enabled', () => {
@@ -33,7 +34,7 @@ describe('ShiftChips', () => {
       />
     )
 
-    expect(screen.getByText('Assigned to this sub')).toBeInTheDocument()
+    expect(screen.getByText('Assigned Sub')).toBeInTheDocument()
     expect(screen.getByText('Can cover')).toBeInTheDocument()
     expect(screen.getByText('Cannot cover')).toBeInTheDocument()
   })

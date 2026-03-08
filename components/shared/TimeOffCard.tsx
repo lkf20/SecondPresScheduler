@@ -12,12 +12,13 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 import CoverageBadge from './CoverageBadge'
+import ShiftChips from '@/components/sub-finder/ShiftChips'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { parseLocalDate } from '@/lib/utils/date'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
-import { getButtonColors, getNeutralChipClasses, coverageColorValues } from '@/lib/utils/colors'
+import { getNeutralChipClasses, coverageColorValues } from '@/lib/utils/colors'
 
 export type TimeOffCardVariant = 'sub-finder' | 'dashboard' | 'time-off'
 
@@ -40,8 +41,18 @@ export interface TimeOffCardProps {
   uncovered?: number
   partial?: number
   totalShifts?: number
-  // Shift details for dropdown (array of strings like "Mon AM", "Tues LB" or objects with label and status)
-  shiftDetails?: string[] | Array<{ label: string; status: 'covered' | 'partial' | 'uncovered' }>
+  // Shift details for dropdown; when items include date + time_slot_code we use large shift chips (same as Recommended Subs)
+  shiftDetails?:
+    | string[]
+    | Array<{
+        label: string
+        status: 'covered' | 'partial' | 'uncovered'
+        date?: string
+        time_slot_code?: string
+        classroom_name?: string | null
+        classroom_color?: string | null
+        assigned_sub_name?: string | null
+      }>
   // Optional props
   notes?: string | null
   isSelected?: boolean
@@ -50,6 +61,7 @@ export interface TimeOffCardProps {
   onEdit?: () => void // Callback for editing (opens panel instead of navigating)
   loading?: boolean
   className?: string
+  isDraft?: boolean
 }
 
 const formatFullDateLabel = (value: string) => {
@@ -81,6 +93,7 @@ export default function TimeOffCard({
   onEdit,
   loading = false,
   className,
+  isDraft = false,
 }: TimeOffCardProps) {
   const router = useRouter()
   const [isExpanded, setIsExpanded] = useState(false)
@@ -240,6 +253,19 @@ export default function TimeOffCard({
                 {reason}
               </span>
             )}
+            {isDraft && (
+              <span
+                className="rounded border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide"
+                style={{
+                  backgroundColor: '#fffbeb',
+                  borderColor: '#fcd34d',
+                  color: '#92400e',
+                }}
+                aria-label="Draft"
+              >
+                Draft
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 text-sm text-slate-600">
             <CalendarDays className="h-4 w-4 text-slate-500" />
@@ -323,12 +349,7 @@ export default function TimeOffCard({
             )}
             {uncovered > 0 && (
               <div onClick={e => e.stopPropagation()}>
-                <Button
-                  asChild
-                  size="sm"
-                  variant="outline"
-                  className={getButtonColors('teal').base}
-                >
+                <Button asChild size="sm" variant="teal">
                   <Link href={`/sub-finder?absence_id=${id}`}>Find Sub</Link>
                 </Button>
               </div>
@@ -337,50 +358,81 @@ export default function TimeOffCard({
         </div>
       </div>
 
-      {/* Shifts dropdown expanded details */}
+      {/* Shifts dropdown expanded details: use large shift chips (same as Recommended Subs) when API provides full details */}
       {hasShiftsDropdown && isExpanded && shiftDetails.length > 0 && (
         <div className="mt-3 border-t border-slate-200 pt-3">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {shiftDetails.map((shift, index) => {
-              const label = typeof shift === 'string' ? shift : shift.label
-              const status = typeof shift === 'object' ? shift.status : undefined
-
-              // Get color values for inline styles (Safari compatibility)
-              let colorValues
-              if (status === 'covered') {
-                colorValues = coverageColorValues.covered
-              } else if (status === 'partial') {
-                colorValues = coverageColorValues.partial
-              } else if (status === 'uncovered') {
-                colorValues = coverageColorValues.uncovered
-              } else {
-                // Neutral colors (no status)
-                colorValues = {
-                  bg: 'rgb(248, 250, 252)', // slate-50
-                  border: 'rgb(226, 232, 240)', // slate-200
-                  text: 'rgb(71, 85, 105)', // slate-600
+          {(() => {
+            const first = shiftDetails[0]
+            const hasFullDetails =
+              typeof first === 'object' &&
+              first !== null &&
+              'date' in first &&
+              'time_slot_code' in first &&
+              typeof (first as { date?: string }).date === 'string' &&
+              typeof (first as { time_slot_code?: string }).time_slot_code === 'string'
+            if (hasFullDetails) {
+              const shifts = shiftDetails.map(s => {
+                const o = s as {
+                  date: string
+                  time_slot_code: string
+                  status: 'covered' | 'partial' | 'uncovered'
+                  classroom_name?: string | null
+                  classroom_color?: string | null
+                  assigned_sub_name?: string | null
                 }
-              }
+                return {
+                  date: o.date,
+                  time_slot_code: o.time_slot_code,
+                  status: o.status,
+                  classroom_name: o.classroom_name ?? null,
+                  classroom_color: o.classroom_color ?? null,
+                  assigned_sub_name: o.assigned_sub_name ?? null,
+                }
+              })
+              return <ShiftChips coverageVariant shifts={shifts} />
+            }
+            return (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {shiftDetails.map((shift, index) => {
+                  const label = typeof shift === 'string' ? shift : shift.label
+                  const status = typeof shift === 'object' ? shift.status : undefined
 
-              return (
-                <span
-                  key={index}
-                  className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-normal transition-colors"
-                  style={
-                    {
-                      backgroundColor: colorValues.bg,
-                      borderWidth: '1px',
-                      borderStyle: 'solid',
-                      borderColor: colorValues.border,
-                      color: colorValues.text,
-                    } as React.CSSProperties
+                  let colorValues
+                  if (status === 'covered') {
+                    colorValues = coverageColorValues.covered
+                  } else if (status === 'partial') {
+                    colorValues = coverageColorValues.partial
+                  } else if (status === 'uncovered') {
+                    colorValues = coverageColorValues.uncovered
+                  } else {
+                    colorValues = {
+                      bg: 'rgb(248, 250, 252)',
+                      border: 'rgb(226, 232, 240)',
+                      text: 'rgb(71, 85, 105)',
+                    }
                   }
-                >
-                  {label}
-                </span>
-              )
-            })}
-          </div>
+
+                  return (
+                    <span
+                      key={index}
+                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-normal transition-colors"
+                      style={
+                        {
+                          backgroundColor: colorValues.bg,
+                          borderWidth: '1px',
+                          borderStyle: 'solid',
+                          borderColor: colorValues.border,
+                          color: colorValues.text,
+                        } as React.CSSProperties
+                      }
+                    >
+                      {label}
+                    </span>
+                  )
+                })}
+              </div>
+            )
+          })()}
         </div>
       )}
     </div>

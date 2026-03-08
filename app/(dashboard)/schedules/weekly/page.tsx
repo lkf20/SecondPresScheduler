@@ -9,11 +9,13 @@ import WeekPicker from '@/components/schedules/WeekPicker'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
 import { Button } from '@/components/ui/button'
-import { Filter, RefreshCw } from 'lucide-react'
+import { Calendar, Filter, RefreshCw } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useWeeklySchedule } from '@/lib/hooks/use-weekly-schedule'
 import { useScheduleSettings } from '@/lib/hooks/use-schedule-settings'
 import { useFilterOptions } from '@/lib/hooks/use-filter-options'
+import Link from 'next/link'
+import { toast } from 'sonner'
 import { invalidateWeeklySchedule } from '@/lib/utils/invalidation'
 import { isSlotInactive } from '@/lib/utils/schedule-slot-activity'
 import {
@@ -46,11 +48,13 @@ export default function WeeklySchedulePage() {
 
   // React Query hooks
   const {
-    data: scheduleData = [],
+    data: scheduleResponse,
     isLoading: isLoadingSchedule,
     isFetching: isFetchingSchedule,
     error: scheduleError,
   } = useWeeklySchedule(weekStartISO)
+  const scheduleData = scheduleResponse?.classrooms ?? []
+  const schoolClosures = scheduleResponse?.school_closures ?? []
   const { data: scheduleSettings, isLoading: isLoadingSettings } = useScheduleSettings()
   const { data: filterOptions, isLoading: isLoadingFilters } = useFilterOptions()
 
@@ -341,12 +345,77 @@ export default function WeeklySchedulePage() {
     })
   }
 
+  const handleClosureMarkOpen = async (closureId: string) => {
+    try {
+      const res = await fetch('/api/settings/calendar', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delete_closure_ids: [closureId] }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to mark open')
+      }
+      toast.success('Closure removed. School is open for this time.')
+      await handleRefresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update')
+    }
+  }
+
+  const handleClosureMarkOpenForDay = async (date: string) => {
+    const closuresForDate = schoolClosures.filter(
+      (c: { date: string; id: string }) => c.date === date
+    )
+    if (closuresForDate.length === 0) {
+      toast.info('No closures for this date.')
+      return
+    }
+    const ids = closuresForDate.map((c: { id: string }) => c.id)
+    try {
+      const res = await fetch('/api/settings/calendar', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delete_closure_ids: ids }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to mark open')
+      }
+      toast.success(
+        ids.length === 1
+          ? 'Closure removed. School is open for this day.'
+          : 'Closures removed. School is open for this day.'
+      )
+      await handleRefresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update')
+    }
+  }
+
+  const handleClosureChangeReason = async (closureId: string, newReason: string) => {
+    try {
+      const res = await fetch('/api/settings/calendar', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          update_closure: { id: closureId, reason: newReason.trim() || null },
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to update reason')
+      }
+      toast.success('Closure reason updated.')
+      await handleRefresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update')
+    }
+  }
+
   // Apply filters to data
   const filteredData = useMemo(() => {
     if (!filters) return scheduleData
-
-    console.log('[WeeklySchedulePage] Filtering with displayMode:', filters.displayMode)
-    console.log('[WeeklySchedulePage] Total scheduleData classrooms:', scheduleData.length)
 
     const result = scheduleData
       .filter(
@@ -372,22 +441,6 @@ export default function WeeklySchedulePage() {
                 // "let through" lots of inactive/missing slots via displayFilters.inactive.
                 if (filters.displayMode === 'absences') {
                   const hasAbsence = slot.absences && slot.absences.length > 0
-
-                  if (hasAbsence) {
-                    console.log('[WeeklySchedulePage] Absences filter - Slot passed:', {
-                      weekStartISO,
-                      classroom: classroom.classroom_name,
-                      day: day.day_name,
-                      timeSlot: slot.time_slot_code || slot.time_slot_id,
-                      absencesCount: slot.absences?.length || 0,
-                      absences: slot.absences?.map(a => ({
-                        teacher_id: a.teacher_id,
-                        teacher_name: a.teacher_name,
-                        has_sub: a.has_sub,
-                      })),
-                    })
-                  }
-
                   return hasAbsence
                 }
 
@@ -524,66 +577,8 @@ export default function WeeklySchedulePage() {
       }))
       .filter(classroom => classroom.days.length > 0)
 
-    // Debug: Log filtered results for substitutes mode
-    if (filters.displayMode === 'substitutes-only') {
-      const totalFilteredSlots = result.reduce((sum, classroom) => {
-        return (
-          sum +
-          classroom.days.reduce((daySum, day) => {
-            return daySum + day.time_slots.length
-          }, 0)
-        )
-      }, 0)
-      console.log('[WeeklySchedulePage] Filtered results for substitutes-only:', {
-        totalFilteredClassrooms: result.length,
-        totalFilteredSlots,
-        classrooms: result.map(c => ({
-          name: c.classroom_name,
-          days: c.days.map(d => ({
-            day: d.day_name,
-            timeSlots: d.time_slots.map(ts => ({
-              code: ts.time_slot_code,
-              hasSubstitute: ts.assignments?.some(a => a.is_substitute === true) || false,
-              substituteNames:
-                ts.assignments?.filter(a => a.is_substitute === true).map(a => a.teacher_name) ||
-                [],
-            })),
-          })),
-        })),
-      })
-    }
-
     return result
   }, [scheduleData, filters, weekStartISO])
-
-  // Temporary debug logs for classroom visibility issues after creating a classroom.
-  useEffect(() => {
-    if (!filters) return
-
-    const scheduleClassroomIds = scheduleData.map(c => c.classroom_id)
-    const selectedClassroomIds = filters.selectedClassroomIds
-    const filteredClassroomIds = filteredData.map(c => c.classroom_id)
-
-    const availableNotSelected = availableClassroomIds.filter(
-      id => !selectedClassroomIds.includes(id)
-    )
-    const availableNotInSchedule = availableClassroomIds.filter(
-      id => !scheduleClassroomIds.includes(id)
-    )
-
-    console.log('[WeeklySchedulePage][ClassroomDebug] visibility snapshot', {
-      availableClassroomCount: availableClassroomIds.length,
-      selectedClassroomCount: selectedClassroomIds.length,
-      scheduleClassroomCount: scheduleClassroomIds.length,
-      filteredClassroomCount: filteredClassroomIds.length,
-      availableClassroomIds,
-      selectedClassroomIds,
-      scheduleClassroomIds,
-      filteredClassroomIds,
-      availableNotSelected,
-      availableNotInSchedule,
-    })
-  }, [availableClassroomIds, filters, filteredData, scheduleData])
 
   // Base data for chip counts: apply only day/time/classroom selections, but NOT displayMode.
   // This keeps chip counts stable and non-confusing when a displayMode is selected.
@@ -729,45 +724,33 @@ export default function WeeklySchedulePage() {
   return (
     <div>
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Weekly Schedule</h1>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleRefresh}
-                      disabled={isFetchingSchedule}
-                      className="h-10 w-10 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-60"
-                    >
-                      <RefreshCw
-                        className={`h-4 w-4 ${isFetchingSchedule ? 'animate-spin' : ''}`}
-                      />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Refresh schedule</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <WeekPicker
-              weekStartISO={weekStartISO}
-              onWeekChange={setWeekStartISO}
-              onTodayClick={handleTodayClick}
-            />
+        <div className="flex items-center gap-4 mb-2">
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Weekly Schedule</h1>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleRefresh}
+                    disabled={isFetchingSchedule}
+                    className="h-10 w-10 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isFetchingSchedule ? 'animate-spin' : ''}`} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Refresh schedule</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
-          <Button
-            variant="outline"
-            onClick={() => setFilterPanelOpen(true)}
-            className="flex items-center gap-2"
-          >
-            <Filter className="h-4 w-4" />
-            Views & Filters
-          </Button>
+          <WeekPicker
+            weekStartISO={weekStartISO}
+            onWeekChange={setWeekStartISO}
+            onTodayClick={handleTodayClick}
+          />
         </div>
         <p className="text-muted-foreground">View staffing by classroom, day, and time slot</p>
       </div>
@@ -788,6 +771,25 @@ export default function WeeklySchedulePage() {
             filterPanelOpen={filterPanelOpen}
             allowCardClick
             readOnly
+            leadingFilterContent={
+              <Button
+                variant="outline"
+                onClick={() => setFilterPanelOpen(true)}
+                className="flex items-center gap-2"
+              >
+                <Filter className="h-4 w-4" />
+                Views & Filters
+              </Button>
+            }
+            trailingFilterContent={
+              <Link
+                href="/settings/calendar"
+                className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors"
+              >
+                <Calendar className="h-4 w-4" />
+                Manage Calendar
+              </Link>
+            }
             displayModeCounts={displayModeCounts}
             displayMode={filters?.displayMode ?? 'all-scheduled-staff'}
             onDisplayModeChange={mode => {
@@ -822,6 +824,10 @@ export default function WeeklySchedulePage() {
                   }
                 : null
             }
+            schoolClosures={schoolClosures}
+            onClosureMarkOpen={handleClosureMarkOpen}
+            onClosureMarkOpenForDay={handleClosureMarkOpenForDay}
+            onClosureChangeReason={handleClosureChangeReason}
           />
           <FilterPanel
             isOpen={filterPanelOpen}

@@ -334,9 +334,11 @@ export async function updateSubstituteContact(
       updateData.is_contacted = true
       updateData.response_status = 'pending'
     } else if (updates.contact_status === 'confirmed') {
+      updateData.contact_status = 'confirmed'
       updateData.is_contacted = true
       updateData.response_status = 'confirmed'
     } else if (updates.contact_status === 'declined_all') {
+      updateData.contact_status = 'declined_all'
       updateData.is_contacted = true
       updateData.response_status = 'declined_all'
     }

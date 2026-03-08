@@ -27,6 +27,7 @@ type Classroom = Database['public']['Tables']['classrooms']['Row']
 
 const classroomSchema = z.object({
   name: z.string().min(1, 'Classroom name is required'),
+  notes: z.string().optional(),
   capacity: z.string().optional(),
   allowed_classes: z.array(z.string()).optional(),
   color: z.string().nullable().optional(),
@@ -43,6 +44,7 @@ interface ClassroomFormProps {
 
 type ClassroomFormSnapshot = {
   name: string
+  notes: string
   capacity: string
   allowedClassIds: string[]
   color: string | null
@@ -81,6 +83,7 @@ export default function ClassroomForm({
     resolver: zodResolver(classroomSchema),
     defaultValues: {
       name: classroom?.name ?? '',
+      notes: classroom?.notes ?? '',
       capacity: classroom?.capacity?.toString() ?? '',
       is_active: classroom?.is_active ?? true,
     },
@@ -88,21 +91,24 @@ export default function ClassroomForm({
 
   const isActive = watch('is_active')
   const name = watch('name')
+  const notes = watch('notes')
   const capacity = watch('capacity')
 
   const currentSnapshot = useMemo<ClassroomFormSnapshot>(
     () => ({
       name: name?.trim() ?? '',
+      notes: notes?.trim() ?? '',
       capacity: capacity?.trim() ?? '',
       allowedClassIds: normalizeAllowedClassIds(allowedClassIds),
       color: selectedColor ?? null,
       isActive: isActive ?? true,
     }),
-    [name, capacity, allowedClassIds, selectedColor, isActive]
+    [name, notes, capacity, allowedClassIds, selectedColor, isActive]
   )
 
   const baselineSnapshotRef = useRef<ClassroomFormSnapshot>({
     name: classroom?.name?.trim() ?? '',
+    notes: classroom?.notes?.trim() ?? '',
     capacity: classroom?.capacity?.toString() ?? '',
     allowedClassIds: [],
     color: classroom?.color ?? null,
@@ -128,6 +134,7 @@ export default function ClassroomForm({
       setLoadingAllowedClasses(false)
       baselineSnapshotRef.current = {
         name: '',
+        notes: '',
         capacity: '',
         allowedClassIds: [],
         color: null,
@@ -149,6 +156,7 @@ export default function ClassroomForm({
         setAllowedClassIds(ids)
         baselineSnapshotRef.current = {
           name: classroom.name?.trim() ?? '',
+          notes: classroom.notes?.trim() ?? '',
           capacity: classroom.capacity?.toString() ?? '',
           allowedClassIds: ids,
           color: classroom.color ?? null,
@@ -170,12 +178,14 @@ export default function ClassroomForm({
       if (isEdit && classroom) {
         const payload: {
           name: string
+          notes?: string | null
           capacity?: number
           allowed_class_group_ids: string[]
           color?: string | null
           is_active: boolean
         } = {
           name: data.name,
+          notes: data.notes?.trim() || null,
           allowed_class_group_ids: allowedClassIds,
           is_active: data.is_active ?? true,
           color: selectedColor ?? null,
@@ -201,12 +211,14 @@ export default function ClassroomForm({
       } else {
         const payload: {
           name: string
+          notes?: string | null
           capacity?: number
           allowed_class_group_ids?: string[]
           color?: string | null
           is_active?: boolean
         } = {
           name: data.name,
+          notes: data.notes?.trim() || null,
           color: selectedColor ?? null,
           is_active: data.is_active ?? true,
         }
@@ -337,6 +349,15 @@ export default function ClassroomForm({
                   onSelectionChange={setAllowedClassIds}
                 />
               )}
+            </FormField>
+
+            <FormField label="Notes" error={errors.notes?.message}>
+              <textarea
+                {...register('notes')}
+                rows={3}
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="e.g. location, equipment"
+              />
             </FormField>
 
             <div className="flex justify-end gap-4">

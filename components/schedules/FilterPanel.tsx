@@ -336,7 +336,7 @@ export default function FilterPanel({
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto bg-gray-50">
+      <SheetContent className="w-full overflow-y-auto bg-gray-50" style={{ maxWidth: '34rem' }}>
         <SheetHeader>
           <SheetTitle>Filters</SheetTitle>
           <SheetDescription>Filter the weekly schedule view</SheetDescription>

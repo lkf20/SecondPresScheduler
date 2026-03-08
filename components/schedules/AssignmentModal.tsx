@@ -200,9 +200,8 @@ export default function AssignmentModal({
                       classId={group.class_group_id}
                       classroomId={group.classroom_id}
                       selectedTeachers={group.assigned_teachers}
-                      onTeachersChange={teachers => {
+                      onTeachersChange={() => {
                         // TODO: Handle teacher assignment updates
-                        console.log('Teachers changed:', teachers)
                       }}
                     />
                   </div>

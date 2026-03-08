@@ -23,20 +23,23 @@ import { Label } from '@/components/ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { getWeekStartISOFromDate } from '@/lib/utils/date'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import {
   getCoverageColors,
   neutralColors,
   coverageColorValues,
-  getButtonColors,
+  staffingColors,
   staffingColorValues,
 } from '@/lib/utils/colors'
+import { StaffingStatusBadge } from '@/components/ui/staffing-status-badge'
 import TimeOffCard from '@/components/shared/TimeOffCard'
 import { Loader2 } from 'lucide-react'
 import { useDashboard } from '@/lib/hooks/use-dashboard'
 import { useProfile } from '@/lib/hooks/use-profile'
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
+import ScheduleSidePanel from '@/components/schedules/ScheduleSidePanel'
 
 type Summary = {
   absences: number
@@ -65,7 +68,7 @@ type CoverageRequestItem = {
   shift_details?: Array<{ label: string; status: 'covered' | 'partial' | 'uncovered' }>
 }
 
-type ScheduledSubItem = {
+export type ScheduledSubItem = {
   id: string
   date: string
   day_name: string
@@ -74,11 +77,14 @@ type ScheduledSubItem = {
   classroom_color: string | null
   notes: string | null
   sub_name: string
+  sub_id?: string
   teacher_name: string
+  coverage_request_id?: string | null
 }
 
 type StaffingTargetItem = {
   id: string
+  date?: string
   day_of_week_id: string
   day_name: string
   day_number: number
@@ -102,8 +108,28 @@ type DashboardOverview = {
   scheduled_subs: ScheduledSubItem[]
 }
 
-const formatSlotLabel = (dayName: string, timeSlotCode: string) =>
-  `${dayName || '—'} ${timeSlotCode}`
+/** One card: same classroom + time slot + day and same required/scheduled/preferred across dates */
+export type StaffingTargetGroup = {
+  dateStart: string
+  dateEnd: string
+  slots: StaffingTargetItem[]
+  /** First slot for rep fields (classroom, time_slot, day, required, scheduled, status) */
+  rep: StaffingTargetItem
+}
+
+const formatShortDateLabel = (value: string) => {
+  const date = new Date(`${value}T00:00:00`)
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
+}
+
+/** Label for a grouped slot: "Mar 9 - 23 • Mon LB" or single "Mon Mar 9 • LB" */
+const formatGroupSlotLabel = (group: StaffingTargetGroup) => {
+  const { rep } = group
+  if (group.dateStart === group.dateEnd) {
+    return `${formatFullDateLabel(group.dateStart)} • ${rep.time_slot_code}`
+  }
+  return `${formatShortDateLabel(group.dateStart)} - ${formatShortDateLabel(group.dateEnd)} • ${rep.day_name || '—'} ${rep.time_slot_code}`
+}
 
 const formatFullDateLabel = (value: string) => {
   const date = new Date(`${value}T00:00:00`)
@@ -114,43 +140,74 @@ const formatFullDateLabel = (value: string) => {
   return `${weekday} ${dateLabel}`
 }
 
-const formatShortfallLabel = (shortfall: number) =>
-  `Below ${shortfall === 1 ? 'by 1' : `by ${shortfall}`}`
-
 const formatShortfallValue = (required: number, scheduled: number) =>
   Math.max(0, required - scheduled)
 
-const groupStaffingTargets = (slots: StaffingTargetItem[]) => {
+const VALID_DATE_ISO = /^\d{4}-\d{2}-\d{2}$/
+
+/** Group by classroom, then by (time_slot + day + required + scheduled + preferred). Only merge slots when required, scheduled, and preferred match. */
+function groupStaffingTargets(slots: StaffingTargetItem[]) {
   const classroomMap = new Map<
     string,
     {
       classroom_name: string
       classroom_color: string | null
-      slots: StaffingTargetItem[]
+      slotGroups: StaffingTargetGroup[]
     }
   >()
 
+  // Group by (classroom_id, time_slot_id, day_of_week_id, required_staff, scheduled_staff, preferred_staff)
+  const rawGroups = new Map<string, StaffingTargetItem[]>()
   slots.forEach(slot => {
-    const entry = classroomMap.get(slot.classroom_id) || {
-      classroom_name: slot.classroom_name,
-      classroom_color: slot.classroom_color ?? null,
-      slots: [],
+    const preferredKey = slot.preferred_staff ?? 'n'
+    const key = `${slot.classroom_id}|${slot.time_slot_id}|${slot.day_of_week_id}|${slot.required_staff}|${slot.scheduled_staff}|${preferredKey}`
+    const list = rawGroups.get(key) || []
+    list.push(slot)
+    rawGroups.set(key, list)
+  })
+
+  // Build StaffingTargetGroup for each raw group (date range + rep)
+  rawGroups.forEach(groupSlots => {
+    const first = groupSlots[0]
+    if (!first) return
+    const dates = groupSlots.map(s => s.date).filter((d): d is string => !!d)
+    const dateStart = dates.length ? dates.reduce((a, b) => (a < b ? a : b)) : (first.date ?? '')
+    const dateEnd = dates.length ? dates.reduce((a, b) => (a > b ? a : b)) : (first.date ?? '')
+    // Exclude groups with no valid date range so we never pass empty date to getWeekStartISOFromDate or ScheduleSidePanel
+    if (
+      !dateStart ||
+      !VALID_DATE_ISO.test(dateStart) ||
+      !dateEnd ||
+      !VALID_DATE_ISO.test(dateEnd)
+    ) {
+      return
     }
-    entry.slots.push(slot)
-    classroomMap.set(slot.classroom_id, entry)
+    const group: StaffingTargetGroup = {
+      dateStart,
+      dateEnd,
+      slots: groupSlots.sort((a, b) => {
+        if (a.day_order !== b.day_order) return a.day_order - b.day_order
+        return a.time_slot_order - b.time_slot_order
+      }),
+      rep: first,
+    }
+    const entry = classroomMap.get(first.classroom_id) || {
+      classroom_name: first.classroom_name,
+      classroom_color: first.classroom_color ?? null,
+      slotGroups: [],
+    }
+    entry.slotGroups.push(group)
+    classroomMap.set(first.classroom_id, entry)
   })
 
   const classrooms = Array.from(classroomMap.values()).sort((a, b) =>
     a.classroom_name.localeCompare(b.classroom_name)
   )
-
-  return classrooms.map(classroom => ({
-    ...classroom,
-    slots: classroom.slots.sort((a, b) => {
-      if (a.day_order !== b.day_order) {
-        return a.day_order - b.day_order
-      }
-      return a.time_slot_order - b.time_slot_order
+  return classrooms.map(c => ({
+    ...c,
+    slotGroups: c.slotGroups.sort((a, b) => {
+      if (a.rep.day_order !== b.rep.day_order) return a.rep.day_order - b.rep.day_order
+      return a.rep.time_slot_order - b.rep.time_slot_order
     }),
   }))
 }
@@ -246,6 +303,7 @@ export default function DashboardClient({
   const [scheduledSubsSectionCollapsed, setScheduledSubsSectionCollapsed] = useState(false)
   const [staffingTargetSectionCollapsed, setStaffingTargetSectionCollapsed] = useState(false)
   const [editingRequestId, setEditingRequestId] = useState<string | null>(null)
+  const [assignCoverageSlot, setAssignCoverageSlot] = useState<StaffingTargetGroup | null>(null)
 
   const handleEdit = (id: string) => {
     setEditingRequestId(id)
@@ -338,43 +396,6 @@ export default function DashboardClient({
     return () => window.removeEventListener('resize', checkScreenSize)
   }, [])
 
-  // Debug grid layout on xl screens
-  useEffect(() => {
-    if (typeof window === 'undefined' || !gridRef.current) return
-
-    const checkLayout = () => {
-      const el = gridRef.current
-      if (!el) return
-
-      const isXl = window.innerWidth >= 1280
-      if (!isXl) return
-
-      const styles = window.getComputedStyle(el)
-      const sections = el.querySelectorAll('section')
-
-      console.log('[Dashboard Grid Debug]', {
-        windowWidth: window.innerWidth,
-        gridWidth: el.offsetWidth,
-        gridTemplateColumns: styles.gridTemplateColumns,
-        gridTemplateColumnsComputed: styles.getPropertyValue('grid-template-columns'),
-        parentWidth: el.parentElement?.offsetWidth,
-        parentMaxWidth: window.getComputedStyle(el.parentElement!).maxWidth,
-        sections: Array.from(sections).map((section, i) => ({
-          index: i,
-          width: section.offsetWidth,
-          minWidth: window.getComputedStyle(section).minWidth,
-          maxWidth: window.getComputedStyle(section).maxWidth,
-          computedWidth: window.getComputedStyle(section).width,
-        })),
-      })
-    }
-
-    // Check on mount and resize
-    checkLayout()
-    window.addEventListener('resize', checkLayout)
-    return () => window.removeEventListener('resize', checkLayout)
-  }, [])
-
   const belowRequiredClassrooms = useMemo(() => {
     const classrooms = new Set<string>()
     overview.staffing_targets
@@ -396,7 +417,6 @@ export default function DashboardClient({
     const partialColors = getCoverageColors('partial')
     const infoColors = { text: 'text-blue-600', bg: 'bg-blue-100', icon: 'text-blue-600' }
     const tealColors = { text: 'text-teal-700', bg: 'bg-teal-100', icon: 'text-teal-600' }
-    const purpleColors = { text: 'text-purple-800', bg: 'bg-blue-100', icon: 'text-purple-800' }
 
     return [
       {
@@ -441,12 +461,14 @@ export default function DashboardClient({
         cardStyle: `${neutralColors.border} bg-white ${neutralColors.textMedium}`,
         secondaryCount: belowPreferredClassrooms,
         secondaryIcon: AlertTriangle,
-        secondaryStyle: purpleColors.text,
-        secondaryIconStyle: `${purpleColors.bg} ${purpleColors.icon}`,
+        secondaryStyle: staffingColors.below_preferred.text,
+        secondaryIconStyle: `${staffingColors.below_preferred.bg} ${staffingColors.below_preferred.text}`,
+        secondaryColorValues: staffingColorValues.below_preferred,
         secondaryRightCount: belowRequiredClassrooms,
         secondaryRightIcon: AlertCircle,
-        secondaryRightStyle: purpleColors.text,
-        secondaryRightIconStyle: `${purpleColors.bg} ${purpleColors.icon}`,
+        secondaryRightStyle: staffingColors.below_required.text,
+        secondaryRightIconStyle: `${staffingColors.below_required.bg} ${staffingColors.below_required.text}`,
+        secondaryRightColorValues: staffingColorValues.below_required,
       },
     ]
   }, [overview.summary, belowRequiredClassrooms, belowPreferredClassrooms])
@@ -715,10 +737,18 @@ export default function DashboardClient({
                                 'flex items-center gap-2 text-3xl font-semibold',
                                 item.secondaryStyle
                               )}
-                              style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}
+                              style={
+                                'secondaryColorValues' in item && item.secondaryColorValues
+                                  ? { color: item.secondaryColorValues.text }
+                                  : undefined
+                              }
                             >
                               <span
-                                style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}
+                                style={
+                                  'secondaryColorValues' in item && item.secondaryColorValues
+                                    ? { color: item.secondaryColorValues.text }
+                                    : undefined
+                                }
                               >
                                 {item.secondaryCount}
                               </span>
@@ -728,10 +758,12 @@ export default function DashboardClient({
                                   item.secondaryIconStyle
                                 )}
                                 style={
-                                  {
-                                    backgroundColor: 'rgba(219, 234, 254, 1)', // blue-100
-                                    color: 'rgba(37, 99, 235, 1)', // blue-600
-                                  } as React.CSSProperties
+                                  'secondaryColorValues' in item && item.secondaryColorValues
+                                    ? {
+                                        backgroundColor: item.secondaryColorValues.bg,
+                                        color: item.secondaryColorValues.text,
+                                      }
+                                    : undefined
                                 }
                               >
                                 <item.secondaryIcon className="h-5 w-5" />
@@ -753,10 +785,20 @@ export default function DashboardClient({
                                 'flex items-center gap-2 text-3xl font-semibold',
                                 item.secondaryRightStyle
                               )}
-                              style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}
+                              style={
+                                'secondaryRightColorValues' in item &&
+                                item.secondaryRightColorValues
+                                  ? { color: item.secondaryRightColorValues.text }
+                                  : undefined
+                              }
                             >
                               <span
-                                style={{ color: 'rgba(37, 99, 235, 1)' } as React.CSSProperties}
+                                style={
+                                  'secondaryRightColorValues' in item &&
+                                  item.secondaryRightColorValues
+                                    ? { color: item.secondaryRightColorValues.text }
+                                    : undefined
+                                }
                               >
                                 {item.secondaryRightCount}
                               </span>
@@ -766,10 +808,13 @@ export default function DashboardClient({
                                   item.secondaryRightIconStyle
                                 )}
                                 style={
-                                  {
-                                    backgroundColor: 'rgba(219, 234, 254, 1)', // blue-100
-                                    color: 'rgba(37, 99, 235, 1)', // blue-600
-                                  } as React.CSSProperties
+                                  'secondaryRightColorValues' in item &&
+                                  item.secondaryRightColorValues
+                                    ? {
+                                        backgroundColor: item.secondaryRightColorValues.bg,
+                                        color: item.secondaryRightColorValues.text,
+                                      }
+                                    : undefined
                                 }
                               >
                                 <item.secondaryRightIcon className="h-5 w-5" />
@@ -879,7 +924,13 @@ export default function DashboardClient({
           <div className={cn('space-y-4', coverageSectionCollapsed && 'hidden xl:block')}>
             {filteredCoverageRequests.length === 0 ? (
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                No upcoming time off in the next {getRangeDaysText(coverageRange)}
+                No upcoming{' '}
+                {coverageFilter === 'needs'
+                  ? 'time off needing a sub'
+                  : coverageFilter === 'covered'
+                    ? 'covered time off'
+                    : 'time off'}{' '}
+                in the next {getRangeDaysText(coverageRange)}
               </div>
             ) : (
               <div className="space-y-3">
@@ -1022,14 +1073,15 @@ export default function DashboardClient({
                         </span>
                       </div>
                     </div>
-                    <div className="flex w-full justify-end sm:w-auto">
-                      <Button
-                        asChild
-                        size="sm"
-                        variant="outline"
-                        className={getButtonColors('teal').base}
-                      >
-                        <Link href={`/schedules/weekly?sub_assignment_id=${assignment.id}`}>
+                    <div className="flex w-full justify-end self-end sm:w-auto">
+                      <Button asChild size="sm" variant="teal">
+                        <Link
+                          href={
+                            assignment.coverage_request_id
+                              ? `/sub-finder?absence_id=${assignment.coverage_request_id}&sub_id=${assignment.sub_id || ''}`
+                              : '/sub-finder'
+                          }
+                        >
                           Update Sub
                         </Link>
                       </Button>
@@ -1071,6 +1123,10 @@ export default function DashboardClient({
           </div>
 
           <div className={cn('space-y-4', staffingTargetSectionCollapsed && 'hidden xl:block')}>
+            <p className="text-xs text-slate-500">
+              Counts permanent staff, flex staff, floaters (0.5), and temporary coverage. Subs and
+              absences are excluded from the calculation.
+            </p>
             {overview.staffing_targets.length === 0 ? (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                 ✅ All classrooms meet staffing targets.
@@ -1085,7 +1141,12 @@ export default function DashboardClient({
                   >
                     <span>
                       Below Required (
-                      {belowRequiredGroups.reduce((total, group) => total + group.slots.length, 0)})
+                      {belowRequiredGroups.reduce(
+                        (total, classroom) =>
+                          total + classroom.slotGroups.reduce((s, g) => s + g.slots.length, 0),
+                        0
+                      )}
+                      )
                     </span>
                     {belowRequiredCollapsed ? (
                       <ChevronDown className="h-4 w-4" />
@@ -1107,69 +1168,43 @@ export default function DashboardClient({
                               className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
                               style={getClassroomPillStyle(classroom.classroom_color)}
                             >
-                              {classroom.classroom_name} ({classroom.slots.length})
+                              {classroom.classroom_name} (
+                              {classroom.slotGroups.reduce((s, g) => s + g.slots.length, 0)})
                             </span>
                           </div>
-                          {classroom.slots.map(slot => (
+                          {classroom.slotGroups.map(group => (
                             <div
-                              key={slot.id}
+                              key={`${group.rep.classroom_id}-${group.rep.time_slot_id}-${group.rep.day_of_week_id}-${group.dateStart}-${group.dateEnd}`}
                               className="grid gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-md transition-shadow hover:shadow-lg md:grid-cols-[1fr_auto]"
                             >
                               <div className="flex flex-wrap items-center gap-4 min-w-0">
                                 <div className="min-w-[160px] space-y-3 flex-shrink-0">
                                   <div className="text-sm font-semibold text-slate-900">
-                                    {formatSlotLabel(slot.day_name, slot.time_slot_code)}
+                                    {formatGroupSlotLabel(group)}
                                   </div>
                                   <div className="flex flex-col items-start gap-2">
-                                    <span
-                                      className="inline-flex items-center rounded-full px-3.5 py-1 text-xs font-medium"
-                                      style={
-                                        slot.status === 'below_required'
-                                          ? ({
-                                              backgroundColor:
-                                                staffingColorValues.below_required.bg,
-                                              borderStyle: 'solid',
-                                              borderWidth: '1px',
-                                              borderColor:
-                                                staffingColorValues.below_required.border,
-                                              color: staffingColorValues.below_required.text,
-                                            } as React.CSSProperties)
-                                          : slot.status === 'below_preferred'
-                                            ? ({
-                                                backgroundColor:
-                                                  staffingColorValues.below_preferred.bg,
-                                                borderStyle: 'solid',
-                                                borderWidth: '1px',
-                                                borderColor:
-                                                  staffingColorValues.below_preferred.border,
-                                                color: staffingColorValues.below_preferred.text,
-                                              } as React.CSSProperties)
-                                            : undefined
-                                      }
-                                    >
-                                      Below Required{' '}
-                                      {formatShortfallLabel(
-                                        formatShortfallValue(
-                                          slot.required_staff,
-                                          slot.scheduled_staff
-                                        )
-                                      )}
-                                    </span>
+                                    <StaffingStatusBadge
+                                      status={group.rep.status}
+                                      label={`Below Required by ${formatShortfallValue(
+                                        group.rep.required_staff,
+                                        group.rep.scheduled_staff
+                                      )}`}
+                                      size="md"
+                                    />
                                     <div className="text-xs text-slate-600 whitespace-nowrap">
-                                      Required: {slot.required_staff} · Scheduled:{' '}
-                                      {slot.scheduled_staff}
+                                      Required: {group.rep.required_staff} · Scheduled:{' '}
+                                      {group.rep.scheduled_staff}
                                     </div>
                                   </div>
                                 </div>
                               </div>
-                              <div className="flex items-center justify-end self-center flex-shrink-0">
+                              <div className="flex items-center justify-end self-end flex-shrink-0">
                                 <Button
                                   size="sm"
-                                  variant="outline"
-                                  className={getButtonColors('teal').base}
-                                  disabled
+                                  variant="teal"
+                                  onClick={() => setAssignCoverageSlot(group)}
                                 >
-                                  Assign Coverage
+                                  Add Coverage
                                 </Button>
                               </div>
                             </div>
@@ -1187,7 +1222,11 @@ export default function DashboardClient({
                   >
                     <span>
                       Below Preferred (
-                      {belowPreferredGroups.reduce((total, group) => total + group.slots.length, 0)}
+                      {belowPreferredGroups.reduce(
+                        (total, classroom) =>
+                          total + classroom.slotGroups.reduce((s, g) => s + g.slots.length, 0),
+                        0
+                      )}
                       )
                     </span>
                     {belowPreferredCollapsed ? (
@@ -1210,67 +1249,44 @@ export default function DashboardClient({
                               className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
                               style={getClassroomPillStyle(classroom.classroom_color)}
                             >
-                              {classroom.classroom_name} ({classroom.slots.length})
+                              {classroom.classroom_name} (
+                              {classroom.slotGroups.reduce((s, g) => s + g.slots.length, 0)})
                             </span>
                           </div>
-                          {classroom.slots.map(slot => (
+                          {classroom.slotGroups.map(group => (
                             <div
-                              key={slot.id}
+                              key={`${group.rep.classroom_id}-${group.rep.time_slot_id}-${group.rep.day_of_week_id}-${group.dateStart}-${group.dateEnd}`}
                               className="grid gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-md transition-shadow hover:shadow-lg md:grid-cols-[1fr_auto]"
                             >
                               <div className="flex flex-wrap items-center gap-4 min-w-0">
                                 <div className="min-w-[160px] space-y-3 flex-shrink-0">
                                   <div className="text-sm font-semibold text-slate-900">
-                                    {formatSlotLabel(slot.day_name, slot.time_slot_code)}
+                                    {formatGroupSlotLabel(group)}
                                   </div>
                                   <div className="flex flex-col items-start gap-2">
-                                    <span
-                                      className="inline-flex items-center rounded-full px-3.5 py-1 text-xs font-medium"
-                                      style={
-                                        slot.status === 'below_preferred'
-                                          ? ({
-                                              backgroundColor:
-                                                staffingColorValues.below_preferred.bg,
-                                              borderStyle: 'solid',
-                                              borderWidth: '1px',
-                                              borderColor:
-                                                staffingColorValues.below_preferred.border,
-                                              color: staffingColorValues.below_preferred.text,
-                                            } as React.CSSProperties)
-                                          : slot.status === 'below_required'
-                                            ? ({
-                                                backgroundColor:
-                                                  staffingColorValues.below_required.bg,
-                                                borderStyle: 'solid',
-                                                borderWidth: '1px',
-                                                borderColor:
-                                                  staffingColorValues.below_required.border,
-                                                color: staffingColorValues.below_required.text,
-                                              } as React.CSSProperties)
-                                            : undefined
-                                      }
-                                    >
-                                      Below Preferred by{' '}
-                                      {formatShortfallValue(
-                                        slot.preferred_staff ?? slot.required_staff,
-                                        slot.scheduled_staff
-                                      )}
-                                    </span>
+                                    <StaffingStatusBadge
+                                      status={group.rep.status}
+                                      label={`Below Preferred by ${formatShortfallValue(
+                                        group.rep.preferred_staff ?? group.rep.required_staff,
+                                        group.rep.scheduled_staff
+                                      )}`}
+                                      size="md"
+                                    />
                                     <div className="text-xs text-slate-600 whitespace-nowrap">
-                                      Preferred: {slot.preferred_staff ?? slot.required_staff} ·
-                                      Scheduled: {slot.scheduled_staff}
+                                      Preferred:{' '}
+                                      {group.rep.preferred_staff ?? group.rep.required_staff} ·
+                                      Scheduled: {group.rep.scheduled_staff}
                                     </div>
                                   </div>
                                 </div>
                               </div>
-                              <div className="flex items-center justify-end self-center flex-shrink-0">
+                              <div className="flex items-center justify-end self-end flex-shrink-0">
                                 <Button
                                   size="sm"
-                                  variant="outline"
-                                  className={getButtonColors('teal').base}
-                                  disabled
+                                  variant="teal"
+                                  onClick={() => setAssignCoverageSlot(group)}
                                 >
-                                  Assign Coverage
+                                  Add Coverage
                                 </Button>
                               </div>
                             </div>
@@ -1284,6 +1300,42 @@ export default function DashboardClient({
           </div>
         </section>
       </div>
+
+      {/* Add Temporary Coverage (reuses ScheduleSidePanel from weekly schedule) */}
+      {assignCoverageSlot &&
+        VALID_DATE_ISO.test(assignCoverageSlot.dateStart) &&
+        VALID_DATE_ISO.test(assignCoverageSlot.dateEnd) && (
+          <ScheduleSidePanel
+            isOpen
+            onClose={() => {
+              setAssignCoverageSlot(null)
+              refetch()
+            }}
+            dayId={assignCoverageSlot.rep.day_of_week_id}
+            dayName={assignCoverageSlot.rep.day_name}
+            timeSlotId={assignCoverageSlot.rep.time_slot_id}
+            timeSlotName={assignCoverageSlot.rep.time_slot_code}
+            timeSlotCode={assignCoverageSlot.rep.time_slot_code}
+            timeSlotStartTime={null}
+            timeSlotEndTime={null}
+            classroomId={assignCoverageSlot.rep.classroom_id}
+            classroomName={assignCoverageSlot.rep.classroom_name}
+            classroomColor={assignCoverageSlot.rep.classroom_color ?? null}
+            selectedDayIds={[]}
+            onSave={() => void refetch()}
+            weekStartISO={getWeekStartISOFromDate(assignCoverageSlot.dateStart)}
+            readOnly
+            initialPanelMode="flex"
+            initialFlexStartDate={assignCoverageSlot.dateStart}
+            initialFlexEndDate={assignCoverageSlot.dateEnd}
+            initialFlexTargetType={
+              assignCoverageSlot.rep.status === 'below_preferred' ? 'preferred' : 'required'
+            }
+            initialFlexRequiredStaff={assignCoverageSlot.rep.required_staff}
+            initialFlexPreferredStaff={assignCoverageSlot.rep.preferred_staff}
+            initialFlexScheduledStaff={assignCoverageSlot.rep.scheduled_staff}
+          />
+        )}
 
       {/* Edit Time Off Panel */}
       {editingRequestId && (

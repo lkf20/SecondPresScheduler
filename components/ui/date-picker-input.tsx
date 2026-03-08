@@ -40,6 +40,10 @@ interface DatePickerInputProps {
   closeOnSelect?: boolean
   openToDate?: string
   includeWeekdayInDisplay?: boolean
+  /** When provided with onOpenChange, controls whether the popover is open */
+  open?: boolean
+  /** Called when the popover open state changes. Use with open for controlled mode. */
+  onOpenChange?: (open: boolean) => void
 }
 
 const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
@@ -55,23 +59,35 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
       closeOnSelect = false,
       openToDate,
       includeWeekdayInDisplay = false,
+      open: controlledOpen,
+      onOpenChange: onOpenChangeProp,
     },
     ref
   ) => {
     const selectedDate = useMemo(() => parseDate(value), [value])
     const openToParsed = useMemo(() => parseDate(openToDate || ''), [openToDate])
-    const [open, setOpen] = useState(false)
+    const [internalOpen, setInternalOpen] = useState(false)
+    const isControlled = controlledOpen !== undefined && onOpenChangeProp !== undefined
+    const open = isControlled ? controlledOpen : internalOpen
     const [viewDate, setViewDate] = useState(() => {
       const base = selectedDate || openToParsed || new Date()
       return new Date(base.getFullYear(), base.getMonth(), 1)
     })
+
+    const setOpenState = (next: boolean) => {
+      if (isControlled) {
+        onOpenChangeProp?.(next)
+      } else {
+        setInternalOpen(next)
+      }
+    }
 
     const handleOpenChange = (nextOpen: boolean) => {
       if (nextOpen) {
         const base = selectedDate || openToParsed || new Date()
         setViewDate(new Date(base.getFullYear(), base.getMonth(), 1))
       }
-      setOpen(nextOpen)
+      setOpenState(nextOpen)
     }
 
     const year = viewDate.getFullYear()
@@ -100,7 +116,7 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
       const next = new Date(year, month, dayNumber)
       onChange(formatISO(next))
       if (closeOnSelect) {
-        setOpen(false)
+        setOpenState(false)
       }
     }
 

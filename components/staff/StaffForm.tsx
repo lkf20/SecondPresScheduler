@@ -474,7 +474,11 @@ export default function StaffForm({
         )}
         <Button
           type="submit"
-          disabled={isSubmitting || (Boolean(staff) && !isFormDirty && !externalDirty)}
+          disabled={
+            isSubmitting ||
+            (duplicateWarning ? !proceedWithDuplicate : false) ||
+            (Boolean(staff) && !isFormDirty && !externalDirty)
+          }
         >
           {isSubmitting ? 'Saving...' : staff ? 'Update' : 'Create'}
         </Button>

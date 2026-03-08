@@ -120,6 +120,18 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     } | null>(null)
     const [showAssignmentDetails, setShowAssignmentDetails] = useState(false)
     const [assignmentHandling, setAssignmentHandling] = useState<'unassign' | 'keep'>('unassign')
+    const [overlapPayload, setOverlapPayload] = useState<{
+      code: 'TIME_OFF_OVERLAP'
+      existingRequestId: string
+      existingStartDate: string
+      existingEndDate: string | null
+      existingStatus: 'draft' | 'active'
+      teacherName: string | null
+      newRequestStartDate: string
+      newRequestEndDate: string
+      overlapStartDate: string
+      overlapEndDate: string | null
+    } | null>(null)
     const getTeacherDisplayName = useCallback(
       (teacher: Staff) =>
         getStaffDisplayName(
@@ -303,7 +315,6 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
             notes: currentValues.notes || undefined,
             selectedShifts: [...selectedShifts],
           }
-          console.log('[TimeOffForm] Captured initial state:', initialFormStateRef.current)
           setIsInitialStateCaptured(true)
         }
       }, 150) // Small delay to ensure all initialization is complete
@@ -518,10 +529,6 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         // Invalidate drafts older than 24 hours
         const DRAFT_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 hours
         if (draft.updatedAt && Date.now() - draft.updatedAt > DRAFT_EXPIRY_MS) {
-          console.log('[TimeOffForm] Draft expired, clearing:', {
-            age: Date.now() - draft.updatedAt,
-            expiry: DRAFT_EXPIRY_MS,
-          })
           window.sessionStorage.removeItem(draftKey)
           hasHydratedDraftRef.current = true
           setIsDraftRestored(true)
@@ -635,7 +642,11 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         })
 
         if (!response.ok) {
-          const errorData = await response.json()
+          const errorData = await response.json().catch(() => ({}))
+          if (response.status === 409 && errorData?.code === 'TIME_OFF_OVERLAP') {
+            setOverlapPayload(errorData)
+            return
+          }
           const action = timeOffRequestId ? 'update' : 'create'
           throw new Error(errorData.error || `Failed to ${action} time off request`)
         }
@@ -732,7 +743,11 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         })
 
         if (!response.ok) {
-          const errorData = await response.json()
+          const errorData = await response.json().catch(() => ({}))
+          if (response.status === 409 && errorData?.code === 'TIME_OFF_OVERLAP') {
+            setOverlapPayload(errorData)
+            return
+          }
           throw new Error(errorData.error || 'Failed to save draft')
         }
 
@@ -1124,7 +1139,12 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                   </FormField>
 
                   <FormField label="Notes" error={errors.notes?.message}>
-                    <Textarea {...register('notes')} placeholder="Optional notes" tabIndex={10} />
+                    <Textarea
+                      {...register('notes')}
+                      placeholder="Optional notes"
+                      tabIndex={10}
+                      className="text-base md:text-lg"
+                    />
                   </FormField>
                 </div>
               </div>
@@ -1323,6 +1343,68 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                     {isCancelling ? 'Cancelling...' : 'Cancel Time Off'}
                   </Button>
                 </>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Time off overlap resolution modal */}
+        <Dialog
+          open={overlapPayload !== null}
+          onOpenChange={open => {
+            if (!open) setOverlapPayload(null)
+          }}
+        >
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Overlapping time off</DialogTitle>
+              <DialogDescription asChild>
+                <div className="space-y-3 pt-1 text-muted-foreground">
+                  {overlapPayload && (
+                    <>
+                      <div>
+                        {overlapPayload.teacherName ?? 'This teacher'} already has
+                        {overlapPayload.existingStatus === 'draft' ? (
+                          <>
+                            {' '}
+                            a <strong>draft</strong> time off request
+                          </>
+                        ) : (
+                          ' a time off request'
+                        )}
+                        :{' '}
+                        {formatRange(
+                          overlapPayload.existingStartDate,
+                          overlapPayload.existingEndDate
+                        )}
+                        . Your new request overlaps on{' '}
+                        {formatRange(
+                          overlapPayload.overlapStartDate,
+                          overlapPayload.overlapEndDate ?? overlapPayload.overlapStartDate
+                        )}
+                        .
+                      </div>
+                      <div className="font-medium text-foreground">
+                        How would you like to proceed?
+                      </div>
+                    </>
+                  )}
+                </div>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setOverlapPayload(null)}>
+                Cancel new request
+              </Button>
+              {overlapPayload && (
+                <Button
+                  onClick={() => {
+                    router.push(`/time-off?edit=${overlapPayload.existingRequestId}`)
+                    setOverlapPayload(null)
+                  }}
+                >
+                  Edit existing request
+                </Button>
               )}
             </DialogFooter>
           </DialogContent>

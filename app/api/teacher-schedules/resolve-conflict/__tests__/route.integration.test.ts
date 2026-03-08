@@ -34,22 +34,48 @@ jest.mock('@/lib/api/audit-logs', () => ({
   createTeacherScheduleAuditLog: jest.fn(),
 }))
 
+const staffRow = {
+  first_name: 'Test',
+  last_name: 'Teacher',
+  display_name: null,
+}
+const classroomRow = { name: 'Target Room' }
+
 const createSupabaseForResolve = (result: { data: any[] | null; error: Error | null }) => {
   let eqCount = 0
-  const queryBuilder = {
-    select: jest.fn(() => queryBuilder),
-    neq: jest.fn(() => queryBuilder),
+  const teacherSchedulesBuilder = {
+    select: jest.fn(() => teacherSchedulesBuilder),
+    neq: jest.fn(() => teacherSchedulesBuilder),
     eq: jest.fn(() => {
       eqCount += 1
       if (eqCount === 4) {
         return Promise.resolve(result)
       }
-      return queryBuilder
+      return teacherSchedulesBuilder
     }),
   }
 
+  const staffBuilder = {
+    select: jest.fn(() => staffBuilder),
+    eq: jest.fn(() => staffBuilder),
+    maybeSingle: jest.fn(() => Promise.resolve({ data: staffRow, error: null })),
+  }
+
+  const classroomsBuilder = {
+    select: jest.fn(() => classroomsBuilder),
+    eq: jest.fn(() => classroomsBuilder),
+    maybeSingle: jest.fn(() => Promise.resolve({ data: classroomRow, error: null })),
+  }
+
+  const fromMock = jest.fn((table: string) => {
+    if (table === 'teacher_schedules') return teacherSchedulesBuilder
+    if (table === 'staff') return staffBuilder
+    if (table === 'classrooms') return classroomsBuilder
+    return teacherSchedulesBuilder
+  })
+
   return {
-    from: jest.fn(() => queryBuilder),
+    from: fromMock,
   }
 }
 

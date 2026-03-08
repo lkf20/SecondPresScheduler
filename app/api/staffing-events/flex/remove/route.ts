@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
+import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
-type RemoveScope = 'single_shift' | 'weekday' | 'all_shifts'
+type RemoveScope = 'single_shift' | 'weekday' | 'all_shifts' | 'future_shifts'
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,6 +16,7 @@ export async function GET(request: NextRequest) {
     const eventId = request.nextUrl.searchParams.get('event_id')
     const classroomId = request.nextUrl.searchParams.get('classroom_id')
     const timeSlotId = request.nextUrl.searchParams.get('time_slot_id')
+    const forEdit = request.nextUrl.searchParams.get('for_edit') === '1'
 
     if (!eventId) {
       return NextResponse.json({ error: 'event_id is required.' }, { status: 400 })
@@ -23,7 +26,9 @@ export async function GET(request: NextRequest) {
 
     const { data: eventRow, error: eventError } = await supabase
       .from('staffing_events')
-      .select('id, staff_id, start_date, end_date')
+      .select(
+        'id, staff_id, start_date, end_date, event_category, covered_staff_id, start_time, end_time, notes'
+      )
       .eq('id', eventId)
       .eq('school_id', schoolId)
       .maybeSingle()
@@ -32,20 +37,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: eventError.message }, { status: 500 })
     }
     if (!eventRow) {
-      return NextResponse.json({ error: 'Flex assignment not found.' }, { status: 404 })
+      return NextResponse.json({ error: 'Temporary coverage not found.' }, { status: 404 })
     }
 
     let shiftsQuery = supabase
       .from('staffing_event_shifts')
-      .select('day_of_week_id')
+      .select('day_of_week_id, classroom_id, time_slot_id')
       .eq('school_id', schoolId)
       .eq('staffing_event_id', eventId)
       .eq('status', 'active')
 
-    if (classroomId) {
+    if (!forEdit && classroomId) {
       shiftsQuery = shiftsQuery.eq('classroom_id', classroomId)
     }
-    if (timeSlotId) {
+    if (!forEdit && timeSlotId) {
       shiftsQuery = shiftsQuery.eq('time_slot_id', timeSlotId)
     }
 
@@ -73,12 +78,36 @@ export async function GET(request: NextRequest) {
       weekdays = (dayRows || []).map(row => row.name)
     }
 
-    return NextResponse.json({
+    const payload: Record<string, unknown> = {
       start_date: eventRow.start_date,
       end_date: eventRow.end_date,
       weekdays,
       matching_shift_count: (shiftRows || []).length,
-    })
+    }
+
+    if (forEdit) {
+      payload.event_category = eventRow.event_category ?? 'standard'
+      payload.covered_staff_id = eventRow.covered_staff_id ?? null
+      payload.start_time =
+        eventRow.start_time != null ? String(eventRow.start_time).slice(0, 5) : null
+      payload.end_time = eventRow.end_time != null ? String(eventRow.end_time).slice(0, 5) : null
+      payload.staff_id = eventRow.staff_id ?? null
+      payload.notes = eventRow.notes ?? null
+      const shifts = shiftRows as Array<{
+        day_of_week_id?: string
+        classroom_id?: string
+        time_slot_id?: string
+      }> | null
+      payload.classroom_ids = Array.from(
+        new Set((shifts || []).map(s => s.classroom_id).filter(Boolean))
+      ) as string[]
+      payload.time_slot_ids = Array.from(
+        new Set((shifts || []).map(s => s.time_slot_id).filter(Boolean))
+      ) as string[]
+      payload.day_of_week_ids = uniqueDayIds
+    }
+
+    return NextResponse.json(payload)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     return NextResponse.json({ error: message }, { status: 500 })
@@ -130,11 +159,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (scope === 'future_shifts' && !body.date) {
+      return NextResponse.json(
+        { error: 'date is required for future_shifts scope.' },
+        { status: 400 }
+      )
+    }
+
+    if (scope === 'future_shifts' && (!classroomId || !timeSlotId)) {
+      return NextResponse.json(
+        { error: 'classroom_id and time_slot_id are required for future_shifts scope.' },
+        { status: 400 }
+      )
+    }
+
     const supabase = await createClient()
 
     const { data: eventRow, error: eventError } = await supabase
       .from('staffing_events')
-      .select('id')
+      .select('id, staff_id')
       .eq('id', eventId)
       .eq('school_id', schoolId)
       .maybeSingle()
@@ -143,7 +186,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: eventError.message }, { status: 500 })
     }
     if (!eventRow) {
-      return NextResponse.json({ error: 'Flex assignment not found.' }, { status: 404 })
+      return NextResponse.json({ error: 'Temporary coverage not found.' }, { status: 404 })
     }
 
     let cancelQuery = supabase
@@ -163,6 +206,13 @@ export async function POST(request: NextRequest) {
     if (scope === 'weekday') {
       cancelQuery = cancelQuery
         .eq('day_of_week_id', dayOfWeekId!)
+        .eq('classroom_id', classroomId!)
+        .eq('time_slot_id', timeSlotId!)
+    }
+
+    if (scope === 'future_shifts') {
+      cancelQuery = cancelQuery
+        .gte('date', body.date!)
         .eq('classroom_id', classroomId!)
         .eq('time_slot_id', timeSlotId!)
     }
@@ -202,6 +252,36 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: eventCancelError.message }, { status: 500 })
       }
     }
+
+    const staffId = eventRow?.staff_id
+    let teacherName: string | null = null
+    if (staffId) {
+      const { data: staffRow } = await supabase
+        .from('staff')
+        .select('first_name, last_name, display_name')
+        .eq('id', staffId)
+        .eq('school_id', schoolId)
+        .maybeSingle()
+      teacherName = staffRow ? getStaffDisplayName(staffRow) : null
+    }
+
+    const { actorUserId, actorDisplayName } = await getAuditActorContext()
+    await logAuditEvent({
+      schoolId,
+      actorUserId,
+      actorDisplayName,
+      action: 'cancel',
+      category: 'temporary_coverage',
+      entityType: 'staffing_event',
+      entityId: eventId,
+      details: {
+        staff_id: staffId,
+        teacher_name: teacherName,
+        scope,
+        removed_count: cancelledRows.length,
+        remaining_active_shifts: activeShiftCount ?? 0,
+      },
+    })
 
     return NextResponse.json({
       success: true,

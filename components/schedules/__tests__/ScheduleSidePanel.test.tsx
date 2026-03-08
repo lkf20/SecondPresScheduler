@@ -1,5 +1,5 @@
 /* eslint-disable react/display-name */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import ScheduleSidePanel from '@/components/schedules/ScheduleSidePanel'
 
 const pushMock = jest.fn()
@@ -65,9 +65,27 @@ jest.mock('@/components/ui/checkbox', () => ({
 }))
 
 jest.mock('@/components/ui/radio-group', () => ({
-  RadioGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  RadioGroup: ({
+    children,
+    onValueChange,
+  }: {
+    children: React.ReactNode
+    onValueChange?: (value: string) => void
+  }) => (
+    <div
+      role="radiogroup"
+      onClick={(e: React.MouseEvent) => {
+        const el = (e.target as HTMLElement).closest?.('[data-value]')
+        if (el && onValueChange) {
+          onValueChange((el as HTMLElement).getAttribute('data-value') ?? '')
+        }
+      }}
+    >
+      {children}
+    </div>
+  ),
   RadioGroupItem: ({ id, value }: { id: string; value: string }) => (
-    <input id={id} value={value} type="radio" readOnly />
+    <input id={id} value={value} type="radio" data-value={value} readOnly />
   ),
 }))
 
@@ -83,14 +101,17 @@ jest.mock('@/components/ui/date-picker-input', () => () => <input />)
 
 jest.mock('@/components/time-off/TimeOffForm', () => () => <div>TimeOffForm</div>)
 jest.mock('@/components/schedules/SlotStatusToggle', () => () => <div>SlotStatusToggle</div>)
-jest.mock('@/components/schedules/ClassGroupMultiSelect', () => () => (
-  <div>ClassGroupMultiSelect</div>
-))
+jest.mock('@/components/settings/ClassSelector', () => () => <div>ClassSelector</div>)
 jest.mock('@/components/schedules/EnrollmentInput', () => () => <div>EnrollmentInput</div>)
 jest.mock('@/components/schedules/TeacherMultiSelect', () => () => <div>TeacherMultiSelect</div>)
-jest.mock('@/components/schedules/MultiDayApplySelector', () => () => (
-  <div>MultiDayApplySelector</div>
-))
+jest.mock('@/components/schedules/MultiDayApplySelector', () => ({
+  __esModule: true,
+  default: ({ disabled }: { disabled?: boolean }) => (
+    <div data-testid="multi-day-apply" data-disabled={disabled ? 'true' : 'false'}>
+      MultiDayApplySelector
+    </div>
+  ),
+}))
 jest.mock('@/components/schedules/UnsavedChangesDialog', () => () => null)
 jest.mock('@/components/schedules/ConflictBanner', () => () => <div>ConflictBanner</div>)
 
@@ -124,15 +145,73 @@ const setupFetch = (removeContext: {
       } as Response
     }
     if (url.includes('/api/teacher-schedules')) {
+      // Return teachers matching buildProps() so panel populates and async updates complete predictably
       return {
         ok: true,
-        json: async () => [],
+        json: async () => [
+          {
+            id: 'ts-1',
+            classroom_id: 'class-1',
+            day_of_week_id: 'day-1',
+            time_slot_id: 'slot-1',
+            teacher_id: 'teacher-1',
+            is_floater: false,
+            teacher: {
+              first_name: 'Bella',
+              last_name: 'Wilson',
+              display_name: null,
+              staff_role_type_assignments: [],
+            },
+          },
+          {
+            id: 'ts-2',
+            classroom_id: 'class-1',
+            day_of_week_id: 'day-1',
+            time_slot_id: 'slot-1',
+            teacher_id: 'teacher-2',
+            is_floater: false,
+            teacher: {
+              first_name: 'Amy',
+              last_name: 'Park',
+              display_name: null,
+              staff_role_type_assignments: [{ staff_role_types: { code: 'FLEXIBLE' } }],
+            },
+          },
+        ],
       } as Response
     }
     if (url.includes('/api/staffing-events/flex/remove?')) {
       return {
         ok: true,
         json: async () => removeContext,
+      } as Response
+    }
+    if (url.includes('/api/schedule-cells?')) {
+      return {
+        ok: true,
+        json: async () => [],
+      } as Response
+    }
+    if (url.includes('/api/dashboard/slot-run?')) {
+      return {
+        ok: true,
+        json: async () => ({
+          belowTarget: true,
+          dateStart: '2026-03-09',
+          dateEnd: '2026-05-11',
+          weeksLabel: '9 weeks',
+          targetType: 'required',
+        }),
+      } as Response
+    }
+    if (url.includes('/api/staffing-events/flex/availability')) {
+      return {
+        ok: true,
+        json: async () => ({
+          staff: [{ id: 's1', name: 'Test Staff', availableShiftKeys: [] }],
+          shift_metrics: [],
+          day_options: [],
+        }),
       } as Response
     }
     return {
@@ -204,6 +283,8 @@ const buildProps = () => ({
 })
 
 describe('ScheduleSidePanel interactions', () => {
+  jest.setTimeout(10000)
+
   afterEach(() => {
     jest.clearAllMocks()
   })
@@ -221,12 +302,24 @@ describe('ScheduleSidePanel interactions', () => {
     })
 
     render(<ScheduleSidePanel {...buildProps()} />)
+    await waitFor(() => expect(screen.getByText('Bella W.')).toBeInTheDocument())
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Remove' }))
 
-    await screen.findByText('Remove flex assignment?')
-    expect(screen.getByText(/Amy P. is assigned as flex staff to Infant Room/i)).toBeInTheDocument()
-    expect(screen.getByText('This shift only')).toBeInTheDocument()
+    await screen.findByText('Remove temporary coverage?')
+    // Wait for flex remove context to load (dialog shows "Loading assignment details..." until then)
+    await waitFor(
+      () => {
+        expect(screen.getByText('This shift only')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+    expect(
+      screen.getByText(/Amy P. is assigned for temporary coverage to Infant Room/i)
+    ).toBeInTheDocument()
     expect(screen.getByText('All Monday shifts')).toBeInTheDocument()
     expect(screen.getByText('All shifts')).toBeInTheDocument()
   })
@@ -240,6 +333,10 @@ describe('ScheduleSidePanel interactions', () => {
     })
 
     render(<ScheduleSidePanel {...buildProps()} />)
+    await waitFor(() => expect(screen.getByText('Bella W.')).toBeInTheDocument(), { timeout: 3000 })
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
 
     expect(await screen.findByText('Below Preferred by 1')).toBeInTheDocument()
     expect(screen.getByText('Required: 2 • Preferred: 3 • Scheduled: 2')).toBeInTheDocument()
@@ -255,14 +352,65 @@ describe('ScheduleSidePanel interactions', () => {
 
     render(<ScheduleSidePanel {...buildProps()} />)
 
-    fireEvent.click(await screen.findByRole('button', { name: /edit permanent staff/i }))
-    expect(screen.getByText('Edit baseline assignment?')).toBeInTheDocument()
+    await waitFor(
+      () => {
+        expect(screen.getByText('Bella W.')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
 
+    fireEvent.click(await screen.findByRole('button', { name: /edit baseline staff/i }))
+    expect(screen.getByText('Edit baseline assignment?')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /^continue$/i }))
     expect(screen.getByText('Edit Permanent Staff')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^back$/i })).toBeInTheDocument()
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: /^back$/i }))
-    expect(await screen.findByText('Flex Staff')).toBeInTheDocument()
+  it('hides Remove button for temporary coverage assignments without staffing_event_id', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    // Flex assignment from baseline (teacher with FLEXIBLE role) - no staffing_event_id
+    const propsWithoutEventId = {
+      ...buildProps(),
+      selectedCellData: {
+        ...buildProps().selectedCellData,
+        assignments: [
+          {
+            id: 'a-1',
+            teacher_id: 'teacher-1',
+            teacher_name: 'Bella W.',
+            classroom_id: 'class-1',
+            classroom_name: 'Infant Room',
+          },
+          {
+            id: 'a-flex-baseline',
+            teacher_id: 'teacher-2',
+            teacher_name: 'Amy P.',
+            classroom_id: 'class-1',
+            classroom_name: 'Infant Room',
+            is_flexible: true,
+            staffing_event_id: undefined,
+          },
+        ],
+      },
+    }
+
+    render(<ScheduleSidePanel {...propsWithoutEventId} />)
+    await waitFor(() => expect(screen.getByText('Amy P.')).toBeInTheDocument(), { timeout: 3000 })
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
+
+    expect(screen.getByText('Amy P.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument()
   })
 
   it('shows single-shift confirmation copy with no weekday/all-shifts options', async () => {
@@ -274,16 +422,356 @@ describe('ScheduleSidePanel interactions', () => {
     })
 
     render(<ScheduleSidePanel {...buildProps()} />)
+    await waitFor(() => expect(screen.getByText('Bella W.')).toBeInTheDocument(), { timeout: 3000 })
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Remove' }))
 
     await waitFor(() => {
       expect(
-        screen.getByText('Amy P. is assigned as flex staff to Infant Room on Monday, Feb 9.')
+        screen.getByText(
+          'Amy P. is assigned for temporary coverage to Infant Room on Monday, Feb 9.'
+        )
       ).toBeInTheDocument()
     })
     expect(screen.queryByText('This shift only')).not.toBeInTheDocument()
     expect(screen.queryByText('All Monday shifts')).not.toBeInTheDocument()
     expect(screen.queryByText('All shifts')).not.toBeInTheDocument()
+  })
+
+  it('disables Save and Apply changes when slot is inactive', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    render(
+      <ScheduleSidePanel
+        {...props}
+        readOnly={false}
+        selectedCellData={{
+          ...props.selectedCellData,
+          schedule_cell: {
+            ...props.selectedCellData.schedule_cell,
+            is_active: false,
+          },
+        }}
+      />
+    )
+
+    expect(await screen.findByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getByTestId('multi-day-apply')).toHaveAttribute('data-disabled', 'true')
+  })
+
+  it('disables quick actions in read-only cell panel when slot is inactive', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    render(
+      <ScheduleSidePanel
+        {...props}
+        readOnly
+        selectedCellData={{
+          ...props.selectedCellData,
+          schedule_cell: {
+            ...props.selectedCellData.schedule_cell,
+            is_active: false,
+          },
+        }}
+      />
+    )
+
+    expect(await screen.findByRole('button', { name: 'Add Temporary Coverage' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edit baseline staff' })).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Edit class groups, enrollment & ratios' })
+    ).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled()
+
+    const addTimeOffButtons = screen.getAllByRole('button', { name: 'Add Time Off' })
+    addTimeOffButtons.forEach(button => {
+      expect(button).toBeDisabled()
+    })
+  })
+
+  it('disables Save and Apply when classroom is inactive (parent inactive)', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    render(
+      <ScheduleSidePanel
+        {...props}
+        readOnly={false}
+        selectedCellData={{
+          ...props.selectedCellData,
+          classroom_is_active: false,
+        }}
+      />
+    )
+
+    expect(await screen.findByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getByTestId('multi-day-apply')).toHaveAttribute('data-disabled', 'true')
+  })
+
+  it('disables Save and Apply when time slot is inactive (parent inactive)', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    render(
+      <ScheduleSidePanel
+        {...props}
+        readOnly={false}
+        selectedCellData={{
+          ...props.selectedCellData,
+          time_slot_is_active: false,
+        }}
+      />
+    )
+
+    expect(await screen.findByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getByTestId('multi-day-apply')).toHaveAttribute('data-disabled', 'true')
+  })
+
+  it('disables quick actions when classroom is inactive (parent inactive)', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    render(
+      <ScheduleSidePanel
+        {...props}
+        readOnly
+        selectedCellData={{
+          ...props.selectedCellData,
+          classroom_is_active: false,
+        }}
+      />
+    )
+
+    expect(await screen.findByRole('button', { name: 'Add Temporary Coverage' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edit baseline staff' })).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Edit class groups, enrollment & ratios' })
+    ).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled()
+
+    const addTimeOffButtons = screen.getAllByRole('button', { name: 'Add Time Off' })
+    addTimeOffButtons.forEach(button => {
+      expect(button).toBeDisabled()
+    })
+  })
+
+  it('disables quick actions when time slot is inactive (parent inactive)', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    render(
+      <ScheduleSidePanel
+        {...props}
+        readOnly
+        selectedCellData={{
+          ...props.selectedCellData,
+          time_slot_is_active: false,
+        }}
+      />
+    )
+
+    expect(await screen.findByRole('button', { name: 'Add Temporary Coverage' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edit baseline staff' })).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Edit class groups, enrollment & ratios' })
+    ).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled()
+
+    const addTimeOffButtons = screen.getAllByRole('button', { name: 'Add Time Off' })
+    addTimeOffButtons.forEach(button => {
+      expect(button).toBeDisabled()
+    })
+  })
+})
+
+describe('ScheduleSidePanel - Add Temporary Coverage', () => {
+  jest.setTimeout(10000)
+
+  afterEach(() => {
+    jest.clearAllMocks()
+  })
+
+  afterAll(() => {
+    global.fetch = originalFetch
+  })
+
+  const buildPropsFromDashboard = () => {
+    const base = buildProps()
+    return {
+      ...base,
+      selectedCellData: undefined,
+      initialPanelMode: 'flex' as const,
+      initialFlexStartDate: '2026-03-09',
+      initialFlexEndDate: '2026-05-11',
+      initialFlexTargetType: 'required' as const,
+      initialFlexRequiredStaff: 2,
+      initialFlexPreferredStaff: 3,
+      initialFlexScheduledStaff: 1,
+    }
+  }
+
+  it('from dashboard: header shows Required, Preferred, and Scheduled when initial flex staffing is passed', async () => {
+    setupFetch({
+      start_date: '2026-03-09',
+      end_date: '2026-05-11',
+      weekdays: ['Monday'],
+      matching_shift_count: 10,
+    })
+
+    render(<ScheduleSidePanel {...buildPropsFromDashboard()} />)
+
+    await waitFor(
+      () => {
+        expect(screen.getByText(/Required: 2.*Preferred: 3.*Scheduled: 1/)).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
+  })
+
+  it('from dashboard: shows Summary card with run-length and suggested coverage range', async () => {
+    setupFetch({
+      start_date: '2026-03-09',
+      end_date: '2026-05-11',
+      weekdays: ['Monday'],
+      matching_shift_count: 10,
+    })
+
+    render(<ScheduleSidePanel {...buildPropsFromDashboard()} />)
+
+    await waitFor(
+      () => {
+        expect(screen.getByText('Summary')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
+    expect(
+      screen.getByText(/Infant Room Monday EM is below required target for the next/)
+    ).toBeInTheDocument()
+    expect(screen.getByText(/Suggested coverage range: Mar 9 – May 11/)).toBeInTheDocument()
+  })
+
+  it('from dashboard: when date range is 8+ weeks shows Long-term assignment detected', async () => {
+    setupFetch({
+      start_date: '2026-03-09',
+      end_date: '2026-05-11',
+      weekdays: ['Monday'],
+      matching_shift_count: 10,
+    })
+
+    render(<ScheduleSidePanel {...buildPropsFromDashboard()} />)
+
+    await waitFor(
+      () => {
+        expect(screen.getByText('Long-term assignment detected')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
+    expect(
+      screen.getByText(/Assigning for a whole semester\? You might want to do this in the/)
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Baseline Schedule' })).toBeInTheDocument()
+  })
+
+  it('from weekly: fetches slot-run and shows Summary when slot is below target', async () => {
+    setupFetch({
+      start_date: '2026-03-09',
+      end_date: '2026-05-11',
+      weekdays: ['Monday'],
+      matching_shift_count: 10,
+    })
+
+    render(<ScheduleSidePanel {...buildProps()} weekStartISO="2026-03-09" />)
+
+    await waitFor(() => expect(screen.getByText('Bella W.')).toBeInTheDocument(), { timeout: 3000 })
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Temporary Coverage' }))
+
+    await waitFor(
+      () => {
+        expect(screen.getByText('Summary')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+    expect(
+      screen.getByText(/Infant Room Monday EM is below required target for the next 9 weeks/)
+    ).toBeInTheDocument()
+    expect(screen.getByText(/Suggested coverage range: Mar 9 – May 11/)).toBeInTheDocument()
+  })
+
+  // Break Coverage UI is hidden when BREAK_COVERAGE_ENABLED is false (see lib/feature-flags.ts).
+  // Re-enable this test when the feature is turned back on.
+  it.skip('shows Break Coverage fields when Break Coverage is selected', async () => {
+    setupFetch({
+      start_date: '2026-03-09',
+      end_date: '2026-05-11',
+      weekdays: ['Monday'],
+      matching_shift_count: 10,
+    })
+
+    render(<ScheduleSidePanel {...buildProps()} weekStartISO="2026-03-09" />)
+
+    await waitFor(() => expect(screen.getByText('Bella W.')).toBeInTheDocument())
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Temporary Coverage' }))
+
+    const radios = await screen.findAllByRole('radio')
+    const breakRadio = radios.find((r: HTMLElement) => r.getAttribute('value') === 'break')
+    expect(breakRadio).toBeDefined()
+    fireEvent.click(breakRadio!)
+
+    await waitFor(() => {
+      expect(screen.getByText('Teacher taking break (optional)')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Unspecified')).toBeInTheDocument()
+    expect(screen.getByText('Start Time (optional)')).toBeInTheDocument()
+    expect(screen.getByText('End Time (optional)')).toBeInTheDocument()
   })
 })

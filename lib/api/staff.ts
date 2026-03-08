@@ -71,7 +71,6 @@ export async function createStaff(staff: {
   phone?: string
   email?: string
   role_type_ids?: string[]
-  is_teacher: boolean
   is_sub?: boolean
   active?: boolean
   school_id?: string
@@ -95,7 +94,6 @@ export async function createStaff(staff: {
     phone: normalizeUSPhoneForStorage(staff.phone),
     email: normalizedEmail ?? undefined,
     is_sub: staff.is_sub ?? false,
-    is_teacher: staff.is_teacher,
     school_id: staff.school_id,
   }
 

@@ -40,6 +40,7 @@ type TimeOffApiItem = {
   start_date: string
   end_date?: string | null
   status?: string
+  request_status?: 'draft' | 'active' | 'cancelled'
   coverage_status?: CoverageStatus
   total?: number
   covered?: number
@@ -100,7 +101,7 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
         teacher_name: item.teacher_name,
         start_date: item.start_date,
         end_date: item.end_date ?? null,
-        status: item.status === 'draft' ? 'draft' : 'active', // Map from API status
+        status: item.request_status === 'draft' ? 'draft' : 'active', // Request lifecycle from API
         coverage_status: coverage_status as CoverageStatus,
         coverage_covered: item.covered || 0,
         coverage_total: item.total || 0,
@@ -316,7 +317,7 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
     const totalShiftsMatch = row.shifts_display.match(/(\d+)/)
     const totalShifts = totalShiftsMatch ? parseInt(totalShiftsMatch[1], 10) : undefined
 
-    // Handle draft status with delete button
+    // Handle draft status with delete button and draft stamp
     if (row.status === 'draft') {
       return (
         <div
@@ -337,6 +338,7 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
             totalShifts={totalShifts}
             shiftDetails={row.shift_details}
             className="border-0 shadow-none px-0 py-0"
+            isDraft
           />
           <div className="mt-3 flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={() => handleEdit(row.id)}>
@@ -367,14 +369,6 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
         shiftDetails={row.shift_details}
         notes={row.notes || null}
         onEdit={() => {
-          console.log('[TimeOffList Debug] opening row', {
-            id: row.id,
-            teacher_name: row.teacher_name,
-            start_date: row.start_date,
-            end_date: row.end_date,
-            shifts_display: row.shifts_display,
-            coverage_total: row.coverage_total,
-          })
           handleEdit(row.id)
         }}
       />

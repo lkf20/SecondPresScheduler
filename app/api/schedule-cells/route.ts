@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getScheduleCells, createScheduleCell } from '@/lib/api/schedule-cells'
+import { getScheduleCells, createScheduleCell, getScheduleCellById } from '@/lib/api/schedule-cells'
 import { createErrorResponse } from '@/lib/utils/errors'
 import {
   scheduleCellFiltersSchema,
   createScheduleCellSchema,
 } from '@/lib/validations/schedule-cells'
 import { validateQueryParams, validateRequest } from '@/lib/utils/validation'
+import { getUserSchoolId } from '@/lib/utils/auth'
+import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,6 +42,32 @@ export async function POST(request: NextRequest) {
     }
 
     const cell = await createScheduleCell(validation.data)
+    const schoolId = (cell as { school_id?: string }).school_id ?? (await getUserSchoolId())
+    if (schoolId) {
+      const cellWithDetails = await getScheduleCellById(cell.id)
+      const { actorUserId, actorDisplayName } = await getAuditActorContext()
+      await logAuditEvent({
+        schoolId,
+        actorUserId,
+        actorDisplayName,
+        action: 'create',
+        category: 'baseline_schedule',
+        entityType: 'schedule_cell',
+        entityId: cell.id,
+        details: {
+          classroom_id: cell.classroom_id,
+          classroom_name: cellWithDetails?.classroom?.name,
+          day_of_week_id: cell.day_of_week_id,
+          day_name: cellWithDetails?.day_of_week?.name,
+          time_slot_id: cell.time_slot_id,
+          time_slot_code: cellWithDetails?.time_slot?.code,
+          is_active: cell.is_active,
+          class_group_ids: validation.data.class_group_ids ?? undefined,
+          enrollment_for_staffing: cell.enrollment_for_staffing ?? undefined,
+          notes: cell.notes ?? undefined,
+        },
+      })
+    }
     return NextResponse.json(cell, { status: 201 })
   } catch (error) {
     return createErrorResponse(

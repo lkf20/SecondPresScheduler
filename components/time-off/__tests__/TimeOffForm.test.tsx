@@ -346,6 +346,59 @@ describe('TimeOffForm', () => {
     expect(await screen.findByText(/teacher cannot be scheduled/i)).toBeInTheDocument()
   })
 
+  it('shows overlap resolution modal on 409 TIME_OFF_OVERLAP and Edit existing request navigates', async () => {
+    const user = userEvent.setup()
+    ;(global.fetch as jest.Mock).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/api/teachers') {
+        return {
+          ok: true,
+          json: async () => [teacher],
+        } as Response
+      }
+      if (url === '/api/time-off') {
+        return {
+          ok: false,
+          status: 409,
+          json: async () => ({
+            code: 'TIME_OFF_OVERLAP',
+            existingRequestId: 'existing-req-123',
+            existingStartDate: '2026-02-04',
+            existingEndDate: '2026-02-10',
+            existingStatus: 'active',
+            teacherName: 'Anne B.',
+            newRequestStartDate: '2026-02-09',
+            newRequestEndDate: '2026-02-10',
+            overlapStartDate: '2026-02-09',
+            overlapEndDate: '2026-02-10',
+          }),
+        } as Response
+      }
+      return {
+        ok: false,
+        json: async () => ({ error: `Unhandled fetch URL in test: ${url}` }),
+      } as Response
+    })
+
+    renderWithQueryClient(<TimeOffForm />)
+
+    const teacherInput = screen.getByPlaceholderText(/select a teacher/i)
+    await user.click(teacherInput)
+    await user.click(await screen.findByRole('button', { name: /bella wilbanks/i }))
+    fireEvent.change(screen.getByTestId('time-off-start-date'), { target: { value: '2026-02-09' } })
+    await user.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: /overlapping time off/i })).toBeInTheDocument()
+    })
+    expect(screen.getByText(/Anne B\. already has a time off request/i)).toBeInTheDocument()
+    expect(screen.getByText(/overlaps on/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /edit existing request/i }))
+
+    expect(mockPush).toHaveBeenCalledWith('/time-off?edit=existing-req-123')
+  })
+
   it('opens cancel dialog with assignments and supports keeping assignments', async () => {
     const user = userEvent.setup()
     const onCancel = jest.fn()

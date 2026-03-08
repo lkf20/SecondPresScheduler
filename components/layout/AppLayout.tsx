@@ -13,7 +13,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   } = await supabase.auth.getUser()
 
   if (error) {
-    console.error('AppLayout auth error:', error.message)
+    const isSessionMissing =
+      error.name === 'AuthSessionMissingError' || error.message === 'Auth session missing!'
+    if (!isSessionMissing) {
+      console.error('AppLayout auth error:', error.message)
+    }
     redirect('/login')
   }
 

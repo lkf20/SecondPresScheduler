@@ -22,11 +22,13 @@ export interface ScheduleCellWithDetails extends ScheduleCell {
     max_age: number | null
     required_ratio: number
     preferred_ratio: number | null
+    enrollment?: number | null
   }>
 }
 
 type ScheduleCellClassGroupJoin = {
-  class_group: ScheduleCellWithDetails['class_groups'] extends Array<infer T> ? T | null : never
+  enrollment?: number | null
+  class_group: (ScheduleCellWithDetails['class_groups'] extends Array<infer T> ? T : never) | null
 }
 
 type ScheduleCellRaw = Omit<ScheduleCellWithDetails, 'class_groups'> & {
@@ -155,6 +157,7 @@ export async function getScheduleCell(
       day_of_week:days_of_week(id, name, day_number),
       time_slot:time_slots(id, code, name, default_start_time, default_end_time),
       schedule_cell_class_groups(
+        enrollment,
         class_group:class_groups(id, name, age_unit, min_age, max_age, required_ratio, preferred_ratio, is_active, order)
       )
     `
@@ -172,13 +175,21 @@ export async function getScheduleCell(
     throw error
   }
 
-  // Transform the nested structure to flatten class_groups array
+  // Transform the nested structure to flatten class_groups array (include enrollment per class group)
   const cell = data as ScheduleCellRaw
   const flattened: ScheduleCellWithDetails = {
     ...cell,
     class_groups: cell.schedule_cell_class_groups
       ? cell.schedule_cell_class_groups
-          .map(j => j.class_group)
+          .map(j => {
+            const cg = j.class_group
+            if (cg == null) return null
+            const withEnrollment = {
+              ...(cg as Record<string, unknown>),
+              enrollment: j.enrollment ?? null,
+            }
+            return withEnrollment as NonNullable<ScheduleCellWithDetails['class_groups']>[number]
+          })
           .filter((cg): cg is NonNullable<typeof cg> => cg !== null)
       : [],
   }
@@ -202,6 +213,7 @@ export async function getScheduleCells(
       day_of_week:days_of_week(id, name, day_number),
       time_slot:time_slots(id, code, name, default_start_time, default_end_time),
       schedule_cell_class_groups(
+        enrollment,
         class_group:class_groups(id, name, age_unit, min_age, max_age, required_ratio, preferred_ratio, is_active, order)
       )
     `
@@ -227,20 +239,76 @@ export async function getScheduleCells(
 
   if (error) throw error
 
-  // Transform the nested structure to flatten class_groups array
+  // Transform the nested structure to flatten class_groups array (include enrollment per class group)
   return (data || []).map(cell => {
     const raw = cell as ScheduleCellRaw
     const flattened: ScheduleCellWithDetails = {
       ...raw,
       class_groups: raw.schedule_cell_class_groups
         ? raw.schedule_cell_class_groups
-            .map(j => j.class_group)
+            .map(j => {
+              const cg = j.class_group
+              if (cg == null) return null
+              const withEnrollment = {
+                ...(cg as Record<string, unknown>),
+                enrollment: j.enrollment ?? null,
+              }
+              return withEnrollment as NonNullable<ScheduleCellWithDetails['class_groups']>[number]
+            })
             .filter((cg): cg is NonNullable<typeof cg> => cg !== null)
         : [],
     }
     delete (flattened as ScheduleCellRaw).schedule_cell_class_groups
     return flattened
   }) as ScheduleCellWithDetails[]
+}
+
+/**
+ * Get a single schedule cell by id
+ */
+export async function getScheduleCellById(id: string): Promise<ScheduleCellWithDetails | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('schedule_cells')
+    .select(
+      `
+      *,
+      classroom:classrooms(id, name),
+      day_of_week:days_of_week(id, name, day_number),
+      time_slot:time_slots(id, code, name, default_start_time, default_end_time),
+      schedule_cell_class_groups(
+        enrollment,
+        class_group:class_groups(id, name, age_unit, min_age, max_age, required_ratio, preferred_ratio, is_active, order)
+      )
+    `
+    )
+    .eq('id', id)
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') return null
+    throw error
+  }
+
+  const raw = data as ScheduleCellRaw
+  const flattened: ScheduleCellWithDetails = {
+    ...raw,
+    class_groups: raw.schedule_cell_class_groups
+      ? raw.schedule_cell_class_groups
+          .map(j => {
+            const cg = j.class_group
+            if (cg == null) return null
+            const withEnrollment = {
+              ...(cg as Record<string, unknown>),
+              enrollment: j.enrollment ?? null,
+            }
+            return withEnrollment as NonNullable<ScheduleCellWithDetails['class_groups']>[number]
+          })
+          .filter((cg): cg is NonNullable<typeof cg> => cg !== null)
+      : [],
+  }
+  delete (flattened as ScheduleCellRaw).schedule_cell_class_groups
+  return flattened
 }
 
 /**
@@ -311,12 +379,13 @@ export async function updateScheduleCell(
   id: string,
   updates: Partial<Omit<ScheduleCell, 'id' | 'created_at' | 'updated_at'>> & {
     class_group_ids?: string[]
+    enrollment_by_class_group?: Record<string, number>
   }
 ): Promise<ScheduleCell> {
   const supabase = await createClient()
 
-  // Extract class_group_ids if present
-  const { class_group_ids, ...cellUpdates } = updates
+  // Extract class_group_ids and enrollment_by_class_group (not columns on schedule_cells)
+  const { class_group_ids, enrollment_by_class_group, ...cellUpdates } = updates
 
   const { data: existingCell, error: existingCellError } = await supabase
     .from('schedule_cells')
@@ -368,12 +437,13 @@ export async function updateScheduleCell(
 
     if (deleteError) throw deleteError
 
-    // Insert new associations
+    // Insert new associations (with optional enrollment per class group)
     if (class_group_ids.length > 0) {
       const joinRows = class_group_ids.map(class_group_id => ({
         schedule_cell_id: id,
         class_group_id,
         school_id: dataSchoolId,
+        enrollment: enrollment_by_class_group?.[class_group_id] ?? null,
       }))
 
       const { error: insertError } = await supabase
@@ -438,6 +508,9 @@ export async function bulkUpdateScheduleCells(
     is_active?: boolean
     class_group_ids?: string[]
     enrollment_for_staffing?: number | null
+    enrollment_by_class_group?: Record<string, number>
+    required_staff_override?: number | null
+    preferred_staff_override?: number | null
     notes?: string | null
     school_id?: string
   }>
@@ -481,7 +554,7 @@ export async function bulkUpdateScheduleCells(
         `school_id is required to update schedule cells (classroom_id: ${update.classroom_id})`
       )
     }
-    return {
+    const row: Record<string, unknown> = {
       classroom_id: update.classroom_id,
       day_of_week_id: update.day_of_week_id,
       time_slot_id: update.time_slot_id,
@@ -491,6 +564,13 @@ export async function bulkUpdateScheduleCells(
         update.enrollment_for_staffing !== undefined ? update.enrollment_for_staffing : null,
       notes: update.notes !== undefined ? update.notes : null,
     }
+    if (update.required_staff_override !== undefined) {
+      row.required_staff_override = update.required_staff_override
+    }
+    if (update.preferred_staff_override !== undefined) {
+      row.preferred_staff_override = update.preferred_staff_override
+    }
+    return row
   })
 
   // For rows that do not yet exist, prevent linking to inactive classroom/time slot.
@@ -608,10 +688,12 @@ export async function bulkUpdateScheduleCells(
             `school_id is required to update schedule cell class groups (classroom_id: ${update.classroom_id})`
           )
         }
+        const enrollmentByClassGroup = update.enrollment_by_class_group
         const joinRows = update.class_group_ids.map(class_group_id => ({
           schedule_cell_id: cell.id,
           class_group_id,
           school_id: resolvedSchoolId,
+          enrollment: enrollmentByClassGroup?.[class_group_id] ?? null,
         }))
 
         const { error: insertError } = await supabase

@@ -21,7 +21,7 @@ export default function SlotStatusToggle({
       </Label>
       <div className="flex items-center justify-between">
         <span
-          className={`text-sm ${isActive ? 'text-blue-600 font-medium' : 'text-muted-foreground'}`}
+          className={`text-sm ${isActive ? 'text-teal-600 font-medium' : 'text-muted-foreground'}`}
         >
           {isActive ? 'Active' : 'Inactive'}
         </span>
@@ -30,7 +30,7 @@ export default function SlotStatusToggle({
           checked={isActive}
           onCheckedChange={onToggle}
           disabled={disabled}
-          className={isActive ? 'data-[state=checked]:bg-blue-600' : ''}
+          className={isActive ? 'data-[state=checked]:!bg-teal-600' : ''}
         />
       </div>
     </div>

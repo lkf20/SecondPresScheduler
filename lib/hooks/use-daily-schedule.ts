@@ -9,6 +9,7 @@ export type DailyScheduleResponse = {
   day_of_week_id: string
   day_name: string
   data: WeeklyScheduleDataByClassroom[]
+  school_closures?: Array<{ date: string; time_slot_id: string | null }>
 }
 
 async function fetchDailySchedule(date: string): Promise<DailyScheduleResponse> {

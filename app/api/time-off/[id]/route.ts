@@ -5,6 +5,7 @@ import {
   updateTimeOffRequest,
   getActiveSubAssignmentsForTimeOffRequest,
   cancelTimeOffRequest,
+  findOverlappingTimeOffRequest,
 } from '@/lib/api/time-off'
 import {
   getTimeOffShifts,
@@ -94,6 +95,71 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return parsed.toISOString().split('T')[0]
     }
 
+    const effectiveTeacherIdForOverlap = requestData.teacher_id ?? existingRequest.teacher_id
+    const effectiveStartForOverlap = requestData.start_date ?? existingRequest.start_date
+    const effectiveEndForOverlap =
+      requestData.end_date ??
+      requestData.start_date ??
+      existingRequest.end_date ??
+      existingRequest.start_date
+
+    let requestedShiftsForOverlap: Array<{ date: string; time_slot_id: string }> = []
+    if (Array.isArray(shifts) && shifts.length > 0) {
+      requestedShiftsForOverlap = shifts.map((shift: any) => ({
+        date: shift.date,
+        time_slot_id: shift.time_slot_id,
+      }))
+    } else if (
+      (requestData.shift_selection_mode ?? existingRequest.shift_selection_mode) === 'all_scheduled'
+    ) {
+      const scheduledForOverlap = await getTeacherScheduledShifts(
+        effectiveTeacherIdForOverlap,
+        effectiveStartForOverlap,
+        effectiveEndForOverlap,
+        timeZone
+      )
+      requestedShiftsForOverlap = scheduledForOverlap.map(shift => ({
+        date: shift.date,
+        time_slot_id: shift.time_slot_id,
+      }))
+    }
+
+    if (requestedShiftsForOverlap.length > 0) {
+      const overlapping = await findOverlappingTimeOffRequest(
+        effectiveTeacherIdForOverlap,
+        requestedShiftsForOverlap,
+        id
+      )
+      if (overlapping) {
+        const overlapStart =
+          effectiveStartForOverlap && overlapping.start_date
+            ? [effectiveStartForOverlap, overlapping.start_date].sort()[1]
+            : overlapping.start_date
+        const overlapEnd =
+          effectiveEndForOverlap && overlapping.end_date
+            ? [effectiveEndForOverlap, overlapping.end_date].sort()[0]
+            : overlapping.end_date
+        const teacherName = existingRequest.teacher
+          ? getStaffDisplayName(existingRequest.teacher)
+          : null
+        return NextResponse.json(
+          {
+            code: 'TIME_OFF_OVERLAP',
+            existingRequestId: overlapping.id,
+            existingStartDate: overlapping.start_date,
+            existingEndDate: overlapping.end_date,
+            existingStatus: overlapping.status,
+            teacherName,
+            newRequestStartDate: effectiveStartForOverlap,
+            newRequestEndDate: effectiveEndForOverlap,
+            overlapStartDate: overlapStart ?? overlapping.start_date,
+            overlapEndDate: overlapEnd ?? overlapping.end_date,
+          },
+          { status: 409 }
+        )
+      }
+    }
+
     let requestedShifts: Array<{ date: string; time_slot_id: string }> = []
 
     // Filter out conflicting shifts (but still allow the request to be updated)
@@ -150,14 +216,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         updated_at: new Date().toISOString(),
       }
 
-      console.log(
-        `[TimeOff Update] Updating coverage_request ${timeOffRequestWithCoverage.coverage_request_id} with dates:`,
-        {
-          start_date: effectiveStartDate,
-          end_date: effectiveEndDate,
-        }
-      )
-
       const { error: coverageUpdateError, data: updatedCoverageRequest } = await supabase
         .from('coverage_requests')
         .update(coverageUpdate)
@@ -171,11 +229,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           coverageUpdateError
         )
         // Don't fail the request, just log the error
-      } else {
-        console.log(
-          '[TimeOff Update] Successfully updated coverage_request dates:',
-          updatedCoverageRequest
-        )
       }
     }
 
@@ -418,17 +471,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           .eq('time_off_request_id', id)
 
         if (shiftCountError) {
-          console.error('[TimeOff Update Debug] Failed to count persisted shifts:', shiftCountError)
-        } else {
-          console.log('[TimeOff Update Debug]', {
-            requestId: id,
-            mode: effectiveShiftSelectionMode,
-            requestedShifts: requestedShifts.length,
-            shiftsToCreate: shiftsToCreate.length,
-            persistedShiftCount: persistedShiftCount ?? 0,
-            startDate: effectiveStartDate,
-            endDate: effectiveRequestEndDate,
-          })
+          console.error('[TimeOff Update] Failed to count persisted shifts:', shiftCountError)
         }
       }
 

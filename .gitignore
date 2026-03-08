@@ -8,6 +8,12 @@
 
 # testing
 /coverage
+playwright-report/
+test-results/
+
+# local / temporary scripts (remove from gitignore if keeping in repo)
+replace.py
+test_api.js
 
 # next.js
 /.next/

@@ -1,4 +1,17 @@
 const { defineConfig, devices } = require('@playwright/test')
+const path = require('path')
+const fs = require('fs')
+
+// Load .env.local so E2E_TEST_EMAIL and E2E_TEST_PASSWORD are available when running E2E locally
+const envPath = path.resolve(process.cwd(), '.env.local')
+if (fs.existsSync(envPath)) {
+  fs.readFileSync(envPath, 'utf8')
+    .split('\n')
+    .forEach(line => {
+      const match = line.match(/^([^#=]+)=(.*)$/)
+      if (match) process.env[match[1].trim()] = match[2].trim().replace(/^["']|["']$/g, '')
+    })
+}
 
 const PORT = Number(process.env.PORT || 3000)
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${PORT}`

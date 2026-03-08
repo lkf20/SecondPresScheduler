@@ -12,6 +12,7 @@ type AvailabilityRequest = {
   end_date: string
   time_slot_ids: string[]
   classroom_ids?: string[]
+  event_category?: 'standard' | 'break'
 }
 
 export async function POST(request: NextRequest) {
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as AvailabilityRequest
-    const { start_date, end_date, time_slot_ids } = body
+    const { start_date, end_date, time_slot_ids, event_category } = body
 
     if (!start_date || !end_date || !Array.isArray(time_slot_ids) || time_slot_ids.length === 0) {
       return NextResponse.json(
@@ -98,24 +99,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: staffError.message }, { status: 500 })
     }
 
-    const flexStaff =
+    const isBreakCoverage = event_category === 'break'
+    const eligibleRoleCodes = isBreakCoverage ? ['FLEXIBLE', 'PERMANENT'] : ['FLEXIBLE']
+
+    const eligibleStaff =
       (staffRows || []).filter((member: any) =>
         (member.staff_role_type_assignments || []).some((assignment: any) => {
           const roleType = assignment?.staff_role_types
           const roleCode = Array.isArray(roleType) ? roleType[0]?.code : roleType?.code
-          return roleCode === 'FLEXIBLE'
+          return roleCode && eligibleRoleCodes.includes(roleCode)
         })
       ) ?? []
 
-    console.log('[FlexAvailability] staff counts', {
-      schoolId,
-      total_staff_rows: (staffRows || []).length,
-      flex_staff_rows: flexStaff.length,
-    })
-
-    const flexIds = flexStaff.map((staff: any) => staff.id)
-    if (flexIds.length === 0) {
-      return NextResponse.json({ staff: [], shifts: [] })
+    const eligibleIds = eligibleStaff.map((staff: any) => staff.id)
+    if (eligibleIds.length === 0) {
+      return NextResponse.json({
+        staff: [],
+        shifts: [],
+        shift_metrics: [],
+        day_options: dayOptions,
+      })
     }
 
     const dates = expandDateRangeWithTimeZone(start_date, end_date, timeZone)
@@ -152,7 +155,7 @@ export async function POST(request: NextRequest) {
     const { data: availabilityRows } = await supabase
       .from('sub_availability')
       .select('sub_id, day_of_week_id, time_slot_id, available')
-      .in('sub_id', flexIds)
+      .in('sub_id', eligibleIds)
 
     ;(availabilityRows || []).forEach(row => {
       if (!row?.sub_id || !row.available) return
@@ -166,7 +169,7 @@ export async function POST(request: NextRequest) {
     const { data: exceptionRows } = await supabase
       .from('sub_availability_exceptions')
       .select('sub_id, date, time_slot_id, available')
-      .in('sub_id', flexIds)
+      .in('sub_id', eligibleIds)
       .gte('date', start_date)
       .lte('date', end_date)
 
@@ -185,7 +188,7 @@ export async function POST(request: NextRequest) {
     const { data: flexConflicts } = await supabase
       .from('staffing_event_shifts')
       .select('staff_id, date, time_slot_id')
-      .in('staff_id', flexIds)
+      .in('staff_id', eligibleIds)
       .eq('status', 'active')
       .gte('date', start_date)
       .lte('date', end_date)
@@ -202,7 +205,7 @@ export async function POST(request: NextRequest) {
     })
 
     const staffAvailability = await Promise.all(
-      flexStaff.map(async (staff: any) => {
+      eligibleStaff.map(async (staff: any) => {
         const availabilityMap = new Map<string, boolean>(availabilityByStaff.get(staff.id) ?? [])
         const exceptions = exceptionsByStaff.get(staff.id) || []
         exceptions.forEach(exception => {
@@ -298,6 +301,8 @@ export async function POST(request: NextRequest) {
         day_of_week_id,
         time_slot_id,
         enrollment_for_staffing,
+        required_staff_override,
+        preferred_staff_override,
         is_active,
         classroom:classrooms(
           id,
@@ -305,6 +310,7 @@ export async function POST(request: NextRequest) {
           color
         ),
         schedule_cell_class_groups(
+          enrollment,
           class_group:class_groups(
             id,
             name,
@@ -322,12 +328,21 @@ export async function POST(request: NextRequest) {
     const scheduleCells = (scheduleCellsData || []).map((cell: any) => {
       const classGroups = cell.schedule_cell_class_groups
         ? cell.schedule_cell_class_groups
-            .map((j: any) => j.class_group)
+            .map((j: any) =>
+              j.class_group ? { ...j.class_group, enrollment: j.enrollment ?? null } : null
+            )
             .filter((cg: any): cg is any => cg !== null)
         : []
+      const hasPerClassEnrollment = classGroups.some(
+        (cg: any) => cg.enrollment != null && cg.enrollment !== ''
+      )
+      const _totalEnrollment = hasPerClassEnrollment
+        ? classGroups.reduce((sum: number, cg: any) => sum + (Number(cg.enrollment) || 0), 0)
+        : cell.enrollment_for_staffing
       return {
         ...cell,
         class_groups: classGroups,
+        _totalEnrollment,
       }
     })
 
@@ -342,20 +357,25 @@ export async function POST(request: NextRequest) {
 
     scheduleCells.forEach((cell: any) => {
       const classGroups = cell.class_groups || []
-      if (!cell.enrollment_for_staffing || classGroups.length === 0) return
+      const totalEnrollment = cell._totalEnrollment ?? cell.enrollment_for_staffing
+      if (!totalEnrollment || classGroups.length === 0) return
       const classGroupForRatio = classGroups.reduce((lowest: any, current: any) => {
         const currentMinAge = current.min_age ?? Infinity
         const lowestMinAge = lowest.min_age ?? Infinity
         return currentMinAge < lowestMinAge ? current : lowest
       })
+      const calculatedRequired =
+        classGroupForRatio.required_ratio && totalEnrollment
+          ? Math.ceil(totalEnrollment / classGroupForRatio.required_ratio)
+          : null
+      const calculatedPreferred =
+        classGroupForRatio.preferred_ratio && totalEnrollment
+          ? Math.ceil(totalEnrollment / classGroupForRatio.preferred_ratio)
+          : null
       const required_staff =
-        classGroupForRatio.required_ratio && cell.enrollment_for_staffing
-          ? Math.ceil(cell.enrollment_for_staffing / classGroupForRatio.required_ratio)
-          : null
+        cell.required_staff_override != null ? cell.required_staff_override : calculatedRequired
       const preferred_staff =
-        classGroupForRatio.preferred_ratio && cell.enrollment_for_staffing
-          ? Math.ceil(cell.enrollment_for_staffing / classGroupForRatio.preferred_ratio)
-          : null
+        cell.preferred_staff_override != null ? cell.preferred_staff_override : calculatedPreferred
       const key = `${cell.day_of_week_id}|${cell.time_slot_id}|${cell.classroom_id}`
       cellByKey.set(key, {
         required_staff,

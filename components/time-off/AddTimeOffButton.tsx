@@ -108,14 +108,14 @@ export default function AddTimeOffButton({
         ? startDateFormatted
         : `${startDateFormatted}-${endDateFormatted}`
 
-    // Reset unsaved changes flag
+    // Reset unsaved changes flag and show toast
     setHasUnsavedChanges(false)
-    // Show toast
     const action = editingRequestId ? 'updated' : 'added'
     toast.success(`Time off ${action} for ${teacherName} (${dateRange})`)
 
-    // Use the unified close path so URL/query + panel state are always cleaned up.
-    handleCloseSheet(false)
+    // Close via the no-prompt path so we don't show "Unsaved changes" (setState is async,
+    // so hasUnsavedChanges would still be true if we called handleCloseSheet(false)).
+    closeSheetWithoutPrompt()
 
     // Refresh the current page to update data
     router.refresh()
