@@ -30,7 +30,7 @@ const settingsSections = [
       },
       {
         name: 'Class Groups',
-        description: 'Manage class group names and hierarchy',
+        description: 'Manage class groups and ratios',
         href: '/settings/classes',
         icon: UsersRound,
         iconCircled: true,
