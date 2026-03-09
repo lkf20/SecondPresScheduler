@@ -3,7 +3,6 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import puppeteer from 'puppeteer'
-import { createClient } from '@/lib/supabase/server'
 import { getScheduleSnapshotData } from '@/lib/api/weekly-schedule'
 import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import { getUserSchoolId } from '@/lib/utils/auth'
@@ -11,8 +10,7 @@ import {
   buildDailyScheduleFilename,
   buildDailySchedulePdfHtml,
 } from '@/lib/reports/daily-schedule-pdf'
-import { getScheduleSettings } from '@/lib/api/schedule-settings'
-import { expandDateRangeWithTimeZone } from '@/lib/utils/date'
+import { filterActiveDailyScheduleData, resolveDailyScheduleDay } from '@/lib/api/daily-schedule'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -36,16 +34,13 @@ const parseLayout = (value: string | null) => {
 }
 
 const parseTeacherNameFormat = (value: string | null) => {
-  if (
-    value === 'default' ||
-    value === 'first_last' ||
-    value === 'first_last_initial' ||
-    value === 'first_initial_last' ||
-    value === 'first'
-  ) {
-    return value
-  }
+  if (value === 'default' || value === 'first_last') return value
   return 'default'
+}
+
+const parsePaperSize = (value: string | null): 'letter' | 'legal' => {
+  if (value === 'legal') return 'legal'
+  return 'letter'
 }
 
 const formatGeneratedAt = (date: Date, timeZone: string) =>
@@ -80,51 +75,56 @@ export async function GET(request: Request) {
     }
 
     const showAbsencesAndSubs = parseBoolean(searchParams.get('showAbsencesAndSubs'), true)
+    const showEnrollment = parseBoolean(searchParams.get('showEnrollment'), false)
+    const legacyShowRatios = parseBoolean(searchParams.get('showRatios'), false)
+    const showPreferredRatios = parseBoolean(
+      searchParams.get('showPreferredRatios'),
+      legacyShowRatios
+    )
+    const showRequiredRatios = parseBoolean(
+      searchParams.get('showRequiredRatios'),
+      legacyShowRatios
+    )
     const colorFriendly = parseBoolean(searchParams.get('colorFriendly'), false)
     const layout = parseLayout(searchParams.get('layout'))
     const teacherNameFormat = parseTeacherNameFormat(searchParams.get('teacherNameFormat'))
+    const paperSize = parsePaperSize(searchParams.get('paperSize'))
 
-    const scheduleSettings = await getScheduleSettings(schoolId)
-    const timeZone = scheduleSettings?.time_zone || 'UTC'
-    const expanded = expandDateRangeWithTimeZone(dateParam, dateParam, timeZone)
-    const dayNumber = expanded[0]?.day_number
-    if (!dayNumber) {
+    const dayResolution = await resolveDailyScheduleDay(schoolId, dateParam, date)
+    if (dayResolution.noSchedule) {
       return NextResponse.json(
-        { error: 'Unable to resolve day of week for date.' },
-        { status: 500 }
-      )
-    }
-    const supabase = await createClient()
-    const dayNumberCandidates = dayNumber === 0 ? [0, 7] : [dayNumber]
-    const { data: daysData, error: daysError } = await supabase
-      .from('days_of_week')
-      .select('id, name, day_number')
-      .in('day_number', dayNumberCandidates)
-
-    if (daysError || !daysData || daysData.length === 0) {
-      return NextResponse.json(
-        { error: 'Unable to resolve day of week for date.' },
-        { status: 500 }
+        {
+          error: dayResolution.message,
+          no_schedule: true,
+          next_scheduled_date: dayResolution.nextScheduledDate,
+          next_scheduled_day_name: dayResolution.nextScheduledDayName,
+        },
+        { status: 400 }
       )
     }
 
-    const day = daysData[0]
+    const timeZone = dayResolution.timeZone
     const [data, schoolClosures] = await Promise.all([
       getScheduleSnapshotData({
         schoolId,
-        selectedDayIds: [day.id],
+        selectedDayIds: [dayResolution.dayId],
         startDateISO: dateParam,
         endDateISO: dateParam,
       }),
       getSchoolClosuresForDateRange(schoolId, dateParam, dateParam),
     ])
 
+    const filteredData = filterActiveDailyScheduleData(data || [])
+
     const html = buildDailySchedulePdfHtml({
       dateISO: dateParam,
       generatedAt: formatGeneratedAt(new Date(), timeZone),
-      data,
+      data: filteredData,
       options: {
         showAbsencesAndSubs,
+        showEnrollment,
+        showPreferredRatios,
+        showRequiredRatios,
         colorFriendly,
         layout,
         teacherNameFormat,
@@ -183,7 +183,7 @@ export async function GET(request: Request) {
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'networkidle0' })
     const pdf = await page.pdf({
-      format: 'letter',
+      format: paperSize,
       landscape: true,
       printBackground: true,
       margin: {
@@ -203,7 +203,9 @@ export async function GET(request: Request) {
       },
     })
   } catch (error: any) {
-    console.error('Error generating daily schedule PDF:', error)
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error generating daily schedule PDF:', error)
+    }
     return NextResponse.json(
       {
         error: error?.message || 'Failed to generate PDF.',

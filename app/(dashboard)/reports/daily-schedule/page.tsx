@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronLeft, ChevronRight, CornerDownRight, Settings2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -10,7 +10,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useDailySchedule } from '@/lib/hooks/use-daily-schedule'
 import { getHeaderClasses } from '@/lib/utils/colors'
-import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
+import { getSlotClosureOnDate } from '@/lib/utils/school-closures'
 import { cn } from '@/lib/utils'
 import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 
@@ -54,25 +54,11 @@ const deriveNameParts = (source: TeacherNameSource) => {
   return { display, first: parts[0], last: parts[parts.length - 1] }
 }
 
-const formatTeacherName = (
-  source: TeacherNameSource,
-  format: 'default' | 'first_last' | 'first_last_initial' | 'first_initial_last' | 'first'
-) => {
+const formatTeacherName = (source: TeacherNameSource, format: 'default' | 'first_last') => {
   const { display, first, last } = deriveNameParts(source)
   if (!display) return ''
   if (format === 'default') return display
-  switch (format) {
-    case 'first_last':
-      return last ? `${first} ${last}` : first
-    case 'first_last_initial':
-      return last ? `${first} ${last.charAt(0)}.` : first
-    case 'first_initial_last':
-      return last ? `${first.charAt(0)}. ${last}` : first
-    case 'first':
-      return first
-    default:
-      return display
-  }
+  return last ? `${first} ${last}` : first
 }
 const parseISODate = (value: string) => {
   if (!value) return null
@@ -143,27 +129,34 @@ const formatSlotRange = (start: string | null, end: string | null) => {
 const buildPdfUrl = ({
   date,
   showAbsencesAndSubs,
+  showEnrollment,
+  showPreferredRatios,
+  showRequiredRatios,
   colorFriendly,
   layout,
   teacherNameFormat,
+  paperSize,
 }: {
   date: string
   showAbsencesAndSubs: boolean
+  showEnrollment: boolean
+  showPreferredRatios: boolean
+  showRequiredRatios: boolean
   colorFriendly: boolean
   layout: 'one' | 'two'
-  teacherNameFormat:
-    | 'default'
-    | 'first_last'
-    | 'first_last_initial'
-    | 'first_initial_last'
-    | 'first'
+  teacherNameFormat: 'default' | 'first_last'
+  paperSize: 'letter' | 'legal'
 }) => {
   const params = new URLSearchParams()
   params.set('date', date)
   params.set('showAbsencesAndSubs', String(showAbsencesAndSubs))
+  params.set('showEnrollment', String(showEnrollment))
+  params.set('showPreferredRatios', String(showPreferredRatios))
+  params.set('showRequiredRatios', String(showRequiredRatios))
   params.set('colorFriendly', String(colorFriendly))
   params.set('layout', layout)
   params.set('teacherNameFormat', teacherNameFormat)
+  params.set('paperSize', paperSize)
   return `/api/reports/daily-schedule/pdf?${params.toString()}`
 }
 
@@ -208,6 +201,93 @@ const getSlotForClassroom = (classroom: WeeklyScheduleDataByClassroom, timeSlotI
   return day.time_slots.find(slot => slot.time_slot_id === timeSlotId) ?? null
 }
 
+type DailySlot = WeeklyScheduleDataByClassroom['days'][0]['time_slots'][0]
+
+const compactGroupName = (name: string) => name.replace(/\s+Room$/i, '').trim()
+
+type CellClassGroup = {
+  id: string
+  name: string
+  age_unit: 'months' | 'years'
+  min_age: number | null
+  max_age: number | null
+  required_ratio: number
+  preferred_ratio: number | null
+  enrollment?: number | null
+}
+
+const getSortedClassGroupsByAge = (groups: CellClassGroup[]) =>
+  [...groups].sort((a, b) => {
+    const aAge =
+      a.min_age === null ? Number.POSITIVE_INFINITY : a.min_age * (a.age_unit === 'years' ? 12 : 1)
+    const bAge =
+      b.min_age === null ? Number.POSITIVE_INFINITY : b.min_age * (b.age_unit === 'years' ? 12 : 1)
+    if (aAge !== bAge) return aAge - bAge
+    return a.name.localeCompare(b.name)
+  })
+
+const getEnrollmentSummary = (slot: DailySlot | null) => {
+  const classGroups = getSortedClassGroupsByAge(
+    (slot?.schedule_cell?.class_groups || []) as CellClassGroup[]
+  )
+  const classGroupNames = classGroups.map(group => compactGroupName(group.name))
+  const classGroupEnrollment = classGroups.filter(group => typeof group.enrollment === 'number')
+  if (classGroupEnrollment.length > 0) {
+    return classGroupEnrollment
+      .map(group => `${compactGroupName(group.name)} (${group.enrollment})`)
+      .join(', ')
+  }
+  if (
+    typeof slot?.schedule_cell?.enrollment_for_staffing === 'number' &&
+    classGroupNames.length > 0
+  ) {
+    return `${classGroupNames.join(', ')} (${slot.schedule_cell.enrollment_for_staffing})`
+  }
+  if (typeof slot?.schedule_cell?.enrollment_for_staffing === 'number') {
+    return `Enrollment (${slot.schedule_cell.enrollment_for_staffing})`
+  }
+  const assignmentEnrollment = slot?.assignments.find(
+    assignment => typeof assignment.enrollment === 'number'
+  )?.enrollment
+  if (typeof assignmentEnrollment === 'number') {
+    return classGroupNames.length > 0
+      ? `${classGroupNames.join(', ')} (${assignmentEnrollment})`
+      : `Enrollment (${assignmentEnrollment})`
+  }
+  return null
+}
+
+const getYoungestRatioGroup = (slot: DailySlot | null): CellClassGroup | null => {
+  const classGroups = getSortedClassGroupsByAge(
+    (slot?.schedule_cell?.class_groups || []) as CellClassGroup[]
+  )
+  const withRatio = classGroups.filter(
+    group => typeof group.required_ratio === 'number' || typeof group.preferred_ratio === 'number'
+  )
+  return withRatio[0] ?? null
+}
+
+const formatRatioSummary = ({
+  showRequiredRatios,
+  showPreferredRatios,
+  requiredRatio,
+  preferredRatio,
+}: {
+  showRequiredRatios: boolean
+  showPreferredRatios: boolean
+  requiredRatio: number | null | undefined
+  preferredRatio: number | null | undefined
+}) => {
+  const hasRequired = showRequiredRatios && typeof requiredRatio === 'number'
+  const hasPreferred = showPreferredRatios && typeof preferredRatio === 'number'
+  if (!hasRequired && !hasPreferred) return null
+  if (hasRequired && hasPreferred) {
+    return `1:${requiredRatio} (R) 1:${preferredRatio} (P)`
+  }
+  if (hasRequired) return `1:${requiredRatio}`
+  return `1:${preferredRatio}`
+}
+
 export default function DailyScheduleReportPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -220,13 +300,13 @@ export default function DailyScheduleReportPage() {
 
   const [selectedDate, setSelectedDate] = useState(initialDate)
   const [showEnrollment, setShowEnrollment] = useState(false)
-  const [showRatios, setShowRatios] = useState(false)
+  const [showPreferredRatios, setShowPreferredRatios] = useState(false)
+  const [showRequiredRatios, setShowRequiredRatios] = useState(false)
   const [showAbsencesAndSubs, setShowAbsencesAndSubs] = useState(true)
   const [colorFriendly, setColorFriendly] = useState(false)
   const [pdfLayout, setPdfLayout] = useState<'one' | 'two'>('one')
-  const [teacherNameFormat, setTeacherNameFormat] = useState<
-    'default' | 'first_last' | 'first_last_initial' | 'first_initial_last' | 'first'
-  >('default')
+  const [teacherNameFormat, setTeacherNameFormat] = useState<'default' | 'first_last'>('default')
+  const [paperSize, setPaperSize] = useState<'letter' | 'legal'>('letter')
   const [isPdfSettingsOpen, setIsPdfSettingsOpen] = useState(false)
   const { data, isLoading, error } = useDailySchedule(selectedDate)
   const [generatedAt, setGeneratedAt] = useState('')
@@ -239,19 +319,26 @@ export default function DailyScheduleReportPage() {
     try {
       const parsed = JSON.parse(raw) as Partial<{
         showEnrollment: boolean
+        showPreferredRatios: boolean
+        showRequiredRatios: boolean
         showRatios: boolean
         showAbsencesAndSubs: boolean
         colorFriendly: boolean
         pdfLayout: 'one' | 'two'
-        teacherNameFormat:
-          | 'default'
-          | 'first_last'
-          | 'first_last_initial'
-          | 'first_initial_last'
-          | 'first'
+        teacherNameFormat: 'default' | 'first_last'
+        paperSize: 'letter' | 'legal'
       }>
       if (typeof parsed.showEnrollment === 'boolean') setShowEnrollment(parsed.showEnrollment)
-      if (typeof parsed.showRatios === 'boolean') setShowRatios(parsed.showRatios)
+      if (typeof parsed.showPreferredRatios === 'boolean') {
+        setShowPreferredRatios(parsed.showPreferredRatios)
+      } else if (typeof parsed.showRatios === 'boolean') {
+        setShowPreferredRatios(parsed.showRatios)
+      }
+      if (typeof parsed.showRequiredRatios === 'boolean') {
+        setShowRequiredRatios(parsed.showRequiredRatios)
+      } else if (typeof parsed.showRatios === 'boolean') {
+        setShowRequiredRatios(parsed.showRatios)
+      }
       if (typeof parsed.showAbsencesAndSubs === 'boolean') {
         setShowAbsencesAndSubs(parsed.showAbsencesAndSubs)
       }
@@ -259,19 +346,41 @@ export default function DailyScheduleReportPage() {
       if (parsed.pdfLayout === 'one' || parsed.pdfLayout === 'two') {
         setPdfLayout(parsed.pdfLayout)
       }
-      if (
-        parsed.teacherNameFormat === 'default' ||
-        parsed.teacherNameFormat === 'first_last' ||
-        parsed.teacherNameFormat === 'first_last_initial' ||
-        parsed.teacherNameFormat === 'first_initial_last' ||
-        parsed.teacherNameFormat === 'first'
-      ) {
+      if (parsed.teacherNameFormat === 'default' || parsed.teacherNameFormat === 'first_last') {
         setTeacherNameFormat(parsed.teacherNameFormat)
+      }
+      if (parsed.paperSize === 'letter' || parsed.paperSize === 'legal') {
+        setPaperSize(parsed.paperSize)
       }
     } catch {
       window.localStorage.removeItem(settingsKey)
     }
   }, [settingsKey])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const payload = {
+      showEnrollment,
+      showPreferredRatios,
+      showRequiredRatios,
+      showAbsencesAndSubs,
+      colorFriendly,
+      pdfLayout,
+      teacherNameFormat,
+      paperSize,
+    }
+    window.localStorage.setItem(settingsKey, JSON.stringify(payload))
+  }, [
+    colorFriendly,
+    paperSize,
+    pdfLayout,
+    settingsKey,
+    showAbsencesAndSubs,
+    showEnrollment,
+    showPreferredRatios,
+    showRequiredRatios,
+    teacherNameFormat,
+  ])
 
   useEffect(() => {
     setGeneratedAt(formatGeneratedAt(new Date()))
@@ -291,7 +400,13 @@ export default function DailyScheduleReportPage() {
   const scheduleData = useMemo(() => data?.data ?? [], [data])
   const schoolClosures = useMemo(() => data?.school_closures ?? [], [data])
   const timeSlots = useMemo(() => buildTimeSlots(scheduleData), [scheduleData])
-  const displayShowAbsencesAndSubs = true
+  const noSchedule = data?.no_schedule === true
+  const noScheduleMessage =
+    data?.no_schedule_message ||
+    "No schedule is configured for this date. This day isn't included in your school's schedule."
+  const nextScheduledDate = data?.next_scheduled_date ?? null
+  const nextScheduledDayName = data?.next_scheduled_day_name ?? null
+  const displayShowAbsencesAndSubs = showAbsencesAndSubs
   const displayColorFriendly = colorFriendly
   const displayCondensedLayout = false
 
@@ -300,7 +415,7 @@ export default function DailyScheduleReportPage() {
       <style jsx global>{`
         @media print {
           @page {
-            size: letter landscape;
+            size: ${paperSize} landscape;
             margin: 0.5in;
           }
           html,
@@ -374,6 +489,28 @@ export default function DailyScheduleReportPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-3">
+              <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-1">
+                <button
+                  type="button"
+                  onClick={() => setColorFriendly(true)}
+                  className={cn(
+                    'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+                    colorFriendly ? 'bg-[#172554] text-white' : 'text-slate-600'
+                  )}
+                >
+                  Color
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setColorFriendly(false)}
+                  className={cn(
+                    'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+                    !colorFriendly ? 'bg-[#172554] text-white' : 'text-slate-600'
+                  )}
+                >
+                  Black &amp; White
+                </button>
+              </div>
               <Popover open={isPdfSettingsOpen} onOpenChange={setIsPdfSettingsOpen}>
                 <PopoverTrigger asChild>
                   <Button type="button" variant="outline" size="icon" aria-label="PDF settings">
@@ -393,16 +530,25 @@ export default function DailyScheduleReportPage() {
                           checked={showEnrollment}
                           onChange={event => setShowEnrollment(event.target.checked)}
                         />
-                        Show enrollment
+                        Show enrollments
                       </label>
                       <label className="flex items-center gap-2">
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-teal-600"
-                          checked={showRatios}
-                          onChange={event => setShowRatios(event.target.checked)}
+                          checked={showPreferredRatios}
+                          onChange={event => setShowPreferredRatios(event.target.checked)}
                         />
-                        Show ratios
+                        Show preferred ratios
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-teal-600"
+                          checked={showRequiredRatios}
+                          onChange={event => setShowRequiredRatios(event.target.checked)}
+                        />
+                        Show required ratios
                       </label>
                       <label className="flex items-center gap-2">
                         <input
@@ -412,15 +558,6 @@ export default function DailyScheduleReportPage() {
                           onChange={event => setShowAbsencesAndSubs(event.target.checked)}
                         />
                         Show absences and subs
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 accent-teal-600"
-                          checked={colorFriendly}
-                          onChange={event => setColorFriendly(event.target.checked)}
-                        />
-                        Color-friendly layout
                       </label>
                     </div>
                     <div className="space-y-2">
@@ -447,35 +584,30 @@ export default function DailyScheduleReportPage() {
                         />
                         First name Last name
                       </label>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Paper Size
+                      </div>
                       <label className="flex items-center gap-2">
                         <input
                           type="radio"
-                          name="teacherNameFormat"
+                          name="paperSize"
                           className="h-4 w-4 accent-teal-600"
-                          checked={teacherNameFormat === 'first_last_initial'}
-                          onChange={() => setTeacherNameFormat('first_last_initial')}
+                          checked={paperSize === 'letter'}
+                          onChange={() => setPaperSize('letter')}
                         />
-                        First name Last initial
+                        Letter
                       </label>
                       <label className="flex items-center gap-2">
                         <input
                           type="radio"
-                          name="teacherNameFormat"
+                          name="paperSize"
                           className="h-4 w-4 accent-teal-600"
-                          checked={teacherNameFormat === 'first_initial_last'}
-                          onChange={() => setTeacherNameFormat('first_initial_last')}
+                          checked={paperSize === 'legal'}
+                          onChange={() => setPaperSize('legal')}
                         />
-                        First initial Last name
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name="teacherNameFormat"
-                          className="h-4 w-4 accent-teal-600"
-                          checked={teacherNameFormat === 'first'}
-                          onChange={() => setTeacherNameFormat('first')}
-                        />
-                        First name only
+                        Legal
                       </label>
                     </div>
                     <div className="space-y-2">
@@ -510,11 +642,13 @@ export default function DailyScheduleReportPage() {
                         if (typeof window === 'undefined') return
                         const payload = {
                           showEnrollment,
-                          showRatios,
+                          showPreferredRatios,
+                          showRequiredRatios,
                           showAbsencesAndSubs,
                           colorFriendly,
                           pdfLayout,
                           teacherNameFormat,
+                          paperSize,
                         }
                         window.localStorage.setItem(settingsKey, JSON.stringify(payload))
                         setIsPdfSettingsOpen(false)
@@ -527,37 +661,20 @@ export default function DailyScheduleReportPage() {
               </Popover>
               <Button
                 type="button"
-                variant="outline"
-                disabled={!pdfEnabled}
+                disabled={!pdfEnabled || noSchedule}
                 onClick={() => {
-                  if (!pdfEnabled) return
-                  toast('Generating PDF...')
-                  const url = buildPdfUrl({
-                    date: selectedDate,
-                    showAbsencesAndSubs,
-                    colorFriendly,
-                    layout: pdfLayout,
-                    teacherNameFormat,
-                  })
-                  const popup = window.open(url, '_blank', 'noopener,noreferrer')
-                  if (!popup) {
-                    toast.error('Popup blocked. Please allow popups to download the PDF.')
-                  }
-                }}
-              >
-                Download PDF
-              </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  if (!pdfEnabled) return
+                  if (!pdfEnabled || noSchedule) return
                   toast('Opening PDF for print...')
                   const url = buildPdfUrl({
                     date: selectedDate,
                     showAbsencesAndSubs,
+                    showEnrollment,
+                    showPreferredRatios,
+                    showRequiredRatios,
                     colorFriendly,
                     layout: pdfLayout,
                     teacherNameFormat,
+                    paperSize,
                   })
                   const popup = window.open(url, '_blank', 'noopener,noreferrer')
                   if (!popup) {
@@ -565,7 +682,7 @@ export default function DailyScheduleReportPage() {
                   }
                 }}
               >
-                Print
+                Print PDF
               </Button>
             </div>
           </div>
@@ -619,7 +736,18 @@ export default function DailyScheduleReportPage() {
                   Absent
                 </span>
               </div>
+              {showRequiredRatios && showPreferredRatios && (
+                <div className="flex items-center gap-2 text-xs text-slate-600">
+                  <span>(R) Required ratio · (P) Preferred ratio</span>
+                </div>
+              )}
             </div>
+            {!showRequiredRatios && showPreferredRatios && (
+              <div className="mt-2 text-xs text-slate-600">(P) Preferred ratio</div>
+            )}
+            {showRequiredRatios && !showPreferredRatios && (
+              <div className="mt-2 text-xs text-slate-600">(R) Required ratio</div>
+            )}
           </div>
 
           {isLoading && <p className="text-sm text-slate-500">Loading schedule...</p>}
@@ -629,7 +757,28 @@ export default function DailyScheduleReportPage() {
             </p>
           )}
 
-          {!isLoading && !error && (
+          {!isLoading && !error && noSchedule && (
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm text-slate-700">{noScheduleMessage}</p>
+              {nextScheduledDate && (
+                <div className="mt-3 flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setSelectedDate(nextScheduledDate)}
+                  >
+                    Go to next scheduled day
+                  </Button>
+                  <span className="text-xs text-slate-500">
+                    {nextScheduledDayName ? `${nextScheduledDayName} · ` : ''}
+                    {formatLongDate(nextScheduledDate)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!isLoading && !error && !noSchedule && (
             <div className="overflow-auto border rounded-md print:border-none print:overflow-visible">
               <table className="w-full table-fixed border-collapse">
                 <colgroup>
@@ -642,7 +791,7 @@ export default function DailyScheduleReportPage() {
                   <tr>
                     <th
                       className={cn(
-                        'border px-3 py-2 text-left text-[12px] font-medium text-slate-700 bg-white print:bg-white',
+                        'border bg-slate-50 px-3 py-2 text-left text-[12px] font-medium text-slate-700 print:bg-slate-50',
                         displayCondensedLayout && 'px-2 py-1'
                       )}
                     >
@@ -654,7 +803,7 @@ export default function DailyScheduleReportPage() {
                         <th
                           key={classroom.classroom_id}
                           className={cn(
-                            'border px-3 py-2 text-center text-[10px] font-semibold tracking-[0.04em] uppercase text-slate-700 bg-white print:bg-white border-b-2 border-b-slate-400',
+                            'border px-3 py-2 text-center text-[9px] font-semibold tracking-[0.04em] uppercase text-slate-700 bg-white print:bg-white border-b-2 border-b-slate-400',
                             displayCondensedLayout && 'px-2 py-1'
                           )}
                           style={
@@ -673,245 +822,280 @@ export default function DailyScheduleReportPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {timeSlots.map(slot => (
-                    <tr key={slot.id} className="align-top">
-                      <td
-                        className={cn(
-                          'border px-3 py-2 align-middle text-xs font-medium text-slate-600',
-                          displayCondensedLayout && 'px-2 py-1'
-                        )}
-                      >
-                        <div className="flex flex-col gap-1">
-                          <div className="text-sm text-slate-800">{slot.code}</div>
-                          {slot.start_time && slot.end_time && (
-                            <div className="text-[11px] text-slate-400 whitespace-pre-line">
-                              {formatSlotRange(slot.start_time, slot.end_time)}
-                            </div>
+                  {timeSlots.map(slot => {
+                    const slotClosure = getSlotClosureOnDate(selectedDate, slot.id, schoolClosures)
+                    const isSlotClosed = Boolean(slotClosure)
+                    return (
+                      <tr key={slot.id} className="align-top">
+                        <td
+                          className={cn(
+                            'border bg-slate-50 px-3 py-2 align-middle text-xs font-medium text-slate-600',
+                            displayCondensedLayout && 'px-2 py-1'
                           )}
-                        </div>
-                      </td>
-                      {scheduleData.map(classroom => {
-                        const slotData = getSlotForClassroom(classroom, slot.id)
-                        const isClosed = isSlotClosedOnDate(selectedDate, slot.id, schoolClosures)
-                        if (isClosed) {
-                          return (
-                            <td
-                              key={classroom.classroom_id}
-                              className={cn(
-                                'border px-3 py-2 text-center text-sm text-slate-500',
-                                displayCondensedLayout && 'px-2 py-1'
-                              )}
-                            >
-                              School Closed
-                            </td>
-                          )
-                        }
-                        const assignments = slotData?.assignments ?? []
-                        const absences = slotData?.absences ?? []
-                        const absentTeacherIds = new Set(
-                          absences.map(absence => absence.teacher_id)
-                        )
-                        const subs = assignments.filter(a => a.is_substitute)
-                        const substitutesByAbsentTeacher = new Map<string, typeof subs>()
-                        subs.forEach(sub => {
-                          if (!sub.absent_teacher_id) return
-                          if (!substitutesByAbsentTeacher.has(sub.absent_teacher_id)) {
-                            substitutesByAbsentTeacher.set(sub.absent_teacher_id, [])
-                          }
-                          substitutesByAbsentTeacher.get(sub.absent_teacher_id)!.push(sub)
-                        })
-                        const regularTeachers = assignments
-                          .filter(
-                            a =>
-                              !a.is_substitute &&
-                              !a.is_floater &&
-                              !absentTeacherIds.has(a.teacher_id) &&
-                              !a.is_flexible
-                          )
-                          .sort(sortByName)
-                        const flexTeachers = assignments
-                          .filter(
-                            a =>
-                              !a.is_substitute &&
-                              !a.is_floater &&
-                              a.is_flexible &&
-                              !absentTeacherIds.has(a.teacher_id)
-                          )
-                          .sort(sortByName)
-                        const floaters = assignments
-                          .filter(
-                            a =>
-                              !a.is_substitute &&
-                              a.is_floater &&
-                              !absentTeacherIds.has(a.teacher_id)
-                          )
-                          .sort(sortByName)
-                        const sortedAbsences = [...absences].sort(sortByName)
-
-                        return (
+                        >
+                          <div className="flex flex-col gap-1">
+                            <div className="text-sm text-slate-800">{slot.code}</div>
+                            {slot.start_time && slot.end_time && (
+                              <div className="text-[11px] font-medium text-slate-400 whitespace-pre-line">
+                                {formatSlotRange(slot.start_time, slot.end_time)}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        {isSlotClosed ? (
                           <td
-                            key={classroom.classroom_id}
+                            colSpan={Math.max(scheduleData.length, 1)}
                             className={cn(
-                              'border px-3 py-2',
+                              'border bg-slate-100 px-3 py-2 align-middle text-center text-sm font-medium text-slate-500',
                               displayCondensedLayout && 'px-2 py-1'
                             )}
                           >
-                            <div className={cn('space-y-2', displayCondensedLayout && 'space-y-1')}>
-                              {regularTeachers.length > 0 && (
-                                <div>
-                                  <ul className="mt-1 space-y-1 text-[12px] font-medium text-slate-700">
-                                    {regularTeachers.map(teacher => (
-                                      <li key={teacher.id} className={cn('text-slate-900')}>
-                                        {formatTeacherName(
-                                          {
-                                            teacher_name: teacher.teacher_name,
-                                            teacher_first_name: teacher.teacher_first_name,
-                                            teacher_last_name: teacher.teacher_last_name,
-                                            teacher_display_name: teacher.teacher_display_name,
-                                          },
-                                          teacherNameFormat
-                                        )}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-
-                              {flexTeachers.length > 0 && (
-                                <div>
-                                  <ul className="mt-1 space-y-1 text-[12px] font-medium text-slate-700">
-                                    {flexTeachers.map(flexTeacher => (
-                                      <li
-                                        key={flexTeacher.id}
-                                        className={cn(
-                                          displayColorFriendly ? 'text-blue-800' : 'text-slate-700'
-                                        )}
-                                      >
-                                        {!displayColorFriendly && (
-                                          <span className="text-slate-500">◦</span>
-                                        )}{' '}
-                                        {formatTeacherName(
-                                          {
-                                            teacher_name: flexTeacher.teacher_name,
-                                            teacher_first_name: flexTeacher.teacher_first_name,
-                                            teacher_last_name: flexTeacher.teacher_last_name,
-                                            teacher_display_name: flexTeacher.teacher_display_name,
-                                          },
-                                          teacherNameFormat
-                                        )}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-
-                              {floaters.length > 0 && (
-                                <div>
-                                  <ul className="mt-1 space-y-1 text-[12px] font-medium text-slate-700">
-                                    {floaters.map(floater => (
-                                      <li
-                                        key={floater.id}
-                                        className={cn(
-                                          displayColorFriendly
-                                            ? 'text-purple-700'
-                                            : 'text-slate-700'
-                                        )}
-                                      >
-                                        {!displayColorFriendly && (
-                                          <span className="text-slate-500">↔</span>
-                                        )}{' '}
-                                        {formatTeacherName(
-                                          {
-                                            teacher_name: floater.teacher_name,
-                                            teacher_first_name: floater.teacher_first_name,
-                                            teacher_last_name: floater.teacher_last_name,
-                                            teacher_display_name: floater.teacher_display_name,
-                                          },
-                                          teacherNameFormat
-                                        )}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-
-                              {displayShowAbsencesAndSubs && sortedAbsences.length > 0 && (
-                                <div>
-                                  <ul className="mt-1 space-y-1 text-[12px] font-medium text-slate-700">
-                                    {sortedAbsences.map(absence => {
-                                      const subsForAbsence =
-                                        substitutesByAbsentTeacher.get(absence.teacher_id) || []
-                                      return (
-                                        <li key={absence.teacher_id} className="space-y-1">
-                                          <div className="text-slate-400">
-                                            <span className="line-through">
-                                              {formatTeacherName(
-                                                {
-                                                  teacher_name: absence.teacher_name,
-                                                  teacher_first_name: absence.teacher_first_name,
-                                                  teacher_last_name: absence.teacher_last_name,
-                                                  teacher_display_name:
-                                                    absence.teacher_display_name,
-                                                },
-                                                teacherNameFormat
-                                              )}
-                                            </span>
-                                            {!absence.has_sub && subsForAbsence.length === 0 && (
-                                              <span
-                                                className={cn(
-                                                  displayColorFriendly
-                                                    ? 'text-orange-600'
-                                                    : 'text-slate-400'
-                                                )}
-                                              >
-                                                {' '}
-                                                (no sub)
-                                              </span>
-                                            )}
-                                          </div>
-                                          {subsForAbsence.map(sub => (
-                                            <div
-                                              key={sub.id}
-                                              className={cn(
-                                                'flex items-center gap-1',
-                                                displayColorFriendly
-                                                  ? 'text-teal-600'
-                                                  : 'text-slate-700'
-                                              )}
-                                            >
-                                              <CornerDownRight
-                                                className={cn(
-                                                  'h-3 w-3',
-                                                  displayColorFriendly
-                                                    ? 'text-teal-600'
-                                                    : 'text-slate-500'
-                                                )}
-                                              />
-                                              <span>
-                                                {formatTeacherName(
-                                                  {
-                                                    teacher_name: sub.teacher_name,
-                                                    teacher_first_name: sub.teacher_first_name,
-                                                    teacher_last_name: sub.teacher_last_name,
-                                                    teacher_display_name: sub.teacher_display_name,
-                                                  },
-                                                  teacherNameFormat
-                                                )}
-                                              </span>
-                                            </div>
-                                          ))}
-                                        </li>
-                                      )
-                                    })}
-                                  </ul>
-                                </div>
-                              )}
+                            <div className="flex flex-col items-center justify-center">
+                              <span>School Closed</span>
+                              {slotClosure?.reason?.trim() ? (
+                                <span className="mt-1 text-xs font-normal text-slate-500">
+                                  {slotClosure.reason.trim()}
+                                </span>
+                              ) : null}
                             </div>
                           </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
+                        ) : (
+                          scheduleData.map(classroom => {
+                            const slotData = getSlotForClassroom(classroom, slot.id)
+                            const assignments = slotData?.assignments ?? []
+                            const enrollmentSummary = getEnrollmentSummary(slotData)
+                            const youngestRatioGroup = getYoungestRatioGroup(slotData)
+                            const ratioSummary = formatRatioSummary({
+                              showRequiredRatios,
+                              showPreferredRatios,
+                              requiredRatio: youngestRatioGroup?.required_ratio,
+                              preferredRatio: youngestRatioGroup?.preferred_ratio,
+                            })
+                            const hasMetrics = Boolean(enrollmentSummary || ratioSummary)
+                            const absences = slotData?.absences ?? []
+                            const absentTeacherIds = new Set(
+                              absences.map(absence => absence.teacher_id)
+                            )
+                            const subs = assignments.filter(a => a.is_substitute)
+                            const substitutesByAbsentTeacher = new Map<string, typeof subs>()
+                            subs.forEach(sub => {
+                              if (!sub.absent_teacher_id) return
+                              if (!substitutesByAbsentTeacher.has(sub.absent_teacher_id)) {
+                                substitutesByAbsentTeacher.set(sub.absent_teacher_id, [])
+                              }
+                              substitutesByAbsentTeacher.get(sub.absent_teacher_id)!.push(sub)
+                            })
+                            const regularTeachers = assignments
+                              .filter(
+                                a =>
+                                  !a.is_substitute &&
+                                  !a.is_floater &&
+                                  !absentTeacherIds.has(a.teacher_id) &&
+                                  !a.is_flexible
+                              )
+                              .sort(sortByName)
+                            const flexTeachers = assignments
+                              .filter(
+                                a =>
+                                  !a.is_substitute &&
+                                  !a.is_floater &&
+                                  a.is_flexible &&
+                                  !absentTeacherIds.has(a.teacher_id)
+                              )
+                              .sort(sortByName)
+                            const floaters = assignments
+                              .filter(
+                                a =>
+                                  !a.is_substitute &&
+                                  a.is_floater &&
+                                  !absentTeacherIds.has(a.teacher_id)
+                              )
+                              .sort(sortByName)
+                            const sortedAbsences = [...absences].sort(sortByName)
+                            const teacherRows: Array<{
+                              key: string
+                              className: string
+                              content: ReactNode
+                            }> = []
+
+                            regularTeachers.forEach(teacher => {
+                              teacherRows.push({
+                                key: `regular-${teacher.id}`,
+                                className: 'text-slate-900',
+                                content: formatTeacherName(
+                                  {
+                                    teacher_name: teacher.teacher_name,
+                                    teacher_first_name: teacher.teacher_first_name,
+                                    teacher_last_name: teacher.teacher_last_name,
+                                    teacher_display_name: teacher.teacher_display_name,
+                                  },
+                                  teacherNameFormat
+                                ),
+                              })
+                            })
+
+                            flexTeachers.forEach(flexTeacher => {
+                              teacherRows.push({
+                                key: `flex-${flexTeacher.id}`,
+                                className: displayColorFriendly
+                                  ? 'text-blue-800'
+                                  : 'text-slate-700',
+                                content: (
+                                  <>
+                                    {!displayColorFriendly && (
+                                      <span className="text-slate-500">◦</span>
+                                    )}{' '}
+                                    {formatTeacherName(
+                                      {
+                                        teacher_name: flexTeacher.teacher_name,
+                                        teacher_first_name: flexTeacher.teacher_first_name,
+                                        teacher_last_name: flexTeacher.teacher_last_name,
+                                        teacher_display_name: flexTeacher.teacher_display_name,
+                                      },
+                                      teacherNameFormat
+                                    )}
+                                  </>
+                                ),
+                              })
+                            })
+
+                            floaters.forEach(floater => {
+                              teacherRows.push({
+                                key: `floater-${floater.id}`,
+                                className: displayColorFriendly
+                                  ? 'text-purple-700'
+                                  : 'text-slate-700',
+                                content: (
+                                  <>
+                                    {!displayColorFriendly && (
+                                      <span className="text-slate-500">↔</span>
+                                    )}{' '}
+                                    {formatTeacherName(
+                                      {
+                                        teacher_name: floater.teacher_name,
+                                        teacher_first_name: floater.teacher_first_name,
+                                        teacher_last_name: floater.teacher_last_name,
+                                        teacher_display_name: floater.teacher_display_name,
+                                      },
+                                      teacherNameFormat
+                                    )}
+                                  </>
+                                ),
+                              })
+                            })
+
+                            if (displayShowAbsencesAndSubs) {
+                              sortedAbsences.forEach(absence => {
+                                const subsForAbsence =
+                                  substitutesByAbsentTeacher.get(absence.teacher_id) || []
+                                teacherRows.push({
+                                  key: `absence-${absence.teacher_id}`,
+                                  className: 'text-slate-400',
+                                  content: (
+                                    <>
+                                      <span className="line-through">
+                                        {formatTeacherName(
+                                          {
+                                            teacher_name: absence.teacher_name,
+                                            teacher_first_name: absence.teacher_first_name,
+                                            teacher_last_name: absence.teacher_last_name,
+                                            teacher_display_name: absence.teacher_display_name,
+                                          },
+                                          teacherNameFormat
+                                        )}
+                                      </span>
+                                      {!absence.has_sub && subsForAbsence.length === 0 && (
+                                        <span
+                                          className={cn(
+                                            displayColorFriendly
+                                              ? 'text-orange-600'
+                                              : 'text-slate-400'
+                                          )}
+                                        >
+                                          {' '}
+                                          (no sub)
+                                        </span>
+                                      )}
+                                    </>
+                                  ),
+                                })
+
+                                subsForAbsence.forEach(sub => {
+                                  teacherRows.push({
+                                    key: `sub-${sub.id}`,
+                                    className: displayColorFriendly
+                                      ? 'text-teal-600'
+                                      : 'text-slate-700',
+                                    content: (
+                                      <span className="inline-flex items-center gap-1">
+                                        <CornerDownRight
+                                          className={cn(
+                                            'h-3 w-3',
+                                            displayColorFriendly
+                                              ? 'text-teal-600'
+                                              : 'text-slate-500'
+                                          )}
+                                        />
+                                        <span>
+                                          {formatTeacherName(
+                                            {
+                                              teacher_name: sub.teacher_name,
+                                              teacher_first_name: sub.teacher_first_name,
+                                              teacher_last_name: sub.teacher_last_name,
+                                              teacher_display_name: sub.teacher_display_name,
+                                            },
+                                            teacherNameFormat
+                                          )}
+                                        </span>
+                                      </span>
+                                    ),
+                                  })
+                                })
+                              })
+                            }
+
+                            return (
+                              <td
+                                key={classroom.classroom_id}
+                                className={cn(
+                                  'border px-2.5 py-2',
+                                  displayCondensedLayout && 'px-2 py-1'
+                                )}
+                              >
+                                <div
+                                  className={cn(
+                                    'space-y-1.5',
+                                    displayCondensedLayout && 'space-y-1'
+                                  )}
+                                >
+                                  {hasMetrics && (
+                                    <div className="-mx-0.5 mb-2 rounded-[2px] bg-slate-50 px-1.5 py-1 text-[10px] font-medium leading-4 text-slate-500">
+                                      <div className="space-y-0">
+                                        {enrollmentSummary && <div>{enrollmentSummary}</div>}
+                                        {ratioSummary && <div>{ratioSummary}</div>}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {teacherRows.length > 0 && (
+                                    <ul className="space-y-0 text-[12px] font-medium leading-4 text-slate-700">
+                                      {teacherRows.map(row => (
+                                        <li
+                                          key={row.key}
+                                          className={cn('leading-4', row.className)}
+                                        >
+                                          {row.content}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              </td>
+                            )
+                          })
+                        )}
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
