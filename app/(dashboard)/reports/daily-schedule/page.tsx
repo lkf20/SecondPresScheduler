@@ -276,31 +276,6 @@ export default function DailyScheduleReportPage() {
   }, [settingsKey])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const payload = {
-      showEnrollment,
-      showPreferredRatios,
-      showRequiredRatios,
-      showAbsencesAndSubs,
-      colorFriendly,
-      pdfLayout,
-      teacherNameFormat,
-      paperSize,
-    }
-    window.localStorage.setItem(settingsKey, JSON.stringify(payload))
-  }, [
-    colorFriendly,
-    paperSize,
-    pdfLayout,
-    settingsKey,
-    showAbsencesAndSubs,
-    showEnrollment,
-    showPreferredRatios,
-    showRequiredRatios,
-    teacherNameFormat,
-  ])
-
-  useEffect(() => {
     setGeneratedAt(formatGeneratedAt(new Date()))
   }, [selectedDate])
 
