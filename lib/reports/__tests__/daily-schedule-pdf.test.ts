@@ -131,7 +131,9 @@ describe('daily schedule pdf html', () => {
     })
 
     expect(html).toContain('font-size:11px; font-weight:500;')
-    expect(html).toContain('font-weight:500;">Anne M.')
+    expect(html).toContain(
+      'font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">Anne M.'
+    )
   })
 
   it('renders enrollment and ratio summaries when enabled', () => {
@@ -188,5 +190,61 @@ describe('daily schedule pdf html', () => {
 
     expect(html).toContain('Infants (7)')
     expect(html).toContain('1:4 (R) 1:5 (P)')
+  })
+
+  it('uses only grayscale tones for schedule content in black-and-white mode', () => {
+    const dataWithNoSub = [
+      {
+        ...baseData[0],
+        days: [
+          {
+            ...baseData[0].days[0],
+            time_slots: [
+              {
+                ...baseData[0].days[0].time_slots[0],
+                assignments: [],
+                absences: [
+                  {
+                    teacher_id: 'teacher-absent',
+                    teacher_name: 'Absent Teacher',
+                    teacher_first_name: 'Absent',
+                    teacher_last_name: 'Teacher',
+                    teacher_display_name: 'Absent Teacher',
+                    has_sub: false,
+                    is_partial: false,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ] as any
+
+    const html = buildDailySchedulePdfHtml({
+      dateISO: '2026-03-09',
+      generatedAt: 'Mar 9, 2026, 9:00 AM',
+      data: dataWithNoSub,
+      options: {
+        showAbsencesAndSubs: true,
+        showEnrollment: false,
+        showPreferredRatios: false,
+        showRequiredRatios: false,
+        colorFriendly: false,
+        layout: 'one',
+        teacherNameFormat: 'default',
+      },
+      timeZone: 'America/New_York',
+      schoolClosures: [],
+    })
+
+    // No-sub styling in B&W mode should be grayscale.
+    expect(html).toContain('background:#F1F5F9')
+    expect(html).toContain('color:#475569')
+
+    // Ensure amber/yellow no-sub highlight colors are not used in B&W output.
+    expect(html).not.toContain('#FEF3C7')
+    expect(html).not.toContain('#92400E')
+    expect(html).not.toContain('#B45309')
   })
 })

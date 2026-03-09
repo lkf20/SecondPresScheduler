@@ -143,6 +143,15 @@ When adding a new UI element (e.g. a chip, badge, or label):
 - **Helpers:** Use `isCellClosed` (from `lib/utils/school-closures.ts`) for weekly grid cells (needs `weekStartISO`, `dayNumber`, `timeSlotId`). Use `isSlotClosedOnDate` for single-date contexts (daily schedule, PDF). Use `getCellDateISO` (from `lib/utils/date.ts`) to compute the calendar date for a cell given week start and day number.
 - **Legends:** If you change how closed cells are shown (e.g. styling or wording), update the "School Closed" legend in the weekly schedule grid.
 
+## Today's Schedule report color mode contract
+
+- **Black & White mode must be grayscale-only** in both on-screen rendering and generated PDF. When `colorFriendly=false`, schedule table content must use only white/black/gray tokens (no accent colors such as blue, teal, purple, amber, orange, yellow).
+- **No-sub indicator in Black & White mode** must use a gray arrow and light-gray highlight (not yellow/amber).
+- **Tests required for color mode changes:** Any change to daily schedule report styling should include/adjust tests in:
+  - `app/(dashboard)/reports/daily-schedule/__tests__/page.test.tsx`
+  - `lib/reports/__tests__/daily-schedule-pdf.test.ts`
+    so grayscale-only behavior is enforced for both screen and PDF paths.
+
 ## Baseline schedule: enrollment and staffing
 
 - **Per-class-group enrollment:** A schedule cell can store enrollment per class group (e.g. Toddler A: 3, Toddler B: 2) in `schedule_cell_class_groups.enrollment`. When any per-class enrollment is set, the total used for ratio is the sum of those values; otherwise the cell’s `enrollment_for_staffing` is used. The grid shows labels like “Toddler A (3), Toddler B (2)” when per-class enrollment is present.

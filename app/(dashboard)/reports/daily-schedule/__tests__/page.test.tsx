@@ -191,4 +191,119 @@ describe("Today's Schedule report page", () => {
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Print PDF' })).toBeDisabled()
   })
+
+  it('uses grayscale-only styling in schedule cells when Black & White mode is selected', async () => {
+    ;(useDailySchedule as jest.Mock).mockReturnValue({
+      data: {
+        date: '2026-03-09',
+        day_of_week_id: 'day-mon',
+        day_name: 'Monday',
+        data: [
+          {
+            classroom_id: 'classroom-1',
+            classroom_name: 'Infant Room',
+            classroom_color: '#1d4ed8',
+            classroom_is_active: true,
+            days: [
+              {
+                day_of_week_id: 'day-mon',
+                day_name: 'Monday',
+                day_number: 1,
+                time_slots: [
+                  {
+                    time_slot_id: 'slot-am',
+                    time_slot_code: 'AM',
+                    time_slot_name: 'School Morning',
+                    time_slot_display_order: 1,
+                    time_slot_start_time: '09:00:00',
+                    time_slot_end_time: '12:00:00',
+                    time_slot_is_active: true,
+                    assignments: [
+                      {
+                        id: 'assignment-regular',
+                        teacher_id: 'teacher-regular',
+                        teacher_name: 'Anne M.',
+                        teacher_first_name: 'Anne',
+                        teacher_last_name: 'M',
+                        teacher_display_name: 'Anne M.',
+                        is_substitute: false,
+                        is_floater: false,
+                        is_flexible: false,
+                        classroom_id: 'classroom-1',
+                        classroom_name: 'Infant Room',
+                      },
+                      {
+                        id: 'assignment-flex',
+                        teacher_id: 'teacher-flex',
+                        teacher_name: 'Flex Teacher',
+                        teacher_first_name: 'Flex',
+                        teacher_last_name: 'Teacher',
+                        teacher_display_name: 'Flex Teacher',
+                        is_substitute: false,
+                        is_floater: false,
+                        is_flexible: true,
+                        classroom_id: 'classroom-1',
+                        classroom_name: 'Infant Room',
+                      },
+                      {
+                        id: 'assignment-floater',
+                        teacher_id: 'teacher-floater',
+                        teacher_name: 'Floater Teacher',
+                        teacher_first_name: 'Floater',
+                        teacher_last_name: 'Teacher',
+                        teacher_display_name: 'Floater Teacher',
+                        is_substitute: false,
+                        is_floater: true,
+                        is_flexible: false,
+                        classroom_id: 'classroom-1',
+                        classroom_name: 'Infant Room',
+                      },
+                    ],
+                    absences: [
+                      {
+                        teacher_id: 'teacher-absent',
+                        teacher_name: 'Absent Teacher',
+                        teacher_first_name: 'Absent',
+                        teacher_last_name: 'Teacher',
+                        teacher_display_name: 'Absent Teacher',
+                        has_sub: false,
+                        is_partial: false,
+                      },
+                    ],
+                    schedule_cell: null,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        school_closures: [],
+        no_schedule: false,
+      },
+      isLoading: false,
+      error: null,
+    })
+
+    const { container } = render(<DailyScheduleReportPage />)
+    const table = await screen.findByRole('table')
+    expect(table).toBeInTheDocument()
+
+    // In Black & White mode (default), schedule cells should not use non-gray accent classes.
+    const forbiddenColorSelectors = [
+      '.text-blue-800',
+      '.text-purple-700',
+      '.text-teal-600',
+      '.text-amber-700',
+      '.text-orange-600',
+      '.bg-amber-100',
+    ]
+    forbiddenColorSelectors.forEach(selector => {
+      expect(container.querySelector(selector)).toBeNull()
+    })
+
+    // No-sub row should use grayscale styling in Black & White mode.
+    const noSubBadge = screen.getByText('No sub')
+    expect(noSubBadge.className).toContain('bg-slate-100')
+    expect(noSubBadge.className).toContain('text-slate-600')
+  })
 })

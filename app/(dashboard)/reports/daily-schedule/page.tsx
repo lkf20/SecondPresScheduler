@@ -988,6 +988,7 @@ export default function DailyScheduleReportPage() {
                               sortedAbsences.forEach(absence => {
                                 const subsForAbsence =
                                   substitutesByAbsentTeacher.get(absence.teacher_id) || []
+                                const isNoSub = !absence.has_sub && subsForAbsence.length === 0
                                 teacherRows.push({
                                   key: `absence-${absence.teacher_id}`,
                                   className: 'text-slate-400',
@@ -1004,21 +1005,39 @@ export default function DailyScheduleReportPage() {
                                           teacherNameFormat
                                         )}
                                       </span>
-                                      {!absence.has_sub && subsForAbsence.length === 0 && (
-                                        <span
-                                          className={cn(
-                                            displayColorFriendly
-                                              ? 'text-orange-600'
-                                              : 'text-slate-400'
-                                          )}
-                                        >
-                                          {' '}
-                                          (no sub)
-                                        </span>
-                                      )}
                                     </>
                                   ),
                                 })
+
+                                if (isNoSub) {
+                                  const noSubArrowClass = displayColorFriendly
+                                    ? 'text-amber-700'
+                                    : 'text-slate-500'
+                                  const noSubBadgeClass = displayColorFriendly
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-slate-100 text-slate-600'
+                                  teacherRows.push({
+                                    key: `no-sub-${absence.teacher_id}`,
+                                    className: displayColorFriendly
+                                      ? 'text-amber-700'
+                                      : 'text-slate-600',
+                                    content: (
+                                      <span className="inline-flex items-center gap-1">
+                                        <CornerDownRight
+                                          className={cn('h-3 w-3', noSubArrowClass)}
+                                        />
+                                        <span
+                                          className={cn(
+                                            'rounded-[2px] px-1 py-0.5 text-[11px] font-medium leading-4',
+                                            noSubBadgeClass
+                                          )}
+                                        >
+                                          No sub
+                                        </span>
+                                      </span>
+                                    ),
+                                  })
+                                }
 
                                 subsForAbsence.forEach(sub => {
                                   teacherRows.push({

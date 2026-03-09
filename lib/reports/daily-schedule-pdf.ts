@@ -348,7 +348,7 @@ export function buildDailySchedulePdfHtml({
                       t.break_start_time && t.break_end_time
                         ? ` <span style="font-size:10px; opacity:0.8;">☕ ${t.break_start_time.slice(0, 5)} - ${t.break_end_time.slice(0, 5)}</span>`
                         : ''
-                    return `<div style="color:${color.permanent}; font-weight:500;">${escapeHtml(
+                    return `<div style="color:${color.permanent}; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">${escapeHtml(
                       formatTeacherName(
                         {
                           teacher_name: t.teacher_name,
@@ -364,7 +364,7 @@ export function buildDailySchedulePdfHtml({
                 const floaterLines = floaters
                   .map(
                     f =>
-                      `<div style="color:${color.floater}; font-weight:500;">${
+                      `<div style="color:${color.floater}; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">${
                         options.colorFriendly ? '' : '↔ '
                       }${escapeHtml(
                         formatTeacherName(
@@ -390,7 +390,7 @@ export function buildDailySchedulePdfHtml({
                         : options.colorFriendly
                           ? ''
                           : '◦ '
-                    return `<div style="color:${color.flex}; font-weight:500;">${prefix}${escapeHtml(
+                    return `<div style="color:${color.flex}; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">${prefix}${escapeHtml(
                       formatTeacherName(
                         {
                           teacher_name: f.teacher_name,
@@ -411,7 +411,7 @@ export function buildDailySchedulePdfHtml({
                         const subLines = subsForAbsence
                           .map(
                             sub =>
-                              `<div style="color:${color.sub}; font-weight:500;">↳ ${escapeHtml(
+                              `<div style="color:${color.sub}; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">↳ ${escapeHtml(
                                 formatTeacherName(
                                   {
                                     teacher_name: sub.teacher_name,
@@ -424,12 +424,14 @@ export function buildDailySchedulePdfHtml({
                               )}</div>`
                           )
                           .join('')
-                        const noSub =
+                        const noSubLine =
                           !absence.has_sub && subsForAbsence.length === 0
-                            ? `<span style="color:${options.colorFriendly ? '#EA580C' : color.absent};"> (no sub)</span>`
+                            ? options.colorFriendly
+                              ? `<div style="color:#B45309; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">↳ <span style="background:#FEF3C7; color:#92400E; border-radius:2px; padding:1px 4px;">No sub</span></div>`
+                              : `<div style="color:#64748B; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">↳ <span style="background:#F1F5F9; color:#475569; border-radius:2px; padding:1px 4px;">No sub</span></div>`
                             : ''
                         return `
-                    <div style="color:${color.absent}; font-weight:500;">
+                    <div style="color:${color.absent}; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">
                       <span style="text-decoration: line-through;">${escapeHtml(
                         formatTeacherName(
                           {
@@ -440,8 +442,9 @@ export function buildDailySchedulePdfHtml({
                           },
                           options.teacherNameFormat
                         )
-                      )}</span>${noSub}
+                      )}</span>
                     </div>
+                    ${noSubLine}
                     ${subLines}`
                       })
                       .join('')
@@ -515,7 +518,7 @@ export function buildDailySchedulePdfHtml({
         <title>Daily Schedule</title>
         <style>
           * { box-sizing: border-box; }
-          body { font-family: Arial, sans-serif; color: #0F172A; margin: 0; }
+          body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0F172A; margin: 0; }
           table { width: 100%; border-collapse: collapse; table-layout: fixed; }
           col.time-col { width: ${timeColWidth}px; }
           .legend { display: flex; gap: 12px; font-size: 11px; color: #475569; margin-top: 6px; }
