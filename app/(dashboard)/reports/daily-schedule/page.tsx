@@ -9,6 +9,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useDailySchedule } from '@/lib/hooks/use-daily-schedule'
+import {
+  formatRatioSummary,
+  getEnrollmentSummary,
+  getYoungestRatioGroup,
+} from '@/lib/reports/daily-schedule-metrics'
 import { getHeaderClasses } from '@/lib/utils/colors'
 import { getSlotClosureOnDate } from '@/lib/utils/school-closures'
 import { cn } from '@/lib/utils'
@@ -199,93 +204,6 @@ const getSlotForClassroom = (classroom: WeeklyScheduleDataByClassroom, timeSlotI
   const day = classroom.days[0]
   if (!day) return null
   return day.time_slots.find(slot => slot.time_slot_id === timeSlotId) ?? null
-}
-
-type DailySlot = WeeklyScheduleDataByClassroom['days'][0]['time_slots'][0]
-
-const compactGroupName = (name: string) => name.replace(/\s+Room$/i, '').trim()
-
-type CellClassGroup = {
-  id: string
-  name: string
-  age_unit: 'months' | 'years'
-  min_age: number | null
-  max_age: number | null
-  required_ratio: number
-  preferred_ratio: number | null
-  enrollment?: number | null
-}
-
-const getSortedClassGroupsByAge = (groups: CellClassGroup[]) =>
-  [...groups].sort((a, b) => {
-    const aAge =
-      a.min_age === null ? Number.POSITIVE_INFINITY : a.min_age * (a.age_unit === 'years' ? 12 : 1)
-    const bAge =
-      b.min_age === null ? Number.POSITIVE_INFINITY : b.min_age * (b.age_unit === 'years' ? 12 : 1)
-    if (aAge !== bAge) return aAge - bAge
-    return a.name.localeCompare(b.name)
-  })
-
-const getEnrollmentSummary = (slot: DailySlot | null) => {
-  const classGroups = getSortedClassGroupsByAge(
-    (slot?.schedule_cell?.class_groups || []) as CellClassGroup[]
-  )
-  const classGroupNames = classGroups.map(group => compactGroupName(group.name))
-  const classGroupEnrollment = classGroups.filter(group => typeof group.enrollment === 'number')
-  if (classGroupEnrollment.length > 0) {
-    return classGroupEnrollment
-      .map(group => `${compactGroupName(group.name)} (${group.enrollment})`)
-      .join(', ')
-  }
-  if (
-    typeof slot?.schedule_cell?.enrollment_for_staffing === 'number' &&
-    classGroupNames.length > 0
-  ) {
-    return `${classGroupNames.join(', ')} (${slot.schedule_cell.enrollment_for_staffing})`
-  }
-  if (typeof slot?.schedule_cell?.enrollment_for_staffing === 'number') {
-    return `Enrollment (${slot.schedule_cell.enrollment_for_staffing})`
-  }
-  const assignmentEnrollment = slot?.assignments.find(
-    assignment => typeof assignment.enrollment === 'number'
-  )?.enrollment
-  if (typeof assignmentEnrollment === 'number') {
-    return classGroupNames.length > 0
-      ? `${classGroupNames.join(', ')} (${assignmentEnrollment})`
-      : `Enrollment (${assignmentEnrollment})`
-  }
-  return null
-}
-
-const getYoungestRatioGroup = (slot: DailySlot | null): CellClassGroup | null => {
-  const classGroups = getSortedClassGroupsByAge(
-    (slot?.schedule_cell?.class_groups || []) as CellClassGroup[]
-  )
-  const withRatio = classGroups.filter(
-    group => typeof group.required_ratio === 'number' || typeof group.preferred_ratio === 'number'
-  )
-  return withRatio[0] ?? null
-}
-
-const formatRatioSummary = ({
-  showRequiredRatios,
-  showPreferredRatios,
-  requiredRatio,
-  preferredRatio,
-}: {
-  showRequiredRatios: boolean
-  showPreferredRatios: boolean
-  requiredRatio: number | null | undefined
-  preferredRatio: number | null | undefined
-}) => {
-  const hasRequired = showRequiredRatios && typeof requiredRatio === 'number'
-  const hasPreferred = showPreferredRatios && typeof preferredRatio === 'number'
-  if (!hasRequired && !hasPreferred) return null
-  if (hasRequired && hasPreferred) {
-    return `1:${requiredRatio} (R) 1:${preferredRatio} (P)`
-  }
-  if (hasRequired) return `1:${requiredRatio}`
-  return `1:${preferredRatio}`
 }
 
 export default function DailyScheduleReportPage() {
@@ -863,7 +781,9 @@ export default function DailyScheduleReportPage() {
                           scheduleData.map(classroom => {
                             const slotData = getSlotForClassroom(classroom, slot.id)
                             const assignments = slotData?.assignments ?? []
-                            const enrollmentSummary = getEnrollmentSummary(slotData)
+                            const enrollmentSummary = showEnrollment
+                              ? getEnrollmentSummary(slotData)
+                              : null
                             const youngestRatioGroup = getYoungestRatioGroup(slotData)
                             const ratioSummary = formatRatioSummary({
                               showRequiredRatios,

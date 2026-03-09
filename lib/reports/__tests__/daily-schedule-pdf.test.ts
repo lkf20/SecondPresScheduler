@@ -247,4 +247,60 @@ describe('daily schedule pdf html', () => {
     expect(html).not.toContain('#92400E')
     expect(html).not.toContain('#B45309')
   })
+
+  it('does not render enrollment summary when showEnrollment is false', () => {
+    const dataWithMetrics = [
+      {
+        ...baseData[0],
+        days: [
+          {
+            ...baseData[0].days[0],
+            time_slots: [
+              {
+                ...baseData[0].days[0].time_slots[0],
+                schedule_cell: {
+                  id: 'cell-1',
+                  is_active: true,
+                  enrollment_for_staffing: 11,
+                  notes: null,
+                  required_staff_override: null,
+                  preferred_staff_override: null,
+                  class_groups: [
+                    {
+                      id: 'group-1',
+                      name: 'Infants',
+                      required_ratio: 4,
+                      preferred_ratio: 5,
+                      enrollment: 7,
+                    },
+                  ],
+                },
+                assignments: [],
+              },
+            ],
+          },
+        ],
+      },
+    ] as any
+
+    const html = buildDailySchedulePdfHtml({
+      dateISO: '2026-03-09',
+      generatedAt: 'Mar 9, 2026, 9:00 AM',
+      data: dataWithMetrics,
+      options: {
+        showAbsencesAndSubs: true,
+        showEnrollment: false,
+        showPreferredRatios: true,
+        showRequiredRatios: true,
+        colorFriendly: true,
+        layout: 'one',
+        teacherNameFormat: 'default',
+      },
+      timeZone: 'America/New_York',
+      schoolClosures: [],
+    })
+
+    expect(html).not.toContain('Infants (7)')
+    expect(html).toContain('1:4 (R) 1:5 (P)')
+  })
 })

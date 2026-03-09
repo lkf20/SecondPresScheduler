@@ -306,4 +306,70 @@ describe("Today's Schedule report page", () => {
     expect(noSubBadge.className).toContain('bg-slate-100')
     expect(noSubBadge.className).toContain('text-slate-600')
   })
+
+  it('does not render enrollment text when Show enrollments is disabled', async () => {
+    ;(useDailySchedule as jest.Mock).mockReturnValue({
+      data: {
+        date: '2026-03-09',
+        day_of_week_id: 'day-mon',
+        day_name: 'Monday',
+        data: [
+          {
+            classroom_id: 'classroom-1',
+            classroom_name: 'Infant Room',
+            classroom_color: '#1d4ed8',
+            classroom_is_active: true,
+            days: [
+              {
+                day_of_week_id: 'day-mon',
+                day_name: 'Monday',
+                day_number: 1,
+                time_slots: [
+                  {
+                    time_slot_id: 'slot-am',
+                    time_slot_code: 'AM',
+                    time_slot_name: 'School Morning',
+                    time_slot_display_order: 1,
+                    time_slot_start_time: '09:00:00',
+                    time_slot_end_time: '12:00:00',
+                    time_slot_is_active: true,
+                    assignments: [],
+                    absences: [],
+                    schedule_cell: {
+                      id: 'cell-1',
+                      is_active: true,
+                      enrollment_for_staffing: 9,
+                      notes: null,
+                      required_staff_override: null,
+                      preferred_staff_override: null,
+                      class_groups: [
+                        {
+                          id: 'group-1',
+                          name: 'Infants',
+                          age_unit: 'years',
+                          min_age: 0,
+                          max_age: 1,
+                          required_ratio: 4,
+                          preferred_ratio: 5,
+                          enrollment: 9,
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        school_closures: [],
+        no_schedule: false,
+      },
+      isLoading: false,
+      error: null,
+    })
+
+    render(<DailyScheduleReportPage />)
+    expect(await screen.findByRole('table')).toBeInTheDocument()
+    expect(screen.queryByText('Infants (9)')).not.toBeInTheDocument()
+  })
 })

@@ -1,5 +1,10 @@
 import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 import { BREAK_COVERAGE_ENABLED } from '@/lib/feature-flags'
+import {
+  formatRatioSummary,
+  getEnrollmentSummary,
+  getYoungestRatioGroup,
+} from '@/lib/reports/daily-schedule-metrics'
 import { formatDateISOInTimeZone } from '@/lib/utils/date'
 import { getSlotClosureOnDate } from '@/lib/utils/school-closures'
 
@@ -137,91 +142,6 @@ const formatTeacherName = (source: TeacherNameSource, format: PdfOptions['teache
   return last ? `${first} ${last}` : first
 }
 
-const compactGroupName = (name: string) => name.replace(/\s+Room$/i, '').trim()
-
-type CellClassGroup = {
-  id: string
-  name: string
-  age_unit: 'months' | 'years'
-  min_age: number | null
-  max_age: number | null
-  required_ratio: number
-  preferred_ratio: number | null
-  enrollment?: number | null
-}
-
-const getSortedClassGroupsByAge = (groups: CellClassGroup[]) =>
-  [...groups].sort((a, b) => {
-    const aAge =
-      a.min_age === null ? Number.POSITIVE_INFINITY : a.min_age * (a.age_unit === 'years' ? 12 : 1)
-    const bAge =
-      b.min_age === null ? Number.POSITIVE_INFINITY : b.min_age * (b.age_unit === 'years' ? 12 : 1)
-    if (aAge !== bAge) return aAge - bAge
-    return a.name.localeCompare(b.name)
-  })
-
-const getEnrollmentSummary = (slotData: ReturnType<typeof getSlotForClassroom>) => {
-  const classGroups = getSortedClassGroupsByAge(
-    (slotData?.schedule_cell?.class_groups || []) as CellClassGroup[]
-  )
-  const classGroupNames = classGroups.map(group => compactGroupName(group.name))
-  const classGroupEnrollment = classGroups.filter(group => typeof group.enrollment === 'number')
-  if (classGroupEnrollment.length > 0) {
-    return classGroupEnrollment
-      .map(group => `${compactGroupName(group.name)} (${group.enrollment})`)
-      .join(', ')
-  }
-  if (
-    typeof slotData?.schedule_cell?.enrollment_for_staffing === 'number' &&
-    classGroupNames.length > 0
-  ) {
-    return `${classGroupNames.join(', ')} (${slotData.schedule_cell.enrollment_for_staffing})`
-  }
-  if (typeof slotData?.schedule_cell?.enrollment_for_staffing === 'number') {
-    return `Enrollment (${slotData.schedule_cell.enrollment_for_staffing})`
-  }
-  const assignmentEnrollment = slotData?.assignments.find(
-    assignment => typeof assignment.enrollment === 'number'
-  )?.enrollment
-  if (typeof assignmentEnrollment === 'number') {
-    return classGroupNames.length > 0
-      ? `${classGroupNames.join(', ')} (${assignmentEnrollment})`
-      : `Enrollment (${assignmentEnrollment})`
-  }
-  return null
-}
-
-const getYoungestRatioGroup = (
-  slotData: ReturnType<typeof getSlotForClassroom>
-): CellClassGroup | null => {
-  const classGroups = getSortedClassGroupsByAge(
-    (slotData?.schedule_cell?.class_groups || []) as CellClassGroup[]
-  )
-  const withRatio = classGroups.filter(
-    group => typeof group.required_ratio === 'number' || typeof group.preferred_ratio === 'number'
-  )
-  return withRatio[0] ?? null
-}
-
-const formatRatioSummary = ({
-  showRequiredRatios,
-  showPreferredRatios,
-  requiredRatio,
-  preferredRatio,
-}: {
-  showRequiredRatios: boolean
-  showPreferredRatios: boolean
-  requiredRatio: number | null | undefined
-  preferredRatio: number | null | undefined
-}) => {
-  const hasRequired = showRequiredRatios && typeof requiredRatio === 'number'
-  const hasPreferred = showPreferredRatios && typeof preferredRatio === 'number'
-  if (!hasRequired && !hasPreferred) return null
-  if (hasRequired && hasPreferred) return `1:${requiredRatio} (R) 1:${preferredRatio} (P)`
-  if (hasRequired) return `1:${requiredRatio}`
-  return `1:${preferredRatio}`
-}
-
 export function buildDailySchedulePdfHtml({
   dateISO,
   generatedAt,
@@ -304,7 +224,9 @@ export function buildDailySchedulePdfHtml({
               .map(classroom => {
                 const slotData = getSlotForClassroom(classroom, slot.id)
                 const assignments = slotData?.assignments ?? []
-                const enrollmentSummary = getEnrollmentSummary(slotData)
+                const enrollmentSummary = options.showEnrollment
+                  ? getEnrollmentSummary(slotData)
+                  : null
                 const youngestRatioGroup = getYoungestRatioGroup(slotData)
                 const absences = slotData?.absences ?? []
                 const absentTeacherIds = new Set(absences.map(absence => absence.teacher_id))
