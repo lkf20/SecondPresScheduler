@@ -6,10 +6,19 @@ import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 
 export type DailyScheduleResponse = {
   date: string
-  day_of_week_id: string
-  day_name: string
+  day_of_week_id: string | null
+  day_name: string | null
   data: WeeklyScheduleDataByClassroom[]
-  school_closures?: Array<{ date: string; time_slot_id: string | null }>
+  school_closures?: Array<{
+    id: string
+    date: string
+    time_slot_id: string | null
+    reason: string | null
+  }>
+  no_schedule?: boolean
+  no_schedule_message?: string
+  next_scheduled_date?: string | null
+  next_scheduled_day_name?: string | null
 }
 
 async function fetchDailySchedule(date: string): Promise<DailyScheduleResponse> {

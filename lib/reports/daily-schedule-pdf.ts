@@ -1,18 +1,21 @@
 import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 import { BREAK_COVERAGE_ENABLED } from '@/lib/feature-flags'
+import {
+  formatRatioSummary,
+  getEnrollmentSummary,
+  getYoungestRatioGroup,
+} from '@/lib/reports/daily-schedule-metrics'
 import { formatDateISOInTimeZone } from '@/lib/utils/date'
-import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
+import { getSlotClosureOnDate } from '@/lib/utils/school-closures'
 
 type PdfOptions = {
   showAbsencesAndSubs: boolean
+  showEnrollment: boolean
+  showPreferredRatios: boolean
+  showRequiredRatios: boolean
   colorFriendly: boolean
   layout: 'one' | 'two'
-  teacherNameFormat:
-    | 'default'
-    | 'first_last'
-    | 'first_last_initial'
-    | 'first_initial_last'
-    | 'first'
+  teacherNameFormat: 'default' | 'first_last'
 }
 
 const escapeHtml = (value: string) =>
@@ -136,18 +139,7 @@ const formatTeacherName = (source: TeacherNameSource, format: PdfOptions['teache
   const { display, first, last } = deriveNameParts(source)
   if (!display) return ''
   if (format === 'default') return display
-  switch (format) {
-    case 'first_last':
-      return last ? `${first} ${last}` : first
-    case 'first_last_initial':
-      return last ? `${first} ${last.charAt(0)}.` : first
-    case 'first_initial_last':
-      return last ? `${first.charAt(0)}. ${last}` : first
-    case 'first':
-      return first
-    default:
-      return display
-  }
+  return last ? `${first} ${last}` : first
 }
 
 export function buildDailySchedulePdfHtml({
@@ -163,7 +155,7 @@ export function buildDailySchedulePdfHtml({
   data: WeeklyScheduleDataByClassroom[]
   options: PdfOptions
   timeZone: string
-  schoolClosures?: Array<{ date: string; time_slot_id: string | null }>
+  schoolClosures?: Array<{ date: string; time_slot_id: string | null; reason: string | null }>
 }) {
   const timeSlots = buildTimeSlots(data)
   const title = formatDateISOInTimeZone(dateISO, timeZone, {
@@ -181,7 +173,7 @@ export function buildDailySchedulePdfHtml({
     grid: '#E2E8F0',
     header: '#0F172A',
   }
-  const timeColWidth = 60
+  const timeColWidth = 72
   const fontSize = 11
 
   const buildTableHeaders = (classrooms: WeeklyScheduleDataByClassroom[]) =>
@@ -191,8 +183,8 @@ export function buildDailySchedulePdfHtml({
         const textColor =
           options.colorFriendly && classroom.classroom_color ? classroom.classroom_color : '#334155'
         return `
-          <th style="border:1px solid ${color.grid}; border-bottom:2px solid #94A3B8; padding:6px; text-align:center; font-size:10px; font-weight:600; color:${textColor}; text-transform: uppercase; letter-spacing: 0.4px;">
-            <div style="line-height:1.2;">
+          <th style="border:1px solid ${color.grid}; border-bottom:2px solid #94A3B8; padding:6px; text-align:center; font-size:8px; font-weight:600; color:${textColor}; text-transform: uppercase; letter-spacing: 0.4px;">
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%; line-height:1.2; text-align:center;">
               <div>${escapeHtml(split.line1)}</div>
               ${split.line2 ? `<div>${escapeHtml(split.line2)}</div>` : ''}
             </div>
@@ -204,144 +196,164 @@ export function buildDailySchedulePdfHtml({
     timeSlots
       .map(slot => {
         const timeCell = `
-        <td style="border:1px solid ${color.grid}; padding:6px; vertical-align:middle; font-size:12px; font-weight:600; color:#475569;">
+        <td style="border:1px solid ${color.grid}; background:#F8FAFC; padding:6px; vertical-align:middle; font-size:12px; font-weight:500; color:#475569;">
           <div style="display:flex; flex-direction:column; gap:4px;">
             <div style="font-size:12px; color:${color.header};">${escapeHtml(slot.code)}</div>
-            <div style="font-size:11px; color:#94A3B8; line-height:1.2;">
+            <div style="font-size:11px; font-weight:500; color:#94A3B8; line-height:1.2;">
               ${formatSlotRange(slot.start_time, slot.end_time)}
             </div>
           </div>
         </td>`
 
-        const cells = classrooms
-          .map(classroom => {
-            const slotData = getSlotForClassroom(classroom, slot.id)
-            if (isSlotClosedOnDate(dateISO, slot.id, schoolClosures)) {
-              return `
-            <td style="border:1px solid ${color.grid}; padding:6px; font-size:${fontSize}px; vertical-align:middle; color:#64748B; text-align:center;">School Closed</td>`
-            }
-            const assignments = slotData?.assignments ?? []
-            const absences = slotData?.absences ?? []
-            const absentTeacherIds = new Set(absences.map(absence => absence.teacher_id))
-            const subs = assignments.filter(a => a.is_substitute)
-            const substitutesByAbsentTeacher = new Map<string, typeof subs>()
-            subs.forEach(sub => {
-              if (!sub.absent_teacher_id) return
-              if (!substitutesByAbsentTeacher.has(sub.absent_teacher_id)) {
-                substitutesByAbsentTeacher.set(sub.absent_teacher_id, [])
-              }
-              substitutesByAbsentTeacher.get(sub.absent_teacher_id)!.push(sub)
-            })
-            const regularTeachers = assignments
-              .filter(
-                a =>
-                  !a.is_substitute &&
-                  !a.is_floater &&
-                  !a.is_flexible &&
-                  !absentTeacherIds.has(a.teacher_id)
-              )
-              .sort(sortByName)
-            const flexTeachers = assignments
-              .filter(
-                a =>
-                  !a.is_substitute &&
-                  !a.is_floater &&
-                  a.is_flexible &&
-                  !absentTeacherIds.has(a.teacher_id)
-              )
-              .sort(sortByName)
-            const floaters = assignments
-              .filter(a => !a.is_substitute && a.is_floater && !absentTeacherIds.has(a.teacher_id))
-              .sort(sortByName)
-            const sortedAbsences = [...absences].sort(sortByName)
+        const slotClosure = getSlotClosureOnDate(dateISO, slot.id, schoolClosures)
+        const isSlotClosed = Boolean(slotClosure)
 
-            const teacherLines = regularTeachers
-              .map(t => {
-                const breakStr =
-                  t.break_start_time && t.break_end_time
-                    ? ` <span style="font-size:10px; opacity:0.8;">☕ ${t.break_start_time.slice(0, 5)} - ${t.break_end_time.slice(0, 5)}</span>`
+        const cells = isSlotClosed
+          ? `
+            <td colspan="${Math.max(classrooms.length, 1)}" style="border:1px solid ${color.grid}; background:#f1f5f9; padding:6px; font-size:${fontSize}px; vertical-align:middle; color:#64748B; text-align:center;">
+              <div style="display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                <span style="font-weight:600;">School Closed</span>
+                ${
+                  slotClosure?.reason?.trim()
+                    ? `<span style="margin-top:4px; font-size:10px; font-weight:400; color:#64748B;">${escapeHtml(slotClosure.reason.trim())}</span>`
                     : ''
-                return `<div style="color:${color.permanent}; font-weight:500;">${escapeHtml(
-                  formatTeacherName(
-                    {
-                      teacher_name: t.teacher_name,
-                      teacher_first_name: t.teacher_first_name,
-                      teacher_last_name: t.teacher_last_name,
-                      teacher_display_name: t.teacher_display_name,
-                    },
-                    options.teacherNameFormat
+                }
+              </div>
+            </td>`
+          : classrooms
+              .map(classroom => {
+                const slotData = getSlotForClassroom(classroom, slot.id)
+                const assignments = slotData?.assignments ?? []
+                const enrollmentSummary = options.showEnrollment
+                  ? getEnrollmentSummary(slotData)
+                  : null
+                const youngestRatioGroup = getYoungestRatioGroup(slotData)
+                const absences = slotData?.absences ?? []
+                const absentTeacherIds = new Set(absences.map(absence => absence.teacher_id))
+                const subs = assignments.filter(a => a.is_substitute)
+                const substitutesByAbsentTeacher = new Map<string, typeof subs>()
+                subs.forEach(sub => {
+                  if (!sub.absent_teacher_id) return
+                  if (!substitutesByAbsentTeacher.has(sub.absent_teacher_id)) {
+                    substitutesByAbsentTeacher.set(sub.absent_teacher_id, [])
+                  }
+                  substitutesByAbsentTeacher.get(sub.absent_teacher_id)!.push(sub)
+                })
+                const regularTeachers = assignments
+                  .filter(
+                    a =>
+                      !a.is_substitute &&
+                      !a.is_floater &&
+                      !a.is_flexible &&
+                      !absentTeacherIds.has(a.teacher_id)
                   )
-                )}${breakStr}</div>`
-              })
-              .join('')
-            const floaterLines = floaters
-              .map(
-                f =>
-                  `<div style="color:${color.floater}; font-weight:500;">${
-                    options.colorFriendly ? '' : '↔ '
-                  }${escapeHtml(
-                    formatTeacherName(
-                      {
-                        teacher_name: f.teacher_name,
-                        teacher_first_name: f.teacher_first_name,
-                        teacher_last_name: f.teacher_last_name,
-                        teacher_display_name: f.teacher_display_name,
-                      },
-                      options.teacherNameFormat
-                    )
-                  )}</div>`
-              )
-              .join('')
-            const flexLines = flexTeachers
-              .map(f => {
-                // When Break Coverage feature is off, do not show break prefix in PDF.
-                const prefix =
-                  f.event_category === 'break' && BREAK_COVERAGE_ENABLED
-                    ? options.colorFriendly
-                      ? '[Break] '
-                      : '☕ '
-                    : options.colorFriendly
-                      ? ''
-                      : '◦ '
-                return `<div style="color:${color.flex}; font-weight:500;">${prefix}${escapeHtml(
-                  formatTeacherName(
-                    {
-                      teacher_name: f.teacher_name,
-                      teacher_first_name: f.teacher_first_name,
-                      teacher_last_name: f.teacher_last_name,
-                      teacher_display_name: f.teacher_display_name,
-                    },
-                    options.teacherNameFormat
+                  .sort(sortByName)
+                const flexTeachers = assignments
+                  .filter(
+                    a =>
+                      !a.is_substitute &&
+                      !a.is_floater &&
+                      a.is_flexible &&
+                      !absentTeacherIds.has(a.teacher_id)
                   )
-                )}</div>`
-              })
-              .join('')
-            const absenceLines = options.showAbsencesAndSubs
-              ? sortedAbsences
-                  .map(absence => {
-                    const subsForAbsence = substitutesByAbsentTeacher.get(absence.teacher_id) || []
-                    const subLines = subsForAbsence
-                      .map(
-                        sub =>
-                          `<div style="color:${color.sub}; font-weight:500;">↳ ${escapeHtml(
-                            formatTeacherName(
-                              {
-                                teacher_name: sub.teacher_name,
-                                teacher_first_name: sub.teacher_first_name,
-                                teacher_last_name: sub.teacher_last_name,
-                                teacher_display_name: sub.teacher_display_name,
-                              },
-                              options.teacherNameFormat
-                            )
-                          )}</div>`
-                      )
-                      .join('')
-                    const noSub =
-                      !absence.has_sub && subsForAbsence.length === 0
-                        ? `<span style="color:${options.colorFriendly ? '#EA580C' : color.absent};"> (no sub)</span>`
+                  .sort(sortByName)
+                const floaters = assignments
+                  .filter(
+                    a => !a.is_substitute && a.is_floater && !absentTeacherIds.has(a.teacher_id)
+                  )
+                  .sort(sortByName)
+                const sortedAbsences = [...absences].sort(sortByName)
+
+                const teacherLines = regularTeachers
+                  .map(t => {
+                    const breakStr =
+                      t.break_start_time && t.break_end_time
+                        ? ` <span style="font-size:10px; opacity:0.8;">☕ ${t.break_start_time.slice(0, 5)} - ${t.break_end_time.slice(0, 5)}</span>`
                         : ''
-                    return `
-                    <div style="color:${color.absent}; font-weight:500;">
+                    return `<div style="color:${color.permanent}; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">${escapeHtml(
+                      formatTeacherName(
+                        {
+                          teacher_name: t.teacher_name,
+                          teacher_first_name: t.teacher_first_name,
+                          teacher_last_name: t.teacher_last_name,
+                          teacher_display_name: t.teacher_display_name,
+                        },
+                        options.teacherNameFormat
+                      )
+                    )}${breakStr}</div>`
+                  })
+                  .join('')
+                const floaterLines = floaters
+                  .map(
+                    f =>
+                      `<div style="color:${color.floater}; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">${
+                        options.colorFriendly ? '' : '↔ '
+                      }${escapeHtml(
+                        formatTeacherName(
+                          {
+                            teacher_name: f.teacher_name,
+                            teacher_first_name: f.teacher_first_name,
+                            teacher_last_name: f.teacher_last_name,
+                            teacher_display_name: f.teacher_display_name,
+                          },
+                          options.teacherNameFormat
+                        )
+                      )}</div>`
+                  )
+                  .join('')
+                const flexLines = flexTeachers
+                  .map(f => {
+                    // When Break Coverage feature is off, do not show break prefix in PDF.
+                    const prefix =
+                      f.event_category === 'break' && BREAK_COVERAGE_ENABLED
+                        ? options.colorFriendly
+                          ? '[Break] '
+                          : '☕ '
+                        : options.colorFriendly
+                          ? ''
+                          : '◦ '
+                    return `<div style="color:${color.flex}; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">${prefix}${escapeHtml(
+                      formatTeacherName(
+                        {
+                          teacher_name: f.teacher_name,
+                          teacher_first_name: f.teacher_first_name,
+                          teacher_last_name: f.teacher_last_name,
+                          teacher_display_name: f.teacher_display_name,
+                        },
+                        options.teacherNameFormat
+                      )
+                    )}</div>`
+                  })
+                  .join('')
+                const absenceLines = options.showAbsencesAndSubs
+                  ? sortedAbsences
+                      .map(absence => {
+                        const subsForAbsence =
+                          substitutesByAbsentTeacher.get(absence.teacher_id) || []
+                        const subLines = subsForAbsence
+                          .map(
+                            sub =>
+                              `<div style="color:${color.sub}; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">↳ ${escapeHtml(
+                                formatTeacherName(
+                                  {
+                                    teacher_name: sub.teacher_name,
+                                    teacher_first_name: sub.teacher_first_name,
+                                    teacher_last_name: sub.teacher_last_name,
+                                    teacher_display_name: sub.teacher_display_name,
+                                  },
+                                  options.teacherNameFormat
+                                )
+                              )}</div>`
+                          )
+                          .join('')
+                        const noSubLine =
+                          !absence.has_sub && subsForAbsence.length === 0
+                            ? options.colorFriendly
+                              ? `<div style="color:#B45309; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">↳ <span style="background:#FEF3C7; color:#92400E; border-radius:2px; padding:1px 4px;">No sub</span></div>`
+                              : `<div style="color:#64748B; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">↳ <span style="background:#F1F5F9; color:#475569; border-radius:2px; padding:1px 4px;">No sub</span></div>`
+                            : ''
+                        return `
+                    <div style="color:${color.absent}; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">
                       <span style="text-decoration: line-through;">${escapeHtml(
                         formatTeacherName(
                           {
@@ -352,24 +364,47 @@ export function buildDailySchedulePdfHtml({
                           },
                           options.teacherNameFormat
                         )
-                      )}</span>${noSub}
+                      )}</span>
                     </div>
+                    ${noSubLine}
                     ${subLines}`
-                  })
-                  .join('')
-              : ''
+                      })
+                      .join('')
+                  : ''
+                const ratioSummary =
+                  (options.showRequiredRatios || options.showPreferredRatios) && youngestRatioGroup
+                    ? formatRatioSummary({
+                        showRequiredRatios: options.showRequiredRatios,
+                        showPreferredRatios: options.showPreferredRatios,
+                        requiredRatio: youngestRatioGroup.required_ratio,
+                        preferredRatio: youngestRatioGroup.preferred_ratio,
+                      })
+                    : null
+                const metricsLines = [enrollmentSummary, ratioSummary].filter(
+                  (line): line is string => typeof line === 'string' && line.length > 0
+                )
+                const hasTeacherContent = Boolean(
+                  teacherLines || floaterLines || flexLines || absenceLines
+                )
+                const metricsBlock =
+                  metricsLines.length > 0
+                    ? `<div style="font-size:9px; font-weight:500; line-height:1.2; color:#64748B; background:#F8FAFC; border-radius:2px; padding:4px 6px; margin-left:-2px; margin-right:-2px;${hasTeacherContent ? ' margin-bottom:4px;' : ''}">${metricsLines
+                        .map(line => `<div>${escapeHtml(line)}</div>`)
+                        .join('')}</div>`
+                    : ''
 
-            return `
+                return `
             <td style="border:1px solid ${color.grid}; padding:6px; font-size:${fontSize}px; vertical-align:top;">
-              <div style="display:flex; flex-direction:column; gap:4px;">
+              <div style="display:flex; flex-direction:column; gap:0;">
+                ${metricsBlock}
                 ${teacherLines}
                 ${floaterLines}
                 ${flexLines}
                 ${absenceLines}
               </div>
             </td>`
-          })
-          .join('')
+              })
+              .join('')
 
         return `<tr>${timeCell}${cells}</tr>`
       })
@@ -383,7 +418,7 @@ export function buildDailySchedulePdfHtml({
       </colgroup>
       <thead>
         <tr>
-          <th style="border:1px solid ${color.grid}; padding:6px; text-align:left; font-size:12px; font-weight:600; color:#334155;">Time</th>
+          <th style="border:1px solid ${color.grid}; background:#F8FAFC; padding:6px; text-align:left; font-size:12px; font-weight:600; color:#334155;">Time</th>
           ${buildTableHeaders(classrooms)}
         </tr>
       </thead>
@@ -405,7 +440,7 @@ export function buildDailySchedulePdfHtml({
         <title>Daily Schedule</title>
         <style>
           * { box-sizing: border-box; }
-          body { font-family: Arial, sans-serif; color: #0F172A; margin: 0; }
+          body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0F172A; margin: 0; }
           table { width: 100%; border-collapse: collapse; table-layout: fixed; }
           col.time-col { width: ${timeColWidth}px; }
           .legend { display: flex; gap: 12px; font-size: 11px; color: #475569; margin-top: 6px; }
@@ -436,6 +471,15 @@ export function buildDailySchedulePdfHtml({
                   }</div>
                   <div style="color:${color.sub};">↳ Sub</div>
                   <div style="color:${color.absent}; text-decoration: line-through;">Absent</div>
+                  ${
+                    options.showRequiredRatios && options.showPreferredRatios
+                      ? `<div style="color:#64748B;">(R) Required ratio · (P) Preferred ratio</div>`
+                      : options.showRequiredRatios
+                        ? `<div style="color:#64748B;">(R) Required ratio</div>`
+                        : options.showPreferredRatios
+                          ? `<div style="color:#64748B;">(P) Preferred ratio</div>`
+                          : ''
+                  }
                 </div>
                 ${renderTable(classrooms)}
               </div>
