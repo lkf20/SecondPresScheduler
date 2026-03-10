@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getTimeOffRequestById } from '@/lib/api/time-off'
 import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
 import { createErrorResponse, getErrorMessage } from '@/lib/utils/errors'
+import { isNeedsReviewClassroomName } from '@/lib/utils/needs-review-classroom'
 
 /**
  * GET /api/sub-finder/coverage-request/[absence_id]
@@ -198,7 +199,9 @@ export async function GET(
     // Get coverage_request_shifts
     const { data: coverageRequestShifts, error: shiftsError } = await supabase
       .from('coverage_request_shifts')
-      .select('id, date, time_slot_id, classroom_id, time_slot:time_slots(code)')
+      .select(
+        'id, date, time_slot_id, classroom_id, time_slot:time_slots(code), classroom:classrooms(name)'
+      )
       .eq('coverage_request_id', coverageRequestId)
 
     if (shiftsError) {
@@ -221,6 +224,10 @@ export async function GET(
       })
     }
 
+    const needsReviewShiftCount = (coverageRequestShifts || []).filter((shift: any) =>
+      isNeedsReviewClassroomName(shift.classroom?.name)
+    ).length
+
     // Return both maps - the detailed one takes precedence
     const combinedMap = Object.fromEntries(shiftMap)
     // Add simple keys for backward compatibility
@@ -233,6 +240,8 @@ export async function GET(
     return NextResponse.json({
       coverage_request_id: coverageRequestId,
       shift_map: combinedMap,
+      needs_classroom_review: needsReviewShiftCount > 0,
+      needs_review_shift_count: needsReviewShiftCount,
     })
   } catch (error) {
     console.error('Error fetching coverage request:', error)

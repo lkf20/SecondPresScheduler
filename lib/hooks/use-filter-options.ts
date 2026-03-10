@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 import type { Database } from '@/types/database'
+import { isNeedsReviewClassroomName } from '@/lib/utils/needs-review-classroom'
 
 type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
 type TimeSlot = Database['public']['Tables']['time_slots']['Row']
@@ -34,7 +35,9 @@ async function fetchFilterOptions(): Promise<FilterOptions> {
   return {
     days: days || [],
     timeSlots: timeSlots || [],
-    classrooms: classrooms || [],
+    classrooms: (classrooms || []).filter(
+      (classroom: Classroom) => !isNeedsReviewClassroomName(classroom.name)
+    ),
   }
 }
 

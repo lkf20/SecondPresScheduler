@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft, Plus } from 'lucide-react'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import SortableClassroomsTable from '@/components/settings/SortableClassroomsTable'
+import { isNeedsReviewClassroomName } from '@/lib/utils/needs-review-classroom'
 
 type ClassroomWithAllowed = Awaited<ReturnType<typeof getClassrooms>>[number]
 
@@ -20,13 +21,15 @@ export default async function ClassroomsPage() {
   }
 
   // Add computed fields for display
-  const classroomsWithComputed = classrooms.map(classroom => ({
-    ...classroom,
-    allowed_classes_display:
-      classroom.allowed_classes_count > 0
-        ? `${classroom.allowed_classes_names} (${classroom.allowed_classes_count})`
-        : 'None',
-  }))
+  const classroomsWithComputed = classrooms
+    .filter(classroom => !isNeedsReviewClassroomName(classroom.name))
+    .map(classroom => ({
+      ...classroom,
+      allowed_classes_display:
+        classroom.allowed_classes_count > 0
+          ? `${classroom.allowed_classes_names} (${classroom.allowed_classes_count})`
+          : 'None',
+    }))
 
   return (
     <div>
