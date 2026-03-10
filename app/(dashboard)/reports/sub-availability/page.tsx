@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 
 const SUB_AVAILABILITY_PDF_URL = '/api/reports/sub-availability/pdf'
 const SUB_AVAILABILITY_DATA_URL = '/api/reports/sub-availability'
+const SUB_AVAILABILITY_DEFAULTS_URL = '/api/reports/sub-availability/defaults'
 
 type ReportData = {
   generated_at: string
@@ -50,9 +51,15 @@ export default function SubAvailabilityReportPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reportData, setReportData] = useState<ReportData | null>(null)
+  const [isSavingTopDefault, setIsSavingTopDefault] = useState(false)
+  const [isSavingFooterDefault, setIsSavingFooterDefault] = useState(false)
+  const [defaultTopHeaderHtml, setDefaultTopHeaderHtml] = useState('')
+  const [defaultFooterNotesHtml, setDefaultFooterNotesHtml] = useState('')
   const topHeaderEditorRef = useRef<HTMLDivElement | null>(null)
   const footerEditorRef = useRef<HTMLDivElement | null>(null)
   const [activeEditor, setActiveEditor] = useState<'top' | 'footer'>('footer')
+  const topHeaderEditedRef = useRef(false)
+  const footerEditedRef = useRef(false)
 
   useEffect(() => {
     let mounted = true
@@ -82,6 +89,47 @@ export default function SubAvailabilityReportPage() {
       mounted = false
     }
   }, [nameFormat])
+
+  useEffect(() => {
+    let mounted = true
+
+    const loadDefaults = async () => {
+      try {
+        const response = await fetch(SUB_AVAILABILITY_DEFAULTS_URL, { cache: 'no-store' })
+        if (!response.ok) return
+
+        const payload = await response.json()
+        if (!mounted) return
+
+        const nextTopHeader =
+          typeof payload?.top_header_html === 'string' ? payload.top_header_html : ''
+        const nextFooter =
+          typeof payload?.footer_notes_html === 'string' ? payload.footer_notes_html : ''
+        setDefaultTopHeaderHtml(nextTopHeader)
+        setDefaultFooterNotesHtml(nextFooter)
+
+        if (!topHeaderEditedRef.current) {
+          setTopHeaderHtml(nextTopHeader)
+          if (topHeaderEditorRef.current) {
+            topHeaderEditorRef.current.innerHTML = nextTopHeader
+          }
+        }
+        if (!footerEditedRef.current) {
+          setFooterNotesHtml(nextFooter)
+          if (footerEditorRef.current) {
+            footerEditorRef.current.innerHTML = nextFooter
+          }
+        }
+      } catch {
+        // Keep defaults optional. If this fails, report still works.
+      }
+    }
+
+    void loadDefaults()
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   const pdfUrl = useMemo(() => {
     const params = new URLSearchParams()
@@ -126,6 +174,16 @@ export default function SubAvailabilityReportPage() {
     () => sanitizeRichTextHtml(footerNotesHtml, 4000),
     [footerNotesHtml]
   )
+  const normalizeForCompare = (html: string) =>
+    sanitizeRichTextHtml(html, 4000)
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\u00a0/g, ' ')
+      .replace(/>\s+</g, '><')
+      .trim()
+  const isTopHeaderSaved =
+    normalizeForCompare(topHeaderHtml) === normalizeForCompare(defaultTopHeaderHtml)
+  const isFooterSaved =
+    normalizeForCompare(footerNotesHtml) === normalizeForCompare(defaultFooterNotesHtml)
 
   const openPdf = () => {
     const popup = window.open(pdfUrl, '_blank', 'noopener,noreferrer')
@@ -134,6 +192,56 @@ export default function SubAvailabilityReportPage() {
       return
     }
     toast.success('Opening PDF...')
+  }
+
+  const handleSaveTopHeaderDefault = async () => {
+    setIsSavingTopDefault(true)
+    try {
+      const response = await fetch(SUB_AVAILABILITY_DEFAULTS_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          top_header_html: topHeaderHtml,
+        }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to save defaults')
+      }
+
+      setDefaultTopHeaderHtml(topHeaderHtml)
+      toast.success('Saved default top header.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save defaults')
+    } finally {
+      setIsSavingTopDefault(false)
+    }
+  }
+
+  const handleSaveFooterDefault = async () => {
+    setIsSavingFooterDefault(true)
+    try {
+      const response = await fetch(SUB_AVAILABILITY_DEFAULTS_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          footer_notes_html: footerNotesHtml,
+        }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to save defaults')
+      }
+
+      setDefaultFooterNotesHtml(footerNotesHtml)
+      toast.success('Saved default bottom footer.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save defaults')
+    } finally {
+      setIsSavingFooterDefault(false)
+    }
   }
 
   const renderCanTeachCell = (values: string[]) => {
@@ -378,25 +486,77 @@ export default function SubAvailabilityReportPage() {
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Top header (optional)</label>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-sm font-medium text-slate-700">Top header (optional)</label>
+                <span
+                  className={cn(
+                    'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                    isTopHeaderSaved
+                      ? 'border-slate-200 bg-slate-100 text-slate-600'
+                      : 'border-amber-200 bg-amber-100 text-amber-800'
+                  )}
+                >
+                  {isTopHeaderSaved ? 'Saved' : 'Unsaved changes'}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSaveTopHeaderDefault}
+                  disabled={isSavingTopDefault}
+                  className="h-7 px-2 text-slate-600 hover:text-slate-900"
+                >
+                  {isSavingTopDefault ? 'Saving...' : 'Save as default header'}
+                </Button>
+              </div>
               <div
                 ref={topHeaderEditorRef}
                 contentEditable
                 suppressContentEditableWarning
                 onFocus={() => setActiveEditor('top')}
-                onInput={e => setTopHeaderHtml((e.currentTarget as HTMLDivElement).innerHTML)}
+                onInput={e => {
+                  topHeaderEditedRef.current = true
+                  setTopHeaderHtml((e.currentTarget as HTMLDivElement).innerHTML)
+                }}
                 className="min-h-[70px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
                 data-placeholder="Optional centered header shown above the report title."
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Bottom footer (optional)</label>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-sm font-medium text-slate-700">
+                  Bottom footer (optional)
+                </label>
+                <span
+                  className={cn(
+                    'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                    isFooterSaved
+                      ? 'border-slate-200 bg-slate-100 text-slate-600'
+                      : 'border-amber-200 bg-amber-100 text-amber-800'
+                  )}
+                >
+                  {isFooterSaved ? 'Saved' : 'Unsaved changes'}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSaveFooterDefault}
+                  disabled={isSavingFooterDefault}
+                  className="h-7 px-2 text-slate-600 hover:text-slate-900"
+                >
+                  {isSavingFooterDefault ? 'Saving...' : 'Save as default footer'}
+                </Button>
+              </div>
               <div
                 ref={footerEditorRef}
                 contentEditable
                 suppressContentEditableWarning
                 onFocus={() => setActiveEditor('footer')}
-                onInput={e => setFooterNotesHtml((e.currentTarget as HTMLDivElement).innerHTML)}
+                onInput={e => {
+                  footerEditedRef.current = true
+                  setFooterNotesHtml((e.currentTarget as HTMLDivElement).innerHTML)
+                }}
                 className="min-h-[70px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
                 data-placeholder="Add optional instructions to appear at the bottom of the printed report."
               />

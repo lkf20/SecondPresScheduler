@@ -643,6 +643,8 @@ export type Database = {
           id: string
           school_id: string
           selected_day_ids: Json
+          sub_availability_footer_notes_html: string | null
+          sub_availability_top_header_html: string | null
           time_zone: string
           updated_at: string | null
         }
@@ -652,6 +654,8 @@ export type Database = {
           id?: string
           school_id: string
           selected_day_ids?: Json
+          sub_availability_footer_notes_html?: string | null
+          sub_availability_top_header_html?: string | null
           time_zone?: string
           updated_at?: string | null
         }
@@ -661,6 +665,8 @@ export type Database = {
           id?: string
           school_id?: string
           selected_day_ids?: Json
+          sub_availability_footer_notes_html?: string | null
+          sub_availability_top_header_html?: string | null
           time_zone?: string
           updated_at?: string | null
         }

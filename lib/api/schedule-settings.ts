@@ -7,6 +7,8 @@ export interface ScheduleSettings {
   selected_day_ids: string[]
   default_display_name_format: DisplayNameFormat
   time_zone: string
+  sub_availability_top_header_html?: string | null
+  sub_availability_footer_notes_html?: string | null
   created_at: string
   updated_at: string
 }
