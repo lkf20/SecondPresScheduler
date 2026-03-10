@@ -455,10 +455,11 @@ export function buildSubAvailabilityPdfHtml({
       }
       .header-left {
         justify-self: start;
+        min-width: 0;
       }
       .header-center {
         justify-self: center;
-        width: 650px;
+        width: 614px;
         max-width: 100%;
         text-align: center;
       }
@@ -474,6 +475,7 @@ export function buildSubAvailabilityPdfHtml({
         margin-top: 2px;
         font-size: 11px;
         color: #64748b;
+        white-space: nowrap;
       }
       .stats {
         font-size: 11px;
