@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import {
   MAX_FOOTER_NOTES_HTML,
   MAX_TOP_HEADER_HTML,
+  sanitizeRichTextHtml,
   truncateRichText,
 } from '@/lib/reports/rich-text'
 
@@ -55,57 +56,37 @@ export const upsertReportDefaults = async ({
   hasFooterNotes,
   columns,
 }: UpsertDefaultsInput) => {
-  const topHeader = hasTopHeader ? truncateRichText(topHeaderHtml, MAX_TOP_HEADER_HTML) : undefined
+  const topHeader = hasTopHeader
+    ? sanitizeRichTextHtml(
+        truncateRichText(topHeaderHtml, MAX_TOP_HEADER_HTML),
+        MAX_TOP_HEADER_HTML
+      )
+    : undefined
   const footerNotes = hasFooterNotes
-    ? truncateRichText(footerNotesHtml, MAX_FOOTER_NOTES_HTML)
+    ? sanitizeRichTextHtml(
+        truncateRichText(footerNotesHtml, MAX_FOOTER_NOTES_HTML),
+        MAX_FOOTER_NOTES_HTML
+      )
     : undefined
 
   const supabase = await createClient()
-  const { data: existing, error: existingError } = await supabase
-    .from('schedule_settings')
-    .select('id')
-    .eq('school_id', schoolId)
-    .limit(1)
-    .maybeSingle()
-
-  if (existingError) {
-    throw new Error(existingError.message || 'Failed to load schedule settings.')
+  const upsertPayload: Record<string, unknown> = {
+    school_id: schoolId,
+    updated_at: new Date().toISOString(),
+  }
+  if (hasTopHeader) {
+    upsertPayload[columns.topHeaderColumn] = topHeader || null
+  }
+  if (hasFooterNotes) {
+    upsertPayload[columns.footerNotesColumn] = footerNotes || null
   }
 
-  if (existing?.id) {
-    const updatePayload: Record<string, string | null> = {}
-    if (hasTopHeader) {
-      updatePayload[columns.topHeaderColumn] = topHeader || null
-    }
-    if (hasFooterNotes) {
-      updatePayload[columns.footerNotesColumn] = footerNotes || null
-    }
+  const { error: upsertError } = await supabase
+    .from('schedule_settings')
+    .upsert(upsertPayload, { onConflict: 'school_id' })
 
-    const { error: updateError } = await supabase
-      .from('schedule_settings')
-      .update({ ...updatePayload, updated_at: new Date().toISOString() })
-      .eq('id', existing.id)
-
-    if (updateError) {
-      throw new Error(updateError.message || 'Failed to save report defaults.')
-    }
-  } else {
-    const insertPayload: Record<string, unknown> = {
-      school_id: schoolId,
-      selected_day_ids: [],
-    }
-    if (hasTopHeader) {
-      insertPayload[columns.topHeaderColumn] = topHeader || null
-    }
-    if (hasFooterNotes) {
-      insertPayload[columns.footerNotesColumn] = footerNotes || null
-    }
-
-    const { error: insertError } = await supabase.from('schedule_settings').insert(insertPayload)
-
-    if (insertError) {
-      throw new Error(insertError.message || 'Failed to save report defaults.')
-    }
+  if (upsertError) {
+    throw new Error(upsertError.message || 'Failed to save report defaults.')
   }
 
   return {

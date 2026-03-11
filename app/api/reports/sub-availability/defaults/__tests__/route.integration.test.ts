@@ -44,22 +44,13 @@ describe('Sub availability defaults route', () => {
     })
   })
 
-  it('PUT updates existing schedule settings row', async () => {
-    const updateEq = jest.fn().mockResolvedValue({ error: null })
-    const update = jest.fn(() => ({ eq: updateEq }))
-
+  it('PUT upserts schedule settings row', async () => {
+    const upsert = jest.fn().mockResolvedValue({ error: null })
     ;(createClient as jest.Mock).mockResolvedValue({
       from: jest.fn((table: string) => {
         if (table !== 'schedule_settings') throw new Error('Unexpected table')
         return {
-          select: jest.fn().mockReturnThis(),
-          eq: jest.fn().mockReturnThis(),
-          limit: jest.fn().mockReturnThis(),
-          maybeSingle: jest.fn().mockResolvedValue({
-            data: { id: 'settings-1' },
-            error: null,
-          }),
-          update,
+          upsert,
         }
       }),
     })
@@ -81,29 +72,23 @@ describe('Sub availability defaults route', () => {
       top_header_html: '<div>A</div>',
       footer_notes_html: '<div>B</div>',
     })
-    expect(update).toHaveBeenCalledWith(
+    expect(upsert).toHaveBeenCalledWith(
       expect.objectContaining({
+        school_id: 'school-1',
         sub_availability_top_header_html: '<div>A</div>',
         sub_availability_footer_notes_html: '<div>B</div>',
-      })
+      }),
+      { onConflict: 'school_id' }
     )
   })
 
-  it('PUT inserts row when schedule settings row does not exist', async () => {
-    const insert = jest.fn().mockResolvedValue({ error: null })
-
+  it('PUT upserts when schedule settings row does not exist', async () => {
+    const upsert = jest.fn().mockResolvedValue({ error: null })
     ;(createClient as jest.Mock).mockResolvedValue({
       from: jest.fn((table: string) => {
         if (table !== 'schedule_settings') throw new Error('Unexpected table')
         return {
-          select: jest.fn().mockReturnThis(),
-          eq: jest.fn().mockReturnThis(),
-          limit: jest.fn().mockReturnThis(),
-          maybeSingle: jest.fn().mockResolvedValue({
-            data: null,
-            error: null,
-          }),
-          insert,
+          upsert,
         }
       }),
     })
@@ -120,32 +105,23 @@ describe('Sub availability defaults route', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(insert).toHaveBeenCalledWith(
+    expect(upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         school_id: 'school-1',
-        selected_day_ids: [],
         sub_availability_top_header_html: '<div>A</div>',
         sub_availability_footer_notes_html: '<div>B</div>',
-      })
+      }),
+      { onConflict: 'school_id' }
     )
   })
 
   it('PUT supports saving top header only without overwriting footer', async () => {
-    const updateEq = jest.fn().mockResolvedValue({ error: null })
-    const update = jest.fn(() => ({ eq: updateEq }))
-
+    const upsert = jest.fn().mockResolvedValue({ error: null })
     ;(createClient as jest.Mock).mockResolvedValue({
       from: jest.fn((table: string) => {
         if (table !== 'schedule_settings') throw new Error('Unexpected table')
         return {
-          select: jest.fn().mockReturnThis(),
-          eq: jest.fn().mockReturnThis(),
-          limit: jest.fn().mockReturnThis(),
-          maybeSingle: jest.fn().mockResolvedValue({
-            data: { id: 'settings-1' },
-            error: null,
-          }),
-          update,
+          upsert,
         }
       }),
     })
@@ -165,15 +141,46 @@ describe('Sub availability defaults route', () => {
     expect(json).toEqual({
       top_header_html: '<div>Top only</div>',
     })
-    expect(update).toHaveBeenCalledWith(
+    expect(upsert).toHaveBeenCalledWith(
       expect.objectContaining({
+        school_id: 'school-1',
         sub_availability_top_header_html: '<div>Top only</div>',
-      })
+      }),
+      { onConflict: 'school_id' }
     )
-    expect(update).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        sub_availability_footer_notes_html: expect.anything(),
-      })
+    const [payload] = upsert.mock.calls[0]
+    expect(payload).not.toHaveProperty('sub_availability_footer_notes_html')
+  })
+
+  it('PUT sanitizes unsafe html before persistence', async () => {
+    const upsert = jest.fn().mockResolvedValue({ error: null })
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table !== 'schedule_settings') throw new Error('Unexpected table')
+        return { upsert }
+      }),
+    })
+
+    const response = await PUT(
+      new Request('http://localhost/api/reports/sub-availability/defaults', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          footer_notes_html:
+            '<div style="position:absolute"><script>alert(1)</script><span>Footer</span></div>',
+        }),
+      }) as any
     )
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.footer_notes_html).toContain('Footer')
+    expect(json.footer_notes_html).not.toContain('<script')
+    expect(json.footer_notes_html).not.toContain('position:absolute')
+
+    const [payload] = upsert.mock.calls[0]
+    expect(String(payload.sub_availability_footer_notes_html)).toContain('Footer')
+    expect(String(payload.sub_availability_footer_notes_html)).not.toContain('<script')
+    expect(String(payload.sub_availability_footer_notes_html)).not.toContain('position:absolute')
   })
 })

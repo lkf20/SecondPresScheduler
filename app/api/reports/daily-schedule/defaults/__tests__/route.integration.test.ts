@@ -44,22 +44,13 @@ describe('Daily schedule defaults route', () => {
     })
   })
 
-  it('PUT updates existing settings row', async () => {
-    const updateEq = jest.fn().mockResolvedValue({ error: null })
-    const update = jest.fn(() => ({ eq: updateEq }))
-
+  it('PUT upserts settings row', async () => {
+    const upsert = jest.fn().mockResolvedValue({ error: null })
     ;(createClient as jest.Mock).mockResolvedValue({
       from: jest.fn((table: string) => {
         if (table !== 'schedule_settings') throw new Error('Unexpected table')
         return {
-          select: jest.fn().mockReturnThis(),
-          eq: jest.fn().mockReturnThis(),
-          limit: jest.fn().mockReturnThis(),
-          maybeSingle: jest.fn().mockResolvedValue({
-            data: { id: 'settings-1' },
-            error: null,
-          }),
-          update,
+          upsert,
         }
       }),
     })
@@ -75,26 +66,22 @@ describe('Daily schedule defaults route', () => {
 
     expect(response.status).toBe(200)
     expect(json).toEqual({ top_header_html: '<div>A</div>' })
-    expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({ daily_schedule_top_header_html: '<div>A</div>' })
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        school_id: 'school-1',
+        daily_schedule_top_header_html: '<div>A</div>',
+      }),
+      { onConflict: 'school_id' }
     )
   })
 
-  it('PUT inserts row when settings row does not exist', async () => {
-    const insert = jest.fn().mockResolvedValue({ error: null })
-
+  it('PUT upserts footer defaults', async () => {
+    const upsert = jest.fn().mockResolvedValue({ error: null })
     ;(createClient as jest.Mock).mockResolvedValue({
       from: jest.fn((table: string) => {
         if (table !== 'schedule_settings') throw new Error('Unexpected table')
         return {
-          select: jest.fn().mockReturnThis(),
-          eq: jest.fn().mockReturnThis(),
-          limit: jest.fn().mockReturnThis(),
-          maybeSingle: jest.fn().mockResolvedValue({
-            data: null,
-            error: null,
-          }),
-          insert,
+          upsert,
         }
       }),
     })
@@ -108,12 +95,43 @@ describe('Daily schedule defaults route', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(insert).toHaveBeenCalledWith(
+    expect(upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         school_id: 'school-1',
-        selected_day_ids: [],
         daily_schedule_footer_notes_html: '<div>Footer</div>',
-      })
+      }),
+      { onConflict: 'school_id' }
     )
+  })
+
+  it('PUT sanitizes unsafe html before persistence', async () => {
+    const upsert = jest.fn().mockResolvedValue({ error: null })
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table !== 'schedule_settings') throw new Error('Unexpected table')
+        return { upsert }
+      }),
+    })
+
+    const response = await PUT(
+      new Request('http://localhost/api/reports/daily-schedule/defaults', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          top_header_html: '<div onclick="alert(1)"><script>alert(1)</script>Safe</div>',
+        }),
+      }) as any
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.top_header_html).toContain('Safe')
+    expect(json.top_header_html).not.toContain('<script')
+    expect(json.top_header_html).not.toContain('onclick=')
+
+    const [payload] = upsert.mock.calls[0]
+    expect(String(payload.daily_schedule_top_header_html)).toContain('Safe')
+    expect(String(payload.daily_schedule_top_header_html)).not.toContain('<script')
+    expect(String(payload.daily_schedule_top_header_html)).not.toContain('onclick=')
   })
 })
