@@ -5,6 +5,9 @@ import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 import { revalidatePath } from 'next/cache'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
+import { toDateStringISO } from '@/lib/utils/date'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
+import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 
 const shouldDebugLog =
   process.env.NODE_ENV === 'development' || process.env.SUB_FINDER_DEBUG === 'true'
@@ -215,6 +218,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Reject assignment if any selected shift is on a school closed day
+    const assignableDates = assignableCoverageRequestShifts.map((s: any) => toDateStringISO(s.date))
+    const minDate = assignableDates.sort()[0]
+    const maxDate = assignableDates.sort().reverse()[0]
+    if (minDate && maxDate) {
+      const schoolClosures = await getSchoolClosuresForDateRange(requestSchoolId, minDate, maxDate)
+      const closureList = schoolClosures.map(c => ({ date: c.date, time_slot_id: c.time_slot_id }))
+      const closedShift = assignableCoverageRequestShifts.find((shift: any) =>
+        isSlotClosedOnDate(toDateStringISO(shift.date), shift.time_slot_id, closureList)
+      )
+      if (closedShift) {
+        return createErrorResponse(
+          'Cannot assign a sub to a shift on a day when school is closed. Please deselect shifts that fall on closed days.',
+          409
+        )
+      }
+    }
+
     if (
       coverageRequest.request_type === 'time_off' &&
       typeof coverageRequest.source_request_id === 'string'
@@ -229,10 +250,12 @@ export async function POST(request: NextRequest) {
       }
 
       const sourceShiftKeys = new Set(
-        (sourceRequestShifts || []).map((shift: any) => `${shift.date}|${shift.time_slot_id}`)
+        (sourceRequestShifts || []).map(
+          (shift: any) => `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
+        )
       )
       const includesCancelledShift = assignableCoverageRequestShifts.some((shift: any) => {
-        const key = `${shift.date}|${shift.time_slot_id}`
+        const key = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
         return !sourceShiftKeys.has(key)
       })
 
@@ -253,7 +276,9 @@ export async function POST(request: NextRequest) {
       )
     )
     const selectedShiftKeys = new Set(
-      assignableCoverageRequestShifts.map((shift: any) => `${shift.date}|${shift.time_slot_id}`)
+      assignableCoverageRequestShifts.map(
+        (shift: any) => `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
+      )
     )
     const { data: subScheduleCollisions, error: subCollisionError } = await supabase
       .from('sub_assignments')
@@ -268,7 +293,7 @@ export async function POST(request: NextRequest) {
     }
 
     const hasSubCollision = (subScheduleCollisions || []).some((assignment: any) =>
-      selectedShiftKeys.has(`${assignment.date}|${assignment.time_slot_id}`)
+      selectedShiftKeys.has(`${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`)
     )
     if (hasSubCollision) {
       return createErrorResponse(
@@ -445,6 +470,27 @@ export async function POST(request: NextRequest) {
     revalidatePath('/sub-finder')
     revalidatePath('/reports')
 
+    const shiftCount = createdAssignments?.length ?? assignableCoverageRequestShifts.length
+    const sortedDates = Array.from(
+      new Set(assignableCoverageRequestShifts.map((s: any) => s.date).filter(Boolean))
+    ).sort()
+    const formatMonthDay = (dateStr: string) => {
+      const [y, m, d] = dateStr.split('-').map(Number)
+      const date = new Date(y, (m ?? 1) - 1, d ?? 1)
+      const month = date.toLocaleString('en-US', { month: 'long' })
+      return `${month} ${date.getDate()}`
+    }
+    const dateLabel =
+      sortedDates.length === 0
+        ? ''
+        : sortedDates.length === 1
+          ? formatMonthDay(sortedDates[0])
+          : `${formatMonthDay(sortedDates[0])} – ${formatMonthDay(sortedDates[sortedDates.length - 1])}`
+    const summary =
+      subName && teacherName
+        ? `Assigned ${subName} to cover ${shiftCount} shift${shiftCount !== 1 ? 's' : ''} for ${teacherName}${dateLabel ? ` on ${dateLabel}` : ''}`
+        : undefined
+
     await logAuditEvent({
       schoolId: requestSchoolId,
       actorUserId,
@@ -461,6 +507,7 @@ export async function POST(request: NextRequest) {
         teacher_name: teacherName ?? undefined,
         assignment_ids: (createdAssignments || []).map((assignment: any) => assignment.id),
         shift_ids: uniqueSelectedShiftIds,
+        ...(summary ? { summary } : {}),
       },
     })
 

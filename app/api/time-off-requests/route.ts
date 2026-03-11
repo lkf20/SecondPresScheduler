@@ -4,6 +4,10 @@ import { getTimeOffRequests } from '@/lib/api/time-off'
 import { getTimeOffShifts, type TimeOffShiftWithDetails } from '@/lib/api/time-off-shifts'
 import { transformTimeOffCardData, type TimeOffCardData } from '@/lib/utils/time-off-card-data'
 import { createErrorResponse } from '@/lib/utils/errors'
+import { getUserSchoolId } from '@/lib/utils/auth'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
+import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
+import { toDateStringISO } from '@/lib/utils/date'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +29,15 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET(request: NextRequest) {
   try {
+    const schoolId = await getUserSchoolId()
+    if (!schoolId) {
+      return createErrorResponse(
+        new Error('User profile not found or missing school_id.'),
+        'Missing school context',
+        403
+      )
+    }
+
     const searchParams = request.nextUrl.searchParams
 
     // Parse filters
@@ -84,6 +97,23 @@ export async function GET(request: NextRequest) {
       filteredRequests = filteredRequests.filter(request => request.teacher_id === teacherId)
     }
 
+    // Fetch school closures for the request date range so we exclude closed-day shifts from totals and display
+    const dateRangeStart =
+      filteredRequests.length > 0
+        ? filteredRequests.map(r => r.start_date).reduce((a, b) => (a && b && a < b ? a : b))
+        : null
+    const dateRangeEnd =
+      filteredRequests.length > 0
+        ? filteredRequests
+            .map(r => r.end_date || r.start_date)
+            .reduce((a, b) => (a && b && a > b ? a : b))
+        : null
+    const schoolClosures =
+      dateRangeStart && dateRangeEnd
+        ? await getSchoolClosuresForDateRange(schoolId, dateRangeStart, dateRangeEnd)
+        : []
+    const closureList = schoolClosures.map(c => ({ date: c.date, time_slot_id: c.time_slot_id }))
+
     // Fetch shifts for all requests
     const teacherIds = Array.from(new Set(filteredRequests.map(r => r.teacher_id).filter(Boolean)))
 
@@ -124,18 +154,23 @@ export async function GET(request: NextRequest) {
     // Transform each request
     const results = await Promise.all(
       filteredRequests.map(async request => {
-        // Get shifts
+        // Get shifts (exclude shifts on school closed days, e.g. snow day added after request was created)
         let shifts: TimeOffShiftWithDetails[] = []
         try {
-          shifts = await getTimeOffShifts(request.id)
+          const allShifts = await getTimeOffShifts(request.id)
+          shifts = closureList.length
+            ? allShifts.filter(
+                s => !isSlotClosedOnDate(toDateStringISO(s.date), s.time_slot_id, closureList)
+              )
+            : allShifts
         } catch (error) {
           console.error(`Error fetching shifts for time off request ${request.id}:`, error)
           shifts = []
         }
 
-        // Get assignments if needed
+        // Get assignments if needed (exclude assignments on closed days)
         let assignments: any[] = []
-        if (includeAssignments && shifts.length > 0) {
+        if (includeAssignments) {
           const requestStartDate = request.start_date
           const requestEndDate = request.end_date || request.start_date
 
@@ -148,7 +183,14 @@ export async function GET(request: NextRequest) {
             .gte('date', requestStartDate)
             .lte('date', requestEndDate)
 
-          assignments = subAssignments || []
+          const rawAssignments = subAssignments || []
+          assignments =
+            closureList.length > 0
+              ? rawAssignments.filter(
+                  (a: any) =>
+                    !isSlotClosedOnDate(toDateStringISO(a.date), a.time_slot_id, closureList)
+                )
+              : rawAssignments
         }
 
         // Build classroom list

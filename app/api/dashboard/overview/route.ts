@@ -4,9 +4,11 @@ import { getUserSchoolId } from '@/lib/utils/auth'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { parseLocalDate, expandDateRangeWithTimeZone } from '@/lib/utils/date'
 import { getStaffingEndDate } from '@/lib/dashboard/staffing-boundary'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import { MONTH_NAMES } from '@/lib/utils/date-format'
 import { getStaffDisplayName, type DisplayNameFormat } from '@/lib/utils/staff-display-name'
 import { filterCoverageRequestsToActiveTimeOffOnly } from '@/lib/dashboard/filter-draft-time-off'
+import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 
 export async function GET(request: NextRequest) {
   try {
@@ -198,6 +200,17 @@ export async function GET(request: NextRequest) {
 
       coverageRequestShifts = shifts || []
     }
+
+    // Fetch school closures for coverage and staffing so we exclude closed-day shifts from counts and lists
+    const schoolClosuresForCoverage = await getSchoolClosuresForDateRange(
+      schoolId,
+      startDate,
+      staffingEndDateForFetch
+    )
+    const closureListForCoverage = schoolClosuresForCoverage.map(c => ({
+      date: c.date,
+      time_slot_id: c.time_slot_id,
+    }))
 
     // Get sub assignments in date range (scheduled subs)
     // We want all sub_assignments in the date range, not just those linked to coverage requests
@@ -430,10 +443,10 @@ export async function GET(request: NextRequest) {
         const reason = timeOffRequest?.reason || null
         const notes = timeOffRequest?.notes || null
 
-        // Get shifts for this request
-        const requestShifts = coverageRequestShifts.filter(
-          s => s.coverage_request_id === request.id
-        )
+        // Get shifts for this request, excluding shifts on school closed days (e.g. snow day added after request was created)
+        const requestShifts = coverageRequestShifts
+          .filter((s: any) => s.coverage_request_id === request.id)
+          .filter((s: any) => !isSlotClosedOnDate(s.date, s.time_slot_id, closureListForCoverage))
 
         // Get sub assignments for these shifts using coverage_request_shift_id
         const shiftIds = new Set(requestShifts.map((s: any) => s.id))
@@ -608,6 +621,8 @@ export async function GET(request: NextRequest) {
 
     // Process staffing targets: use 12-week lookahead for run-length and suggestions (coverage range unchanged)
     const expandedDates = expandDateRangeWithTimeZone(startDate, staffingEndDateForFetch, timeZone)
+    const closureList = closureListForCoverage
+
     const dayNumberToDayOfWeekId = new Map<number, string>()
     scheduleCells.forEach((cell: any) => {
       const dow = cell.day_of_week as any
@@ -647,6 +662,7 @@ export async function GET(request: NextRequest) {
         const classGroups = cell.class_groups || []
 
         if (cell.day_of_week_id !== dayOfWeekId) continue
+        if (isSlotClosedOnDate(dateEntry.date, cell.time_slot_id, closureList)) continue
 
         const classGroupForRatio = classGroups.reduce((lowest: any, current: any) => {
           const currentMinAge = current.min_age ?? Infinity
@@ -718,36 +734,38 @@ export async function GET(request: NextRequest) {
       return row?.coverage_request_id ?? null
     }
 
-    // Process scheduled subs
-    const processedScheduledSubs = (subAssignments || []).map((sa: any) => {
-      const sub = sa.sub as any
-      const teacher = sa.teacher as any
-      const classroom = sa.classroom as any
-      const dayOfWeek = sa.day_of_week as any
-      const timeSlot = sa.time_slot as any
+    // Process scheduled subs (exclude assignments on school closed days)
+    const processedScheduledSubs = (subAssignments || [])
+      .filter((sa: any) => !isSlotClosedOnDate(sa.date, sa.time_slot_id, closureListForCoverage))
+      .map((sa: any) => {
+        const sub = sa.sub as any
+        const teacher = sa.teacher as any
+        const classroom = sa.classroom as any
+        const dayOfWeek = sa.day_of_week as any
+        const timeSlot = sa.time_slot as any
 
-      const subName = sub
-        ? getStaffDisplayName(sub, displayNameFormat) || 'Unknown Sub'
-        : 'Unknown Sub'
+        const subName = sub
+          ? getStaffDisplayName(sub, displayNameFormat) || 'Unknown Sub'
+          : 'Unknown Sub'
 
-      const teacherName = teacher
-        ? getStaffDisplayName(teacher, displayNameFormat) || 'Unknown Teacher'
-        : 'Unknown Teacher'
+        const teacherName = teacher
+          ? getStaffDisplayName(teacher, displayNameFormat) || 'Unknown Teacher'
+          : 'Unknown Teacher'
 
-      return {
-        id: sa.id,
-        date: sa.date,
-        day_name: dayOfWeek?.name || 'Unknown',
-        time_slot_code: timeSlot?.code || 'Unknown',
-        classroom_name: classroom?.name || 'Unknown',
-        classroom_color: classroom?.color || null,
-        notes: sa.notes,
-        sub_name: subName,
-        sub_id: sub?.id,
-        teacher_name: teacherName,
-        coverage_request_id: getCoverageRequestId(sa),
-      }
-    })
+        return {
+          id: sa.id,
+          date: sa.date,
+          day_name: dayOfWeek?.name || 'Unknown',
+          time_slot_code: timeSlot?.code || 'Unknown',
+          classroom_name: classroom?.name || 'Unknown',
+          classroom_color: classroom?.color || null,
+          notes: sa.notes,
+          sub_name: subName,
+          sub_id: sub?.id,
+          teacher_name: teacherName,
+          coverage_request_id: getCoverageRequestId(sa),
+        }
+      })
 
     // Calculate summary
     const summary = {

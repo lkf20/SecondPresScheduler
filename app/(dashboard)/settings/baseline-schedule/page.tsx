@@ -55,7 +55,7 @@ export default function BaselineSchedulePage() {
     error: scheduleError,
   } = useWeeklySchedule(weekStartISO)
   const scheduleData = scheduleResponse?.classrooms ?? []
-  const schoolClosures = scheduleResponse?.school_closures ?? []
+  // Baseline is permanent (day × slot), not date-based; do not show school closures here (they appear on weekly schedule)
   const { data: scheduleSettings, isLoading: isLoadingSettings } = useScheduleSettings()
   const { data: filterOptions, isLoading: isLoadingFilters } = useFilterOptions()
 
@@ -147,6 +147,7 @@ export default function BaselineSchedulePage() {
           belowPreferred: true,
           fullyStaffed: true,
           inactive: true,
+          viewNotes: false,
         },
         displayMode: 'permanent-only', // Baseline schedule only shows permanent teachers
         layout: 'days-x-classrooms', // Default layout
@@ -174,6 +175,7 @@ export default function BaselineSchedulePage() {
         belowPreferred: true,
         fullyStaffed: true,
         inactive: true,
+        viewNotes: false,
       },
       displayMode: 'permanent-only', // Baseline schedule only shows permanent teachers
       layout: prev?.layout ?? 'days-x-classrooms',
@@ -382,9 +384,10 @@ export default function BaselineSchedulePage() {
                 if (fullyStaffed) return filters.displayFilters.fullyStaffed
                 return false
               }),
-          })),
+          }))
+          .filter(day => day.time_slots.length > 0), // collapse days with no matching slots
       }))
-      .filter(classroom => classroom.days.length > 0)
+      .filter(classroom => classroom.days.length > 0) // collapse classrooms with no matching slots
   }, [scheduleData, filters])
 
   // Calculate slot counts for display
@@ -436,24 +439,13 @@ export default function BaselineSchedulePage() {
         <LoadingSpinner />
       ) : (
         <>
-          <div className="mb-4 flex items-center gap-3">
-            <Button
-              variant="outline"
-              onClick={() => setFilterPanelOpen(true)}
-              className="flex items-center gap-2"
-            >
-              <Filter className="h-4 w-4" />
-              Views & Filters
-            </Button>
-            <p className="text-sm text-muted-foreground italic">
-              Showing {slotCounts.shown} of {slotCounts.total} slots
-            </p>
-          </div>
           <WeeklyScheduleGridNew
             data={filteredData}
             selectedDayIds={filters?.selectedDayIds ?? selectedDayIds}
+            scheduleDayIdsFromSettings={selectedDayIds}
             weekStartISO={weekStartISO}
             displayMode={filters?.displayMode ?? 'permanent-only'}
+            showNotes={filters?.displayFilters?.viewNotes ?? false}
             layout={filters?.layout ?? 'days-x-classrooms'}
             onRefresh={handleRefresh}
             onFilterPanelOpenChange={setFilterPanelOpen}
@@ -470,8 +462,24 @@ export default function BaselineSchedulePage() {
             showLegendSubstitutes={false}
             showLegendTemporaryCoverage={false}
             showFilterChips={false}
+            contentBelowLegend={
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setFilterPanelOpen(true)}
+                  className="flex items-center gap-2"
+                >
+                  <Filter className="h-4 w-4" />
+                  Views & Filters
+                </Button>
+                <p className="text-sm text-muted-foreground italic">
+                  Showing {slotCounts.shown} of {slotCounts.total} slots
+                </p>
+              </>
+            }
             returnToWeekly={returnToWeekly}
-            schoolClosures={schoolClosures}
+            showDateInHeader={false}
+            schoolClosures={[]}
           />
           <FilterPanel
             isOpen={filterPanelOpen}

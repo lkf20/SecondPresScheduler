@@ -51,6 +51,7 @@ write paths.
 - **Lifecycle:** no status; rows are created/deleted per request update.
 - **Derived vs stored:**
   - **Stored:** `date`, `time_slot_id`, `is_partial`, `start_time`, `end_time`
+- **School closures:** Shifts are not created for (date, time_slot) when that slot is closed (see `school_closures`). Time off POST/PUT filter requested shifts using `getSchoolClosuresForDateRange` and `isSlotClosedOnDate` so no time_off_shifts or coverage_request_shifts are created for closed days.
 
 ### Dashboard and time off
 

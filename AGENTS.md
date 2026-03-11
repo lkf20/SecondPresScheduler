@@ -129,6 +129,21 @@ When adding a new UI element (e.g. a chip, badge, or label):
 - **Avoid ad-hoc color classes** for status/warning/error states—use the shared constants or components so the app stays visually consistent.
 - **Secondary outline buttons (turquoise):** For secondary actions like Find Sub, Update Sub, and similar “go to sub-finder” or teal-accent actions, use `variant="teal"` on the Button component. This gives turquoise border and text with teal fill on hover. Do not use `variant="outline"` with custom teal classes—use the built-in `teal` variant for consistency.
 
+### Buttons (uniform UI)
+
+Use the shared `Button` component (`components/ui/button.tsx`) and these variants so the app stays uniform:
+
+| Variant         | Use for                           | Appearance / colors                           |
+| --------------- | --------------------------------- | --------------------------------------------- |
+| **default**     | Primary action (one per screen)   | `bg-primary` (theme primary; main CTA)        |
+| **teal**        | Primary or accent actions         | Turquoise border and text; teal fill on hover |
+| **outline**     | Secondary actions                 | Border + background; accent on hover          |
+| **ghost**       | Tertiary / low emphasis           | No border; subtle hover                       |
+| **destructive** | Destructive actions (e.g. delete) | Red/destructive theme                         |
+| **link**        | Inline link-style                 | Underline on hover                            |
+
+- Do not use custom blue (e.g. `bg-blue-600`) for primary actions—use `variant="default"` or `variant="teal"` per the table above so buttons match the rest of the app.
+
 ## Workflow
 
 - Work via pull requests. Follow the repo’s branch and commit rules (see `.cursor/rules` if present).
@@ -138,13 +153,16 @@ When adding a new UI element (e.g. a chip, badge, or label):
 
 - **First and last day of school:** Stored in `schedule_settings.first_day_of_school` and `last_day_of_school`. Managed on the School Calendar settings page (`/settings/calendar`).
 - **School closures:** Stored in `school_closures` (date, optional `time_slot_id`, reason). When `time_slot_id` is null, the whole day is closed; when set, only that time slot is closed on that date.
-- **Where closures appear:** Weekly schedule grid and baseline schedule show "School Closed" for closed cells. Printable Today's Schedule (on-screen and PDF) shows "School Closed" for closed cells. The weekly schedule legend includes "School Closed" when closures exist.
+- **Where closures appear:** The **weekly schedule** grid shows "School Closed" for closed cells (date-based view). The **baseline schedule** is permanent (day × slot, not date-based) and does _not_ show school closures; pass `schoolClosures={[]}` there. Printable Today's Schedule (on-screen and PDF) shows "School Closed" for closed cells. The weekly schedule legend includes "School Closed" when closures exist.
 - **Manage Calendar link:** The weekly schedule page has a "Manage Calendar" button (teal variant) that links to `/settings/calendar`.
 - **Helpers:** Use `isCellClosed` (from `lib/utils/school-closures.ts`) for weekly grid cells (needs `weekStartISO`, `dayNumber`, `timeSlotId`). Use `isSlotClosedOnDate` for single-date contexts (daily schedule, PDF). Use `getCellDateISO` (from `lib/utils/date.ts`) to compute the calendar date for a cell given week start and day number.
 - **Legends:** If you change how closed cells are shown (e.g. styling or wording), update the "School Closed" legend in the weekly schedule grid.
+- **School closures and business logic:** Time off, sub assignment, flex (temporary coverage), and dashboard must respect closures: do not create time off shifts or coverage for closed days; do not allow assigning a sub to a shift on a closed day; do not create flex/staffing_event_shifts for closed days; do not count closed days in dashboard “below required/preferred” staffing targets or in slot-run “below target” runs. Fetch closures via `getSchoolClosuresForDateRange` (from `lib/api/school-calendar.ts`) for the relevant date range and filter using `isSlotClosedOnDate` (from `lib/utils/school-closures.ts`). When **reading** data for display or aggregation (dashboard coverage, time-off-requests list, sub-finder absences, coverage-request shift maps, assigned-shifts), exclude time off shifts and sub assignments that fall on closed days so that “created first, then day marked closed” (e.g. snow day) is handled: those shifts/assignments are not shown as needing coverage and are not counted in totals.
+- **Testing school closures:** In API integration tests for time off, assign-shifts, and flex, mock `getSchoolClosuresForDateRange` (e.g. `jest.mock('@/lib/api/school-calendar', () => ({ getSchoolClosuresForDateRange: jest.fn().mockResolvedValue([]) }))`) so tests that do not assert closure behavior do not hit the DB. For closure behavior: add or update tests that mock `getSchoolClosuresForDateRange` to return closures for specific dates/slots and assert that shifts on those dates are excluded from creation (time off, flex) or that assignment is rejected with 409 (assign-shifts), and that `getSchoolClosuresForDateRange` is called with the expected school and date range.
 
 ## Baseline schedule: enrollment and staffing
 
+- **Inactive cells and Save:** Class groups are required only when the slot is active. Inactive cells can be saved without class groups. Save is disabled only when the parent (classroom or time slot) is inactive. See [Schedule Semantics Contract](docs/contracts/SCHEDULE_SEMANTICS_CONTRACT.md) (Edit panel: commit and cancel — Inactive cells).
 - **Per-class-group enrollment:** A schedule cell can store enrollment per class group (e.g. Toddler A: 3, Toddler B: 2) in `schedule_cell_class_groups.enrollment`. When any per-class enrollment is set, the total used for ratio is the sum of those values; otherwise the cell’s `enrollment_for_staffing` is used. The grid shows labels like “Toddler A (3), Toddler B (2)” when per-class enrollment is present.
 - **Staffing overrides:** A cell can override the auto-calculated required/preferred staff with `schedule_cells.required_staff_override` and `preferred_staff_override` (e.g. for nap time or combined groups). When set, these overrides are used instead of the ratio-based calculation. Use the shared helper `getTotalEnrollmentForCalculation` (from `ScheduleSidePanel`) for total enrollment and apply overrides in all places that compute or display required/preferred staff (ScheduleCell, ScheduleSidePanel, dashboard overview, slot-run, flex availability, baseline-schedule filtering).
 - **Legends:** If you add or change how enrollment or staffing targets are shown in the grid or panel, update any related legend or key.
@@ -165,6 +183,29 @@ When adding a new UI element (e.g. a chip, badge, or label):
 - **Refresh when moving off declined.** When the user changes contact status from “Declined all” to “Not contacted”, “Pending”, or “Confirmed”, refresh the contact panel (e.g. via `onAssignmentComplete`) so availability and shift coverage are shown again.
 - **Confirmed per shift only.** When showing contacted subs on detail shift cards (e.g. “Show shifts detail”), show a sub as **confirmed** only for the specific shift they are assigned to. If a sub is confirmed/assigned for a different shift in the same absence, treat them as **declined** for all other shifts (they are no longer available for those). Pending and declined_all apply per contact, not per shift.
 - **Tests.** ContactSubPanel tests should cover: request summary shows “This sub has declined all shifts.” when status is declined_all; shift cards show unavailable when declined_all; changing from declined to another status triggers refresh.
+
+## Sub Finder: Pick Dates and Overlap
+
+- **100% Overlap:** When a user selects custom dates for finding subs and the selected shifts overlap 100% with an existing time-off request, do not prompt them to "Modify" or "Create new" time-off requests. Instead, show a message ("Teacher already has a recorded time off request for these shifts. Use Find Subs to see recommended subs, or select the existing absence below.") and allow them to click "Find Subs" to see subs specifically for those shifts, preserving the selected scope.
+- **Contextual Copy:** Always explicitly display the broader context of the full absence using the existing time-off request list, so the user knows the full extent of the teacher's original absence.
+
+## Sub Finder: time off alerts
+
+- **No time off:** When the director selects dates/shifts that have no existing time off request, show an alert in the left panel: "No time off request for these dates yet. Create one to contact and assign subs." with a "Create time off request" button. The main page also shows a preview banner with the same action when they have run Find Subs.
+- **Partial overlap:** When some selected shifts overlap with existing time off and some do not, show a box in the left panel with the line "X of Y shifts overlap with existing time off." followed by a bullet list of overlapping requests (each line: reason, date range; no parentheses). When there is one existing request, show a single bullet. When there are two or more, show each on its own line with a radio so the user selects which request to extend. Center a primary "Extend existing request" button in the box; keep it enabled. If the user clicks Extend with two or more requests but no selection, show inline red text: "Select a request to extend first." Below the button, show "Or create new time off request" as a text-only (ghost) link; it opens the Add Time Off panel. Extend navigates to edit the selected (or sole) request.
+- **100% overlap:** No extend/create prompt. Show helper text only: "Teacher already has recorded time off for these shifts. Use Find Subs to see recommended subs, or select the existing absence below."
+- **Find Subs button label (Pick dates flow):** When one or more selected shifts do not have a time off request (no overlap or partial overlap), show "Find Subs in Preview Mode" so the user knows they are in preview. When all selected shifts have time off (100% overlap), show "Find Subs". Once a time off request has been created for all shifts, the left panel can refresh and show "Find Subs" instead of "Find Subs in Preview Mode".
+
+## Sub Finder: Preview mode and Contact & Assign
+
+- **Preview mode:** When the user selects "Preview only" (vs "Record + Assign") in the Pick dates flow, the Sub Finder runs in **preview mode**: they can see recommended subs but must not be able to contact or assign. In preview mode, **do not show Contact & Assign (or Update) buttons** on sub cards anywhere—neither on the main recommended-subs area nor in the right "All subs" panel. Also **do not show Find Sub** (or Change sub) on **detail shift cards** (the cards shown when "Show shifts detail" is expanded); those are rendered by `ShiftStatusCard`.
+- **Implementation:** Sub cards (`SubFinderCard`) accept a `previewMode` prop; when true, the card hides all Contact & Assign and Update buttons. Detail shift cards (`ShiftStatusCard`) accept a `previewMode` prop; when true, the card hides the Find Sub button (uncovered shifts) and the Change sub button (covered shifts). The main page passes `isPreviewMode` into `RecommendedCombination`, `RecommendedSubsList`, and every `ShiftStatusCard` as `previewMode`. When adding new sub-card or shift-card surfaces, ensure preview mode is passed so that in preview mode no contact/assign/find-sub actions are shown.
+
+## Assign Sub Hot Button Flow
+
+- **Consolidated flow:** The Assign Sub right panel (opened from the header) is an intentional, highly consolidated flow for directors to quickly log an absence and assign a known sub without leaving their current page context. It performs inline Time Off creation (if needed) and Sub Contact creation in a single action.
+- **Conflict handling:** When selecting shifts, sub "unavailable" (regular availability) and "unqualified" status are soft warnings that still allow the director to override and assign the shift. However, "conflict_teaching" and "conflict_sub" (double bookings) are hard blocks that disable selection.
+- **Time Off and Notes:** If the selected shifts do not have an existing time off request, the panel must show an inline form to capture the Time Off Reason and Notes. It should also include a "Notes for Sub" field to capture contact notes, matching the standard Contact & Assign behavior.
 
 ## Database migrations
 

@@ -8,6 +8,8 @@ import {
   getStaffingWeeksLabelFromCount,
   STAFFING_BOUNDARY_DAY,
 } from '@/lib/dashboard/staffing-boundary'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
+import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 
 /**
  * GET /api/dashboard/slot-run?classroom_id=&day_of_week_id=&time_slot_id=&start_date=
@@ -193,10 +195,14 @@ export async function GET(request: NextRequest) {
     })
 
     const expandedDates = expandDateRangeWithTimeZone(startDate, staffingEndDate, timeZone)
+    const schoolClosures = await getSchoolClosuresForDateRange(schoolId, startDate, staffingEndDate)
+    const closureList = schoolClosures.map(c => ({ date: c.date, time_slot_id: c.time_slot_id }))
+
     const belowDates: Array<{ date: string; status: 'below_required' | 'below_preferred' }> = []
 
     for (const dateEntry of expandedDates) {
       if (dateEntry.day_number !== dayNumber) continue
+      if (isSlotClosedOnDate(dateEntry.date, timeSlotId, closureList)) continue
 
       const tempCount = tempByDate.get(dateEntry.date) || 0
       const totalScheduled = teacherContrib + tempCount

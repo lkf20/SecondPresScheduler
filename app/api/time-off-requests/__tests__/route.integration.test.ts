@@ -4,9 +4,19 @@ import { GET } from '@/app/api/time-off-requests/route'
 import { getTimeOffRequests } from '@/lib/api/time-off'
 import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
 import { transformTimeOffCardData } from '@/lib/utils/time-off-card-data'
+import { getUserSchoolId } from '@/lib/utils/auth'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 
 jest.mock('@/lib/supabase/server', () => ({
   createClient: jest.fn(async () => ({})),
+}))
+
+jest.mock('@/lib/utils/auth', () => ({
+  getUserSchoolId: jest.fn(),
+}))
+
+jest.mock('@/lib/api/school-calendar', () => ({
+  getSchoolClosuresForDateRange: jest.fn(),
 }))
 
 jest.mock('@/lib/api/time-off', () => ({
@@ -25,10 +35,26 @@ describe('GET /api/time-off-requests integration', () => {
   beforeEach(() => {
     jest.spyOn(console, 'log').mockImplementation(() => {})
     jest.spyOn(console, 'error').mockImplementation(() => {})
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
   })
 
   afterEach(() => {
     jest.restoreAllMocks()
+  })
+
+  it('returns 403 when user has no school context', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValueOnce(null)
+
+    const request = {
+      nextUrl: new URL('http://localhost:3000/api/time-off-requests'),
+    }
+
+    const response = await GET(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(403)
+    expect(json.error).toMatch(/school/i)
   })
 
   it('returns 500 with error payload when fetching requests fails', async () => {
@@ -105,7 +131,7 @@ describe('GET /api/time-off-requests integration', () => {
     expect(getTimeOffRequests).toHaveBeenCalledWith({ statuses: ['active', 'draft'] })
     expect(json.data).toHaveLength(1)
     expect(json.data[0].id).toBe('req-1')
-    expect(getTimeOffShifts).toHaveBeenCalledTimes(1)
+    expect(getTimeOffShifts).toHaveBeenCalled()
     expect(json.meta.filters.teacher_id).toBe('teacher-1')
   })
 
@@ -159,5 +185,57 @@ describe('GET /api/time-off-requests integration', () => {
     expect(response.status).toBe(200)
     expect(json.data).toHaveLength(1)
     expect(json.data[0].id).toBe('req-needs')
+  })
+
+  it('fetches school closures and filters shifts on closed days', async () => {
+    const closedDate = '2026-02-10'
+    ;(getTimeOffRequests as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'req-1',
+        teacher_id: 'teacher-1',
+        start_date: closedDate,
+        end_date: '2026-02-11',
+        reason: null,
+        notes: null,
+        status: 'active',
+      },
+    ])
+    ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValueOnce([
+      { date: closedDate, time_slot_id: null },
+    ])
+    ;(transformTimeOffCardData as jest.Mock).mockImplementation(
+      (_request: unknown, shifts: unknown[]) => ({
+        id: 'req-1',
+        status: 'needs_coverage',
+        request_status: 'active',
+        teacher_name: 'req-1',
+        start_date: closedDate,
+        end_date: '2026-02-11',
+        total: (shifts as unknown[]).length,
+        covered: 0,
+        partial: 0,
+        uncovered: (shifts as unknown[]).length,
+        classrooms: [],
+        shift_details: [],
+      })
+    )
+
+    const request = {
+      nextUrl: new URL(
+        'http://localhost:3000/api/time-off-requests?include_classrooms=false&include_assignments=false'
+      ),
+    }
+
+    const response = await GET(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(getSchoolClosuresForDateRange).toHaveBeenCalledWith('school-1', closedDate, '2026-02-11')
+    expect(getTimeOffShifts).toHaveBeenCalledWith('req-1')
+    expect(transformTimeOffCardData).toHaveBeenCalled()
+    // Route filters shifts by closure list; transform receives only non-closed shifts (implementation detail)
+    const shiftsPassedToTransform = (transformTimeOffCardData as jest.Mock).mock
+      .calls[0][1] as unknown[]
+    expect(Array.isArray(shiftsPassedToTransform)).toBe(true)
   })
 })

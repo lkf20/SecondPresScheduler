@@ -3,6 +3,10 @@ import { createClient } from '@/lib/supabase/server'
 import { getTimeOffRequestById } from '@/lib/api/time-off'
 import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
 import { createErrorResponse, getErrorMessage } from '@/lib/utils/errors'
+import { toDateStringISO } from '@/lib/utils/date'
+import { getUserSchoolId } from '@/lib/utils/auth'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
+import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 
 /**
  * GET /api/sub-finder/coverage-request/[absence_id]
@@ -28,11 +32,24 @@ export async function GET(
     }
 
     let coverageRequestId = (timeOffRequest as any).coverage_request_id
+    const startDate = (timeOffRequest as any).start_date
+    const endDate = (timeOffRequest as any).end_date || startDate
+
     if (!coverageRequestId) {
-      const shifts = await getTimeOffShifts(absence_id)
+      const allShifts = await getTimeOffShifts(absence_id)
+      const userSchoolId = await getUserSchoolId()
+      const schoolClosures =
+        userSchoolId && startDate && endDate
+          ? await getSchoolClosuresForDateRange(userSchoolId, startDate, endDate)
+          : []
+      const closureList = schoolClosures.map(c => ({ date: c.date, time_slot_id: c.time_slot_id }))
+      const shifts =
+        closureList.length > 0
+          ? allShifts.filter(
+              (s: any) => !isSlotClosedOnDate(toDateStringISO(s.date), s.time_slot_id, closureList)
+            )
+          : allShifts
       const totalShifts = shifts.length
-      const startDate = (timeOffRequest as any).start_date
-      const endDate = (timeOffRequest as any).end_date || startDate
 
       const { data: assignments, error: assignmentsError } = await supabase
         .from('sub_assignments')
@@ -46,10 +63,12 @@ export async function GET(
       }
 
       const assignmentKeys = new Set(
-        (assignments || []).map(assignment => `${assignment.date}|${assignment.time_slot_id}`)
+        (assignments || []).map(
+          assignment => `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`
+        )
       )
       const coveredShifts = shifts.reduce((count, shift) => {
-        const key = `${shift.date}|${shift.time_slot_id}`
+        const key = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
         return assignmentKeys.has(key) ? count + 1 : count
       }, 0)
 
@@ -195,8 +214,8 @@ export async function GET(
       }
     }
 
-    // Get coverage_request_shifts
-    const { data: coverageRequestShifts, error: shiftsError } = await supabase
+    // Get coverage_request_shifts (filter out shifts on school closed days for response)
+    const { data: rawCoverageRequestShifts, error: shiftsError } = await supabase
       .from('coverage_request_shifts')
       .select('id, date, time_slot_id, classroom_id, time_slot:time_slots(code)')
       .eq('coverage_request_id', coverageRequestId)
@@ -205,14 +224,30 @@ export async function GET(
       console.error('Error fetching coverage_request_shifts:', shiftsError)
     }
 
+    const schoolIdForFilter = await getUserSchoolId()
+    const closureListForResponse =
+      schoolIdForFilter && startDate && endDate
+        ? (await getSchoolClosuresForDateRange(schoolIdForFilter, startDate, endDate)).map(c => ({
+            date: c.date,
+            time_slot_id: c.time_slot_id,
+          }))
+        : []
+    const coverageRequestShifts =
+      closureListForResponse.length > 0 && rawCoverageRequestShifts
+        ? rawCoverageRequestShifts.filter(
+            (s: any) =>
+              !isSlotClosedOnDate(toDateStringISO(s.date), s.time_slot_id, closureListForResponse)
+          )
+        : rawCoverageRequestShifts || []
+
     // Create a map: date|time_slot_code|classroom_id -> coverage_request_shift_id
     // Also create a simpler map: date|time_slot_code -> coverage_request_shift_id (for backward compatibility)
     const shiftMap = new Map<string, string>()
     const shiftMapSimple = new Map<string, string>()
     if (coverageRequestShifts) {
       coverageRequestShifts.forEach((shift: any) => {
-        const key = `${shift.date}|${shift.time_slot?.code || ''}|${shift.classroom_id || ''}`
-        const simpleKey = `${shift.date}|${shift.time_slot?.code || ''}`
+        const key = `${toDateStringISO(shift.date)}|${shift.time_slot?.code || ''}|${shift.classroom_id || ''}`
+        const simpleKey = `${toDateStringISO(shift.date)}|${shift.time_slot?.code || ''}`
         shiftMap.set(key, shift.id)
         // Use the first shift ID found for the simple key (for backward compatibility)
         if (!shiftMapSimple.has(simpleKey)) {

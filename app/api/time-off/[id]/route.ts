@@ -5,7 +5,6 @@ import {
   updateTimeOffRequest,
   getActiveSubAssignmentsForTimeOffRequest,
   cancelTimeOffRequest,
-  findOverlappingTimeOffRequest,
 } from '@/lib/api/time-off'
 import {
   getTimeOffShifts,
@@ -27,11 +26,13 @@ const logTimeOffRouteError = (...args: unknown[]) => {
 import { formatDateISOInTimeZone } from '@/lib/utils/date'
 import { createClient } from '@/lib/supabase/server'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import {
   canTransitionTimeOffStatus,
   formatTransitionError,
   type TimeOffStatus,
 } from '@/lib/lifecycle/status-transitions'
+import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
@@ -95,70 +96,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return parsed.toISOString().split('T')[0]
     }
 
-    const effectiveTeacherIdForOverlap = requestData.teacher_id ?? existingRequest.teacher_id
-    const effectiveStartForOverlap = requestData.start_date ?? existingRequest.start_date
-    const effectiveEndForOverlap =
-      requestData.end_date ??
-      requestData.start_date ??
-      existingRequest.end_date ??
-      existingRequest.start_date
-
-    let requestedShiftsForOverlap: Array<{ date: string; time_slot_id: string }> = []
-    if (Array.isArray(shifts) && shifts.length > 0) {
-      requestedShiftsForOverlap = shifts.map((shift: any) => ({
-        date: shift.date,
-        time_slot_id: shift.time_slot_id,
-      }))
-    } else if (
-      (requestData.shift_selection_mode ?? existingRequest.shift_selection_mode) === 'all_scheduled'
-    ) {
-      const scheduledForOverlap = await getTeacherScheduledShifts(
-        effectiveTeacherIdForOverlap,
-        effectiveStartForOverlap,
-        effectiveEndForOverlap,
-        timeZone
-      )
-      requestedShiftsForOverlap = scheduledForOverlap.map(shift => ({
-        date: shift.date,
-        time_slot_id: shift.time_slot_id,
-      }))
-    }
-
-    if (requestedShiftsForOverlap.length > 0) {
-      const overlapping = await findOverlappingTimeOffRequest(
-        effectiveTeacherIdForOverlap,
-        requestedShiftsForOverlap,
-        id
-      )
-      if (overlapping) {
-        const overlapStart =
-          effectiveStartForOverlap && overlapping.start_date
-            ? [effectiveStartForOverlap, overlapping.start_date].sort()[1]
-            : overlapping.start_date
-        const overlapEnd =
-          effectiveEndForOverlap && overlapping.end_date
-            ? [effectiveEndForOverlap, overlapping.end_date].sort()[0]
-            : overlapping.end_date
-        const teacherName = existingRequest.teacher
-          ? getStaffDisplayName(existingRequest.teacher)
-          : null
-        return NextResponse.json(
-          {
-            code: 'TIME_OFF_OVERLAP',
-            existingRequestId: overlapping.id,
-            existingStartDate: overlapping.start_date,
-            existingEndDate: overlapping.end_date,
-            existingStatus: overlapping.status,
-            teacherName,
-            newRequestStartDate: effectiveStartForOverlap,
-            newRequestEndDate: effectiveEndForOverlap,
-            overlapStartDate: overlapStart ?? overlapping.start_date,
-            overlapEndDate: overlapEnd ?? overlapping.end_date,
-          },
-          { status: 409 }
-        )
-      }
-    }
+    // Overlap check only for new requests (POST). When editing (PUT), we allow the update
+    // and the "filter out conflicting shifts" logic below will exclude shifts already on another
+    // request, so the user does not get the overlapping-time-off alert when editing.
+    // (The form already shows "This teacher already has time off recorded for N shifts...".)
+    // Skip overlap 409 for PUT.
 
     let requestedShifts: Array<{ date: string; time_slot_id: string }> = []
 
@@ -232,14 +174,41 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    // Handle shifts
-    const shouldReplaceExplicitShifts = shifts !== undefined
+    // Handle shifts: full replace when client sends an explicit shifts array (select_shifts mode).
+    // Use Array.isArray so we only replace when we have a real list; avoids leaving stale shifts
+    // if the client ever sends shift_selection_mode 'select_shifts' but omits or malforms shifts.
+    // Normalize explicit shifts to the request's date range so we never persist shifts outside it
+    // (e.g. user changed end date to March 12 but form state still had March 13 selected).
+    let effectiveShifts = shifts
+    if (Array.isArray(shifts) && shifts.length > 0) {
+      effectiveShifts = shifts.filter(
+        (s: { date?: string }) =>
+          normalizeDate(s.date || '') >= effectiveStartDate &&
+          normalizeDate(s.date || '') <= effectiveRequestEndDate
+      )
+    }
+    const shouldReplaceExplicitShifts = Array.isArray(shifts)
     const shouldSyncAllScheduled =
-      shifts === undefined && effectiveShiftSelectionMode === 'all_scheduled'
+      !shouldReplaceExplicitShifts && effectiveShiftSelectionMode === 'all_scheduled'
 
     if (shouldReplaceExplicitShifts || shouldSyncAllScheduled) {
-      // For explicit shift mode, we fully replace existing shifts.
-      // For all_scheduled mode, we sync incrementally so we avoid counter constraint failures.
+      // Exclude shifts on school closed days (no coverage needed)
+      const requestSchoolId = existingRequest.school_id || sessionSchoolId
+      const schoolClosures =
+        requestSchoolId && effectiveStartDate && effectiveRequestEndDate
+          ? await getSchoolClosuresForDateRange(
+              requestSchoolId,
+              effectiveStartDate,
+              effectiveRequestEndDate
+            )
+          : []
+      const closureList = schoolClosures.map(c => ({ date: c.date, time_slot_id: c.time_slot_id }))
+
+      // Explicit shifts: full replace (delete all, then create from payload). No sub_assignments
+      // are preserved by id because we're replacing the whole set.
+      // All_scheduled: only remove shifts beyond the new end date so we do NOT delete shifts
+      // that still have sub_assignments (e.g. March 10–12 when user shortens to March 10–12;
+      // March 13 is removed, March 10’s assignment stays).
       if (shouldReplaceExplicitShifts) {
         await deleteTimeOffShifts(id)
       }
@@ -307,8 +276,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         removedShiftCount = shiftsToRemove.length
       }
 
-      if (Array.isArray(shifts) && shifts.length > 0) {
-        requestedShifts = shifts.map((shift: any) => ({
+      if (Array.isArray(effectiveShifts) && effectiveShifts.length > 0) {
+        requestedShifts = effectiveShifts.map((shift: any) => ({
           date: shift.date,
           time_slot_id: shift.time_slot_id,
         }))
@@ -324,6 +293,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           time_slot_id: shift.time_slot_id,
         }))
       }
+      requestedShifts = requestedShifts.filter(
+        s => !isSlotClosedOnDate(normalizeDate(s.date), s.time_slot_id, closureList)
+      )
 
       if (requestedShifts.length > 0 && status !== 'draft') {
         const existingShifts = await getTeacherTimeOffShifts(
@@ -336,21 +308,32 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           existingShifts.map(shift => `${normalizeDate(shift.date)}::${shift.time_slot_id}`)
         )
 
-        // Filter out conflicting shifts
-        if (Array.isArray(shifts) && shifts.length > 0) {
-          const excluded = shifts.filter(shift => {
-            const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
-            return existingShiftKeys.has(shiftKey)
-          })
+        // Filter out conflicting shifts (use effectiveShifts = in-range only)
+        if (Array.isArray(effectiveShifts) && effectiveShifts.length > 0) {
+          const excluded = effectiveShifts.filter(
+            (shift: { date?: string; time_slot_id?: string }) => {
+              const shiftKey = `${normalizeDate(shift.date || '')}::${shift.time_slot_id || ''}`
+              return existingShiftKeys.has(shiftKey)
+            }
+          )
 
-          excludedShifts = excluded.map(shift => ({
-            date: normalizeDate(shift.date),
+          excludedShifts = excluded.map((shift: { date?: string }) => ({
+            date: normalizeDate(shift.date || ''),
           }))
 
-          shiftsToCreate = shifts.filter(shift => {
-            const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
-            return !existingShiftKeys.has(shiftKey)
-          })
+          shiftsToCreate = effectiveShifts
+            .filter((shift: { date?: string; time_slot_id?: string }) => {
+              const shiftKey = `${normalizeDate(shift.date || '')}::${shift.time_slot_id || ''}`
+              return !existingShiftKeys.has(shiftKey)
+            })
+            .filter(
+              (shift: { date?: string; time_slot_id?: string }) =>
+                !isSlotClosedOnDate(
+                  normalizeDate(shift.date || ''),
+                  shift.time_slot_id || '',
+                  closureList
+                )
+            )
           excludedShiftCount = excludedShifts.length
         } else if (effectiveShiftSelectionMode === 'all_scheduled') {
           // If "all_scheduled" mode, fetch all scheduled shifts and filter out conflicts
@@ -394,6 +377,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
               const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
               return !existingShiftKeys.has(shiftKey) && !currentRequestShiftKeys.has(shiftKey)
             })
+            .filter(
+              shift =>
+                !isSlotClosedOnDate(normalizeDate(shift.date), shift.time_slot_id, closureList)
+            )
           excludedShiftCount = excludedShifts.length
         }
 
@@ -427,9 +414,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           }
         }
       } else {
-        // No conflicts to check, use all requested shifts
-        if (Array.isArray(shifts) && shifts.length > 0) {
-          shiftsToCreate = shifts
+        // No conflicts to check, use all requested shifts (effectiveShifts = in-range only)
+        if (Array.isArray(effectiveShifts) && effectiveShifts.length > 0) {
+          shiftsToCreate = effectiveShifts.filter(
+            (shift: { date?: string; time_slot_id?: string }) =>
+              !isSlotClosedOnDate(
+                normalizeDate(shift.date || ''),
+                shift.time_slot_id || '',
+                closureList
+              )
+          )
         } else if (effectiveShiftSelectionMode === 'all_scheduled') {
           const scheduledShifts = await getTeacherScheduledShifts(
             effectiveTeacherId,
@@ -456,6 +450,42 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
               const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
               return !currentRequestShiftKeys.has(shiftKey)
             })
+            .filter(
+              shift =>
+                !isSlotClosedOnDate(normalizeDate(shift.date), shift.time_slot_id, closureList)
+            )
+        }
+      }
+
+      // All_scheduled: defensive cleanup — remove any shift with date > new end (e.g. format edge cases)
+      if (shouldSyncAllScheduled) {
+        const { data: beyondEndShifts } = await supabase
+          .from('time_off_shifts')
+          .select('id')
+          .eq('time_off_request_id', id)
+          .gt('date', effectiveRequestEndDate)
+        if (beyondEndShifts?.length) {
+          const beyondIds = beyondEndShifts.map((s: { id: string }) => s.id)
+          const { data: activeAssignments } = await supabase
+            .from('sub_assignments')
+            .select('id')
+            .in('coverage_request_shift_id', beyondIds)
+            .eq('status', 'active')
+          if (activeAssignments?.length) {
+            await supabase
+              .from('sub_assignments')
+              .update({ status: 'cancelled' })
+              .in(
+                'id',
+                activeAssignments.map((a: { id: string }) => a.id)
+              )
+          }
+          const { error: beyondDeleteError } = await supabase
+            .from('time_off_shifts')
+            .delete()
+            .eq('time_off_request_id', id)
+            .in('id', beyondIds)
+          if (!beyondDeleteError) removedShiftCount += beyondIds.length
         }
       }
 
@@ -475,23 +505,21 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         }
       }
 
-      // After shifts are created/updated, recalculate coverage_request dates from actual shifts
-      // This ensures the dates match the actual shift dates (MIN and MAX)
-      if (timeOffRequestWithCoverage?.coverage_request_id) {
-        const { data: coverageShifts } = await supabase
-          .from('coverage_request_shifts')
-          .select('date')
-          .eq('coverage_request_id', timeOffRequestWithCoverage.coverage_request_id)
+      // After shifts are created/updated, set request and coverage dates from actual shifts
+      // so the displayed range (e.g. Mar 10–12) matches the shifts and is consistent everywhere.
+      const persistedShiftsForRange = await getTimeOffShifts(id)
+      if (persistedShiftsForRange.length > 0) {
+        const dates = persistedShiftsForRange
+          .map(s => normalizeDate(s.date))
+          .filter(Boolean)
+          .sort()
+        if (dates.length > 0) {
+          const minDate = dates[0]
+          const maxDate = dates[dates.length - 1]
 
-        if (coverageShifts && coverageShifts.length > 0) {
-          const dates = coverageShifts
-            .map(s => s.date)
-            .filter(Boolean)
-            .sort()
-          if (dates.length > 0) {
-            const minDate = dates[0]
-            const maxDate = dates[dates.length - 1]
+          await updateTimeOffRequest(id, { start_date: minDate, end_date: maxDate })
 
+          if (timeOffRequestWithCoverage?.coverage_request_id) {
             await supabase
               .from('coverage_requests')
               .update({
@@ -503,6 +531,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           }
         }
       }
+      // If there are no shifts, leave time_off_requests dates as updated from requestData
+      // (coverage_requests already updated above from time_off_requests when we had coverage_request_id).
     }
 
     // Revalidate all pages that might show this data
@@ -553,14 +583,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       changedFields.push('shifts')
     }
 
+    const finalRequest = await getTimeOffRequestById(id)
     const { actorUserId, actorDisplayName } = await getAuditActorContext()
     const teacherName = existingRequest.teacher
       ? getStaffDisplayName(existingRequest.teacher)
       : null
 
-    if (updatedRequest.school_id && changedFields.length > 0) {
+    if (finalRequest?.school_id && changedFields.length > 0) {
       await logAuditEvent({
-        schoolId: updatedRequest.school_id,
+        schoolId: finalRequest.school_id,
         actorUserId,
         actorDisplayName,
         action: existingRequest.status === status ? 'update' : 'status_change',
@@ -580,13 +611,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             shift_count: existingRequest.shifts?.length || 0,
           },
           after: {
-            status,
-            teacher_id: updatedRequest.teacher_id,
-            start_date: updatedRequest.start_date,
-            end_date: updatedRequest.end_date,
-            reason: updatedRequest.reason,
-            notes: updatedRequest.notes,
-            shift_selection_mode: effectiveShiftSelectionMode,
+            status: finalRequest.status,
+            teacher_id: finalRequest.teacher_id,
+            start_date: finalRequest.start_date,
+            end_date: finalRequest.end_date,
+            reason: finalRequest.reason,
+            notes: finalRequest.notes,
+            shift_selection_mode: finalRequest.shift_selection_mode,
             shift_count: persistedShifts.length,
           },
           shifts_created: shiftsToCreate.length,
@@ -598,7 +629,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     return NextResponse.json({
-      ...updatedRequest,
+      ...finalRequest,
       warning,
       excludedShiftCount,
     })

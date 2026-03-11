@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getTimeOffRequestById } from '@/lib/api/time-off'
 import { createErrorResponse, getErrorMessage } from '@/lib/utils/errors'
+import { getUserSchoolId } from '@/lib/utils/auth'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
+import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
+import { toDateStringISO } from '@/lib/utils/date'
 
 /**
  * GET /api/sub-finder/coverage-request/[absence_id]/assigned-shifts
@@ -64,9 +68,31 @@ export async function GET(
       })
     }
 
+    // Exclude shifts on school closed days (e.g. snow day added after assignment)
+    const dateRangeStart = coverageRequestShifts.reduce(
+      (min: string, s: any) => (s.date && (!min || s.date < min) ? s.date : min),
+      ''
+    )
+    const dateRangeEnd = coverageRequestShifts.reduce(
+      (max: string, s: any) => (s.date && (!max || s.date > max) ? s.date : max),
+      ''
+    )
+    const schoolId = await getUserSchoolId()
+    const schoolClosures =
+      schoolId && dateRangeStart && dateRangeEnd
+        ? await getSchoolClosuresForDateRange(schoolId, dateRangeStart, dateRangeEnd)
+        : []
+    const closureList = schoolClosures.map(c => ({ date: c.date, time_slot_id: c.time_slot_id }))
+    const openShifts =
+      closureList.length > 0
+        ? coverageRequestShifts.filter(
+            (s: any) => !isSlotClosedOnDate(toDateStringISO(s.date), s.time_slot_id, closureList)
+          )
+        : coverageRequestShifts
+
     // Build a set of date|time_slot_code combinations for this coverage request
     const coverageShiftKeys = new Set<string>()
-    coverageRequestShifts.forEach((shift: any) => {
+    openShifts.forEach((shift: any) => {
       const timeSlotCode = shift.time_slots?.code || ''
       const key = `${shift.date}|${timeSlotCode}`
       coverageShiftKeys.add(key)
@@ -92,7 +118,7 @@ export async function GET(
       return createErrorResponse('Failed to fetch assigned shifts', 500)
     }
 
-    // Filter sub_assignments to only include those that match coverage_request_shifts
+    // Filter sub_assignments to only include those that match coverage_request_shifts (and are not on closed days)
     const matchingAssignments = (subAssignments || []).filter((assignment: any) => {
       const timeSlotCode = assignment.time_slots?.code || ''
       const key = `${assignment.date}|${timeSlotCode}`
