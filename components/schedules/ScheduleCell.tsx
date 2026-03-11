@@ -48,6 +48,8 @@ interface ScheduleCellProps {
     | 'absences'
   /** When true, show cell notes at the bottom with a light gray divider (from Views & Filters) */
   showNotes?: boolean
+  /** When provided, if the cell has all of these class groups we show "All class groups" instead of listing them */
+  allClassGroupIds?: string[]
 }
 
 export default function ScheduleCell({
@@ -55,6 +57,7 @@ export default function ScheduleCell({
   onClick,
   displayMode = 'all-scheduled-staff',
   showNotes = false,
+  allClassGroupIds,
 }: ScheduleCellProps) {
   const scheduleCell = data?.schedule_cell
   const notesText = scheduleCell?.notes?.trim() ?? ''
@@ -79,16 +82,28 @@ export default function ScheduleCell({
         })
       : []
 
+  // When cell has all class groups (school-wide), show "All class groups" instead of listing
+  const cellClassGroupIds = new Set(classGroupsSorted.map(cg => cg.id))
+  const hasAllClassGroups =
+    allClassGroupIds &&
+    allClassGroupIds.length > 0 &&
+    allClassGroupIds.length === classGroupsSorted.length &&
+    allClassGroupIds.every(id => cellClassGroupIds.has(id))
+
   // Build label: for single class group show only total (avoid redundant "Name (3) (3)"); for multiple show "Name (n), ..." and total
   const classGroupNames =
     classGroupsSorted.length > 0
-      ? classGroupsSorted.length === 1
+      ? hasAllClassGroups
         ? enrollment != null
-          ? `${classGroupsSorted[0].name} (${enrollment})`
-          : classGroupsSorted[0].name
-        : classGroupsSorted
-            .map(cg => (cg.enrollment != null ? `${cg.name} (${cg.enrollment})` : cg.name))
-            .join(', ')
+          ? `All class groups (${enrollment})`
+          : 'All class groups'
+        : classGroupsSorted.length === 1
+          ? enrollment != null
+            ? `${classGroupsSorted[0].name} (${enrollment})`
+            : classGroupsSorted[0].name
+          : classGroupsSorted
+              .map(cg => (cg.enrollment != null ? `${cg.name} (${cg.enrollment})` : cg.name))
+              .join(', ')
       : data?.assignments && data.assignments.length > 0
         ? data.assignments.find(a => a.class_name)?.class_name
         : null
@@ -185,9 +200,12 @@ export default function ScheduleCell({
           {classGroupNames && (
             <div className="text-xs font-normal text-muted-foreground">
               {classGroupNames}
-              {classGroupsSorted.length > 1 && enrollment !== null && enrollment !== undefined && (
-                <span className="text-muted-foreground/70"> ({enrollment})</span>
-              )}
+              {classGroupsSorted.length > 1 &&
+                !hasAllClassGroups &&
+                enrollment !== null &&
+                enrollment !== undefined && (
+                  <span className="text-muted-foreground/70"> ({enrollment})</span>
+                )}
             </div>
           )}
           {isActive && staffingStatus && staffingMessage && (

@@ -42,6 +42,8 @@ interface ScheduleGridCellCardProps {
   onClosureMarkOpenForDay?: (date: string) => void
   onClosureChangeReason?: (closureId: string, newReason: string) => void
   onClick?: () => void
+  /** When provided, cell shows "All class groups" if it has all of these (instead of listing). */
+  allClassGroupIds?: string[]
 }
 
 /**
@@ -60,6 +62,7 @@ export default function ScheduleGridCellCard({
   onClosureMarkOpenForDay,
   onClosureChangeReason,
   onClick,
+  allClassGroupIds,
 }: ScheduleGridCellCardProps) {
   const [editReasonOpen, setEditReasonOpen] = useState(false)
   const [editReasonValue, setEditReasonValue] = useState('')
@@ -223,7 +226,12 @@ export default function ScheduleGridCellCard({
       onClick={allowCardClick ? onClick : undefined}
     >
       <div className="flex-1 min-h-0 overflow-visible">
-        <ScheduleCell data={data} displayMode={displayMode} showNotes={showNotes} />
+        <ScheduleCell
+          data={data}
+          displayMode={displayMode}
+          showNotes={showNotes}
+          allClassGroupIds={allClassGroupIds}
+        />
       </div>
     </div>
   )

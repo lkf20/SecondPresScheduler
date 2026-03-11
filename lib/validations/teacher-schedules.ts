@@ -24,6 +24,8 @@ export const checkConflictsSchema = z.object({
         day_of_week_id: z.string().uuid({ message: 'day_of_week_id must be a valid UUID' }),
         time_slot_id: z.string().uuid({ message: 'time_slot_id must be a valid UUID' }),
         classroom_id: z.string().uuid({ message: 'classroom_id must be a valid UUID' }),
+        /** When true, conflict is not reported if the conflicting assignment is also a floater (both floaters allowed). */
+        is_floater: z.boolean().optional(),
       })
     )
     .min(1, { message: 'At least one check is required' }),

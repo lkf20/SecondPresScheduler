@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
-import { expandDateRangeWithTimeZone, parseLocalDate } from '@/lib/utils/date'
+import { expandDateRangeWithTimeZone, parseLocalDate, toDateStringISO } from '@/lib/utils/date'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
 import { getTeacherScheduledShifts, getTimeOffShifts } from '@/lib/api/time-off-shifts'
 import { getTimeOffRequests } from '@/lib/api/time-off'
@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
     const flexConflictMap = new Map<string, Set<string>>()
     ;(flexConflicts || []).forEach(row => {
       if (!row?.staff_id) return
-      const key = `${row.date}|${row.time_slot_id}`
+      const key = `${toDateStringISO(row.date)}|${row.time_slot_id}`
       if (!flexConflictMap.has(row.staff_id)) {
         flexConflictMap.set(row.staff_id, new Set())
       }
@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
         const availabilityMap = new Map<string, boolean>(availabilityByStaff.get(staff.id) ?? [])
         const exceptions = exceptionsByStaff.get(staff.id) || []
         exceptions.forEach(exception => {
-          const key = `${exception.date}|${exception.time_slot_id}`
+          const key = `${toDateStringISO(exception.date)}|${exception.time_slot_id}`
           availabilityMap.set(key, exception.available)
         })
 
@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
             timeZone
           )
           scheduled.forEach(shift => {
-            scheduleConflicts.add(`${shift.date}|${shift.time_slot_id}`)
+            scheduleConflicts.add(`${toDateStringISO(shift.date)}|${shift.time_slot_id}`)
           })
         } catch {
           // ignore schedule conflicts if fetch fails
@@ -239,7 +239,7 @@ export async function POST(request: NextRequest) {
             try {
               const reqShifts = await getTimeOffShifts(req.id)
               reqShifts.forEach((shift: any) => {
-                timeOffConflicts.add(`${shift.date}|${shift.time_slot_id}`)
+                timeOffConflicts.add(`${toDateStringISO(shift.date)}|${shift.time_slot_id}`)
               })
             } catch {
               // ignore
@@ -256,7 +256,7 @@ export async function POST(request: NextRequest) {
           availabilityMap.size > 0 || (exceptionsByStaff.get(staff.id) || []).length > 0
 
         shiftKeys.forEach(shift => {
-          const key = `${shift.date}|${shift.time_slot_id}`
+          const key = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
           const dayKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
           let isAvailable = hasAvailabilityData
             ? availabilityMap.has(key)
@@ -404,7 +404,7 @@ export async function POST(request: NextRequest) {
 
     const subCountByKey = new Map<string, number>()
     ;(subAssignments || []).forEach((sa: any) => {
-      const key = `${sa.date}|${sa.time_slot_id}|${sa.classroom_id}`
+      const key = `${toDateStringISO(sa.date)}|${sa.time_slot_id}|${sa.classroom_id}`
       subCountByKey.set(key, (subCountByKey.get(key) || 0) + 1)
     })
 
@@ -417,7 +417,7 @@ export async function POST(request: NextRequest) {
 
     const flexCountByKey = new Map<string, number>()
     ;(flexAssignments || []).forEach((fa: any) => {
-      const key = `${fa.date}|${fa.time_slot_id}|${fa.classroom_id}`
+      const key = `${toDateStringISO(fa.date)}|${fa.time_slot_id}|${fa.classroom_id}`
       flexCountByKey.set(key, (flexCountByKey.get(key) || 0) + 1)
     })
 
@@ -429,7 +429,7 @@ export async function POST(request: NextRequest) {
 
     const shiftMetrics = shiftKeys.flatMap(shift =>
       (body.classroom_ids?.length ? body.classroom_ids : []).map(classroomId => {
-        const dateKey = `${shift.date}|${shift.time_slot_id}|${classroomId}`
+        const dateKey = `${toDateStringISO(shift.date)}|${shift.time_slot_id}|${classroomId}`
         const dayName = new Date(`${shift.date}T00:00:00`).toLocaleDateString('en-US', {
           weekday: 'long',
         })

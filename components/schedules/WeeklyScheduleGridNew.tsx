@@ -522,6 +522,7 @@ export default function WeeklyScheduleGridNew({
     classroomName: string
     classroomColor: string | null
   } | null>(null)
+  const [allClassGroupIds, setAllClassGroupIds] = useState<string[]>([])
   const [selectedCellSnapshot, setSelectedCellSnapshot] = useState<{
     day_of_week_id: string
     day_name: string
@@ -572,6 +573,14 @@ export default function WeeklyScheduleGridNew({
     () => extractDaysAndTimeSlots(data, selectedDayIds),
     [data, selectedDayIds]
   )
+
+  // Fetch all active class group IDs once so cells can show "All class groups" when the cell has all of them
+  useEffect(() => {
+    fetch('/api/class-groups')
+      .then(r => r.json())
+      .then((rows: Array<{ id: string }>) => setAllClassGroupIds(rows.map(r => r.id)))
+      .catch(() => {})
+  }, [])
 
   const hasAppliedInitialSelection = useRef(false)
 
@@ -1070,6 +1079,7 @@ export default function WeeklyScheduleGridNew({
                                 showNotes={showNotes}
                                 allowCardClick={allowCardClick}
                                 isInactive={isInactive}
+                                allClassGroupIds={allClassGroupIds}
                                 isClosed={
                                   weekStartISO
                                     ? isCellClosed(
@@ -1431,6 +1441,7 @@ export default function WeeklyScheduleGridNew({
                             showNotes={showNotes}
                             allowCardClick={allowCardClick}
                             isInactive={isInactive}
+                            allClassGroupIds={allClassGroupIds}
                             isClosed={
                               weekStartISO
                                 ? isCellClosed(weekStartISO, day.number, slot.id, schoolClosures)

@@ -25,17 +25,10 @@ const createSupabaseForChecks = (results: Array<{ data: any[] | null; error: Err
     from: jest.fn(() => {
       const currentResult = results[resultIndex] ?? { data: [], error: null }
       resultIndex += 1
-      let eqCount = 0
       const queryBuilder = {
         select: jest.fn(() => queryBuilder),
-        neq: jest.fn(() => queryBuilder),
-        eq: jest.fn(() => {
-          eqCount += 1
-          if (eqCount === 4) {
-            return Promise.resolve(currentResult)
-          }
-          return queryBuilder
-        }),
+        eq: jest.fn(() => queryBuilder),
+        neq: jest.fn(() => Promise.resolve(currentResult)),
       }
       return queryBuilder
     }),
@@ -127,6 +120,7 @@ describe('POST /api/teacher-schedules/check-conflicts integration', () => {
         time_slot_id: 'slot-em',
         time_slot_code: 'EM',
         target_classroom_id: 'class-target',
+        conflicting_role_label: 'Permanent teacher',
       },
     ])
   })
@@ -258,7 +252,7 @@ describe('POST /api/teacher-schedules/check-conflicts integration', () => {
     expect(json.conflicts).toEqual([])
   })
 
-  it('applies non-floater conflict filter when checking double bookings', async () => {
+  it('includes floater assignments as conflicts (finds any assignment in another classroom)', async () => {
     ;(validateRequest as jest.Mock).mockReturnValue({
       success: true,
       data: {
@@ -272,23 +266,28 @@ describe('POST /api/teacher-schedules/check-conflicts integration', () => {
         ],
       },
     })
-
-    const eqSpy = jest.fn()
-    const queryBuilder: any = {
-      select: jest.fn(() => queryBuilder),
-      neq: jest.fn(() => queryBuilder),
-      eq: eqSpy,
-    }
-
-    eqSpy.mockImplementation((field: string) => {
-      if (field === 'is_floater') {
-        return Promise.resolve({ data: [], error: null })
-      }
-      return queryBuilder
-    })
-    ;(createClient as jest.Mock).mockResolvedValue({
-      from: jest.fn(() => queryBuilder),
-    })
+    ;(createClient as jest.Mock).mockResolvedValue(
+      createSupabaseForChecks([
+        {
+          data: [
+            {
+              id: 'schedule-floater',
+              classroom_id: 'class-other',
+              is_floater: true,
+              classroom: { name: 'Toddler A' },
+              day_of_week: { name: 'Monday' },
+              time_slot: { code: 'LB1' },
+              teacher: {
+                first_name: 'Katie',
+                last_name: 'K.',
+                display_name: null,
+              },
+            },
+          ],
+          error: null,
+        },
+      ])
+    )
 
     const response = await POST(
       new Request('http://localhost/api/teacher-schedules/check-conflicts', {
@@ -299,8 +298,9 @@ describe('POST /api/teacher-schedules/check-conflicts integration', () => {
     const json = await response.json()
 
     expect(response.status).toBe(200)
-    expect(json.conflicts).toEqual([])
-    expect(eqSpy).toHaveBeenCalledWith('is_floater', false)
+    expect(json.conflicts).toHaveLength(1)
+    expect(json.conflicts[0].conflicting_role_label).toBe('Floater')
+    expect(json.conflicts[0].conflicting_classroom_name).toBe('Toddler A')
   })
 
   it('returns error response when supabase query fails', async () => {

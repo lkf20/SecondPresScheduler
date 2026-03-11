@@ -30,7 +30,7 @@ export function getEffectiveClassroomIds(
   filters: ScheduleFilterInput,
   availableClassrooms: ItemWithActive[]
 ): string[] {
-  const showInactive = filters.showInactiveClassrooms ?? true
+  const showInactive = filters.showInactiveClassrooms ?? false
   if (showInactive) return filters.selectedClassroomIds
   const activeIds = new Set(availableClassrooms.filter(c => c.is_active !== false).map(c => c.id))
   return filters.selectedClassroomIds.filter(id => activeIds.has(id))
@@ -44,7 +44,7 @@ export function getEffectiveTimeSlotIds(
   filters: ScheduleFilterInput,
   availableTimeSlots: ItemWithActive[]
 ): string[] {
-  const showInactive = filters.showInactiveTimeSlots ?? true
+  const showInactive = filters.showInactiveTimeSlots ?? false
   if (showInactive) return filters.selectedTimeSlotIds
   const activeIds = new Set(
     availableTimeSlots.filter(ts => ts.is_active !== false).map(ts => ts.id)

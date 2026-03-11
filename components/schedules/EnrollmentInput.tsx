@@ -11,6 +11,8 @@ interface EnrollmentInputProps {
   disabled?: boolean
   showUseDefault?: boolean
   onUseDefault?: () => void
+  /** When true, do not render the "Enrollment (for staffing)" label (caller provides it). */
+  hideLabel?: boolean
 }
 
 export default function EnrollmentInput({
@@ -19,6 +21,7 @@ export default function EnrollmentInput({
   disabled = false,
   showUseDefault = false,
   onUseDefault,
+  hideLabel = false,
 }: EnrollmentInputProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
@@ -34,22 +37,24 @@ export default function EnrollmentInput({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between mb-6">
-        <Label htmlFor="enrollment" className="text-base font-medium">
-          Enrollment (for staffing)
-        </Label>
-        {showUseDefault && onUseDefault && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onUseDefault}
-            disabled={disabled}
-          >
-            Use default
-          </Button>
-        )}
-      </div>
+      {!hideLabel && (
+        <div className="flex items-center justify-between mb-6">
+          <Label htmlFor="enrollment" className="text-base font-medium">
+            Enrollment (for staffing)
+          </Label>
+          {showUseDefault && onUseDefault && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onUseDefault}
+              disabled={disabled}
+            >
+              Use default
+            </Button>
+          )}
+        </div>
+      )}
       <Input
         id="enrollment"
         type="number"

@@ -111,8 +111,8 @@ export default function FilterPanel({
         initialFilters?.selectedTimeSlotIds ?? availableTimeSlots.map(ts => ts.id),
       selectedClassroomIds:
         initialFilters?.selectedClassroomIds ?? availableClassrooms.map(c => c.id),
-      showInactiveClassrooms: initialFilters?.showInactiveClassrooms ?? true,
-      showInactiveTimeSlots: initialFilters?.showInactiveTimeSlots ?? true,
+      showInactiveClassrooms: initialFilters?.showInactiveClassrooms ?? false,
+      showInactiveTimeSlots: initialFilters?.showInactiveTimeSlots ?? false,
       slotFilterMode,
       displayFilters: {
         belowRequired: initialFilters?.displayFilters?.belowRequired ?? true,

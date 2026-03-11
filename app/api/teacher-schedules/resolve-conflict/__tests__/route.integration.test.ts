@@ -11,9 +11,13 @@ import {
   updateTeacherSchedule,
 } from '@/lib/api/schedules'
 import { createTeacherScheduleAuditLog } from '@/lib/api/audit-logs'
+import { getUserSchoolId } from '@/lib/utils/auth'
 
 jest.mock('@/lib/supabase/server', () => ({
   createClient: jest.fn(),
+}))
+jest.mock('@/lib/utils/auth', () => ({
+  getUserSchoolId: jest.fn(),
 }))
 
 jest.mock('@/lib/utils/errors', () => ({
@@ -42,17 +46,12 @@ const staffRow = {
 const classroomRow = { name: 'Target Room' }
 
 const createSupabaseForResolve = (result: { data: any[] | null; error: Error | null }) => {
-  let eqCount = 0
   const teacherSchedulesBuilder = {
     select: jest.fn(() => teacherSchedulesBuilder),
-    neq: jest.fn(() => teacherSchedulesBuilder),
-    eq: jest.fn(() => {
-      eqCount += 1
-      if (eqCount === 4) {
-        return Promise.resolve(result)
-      }
-      return teacherSchedulesBuilder
-    }),
+    eq: jest.fn(() => teacherSchedulesBuilder),
+    neq: jest.fn(() => Promise.resolve(result)),
+    // For "existing in target" query in mark_floater (returns no existing row so we create)
+    maybeSingle: jest.fn(() => Promise.resolve({ data: null })),
   }
 
   const staffBuilder = {
@@ -90,6 +89,7 @@ describe('POST /api/teacher-schedules/resolve-conflict integration', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(createErrorResponse as jest.Mock).mockImplementation(
       (_error: unknown, message: string, status: number) =>
         NextResponse.json({ error: message }, { status })
@@ -102,10 +102,6 @@ describe('POST /api/teacher-schedules/resolve-conflict integration', () => {
       classroom_id: 'class-target',
       is_floater: false,
     })
-    ;(updateTeacherSchedule as jest.Mock).mockImplementation(async (id: string) => ({
-      id,
-      is_floater: true,
-    }))
   })
 
   it('returns validation error when request body is invalid', async () => {
@@ -196,7 +192,7 @@ describe('POST /api/teacher-schedules/resolve-conflict integration', () => {
     expect(json.created.id).toBe('new-schedule-1')
   })
 
-  it('handles mark_floater by updating conflicts and creating a floater assignment', async () => {
+  it('handles mark_floater by updating conflicts to floater and creating floater in target room', async () => {
     ;(validateRequest as jest.Mock).mockReturnValue({
       success: true,
       data: {
@@ -216,6 +212,12 @@ describe('POST /api/teacher-schedules/resolve-conflict integration', () => {
         error: null,
       })
     )
+    ;(updateTeacherSchedule as jest.Mock).mockResolvedValue({
+      id: 'conflict-1',
+      teacher_id: 'teacher-1',
+      classroom_id: 'class-a',
+      is_floater: true,
+    })
     ;(createTeacherSchedule as jest.Mock).mockResolvedValue({
       id: 'new-floater-schedule',
       teacher_id: 'teacher-1',
@@ -232,21 +234,23 @@ describe('POST /api/teacher-schedules/resolve-conflict integration', () => {
     const json = await response.json()
 
     expect(response.status).toBe(200)
-    expect(updateTeacherSchedule).toHaveBeenCalledWith('conflict-1', {
-      is_floater: true,
-    })
+    expect(deleteTeacherSchedule).not.toHaveBeenCalled()
+    expect(updateTeacherSchedule).toHaveBeenCalledWith('conflict-1', { is_floater: true }, undefined)
     expect(createTeacherSchedule).toHaveBeenCalledWith({
       teacher_id: 'teacher-1',
       day_of_week_id: 'day-mon',
       time_slot_id: 'slot-em',
       classroom_id: 'class-target',
       is_floater: true,
+      school_id: 'school-1',
     })
+    expect(json.updated).toHaveLength(1)
+    expect(json.updated[0].is_floater).toBe(true)
     expect(json.created.id).toBe('new-floater-schedule')
-    expect(json.updated).toEqual([{ id: 'conflict-1', is_floater: true }])
+    expect(json.created.is_floater).toBe(true)
   })
 
-  it('returns empty updated list when mark_floater updates return null', async () => {
+  it('mark_floater with already-floater conflict updates it and creates floater in target room', async () => {
     ;(validateRequest as jest.Mock).mockReturnValue({
       success: true,
       data: {
@@ -260,13 +264,18 @@ describe('POST /api/teacher-schedules/resolve-conflict integration', () => {
           {
             id: 'conflict-1',
             classroom_id: 'class-a',
-            is_floater: false,
+            is_floater: true,
           },
         ],
         error: null,
       })
     )
-    ;(updateTeacherSchedule as jest.Mock).mockResolvedValue(null)
+    ;(updateTeacherSchedule as jest.Mock).mockResolvedValue({
+      id: 'conflict-1',
+      teacher_id: 'teacher-1',
+      classroom_id: 'class-a',
+      is_floater: true,
+    })
     ;(createTeacherSchedule as jest.Mock).mockResolvedValue({
       id: 'new-floater-schedule',
       teacher_id: 'teacher-1',
@@ -283,9 +292,11 @@ describe('POST /api/teacher-schedules/resolve-conflict integration', () => {
     const json = await response.json()
 
     expect(response.status).toBe(200)
-    expect(updateTeacherSchedule).toHaveBeenCalled()
-    expect(json.updated).toEqual([])
+    expect(deleteTeacherSchedule).not.toHaveBeenCalled()
+    expect(updateTeacherSchedule).toHaveBeenCalledWith('conflict-1', { is_floater: true }, undefined)
+    expect(json.updated).toHaveLength(1)
     expect(json.created.id).toBe('new-floater-schedule')
+    expect(json.created.is_floater).toBe(true)
   })
 
   it('handles cancel resolution by logging and returning empty result', async () => {
@@ -319,7 +330,6 @@ describe('POST /api/teacher-schedules/resolve-conflict integration', () => {
 
     expect(response.status).toBe(200)
     expect(deleteTeacherSchedule).not.toHaveBeenCalled()
-    expect(updateTeacherSchedule).not.toHaveBeenCalled()
     expect(createTeacherSchedule).not.toHaveBeenCalled()
     expect(createTeacherScheduleAuditLog).toHaveBeenCalledTimes(1)
     expect(json).toEqual({})

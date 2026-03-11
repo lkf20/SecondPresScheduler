@@ -32,12 +32,13 @@ describe('schedule-filter-helpers', () => {
       expect(getEffectiveClassroomIds(filters, availableClassrooms)).toEqual(['c1', 'c3'])
     })
 
-    it('defaults showInactiveClassrooms to true when undefined', () => {
+    it('defaults showInactiveClassrooms to false when undefined', () => {
       const filters: ScheduleFilterInput = {
         selectedClassroomIds: ['c1', 'c2'],
         selectedTimeSlotIds: [],
       }
-      expect(getEffectiveClassroomIds(filters, availableClassrooms)).toEqual(['c1', 'c2'])
+      // c2 is inactive, so with default false we only get active c1
+      expect(getEffectiveClassroomIds(filters, availableClassrooms)).toEqual(['c1'])
     })
 
     it('omits selected ids that are not in available list when showing only active', () => {
@@ -85,12 +86,13 @@ describe('schedule-filter-helpers', () => {
       expect(getEffectiveTimeSlotIds(filters, availableTimeSlots)).toEqual(['ts1', 'ts3'])
     })
 
-    it('defaults showInactiveTimeSlots to true when undefined', () => {
+    it('defaults showInactiveTimeSlots to false when undefined', () => {
       const filters: ScheduleFilterInput = {
         selectedClassroomIds: [],
         selectedTimeSlotIds: ['ts1', 'ts2'],
       }
-      expect(getEffectiveTimeSlotIds(filters, availableTimeSlots)).toEqual(['ts1', 'ts2'])
+      // ts2 is inactive, so with default false we only get active ts1
+      expect(getEffectiveTimeSlotIds(filters, availableTimeSlots)).toEqual(['ts1'])
     })
   })
 

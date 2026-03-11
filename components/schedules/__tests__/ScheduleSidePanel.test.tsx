@@ -117,12 +117,17 @@ jest.mock('@/components/schedules/ConflictBanner', () => () => <div>ConflictBann
 
 const originalFetch = global.fetch
 
-const setupFetch = (removeContext: {
-  start_date: string
-  end_date: string
-  weekdays: string[]
-  matching_shift_count: number
-}) => {
+const setupFetch = (
+  removeContext: {
+    start_date: string
+    end_date: string
+    weekdays: string[]
+    matching_shift_count: number
+  },
+  options?: { checkConflictsResponse?: { conflicts: any[] } }
+) => {
+  const checkConflictsResponse = options?.checkConflictsResponse ?? { conflicts: [] }
+
   global.fetch = jest.fn(async (input: RequestInfo | URL) => {
     const url = String(input)
 
@@ -142,6 +147,12 @@ const setupFetch = (removeContext: {
       return {
         ok: true,
         json: async () => [],
+      } as Response
+    }
+    if (url.includes('/api/teacher-schedules/check-conflicts')) {
+      return {
+        ok: true,
+        json: async () => checkConflictsResponse,
       } as Response
     }
     if (url.includes('/api/teacher-schedules')) {
@@ -441,7 +452,55 @@ describe('ScheduleSidePanel interactions', () => {
     expect(screen.queryByText('All shifts')).not.toBeInTheDocument()
   })
 
-  it('disables Save and Apply changes when slot is inactive', async () => {
+  it('shows conflict banner on Baseline when teacher is already assigned in another room (same day/slot)', async () => {
+    setupFetch(
+      {
+        start_date: '2026-02-09',
+        end_date: '2026-02-09',
+        weekdays: ['Monday'],
+        matching_shift_count: 1,
+      },
+      {
+        checkConflictsResponse: {
+          conflicts: [
+            {
+              teacher_id: 'teacher-1',
+              teacher_name: 'Bella W.',
+              conflicting_schedule_id: 'ts-other',
+              conflicting_classroom_id: 'class-other',
+              conflicting_classroom_name: 'Toddler B Room',
+              day_of_week_id: 'day-1',
+              day_of_week_name: 'Monday',
+              time_slot_id: 'slot-1',
+              time_slot_code: 'LB1',
+              target_classroom_id: 'class-1',
+              conflicting_role_label: 'Permanent teacher',
+            },
+          ],
+        },
+      }
+    )
+
+    // Baseline page: readOnly false so conflict check runs without needing panelMode 'editCell'
+    const baselineProps = {
+      ...buildProps(),
+      readOnly: false,
+      classroomId: 'class-silver',
+      classroomName: 'Silver Room',
+    }
+
+    render(<ScheduleSidePanel {...baselineProps} />)
+
+    // Wait for conflict check to run and ConflictBanner to appear (teachers come from selectedCellData; check-conflicts returns conflict)
+    await waitFor(
+      () => {
+        expect(screen.getByText('ConflictBanner')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+  })
+
+  it('keeps Save enabled when slot is inactive so user can persist deactivation or other changes', async () => {
     setupFetch({
       start_date: '2026-02-09',
       end_date: '2026-02-09',
@@ -464,8 +523,40 @@ describe('ScheduleSidePanel interactions', () => {
       />
     )
 
-    expect(await screen.findByRole('button', { name: 'Save' })).toBeDisabled()
+    // Save is not disabled when slot is inactive (user can save deactivation or reopen and save)
+    const saveButton = await screen.findByRole('button', { name: 'Save' })
+    expect(saveButton).not.toBeDisabled()
     expect(screen.getByTestId('multi-day-apply')).toHaveAttribute('data-disabled', 'true')
+  })
+
+  it('shows class group required message only when slot is active', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    render(
+      <ScheduleSidePanel
+        {...props}
+        readOnly={false}
+        selectedCellData={{
+          ...props.selectedCellData!,
+          schedule_cell: {
+            ...props.selectedCellData!.schedule_cell,
+            class_groups: [],
+          },
+        }}
+      />
+    )
+
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument())
+    // When slot is active and no class groups: show warning (class groups required when active)
+    expect(
+      screen.getByText('At least one class group is required when slot is active')
+    ).toBeInTheDocument()
   })
 
   it('disables quick actions in read-only cell panel when slot is inactive', async () => {

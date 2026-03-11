@@ -30,6 +30,49 @@ export function parseLocalDate(dateString: string): Date {
   return date
 }
 
+/**
+ * Normalize a date value to YYYY-MM-DD for consistent keys, comparisons, and API contracts.
+ * Use this whenever you build keys from dates (e.g. `${date}|${time_slot_id}`) or compare
+ * dates from different sources (DB, API, client). The DB may return date columns as
+ * "YYYY-MM-DD" or with a time component (e.g. "2025-03-17T00:00:00.000Z"); using this
+ * ensures matching works regardless.
+ *
+ * @param value - Date string (any parseable format) or Date object
+ * @returns YYYY-MM-DD string, or empty string if value is falsy/invalid
+ */
+export function toDateStringISO(value: string | Date | null | undefined): string {
+  if (value == null || value === '') return ''
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return ''
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+    // ISO or timestamp: "2025-03-17T00:00:00.000Z" -> take first 10 chars
+    if (trimmed.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10)
+    try {
+      const d = new Date(trimmed)
+      if (!Number.isNaN(d.getTime())) {
+        const y = d.getFullYear()
+        const m = String(d.getMonth() + 1).padStart(2, '0')
+        const day = String(d.getDate()).padStart(2, '0')
+        return `${y}-${m}-${day}`
+      }
+    } catch {
+      /* fall through */
+    }
+    return ''
+  }
+  try {
+    const d = value instanceof Date ? value : new Date(value)
+    if (Number.isNaN(d.getTime())) return ''
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  } catch {
+    return ''
+  }
+}
+
 const weekdayToDayNumber: Record<string, number> = {
   Monday: 1,
   Tuesday: 2,

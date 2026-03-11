@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import {
   Select,
   SelectContent,
@@ -67,7 +68,13 @@ export default function ClassSelector({
       </Select>
       {allowedClassIds && allowedClassIds.length > 0 && (
         <p className="text-xs text-muted-foreground">
-          Showing only class groups allowed in this classroom
+          Showing only class groups allowed in this classroom. To update go to{' '}
+          <Link
+            href="/settings/classrooms"
+            className="text-teal-700 underline underline-offset-2 hover:text-teal-800"
+          >
+            Settings → Classrooms
+          </Link>
         </p>
       )}
     </div>

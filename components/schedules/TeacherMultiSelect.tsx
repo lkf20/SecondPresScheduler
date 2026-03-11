@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
@@ -135,8 +134,18 @@ export default function TeacherMultiSelect({
     const selected = teachers
       .filter(t => newSelected.has(t.id))
       .map(t => {
-        // Preserve existing is_floater status if teacher was already selected
+        // Preserve existing is_floater and is_flexible if teacher was already selected
         const existing = selectedTeachers.find(st => (st.teacher_id || st.id) === t.id)
+        const isFlexFromStaff =
+          (t as StaffWithRole).staff_role_type_assignments?.some(
+            a => a.staff_role_types?.code === 'FLEXIBLE'
+          ) ?? false
+        const is_flexible =
+          roleFilter === 'FLEXIBLE'
+            ? true
+            : roleFilter === 'PERMANENT'
+              ? false
+              : (existing?.is_flexible ?? isFlexFromStaff)
         return {
           id: '', // Will be set when saved
           name: getStaffDisplayName(
@@ -149,17 +158,21 @@ export default function TeacherMultiSelect({
           ),
           teacher_id: t.id,
           is_floater: existing?.is_floater ?? false,
-          is_flexible: roleFilter === 'FLEXIBLE',
+          is_flexible,
         }
       })
     onTeachersChange(selected)
 
-    // Clear search bar when a checkbox is clicked and focus it
-    setSearchQuery('')
-    // Focus the search input after state update
-    setTimeout(() => {
-      searchInputRef.current?.focus()
-    }, 0)
+    if (checked) {
+      // When adding a teacher, clear search and focus so user can keep searching
+      setSearchQuery('')
+      setTimeout(() => {
+        searchInputRef.current?.focus()
+      }, 0)
+    } else {
+      // When removing a chip, don't open or leave the dropdown open
+      setIsOpen(false)
+    }
   }
 
   const handleRemove = (teacherId: string) => {
@@ -205,11 +218,12 @@ export default function TeacherMultiSelect({
   }
   const assignedCount = selectedTeachersList.length
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside; clear search so next open shows placeholder
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false)
+        setSearchQuery('')
       }
     }
 
@@ -221,17 +235,6 @@ export default function TeacherMultiSelect({
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [isOpen])
-
-  // Get display text for button
-  const getButtonText = () => {
-    if (selectedTeachersList.length === 0) {
-      return 'Select teachers...'
-    }
-    if (selectedTeachersList.length === 1) {
-      return getTeacherLabel(selectedTeachersList[0])
-    }
-    return `${selectedTeachersList.length} teachers selected`
-  }
 
   // Calculate status
   let statusIcon = <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -252,41 +255,29 @@ export default function TeacherMultiSelect({
 
   return (
     <div className="space-y-3">
-      {/* Search bar and dropdown */}
+      {/* Single search input: focus opens list below (no duplicate search bar) */}
       <div className="relative" ref={dropdownRef}>
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full justify-between"
-          onClick={() => !disabled && setIsOpen(!isOpen)}
-          disabled={disabled}
-        >
-          <span className="flex items-center gap-2">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <span className={selectedTeachersList.length === 0 ? 'text-muted-foreground' : ''}>
-              {getButtonText()}
-            </span>
-          </span>
-          <ChevronDown
-            className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`}
+        <div className="relative flex items-center">
+          <Search className="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            ref={searchInputRef}
+            type="text"
+            placeholder="Search teachers..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onFocus={() => !disabled && setIsOpen(true)}
+            onClick={() => !disabled && setIsOpen(true)}
+            disabled={disabled}
+            className="w-full pl-10 pr-9"
           />
-        </Button>
+          <ChevronDown
+            className={`absolute right-3 h-4 w-4 text-muted-foreground pointer-events-none transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          />
+        </div>
 
-        {/* Dropdown menu */}
+        {/* Dropdown: list only (search is the input above) */}
         {isOpen && (
           <div className="absolute z-50 w-full mt-1 bg-background border rounded-md shadow-lg">
-            {/* Search input inside dropdown */}
-            <div className="p-2 border-b">
-              <Input
-                ref={searchInputRef}
-                placeholder="Search teachers..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="w-full"
-                autoFocus
-              />
-            </div>
-
             {/* Teacher list */}
             <div className="max-h-60 overflow-y-auto">
               {filteredTeachers.length === 0 ? (
