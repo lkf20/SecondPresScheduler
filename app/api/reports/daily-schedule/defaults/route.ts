@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getReportDefaults, upsertReportDefaults } from '@/lib/api/report-defaults'
 
-const SUB_AVAILABILITY_DEFAULT_COLUMNS = {
-  topHeaderColumn: 'sub_availability_top_header_html',
-  footerNotesColumn: 'sub_availability_footer_notes_html',
+const DAILY_SCHEDULE_DEFAULT_COLUMNS = {
+  topHeaderColumn: 'daily_schedule_top_header_html',
+  footerNotesColumn: 'daily_schedule_footer_notes_html',
 } as const
 
 export async function GET() {
@@ -19,7 +19,7 @@ export async function GET() {
 
     const defaults = await getReportDefaults({
       schoolId,
-      columns: SUB_AVAILABILITY_DEFAULT_COLUMNS,
+      columns: DAILY_SCHEDULE_DEFAULT_COLUMNS,
     })
     return NextResponse.json(defaults)
   } catch (error: any) {
@@ -43,7 +43,6 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const hasTopHeader = Object.prototype.hasOwnProperty.call(body ?? {}, 'top_header_html')
     const hasFooterNotes = Object.prototype.hasOwnProperty.call(body ?? {}, 'footer_notes_html')
-
     if (!hasTopHeader && !hasFooterNotes) {
       return NextResponse.json(
         { error: 'Provide at least one of top_header_html or footer_notes_html.' },
@@ -57,7 +56,7 @@ export async function PUT(request: NextRequest) {
       footerNotesHtml: body?.footer_notes_html,
       hasTopHeader,
       hasFooterNotes,
-      columns: SUB_AVAILABILITY_DEFAULT_COLUMNS,
+      columns: DAILY_SCHEDULE_DEFAULT_COLUMNS,
     })
     return NextResponse.json(saved)
   } catch (error: any) {

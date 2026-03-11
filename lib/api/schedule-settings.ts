@@ -9,6 +9,8 @@ export interface ScheduleSettings {
   time_zone: string
   sub_availability_top_header_html?: string | null
   sub_availability_footer_notes_html?: string | null
+  daily_schedule_top_header_html?: string | null
+  daily_schedule_footer_notes_html?: string | null
   created_at: string
   updated_at: string
 }

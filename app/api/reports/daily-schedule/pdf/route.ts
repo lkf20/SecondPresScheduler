@@ -10,6 +10,12 @@ import {
   buildDailyScheduleFilename,
   buildDailySchedulePdfHtml,
 } from '@/lib/reports/daily-schedule-pdf'
+import {
+  MAX_FOOTER_NOTES_HTML,
+  MAX_TOP_HEADER_HTML,
+  formatGeneratedAt,
+  truncateRichText,
+} from '@/lib/reports/rich-text'
 import { filterActiveDailyScheduleData, resolveDailyScheduleDay } from '@/lib/api/daily-schedule'
 
 export const runtime = 'nodejs'
@@ -43,16 +49,9 @@ const parsePaperSize = (value: string | null): 'letter' | 'legal' => {
   return 'letter'
 }
 
-const formatGeneratedAt = (date: Date, timeZone: string) =>
-  new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  }).format(date)
+const parseTopHeaderHtml = (value: string | null) => truncateRichText(value, MAX_TOP_HEADER_HTML)
+const parseFooterNotesHtml = (value: string | null) =>
+  truncateRichText(value, MAX_FOOTER_NOTES_HTML)
 
 export async function GET(request: Request) {
   try {
@@ -89,6 +88,8 @@ export async function GET(request: Request) {
     const layout = parseLayout(searchParams.get('layout'))
     const teacherNameFormat = parseTeacherNameFormat(searchParams.get('teacherNameFormat'))
     const paperSize = parsePaperSize(searchParams.get('paperSize'))
+    const topHeaderHtml = parseTopHeaderHtml(searchParams.get('topHeaderHtml'))
+    const footerNotesHtml = parseFooterNotesHtml(searchParams.get('footerNotesHtml'))
 
     const dayResolution = await resolveDailyScheduleDay(schoolId, dateParam, date)
     if (dayResolution.noSchedule) {
@@ -128,6 +129,8 @@ export async function GET(request: Request) {
         colorFriendly,
         layout,
         teacherNameFormat,
+        topHeaderHtml,
+        footerNotesHtml,
       },
       timeZone,
       schoolClosures,

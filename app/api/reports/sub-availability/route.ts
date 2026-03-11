@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getSubAvailabilityReportData } from '@/lib/api/sub-availability'
-import {
-  buildSubAvailabilityReportModel,
-  formatGeneratedAt,
-} from '@/lib/reports/sub-availability-pdf'
+import { buildSubAvailabilityReportModel } from '@/lib/reports/sub-availability-pdf'
+import { formatGeneratedAt } from '@/lib/reports/rich-text'
 
 const parseNameFormat = (value: string | null): 'display' | 'full' =>
   value === 'full' ? 'full' : 'display'

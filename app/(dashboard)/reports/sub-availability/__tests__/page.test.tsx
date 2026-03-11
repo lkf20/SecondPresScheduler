@@ -286,7 +286,7 @@ describe('Sub Availability report page', () => {
     )
 
     render(<SubAvailabilityReportPage />)
-    await screen.findByText('Footer')
+    expect((await screen.findAllByText('Footer')).length).toBeGreaterThanOrEqual(1)
     await screen.findByText('Save as default footer')
     fireEvent.click(screen.getByRole('button', { name: 'Save as default footer' }))
 
@@ -334,7 +334,7 @@ describe('Sub Availability report page', () => {
     })
 
     const { container } = render(<SubAvailabilityReportPage />)
-    await screen.findByText('Center Header')
+    expect((await screen.findAllByText('Center Header')).length).toBeGreaterThanOrEqual(1)
     expect(await screen.findAllByText('Footer Note')).toHaveLength(2)
 
     const editors = Array.from(container.querySelectorAll('div[contenteditable="true"]'))
