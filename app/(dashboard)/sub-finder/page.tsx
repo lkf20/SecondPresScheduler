@@ -262,7 +262,7 @@ export default function SubFinderPage() {
 
   /** Clear extend selection and warning when conflicting requests change (e.g. different date) or when not 2+. */
   useEffect(() => {
-    if (manualConflictingRequests.length !== 1) {
+    if (manualConflictingRequests.length < 2) {
       setManualExtendSelectedRequestId(null)
       setManualExtendShowSelectWarning(false)
     }
