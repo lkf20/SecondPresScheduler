@@ -256,8 +256,12 @@ describe('Sub Availability report page', () => {
     )
 
     const { container } = render(<SubAvailabilityReportPage />)
-    await screen.findByText('Header')
-    await screen.findByText('Save as default header')
+    await screen.findByRole('button', { name: 'Save as default header' })
+    const editors = Array.from(container.querySelectorAll('div[contenteditable="true"]'))
+    expect(editors).toHaveLength(2)
+    await waitFor(() => {
+      expect(editors[0]?.innerHTML).toContain('Header')
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Save as default header' }))
 
     await waitFor(() => {
@@ -274,8 +278,6 @@ describe('Sub Availability report page', () => {
     expect(payload).toEqual({
       top_header_html: '<div>Header</div>',
     })
-    const editors = Array.from(container.querySelectorAll('div[contenteditable="true"]'))
-    expect(editors).toHaveLength(2)
     await waitFor(() => {
       expect(editors[0]?.innerHTML).toContain('Header (saved)')
     })
