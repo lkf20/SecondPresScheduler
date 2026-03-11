@@ -25,7 +25,11 @@ import {
 import { isNeedsReviewClassroomName } from '@/lib/utils/needs-review-classroom'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 import type { WeeklyScheduleData } from '@/lib/api/weekly-schedule'
-import { applyScheduleFilters } from '@/lib/schedules/schedule-filter-data'
+import { getSlotCoverageTotalWeekly } from '@/lib/schedules/coverage-weights'
+import {
+  applyScheduleFilters,
+  getSlotRequiredPreferred,
+} from '@/lib/schedules/schedule-filter-data'
 
 // Calculate Monday of current week as ISO string for query key
 function getWeekStartISO(): string {
@@ -518,44 +522,19 @@ export default function WeeklySchedulePage() {
             absences += 1
           }
 
-          // Coverage issues: below required or preferred
+          // Coverage issues: below required or preferred (weekly coverage rules: permanent, flex, temp, sub 1; floater 0.5; absence -1)
           const scheduleCell = slot.schedule_cell
-          if (
-            scheduleCell &&
-            scheduleCell.is_active &&
-            scheduleCell.class_groups &&
-            scheduleCell.class_groups.length > 0 &&
-            scheduleCell.enrollment_for_staffing
-          ) {
-            const classGroupForRatio = scheduleCell.class_groups.reduce((lowest, current) => {
-              const currentMinAge = current.min_age ?? Infinity
-              const lowestMinAge = lowest.min_age ?? Infinity
-              return currentMinAge < lowestMinAge ? current : lowest
-            })
-
-            const requiredTeachers = classGroupForRatio.required_ratio
-              ? Math.ceil(scheduleCell.enrollment_for_staffing / classGroupForRatio.required_ratio)
-              : undefined
-            const preferredTeachers = classGroupForRatio.preferred_ratio
-              ? Math.ceil(scheduleCell.enrollment_for_staffing / classGroupForRatio.preferred_ratio)
-              : undefined
-
-            const classGroupIds = scheduleCell.class_groups.map(cg => cg.id)
-            const coverageAssignments = (slot.assignments || []).filter(a => {
-              if (!a.teacher_id) return false
-              if (a.is_floater) return false
-              if (a.is_substitute === true) return true
-              const classGroupId = a.class_group_id
-              return !!classGroupId && classGroupIds.includes(classGroupId)
-            })
-
-            const assignedCount = coverageAssignments.length
-            const belowRequired = requiredTeachers !== undefined && assignedCount < requiredTeachers
-            const belowPreferred =
-              preferredTeachers !== undefined && assignedCount < preferredTeachers
-
-            if (belowRequired || belowPreferred) {
-              coverageIssues += 1
+          if (scheduleCell?.is_active) {
+            const thresholds = getSlotRequiredPreferred(slot)
+            if (thresholds) {
+              const coverageTotal = getSlotCoverageTotalWeekly(slot)
+              const belowRequired =
+                thresholds.required !== undefined && coverageTotal < thresholds.required
+              const belowPreferred =
+                thresholds.preferred !== undefined && coverageTotal < thresholds.preferred
+              if (belowRequired || belowPreferred) {
+                coverageIssues += 1
+              }
             }
           }
         })

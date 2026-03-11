@@ -632,7 +632,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Precompute teacher contribution per (day_of_week_id, time_slot_id, classroom_id).
-    // It is identical for every date with the same day-of-week, so compute once per slot.
+    // Dashboard below-staffing: permanent 1, flex 1, floater 0.5, temp coverage 1; subs and absences excluded. See AGENTS.md "Coverage counting".
     const teacherContribBySlot = new Map<string, number>()
     for (const cell of scheduleCells) {
       const slotKey = `${cell.day_of_week_id}|${cell.time_slot_id}|${cell.classroom_id}`

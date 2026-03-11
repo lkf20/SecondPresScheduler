@@ -7,6 +7,10 @@
 import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 import { getTotalEnrollmentForCalculation } from '@/components/schedules/ScheduleSidePanel'
 import {
+  getSlotCoverageTotalBaseline,
+  getSlotCoverageTotalWeekly,
+} from '@/lib/schedules/coverage-weights'
+import {
   getEffectiveClassroomIds,
   getEffectiveTimeSlotIds,
   isStaffingNarrowing,
@@ -42,9 +46,12 @@ export interface ScheduleFiltersInput extends ScheduleFilterInput {
     | 'absences'
 }
 
+type CoverageContext = 'weekly' | 'baseline'
+
 function slotPassesStaffingFilter(
   slot: WeeklyScheduleDataByClassroom['days'][0]['time_slots'][0],
-  df: NonNullable<ScheduleFilterInput['displayFilters']>
+  df: NonNullable<ScheduleFilterInput['displayFilters']>,
+  coverageContext: CoverageContext
 ): boolean {
   const scheduleCell = slot.schedule_cell
   if (!scheduleCell) return false
@@ -75,21 +82,61 @@ function slotPassesStaffingFilter(
     scheduleCell.preferred_staff_override != null
       ? scheduleCell.preferred_staff_override
       : calculatedPreferred
-  const assignedCount = (slot.assignments || []).filter(
-    a => a.teacher_id && !a.is_substitute
-  ).length
-  const belowRequired = requiredTeachers !== undefined && assignedCount < requiredTeachers
+
+  const coverageTotal =
+    coverageContext === 'baseline'
+      ? getSlotCoverageTotalBaseline(slot)
+      : getSlotCoverageTotalWeekly(slot)
+
+  const belowRequired = requiredTeachers !== undefined && coverageTotal < requiredTeachers
   const belowPreferred =
-    preferredTeachers !== undefined && assignedCount < preferredTeachers
+    preferredTeachers !== undefined && coverageTotal < preferredTeachers
   const fullyStaffed =
     requiredTeachers !== undefined &&
-    assignedCount >= requiredTeachers &&
-    (preferredTeachers === undefined || assignedCount >= preferredTeachers)
+    coverageTotal >= requiredTeachers &&
+    (preferredTeachers === undefined || coverageTotal >= preferredTeachers)
 
   if (belowRequired) return df.belowRequired
   if (belowPreferred) return df.belowPreferred
   if (fullyStaffed) return df.fullyStaffed
   return false
+}
+
+/** Return required/preferred staff for a slot (for ratio comparison). Used with coverage totals from coverage-weights. */
+export function getSlotRequiredPreferred(
+  slot: WeeklyScheduleDataByClassroom['days'][0]['time_slots'][0]
+): { required?: number; preferred?: number } | null {
+  const scheduleCell = slot.schedule_cell
+  if (!scheduleCell?.class_groups?.length) return null
+
+  const classGroups = scheduleCell.class_groups
+  const totalEnrollment = getTotalEnrollmentForCalculation(
+    classGroups,
+    scheduleCell.enrollment_for_staffing ?? null
+  )
+  if (totalEnrollment == null) return null
+
+  const classGroupForRatio = classGroups.reduce((lowest, current) => {
+    const currentMinAge = current.min_age ?? Infinity
+    const lowestMinAge = lowest.min_age ?? Infinity
+    return currentMinAge < lowestMinAge ? current : lowest
+  })
+  const calculatedRequired = classGroupForRatio.required_ratio
+    ? Math.ceil(totalEnrollment / classGroupForRatio.required_ratio)
+    : undefined
+  const calculatedPreferred = classGroupForRatio.preferred_ratio
+    ? Math.ceil(totalEnrollment / (classGroupForRatio.preferred_ratio ?? 1))
+    : undefined
+  const required =
+    scheduleCell.required_staff_override != null
+      ? scheduleCell.required_staff_override
+      : calculatedRequired
+  const preferred =
+    scheduleCell.preferred_staff_override != null
+      ? scheduleCell.preferred_staff_override
+      : calculatedPreferred
+  if (required === undefined && preferred === undefined) return null
+  return { required, preferred }
 }
 
 /**
@@ -204,14 +251,15 @@ export function applyScheduleFilters(
           if (applyDisplayMode && filters.displayMode === 'coverage-issues') {
             const scheduleCell = slot.schedule_cell
             if (!scheduleCell || !scheduleCell.is_active) return false
-            return slotPassesStaffingFilter(slot, df)
+            return slotPassesStaffingFilter(slot, df, 'weekly')
           }
 
           if (showAllSlots) return true
 
           if (isSlotInactive(slot)) return df.inactive
 
-          return slotPassesStaffingFilter(slot, df)
+          const coverageContext = applyDisplayMode ? 'weekly' : 'baseline'
+          return slotPassesStaffingFilter(slot, df, coverageContext)
         }),
       }))
 

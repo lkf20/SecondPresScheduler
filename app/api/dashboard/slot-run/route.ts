@@ -168,6 +168,7 @@ export async function GET(request: NextRequest) {
       return createErrorResponse(tsError, 'Failed to fetch teacher schedules', 500)
     }
 
+    // Dashboard below-staffing: permanent 1, flex 1, floater 0.5, temp +1; subs and absences excluded. See AGENTS.md "Coverage counting".
     const teacherContrib = (teacherSchedules || []).reduce(
       (sum: number, ts: any) => sum + (ts.is_floater ? 0.5 : 1),
       0

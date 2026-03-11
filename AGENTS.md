@@ -177,6 +177,16 @@ Use the shared `Button` component (`components/ui/button.tsx`) and these variant
 - **Staffing overrides:** A cell can override the auto-calculated required/preferred staff with `schedule_cells.required_staff_override` and `preferred_staff_override` (e.g. for nap time or combined groups). When set, these overrides are used instead of the ratio-based calculation. Use the shared helper `getTotalEnrollmentForCalculation` (from `ScheduleSidePanel`) for total enrollment and apply overrides in all places that compute or display required/preferred staff (ScheduleCell, ScheduleSidePanel, dashboard overview, slot-run, flex availability, baseline-schedule filtering).
 - **Legends:** If you add or change how enrollment or staffing targets are shown in the grid or panel, update any related legend or key.
 
+## Coverage counting (staff who count toward ratios)
+
+When comparing a cell’s staffing to required/preferred ratios, use these rules. Implement shared logic in `lib/schedules/coverage-weights.ts` and use it everywhere coverage is computed.
+
+- **Weekly schedule (and rest of app where operational reality applies):** Permanent staff = 1, Flex staff = 1, Temporary coverage = 1, Sub = 1, Floater = 0.5, Absence = -1. Example: Anna (permanent) + Sally (absent) + Jane (sub) + Kim (temp) + Tarah (floater) → 1 − 1 + 1 + 1 + 0.5 = 2.5.
+- **Baseline schedule:** Permanent = 1, Flex = 1, Floater = 0.5. No subs, temp coverage, or absences (baseline is the template). Example: Anna + Tarah (floater) → 1 + 0.5 = 1.5.
+- **Dashboard “Below staffing target” section:** Permanent = 1, Flex = 1, Temporary coverage = 1, Floater = 0.5. Subs and absences are excluded from the calculation. Use the same weights in `app/api/dashboard/overview/route.ts` and `app/api/dashboard/slot-run/route.ts`.
+
+Floater weight is 0.5 for now; it may become more sophisticated later—keep logic in `coverage-weights.ts` and add a comment there if you extend it.
+
 ## School Calendar
 
 - **Purpose:** School Calendar lets admins set the first and last day of school and manage closed days (holidays, snow days, etc.). Closed days or time slots appear as “School Closed” across the app.

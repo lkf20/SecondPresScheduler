@@ -6,6 +6,8 @@ import ScheduleGridCellCard from './ScheduleGridCellCard'
 import ScheduleSidePanel from './ScheduleSidePanel'
 import type { WeeklyScheduleData, WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
+import { getSlotCoverageTotalWeekly } from '@/lib/schedules/coverage-weights'
+import { getSlotRequiredPreferred } from '@/lib/schedules/schedule-filter-data'
 import { parseLocalDate } from '@/lib/utils/date'
 import { isCellClosed, getMatchingClosure } from '@/lib/utils/school-closures'
 import { isSlotEffectivelyInactive } from '@/lib/utils/schedule-slot-activity'
@@ -280,34 +282,17 @@ export function calculateAssignmentCounts(data: WeeklyScheduleDataByClassroom[])
         }
 
         const scheduleCell = slot.schedule_cell
-        if (
-          scheduleCell &&
-          scheduleCell.is_active &&
-          scheduleCell.class_groups &&
-          scheduleCell.class_groups.length > 0
-        ) {
-          const classGroupForRatio = scheduleCell.class_groups.reduce((lowest, current) => {
-            const currentMinAge = current.min_age ?? Infinity
-            const lowestMinAge = lowest.min_age ?? Infinity
-            return currentMinAge < lowestMinAge ? current : lowest
-          })
-
-          const requiredTeachers = classGroupForRatio.required_ratio
-            ? Math.ceil(scheduleCell.enrollment_for_staffing! / classGroupForRatio.required_ratio)
-            : undefined
-          const preferredTeachers = classGroupForRatio.preferred_ratio
-            ? Math.ceil(scheduleCell.enrollment_for_staffing! / classGroupForRatio.preferred_ratio)
-            : undefined
-
-          const assignedCount = slot.assignments.filter(
-            a => a.teacher_id && !a.is_substitute
-          ).length
-          const belowRequired = requiredTeachers !== undefined && assignedCount < requiredTeachers
-          const belowPreferred =
-            preferredTeachers !== undefined && assignedCount < preferredTeachers
-
-          if (belowRequired || belowPreferred) {
-            coverageIssuesCount++
+        if (scheduleCell?.is_active) {
+          const thresholds = getSlotRequiredPreferred(slot)
+          if (thresholds) {
+            const coverageTotal = getSlotCoverageTotalWeekly(slot)
+            const belowRequired =
+              thresholds.required !== undefined && coverageTotal < thresholds.required
+            const belowPreferred =
+              thresholds.preferred !== undefined && coverageTotal < thresholds.preferred
+            if (belowRequired || belowPreferred) {
+              coverageIssuesCount++
+            }
           }
         }
       })
