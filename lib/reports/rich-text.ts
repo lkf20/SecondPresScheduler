@@ -130,8 +130,8 @@ export const htmlToPlainText = (html: string) =>
 
 export const hasRichTextContent = (html: string) => htmlToPlainText(html).length > 0
 
-export const normalizeRichTextForCompare = (html: string) =>
-  sanitizeRichTextHtml(html, MAX_FOOTER_NOTES_HTML)
+export const normalizeRichTextForCompare = (html: string, maxLength = MAX_FOOTER_NOTES_HTML) =>
+  sanitizeRichTextHtml(html, maxLength)
     .replace(/&nbsp;/g, ' ')
     .replace(/\u00a0/g, ' ')
     .replace(/>\s+</g, '><')

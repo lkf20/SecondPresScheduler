@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { normalizeRichTextForCompare } from '@/lib/reports/rich-text'
+import { MAX_TOP_HEADER_HTML, normalizeRichTextForCompare } from '@/lib/reports/rich-text'
 
 type UseReportDefaultsOptions = {
   defaultsUrl: string
@@ -69,8 +69,8 @@ export function useReportDefaults({
 
   const isTopHeaderSaved = useMemo(
     () =>
-      normalizeRichTextForCompare(topHeaderHtml) ===
-      normalizeRichTextForCompare(defaultTopHeaderHtml),
+      normalizeRichTextForCompare(topHeaderHtml, MAX_TOP_HEADER_HTML) ===
+      normalizeRichTextForCompare(defaultTopHeaderHtml, MAX_TOP_HEADER_HTML),
     [topHeaderHtml, defaultTopHeaderHtml]
   )
 
