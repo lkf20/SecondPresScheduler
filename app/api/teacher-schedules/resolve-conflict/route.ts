@@ -225,7 +225,8 @@ export async function POST(request: NextRequest) {
         const schoolId =
           (conflictingSchedules[0] as { school_id?: string }).school_id ??
           (await getUserSchoolId())
-        let existingInTarget: { id: string; is_floater: boolean | null } | null = null
+        type ExistingRow = { id: string; is_floater: boolean | null } | null
+        let existingInTarget: ExistingRow = null
         if (schoolId) {
           const { data } = await supabase
             .from('teacher_schedules')
@@ -236,7 +237,7 @@ export async function POST(request: NextRequest) {
             .eq('classroom_id', target_classroom_id)
             .eq('school_id', schoolId)
             .maybeSingle()
-          existingInTarget = data as typeof existingInTarget
+          existingInTarget = data as ExistingRow
         }
 
         let newSchedule: TeacherSchedule
