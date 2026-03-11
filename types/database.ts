@@ -639,6 +639,8 @@ export type Database = {
       schedule_settings: {
         Row: {
           created_at: string | null
+          daily_schedule_footer_notes_html: string | null
+          daily_schedule_top_header_html: string | null
           default_display_name_format: string
           id: string
           school_id: string
@@ -650,6 +652,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          daily_schedule_footer_notes_html?: string | null
+          daily_schedule_top_header_html?: string | null
           default_display_name_format?: string
           id?: string
           school_id: string
@@ -661,6 +665,8 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          daily_schedule_footer_notes_html?: string | null
+          daily_schedule_top_header_html?: string | null
           default_display_name_format?: string
           id?: string
           school_id?: string
