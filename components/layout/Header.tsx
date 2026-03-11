@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
@@ -29,6 +29,8 @@ import TimeOffForm from '@/components/time-off/TimeOffForm'
 import AssignSubPanel from '@/components/assign-sub/AssignSubPanel'
 import { getPanelBackgroundClasses, coverageColorValues } from '@/lib/utils/colors'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
@@ -55,6 +57,11 @@ export default function Header({ userEmail }: HeaderProps) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [clearDraftOnMount, setClearDraftOnMount] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
+  const [timeOffInitialTeacherId, setTimeOffInitialTeacherId] = useState<string | undefined>()
+  const [timeOffInitialStartDate, setTimeOffInitialStartDate] = useState<string | undefined>()
+  const [timeOffInitialEndDate, setTimeOffInitialEndDate] = useState<string | undefined>()
+  const searchParams = useSearchParams()
+  const pathname = usePathname()
   const timeOffFormRef = useRef<{ reset: () => void }>(null)
   const {
     activePanel,
@@ -82,6 +89,9 @@ export default function Header({ userEmail }: HeaderProps) {
   const [findSubExistingAbsenceId, setFindSubExistingAbsenceId] = useState<string | null>(null)
   const [findSubCustomStart, setFindSubCustomStart] = useState('')
   const [findSubCustomEnd, setFindSubCustomEnd] = useState('')
+  const [findSubRecordVsPreview, setFindSubRecordVsPreview] = useState<'record' | 'preview'>(
+    'record'
+  )
   const findSubFetchedTeacherIdRef = useRef<string | null>(null)
   const formatISODate = (date: Date) => {
     const year = date.getFullYear()
@@ -96,7 +106,12 @@ export default function Header({ userEmail }: HeaderProps) {
     router.refresh()
   }
 
-  const handleTimeOffSuccess = (teacherName: string, startDate: string, endDate: string) => {
+  const handleTimeOffSuccess = (
+    teacherName: string,
+    startDate: string,
+    endDate: string,
+    requestId?: string
+  ) => {
     // Format date range for toast
     const formatDateForToast = (dateStr: string) => {
       const [year, month, day] = dateStr.split('-').map(Number)
@@ -119,8 +134,13 @@ export default function Header({ userEmail }: HeaderProps) {
     // Show toast
     toast.success(`Time off added for ${teacherName} (${dateRange})`)
 
-    // Refresh the current page to update data
-    router.refresh()
+    // If we have the new request id, go to Sub Finder with it selected so the left panel
+    // refetches, selects the new absence, and main content shows it (no longer in preview).
+    if (requestId) {
+      router.push(`/sub-finder?absence_id=${requestId}`)
+    } else {
+      router.refresh()
+    }
   }
 
   const handleCloseSheet = (open: boolean) => {
@@ -133,6 +153,9 @@ export default function Header({ userEmail }: HeaderProps) {
       // No unsaved changes, close normally
       setIsTimeOffSheetOpen(false)
       setClearDraftOnMount(false) // Reset flag for next open
+      setTimeOffInitialTeacherId(undefined)
+      setTimeOffInitialStartDate(undefined)
+      setTimeOffInitialEndDate(undefined)
       setActivePanel(null)
       setTimeout(() => {
         restorePreviousPanel()
@@ -221,9 +244,14 @@ export default function Header({ userEmail }: HeaderProps) {
     setIsFindSubPopoverOpen(false)
     setTeacherSearch('')
     setSelectedTeacherId('')
-    router.push(
-      `/sub-finder?mode=manual&teacher_id=${selectedTeacherId}&start_date=${startDate}&end_date=${endDate}`
-    )
+
+    const subFinderParams = new URLSearchParams()
+    subFinderParams.set('mode', 'manual')
+    subFinderParams.set('teacher_id', selectedTeacherId)
+    subFinderParams.set('start_date', startDate)
+    subFinderParams.set('end_date', endDate)
+
+    router.push(`/sub-finder?${subFinderParams.toString()}`)
   }
 
   const getTeacherDisplayName = useCallback(
@@ -289,6 +317,7 @@ export default function Header({ userEmail }: HeaderProps) {
       setUpcomingTimeOff(null)
       setTimeOffLoading(false)
       setTimeOffError(false)
+      setFindSubRecordVsPreview('record')
       findSubFetchedTeacherIdRef.current = null
     }
   }, [isFindSubPopoverOpen])
@@ -335,6 +364,39 @@ export default function Header({ userEmail }: HeaderProps) {
     setIsMounted(true)
   }, [])
 
+  // Open Add Time Off panel when URL has open_time_off=1 (e.g. from sub-finder "Create time off request")
+  useEffect(() => {
+    if (searchParams.get('open_time_off') !== '1') return
+    const teacherId = searchParams.get('teacher_id') || undefined
+    const startDate = searchParams.get('start_date') || undefined
+    const endDate = searchParams.get('end_date') || undefined
+    if (activePanel && activePanel !== 'time-off') {
+      savePreviousPanel(activePanel)
+      requestPanelClose(activePanel)
+    }
+    setTimeOffInitialTeacherId(teacherId)
+    setTimeOffInitialStartDate(startDate)
+    setTimeOffInitialEndDate(endDate)
+    setClearDraftOnMount(false)
+    setActivePanel('time-off')
+    setIsTimeOffSheetOpen(true)
+    const next = new URLSearchParams(searchParams.toString())
+    next.delete('open_time_off')
+    next.delete('teacher_id')
+    next.delete('start_date')
+    next.delete('end_date')
+    const query = next.toString()
+    router.replace(query ? `${pathname}?${query}` : pathname)
+  }, [
+    searchParams,
+    pathname,
+    router,
+    activePanel,
+    savePreviousPanel,
+    requestPanelClose,
+    setActivePanel,
+  ])
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between px-4">
@@ -367,7 +429,9 @@ export default function Header({ userEmail }: HeaderProps) {
                   savePreviousPanel(activePanel)
                   requestPanelClose(activePanel)
                 }
-                // Clear draft when opening fresh (not restoring from previous session)
+                setTimeOffInitialTeacherId(undefined)
+                setTimeOffInitialStartDate(undefined)
+                setTimeOffInitialEndDate(undefined)
                 setClearDraftOnMount(true)
                 setActivePanel('time-off')
                 setIsTimeOffSheetOpen(true)
@@ -477,158 +541,171 @@ export default function Header({ userEmail }: HeaderProps) {
                                       : `${getTeacherDisplayName(selectedTeacher)} has no upcoming time off`}
                                 </p>
                               </div>
-                              <p className="font-semibold text-sm text-slate-800">
-                                Select dates for sub
+                              {/* Pick dates - segmented control: click to select, click again to deselect (same as Sub Finder left panel) */}
+                              <p className="text-xs font-medium text-slate-500 pt-1 pb-0.5">
+                                Pick dates
                               </p>
-                              <RadioGroup
-                                value={
-                                  findSubDateChoice === 'existing'
-                                    ? (findSubExistingAbsenceId ?? '')
-                                    : findSubDateChoice === ''
-                                      ? ''
-                                      : findSubDateChoice
-                                }
-                                onValueChange={value => {
-                                  if (
-                                    value === 'today' ||
-                                    value === 'tomorrow' ||
-                                    value === 'custom'
-                                  ) {
-                                    setFindSubDateChoice(value)
-                                    setFindSubExistingAbsenceId(null)
-                                    if (value === 'today' || value === 'tomorrow') {
-                                      setFindSubCustomStart('')
-                                      setFindSubCustomEnd('')
-                                    }
-                                    if (value === 'custom' && !findSubCustomStart) {
-                                      setFindSubCustomStart(getTodayISO())
-                                      setFindSubCustomEnd(getTodayISO())
-                                    }
-                                  } else {
-                                    setFindSubDateChoice('existing')
-                                    setFindSubExistingAbsenceId(value)
-                                  }
-                                }}
-                                className="space-y-2"
-                                aria-label="Find sub for"
-                              >
-                                {upcomingTimeOff && upcomingTimeOff.length > 0 && (
-                                  <>
-                                    <p className="text-xs font-medium text-slate-500 pt-1 pb-0.5">
-                                      Existing time off
-                                    </p>
-                                    {sortedUpcomingTimeOff.slice(0, 5).map(absence => (
-                                      <div
-                                        key={absence.id}
-                                        className="flex items-center gap-2 space-y-0 flex-wrap"
-                                      >
-                                        <RadioGroupItem
-                                          value={absence.id}
-                                          id={`find-sub-absence-${absence.id}`}
-                                        />
-                                        <Label
-                                          htmlFor={`find-sub-absence-${absence.id}`}
-                                          className="cursor-pointer text-sm font-normal flex-1 min-w-0"
-                                        >
-                                          {formatAbsenceDateRange(
-                                            absence.start_date,
-                                            absence.end_date
-                                          )}
-                                        </Label>
-                                        {absence.uncovered === 0 ? (
-                                          <span
-                                            className="shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium"
-                                            style={{
-                                              backgroundColor: coverageColorValues.covered.bg,
-                                              color: coverageColorValues.covered.text,
-                                              borderColor: coverageColorValues.covered.border,
-                                              borderWidth: 1,
-                                              borderStyle: 'solid',
-                                            }}
-                                          >
-                                            Covered
-                                          </span>
-                                        ) : (
-                                          <span
-                                            className="shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium"
-                                            style={{
-                                              backgroundColor: coverageColorValues.uncovered.bg,
-                                              color: coverageColorValues.uncovered.text,
-                                              borderColor: coverageColorValues.uncovered.border,
-                                              borderWidth: 1,
-                                              borderStyle: 'solid',
-                                            }}
-                                          >
-                                            {absence.uncovered}/{absence.total} uncovered
-                                          </span>
+                              <div className="flex justify-center">
+                                <div
+                                  className="inline-flex items-center rounded-full border p-1"
+                                  style={{
+                                    borderColor: '#e2e8f0',
+                                    backgroundColor: '#ffffff',
+                                  }}
+                                  role="group"
+                                  aria-label="Pick dates"
+                                >
+                                  {(
+                                    [
+                                      { value: 'today' as const, label: 'Today' },
+                                      { value: 'tomorrow' as const, label: 'Tomorrow' },
+                                      { value: 'custom' as const, label: 'Custom date range' },
+                                    ] as const
+                                  ).map(({ value, label }) => {
+                                    const isSelected = findSubDateChoice === value
+                                    return (
+                                      <button
+                                        key={value}
+                                        type="button"
+                                        id={
+                                          value === 'today'
+                                            ? 'find-sub-today'
+                                            : value === 'tomorrow'
+                                              ? 'find-sub-tomorrow'
+                                              : 'find-sub-custom'
+                                        }
+                                        className={cn(
+                                          'rounded-full py-1.5 px-4 text-sm font-medium transition-[color,background-color] duration-150',
+                                          isSelected
+                                            ? 'bg-[#172554] text-white'
+                                            : 'bg-transparent text-[#475569] hover:bg-slate-100/80'
                                         )}
-                                      </div>
-                                    ))}
-                                    {sortedUpcomingTimeOff.length > 5 && (
-                                      <p className="text-xs text-muted-foreground pl-6">
-                                        +{sortedUpcomingTimeOff.length - 5} more
-                                      </p>
-                                    )}
-                                    <p className="text-xs font-medium text-slate-500 pt-1 pb-0.5">
-                                      Different dates
-                                    </p>
-                                  </>
-                                )}
-                                <div className="flex items-center gap-2 space-y-0">
-                                  <RadioGroupItem value="today" id="find-sub-today" />
-                                  <Label
-                                    htmlFor="find-sub-today"
-                                    className="cursor-pointer text-sm font-normal"
-                                  >
-                                    Today
-                                  </Label>
-                                </div>
-                                <div className="flex items-center gap-2 space-y-0">
-                                  <RadioGroupItem value="tomorrow" id="find-sub-tomorrow" />
-                                  <Label
-                                    htmlFor="find-sub-tomorrow"
-                                    className="cursor-pointer text-sm font-normal"
-                                  >
-                                    Tomorrow
-                                  </Label>
-                                </div>
-                                <div className="flex items-center gap-2 space-y-0">
-                                  <RadioGroupItem value="custom" id="find-sub-custom" />
-                                  <Label
-                                    htmlFor="find-sub-custom"
-                                    className="cursor-pointer text-sm font-normal"
-                                  >
-                                    Custom date range
-                                  </Label>
-                                </div>
-                                {findSubDateChoice === 'custom' && (
-                                  <div className="pl-6 space-y-2 border-l-2 border-slate-200 ml-1">
-                                    <div>
-                                      <Label className="text-xs">Start date</Label>
-                                      <DatePickerInput
-                                        value={findSubCustomStart}
-                                        onChange={v => {
-                                          setFindSubCustomStart(v)
-                                          if (findSubCustomEnd && v > findSubCustomEnd) {
-                                            setFindSubCustomEnd(v)
+                                        onClick={() => {
+                                          const today = getTodayISO()
+                                          const tomorrow = getTomorrowISO()
+                                          if (isSelected) {
+                                            setFindSubDateChoice('')
+                                            setFindSubCustomStart('')
+                                            setFindSubCustomEnd('')
+                                            return
+                                          }
+                                          setFindSubDateChoice(value)
+                                          setFindSubExistingAbsenceId(null)
+                                          if (value === 'today') {
+                                            setFindSubCustomStart(today)
+                                            setFindSubCustomEnd(today)
+                                          } else if (value === 'tomorrow') {
+                                            setFindSubCustomStart(tomorrow)
+                                            setFindSubCustomEnd(tomorrow)
+                                          } else {
+                                            if (!findSubCustomStart) {
+                                              setFindSubCustomStart(today)
+                                              setFindSubCustomEnd(today)
+                                            }
                                           }
                                         }}
-                                        placeholder="Select start date"
-                                        className="mt-1 h-8 text-sm"
-                                      />
-                                    </div>
-                                    <div>
-                                      <Label className="text-xs">End date</Label>
-                                      <DatePickerInput
-                                        value={findSubCustomEnd}
-                                        onChange={setFindSubCustomEnd}
-                                        placeholder="Select end date"
-                                        className="mt-1 h-8 text-sm"
-                                      />
-                                    </div>
+                                      >
+                                        {label}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                              {findSubDateChoice === 'custom' && (
+                                <div className="pl-6 space-y-2 border-l-2 border-slate-200 ml-1 mt-2">
+                                  <div>
+                                    <Label className="text-xs">Start date</Label>
+                                    <DatePickerInput
+                                      value={findSubCustomStart}
+                                      onChange={v => {
+                                        setFindSubCustomStart(v)
+                                        if (findSubCustomEnd && v > findSubCustomEnd) {
+                                          setFindSubCustomEnd(v)
+                                        }
+                                      }}
+                                      placeholder="Select start date"
+                                      className="mt-1 h-8 text-sm"
+                                    />
                                   </div>
-                                )}
-                              </RadioGroup>
+                                  <div>
+                                    <Label className="text-xs">End date</Label>
+                                    <DatePickerInput
+                                      value={findSubCustomEnd}
+                                      onChange={setFindSubCustomEnd}
+                                      placeholder="Select end date"
+                                      className="mt-1 h-8 text-sm"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                              {/* Existing time off (only when teacher has absences) */}
+                              {upcomingTimeOff && upcomingTimeOff.length > 0 && (
+                                <RadioGroup
+                                  value={findSubExistingAbsenceId ?? ''}
+                                  onValueChange={value => {
+                                    setFindSubDateChoice('existing')
+                                    setFindSubExistingAbsenceId(value)
+                                  }}
+                                  className="space-y-2 pt-2"
+                                  aria-label="Existing time off"
+                                >
+                                  <p className="text-xs font-medium text-slate-500 pt-2 pb-0.5">
+                                    Existing time off
+                                  </p>
+                                  {sortedUpcomingTimeOff.slice(0, 5).map(absence => (
+                                    <div
+                                      key={absence.id}
+                                      className="flex items-center gap-2 space-y-0 flex-wrap"
+                                    >
+                                      <RadioGroupItem
+                                        value={absence.id}
+                                        id={`find-sub-absence-${absence.id}`}
+                                      />
+                                      <Label
+                                        htmlFor={`find-sub-absence-${absence.id}`}
+                                        className="cursor-pointer text-sm font-normal flex-1 min-w-0"
+                                      >
+                                        {formatAbsenceDateRange(
+                                          absence.start_date,
+                                          absence.end_date
+                                        )}
+                                      </Label>
+                                      {absence.uncovered === 0 ? (
+                                        <span
+                                          className="shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium"
+                                          style={{
+                                            backgroundColor: coverageColorValues.covered.bg,
+                                            color: coverageColorValues.covered.text,
+                                            borderColor: coverageColorValues.covered.border,
+                                            borderWidth: 1,
+                                            borderStyle: 'solid',
+                                          }}
+                                        >
+                                          Covered
+                                        </span>
+                                      ) : (
+                                        <span
+                                          className="shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium"
+                                          style={{
+                                            backgroundColor: coverageColorValues.uncovered.bg,
+                                            color: coverageColorValues.uncovered.text,
+                                            borderColor: coverageColorValues.uncovered.border,
+                                            borderWidth: 1,
+                                            borderStyle: 'solid',
+                                          }}
+                                        >
+                                          {absence.uncovered}/{absence.total} uncovered
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))}
+                                  {sortedUpcomingTimeOff.length > 5 && (
+                                    <p className="text-xs text-muted-foreground pl-6">
+                                      +{sortedUpcomingTimeOff.length - 5} more
+                                    </p>
+                                  )}
+                                </RadioGroup>
+                              )}
                             </>
                           )}
                           <Button
@@ -725,11 +802,15 @@ export default function Header({ userEmail }: HeaderProps) {
               </div>
             </SheetHeader>
             <TimeOffForm
+              key={`time-off-${timeOffInitialTeacherId ?? ''}-${timeOffInitialStartDate ?? ''}-${timeOffInitialEndDate ?? ''}`}
               ref={timeOffFormRef}
               onSuccess={handleTimeOffSuccess}
               onCancel={() => handleCloseSheet(false)}
               onHasUnsavedChanges={setHasUnsavedChanges}
               clearDraftOnMount={clearDraftOnMount}
+              initialTeacherId={timeOffInitialTeacherId}
+              initialStartDate={timeOffInitialStartDate}
+              initialEndDate={timeOffInitialEndDate}
             />
           </div>
         </SheetContent>
@@ -792,7 +873,10 @@ export default function Header({ userEmail }: HeaderProps) {
                 </div>
               </div>
             </SheetHeader>
-            <ActivityFeed className="min-h-[calc(100vh-170px)]" />
+            <ActivityFeed
+              className="min-h-[calc(100vh-170px)]"
+              onNavigateToView={() => setIsActivitySheetOpen(false)}
+            />
           </div>
         </SheetContent>
       </Sheet>

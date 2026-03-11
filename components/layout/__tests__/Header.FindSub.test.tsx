@@ -6,9 +6,9 @@
  * 2. Go is disabled when no teacher is selected.
  * 3. Selecting a teacher shows status and date options (no default selection).
  * 4. When teacher has no upcoming time off: Today, Tomorrow, Custom options; Go disabled until one is selected.
- * 5. Selecting Today and Go navigates to Sub Finder manual with teacher_id and today's dates.
+ * 5. Selecting Today + Preview only + Go navigates to Sub Finder manual with teacher_id and today's dates. Record + Assign + Go opens the Add Time Off right-side panel.
  * 6. Selecting Tomorrow and Go navigates with tomorrow's dates.
- * 7. When teacher has existing time off: existing absences listed (with Covered/uncovered chips), plus Different dates (Today/Tomorrow/Custom); Go disabled until one is selected.
+ * 7. When teacher has existing time off: Pick dates (Today/Tomorrow/Custom) first, then Existing time off; Go disabled until one is selected.
  * 8. Selecting an existing absence and Go navigates to Sub Finder with absence_id.
  * 9. When existing time off: selecting "Today" under different dates and Go navigates to manual with dates.
  * 10. Custom date: selecting Custom pre-fills start/end with today so Go is enabled; Go with custom dates navigates with start_date and end_date.
@@ -27,7 +27,10 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({
     push: mockPush,
     refresh: mockRefresh,
+    replace: jest.fn(),
   }),
+  usePathname: () => '/dashboard',
+  useSearchParams: () => new URLSearchParams(),
 }))
 
 jest.mock('@/lib/supabase/client', () => ({
@@ -67,15 +70,17 @@ jest.mock('@/lib/hooks/use-display-name-format', () => ({
   useDisplayNameFormat: () => ({ format: 'first_last' }),
 }))
 
-jest.mock('@/components/time-off/TimeOffForm', () => ({
-  __esModule: true,
-  default: React.forwardRef(() => <div>TimeOffForm</div>),
-}))
+jest.mock('@/components/time-off/TimeOffForm', () => {
+  const MockTimeOffForm = React.forwardRef(() => <div>TimeOffForm</div>)
+  MockTimeOffForm.displayName = 'MockTimeOffForm'
+  return { __esModule: true, default: MockTimeOffForm }
+})
 
-jest.mock('@/components/assign-sub/AssignSubPanel', () => ({
-  __esModule: true,
-  default: () => null,
-}))
+jest.mock('@/components/assign-sub/AssignSubPanel', () => {
+  const MockAssignSubPanel = () => null
+  MockAssignSubPanel.displayName = 'MockAssignSubPanel'
+  return { __esModule: true, default: MockAssignSubPanel }
+})
 
 jest.mock('@/components/activity/ActivityFeed', () => ({
   __esModule: true,
@@ -196,25 +201,25 @@ describe('Header Find Sub hot button', () => {
     await waitFor(() => {
       expect(screen.getByText(/Anne M\. has no upcoming time off/i)).toBeInTheDocument()
     })
-    expect(screen.getByText('Select dates for sub')).toBeInTheDocument()
-    expect(screen.getByLabelText('Today')).toBeInTheDocument()
-    expect(screen.getByLabelText('Tomorrow')).toBeInTheDocument()
-    expect(screen.getByLabelText('Custom date range')).toBeInTheDocument()
+    expect(screen.getByText('Pick dates')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Today' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tomorrow' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Custom date range' })).toBeInTheDocument()
     const goBtn = screen.getByRole('button', { name: /^go$/i })
     expect(goBtn).toBeDisabled()
-    await userEvent.click(screen.getByLabelText('Today'))
+    await userEvent.click(screen.getAllByRole('button', { name: 'Today' })[0])
     await waitFor(() => {
       expect(goBtn).toBeEnabled()
     })
   })
 
-  it('selecting Today and Go navigates to Sub Finder manual with teacher and today dates', async () => {
+  it('selecting Today + Go navigates to Sub Finder manual with teacher and today dates', async () => {
     render(<Header />)
     await userEvent.click(screen.getByRole('button', { name: /find sub/i }))
     await waitFor(() => screen.getByText('Anne M.'))
     await userEvent.click(screen.getByText('Anne M.'))
     await waitFor(() => screen.getByText(/no upcoming time off/i))
-    await userEvent.click(screen.getByLabelText('Today'))
+    await userEvent.click(screen.getAllByRole('button', { name: 'Today' })[0])
     await userEvent.click(screen.getByRole('button', { name: /^go$/i }))
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledTimes(1)
@@ -227,24 +232,24 @@ describe('Header Find Sub hot button', () => {
     })
   })
 
-  it('selecting Tomorrow and Go navigates with tomorrow dates', async () => {
+  it('selecting Tomorrow + Go navigates with tomorrow dates', async () => {
     render(<Header />)
     await userEvent.click(screen.getByRole('button', { name: /find sub/i }))
     await waitFor(() => screen.getByText('Anne M.'))
     await userEvent.click(screen.getByText('Anne M.'))
     await waitFor(() => screen.getByText(/no upcoming time off/i))
-    await userEvent.click(screen.getByLabelText('Tomorrow'))
+    await userEvent.click(screen.getAllByRole('button', { name: 'Tomorrow' })[0])
     await userEvent.click(screen.getByRole('button', { name: /^go$/i }))
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith(
         expect.stringMatching(
-          /\/sub-finder\?mode=manual&teacher_id=teacher-1&start_date=\d{4}-\d{2}-\d{2}&end_date=\d{4}-\d{2}-\d{2}/
+          /\/sub-finder\?.*mode=manual.*teacher_id=teacher-1.*start_date=\d{4}-\d{2}-\d{2}.*end_date=\d{4}-\d{2}-\d{2}/
         )
       )
     })
   })
 
-  it('when teacher has existing time off: shows absences and Different dates, Go disabled until selection', async () => {
+  it('when teacher has existing time off: shows Pick dates first then Existing time off, Go disabled until selection', async () => {
     const absence = createTimeOffItem(
       'absence-1',
       'teacher-1',
@@ -278,8 +283,8 @@ describe('Header Find Sub hot button', () => {
     await waitFor(() => {
       expect(screen.getByText(/Anne M\. has existing upcoming time off/i)).toBeInTheDocument()
     })
+    expect(screen.getByText('Pick dates')).toBeInTheDocument()
     expect(screen.getByText('Existing time off')).toBeInTheDocument()
-    expect(screen.getByText('Different dates')).toBeInTheDocument()
     const goBtn = screen.getByRole('button', { name: /^go$/i })
     expect(goBtn).toBeDisabled()
     await userEvent.click(screen.getByRole('radio', { name: /Apr 4/ }))
@@ -327,7 +332,7 @@ describe('Header Find Sub hot button', () => {
     })
   })
 
-  it('when time-off fetch fails: shows fallback message and user can still choose Today and Go', async () => {
+  it('when time-off fetch fails: shows fallback message and user can choose Today + Go', async () => {
     global.fetch = jest.fn((url: string | URL) => {
       const u = typeof url === 'string' ? url : url.toString()
       if (u.includes('/api/teachers')) {
@@ -351,7 +356,7 @@ describe('Header Find Sub hot button', () => {
         screen.getByText(/Couldn't load time off. You can still find subs for today/i)
       ).toBeInTheDocument()
     })
-    await userEvent.click(screen.getByLabelText('Today'))
+    await userEvent.click(screen.getAllByRole('button', { name: 'Today' })[0])
     await userEvent.click(screen.getByRole('button', { name: /^go$/i }))
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('mode=manual'))
