@@ -7,7 +7,7 @@
  * - Gray if the cell meets preferred staffing (e.g. covered by Flex)
  */
 const { test, expect } = require('@playwright/test')
-const { ensureAuthenticated, hasE2ECredentials } = require('../helpers/auth')
+const { gotoWithAuth, hasE2ECredentials } = require('../helpers/auth')
 
 const json = payload => ({
   status: 200,
@@ -148,7 +148,7 @@ test('Absence warning icon scales color based on cell staffing status @gold', as
     )
   })
 
-  await ensureAuthenticated(page, '/schedules/weekly')
+  await gotoWithAuth(page, '/schedules/weekly')
   await expect(page.getByRole('heading', { name: 'Weekly Schedule' })).toBeVisible({
     timeout: 15000,
   })

@@ -4,7 +4,7 @@
  * API returns 409 when sub already assigned to same shift(s); UI must show the error.
  */
 const { test, expect } = require('@playwright/test')
-const { ensureAuthenticated, hasE2ECredentials } = require('../helpers/auth')
+const { gotoWithAuth, hasE2ECredentials } = require('../helpers/auth')
 
 const json = payload => ({
   status: 200,
@@ -183,7 +183,7 @@ test('assign-shifts 409 double-booking error is shown in UI @gold', async ({ pag
     await route.fallback()
   })
 
-  await ensureAuthenticated(page, '/sub-finder')
+  await gotoWithAuth(page, '/sub-finder')
   await expect(page.getByRole('heading', { name: /sub finder/i })).toBeVisible({
     timeout: 15000,
   })

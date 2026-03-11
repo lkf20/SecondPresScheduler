@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test')
-const { ensureAuthenticated, hasE2ECredentials } = require('./helpers/auth')
+const { gotoWithAuth, hasE2ECredentials } = require('./helpers/auth')
 
 const json = payload => ({
   status: 200,
@@ -200,7 +200,7 @@ test('weekly schedule baseline handoff and return @smoke', async ({ page }) => {
   )
 
   await mockWeeklyScheduleApis(page)
-  await ensureAuthenticated(page, '/schedules/weekly')
+  await gotoWithAuth(page, '/schedules/weekly')
 
   await expect(page.getByRole('heading', { name: /weekly schedule/i })).toBeVisible()
   await page.getByText('Bella W.').first().click()
@@ -225,7 +225,7 @@ test('weekly schedule flex removal scope flow @smoke', async ({ page }) => {
   )
 
   const tracker = await mockWeeklyScheduleApis(page)
-  await ensureAuthenticated(page, '/schedules/weekly')
+  await gotoWithAuth(page, '/schedules/weekly')
 
   await page.getByText('Bella W.').first().click()
   await page.getByRole('button', { name: /^remove$/i }).click()
@@ -255,7 +255,7 @@ test('weekly schedule baseline save refreshes schedule data @smoke', async ({ pa
   )
 
   const tracker = await mockWeeklyScheduleApis(page)
-  await ensureAuthenticated(page, '/schedules/weekly')
+  await gotoWithAuth(page, '/schedules/weekly')
 
   await page.getByText('Bella W.').first().click()
   await page.getByText('Edit baseline staff').click()
