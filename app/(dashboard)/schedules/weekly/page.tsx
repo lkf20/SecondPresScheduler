@@ -9,7 +9,7 @@ import WeekPicker from '@/components/schedules/WeekPicker'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
 import { Button } from '@/components/ui/button'
-import { Calendar, Filter, RefreshCw } from 'lucide-react'
+import { Calendar, Filter, RefreshCw, X } from 'lucide-react'
 import TeacherFilterSearch from '@/components/schedules/TeacherFilterSearch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useWeeklySchedule } from '@/lib/hooks/use-weekly-schedule'
@@ -117,8 +117,8 @@ export default function WeeklySchedulePage() {
             slotFilterMode:
               parsed.slotFilterMode ??
               (parsed.displayFilters?.showAll === false ? 'select' : 'all'),
-            showInactiveClassrooms: parsed.showInactiveClassrooms ?? true,
-            showInactiveTimeSlots: parsed.showInactiveTimeSlots ?? true,
+            showInactiveClassrooms: parsed.showInactiveClassrooms ?? false,
+            showInactiveTimeSlots: parsed.showInactiveTimeSlots ?? false,
             displayFilters: {
               ...parsed.displayFilters,
             },
@@ -155,8 +155,8 @@ export default function WeeklySchedulePage() {
               slotFilterMode:
                 parsed.slotFilterMode ??
                 (parsed.displayFilters?.showAll === false ? 'select' : 'all'),
-              showInactiveClassrooms: parsed.showInactiveClassrooms ?? true,
-              showInactiveTimeSlots: parsed.showInactiveTimeSlots ?? true,
+              showInactiveClassrooms: parsed.showInactiveClassrooms ?? false,
+              showInactiveTimeSlots: parsed.showInactiveTimeSlots ?? false,
               displayFilters: {
                 ...parsed.displayFilters,
               },
@@ -173,8 +173,8 @@ export default function WeeklySchedulePage() {
         selectedTimeSlotIds: availableTimeSlots.map(ts => ts.id),
         selectedClassroomIds: availableClassrooms.map(c => c.id),
         slotFilterMode: 'all',
-        showInactiveClassrooms: true,
-        showInactiveTimeSlots: true,
+        showInactiveClassrooms: false,
+        showInactiveTimeSlots: false,
         displayFilters: {
           belowRequired: true,
           belowPreferred: true,
@@ -204,8 +204,8 @@ export default function WeeklySchedulePage() {
       selectedTimeSlotIds: [focusTimeSlotId],
       selectedClassroomIds: [focusClassroomId],
       slotFilterMode: prev?.slotFilterMode ?? 'all',
-      showInactiveClassrooms: prev?.showInactiveClassrooms ?? true,
-      showInactiveTimeSlots: prev?.showInactiveTimeSlots ?? true,
+      showInactiveClassrooms: prev?.showInactiveClassrooms ?? false,
+      showInactiveTimeSlots: prev?.showInactiveTimeSlots ?? false,
       displayFilters: prev?.displayFilters ?? {
         belowRequired: true,
         belowPreferred: true,
@@ -898,8 +898,8 @@ export default function WeeklySchedulePage() {
                       !filters.displayFilters.belowPreferred ||
                       !filters.displayFilters.fullyStaffed ||
                       !filters.displayFilters.inactive ||
-                      !filters.showInactiveClassrooms ||
-                      !filters.showInactiveTimeSlots ||
+                      filters.showInactiveClassrooms ||
+                      filters.showInactiveTimeSlots ||
                       filters.displayMode !== 'all-scheduled-staff' ||
                       filters.selectedClassroomIds.length < availableClassrooms.length ||
                       filters.selectedTimeSlotIds.length < availableTimeSlots.length ||
@@ -910,7 +910,7 @@ export default function WeeklySchedulePage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-slate-600 hover:text-slate-900"
+                        className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900"
                         onClick={() => {
                           setTeacherFilterId(null)
                           setFilters(prev =>
@@ -925,20 +925,22 @@ export default function WeeklySchedulePage() {
                                   selectedClassroomIds: availableClassrooms.map(c => c.id),
                                   displayMode: 'all-scheduled-staff',
                                   slotFilterMode: 'all',
-                                  showInactiveClassrooms: true,
-                                  showInactiveTimeSlots: true,
+                                  showInactiveClassrooms: false,
+                                  showInactiveTimeSlots: false,
                                   displayFilters: {
                                     ...prev.displayFilters,
                                     belowRequired: true,
                                     belowPreferred: true,
                                     fullyStaffed: true,
-                                    inactive: false,
+                                    inactive: true,
+                                    viewNotes: false,
                                   },
                                 }
                               : prev
                           )
                         }}
                       >
+                        <X className="h-3.5 w-3.5 shrink-0" />
                         Clear all filters
                       </Button>
                     )
@@ -969,8 +971,8 @@ export default function WeeklySchedulePage() {
                   selectedTimeSlotIds: availableTimeSlots.map(ts => ts.id),
                   selectedClassroomIds: availableClassrooms.map(c => c.id),
                   slotFilterMode: 'all',
-                  showInactiveClassrooms: true,
-                  showInactiveTimeSlots: true,
+                  showInactiveClassrooms: false,
+                  showInactiveTimeSlots: false,
                   displayFilters: {
                     belowRequired: true,
                     belowPreferred: true,

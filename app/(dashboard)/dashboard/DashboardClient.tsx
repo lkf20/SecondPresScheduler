@@ -643,13 +643,17 @@ export default function DashboardClient({
       </section>
 
       <section className="space-y-3 pb-1">
-        <div className="grid gap-x-4 gap-y-6 justify-items-start grid-cols-[repeat(auto-fill,minmax(250px,250px))]">
+        <div className="grid gap-x-4 gap-y-6 justify-items-start items-stretch grid-cols-[repeat(auto-fill,minmax(250px,250px))]">
           {summaryItems.map(item => (
-            <div key={item.key} className="text-left min-w-[250px] max-w-[250px]">
+            <div key={item.key} className="text-left min-w-[250px] max-w-[250px] h-full flex">
               <Card
-                className={cn('w-full border-2 shadow-sm', 'sm:justify-self-start', item.cardStyle)}
+                className={cn(
+                  'w-full border-2 shadow-sm flex flex-col flex-1',
+                  'sm:justify-self-start',
+                  item.cardStyle
+                )}
               >
-                <CardContent className="p-4">
+                <CardContent className="p-4 flex flex-col flex-1">
                   <div
                     className="text-base font-normal"
                     style={

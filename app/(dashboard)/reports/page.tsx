@@ -26,11 +26,11 @@ export default function ReportsPage() {
         <p className="text-muted-foreground mt-2">Generate schedules and availability reports</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-stretch">
         {reports.map(report => (
-          <Link key={report.name} href={report.href}>
-            <Card className="hover:bg-accent transition-colors cursor-pointer">
-              <CardHeader>
+          <Link key={report.name} href={report.href} className="h-full flex">
+            <Card className="hover:bg-accent transition-colors cursor-pointer h-full flex flex-col flex-1 w-full">
+              <CardHeader className="flex-1">
                 <div className="flex items-center gap-2">
                   <report.icon className="h-5 w-5 text-muted-foreground" />
                   <CardTitle>{report.name}</CardTitle>

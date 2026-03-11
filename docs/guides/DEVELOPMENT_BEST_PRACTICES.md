@@ -86,6 +86,11 @@ This document outlines best practices for developing and maintaining the Prescho
 - **Keep comments up to date**: Remove or update outdated comments
 - **Use JSDoc for public APIs**: Document function parameters and return types
 
+### Date handling
+
+- **Standardize date keys**: When building keys from dates (e.g. `${date}|${time_slot_id}` for matching shifts to assignments), use `toDateStringISO()` from `lib/utils/date.ts`. The database may return date columns as `"YYYY-MM-DD"` or with a time component (e.g. `"2025-03-17T00:00:00.000Z"`); normalizing ensures matching works across sources.
+- **Parsing for display**: Use `parseLocalDate()` from `lib/utils/date.ts` when parsing date strings for display or range logic so local dates are not shifted by timezone.
+
 ---
 
 ## 🔄 Workflow

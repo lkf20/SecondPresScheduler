@@ -69,6 +69,7 @@ Report what was reviewed, what passed, what was fixed, and what (if anything) ne
 
 ## Code quality and structure
 
+- **Default to excluding inactive content.** Unless otherwise noted or “include inactive” is explicitly mentioned (e.g. a “Show inactive” toggle or `includeInactive=true`), default to excluding and hiding inactive entities in the app—e.g. classrooms, class groups, time slots. Lists, dropdowns, filters, and selectors should show only active items unless the feature clearly supports including inactive ones.
 - **Avoid duplication.** Reuse existing logic and components instead of copying code. Before creating a new component, search the codebase for an existing one that already does the job or can be extended.
 - **Match the app’s UI.** Use the same patterns, tokens, and components as the rest of the app so new work looks and behaves consistently.
 
