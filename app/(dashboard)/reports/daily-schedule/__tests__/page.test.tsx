@@ -120,7 +120,7 @@ describe("Today's Schedule report page", () => {
 
     await waitFor(() => {
       expect(openMock).toHaveBeenCalledWith(
-        '/api/reports/daily-schedule/pdf?date=2026-03-09&showAbsencesAndSubs=true&showEnrollment=false&showPreferredRatios=false&showRequiredRatios=false&colorFriendly=false&layout=one&teacherNameFormat=default&paperSize=letter',
+        '/api/reports/daily-schedule/pdf?date=2026-03-09&showAbsencesAndSubs=true&showEnrollment=false&showNotes=false&showPreferredRatios=false&showRequiredRatios=false&colorFriendly=false&layout=one&teacherNameFormat=default&paperSize=letter',
         '_blank',
         'noopener,noreferrer'
       )
@@ -388,6 +388,74 @@ describe("Today's Schedule report page", () => {
     render(<DailyScheduleReportPage />)
     expect(await screen.findByRole('table')).toBeInTheDocument()
     expect(screen.queryByText('Infants (9)')).not.toBeInTheDocument()
+  })
+
+  it('renders notes only when Show notes is enabled and includes showNotes in PDF url', async () => {
+    ;(useDailySchedule as jest.Mock).mockReturnValue({
+      data: {
+        date: '2026-03-09',
+        day_of_week_id: 'day-mon',
+        day_name: 'Monday',
+        data: [
+          {
+            classroom_id: 'classroom-1',
+            classroom_name: 'Infant Room',
+            classroom_color: '#1d4ed8',
+            classroom_is_active: true,
+            days: [
+              {
+                day_of_week_id: 'day-mon',
+                day_name: 'Monday',
+                day_number: 1,
+                time_slots: [
+                  {
+                    time_slot_id: 'slot-am',
+                    time_slot_code: 'AM',
+                    time_slot_name: 'School Morning',
+                    time_slot_display_order: 1,
+                    time_slot_start_time: '09:00:00',
+                    time_slot_end_time: '12:00:00',
+                    time_slot_is_active: true,
+                    assignments: [],
+                    absences: [],
+                    schedule_cell: {
+                      id: 'cell-1',
+                      is_active: true,
+                      enrollment_for_staffing: null,
+                      notes: 'Bring nap mats from storage',
+                      required_staff_override: null,
+                      preferred_staff_override: null,
+                      class_groups: [],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        school_closures: [],
+        no_schedule: false,
+      },
+      isLoading: false,
+      error: null,
+    })
+    openMock.mockReturnValue({} as Window)
+
+    render(<DailyScheduleReportPage />)
+    expect(await screen.findByRole('table')).toBeInTheDocument()
+    expect(screen.queryByText('Bring nap mats from storage')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Show notes' }))
+    expect(screen.getByText('Bring nap mats from storage')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Print PDF' }))
+    await waitFor(() => {
+      expect(openMock).toHaveBeenCalledWith(
+        expect.stringContaining('showNotes=true'),
+        '_blank',
+        'noopener,noreferrer'
+      )
+    })
   })
 
   it('includes rich text header/footer params in PDF url when editors have content', async () => {

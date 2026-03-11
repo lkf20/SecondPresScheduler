@@ -75,6 +75,7 @@ export async function GET(request: Request) {
 
     const showAbsencesAndSubs = parseBoolean(searchParams.get('showAbsencesAndSubs'), true)
     const showEnrollment = parseBoolean(searchParams.get('showEnrollment'), false)
+    const showNotes = parseBoolean(searchParams.get('showNotes'), false)
     const legacyShowRatios = parseBoolean(searchParams.get('showRatios'), false)
     const showPreferredRatios = parseBoolean(
       searchParams.get('showPreferredRatios'),
@@ -124,6 +125,7 @@ export async function GET(request: Request) {
       options: {
         showAbsencesAndSubs,
         showEnrollment,
+        showNotes,
         showPreferredRatios,
         showRequiredRatios,
         colorFriendly,

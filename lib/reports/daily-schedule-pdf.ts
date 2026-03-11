@@ -12,6 +12,7 @@ import { getSlotClosureOnDate } from '@/lib/utils/school-closures'
 type PdfOptions = {
   showAbsencesAndSubs: boolean
   showEnrollment: boolean
+  showNotes?: boolean
   showPreferredRatios: boolean
   showRequiredRatios: boolean
   colorFriendly: boolean
@@ -232,6 +233,8 @@ export function buildDailySchedulePdfHtml({
                 const enrollmentSummary = options.showEnrollment
                   ? getEnrollmentSummary(slotData)
                   : null
+                const slotNotes =
+                  options.showNotes === true ? slotData?.schedule_cell?.notes?.trim() : ''
                 const youngestRatioGroup = getYoungestRatioGroup(slotData)
                 const absences = slotData?.absences ?? []
                 const absentTeacherIds = new Set(absences.map(absence => absence.teacher_id))
@@ -397,6 +400,9 @@ export function buildDailySchedulePdfHtml({
                         .map(line => `<div>${escapeHtml(line)}</div>`)
                         .join('')}</div>`
                     : ''
+                const notesBlock = slotNotes
+                  ? `<div style="margin-top:4px; border-top:1px solid ${color.grid}; padding-top:4px; font-size:9px; line-height:1.2; color:#64748B;">${escapeHtml(slotNotes)}</div>`
+                  : ''
 
                 return `
             <td style="border:1px solid ${color.grid}; padding:6px; font-size:${fontSize}px; vertical-align:top;">
@@ -406,6 +412,7 @@ export function buildDailySchedulePdfHtml({
                 ${floaterLines}
                 ${flexLines}
                 ${absenceLines}
+                ${notesBlock}
               </div>
             </td>`
               })

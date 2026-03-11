@@ -329,6 +329,74 @@ describe('daily schedule pdf html', () => {
     expect(html).toContain('Footer note')
   })
 
+  it('renders schedule cell notes only when showNotes is enabled', () => {
+    const dataWithNotes = [
+      {
+        ...baseData[0],
+        days: [
+          {
+            ...baseData[0].days[0],
+            time_slots: [
+              {
+                ...baseData[0].days[0].time_slots[0],
+                schedule_cell: {
+                  id: 'cell-1',
+                  is_active: true,
+                  enrollment_for_staffing: null,
+                  notes: 'Bring extra cots',
+                  required_staff_override: null,
+                  preferred_staff_override: null,
+                  class_groups: [],
+                },
+                assignments: [],
+                absences: [],
+              },
+            ],
+          },
+        ],
+      },
+    ] as any
+
+    const withNotes = buildDailySchedulePdfHtml({
+      dateISO: '2026-03-09',
+      generatedAt: 'Mar 9, 2026, 9:00 AM',
+      data: dataWithNotes,
+      options: {
+        showAbsencesAndSubs: true,
+        showEnrollment: false,
+        showNotes: true,
+        showPreferredRatios: false,
+        showRequiredRatios: false,
+        colorFriendly: true,
+        layout: 'one',
+        teacherNameFormat: 'default',
+      },
+      timeZone: 'America/New_York',
+      schoolClosures: [],
+    })
+
+    const withoutNotes = buildDailySchedulePdfHtml({
+      dateISO: '2026-03-09',
+      generatedAt: 'Mar 9, 2026, 9:00 AM',
+      data: dataWithNotes,
+      options: {
+        showAbsencesAndSubs: true,
+        showEnrollment: false,
+        showNotes: false,
+        showPreferredRatios: false,
+        showRequiredRatios: false,
+        colorFriendly: true,
+        layout: 'one',
+        teacherNameFormat: 'default',
+      },
+      timeZone: 'America/New_York',
+      schoolClosures: [],
+    })
+
+    expect(withNotes).toContain('Bring extra cots')
+    expect(withoutNotes).not.toContain('Bring extra cots')
+  })
+
   it('sanitizes rich text top header and footer notes in output html', () => {
     const html = buildDailySchedulePdfHtml({
       dateISO: '2026-03-09',

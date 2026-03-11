@@ -15,10 +15,7 @@ import {
   getEnrollmentSummary,
   getYoungestRatioGroup,
 } from '@/lib/reports/daily-schedule-metrics'
-import {
-  hasRichTextContent,
-  sanitizeRichTextHtml,
-} from '@/lib/reports/rich-text'
+import { hasRichTextContent, sanitizeRichTextHtml } from '@/lib/reports/rich-text'
 import { useReportDefaults } from '@/lib/hooks/use-report-defaults'
 import { getHeaderClasses } from '@/lib/utils/colors'
 import { getSlotClosureOnDate } from '@/lib/utils/school-closures'
@@ -141,6 +138,7 @@ const buildPdfUrl = ({
   date,
   showAbsencesAndSubs,
   showEnrollment,
+  showNotes,
   showPreferredRatios,
   showRequiredRatios,
   colorFriendly,
@@ -153,6 +151,7 @@ const buildPdfUrl = ({
   date: string
   showAbsencesAndSubs: boolean
   showEnrollment: boolean
+  showNotes: boolean
   showPreferredRatios: boolean
   showRequiredRatios: boolean
   colorFriendly: boolean
@@ -166,6 +165,7 @@ const buildPdfUrl = ({
   params.set('date', date)
   params.set('showAbsencesAndSubs', String(showAbsencesAndSubs))
   params.set('showEnrollment', String(showEnrollment))
+  params.set('showNotes', String(showNotes))
   params.set('showPreferredRatios', String(showPreferredRatios))
   params.set('showRequiredRatios', String(showRequiredRatios))
   params.set('colorFriendly', String(colorFriendly))
@@ -231,6 +231,7 @@ export default function DailyScheduleReportPage() {
 
   const [selectedDate, setSelectedDate] = useState(initialDate)
   const [showEnrollment, setShowEnrollment] = useState(false)
+  const [showNotes, setShowNotes] = useState(false)
   const [showPreferredRatios, setShowPreferredRatios] = useState(false)
   const [showRequiredRatios, setShowRequiredRatios] = useState(false)
   const [showAbsencesAndSubs, setShowAbsencesAndSubs] = useState(true)
@@ -262,6 +263,7 @@ export default function DailyScheduleReportPage() {
     try {
       const parsed = JSON.parse(raw) as Partial<{
         showEnrollment: boolean
+        showNotes: boolean
         showPreferredRatios: boolean
         showRequiredRatios: boolean
         showRatios: boolean
@@ -272,6 +274,7 @@ export default function DailyScheduleReportPage() {
         paperSize: 'letter' | 'legal'
       }>
       if (typeof parsed.showEnrollment === 'boolean') setShowEnrollment(parsed.showEnrollment)
+      if (typeof parsed.showNotes === 'boolean') setShowNotes(parsed.showNotes)
       if (typeof parsed.showPreferredRatios === 'boolean') {
         setShowPreferredRatios(parsed.showPreferredRatios)
       } else if (typeof parsed.showRatios === 'boolean') {
@@ -462,6 +465,15 @@ export default function DailyScheduleReportPage() {
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-teal-600"
+                          checked={showNotes}
+                          onChange={event => setShowNotes(event.target.checked)}
+                        />
+                        Show notes
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-teal-600"
                           checked={showPreferredRatios}
                           onChange={event => setShowPreferredRatios(event.target.checked)}
                         />
@@ -568,6 +580,7 @@ export default function DailyScheduleReportPage() {
                         if (typeof window === 'undefined') return
                         const payload = {
                           showEnrollment,
+                          showNotes,
                           showPreferredRatios,
                           showRequiredRatios,
                           showAbsencesAndSubs,
@@ -595,6 +608,7 @@ export default function DailyScheduleReportPage() {
                     date: selectedDate,
                     showAbsencesAndSubs,
                     showEnrollment,
+                    showNotes,
                     showPreferredRatios,
                     showRequiredRatios,
                     colorFriendly,
@@ -828,6 +842,9 @@ export default function DailyScheduleReportPage() {
                                 ? getEnrollmentSummary(slotData)
                                 : null
                               const youngestRatioGroup = getYoungestRatioGroup(slotData)
+                              const slotNotes = showNotes
+                                ? slotData?.schedule_cell?.notes?.trim()
+                                : ''
                               const ratioSummary = formatRatioSummary({
                                 showRequiredRatios,
                                 showPreferredRatios,
@@ -1070,6 +1087,11 @@ export default function DailyScheduleReportPage() {
                                         ))}
                                       </ul>
                                     )}
+                                    {slotNotes ? (
+                                      <div className="mt-2 border-t border-slate-200 pt-1 text-[11px] leading-4 text-slate-600">
+                                        {slotNotes}
+                                      </div>
+                                    ) : null}
                                   </div>
                                 </td>
                               )
