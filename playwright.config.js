@@ -13,7 +13,8 @@ if (fs.existsSync(envPath)) {
     })
 }
 
-const PORT = Number(process.env.PORT || 3000)
+// Use 3001 by default so E2E does not conflict with a dev server on 3000
+const PORT = Number(process.env.PORT || 3001)
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${PORT}`
 
 module.exports = defineConfig({

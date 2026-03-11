@@ -19,12 +19,14 @@ npm run test
 # Coverage output
 npm run test:coverage
 
-# E2E smoke
+# E2E smoke (starts app on port 3001 by default to avoid conflict with dev on 3000)
 npm run test:e2e:smoke
 
 # Full E2E suite
 npm run test:e2e
 ```
+
+To use an already-running dev server (e.g. on port 3000) instead of Playwright starting one, set `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000` before running E2E.
 
 ## Local DB Test Harness (Supabase)
 
