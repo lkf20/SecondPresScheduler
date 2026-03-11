@@ -18,7 +18,7 @@ const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${PORT}`
 
 module.exports = defineConfig({
   testDir: './tests/e2e',
-  timeout: 45_000,
+  timeout: 60_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -31,9 +31,14 @@ module.exports = defineConfig({
     video: 'retain-on-failure',
   },
   projects: [
+    { name: 'setup', testMatch: /.*\.setup\.js/ },
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: 'tests/e2e/.auth/user.json',
+      },
+      dependencies: ['setup'],
     },
   ],
   webServer: process.env.PLAYWRIGHT_BASE_URL

@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/lib/contexts/ThemeContext'
 import { SchoolProvider } from '@/lib/contexts/SchoolContext'
 import { DisplayNameFormatProvider } from '@/lib/contexts/DisplayNameFormatContext'
 import { QueryProvider } from '@/components/providers/QueryProvider'
+import SupabaseEnvBadge from '@/components/SupabaseEnvBadge'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
@@ -88,6 +89,7 @@ export default async function RootLayout({
             </DisplayNameFormatProvider>
           </SchoolProvider>
         </QueryProvider>
+        <SupabaseEnvBadge />
       </body>
     </html>
   )
