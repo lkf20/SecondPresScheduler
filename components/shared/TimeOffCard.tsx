@@ -379,6 +379,7 @@ export default function TimeOffCard({
                   classroom_name?: string | null
                   classroom_color?: string | null
                   assigned_sub_name?: string | null
+                  sub_name?: string | null
                 }
                 return {
                   date: o.date,
@@ -386,7 +387,7 @@ export default function TimeOffCard({
                   status: o.status,
                   classroom_name: o.classroom_name ?? null,
                   classroom_color: o.classroom_color ?? null,
-                  assigned_sub_name: o.assigned_sub_name ?? null,
+                  assigned_sub_name: o.assigned_sub_name ?? o.sub_name ?? null,
                 }
               })
               return <ShiftChips coverageVariant shifts={shifts} />

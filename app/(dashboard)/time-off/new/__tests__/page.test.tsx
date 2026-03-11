@@ -1,62 +1,40 @@
 /**
- * New Time Off page: redirect to Sub Finder when return_to=sub-finder (scenario 1).
+ * New Time Off page: redirect to open Add Time Off panel (open_time_off=1) on sub-finder or time-off.
  */
 
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { render, waitFor } from '@testing-library/react'
 import NewTimeOffPage from '../page'
 
-const mockPush = jest.fn()
-const mockRefresh = jest.fn()
+const mockReplace = jest.fn()
 
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush, refresh: mockRefresh }),
-  useSearchParams: () => ({
-    get: (key: string) =>
-      key === 'return_to' ? 'sub-finder' : key === 'teacher_id' ? 'teacher-1' : null,
-  }),
+  useRouter: () => ({ replace: mockReplace }),
+  useSearchParams: () => {
+    const p = new URLSearchParams()
+    p.set('return_to', 'sub-finder')
+    p.set('teacher_id', 'teacher-1')
+    p.set('start_date', '2026-03-16')
+    p.set('end_date', '2026-03-20')
+    return p
+  },
 }))
 
-jest.mock('@/components/time-off/TimeOffForm', () => {
-  return function MockTimeOffForm({
-    onSuccess,
-  }: {
-    onSuccess?: (
-      teacherName: string,
-      startDate: string,
-      endDate: string,
-      requestId?: string
-    ) => void
-  }) {
-    return (
-      <div>
-        <button
-          type="button"
-          onClick={() => onSuccess?.('Anne M.', '2026-03-16', '2026-03-20', 'new-absence-123')}
-        >
-          Simulate create success
-        </button>
-      </div>
-    )
-  }
-})
-
-jest.mock('sonner', () => ({
-  toast: { success: jest.fn() },
-}))
-
-describe('New Time Off page – return to Sub Finder', () => {
+describe('New Time Off redirect page', () => {
   beforeEach(() => {
-    mockPush.mockClear()
-    mockRefresh.mockClear()
+    mockReplace.mockClear()
   })
 
-  it('when return_to=sub-finder and onSuccess called with requestId, redirects to Sub Finder with absence_id (scenario 1)', async () => {
+  it('redirects to sub-finder with open_time_off=1 and params when return_to=sub-finder', async () => {
     render(<NewTimeOffPage />)
 
-    await userEvent.click(screen.getByRole('button', { name: /simulate create success/i }))
-
-    expect(mockPush).toHaveBeenCalledWith('/sub-finder?absence_id=new-absence-123')
-    expect(mockRefresh).toHaveBeenCalled()
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledTimes(1)
+    })
+    const [url] = mockReplace.mock.calls[0]
+    expect(url).toContain('open_time_off=1')
+    expect(url).toContain('/sub-finder')
+    expect(url).toContain('teacher_id=teacher-1')
+    expect(url).toContain('start_date=2026-03-16')
+    expect(url).toContain('end_date=2026-03-20')
   })
 })

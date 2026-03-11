@@ -29,6 +29,8 @@ import { getPanelBackgroundClasses } from '@/lib/utils/colors'
 interface AddTimeOffButtonProps {
   timeOffRequestId?: string | null
   onClose?: () => void
+  /** Called when a time off request is successfully added or updated (before the panel closes). */
+  onSuccess?: () => void
   initialTeacherId?: string
   initialStartDate?: string
   initialEndDate?: string
@@ -39,6 +41,7 @@ interface AddTimeOffButtonProps {
 export default function AddTimeOffButton({
   timeOffRequestId = null,
   onClose,
+  onSuccess,
   initialTeacherId,
   initialStartDate,
   initialEndDate,
@@ -63,17 +66,21 @@ export default function AddTimeOffButton({
   } = usePanelManager()
 
   // Update editingRequestId when prop changes (only for edit mode)
+  // When extending from Sub Finder (initialSelectedShifts provided), clear draft so the form shows merged shifts/dates
   useEffect(() => {
     if (timeOffRequestId) {
       setEditingRequestId(timeOffRequestId)
       setIsTimeOffSheetOpen(true)
-      setClearDraftOnMount(false) // Don't clear draft when editing
+      const extendingFromSubFinder = Boolean(
+        initialSelectedShifts && initialSelectedShifts.length > 0
+      )
+      setClearDraftOnMount(extendingFromSubFinder)
     } else {
       // Reset to add mode when timeOffRequestId is cleared
       setEditingRequestId(null)
       setIsTimeOffSheetOpen(false)
     }
-  }, [timeOffRequestId])
+  }, [timeOffRequestId, initialSelectedShifts])
 
   const closeSheetWithoutPrompt = () => {
     skipUnsavedPromptRef.current = true
@@ -112,6 +119,8 @@ export default function AddTimeOffButton({
     setHasUnsavedChanges(false)
     const action = editingRequestId ? 'updated' : 'added'
     toast.success(`Time off ${action} for ${teacherName} (${dateRange})`)
+
+    onSuccess?.()
 
     // Close via the no-prompt path so we don't show "Unsaved changes" (setState is async,
     // so hasUnsavedChanges would still be true if we called handleCloseSheet(false)).
@@ -211,6 +220,10 @@ export default function AddTimeOffButton({
                 onHasUnsavedChanges={setHasUnsavedChanges}
                 clearDraftOnMount={clearDraftOnMount}
                 timeOffRequestId={timeOffRequestId}
+                initialTeacherId={initialTeacherId}
+                initialStartDate={initialStartDate}
+                initialEndDate={initialEndDate}
+                initialSelectedShifts={initialSelectedShifts}
               />
             </div>
           </SheetContent>

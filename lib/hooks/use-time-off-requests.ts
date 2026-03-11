@@ -45,6 +45,9 @@ async function fetchTimeOffRequests(
   if (params?.endDate) {
     searchParams.set('end_date', params.endDate)
   }
+  if (params?.includeDetailedShifts === true) {
+    searchParams.set('include_detailed_shifts', 'true')
+  }
 
   const url = `/api/time-off-requests${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
   const response = await fetch(url, { cache: 'no-store' })

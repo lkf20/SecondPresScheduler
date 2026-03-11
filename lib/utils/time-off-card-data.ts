@@ -1,4 +1,4 @@
-import { parseLocalDate } from './date'
+import { parseLocalDate, toDateStringISO } from './date'
 import { MONTH_NAMES } from './date-format'
 import { getStaffDisplayName, type DisplayNameFormat } from './staff-display-name'
 
@@ -143,6 +143,7 @@ export function transformTimeOffCardData(
   } = options
 
   // Build assignment map: key = `${date}|${time_slot_id}` -> { hasFull, hasPartial, sub }
+  // Use toDateStringISO so keys match regardless of DB date format (YYYY-MM-DD vs timestamp)
   const assignmentMap = new Map<
     string,
     {
@@ -155,7 +156,7 @@ export function transformTimeOffCardData(
   >()
 
   assignments.forEach(assignment => {
-    const key = `${assignment.date}|${assignment.time_slot_id}`
+    const key = `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`
     const existing = assignmentMap.get(key) || {
       hasFull: false,
       hasPartial: false,
@@ -199,7 +200,7 @@ export function transformTimeOffCardData(
   const shiftDetails: TimeOffCardData['shift_details'] = []
 
   shifts.forEach(shift => {
-    const key = `${shift.date}|${shift.time_slot_id}`
+    const key = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
     const assignment = assignmentMap.get(key)
 
     let status: 'covered' | 'partial' | 'uncovered' = 'uncovered'

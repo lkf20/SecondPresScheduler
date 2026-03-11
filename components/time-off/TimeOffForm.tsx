@@ -241,12 +241,29 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         })
         .then(requestData => {
           setCurrentRequestStatus(requestData.status || null)
-          // Populate form with existing data
+          const willMergeShifts = Boolean(initialSelectedShifts && initialSelectedShifts.length > 0)
+          // When extending from Sub Finder, expand date range to include initial dates
+          const existingStart = requestData.start_date || ''
+          const existingEnd = requestData.end_date || requestData.start_date || ''
+          let start_date = existingStart
+          let end_date = existingEnd
+          if (initialStartDate || initialEndDate) {
+            if (initialStartDate && (!existingStart || initialStartDate < existingStart)) {
+              start_date = initialStartDate
+            }
+            const initialEnd = initialEndDate || initialStartDate
+            if (initialEnd && (!existingEnd || initialEnd > existingEnd)) {
+              end_date = initialEnd
+            }
+          }
+          // Populate form with existing data; use select_shifts when merging so the table shows
           reset({
             teacher_id: requestData.teacher_id || '',
-            start_date: requestData.start_date || '',
-            end_date: requestData.end_date || '',
-            shift_selection_mode: requestData.shift_selection_mode || 'all_scheduled',
+            start_date,
+            end_date,
+            shift_selection_mode: willMergeShifts
+              ? 'select_shifts'
+              : requestData.shift_selection_mode || 'all_scheduled',
             reason: requestData.reason || undefined,
             notes: requestData.notes || '',
           })
@@ -262,21 +279,42 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                 time_slot_id: shift.time_slot_id,
               })
             )
+          }
+
+          // When extending from Sub Finder, merge initialSelectedShifts (checked shifts from left panel) with loaded shifts
+          let shiftsToShow = loadedShifts
+          if (initialSelectedShifts && initialSelectedShifts.length > 0) {
+            const key = (s: { date: string; time_slot_id: string }) => `${s.date}:${s.time_slot_id}`
+            const existingKeys = new Set(loadedShifts.map(key))
+            const added = initialSelectedShifts.filter(s => !existingKeys.has(key(s)))
+            shiftsToShow = [...loadedShifts, ...added]
+            setSelectedShifts(shiftsToShow)
+          } else {
             setSelectedShifts(loadedShifts)
           }
 
-          // Capture initial state immediately after loading (for edit mode)
-          // Use a small delay to ensure form state is settled after reset()
+          // Capture initial state for unsaved-changes comparison. When we merged (extend from Sub Finder),
+          // use the *pre-merge* state so the form sees "changes" and the Update button is enabled.
+          const didMerge =
+            (initialSelectedShifts && initialSelectedShifts.length > 0) ||
+            initialStartDate ||
+            initialEndDate
+          const initialShiftsForComparison = didMerge ? loadedShifts : shiftsToShow
+          const initialStartForComparison = didMerge ? existingStart : start_date
+          const initialEndForComparison = didMerge ? existingEnd : end_date
           setTimeout(() => {
-            const currentValues = getValues()
             initialFormStateRef.current = {
-              teacher_id: currentValues.teacher_id || '',
-              start_date: currentValues.start_date || '',
-              end_date: currentValues.end_date || undefined,
-              shift_selection_mode: currentValues.shift_selection_mode || 'all_scheduled',
-              reason: currentValues.reason || undefined,
-              notes: currentValues.notes || undefined,
-              selectedShifts: [...loadedShifts],
+              teacher_id: requestData.teacher_id || '',
+              start_date: initialStartForComparison,
+              end_date: initialEndForComparison || undefined,
+              shift_selection_mode: didMerge
+                ? requestData.shift_selection_mode || 'all_scheduled'
+                : willMergeShifts
+                  ? 'select_shifts'
+                  : requestData.shift_selection_mode || 'all_scheduled',
+              reason: requestData.reason || undefined,
+              notes: requestData.notes || undefined,
+              selectedShifts: [...initialShiftsForComparison],
             }
             setIsInitialStateCaptured(true)
             setIsDraftRestored(true)
@@ -289,7 +327,14 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
           setError('Failed to load time off request')
           setIsLoadingRequest(false)
         })
-    }, [timeOffRequestId, reset, getValues])
+    }, [
+      timeOffRequestId,
+      reset,
+      getValues,
+      initialSelectedShifts,
+      initialStartDate,
+      initialEndDate,
+    ])
 
     // Track if we've captured the initial state yet
     const [isInitialStateCaptured, setIsInitialStateCaptured] = useState(false)
@@ -493,7 +538,9 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       if (startDate) {
         const today = new Date()
         today.setHours(0, 0, 0, 0)
-        const selectedDate = new Date(startDate)
+        // Parse as local date so "today" is not treated as past (ISO date-only is UTC midnight, which can be previous day in local TZ)
+        const [y, m, d] = startDate.split('-').map(Number)
+        const selectedDate = new Date(y, m - 1, d)
         selectedDate.setHours(0, 0, 0, 0)
         setIsPastDate(selectedDate < today)
       } else {
@@ -629,7 +676,18 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         }
 
         if (data.shift_selection_mode === 'select_shifts' && selectedShifts.length > 0) {
-          payload.shifts = selectedShifts
+          // Only send shifts within the selected date range (e.g. after user shortens end date)
+          const start = data.start_date || ''
+          const end = effectiveEndDate || start
+          payload.shifts = selectedShifts.filter(s => s.date >= start && s.date <= end)
+          if (payload.shifts.length === 0) {
+            setFormError('shift_selection_mode', {
+              type: 'manual',
+              message:
+                'No selected shifts fall within the start and end date. Expand the date range or select shifts.',
+            })
+            return
+          }
         }
 
         const url = timeOffRequestId ? `/api/time-off/${timeOffRequestId}` : '/api/time-off'
@@ -730,7 +788,9 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         }
 
         if (values.shift_selection_mode === 'select_shifts' && selectedShifts.length > 0) {
-          payload.shifts = selectedShifts
+          const start = values.start_date || ''
+          const end = effectiveEndDate || start
+          payload.shifts = selectedShifts.filter(s => s.date >= start && s.date <= end)
         }
 
         const url = timeOffRequestId ? `/api/time-off/${timeOffRequestId}` : '/api/time-off'
@@ -1053,9 +1113,11 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
                         <p className="text-sm text-yellow-600 flex items-start gap-2">
                           <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
                           This teacher already has time off recorded for{' '}
-                          {conflictSummary.conflictCount} of these shifts. This shift
-                          {conflictSummary.conflictCount !== 1 ? 's will' : ' will'} not be included
-                          in this time off request.
+                          {conflictSummary.conflictCount} of these shifts.{' '}
+                          {conflictSummary.conflictCount !== 1
+                            ? 'These shifts will'
+                            : 'This shift will'}{' '}
+                          not be included in this time off request.
                         </p>
                       )}
                       {conflictingRequests.length > 0 && (

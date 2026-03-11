@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
-import { expandDateRangeWithTimeZone } from '@/lib/utils/date'
+import { expandDateRangeWithTimeZone, toDateStringISO } from '@/lib/utils/date'
 
 type TimeOffShift = Database['public']['Tables']['time_off_shifts']['Row']
 type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
@@ -344,7 +344,7 @@ export async function getTimeOffCoverageSummary(request: {
 
   const assignmentMap = new Map<string, { full: boolean; partial: boolean }>()
   ;((assignments as SubAssignment[] | null) || []).forEach(assignment => {
-    const key = `${assignment.date}::${assignment.time_slot_id}`
+    const key = `${toDateStringISO(assignment.date)}::${assignment.time_slot_id}`
     const entry = assignmentMap.get(key) || { full: false, partial: false }
     const isPartial = assignment.is_partial || assignment.assignment_type === 'Partial Sub Shift'
     if (isPartial) {
@@ -360,7 +360,7 @@ export async function getTimeOffCoverageSummary(request: {
   let uncovered = 0
 
   shifts.forEach(shift => {
-    const key = `${shift.date}::${shift.time_slot_id}`
+    const key = `${toDateStringISO(shift.date)}::${shift.time_slot_id}`
     const coverage = assignmentMap.get(key)
     if (coverage?.full) {
       covered += 1

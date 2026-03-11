@@ -17,6 +17,8 @@ export interface TimeOffRequestsQueryParams {
   teacherId?: string
   startDate?: string
   endDate?: string
+  /** Include date/time_slot_code/classroom in shift_details for large shift chips (e.g. time-off list) */
+  includeDetailedShifts?: boolean
 }
 
 export interface SubFinderAbsencesQueryParams {
