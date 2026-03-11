@@ -1,15 +1,15 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import ReportRichTextEditors from '@/components/reports/ReportRichTextEditors'
 import {
   hasRichTextContent,
-  normalizeRichTextForCompare,
   sanitizeRichTextHtml,
 } from '@/lib/reports/rich-text'
+import { useReportDefaults } from '@/lib/hooks/use-report-defaults'
 import { getHeaderClasses } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
 
@@ -42,17 +42,21 @@ type ReportData = {
 export default function SubAvailabilityReportPage() {
   const [colorFriendly, setColorFriendly] = useState(true)
   const [nameFormat, setNameFormat] = useState<'display' | 'full'>('display')
-  const [topHeaderHtml, setTopHeaderHtml] = useState('')
-  const [footerNotesHtml, setFooterNotesHtml] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reportData, setReportData] = useState<ReportData | null>(null)
-  const [isSavingTopDefault, setIsSavingTopDefault] = useState(false)
-  const [isSavingFooterDefault, setIsSavingFooterDefault] = useState(false)
-  const [defaultTopHeaderHtml, setDefaultTopHeaderHtml] = useState('')
-  const [defaultFooterNotesHtml, setDefaultFooterNotesHtml] = useState('')
-  const hasEditedTopHeaderRef = useRef(false)
-  const hasEditedFooterRef = useRef(false)
+  const {
+    topHeaderHtml,
+    footerNotesHtml,
+    onTopHtmlChange,
+    onFooterHtmlChange,
+    isTopHeaderSaved,
+    isFooterSaved,
+    isSavingTopDefault,
+    isSavingFooterDefault,
+    saveTopDefault: handleSaveTopHeaderDefault,
+    saveFooterDefault: handleSaveFooterDefault,
+  } = useReportDefaults({ defaultsUrl: SUB_AVAILABILITY_DEFAULTS_URL })
 
   useEffect(() => {
     let mounted = true
@@ -82,41 +86,6 @@ export default function SubAvailabilityReportPage() {
       mounted = false
     }
   }, [nameFormat])
-
-  useEffect(() => {
-    let mounted = true
-
-    const loadDefaults = async () => {
-      try {
-        const response = await fetch(SUB_AVAILABILITY_DEFAULTS_URL, { cache: 'no-store' })
-        if (!response.ok) return
-
-        const payload = await response.json()
-        if (!mounted) return
-
-        const nextTopHeader =
-          typeof payload?.top_header_html === 'string' ? payload.top_header_html : ''
-        const nextFooter =
-          typeof payload?.footer_notes_html === 'string' ? payload.footer_notes_html : ''
-        setDefaultTopHeaderHtml(nextTopHeader)
-        setDefaultFooterNotesHtml(nextFooter)
-
-        if (!hasEditedTopHeaderRef.current) {
-          setTopHeaderHtml(nextTopHeader)
-        }
-        if (!hasEditedFooterRef.current) {
-          setFooterNotesHtml(nextFooter)
-        }
-      } catch {
-        // Keep defaults optional. If this fails, report still works.
-      }
-    }
-
-    void loadDefaults()
-    return () => {
-      mounted = false
-    }
-  }, [])
 
   const pdfUrl = useMemo(() => {
     const params = new URLSearchParams()
@@ -153,11 +122,6 @@ export default function SubAvailabilityReportPage() {
     () => sanitizeRichTextHtml(footerNotesHtml, 4000),
     [footerNotesHtml]
   )
-  const isTopHeaderSaved =
-    normalizeRichTextForCompare(topHeaderHtml) === normalizeRichTextForCompare(defaultTopHeaderHtml)
-  const isFooterSaved =
-    normalizeRichTextForCompare(footerNotesHtml) ===
-    normalizeRichTextForCompare(defaultFooterNotesHtml)
 
   const openPdf = () => {
     const popup = window.open(pdfUrl, '_blank', 'noopener,noreferrer')
@@ -166,62 +130,6 @@ export default function SubAvailabilityReportPage() {
       return
     }
     toast.success('Opening PDF...')
-  }
-
-  const handleSaveTopHeaderDefault = async () => {
-    setIsSavingTopDefault(true)
-    try {
-      const response = await fetch(SUB_AVAILABILITY_DEFAULTS_URL, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          top_header_html: topHeaderHtml,
-        }),
-      })
-
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        throw new Error(payload?.error || 'Failed to save defaults')
-      }
-
-      const savedTopHeaderHtml =
-        typeof payload?.top_header_html === 'string' ? payload.top_header_html : topHeaderHtml
-      setTopHeaderHtml(savedTopHeaderHtml)
-      setDefaultTopHeaderHtml(savedTopHeaderHtml)
-      toast.success('Saved default top header.')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save defaults')
-    } finally {
-      setIsSavingTopDefault(false)
-    }
-  }
-
-  const handleSaveFooterDefault = async () => {
-    setIsSavingFooterDefault(true)
-    try {
-      const response = await fetch(SUB_AVAILABILITY_DEFAULTS_URL, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          footer_notes_html: footerNotesHtml,
-        }),
-      })
-
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        throw new Error(payload?.error || 'Failed to save defaults')
-      }
-
-      const savedFooterNotesHtml =
-        typeof payload?.footer_notes_html === 'string' ? payload.footer_notes_html : footerNotesHtml
-      setFooterNotesHtml(savedFooterNotesHtml)
-      setDefaultFooterNotesHtml(savedFooterNotesHtml)
-      toast.success('Saved default bottom footer.')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save defaults')
-    } finally {
-      setIsSavingFooterDefault(false)
-    }
   }
 
   const renderCanTeachCell = (values: string[]) => {
@@ -307,14 +215,8 @@ export default function SubAvailabilityReportPage() {
           footerPlaceholder="Add optional instructions to appear at the bottom of the printed report."
           topHtml={topHeaderHtml}
           footerHtml={footerNotesHtml}
-          onTopHtmlChange={html => {
-            hasEditedTopHeaderRef.current = true
-            setTopHeaderHtml(html)
-          }}
-          onFooterHtmlChange={html => {
-            hasEditedFooterRef.current = true
-            setFooterNotesHtml(html)
-          }}
+          onTopHtmlChange={onTopHtmlChange}
+          onFooterHtmlChange={onFooterHtmlChange}
           topIsSaved={isTopHeaderSaved}
           footerIsSaved={isFooterSaved}
           onSaveTopDefault={handleSaveTopHeaderDefault}

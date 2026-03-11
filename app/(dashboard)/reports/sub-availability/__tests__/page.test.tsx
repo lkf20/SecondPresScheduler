@@ -136,32 +136,44 @@ describe('Sub Availability report page', () => {
   })
 
   it('renders duplicate names safely when ids are unique', async () => {
-    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        generated_at: 'Mar 7, 2026, 4:35 PM',
-        sub_count: 2,
-        report_context: {
-          columns: [],
-          dayHeaders: [],
-          rows: [
-            {
-              id: 'sub-1',
-              subName: 'Alex P.',
-              phone: '(502) 555-1111',
-              canTeach: ['All'],
-              matrix: [],
-            },
-            {
-              id: 'sub-2',
-              subName: 'Alex P.',
-              phone: '(502) 555-2222',
-              canTeach: ['All'],
-              matrix: [],
-            },
-          ],
-        },
-      }),
+    ;(global.fetch as jest.Mock).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/reports/sub-availability/defaults')) {
+        return {
+          ok: true,
+          json: async () => ({
+            top_header_html: '',
+            footer_notes_html: '',
+          }),
+        } as Response
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          generated_at: 'Mar 7, 2026, 4:35 PM',
+          sub_count: 2,
+          report_context: {
+            columns: [],
+            dayHeaders: [],
+            rows: [
+              {
+                id: 'sub-1',
+                subName: 'Alex P.',
+                phone: '(502) 555-1111',
+                canTeach: ['All'],
+                matrix: [],
+              },
+              {
+                id: 'sub-2',
+                subName: 'Alex P.',
+                phone: '(502) 555-2222',
+                canTeach: ['All'],
+                matrix: [],
+              },
+            ],
+          },
+        }),
+      } as Response
     })
 
     render(<SubAvailabilityReportPage />)
@@ -169,25 +181,37 @@ describe('Sub Availability report page', () => {
   })
 
   it('shows empty matrix guidance when no schedule days are selected', async () => {
-    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        generated_at: 'Mar 7, 2026, 4:35 PM',
-        sub_count: 1,
-        report_context: {
-          columns: [],
-          dayHeaders: [],
-          rows: [
-            {
-              id: 'sub-1',
-              subName: 'Test S.',
-              phone: '(502) 555-1212',
-              canTeach: ['All'],
-              matrix: [],
-            },
-          ],
-        },
-      }),
+    ;(global.fetch as jest.Mock).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/reports/sub-availability/defaults')) {
+        return {
+          ok: true,
+          json: async () => ({
+            top_header_html: '',
+            footer_notes_html: '',
+          }),
+        } as Response
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          generated_at: 'Mar 7, 2026, 4:35 PM',
+          sub_count: 1,
+          report_context: {
+            columns: [],
+            dayHeaders: [],
+            rows: [
+              {
+                id: 'sub-1',
+                subName: 'Test S.',
+                phone: '(502) 555-1212',
+                canTeach: ['All'],
+                matrix: [],
+              },
+            ],
+          },
+        }),
+      } as Response
     })
 
     render(<SubAvailabilityReportPage />)
