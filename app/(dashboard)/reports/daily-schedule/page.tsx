@@ -354,7 +354,10 @@ export default function DailyScheduleReportPage() {
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload?.error || 'Failed to save defaults')
-      setDefaultTopHeaderHtml(topHeaderHtml)
+      const savedTopHeaderHtml =
+        typeof payload?.top_header_html === 'string' ? payload.top_header_html : topHeaderHtml
+      setTopHeaderHtml(savedTopHeaderHtml)
+      setDefaultTopHeaderHtml(savedTopHeaderHtml)
       toast.success('Saved default top header.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save defaults')
@@ -373,7 +376,10 @@ export default function DailyScheduleReportPage() {
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload?.error || 'Failed to save defaults')
-      setDefaultFooterNotesHtml(footerNotesHtml)
+      const savedFooterNotesHtml =
+        typeof payload?.footer_notes_html === 'string' ? payload.footer_notes_html : footerNotesHtml
+      setFooterNotesHtml(savedFooterNotesHtml)
+      setDefaultFooterNotesHtml(savedFooterNotesHtml)
       toast.success('Saved default bottom footer.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save defaults')

@@ -417,11 +417,11 @@ describe("Today's Schedule report page", () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ top_header_html: '<div>Top Header</div>' }),
+        json: async () => ({ top_header_html: '<div>Top Header (saved)</div>' }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ footer_notes_html: '<div>Bottom Footer</div>' }),
+        json: async () => ({ footer_notes_html: '<div>Bottom Footer (saved)</div>' }),
       })
 
     const { container } = render(<DailyScheduleReportPage />)
@@ -443,6 +443,11 @@ describe("Today's Schedule report page", () => {
       const putBodies = putCalls.map(call => String(call[1]?.body || ''))
       expect(putBodies).toContain(JSON.stringify({ top_header_html: '<div>Top Header</div>' }))
       expect(putBodies).toContain(JSON.stringify({ footer_notes_html: '<div>Bottom Footer</div>' }))
+    })
+
+    await waitFor(() => {
+      expect(editors[0].innerHTML).toContain('Top Header (saved)')
+      expect(editors[1].innerHTML).toContain('Bottom Footer (saved)')
     })
   })
 

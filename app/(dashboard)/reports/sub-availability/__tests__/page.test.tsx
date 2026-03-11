@@ -206,7 +206,7 @@ describe('Sub Availability report page', () => {
           return {
             ok: true,
             json: async () => ({
-              top_header_html: '<div>Header</div>',
+              top_header_html: '<div>Header (saved)</div>',
               footer_notes_html: '<div>Footer</div>',
             }),
           } as Response
@@ -231,7 +231,7 @@ describe('Sub Availability report page', () => {
       }
     )
 
-    render(<SubAvailabilityReportPage />)
+    const { container } = render(<SubAvailabilityReportPage />)
     await screen.findByText('Header')
     await screen.findByText('Save as default header')
     fireEvent.click(screen.getByRole('button', { name: 'Save as default header' }))
@@ -249,6 +249,11 @@ describe('Sub Availability report page', () => {
     const payload = JSON.parse(defaultsPutCall?.[1]?.body as string)
     expect(payload).toEqual({
       top_header_html: '<div>Header</div>',
+    })
+    const editors = Array.from(container.querySelectorAll('div[contenteditable="true"]'))
+    expect(editors).toHaveLength(2)
+    await waitFor(() => {
+      expect(editors[0]?.innerHTML).toContain('Header (saved)')
     })
     expect(successToastMock).toHaveBeenCalled()
   })
