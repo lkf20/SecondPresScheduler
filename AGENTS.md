@@ -160,6 +160,15 @@ Use the shared `Button` component (`components/ui/button.tsx`) and these variant
 - **School closures and business logic:** Time off, sub assignment, flex (temporary coverage), and dashboard must respect closures: do not create time off shifts or coverage for closed days; do not allow assigning a sub to a shift on a closed day; do not create flex/staffing_event_shifts for closed days; do not count closed days in dashboard “below required/preferred” staffing targets or in slot-run “below target” runs. Fetch closures via `getSchoolClosuresForDateRange` (from `lib/api/school-calendar.ts`) for the relevant date range and filter using `isSlotClosedOnDate` (from `lib/utils/school-closures.ts`). When **reading** data for display or aggregation (dashboard coverage, time-off-requests list, sub-finder absences, coverage-request shift maps, assigned-shifts), exclude time off shifts and sub assignments that fall on closed days so that “created first, then day marked closed” (e.g. snow day) is handled: those shifts/assignments are not shown as needing coverage and are not counted in totals.
 - **Testing school closures:** In API integration tests for time off, assign-shifts, and flex, mock `getSchoolClosuresForDateRange` (e.g. `jest.mock('@/lib/api/school-calendar', () => ({ getSchoolClosuresForDateRange: jest.fn().mockResolvedValue([]) }))`) so tests that do not assert closure behavior do not hit the DB. For closure behavior: add or update tests that mock `getSchoolClosuresForDateRange` to return closures for specific dates/slots and assert that shifts on those dates are excluded from creation (time off, flex) or that assignment is rejected with 409 (assign-shifts), and that `getSchoolClosuresForDateRange` is called with the expected school and date range.
 
+## Today's Schedule report color mode contract
+
+- **Black & White mode must be grayscale-only** in both on-screen rendering and generated PDF. When `colorFriendly=false`, schedule table content must use only white/black/gray tokens (no accent colors such as blue, teal, purple, amber, orange, yellow).
+- **No-sub indicator in Black & White mode** must use a gray arrow and light-gray highlight (not yellow/amber).
+- **Tests required for color mode changes:** Any change to daily schedule report styling should include/adjust tests in:
+  - `app/(dashboard)/reports/daily-schedule/__tests__/page.test.tsx`
+  - `lib/reports/__tests__/daily-schedule-pdf.test.ts`
+    so grayscale-only behavior is enforced for both screen and PDF paths.
+
 ## Baseline schedule: enrollment and staffing
 
 - **Inactive cells and Save:** Class groups are required only when the slot is active. Inactive cells can be saved without class groups. Save is disabled only when the parent (classroom or time slot) is inactive. See [Schedule Semantics Contract](docs/contracts/SCHEDULE_SEMANTICS_CONTRACT.md) (Edit panel: commit and cancel — Inactive cells).

@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { getScheduleSnapshotData } from '@/lib/api/weekly-schedule'
 import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import { getUserSchoolId } from '@/lib/utils/auth'
-import { getScheduleSettings } from '@/lib/api/schedule-settings'
-import { expandDateRangeWithTimeZone } from '@/lib/utils/date'
+import { filterActiveDailyScheduleData, resolveDailyScheduleDay } from '@/lib/api/daily-schedule'
 
 const parseDateParam = (value: string | null) => {
   if (!value) return null
@@ -35,55 +33,48 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Missing or invalid date parameter.' }, { status: 400 })
     }
 
-    const scheduleSettings = await getScheduleSettings(schoolId)
-    const timeZone = scheduleSettings?.time_zone || 'UTC'
-    const expanded = expandDateRangeWithTimeZone(dateParam, dateParam, timeZone)
-    const dayNumber = expanded[0]?.day_number
-    if (!dayNumber) {
-      return NextResponse.json(
-        { error: 'Unable to resolve day of week for date.' },
-        { status: 500 }
-      )
+    const dayResolution = await resolveDailyScheduleDay(schoolId, dateParam, date)
+    if (dayResolution.noSchedule) {
+      return NextResponse.json({
+        date: dateParam,
+        day_of_week_id: null,
+        day_name: null,
+        data: [],
+        school_closures: [],
+        no_schedule: true,
+        no_schedule_message: dayResolution.message,
+        next_scheduled_date: dayResolution.nextScheduledDate,
+        next_scheduled_day_name: dayResolution.nextScheduledDayName,
+      })
     }
-    const supabase = await createClient()
-    const dayNumberCandidates = dayNumber === 0 ? [0, 7] : [dayNumber]
-    const { data: daysData, error: daysError } = await supabase
-      .from('days_of_week')
-      .select('id, name, day_number')
-      .in('day_number', dayNumberCandidates)
-
-    if (daysError || !daysData || daysData.length === 0) {
-      return NextResponse.json(
-        { error: 'Unable to resolve day of week for date.' },
-        { status: 500 }
-      )
-    }
-
-    const day = daysData[0]
 
     const [data, schoolClosures] = await Promise.all([
       getScheduleSnapshotData({
         schoolId,
-        selectedDayIds: [day.id],
+        selectedDayIds: [dayResolution.dayId],
         startDateISO: dateParam,
         endDateISO: dateParam,
       }),
       getSchoolClosuresForDateRange(schoolId, dateParam, dateParam),
     ])
 
+    const filteredData = filterActiveDailyScheduleData(data || [])
+
     return NextResponse.json({
       date: dateParam,
-      day_of_week_id: day.id,
-      day_name: day.name,
-      data,
+      day_of_week_id: dayResolution.dayId,
+      day_name: dayResolution.dayName,
+      data: filteredData,
       school_closures: schoolClosures,
+      no_schedule: false,
     })
   } catch (error: any) {
-    console.error('Error fetching daily schedule:', error)
-    console.error('Error stack:', error.stack)
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error fetching daily schedule:', error)
+    }
     return NextResponse.json(
       {
-        error: error.message,
+        error: error?.message || 'Failed to fetch daily schedule.',
         details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
       },
       { status: 500 }

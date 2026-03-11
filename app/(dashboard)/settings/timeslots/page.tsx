@@ -125,19 +125,11 @@ export default function TimeSlotsPage() {
           Back to Settings
         </Link>
       </div>
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Days & Time Slots</h1>
-          <p className="text-muted-foreground mt-2">
-            Configure which days appear in the weekly schedule and manage time periods
-          </p>
-        </div>
-        <Link href="/settings/timeslots/new">
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Time Slot
-          </Button>
-        </Link>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Days & Time Slots</h1>
+        <p className="text-muted-foreground mt-2">
+          Configure which days appear in the weekly schedule and manage time periods
+        </p>
       </div>
 
       {error && <ErrorMessage message={error} className="mb-6" />}
@@ -174,22 +166,33 @@ export default function TimeSlotsPage() {
       <div className="mb-6">
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold">Time Slots</h2>
+            <div className="flex items-center gap-6">
+              <h2 className="text-xl font-semibold">Time Slots</h2>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="show-inactive-timeslots"
+                  checked={showInactive}
+                  onCheckedChange={setShowInactive}
+                />
+                <Label
+                  htmlFor="show-inactive-timeslots"
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Show inactive
+                </Label>
+              </div>
+            </div>
             <p className="mt-1 text-sm text-muted-foreground">
               Define time slots for scheduling staff. These time slots will appear in the weekly
               schedule across all days and classrooms.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Switch
-              id="show-inactive-timeslots"
-              checked={showInactive}
-              onCheckedChange={setShowInactive}
-            />
-            <Label htmlFor="show-inactive-timeslots" className="text-sm font-normal cursor-pointer">
-              Show inactive
-            </Label>
-          </div>
+          <Link href="/settings/timeslots/new">
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Time Slot
+            </Button>
+          </Link>
         </div>
         {loading ? (
           <div className="text-muted-foreground">Loading time slots...</div>

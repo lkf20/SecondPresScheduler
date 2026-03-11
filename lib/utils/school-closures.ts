@@ -5,6 +5,12 @@ export interface SchoolClosureForCheck {
   time_slot_id: string | null
 }
 
+export interface SchoolClosureWithReason {
+  date: string
+  time_slot_id: string | null
+  reason: string | null
+}
+
 /**
  * Returns true if the given time slot on the given date is closed.
  * Use this when you already have the date (e.g. daily schedule, PDF).
@@ -19,6 +25,23 @@ export function isSlotClosedOnDate(
   if (closures.length === 0) return false
   return closures.some(
     c => c.date === dateISO && (c.time_slot_id === null || c.time_slot_id === timeSlotId)
+  )
+}
+
+/**
+ * Returns the matching closure for a specific date/time-slot.
+ * Slot-specific closures are preferred over whole-day closures.
+ */
+export function getSlotClosureOnDate(
+  dateISO: string,
+  timeSlotId: string,
+  closures: SchoolClosureWithReason[]
+): SchoolClosureWithReason | null {
+  if (closures.length === 0) return null
+  return (
+    closures.find(c => c.date === dateISO && c.time_slot_id === timeSlotId) ??
+    closures.find(c => c.date === dateISO && c.time_slot_id === null) ??
+    null
   )
 }
 

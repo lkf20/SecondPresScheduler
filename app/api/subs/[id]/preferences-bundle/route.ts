@@ -14,6 +14,12 @@ function getErrorStatus(error: unknown): number {
   return 500
 }
 
+type CapabilitiesPayload = {
+  can_change_diapers?: boolean
+  can_lift_children?: boolean
+  can_assist_with_toileting?: boolean
+}
+
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
@@ -32,12 +38,26 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'capabilities must be an object' }, { status: 400 })
     }
 
+    // Whitelist capability keys that this endpoint is allowed to mutate.
+    // Notes are managed independently and must never be updated through preferences-bundle.
+    const safeCapabilities: CapabilitiesPayload = {
+      ...(capabilities.can_change_diapers !== undefined
+        ? { can_change_diapers: Boolean(capabilities.can_change_diapers) }
+        : {}),
+      ...(capabilities.can_lift_children !== undefined
+        ? { can_lift_children: Boolean(capabilities.can_lift_children) }
+        : {}),
+      ...(capabilities.can_assist_with_toileting !== undefined
+        ? { can_assist_with_toileting: Boolean(capabilities.can_assist_with_toileting) }
+        : {}),
+    }
+
     const supabase = await createClient()
     const { error } = await supabase.rpc('save_sub_preferences_bundle', {
       p_sub_id: id,
       p_class_group_ids: class_group_ids,
       p_qualifications: qualifications,
-      p_capabilities: capabilities,
+      p_capabilities: safeCapabilities,
     })
 
     if (error) throw error

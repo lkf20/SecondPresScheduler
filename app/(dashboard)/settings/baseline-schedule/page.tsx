@@ -15,6 +15,10 @@ import { useScheduleSettings } from '@/lib/hooks/use-schedule-settings'
 import { useFilterOptions } from '@/lib/hooks/use-filter-options'
 import { invalidateWeeklySchedule } from '@/lib/utils/invalidation'
 import { isSlotInactive } from '@/lib/utils/schedule-slot-activity'
+import {
+  includeNewIdsWhenPreviouslyAllSelected,
+  reconcileSelectedIdsWithAvailable,
+} from '@/lib/utils/filter-selection'
 import { getTotalEnrollmentForCalculation } from '@/components/schedules/ScheduleSidePanel'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 
@@ -68,6 +72,10 @@ export default function BaselineSchedulePage() {
     () => filterOptions?.timeSlots || [],
     [filterOptions?.timeSlots]
   )
+  const availableTimeSlotIds = useMemo(
+    () => availableTimeSlots.map(ts => ts.id),
+    [availableTimeSlots]
+  )
   const availableClassrooms = useMemo(
     () => filterOptions?.classrooms || [],
     [filterOptions?.classrooms]
@@ -86,7 +94,9 @@ export default function BaselineSchedulePage() {
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
   const prevAvailableClassroomIdsRef = useRef<string[] | null>(null)
+  const prevAvailableTimeSlotIdsRef = useRef<string[] | null>(null)
   const previousAvailableClassroomsStorageKey = 'baseline-schedule-available-classroom-ids'
+  const previousAvailableTimeSlotsStorageKey = 'baseline-schedule-available-time-slot-ids'
   const [filters, setFilters] = useState<FilterState | null>(() => {
     // Load filters from localStorage on mount (using separate key for baseline schedule)
     if (typeof window !== 'undefined') {
@@ -196,23 +206,27 @@ export default function BaselineSchedulePage() {
   useEffect(() => {
     if (!filters || availableClassroomIds.length === 0) return
 
-    const availableSet = new Set(availableClassroomIds)
-    const validSelected = filters.selectedClassroomIds.filter(id => availableSet.has(id))
-    const hadInvalidIds = validSelected.length !== filters.selectedClassroomIds.length
-    if (!hadInvalidIds) return
-
-    const nextSelected =
-      filters.selectedClassroomIds.length >= availableClassroomIds.length
-        ? availableClassroomIds
-        : validSelected
-
-    const isSame =
-      nextSelected.length === filters.selectedClassroomIds.length &&
-      nextSelected.every(id => filters.selectedClassroomIds.includes(id))
-    if (isSame) return
+    const nextSelected = reconcileSelectedIdsWithAvailable(
+      filters.selectedClassroomIds,
+      availableClassroomIds
+    )
+    if (nextSelected === filters.selectedClassroomIds) return
 
     setFilters(prev => (prev ? { ...prev, selectedClassroomIds: nextSelected } : prev))
   }, [availableClassroomIds, filters])
+
+  // Normalize selected time slot IDs against current available time slots.
+  useEffect(() => {
+    if (!filters || availableTimeSlotIds.length === 0) return
+
+    const nextSelected = reconcileSelectedIdsWithAvailable(
+      filters.selectedTimeSlotIds,
+      availableTimeSlotIds
+    )
+    if (nextSelected === filters.selectedTimeSlotIds) return
+
+    setFilters(prev => (prev ? { ...prev, selectedTimeSlotIds: nextSelected } : prev))
+  }, [availableTimeSlotIds, filters])
 
   // Save filters to localStorage whenever they change (using separate key for baseline schedule)
   useEffect(() => {
@@ -251,24 +265,15 @@ export default function BaselineSchedulePage() {
       previousAvailableIds = availableClassroomIds
     }
 
-    const previousAvailableSet = new Set(previousAvailableIds)
-    const selectedSet = new Set(filters.selectedClassroomIds)
-
-    const hadAllPreviouslyAvailableSelected =
-      previousAvailableIds.length > 0 && previousAvailableIds.every(id => selectedSet.has(id))
-
-    const newlyAddedIds = availableClassroomIds.filter(id => !previousAvailableSet.has(id))
-
-    if (hadAllPreviouslyAvailableSelected && newlyAddedIds.length > 0) {
+    const nextSelected = includeNewIdsWhenPreviouslyAllSelected(
+      filters.selectedClassroomIds,
+      previousAvailableIds,
+      availableClassroomIds
+    )
+    if (nextSelected !== filters.selectedClassroomIds) {
       setFilters(prev => {
         if (!prev) return prev
-        const prevSelectedSet = new Set(prev.selectedClassroomIds)
-        const stillMissing = newlyAddedIds.filter(id => !prevSelectedSet.has(id))
-        if (stillMissing.length === 0) return prev
-        return {
-          ...prev,
-          selectedClassroomIds: [...prev.selectedClassroomIds, ...stillMissing],
-        }
+        return { ...prev, selectedClassroomIds: nextSelected }
       })
     }
 
@@ -284,6 +289,53 @@ export default function BaselineSchedulePage() {
       }
     }
   }, [availableClassroomIds, filters?.selectedClassroomIds])
+
+  // If new time slots appear and user previously had all currently-available time slots selected,
+  // auto-include newly added time slot IDs so they immediately appear.
+  useEffect(() => {
+    if (!filters) return
+    if (availableTimeSlotIds.length === 0) return
+
+    let previousAvailableIds = prevAvailableTimeSlotIdsRef.current
+    if (!previousAvailableIds && typeof window !== 'undefined') {
+      try {
+        const stored = window.localStorage.getItem(previousAvailableTimeSlotsStorageKey)
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed)) {
+            previousAvailableIds = parsed.filter((id): id is string => typeof id === 'string')
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing previous available time slots:', e)
+      }
+    }
+    if (!previousAvailableIds) previousAvailableIds = availableTimeSlotIds
+
+    const nextSelected = includeNewIdsWhenPreviouslyAllSelected(
+      filters.selectedTimeSlotIds,
+      previousAvailableIds,
+      availableTimeSlotIds
+    )
+    if (nextSelected !== filters.selectedTimeSlotIds) {
+      setFilters(prev => {
+        if (!prev) return prev
+        return { ...prev, selectedTimeSlotIds: nextSelected }
+      })
+    }
+
+    prevAvailableTimeSlotIdsRef.current = availableTimeSlotIds
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(
+          previousAvailableTimeSlotsStorageKey,
+          JSON.stringify(availableTimeSlotIds)
+        )
+      } catch (e) {
+        console.error('Error saving previous available time slots:', e)
+      }
+    }
+  }, [availableTimeSlotIds, filters?.selectedTimeSlotIds])
 
   // Handle refresh - invalidate React Query cache and refetch (used by header refresh button).
   // Navigation to weekly when returnToWeekly is true is handled by a separate "Back to Weekly" control, not by refresh.

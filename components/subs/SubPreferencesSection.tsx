@@ -36,7 +36,6 @@ interface SubPreferencesSectionProps {
     can_change_diapers: boolean | null
     can_lift_children: boolean | null
     can_assist_with_toileting: boolean | null
-    capabilities_notes: string | null
   }
   onDirtyChange?: (dirty: boolean) => void
   externalSaveSignal?: number
@@ -57,7 +56,6 @@ type PreferencesSnapshot = {
     can_change_diapers: boolean
     can_lift_children: boolean
     can_assist_with_toileting: boolean
-    capabilities_notes: string
   }
 }
 
@@ -71,7 +69,6 @@ const preferencesCache = new Map<
       can_change_diapers: boolean
       can_lift_children: boolean
       can_assist_with_toileting: boolean
-      capabilities_notes: string
     }
   }
 >()
@@ -96,7 +93,6 @@ const buildSnapshot = (
     can_change_diapers: boolean
     can_lift_children: boolean
     can_assist_with_toileting: boolean
-    capabilities_notes: string
   }
 ): PreferencesSnapshot => ({
   selectedClassIds: [...selectedClassIds].sort(),
@@ -105,7 +101,6 @@ const buildSnapshot = (
     can_change_diapers: capabilitiesState.can_change_diapers,
     can_lift_children: capabilitiesState.can_lift_children,
     can_assist_with_toileting: capabilitiesState.can_assist_with_toileting,
-    capabilities_notes: capabilitiesState.capabilities_notes || '',
   },
 })
 
@@ -125,14 +120,8 @@ export default function SubPreferencesSection({
       can_change_diapers: sub.can_change_diapers ?? false,
       can_lift_children: sub.can_lift_children ?? false,
       can_assist_with_toileting: sub.can_assist_with_toileting ?? false,
-      capabilities_notes: sub.capabilities_notes || '',
     }),
-    [
-      sub.can_change_diapers,
-      sub.can_lift_children,
-      sub.can_assist_with_toileting,
-      sub.capabilities_notes,
-    ]
+    [sub.can_change_diapers, sub.can_lift_children, sub.can_assist_with_toileting]
   )
   const [loading, setLoading] = useState(true)
   const [classPreferences, setClassPreferences] = useState<ClassPreference[]>([])
@@ -316,13 +305,11 @@ export default function SubPreferencesSection({
     can_change_diapers: boolean
     can_lift_children: boolean
     can_assist_with_toileting: boolean
-    capabilities_notes: string | null
   }) => {
     setCapabilitiesState({
       can_change_diapers: capabilities.can_change_diapers,
       can_lift_children: capabilities.can_lift_children,
       can_assist_with_toileting: capabilities.can_assist_with_toileting,
-      capabilities_notes: capabilities.capabilities_notes || '',
     })
     const cached = preferencesCache.get(subId)
     preferencesCache.set(subId, {
@@ -333,7 +320,6 @@ export default function SubPreferencesSection({
         can_change_diapers: capabilities.can_change_diapers,
         can_lift_children: capabilities.can_lift_children,
         can_assist_with_toileting: capabilities.can_assist_with_toileting,
-        capabilities_notes: capabilities.capabilities_notes || '',
       },
     })
   }
@@ -350,7 +336,6 @@ export default function SubPreferencesSection({
       }))
       const capabilitiesPayload = {
         ...capabilitiesState,
-        capabilities_notes: capabilitiesState.capabilities_notes.trim() || null,
       }
 
       const response = await fetch(`/api/subs/${subId}/preferences-bundle`, {
@@ -423,7 +408,6 @@ export default function SubPreferencesSection({
             can_change_diapers: capabilitiesState.can_change_diapers,
             can_lift_children: capabilitiesState.can_lift_children,
             can_assist_with_toileting: capabilitiesState.can_assist_with_toileting,
-            capabilities_notes: capabilitiesState.capabilities_notes || null,
           }}
           onQualificationsChange={handleQualificationsChange}
           onCapabilitiesChange={handleCapabilitiesChange}

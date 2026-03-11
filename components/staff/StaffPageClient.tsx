@@ -249,6 +249,14 @@ export default function StaffPageClient({
                   Custom
                 </Badge>
               )}
+              {Boolean(row.capabilities_notes?.trim()) && (
+                <Badge
+                  variant="outline"
+                  className="text-xs font-normal border-teal-200 bg-teal-50 text-teal-700"
+                >
+                  Has notes
+                </Badge>
+              )}
               {isDuplicate && (
                 <TooltipProvider>
                   <Tooltip>
