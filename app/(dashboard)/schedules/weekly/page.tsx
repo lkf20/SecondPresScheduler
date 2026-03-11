@@ -23,6 +23,7 @@ import {
   includeNewIdsWhenPreviouslyAllSelected,
   reconcileSelectedIdsWithAvailable,
 } from '@/lib/utils/filter-selection'
+import { isNeedsReviewClassroomName } from '@/lib/utils/needs-review-classroom'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 import { getTotalEnrollmentForCalculation } from '@/components/schedules/ScheduleSidePanel'
 import type { WeeklyScheduleData } from '@/lib/api/weekly-schedule'
@@ -61,7 +62,13 @@ export default function WeeklySchedulePage() {
     isFetching: isFetchingSchedule,
     error: scheduleError,
   } = useWeeklySchedule(weekStartISO)
-  const scheduleData = scheduleResponse?.classrooms ?? []
+  const scheduleData = useMemo(
+    () =>
+      (scheduleResponse?.classrooms ?? []).filter(
+        classroom => !isNeedsReviewClassroomName(classroom.classroom_name)
+      ),
+    [scheduleResponse?.classrooms]
+  )
   const schoolClosures = scheduleResponse?.school_closures ?? []
   const { data: scheduleSettings, isLoading: isLoadingSettings } = useScheduleSettings()
   const { data: filterOptions, isLoading: isLoadingFilters } = useFilterOptions()

@@ -1,24 +1,21 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import {
-  AlignCenter,
-  AlignLeft,
-  AlignRight,
-  Bold,
-  Highlighter,
-  Italic,
-  Underline,
-} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { sanitizeRichTextHtml } from '@/lib/reports/sub-availability-pdf'
+import ReportRichTextEditors from '@/components/reports/ReportRichTextEditors'
+import {
+  hasRichTextContent,
+  sanitizeRichTextHtml,
+} from '@/lib/reports/rich-text'
+import { useReportDefaults } from '@/lib/hooks/use-report-defaults'
 import { getHeaderClasses } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
 
 const SUB_AVAILABILITY_PDF_URL = '/api/reports/sub-availability/pdf'
 const SUB_AVAILABILITY_DATA_URL = '/api/reports/sub-availability'
+const SUB_AVAILABILITY_DEFAULTS_URL = '/api/reports/sub-availability/defaults'
 
 type ReportData = {
   generated_at: string
@@ -45,14 +42,21 @@ type ReportData = {
 export default function SubAvailabilityReportPage() {
   const [colorFriendly, setColorFriendly] = useState(true)
   const [nameFormat, setNameFormat] = useState<'display' | 'full'>('display')
-  const [topHeaderHtml, setTopHeaderHtml] = useState('')
-  const [footerNotesHtml, setFooterNotesHtml] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reportData, setReportData] = useState<ReportData | null>(null)
-  const topHeaderEditorRef = useRef<HTMLDivElement | null>(null)
-  const footerEditorRef = useRef<HTMLDivElement | null>(null)
-  const [activeEditor, setActiveEditor] = useState<'top' | 'footer'>('footer')
+  const {
+    topHeaderHtml,
+    footerNotesHtml,
+    onTopHtmlChange,
+    onFooterHtmlChange,
+    isTopHeaderSaved,
+    isFooterSaved,
+    isSavingTopDefault,
+    isSavingFooterDefault,
+    saveTopDefault: handleSaveTopHeaderDefault,
+    saveFooterDefault: handleSaveFooterDefault,
+  } = useReportDefaults({ defaultsUrl: SUB_AVAILABILITY_DEFAULTS_URL })
 
   useEffect(() => {
     let mounted = true
@@ -87,16 +91,8 @@ export default function SubAvailabilityReportPage() {
     const params = new URLSearchParams()
     params.set('colorFriendly', String(colorFriendly))
     params.set('nameFormat', nameFormat)
-    const footerPlain = footerNotesHtml
-      .replace(/<[^>]*>/g, ' ')
-      .replace(/&nbsp;/g, ' ')
-      .trim()
-    const topHeaderPlain = topHeaderHtml
-      .replace(/<[^>]*>/g, ' ')
-      .replace(/&nbsp;/g, ' ')
-      .trim()
-    if (topHeaderPlain) params.set('topHeaderHtml', topHeaderHtml)
-    if (footerPlain) params.set('footerNotesHtml', footerNotesHtml)
+    if (hasRichTextContent(topHeaderHtml)) params.set('topHeaderHtml', topHeaderHtml)
+    if (hasRichTextContent(footerNotesHtml)) params.set('footerNotesHtml', footerNotesHtml)
     return `${SUB_AVAILABILITY_PDF_URL}?${params.toString()}`
   }, [colorFriendly, nameFormat, topHeaderHtml, footerNotesHtml])
 
@@ -147,72 +143,6 @@ export default function SubAvailabilityReportPage() {
         <span className="italic">{exceptText}</span>
       </>
     )
-  }
-
-  const getActiveEditorRef = () => {
-    const focusedElement = document.activeElement as HTMLElement | null
-    const focusedTop = topHeaderEditorRef.current && focusedElement === topHeaderEditorRef.current
-    const focusedFooter = footerEditorRef.current && focusedElement === footerEditorRef.current
-    return focusedTop
-      ? topHeaderEditorRef
-      : focusedFooter
-        ? footerEditorRef
-        : activeEditor === 'top'
-          ? topHeaderEditorRef
-          : footerEditorRef
-  }
-
-  const syncEditorStateFromRef = (
-    editorRef: React.RefObject<HTMLDivElement | null> | { current: HTMLDivElement | null }
-  ) => {
-    if (editorRef === topHeaderEditorRef) {
-      setTopHeaderHtml(topHeaderEditorRef.current?.innerHTML || '')
-      return
-    }
-    setFooterNotesHtml(footerEditorRef.current?.innerHTML || '')
-  }
-
-  const runEditorCommand = (command: string, value?: string) => {
-    const editorRef = getActiveEditorRef()
-    editorRef.current?.focus()
-    document.execCommand(command, false, value)
-    syncEditorStateFromRef(editorRef)
-  }
-
-  const runHighlightCommand = () => {
-    const editorRef = getActiveEditorRef()
-    const editor = editorRef.current
-    if (!editor) return
-    editor.focus()
-
-    const selection = window.getSelection()
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-      runEditorCommand('hiliteColor', '#fff59d')
-      return
-    }
-
-    const range = selection.getRangeAt(0)
-    const containerEl =
-      range.startContainer.nodeType === Node.ELEMENT_NODE
-        ? (range.startContainer as HTMLElement)
-        : (range.startContainer.parentElement ?? editor)
-    const currentFontSize = window.getComputedStyle(containerEl).fontSize || '14px'
-
-    try {
-      const span = document.createElement('span')
-      span.style.backgroundColor = '#fff59d'
-      span.style.fontSize = currentFontSize
-      span.style.lineHeight = 'inherit'
-      range.surroundContents(span)
-      selection.removeAllRanges()
-      const nextRange = document.createRange()
-      nextRange.selectNodeContents(span)
-      selection.addRange(nextRange)
-    } catch {
-      document.execCommand('hiliteColor', false, '#fff59d')
-    }
-
-    syncEditorStateFromRef(editorRef)
   }
 
   return (
@@ -278,131 +208,22 @@ export default function SubAvailabilityReportPage() {
             </Button>
           </div>
         </div>
-        <div className="space-y-3">
-          <div className="mb-3 mt-8 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              title="Bold"
-              aria-label="Bold"
-              className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-800 hover:bg-slate-50"
-              onClick={() => runEditorCommand('bold')}
-            >
-              <Bold className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              title="Italic"
-              aria-label="Italic"
-              className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-800 hover:bg-slate-50"
-              onClick={() => runEditorCommand('italic')}
-            >
-              <Italic className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              title="Underline"
-              aria-label="Underline"
-              className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-800 hover:bg-slate-50"
-              onClick={() => runEditorCommand('underline')}
-            >
-              <Underline className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              title="Highlight"
-              aria-label="Highlight"
-              className="rounded border border-amber-300 bg-amber-100 px-2 py-1 text-amber-800 hover:bg-amber-200"
-              onClick={runHighlightCommand}
-            >
-              <Highlighter className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              title="Align Left"
-              aria-label="Align Left"
-              className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-800 hover:bg-slate-50"
-              onClick={() => runEditorCommand('justifyLeft')}
-            >
-              <AlignLeft className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              title="Align Center"
-              aria-label="Align Center"
-              className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-800 hover:bg-slate-50"
-              onClick={() => runEditorCommand('justifyCenter')}
-            >
-              <AlignCenter className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              title="Align Right"
-              aria-label="Align Right"
-              className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-800 hover:bg-slate-50"
-              onClick={() => runEditorCommand('justifyRight')}
-            >
-              <AlignRight className="h-4 w-4" />
-            </button>
-            <select
-              className="rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800"
-              defaultValue=""
-              onChange={e => {
-                if (e.target.value) runEditorCommand('foreColor', e.target.value)
-              }}
-            >
-              <option value="" disabled>
-                Font color
-              </option>
-              <option value="#111827">Black</option>
-              <option value="#0f766e">Teal</option>
-              <option value="#1d4ed8">Blue</option>
-              <option value="#b45309">Amber</option>
-              <option value="#b91c1c">Red</option>
-            </select>
-            <select
-              className="rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800"
-              defaultValue=""
-              onChange={e => {
-                if (e.target.value) runEditorCommand('fontSize', e.target.value)
-              }}
-            >
-              <option value="" disabled>
-                Font size
-              </option>
-              <option value="1">Extra small</option>
-              <option value="2">Small</option>
-              <option value="3">Normal</option>
-              <option value="4">Large</option>
-              <option value="5">XL</option>
-            </select>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Top header (optional)</label>
-              <div
-                ref={topHeaderEditorRef}
-                contentEditable
-                suppressContentEditableWarning
-                onFocus={() => setActiveEditor('top')}
-                onInput={e => setTopHeaderHtml((e.currentTarget as HTMLDivElement).innerHTML)}
-                className="min-h-[70px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-                data-placeholder="Optional centered header shown above the report title."
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Bottom footer (optional)</label>
-              <div
-                ref={footerEditorRef}
-                contentEditable
-                suppressContentEditableWarning
-                onFocus={() => setActiveEditor('footer')}
-                onInput={e => setFooterNotesHtml((e.currentTarget as HTMLDivElement).innerHTML)}
-                className="min-h-[70px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-                data-placeholder="Add optional instructions to appear at the bottom of the printed report."
-              />
-            </div>
-          </div>
-        </div>
+        <ReportRichTextEditors
+          topLabel="Top header (optional)"
+          footerLabel="Bottom footer (optional)"
+          topPlaceholder="Optional centered header shown above the report title."
+          footerPlaceholder="Add optional instructions to appear at the bottom of the printed report."
+          topHtml={topHeaderHtml}
+          footerHtml={footerNotesHtml}
+          onTopHtmlChange={onTopHtmlChange}
+          onFooterHtmlChange={onFooterHtmlChange}
+          topIsSaved={isTopHeaderSaved}
+          footerIsSaved={isFooterSaved}
+          onSaveTopDefault={handleSaveTopHeaderDefault}
+          onSaveFooterDefault={handleSaveFooterDefault}
+          isSavingTopDefault={isSavingTopDefault}
+          isSavingFooterDefault={isSavingFooterDefault}
+        />
       </div>
 
       <Card className="mt-3">
@@ -615,12 +436,6 @@ export default function SubAvailabilityReportPage() {
               </div>
             ) : null}
           </div>
-          <style jsx>{`
-            [contenteditable][data-placeholder]:empty:before {
-              content: attr(data-placeholder);
-              color: #94a3b8;
-            }
-          `}</style>
         </CardContent>
       </Card>
     </div>

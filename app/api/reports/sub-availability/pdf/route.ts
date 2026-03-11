@@ -11,6 +11,11 @@ import {
   buildSubAvailabilityReportModel,
   formatGeneratedAt,
 } from '@/lib/reports/sub-availability-pdf'
+import {
+  MAX_FOOTER_NOTES_HTML,
+  MAX_TOP_HEADER_HTML,
+  truncateRichText,
+} from '@/lib/reports/rich-text'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -21,8 +26,9 @@ const parseBoolean = (value: string | null, fallback: boolean) => {
 }
 const parseNameFormat = (value: string | null): 'display' | 'full' =>
   value === 'full' ? 'full' : 'display'
-const parseFooterNotesHtml = (value: string | null) => (value ? value.slice(0, 4000) : '')
-const parseTopHeaderHtml = (value: string | null) => (value ? value.slice(0, 2000) : '')
+const parseFooterNotesHtml = (value: string | null) =>
+  truncateRichText(value, MAX_FOOTER_NOTES_HTML)
+const parseTopHeaderHtml = (value: string | null) => truncateRichText(value, MAX_TOP_HEADER_HTML)
 
 const resolveExecutablePath = () => {
   const envPath = process.env.PUPPETEER_EXECUTABLE_PATH

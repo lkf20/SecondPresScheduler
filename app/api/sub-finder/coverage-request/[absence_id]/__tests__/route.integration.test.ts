@@ -100,7 +100,52 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
         '2099-02-10|EM|classroom-1': 'crs-1',
         '2099-02-10|EM': 'crs-1',
       },
+      needs_classroom_review: false,
+      needs_review_shift_count: 0,
     })
+  })
+
+  it('flags coverage requests that contain Unknown (needs review) shifts', async () => {
+    ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
+      id: 'absence-1',
+      teacher_id: 'teacher-1',
+      coverage_request_id: 'coverage-1',
+    })
+
+    const coverageRequestShiftsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'crs-1',
+            date: '2099-02-10',
+            classroom_id: 'classroom-needs-review',
+            classroom: { name: 'Unknown (needs review)' },
+            time_slot: { code: 'EM' },
+          },
+        ],
+        error: null,
+      }),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'coverage_request_shifts') return coverageRequestShiftsQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = {
+      nextUrl: new URL('http://localhost:3000/api/sub-finder/coverage-request/absence-1'),
+    }
+    const response = await GET(request as any, {
+      params: Promise.resolve({ absence_id: 'absence-1' }),
+    })
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.needs_classroom_review).toBe(true)
+    expect(json.needs_review_shift_count).toBe(1)
   })
 
   it('creates coverage request when missing and returns generated shift map', async () => {
@@ -211,6 +256,8 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
     expect(json.shift_map).toMatchObject({
       '2099-02-10|EM|classroom-1': 'crs-1',
     })
+    expect(json.needs_classroom_review).toBe(false)
+    expect(json.needs_review_shift_count).toBe(0)
   })
 
   it('returns 500 when creating a new coverage request fails', async () => {

@@ -117,6 +117,7 @@ export default function SubFinderPage() {
   const savedSubRef = useRef<SubCandidate | null>(null)
   const savedAbsenceRef = useRef<Absence | null>(null)
   const selectedAbsenceIdRef = useRef<string | null>(null) // Track selected absence ID to prevent loss during restoration
+  const classroomReviewWarnedAbsenceIdsRef = useRef<Set<string>>(new Set())
   // Cache contact data: key = `${subId}-${absenceId}`
   type ContactDataCacheEntry = {
     id: string
@@ -150,6 +151,24 @@ export default function SubFinderPage() {
   const [contactDataCache, setContactDataCache] = useState<Map<string, ContactDataCacheEntry>>(
     new Map()
   )
+  const maybeWarnNeedsClassroomReview = useCallback((absenceId: string, coverageData: any) => {
+    if (!coverageData?.needs_classroom_review) return
+    if (classroomReviewWarnedAbsenceIdsRef.current.has(absenceId)) return
+    classroomReviewWarnedAbsenceIdsRef.current.add(absenceId)
+
+    const reviewCount =
+      typeof coverageData.needs_review_shift_count === 'number'
+        ? coverageData.needs_review_shift_count
+        : null
+    const shiftText =
+      reviewCount && reviewCount > 0
+        ? `${reviewCount} shift${reviewCount === 1 ? '' : 's'}`
+        : 'one or more shifts'
+
+    toast.warning('Classroom needs review', {
+      description: `We assigned ${shiftText} to "Unknown (needs review)". Update classroom details in Settings or Weekly Schedule.`,
+    })
+  }, [])
   const getContactStatusLine = useCallback(
     (sub: SubCandidate): string | null => {
       const absenceId = selectedAbsence?.id
@@ -768,6 +787,7 @@ export default function SubFinderPage() {
       }
 
       const coverageData = await coverageResponse.json()
+      maybeWarnNeedsClassroomReview(absence.id, coverageData)
 
       // Get contact data
       const contactResponse = await fetch(
@@ -921,6 +941,7 @@ export default function SubFinderPage() {
         )
         if (!coverageResponse.ok) return
         const coverageData = await coverageResponse.json()
+        maybeWarnNeedsClassroomReview(selectedAbsence.id, coverageData)
         const contactResponse = await fetch(
           `/api/sub-finder/substitute-contacts?coverage_request_id=${coverageData.coverage_request_id}&sub_id=${removeDialogShift.sub_id}`
         )
@@ -946,7 +967,7 @@ export default function SubFinderPage() {
     return () => {
       isCancelled = true
     }
-  }, [contactDataCache, removeDialogShift?.sub_id, selectedAbsence])
+  }, [contactDataCache, removeDialogShift?.sub_id, selectedAbsence, maybeWarnNeedsClassroomReview])
 
   const handleRemoveSubAssignment = useCallback(
     async (scope: 'single' | 'all_for_absence') => {

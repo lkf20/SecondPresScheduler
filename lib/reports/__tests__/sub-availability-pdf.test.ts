@@ -208,4 +208,14 @@ describe('sub availability pdf report helpers', () => {
     expect(html).not.toContain('onclick')
     expect(html).not.toContain('<script')
   })
+
+  it('blocks unsafe css injection through font color attributes', () => {
+    const html = sanitizeRichTextHtml(
+      '<div><font color="red;background:url(//evil.com)">Unsafe</font></div>'
+    )
+
+    expect(html).toContain('<div><span>Unsafe</span></div>')
+    expect(html).not.toContain('background:url')
+    expect(html).not.toContain('url(')
+  })
 })
