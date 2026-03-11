@@ -1363,29 +1363,6 @@ export default function ScheduleSidePanel({
       })
       .catch(() => setClassrooms([]))
 
-    // Always load allowed class groups from the per-classroom API (single source of truth)
-    if (!classroomId) {
-      setAllowedClassGroupIds([])
-      setAllowedClassGroupIdsLoaded(false)
-    } else {
-      setAllowedClassGroupIdsLoaded(false)
-      fetch(`/api/classrooms/${classroomId}/allowed-classes`)
-        .then(res => {
-          if (!res.ok) return []
-          return res.json()
-        })
-        .then((ids: unknown) => {
-          setAllowedClassGroupIds(
-            Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : []
-          )
-          setAllowedClassGroupIdsLoaded(true)
-        })
-        .catch(() => {
-          setAllowedClassGroupIds([])
-          setAllowedClassGroupIdsLoaded(true)
-        })
-    }
-
     // Fetch all class groups (including inactive) for updating classGroups when classGroupIds changes
     fetch('/api/class-groups?includeInactive=true')
       .then(r => r.json())
@@ -1395,6 +1372,37 @@ export default function ScheduleSidePanel({
       })
       .catch(console.error)
   }, [isOpen, classroomId, dayId, timeSlotId, selectedCellData, initializeFromCell])
+
+  // Load allowed class groups for this classroom only when panel opens or classroom changes.
+  // Separate effect so we do not reset when selectedCellData or initializeFromCell change (which would make the dropdown show all class groups).
+  useEffect(() => {
+    if (!isOpen) {
+      setAllowedClassGroupIds([])
+      setAllowedClassGroupIdsLoaded(false)
+      return
+    }
+    if (!classroomId) {
+      setAllowedClassGroupIds([])
+      setAllowedClassGroupIdsLoaded(true)
+      return
+    }
+    setAllowedClassGroupIdsLoaded(false)
+    fetch(`/api/classrooms/${classroomId}/allowed-classes`)
+      .then(res => {
+        if (!res.ok) return []
+        return res.json()
+      })
+      .then((ids: unknown) => {
+        setAllowedClassGroupIds(
+          Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : []
+        )
+        setAllowedClassGroupIdsLoaded(true)
+      })
+      .catch(() => {
+        setAllowedClassGroupIds([])
+        setAllowedClassGroupIdsLoaded(true)
+      })
+  }, [isOpen, classroomId])
 
   // Update classGroups when classGroupIds changes
   useEffect(() => {
