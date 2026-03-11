@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -51,6 +51,8 @@ export default function SubAvailabilityReportPage() {
   const [isSavingFooterDefault, setIsSavingFooterDefault] = useState(false)
   const [defaultTopHeaderHtml, setDefaultTopHeaderHtml] = useState('')
   const [defaultFooterNotesHtml, setDefaultFooterNotesHtml] = useState('')
+  const hasEditedTopHeaderRef = useRef(false)
+  const hasEditedFooterRef = useRef(false)
 
   useEffect(() => {
     let mounted = true
@@ -99,8 +101,12 @@ export default function SubAvailabilityReportPage() {
         setDefaultTopHeaderHtml(nextTopHeader)
         setDefaultFooterNotesHtml(nextFooter)
 
-        setTopHeaderHtml(nextTopHeader)
-        setFooterNotesHtml(nextFooter)
+        if (!hasEditedTopHeaderRef.current) {
+          setTopHeaderHtml(nextTopHeader)
+        }
+        if (!hasEditedFooterRef.current) {
+          setFooterNotesHtml(nextFooter)
+        }
       } catch {
         // Keep defaults optional. If this fails, report still works.
       }
@@ -295,8 +301,14 @@ export default function SubAvailabilityReportPage() {
           footerPlaceholder="Add optional instructions to appear at the bottom of the printed report."
           topHtml={topHeaderHtml}
           footerHtml={footerNotesHtml}
-          onTopHtmlChange={setTopHeaderHtml}
-          onFooterHtmlChange={setFooterNotesHtml}
+          onTopHtmlChange={html => {
+            hasEditedTopHeaderRef.current = true
+            setTopHeaderHtml(html)
+          }}
+          onFooterHtmlChange={html => {
+            hasEditedFooterRef.current = true
+            setFooterNotesHtml(html)
+          }}
           topIsSaved={isTopHeaderSaved}
           footerIsSaved={isFooterSaved}
           onSaveTopDefault={handleSaveTopHeaderDefault}

@@ -445,4 +445,39 @@ describe("Today's Schedule report page", () => {
       expect(putBodies).toContain(JSON.stringify({ footer_notes_html: '<div>Bottom Footer</div>' }))
     })
   })
+
+  it('does not overwrite user edits when defaults resolve late', async () => {
+    let resolveDefaults: ((value: any) => void) | null = null
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('/api/reports/daily-schedule/defaults') && !init?.method) {
+        return new Promise(resolve => {
+          resolveDefaults = resolve
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({}),
+      })
+    })
+
+    const { container } = render(<DailyScheduleReportPage />)
+    const editors = Array.from(container.querySelectorAll('div[contenteditable="true"]'))
+    expect(editors).toHaveLength(2)
+
+    editors[0].innerHTML = '<div>User Header</div>'
+    fireEvent.input(editors[0])
+
+    resolveDefaults?.({
+      ok: true,
+      json: async () => ({
+        top_header_html: '<div>Server Header</div>',
+        footer_notes_html: '<div>Server Footer</div>',
+      }),
+    })
+
+    await waitFor(() => {
+      expect(editors[0].innerHTML).toContain('User Header')
+    })
+  })
 })

@@ -1,6 +1,6 @@
 'use client'
 
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronLeft, ChevronRight, CornerDownRight, Settings2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -247,6 +247,8 @@ export default function DailyScheduleReportPage() {
   const [isSavingFooterDefault, setIsSavingFooterDefault] = useState(false)
   const { data, isLoading, error } = useDailySchedule(selectedDate)
   const [generatedAt, setGeneratedAt] = useState('')
+  const hasEditedTopHeaderRef = useRef(false)
+  const hasEditedFooterRef = useRef(false)
   const pdfEnabled = isValidDateString(selectedDate)
 
   useEffect(() => {
@@ -306,8 +308,12 @@ export default function DailyScheduleReportPage() {
           typeof payload?.top_header_html === 'string' ? payload.top_header_html : ''
         const nextFooter =
           typeof payload?.footer_notes_html === 'string' ? payload.footer_notes_html : ''
-        setTopHeaderHtml(nextTopHeader)
-        setFooterNotesHtml(nextFooter)
+        if (!hasEditedTopHeaderRef.current) {
+          setTopHeaderHtml(nextTopHeader)
+        }
+        if (!hasEditedFooterRef.current) {
+          setFooterNotesHtml(nextFooter)
+        }
         setDefaultTopHeaderHtml(nextTopHeader)
         setDefaultFooterNotesHtml(nextFooter)
       } catch {
@@ -686,8 +692,14 @@ export default function DailyScheduleReportPage() {
           footerPlaceholder="Add optional instructions to appear at the bottom of the printed report."
           topHtml={topHeaderHtml}
           footerHtml={footerNotesHtml}
-          onTopHtmlChange={setTopHeaderHtml}
-          onFooterHtmlChange={setFooterNotesHtml}
+          onTopHtmlChange={html => {
+            hasEditedTopHeaderRef.current = true
+            setTopHeaderHtml(html)
+          }}
+          onFooterHtmlChange={html => {
+            hasEditedFooterRef.current = true
+            setFooterNotesHtml(html)
+          }}
           topIsSaved={isTopHeaderSaved}
           footerIsSaved={isFooterSaved}
           onSaveTopDefault={handleSaveTopHeaderDefault}
