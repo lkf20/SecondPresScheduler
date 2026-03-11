@@ -31,6 +31,8 @@ export interface ClosureMetadata {
 interface ScheduleGridCellCardProps {
   data?: ScheduleCellData
   displayMode?: DisplayMode
+  /** When true, show cell notes at the bottom (from Views & Filters > Show notes) */
+  showNotes?: boolean
   allowCardClick: boolean
   isInactive: boolean
   isClosed?: boolean
@@ -49,6 +51,7 @@ interface ScheduleGridCellCardProps {
 export default function ScheduleGridCellCard({
   data,
   displayMode = 'all-scheduled-staff',
+  showNotes = false,
   allowCardClick,
   isInactive,
   isClosed = false,
@@ -93,15 +96,11 @@ export default function ScheduleGridCellCard({
     return (
       <>
         <div
-          className="rounded-lg border border-gray-200 shadow-sm min-h-[120px] flex-shrink-0 bg-slate-50 flex flex-col items-center justify-center px-2 py-3"
+          className="rounded-lg border border-gray-200 shadow-sm min-h-[120px] flex-shrink-0 h-full bg-slate-50 flex flex-col items-center justify-center px-2 py-3"
           style={{
-            width: '220px',
-            minWidth: '220px',
-            maxWidth: '220px',
-            marginTop: '6px',
-            marginBottom: '6px',
-            marginLeft: '10px',
-            marginRight: '10px',
+            width: '100%',
+            minWidth: 0,
+            maxWidth: '100%',
           }}
         >
           <span className="text-sm font-medium text-slate-500">School Closed</span>
@@ -213,21 +212,19 @@ export default function ScheduleGridCellCard({
 
   return (
     <div
-      className={`rounded-lg border border-gray-200 shadow-sm transition-all duration-200 min-h-[120px] flex-shrink-0 ${
+      className={`rounded-lg border border-gray-200 shadow-sm transition-all duration-200 min-h-[120px] flex-shrink-0 h-full flex flex-col ${
         isInactive ? SCHEDULE_INACTIVE_CARD_CLASS : 'bg-white'
       } ${allowCardClick ? 'hover:shadow-md cursor-pointer' : 'cursor-default'}`}
       style={{
-        width: '220px',
-        minWidth: '220px',
-        maxWidth: '220px',
-        marginTop: '6px',
-        marginBottom: '6px',
-        marginLeft: '10px',
-        marginRight: '10px',
+        width: '100%',
+        minWidth: 0,
+        maxWidth: '100%',
       }}
       onClick={allowCardClick ? onClick : undefined}
     >
-      <ScheduleCell data={data} displayMode={displayMode} />
+      <div className="flex-1 min-h-0 overflow-visible">
+        <ScheduleCell data={data} displayMode={displayMode} showNotes={showNotes} />
+      </div>
     </div>
   )
 }

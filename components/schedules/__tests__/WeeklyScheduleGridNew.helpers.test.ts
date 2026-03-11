@@ -15,34 +15,40 @@ describe('WeeklyScheduleGridNew helpers', () => {
     expect(hexToRgba('112233')).toBe('rgba(17, 34, 51, 0.08)')
   })
 
-  it('builds grid template for days x classrooms layout', () => {
-    const result = generateDaysXClassroomsGridTemplate(
-      2,
-      [
-        { id: 'day-1', name: 'Monday', number: 1 },
-        { id: 'day-2', name: 'Tuesday', number: 2 },
-      ],
-      [
-        { id: 'slot-1', code: 'AM' },
-        { id: 'slot-2', code: 'MID' },
-      ]
-    )
+  it('builds grid template for days x classrooms layout (per-day time slots)', () => {
+    const daysWithTimeSlots = [
+      {
+        day: { id: 'day-1', name: 'Monday', number: 1 },
+        timeSlots: [
+          { id: 'slot-1', code: 'AM' },
+          { id: 'slot-2', code: 'MID' },
+        ],
+      },
+      {
+        day: { id: 'day-2', name: 'Tuesday', number: 2 },
+        timeSlots: [
+          { id: 'slot-1', code: 'AM' },
+          { id: 'slot-2', code: 'MID' },
+        ],
+      },
+    ]
+    const result = generateDaysXClassroomsGridTemplate(2, daysWithTimeSlots)
 
-    expect(result.columns).toBe('120px repeat(2, 240px)')
+    expect(result.columns).toBe('120px repeat(2, 220px)')
     expect(result.rows).toBe(
       'auto 36px minmax(120px, auto) minmax(120px, auto) 16px 36px minmax(120px, auto) minmax(120px, auto)'
     )
   })
 
   it('builds grid template for classrooms x days layout', () => {
-    const result = generateClassroomsXDaysGridTemplate(3, 2)
+    const result = generateClassroomsXDaysGridTemplate(3, 2, 5)
 
-    expect(result.columns).toBe('110px repeat(2, 240px) repeat(2, 240px) repeat(2, 240px)')
-    expect(result.rows).toBe('auto auto repeat(auto, minmax(120px, auto))')
+    expect(result.columns).toBe('110px repeat(2, 220px) repeat(2, 220px) repeat(2, 220px)')
+    expect(result.rows).toBe('auto auto repeat(5, minmax(120px, auto))')
   })
 
   it('uses zero-row template when there are no selected days', () => {
-    const result = generateClassroomsXDaysGridTemplate(0, 2)
+    const result = generateClassroomsXDaysGridTemplate(0, 2, 0)
 
     expect(result.columns).toBe('110px ')
     expect(result.rows).toBe('auto auto repeat(0, minmax(120px, auto))')
@@ -173,6 +179,9 @@ describe('WeeklyScheduleGridNew helpers', () => {
 
     expect(result.days.map(day => day.id)).toEqual(['day-mon', 'day-sun'])
     expect(result.timeSlots.map(slot => slot.id)).toEqual(['slot-1', 'slot-2'])
+    // Per-day time slots: Monday has slot-1 only, Sunday has slot-2 only
+    expect(result.timeSlotsByDay.get('day-mon')?.map(s => s.id)).toEqual(['slot-1'])
+    expect(result.timeSlotsByDay.get('day-sun')?.map(s => s.id)).toEqual(['slot-2'])
   })
 
   it('resolves time slot presentation from metadata with fallback to slot code', () => {
