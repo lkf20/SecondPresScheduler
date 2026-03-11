@@ -37,7 +37,10 @@ jest.mock('@/components/schedules/ScheduleCell', () => {
 })
 
 jest.mock('@/components/schedules/ScheduleSidePanel', () => {
-  return function MockScheduleSidePanel({
+  const actual = jest.requireActual<typeof import('@/components/schedules/ScheduleSidePanel')>(
+    '@/components/schedules/ScheduleSidePanel'
+  )
+  function MockScheduleSidePanel({
     dayName,
     timeSlotCode,
     classroomName,
@@ -66,6 +69,11 @@ jest.mock('@/components/schedules/ScheduleSidePanel', () => {
         </button>
       </div>
     )
+  }
+  return {
+    ...actual,
+    __esModule: true,
+    default: MockScheduleSidePanel,
   }
 })
 
