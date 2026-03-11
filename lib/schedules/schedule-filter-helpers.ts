@@ -64,3 +64,96 @@ export function isStaffingNarrowing(filters: ScheduleFilterInput): boolean {
   if (!df) return false
   return !df.belowRequired || !df.belowPreferred || !df.fullyStaffed || !df.inactive
 }
+
+/** Shape used by hasActiveScheduleFilters and getClearedScheduleFilters (subset of FilterState). */
+export interface ScheduleFiltersForClear {
+  selectedDayIds: string[]
+  selectedTimeSlotIds: string[]
+  selectedClassroomIds: string[]
+  slotFilterMode?: 'all' | 'select'
+  showInactiveClassrooms?: boolean
+  showInactiveTimeSlots?: boolean
+  displayFilters: {
+    belowRequired: boolean
+    belowPreferred: boolean
+    fullyStaffed: boolean
+    inactive: boolean
+    viewNotes?: boolean
+  }
+  displayMode?: string
+}
+
+/**
+ * True when any schedule filter is narrowed from the "show all" default.
+ * Used to decide whether to show the "Clear all filters" button.
+ */
+export function hasActiveScheduleFilters(
+  filters: ScheduleFiltersForClear,
+  context: {
+    defaultDayCount: number
+    totalTimeSlots: number
+    totalClassrooms: number
+    teacherFilterId: string | null
+    /** If set, treat displayMode as a filter; e.g. 'all-scheduled-staff' for weekly. Baseline omits. */
+    defaultDisplayMode?: string
+  }
+): boolean {
+  const {
+    defaultDayCount,
+    totalTimeSlots,
+    totalClassrooms,
+    teacherFilterId,
+    defaultDisplayMode,
+  } = context
+  return (
+    filters.slotFilterMode === 'select' ||
+    !filters.displayFilters.belowRequired ||
+    !filters.displayFilters.belowPreferred ||
+    !filters.displayFilters.fullyStaffed ||
+    !filters.displayFilters.inactive ||
+    (filters.showInactiveClassrooms ?? false) ||
+    (filters.showInactiveTimeSlots ?? false) ||
+    (defaultDisplayMode != null && filters.displayMode !== defaultDisplayMode) ||
+    filters.selectedClassroomIds.length < totalClassrooms ||
+    filters.selectedTimeSlotIds.length < totalTimeSlots ||
+    filters.selectedDayIds.length < defaultDayCount ||
+    teacherFilterId != null
+  )
+}
+
+/**
+ * Return filters with all schedule filters reset to "show all" defaults.
+ * Used by the "Clear all filters" button on weekly and baseline schedule pages.
+ * Preserves extra fields on prev (e.g. layout) so return type is same as prev.
+ */
+export function getClearedScheduleFilters<T extends ScheduleFiltersForClear>(
+  prev: T,
+  context: {
+    defaultDayIds: string[]
+    allTimeSlotIds: string[]
+    allClassroomIds: string[]
+    /** If set, reset displayMode (e.g. 'all-scheduled-staff' for weekly). Baseline omits. */
+    defaultDisplayMode?: string
+  }
+): T {
+  const { defaultDayIds, allTimeSlotIds, allClassroomIds, defaultDisplayMode } = context
+  const next = {
+    ...prev,
+    selectedDayIds: defaultDayIds,
+    selectedTimeSlotIds: allTimeSlotIds,
+    selectedClassroomIds: allClassroomIds,
+    slotFilterMode: 'all' as const,
+    showInactiveClassrooms: false,
+    showInactiveTimeSlots: false,
+    displayFilters: {
+      ...prev.displayFilters,
+      belowRequired: true,
+      belowPreferred: true,
+      fullyStaffed: true,
+      inactive: true,
+      viewNotes: false,
+    },
+    ...(defaultDisplayMode != null && { displayMode: defaultDisplayMode }),
+  }
+  return next as T
+}

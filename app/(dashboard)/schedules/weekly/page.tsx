@@ -27,6 +27,10 @@ import { useSchool } from '@/lib/contexts/SchoolContext'
 import type { WeeklyScheduleData } from '@/lib/api/weekly-schedule'
 import { getSlotCoverageTotalWeekly } from '@/lib/schedules/coverage-weights'
 import {
+  getClearedScheduleFilters,
+  hasActiveScheduleFilters,
+} from '@/lib/schedules/schedule-filter-helpers'
+import {
   applyScheduleFilters,
   getSlotRequiredPreferred,
 } from '@/lib/schedules/schedule-filter-data'
@@ -654,22 +658,18 @@ export default function WeeklySchedulePage() {
                 />
                 {filters &&
                   (() => {
-                    const defaultDayCount =
-                      selectedDayIds.length > 0 ? selectedDayIds.length : availableDays.length
-                    const hasActiveFilters =
-                      filters.slotFilterMode === 'select' ||
-                      !filters.displayFilters.belowRequired ||
-                      !filters.displayFilters.belowPreferred ||
-                      !filters.displayFilters.fullyStaffed ||
-                      !filters.displayFilters.inactive ||
-                      filters.showInactiveClassrooms ||
-                      filters.showInactiveTimeSlots ||
-                      filters.displayMode !== 'all-scheduled-staff' ||
-                      filters.selectedClassroomIds.length < availableClassrooms.length ||
-                      filters.selectedTimeSlotIds.length < availableTimeSlots.length ||
-                      filters.selectedDayIds.length < defaultDayCount ||
-                      teacherFilterId != null
-                    if (!hasActiveFilters) return null
+                    const defaultDayIds =
+                      selectedDayIds.length > 0 ? selectedDayIds : availableDays.map(d => d.id)
+                    const defaultDayCount = defaultDayIds.length
+                    const active =
+                      hasActiveScheduleFilters(filters, {
+                        defaultDayCount,
+                        totalTimeSlots: availableTimeSlots.length,
+                        totalClassrooms: availableClassrooms.length,
+                        teacherFilterId,
+                        defaultDisplayMode: 'all-scheduled-staff',
+                      })
+                    if (!active) return null
                     return (
                       <Button
                         variant="ghost"
@@ -679,27 +679,12 @@ export default function WeeklySchedulePage() {
                           setTeacherFilterId(null)
                           setFilters(prev =>
                             prev
-                              ? {
-                                  ...prev,
-                                  selectedDayIds:
-                                    selectedDayIds.length > 0
-                                      ? selectedDayIds
-                                      : availableDays.map(d => d.id),
-                                  selectedTimeSlotIds: availableTimeSlots.map(ts => ts.id),
-                                  selectedClassroomIds: availableClassrooms.map(c => c.id),
-                                  displayMode: 'all-scheduled-staff',
-                                  slotFilterMode: 'all',
-                                  showInactiveClassrooms: false,
-                                  showInactiveTimeSlots: false,
-                                  displayFilters: {
-                                    ...prev.displayFilters,
-                                    belowRequired: true,
-                                    belowPreferred: true,
-                                    fullyStaffed: true,
-                                    inactive: true,
-                                    viewNotes: false,
-                                  },
-                                }
+                              ? getClearedScheduleFilters(prev, {
+                                  defaultDayIds,
+                                  allTimeSlotIds: availableTimeSlots.map(ts => ts.id),
+                                  allClassroomIds: availableClassrooms.map(c => c.id),
+                                  defaultDisplayMode: 'all-scheduled-staff',
+                                })
                               : prev
                           )
                         }}
