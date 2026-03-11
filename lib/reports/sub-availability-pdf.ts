@@ -1,5 +1,5 @@
 import { formatUSPhone } from '@/lib/utils/phone'
-import { formatGeneratedAt, sanitizeRichTextHtml } from '@/lib/reports/rich-text'
+import { sanitizeRichTextHtml } from '@/lib/reports/rich-text'
 export { formatGeneratedAt, sanitizeRichTextHtml } from '@/lib/reports/rich-text'
 
 type SubRow = {
