@@ -639,28 +639,40 @@ export type Database = {
       schedule_settings: {
         Row: {
           created_at: string | null
+          daily_schedule_footer_notes_html: string | null
+          daily_schedule_top_header_html: string | null
           default_display_name_format: string
           id: string
           school_id: string
           selected_day_ids: Json
+          sub_availability_footer_notes_html: string | null
+          sub_availability_top_header_html: string | null
           time_zone: string
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
+          daily_schedule_footer_notes_html?: string | null
+          daily_schedule_top_header_html?: string | null
           default_display_name_format?: string
           id?: string
           school_id: string
           selected_day_ids?: Json
+          sub_availability_footer_notes_html?: string | null
+          sub_availability_top_header_html?: string | null
           time_zone?: string
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
+          daily_schedule_footer_notes_html?: string | null
+          daily_schedule_top_header_html?: string | null
           default_display_name_format?: string
           id?: string
           school_id?: string
           selected_day_ids?: Json
+          sub_availability_footer_notes_html?: string | null
+          sub_availability_top_header_html?: string | null
           time_zone?: string
           updated_at?: string | null
         }

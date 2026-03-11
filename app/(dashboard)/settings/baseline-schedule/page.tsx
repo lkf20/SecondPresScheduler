@@ -21,6 +21,7 @@ import {
 } from '@/lib/utils/filter-selection'
 import { getTotalEnrollmentForCalculation } from '@/components/schedules/ScheduleSidePanel'
 import { useSchool } from '@/lib/contexts/SchoolContext'
+import { isNeedsReviewClassroomName } from '@/lib/utils/needs-review-classroom'
 
 // Calculate Monday of current week as ISO string for query key
 function formatLocalISODate(date: Date): string {
@@ -58,7 +59,13 @@ export default function BaselineSchedulePage() {
     isLoading: isLoadingSchedule,
     error: scheduleError,
   } = useWeeklySchedule(weekStartISO)
-  const scheduleData = scheduleResponse?.classrooms ?? []
+  const scheduleData = useMemo(
+    () =>
+      (scheduleResponse?.classrooms ?? []).filter(
+        classroom => !isNeedsReviewClassroomName(classroom.classroom_name)
+      ),
+    [scheduleResponse?.classrooms]
+  )
   const schoolClosures = scheduleResponse?.school_closures ?? []
   const { data: scheduleSettings, isLoading: isLoadingSettings } = useScheduleSettings()
   const { data: filterOptions, isLoading: isLoadingFilters } = useFilterOptions()

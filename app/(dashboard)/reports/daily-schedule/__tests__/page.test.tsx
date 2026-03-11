@@ -4,17 +4,19 @@ import { useDailySchedule } from '@/lib/hooks/use-daily-schedule'
 
 const replaceMock = jest.fn()
 const openMock = jest.fn()
-const toastMock = jest.fn() as jest.Mock & { error: jest.Mock }
-toastMock.error = jest.fn()
+const fetchMock = jest.fn()
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ replace: replaceMock }),
   useSearchParams: () => new URLSearchParams('date=2026-03-09'),
 }))
 
-jest.mock('sonner', () => ({
-  toast: (...args: unknown[]) => toastMock(...args),
-}))
+jest.mock('sonner', () => {
+  const toast = jest.fn() as jest.Mock & { error: jest.Mock; success: jest.Mock }
+  toast.error = jest.fn()
+  toast.success = jest.fn()
+  return { toast }
+})
 
 jest.mock('@/lib/hooks/use-daily-schedule', () => ({
   useDailySchedule: jest.fn(),
@@ -44,12 +46,25 @@ jest.mock('@/components/ui/popover', () => ({
   PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }))
 
+const { toast: toastMock } = jest.requireMock('sonner') as {
+  toast: jest.Mock & { error: jest.Mock; success: jest.Mock }
+}
+
 describe("Today's Schedule report page", () => {
   const originalOpen = window.open
+  const originalFetch = global.fetch
 
   beforeEach(() => {
     jest.clearAllMocks()
     window.open = openMock as any
+    global.fetch = fetchMock as any
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        top_header_html: '',
+        footer_notes_html: '',
+      }),
+    })
     ;(useDailySchedule as jest.Mock).mockReturnValue({
       data: {
         date: '2026-03-09',
@@ -94,6 +109,7 @@ describe("Today's Schedule report page", () => {
 
   afterEach(() => {
     window.open = originalOpen
+    global.fetch = originalFetch
   })
 
   it('opens print pdf with expected default query params', async () => {
@@ -104,7 +120,7 @@ describe("Today's Schedule report page", () => {
 
     await waitFor(() => {
       expect(openMock).toHaveBeenCalledWith(
-        '/api/reports/daily-schedule/pdf?date=2026-03-09&showAbsencesAndSubs=true&showEnrollment=false&showPreferredRatios=false&showRequiredRatios=false&colorFriendly=false&layout=one&teacherNameFormat=default&paperSize=letter',
+        '/api/reports/daily-schedule/pdf?date=2026-03-09&showAbsencesAndSubs=true&showEnrollment=false&showNotes=false&showPreferredRatios=false&showRequiredRatios=false&colorFriendly=false&layout=one&teacherNameFormat=default&paperSize=letter',
         '_blank',
         'noopener,noreferrer'
       )
@@ -289,6 +305,7 @@ describe("Today's Schedule report page", () => {
     expect(table).toBeInTheDocument()
 
     // In Black & White mode (default), schedule cells should not use non-gray accent classes.
+    const reportContainer = container.querySelector('.daily-report-print-area') || container
     const forbiddenColorSelectors = [
       '.text-blue-800',
       '.text-purple-700',
@@ -298,7 +315,7 @@ describe("Today's Schedule report page", () => {
       '.bg-amber-100',
     ]
     forbiddenColorSelectors.forEach(selector => {
-      expect(container.querySelector(selector)).toBeNull()
+      expect(reportContainer.querySelector(selector)).toBeNull()
     })
 
     // No-sub row should use grayscale styling in Black & White mode.
@@ -371,5 +388,169 @@ describe("Today's Schedule report page", () => {
     render(<DailyScheduleReportPage />)
     expect(await screen.findByRole('table')).toBeInTheDocument()
     expect(screen.queryByText('Infants (9)')).not.toBeInTheDocument()
+  })
+
+  it('renders notes only when Show notes is enabled and includes showNotes in PDF url', async () => {
+    ;(useDailySchedule as jest.Mock).mockReturnValue({
+      data: {
+        date: '2026-03-09',
+        day_of_week_id: 'day-mon',
+        day_name: 'Monday',
+        data: [
+          {
+            classroom_id: 'classroom-1',
+            classroom_name: 'Infant Room',
+            classroom_color: '#1d4ed8',
+            classroom_is_active: true,
+            days: [
+              {
+                day_of_week_id: 'day-mon',
+                day_name: 'Monday',
+                day_number: 1,
+                time_slots: [
+                  {
+                    time_slot_id: 'slot-am',
+                    time_slot_code: 'AM',
+                    time_slot_name: 'School Morning',
+                    time_slot_display_order: 1,
+                    time_slot_start_time: '09:00:00',
+                    time_slot_end_time: '12:00:00',
+                    time_slot_is_active: true,
+                    assignments: [],
+                    absences: [],
+                    schedule_cell: {
+                      id: 'cell-1',
+                      is_active: true,
+                      enrollment_for_staffing: null,
+                      notes: 'Bring nap mats from storage',
+                      required_staff_override: null,
+                      preferred_staff_override: null,
+                      class_groups: [],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        school_closures: [],
+        no_schedule: false,
+      },
+      isLoading: false,
+      error: null,
+    })
+    openMock.mockReturnValue({} as Window)
+
+    render(<DailyScheduleReportPage />)
+    expect(await screen.findByRole('table')).toBeInTheDocument()
+    expect(screen.queryByText('Bring nap mats from storage')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Show notes' }))
+    expect(screen.getByText('Bring nap mats from storage')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Print PDF' }))
+    await waitFor(() => {
+      expect(openMock).toHaveBeenCalledWith(
+        expect.stringContaining('showNotes=true'),
+        '_blank',
+        'noopener,noreferrer'
+      )
+    })
+  })
+
+  it('includes rich text header/footer params in PDF url when editors have content', async () => {
+    openMock.mockReturnValue({} as Window)
+    const { container } = render(<DailyScheduleReportPage />)
+    const editors = Array.from(container.querySelectorAll('div[contenteditable="true"]'))
+    expect(editors).toHaveLength(2)
+    editors[0].innerHTML = '<div>Top Header</div>'
+    fireEvent.input(editors[0])
+    editors[1].innerHTML = '<div>Bottom Footer</div>'
+    fireEvent.input(editors[1])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Print PDF' }))
+
+    await waitFor(() => {
+      const openedUrl = openMock.mock.calls[0]?.[0] as string
+      expect(openedUrl).toContain('topHeaderHtml=')
+      expect(openedUrl).toContain('footerNotesHtml=')
+    })
+  })
+
+  it('saves default top and footer content independently', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ top_header_html: '', footer_notes_html: '' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ top_header_html: '<div>Top Header (saved)</div>' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ footer_notes_html: '<div>Bottom Footer (saved)</div>' }),
+      })
+
+    const { container } = render(<DailyScheduleReportPage />)
+    const editors = Array.from(container.querySelectorAll('div[contenteditable="true"]'))
+    expect(editors).toHaveLength(2)
+    editors[0].innerHTML = '<div>Top Header</div>'
+    fireEvent.input(editors[0])
+    editors[1].innerHTML = '<div>Bottom Footer</div>'
+    fireEvent.input(editors[1])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save as default header' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save as default footer' }))
+
+    await waitFor(() => {
+      const putCalls = fetchMock.mock.calls.filter(
+        call => call[0] === '/api/reports/daily-schedule/defaults' && call[1]?.method === 'PUT'
+      )
+      expect(putCalls.length).toBeGreaterThanOrEqual(2)
+      const putBodies = putCalls.map(call => String(call[1]?.body || ''))
+      expect(putBodies).toContain(JSON.stringify({ top_header_html: '<div>Top Header</div>' }))
+      expect(putBodies).toContain(JSON.stringify({ footer_notes_html: '<div>Bottom Footer</div>' }))
+    })
+
+    await waitFor(() => {
+      expect(editors[0].innerHTML).toContain('Top Header (saved)')
+      expect(editors[1].innerHTML).toContain('Bottom Footer (saved)')
+    })
+  })
+
+  it('does not overwrite user edits when defaults resolve late', async () => {
+    let resolveDefaults: ((value: any) => void) | null = null
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('/api/reports/daily-schedule/defaults') && !init?.method) {
+        return new Promise(resolve => {
+          resolveDefaults = resolve
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({}),
+      })
+    })
+
+    const { container } = render(<DailyScheduleReportPage />)
+    const editors = Array.from(container.querySelectorAll('div[contenteditable="true"]'))
+    expect(editors).toHaveLength(2)
+
+    editors[0].innerHTML = '<div>User Header</div>'
+    fireEvent.input(editors[0])
+
+    resolveDefaults?.({
+      ok: true,
+      json: async () => ({
+        top_header_html: '<div>Server Header</div>',
+        footer_notes_html: '<div>Server Footer</div>',
+      }),
+    })
+
+    await waitFor(() => {
+      expect(editors[0].innerHTML).toContain('User Header')
+    })
   })
 })
