@@ -4,6 +4,11 @@ import { GET } from '@/app/api/sub-finder/coverage-request/[absence_id]/route'
 import { getTimeOffRequestById } from '@/lib/api/time-off'
 import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
 import { createClient } from '@/lib/supabase/server'
+import { getUserSchoolId } from '@/lib/utils/auth'
+
+jest.mock('@/lib/utils/auth', () => ({
+  getUserSchoolId: jest.fn(),
+}))
 
 jest.mock('@/lib/supabase/server', () => ({
   createClient: jest.fn(),
@@ -15,6 +20,10 @@ jest.mock('@/lib/api/time-off', () => ({
 
 jest.mock('@/lib/api/time-off-shifts', () => ({
   getTimeOffShifts: jest.fn(),
+}))
+
+jest.mock('@/lib/api/school-calendar', () => ({
+  getSchoolClosuresForDateRange: jest.fn().mockResolvedValue([]),
 }))
 
 describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => {
@@ -47,6 +56,7 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
   })
 
   it('returns existing coverage request mapping when already linked', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'absence-1',
       teacher_id: 'teacher-1',
@@ -94,6 +104,7 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
   })
 
   it('creates coverage request when missing and returns generated shift map', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'absence-1',
       teacher_id: 'teacher-1',
@@ -203,6 +214,7 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
   })
 
   it('returns 500 when creating a new coverage request fails', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'absence-1',
       teacher_id: 'teacher-1',
@@ -253,6 +265,7 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
   })
 
   it('returns 500 when no classroom is available for generated coverage shifts', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'absence-1',
       teacher_id: 'teacher-1',
