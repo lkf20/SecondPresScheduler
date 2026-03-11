@@ -1996,6 +1996,7 @@ export default function SubFinderPage() {
                     className="w-full"
                     disabled={
                       !manualConflictCheckReady ||
+                      manualConflictSummary.totalScheduled === 0 ||
                       (manualSelectedShifts.length === 0 &&
                         manualConflictSummary.conflictCount !==
                           manualConflictSummary.totalScheduled)
