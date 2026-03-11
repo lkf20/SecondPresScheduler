@@ -45,7 +45,7 @@ describe('coverage-weights', () => {
   })
 
   describe('getSlotCoverageTotalBaseline', () => {
-    it('counts only non-sub, non-flex assignments (permanent + floater)', () => {
+    it('counts permanent, flex, and floater; excludes only substitutes', () => {
       const slot = {
         assignments: [
           { teacher_id: '1', is_floater: false },
@@ -54,7 +54,7 @@ describe('coverage-weights', () => {
           { teacher_id: '4', is_flexible: true },
         ],
       }
-      expect(getSlotCoverageTotalBaseline(slot)).toBe(1 + 0.5)
+      expect(getSlotCoverageTotalBaseline(slot)).toBe(1 + 0.5 + 1)
     })
     it('ignores absences (baseline has no time-based events)', () => {
       const slot = {

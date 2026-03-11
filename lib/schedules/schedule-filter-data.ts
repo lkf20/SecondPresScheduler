@@ -48,20 +48,25 @@ export interface ScheduleFiltersInput extends ScheduleFilterInput {
 
 type CoverageContext = 'weekly' | 'baseline'
 
+/**
+ * When coverageIssuesOnly is true (e.g. displayMode === 'coverage-issues'), only slots below
+ * required or below preferred are shown; fully-staffed slots are hidden regardless of df.fullyStaffed.
+ */
 function slotPassesStaffingFilter(
   slot: WeeklyScheduleDataByClassroom['days'][0]['time_slots'][0],
   df: NonNullable<ScheduleFilterInput['displayFilters']>,
-  coverageContext: CoverageContext
+  coverageContext: CoverageContext,
+  coverageIssuesOnly?: boolean
 ): boolean {
   const scheduleCell = slot.schedule_cell
-  if (!scheduleCell) return false
+  if (!scheduleCell) return df.inactive
 
   const classGroups = scheduleCell.class_groups ?? []
   const totalEnrollment = getTotalEnrollmentForCalculation(
     classGroups,
     scheduleCell.enrollment_for_staffing ?? null
   )
-  if (!classGroups.length || totalEnrollment == null) return false
+  if (!classGroups.length || totalEnrollment == null) return df.inactive
 
   const classGroupForRatio = classGroups.reduce((lowest, current) => {
     const currentMinAge = current.min_age ?? Infinity
@@ -98,7 +103,7 @@ function slotPassesStaffingFilter(
 
   if (belowRequired) return df.belowRequired
   if (belowPreferred) return df.belowPreferred
-  if (fullyStaffed) return df.fullyStaffed
+  if (fullyStaffed) return coverageIssuesOnly ? false : df.fullyStaffed
   return false
 }
 
@@ -251,7 +256,7 @@ export function applyScheduleFilters(
           if (applyDisplayMode && filters.displayMode === 'coverage-issues') {
             const scheduleCell = slot.schedule_cell
             if (!scheduleCell || !scheduleCell.is_active) return false
-            return slotPassesStaffingFilter(slot, df, 'weekly')
+            return slotPassesStaffingFilter(slot, df, 'weekly', true)
           }
 
           if (showAllSlots) return true

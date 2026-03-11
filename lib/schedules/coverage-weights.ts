@@ -43,12 +43,12 @@ export function getSlotCoverageTotalWeekly(slot: SlotLike): number {
 /**
  * Total coverage for a slot in Baseline context.
  * Baseline does not consider time-based events: only Permanent (1), Flex (1), Floater (0.5).
- * Subs, temp coverage, and absences are excluded from the calculation.
+ * Subs and absences are excluded; temp coverage (staffing_events) is excluded when present in data.
  */
 export function getSlotCoverageTotalBaseline(slot: SlotLike): number {
   const assignments = slot.assignments ?? []
   const baselineAssignments = assignments.filter(
-    a => a.teacher_id && !a.is_substitute && !a.is_flexible
+    a => a.teacher_id && !a.is_substitute
   )
   return baselineAssignments.reduce(
     (sum, a) => sum + getAssignmentCoverageWeight(a),

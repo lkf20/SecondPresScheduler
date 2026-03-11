@@ -64,7 +64,6 @@ export default function SubFinderPage() {
   const requestedMode = searchParams.get('mode')
   const requestedStartDate = searchParams.get('start_date')
   const requestedEndDate = searchParams.get('end_date')
-  const requestedPreview = searchParams.get('preview') === 'true'
   const [mode, setMode] = useState<Mode>('existing')
   const [includePastShifts, setIncludePastShifts] = useState(false)
   const [shiftFilters, setShiftFilters] = useState<string[]>(['all'])
@@ -1296,7 +1295,6 @@ export default function SubFinderPage() {
     requestedTeacherId,
     requestedStartDate,
     requestedEndDate,
-    requestedPreview,
     searchParams,
     router,
     teachers,
