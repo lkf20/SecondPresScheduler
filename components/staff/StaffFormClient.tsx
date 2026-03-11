@@ -140,24 +140,18 @@ export default function StaffFormClient({
 
   const getReturnUrl = () => {
     const params = new URLSearchParams()
-    if (returnPage !== '1') {
-      params.set('page', returnPage)
-    }
-    if (returnSearch) {
-      params.set('search', returnSearch)
-    }
+    searchParams.forEach((value, key) => {
+      if (key !== 'tab') params.set(key, value)
+    })
     const queryString = params.toString()
     return `/staff${queryString ? `?${queryString}` : ''}`
   }
 
   const getStaffDetailUrl = (staffId: string) => {
     const params = new URLSearchParams()
-    if (returnPage !== '1') {
-      params.set('returnPage', returnPage)
-    }
-    if (returnSearch) {
-      params.set('returnSearch', returnSearch)
-    }
+    searchParams.forEach((value, key) => {
+      params.set(key, value)
+    })
     const queryString = params.toString()
     return `/staff/${staffId}${queryString ? `?${queryString}` : ''}`
   }
@@ -583,8 +577,7 @@ export default function StaffFormClient({
             setPendingTabAfterSave(null)
           }
         }}
-        title="Unsaved Changes"
-        description={`You have unsaved changes in ${
+        tabName={
           pendingTabSwitch?.sourceTab === 'overview'
             ? 'Overview'
             : pendingTabSwitch?.sourceTab === 'availability'
@@ -592,10 +585,10 @@ export default function StaffFormClient({
               : pendingTabSwitch?.sourceTab === 'preferences'
                 ? 'Preferences & Qualifications'
                 : 'Notes'
-        }. What would you like to do?`}
-        keepEditingLabel="Stay here"
-        discardLabel="Discard and continue"
-        saveLabel="Save and continue"
+        }
+        keepEditingLabel="Cancel"
+        discardLabel="Discard"
+        saveLabel="Save"
         onKeepEditing={handleTabSwitchKeepEditing}
         onDiscardAndLeave={handleTabSwitchDiscard}
         onSaveAndContinue={handleTabSwitchSaveAndContinue}
@@ -605,6 +598,9 @@ export default function StaffFormClient({
         onOpenChange={setShowUnsavedDialog}
         onKeepEditing={handleKeepEditing}
         onDiscardAndLeave={handleDiscardAndLeave}
+        keepEditingLabel="Cancel"
+        discardLabel="Discard"
+        description="You have unsaved changes. What would you like to do?"
       />
     </div>
   )

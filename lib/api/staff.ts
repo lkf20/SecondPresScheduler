@@ -7,10 +7,13 @@ type Staff = Database['public']['Tables']['staff']['Row']
 type StaffRoleType = Database['public']['Tables']['staff_role_types']['Row']
 type StaffRoleAssignment = Database['public']['Tables']['staff_role_type_assignments']['Row']
 
+export type PreferredClassGroup = { id: string; name: string }
+
 export type StaffWithRole = Staff & {
   staff_role_type_assignments?: Array<
     StaffRoleAssignment & { staff_role_types?: StaffRoleType | null }
   >
+  preferred_class_groups?: PreferredClassGroup[]
 }
 
 export async function getStaff() {
@@ -29,7 +32,30 @@ export async function getStaff() {
     .order('last_name', { ascending: true })
 
   if (error) throw error
-  return data as StaffWithRole[]
+  const staffList = (data ?? []) as StaffWithRole[]
+
+  const subIds = staffList.filter(s => s.is_sub === true).map(s => s.id)
+  if (subIds.length === 0) return staffList
+
+  const { data: prefs } = await supabase
+    .from('sub_class_preferences')
+    .select('sub_id, class_group:class_groups(id, name)')
+    .in('sub_id', subIds)
+    .eq('can_teach', true)
+
+  const prefsBySub = new Map<string, PreferredClassGroup[]>()
+  for (const row of prefs ?? []) {
+    const r = row as unknown as { sub_id: string; class_group?: { id: string; name: string } | null }
+    const cg = r.class_group
+    if (!cg?.id) continue
+    const list = prefsBySub.get(r.sub_id) ?? []
+    list.push({ id: cg.id, name: cg.name })
+    prefsBySub.set(r.sub_id, list)
+  }
+  return staffList.map(s => ({
+    ...s,
+    preferred_class_groups: prefsBySub.get(s.id) ?? [],
+  }))
 }
 
 export async function getStaffById(id: string) {

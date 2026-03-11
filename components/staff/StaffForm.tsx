@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Button } from '@/components/ui/button'
 import FormField from '@/components/shared/FormField'
 import { Database } from '@/types/database'
@@ -342,7 +343,13 @@ export default function StaffForm({
 
         <div className="md:col-span-2 space-y-2">
           <FormField label="Display Name" error={errors.display_name?.message} required>
-            <Input {...register('display_name')} disabled={useDefaultDisplayName} />
+            <div style={{ backgroundColor: '#f1f5f9' }} className="rounded-md border border-slate-200">
+              <Input
+                {...register('display_name')}
+                disabled={useDefaultDisplayName}
+                className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+              />
+            </div>
           </FormField>
           <div className="flex items-center gap-2">
             <Checkbox
@@ -393,44 +400,80 @@ export default function StaffForm({
             <div className="text-sm text-muted-foreground">Loading...</div>
           ) : (
             <div className="flex flex-wrap items-center gap-6">
-              {roleTypes.map(roleType => {
-                const checked = roleTypeIds.includes(roleType.id)
+              {(() => {
+                const permanentType = roleTypes.find(r => r.code === 'PERMANENT')
+                const flexibleType = roleTypes.find(r => r.code === 'FLEXIBLE')
+                const permanentOrFlexibleValue =
+                  roleTypeIds.includes(permanentType?.id ?? '')
+                    ? 'permanent'
+                    : roleTypeIds.includes(flexibleType?.id ?? '')
+                      ? 'flexible'
+                      : ''
                 return (
-                  <div key={roleType.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`role-${roleType.id}`}
-                      checked={checked}
-                      onCheckedChange={value => {
-                        const next = value
-                          ? [...roleTypeIds, roleType.id]
-                          : roleTypeIds.filter(id => id !== roleType.id)
-                        setValue('role_type_ids', normalizeRoleTypeIds(next), {
+                  <>
+                    <RadioGroup
+                      value={permanentOrFlexibleValue}
+                      onValueChange={value => {
+                        const nextIds =
+                          value === 'permanent' && permanentType
+                            ? [permanentType.id]
+                            : value === 'flexible' && flexibleType
+                              ? [flexibleType.id]
+                              : []
+                        setValue('role_type_ids', normalizeRoleTypeIds(nextIds), {
                           shouldValidate: true,
                           shouldDirty: true,
                         })
                       }}
-                    />
-                    <Label htmlFor={`role-${roleType.id}`} className="font-normal cursor-pointer">
-                      {roleType.label}
-                    </Label>
-                  </div>
+                      className="flex flex-wrap items-center gap-6"
+                    >
+                      {permanentType && (
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem
+                            value="permanent"
+                            id={`role-${permanentType.id}`}
+                          />
+                          <Label
+                            htmlFor={`role-${permanentType.id}`}
+                            className="font-normal cursor-pointer"
+                          >
+                            {permanentType.label}
+                          </Label>
+                        </div>
+                      )}
+                      {flexibleType && (
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem
+                            value="flexible"
+                            id={`role-${flexibleType.id}`}
+                          />
+                          <Label
+                            htmlFor={`role-${flexibleType.id}`}
+                            className="font-normal cursor-pointer"
+                          >
+                            {flexibleType.label}
+                          </Label>
+                        </div>
+                      )}
+                    </RadioGroup>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="is_sub"
+                        checked={isSub}
+                        onCheckedChange={checked =>
+                          setValue('is_sub', checked === true, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          })
+                        }
+                      />
+                      <Label htmlFor="is_sub" className="font-normal cursor-pointer">
+                        Substitute
+                      </Label>
+                    </div>
+                  </>
                 )
-              })}
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="is_sub"
-                  checked={isSub}
-                  onCheckedChange={checked =>
-                    setValue('is_sub', checked === true, {
-                      shouldDirty: true,
-                      shouldValidate: true,
-                    })
-                  }
-                />
-                <Label htmlFor="is_sub" className="font-normal cursor-pointer">
-                  Substitute
-                </Label>
-              </div>
+              })()}
             </div>
           )}
         </FormField>

@@ -16,6 +16,8 @@ interface StaffUnsavedChangesDialogProps {
   onKeepEditing: () => void
   onDiscardAndLeave: () => void
   onSaveAndContinue?: () => void
+  /** Tab/section name for the message, e.g. "Overview", "Availability", "Preferences & Qualifications", "Notes" */
+  tabName?: string
   title?: string
   description?: string
   keepEditingLabel?: string
@@ -29,27 +31,34 @@ export default function StaffUnsavedChangesDialog({
   onKeepEditing,
   onDiscardAndLeave,
   onSaveAndContinue,
+  tabName = 'this section',
   title = 'Unsaved Changes',
-  description = 'You have unsaved changes. Leave this page and discard them?',
-  keepEditingLabel = 'Keep Editing',
-  discardLabel = 'Discard & Leave',
-  saveLabel = 'Save & Continue',
+  description,
+  keepEditingLabel = 'Cancel',
+  discardLabel = 'Discard',
+  saveLabel = 'Save',
 }: StaffUnsavedChangesDialogProps) {
+  const resolvedDescription =
+    description ??
+    `You have unsaved changes in ${tabName}. What would you like to do?`
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          <DialogDescription>{resolvedDescription}</DialogDescription>
         </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={onKeepEditing}>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={onKeepEditing} className="border-slate-300">
             {keepEditingLabel}
           </Button>
-          {onSaveAndContinue && <Button onClick={onSaveAndContinue}>{saveLabel}</Button>}
-          <Button variant="destructive" onClick={onDiscardAndLeave}>
+          <Button variant="outline" onClick={onDiscardAndLeave} className="border-slate-300">
             {discardLabel}
           </Button>
+          {onSaveAndContinue && (
+            <Button onClick={onSaveAndContinue}>{saveLabel}</Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
