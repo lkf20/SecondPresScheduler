@@ -47,6 +47,39 @@ export const sanitizeRichTextHtml = (raw: string, maxLength = MAX_FOOTER_NOTES_H
     '7': '32px',
   }
 
+  const isSafeCssColor = (value: string) => {
+    const trimmedValue = value.trim()
+    if (!trimmedValue) return false
+    if (/[;<>`]/.test(trimmedValue)) return false
+    if (/url\(|expression\(|javascript:/i.test(trimmedValue)) return false
+
+    return (
+      /^#[0-9a-f]{3,8}$/i.test(trimmedValue) ||
+      /^rgba?\(\s*(?:25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(?:25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/i.test(
+        trimmedValue
+      ) ||
+      /^hsla?\(\s*(?:360|3[0-5]\d|[12]?\d?\d)(?:deg)?\s*,\s*(?:100|[1-9]?\d)%\s*,\s*(?:100|[1-9]?\d)%(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/i.test(
+        trimmedValue
+      ) ||
+      /^[a-z][a-z0-9-]{0,31}$/i.test(trimmedValue)
+    )
+  }
+
+  const sanitizeStyleDeclaration = (propRaw: string, valueRaw: string) => {
+    const prop = propRaw.trim().toLowerCase()
+    if (!allowedStyleProps.has(prop)) return null
+
+    const value = valueRaw.trim()
+    if (!value || /url\(|expression\(|javascript:/i.test(value)) return null
+    if (/[;<>`]/.test(value)) return null
+
+    if ((prop === 'color' || prop === 'background-color') && !isSafeCssColor(value)) {
+      return null
+    }
+
+    return `${prop}: ${value}`
+  }
+
   return withoutScripts.replace(/<\/?([a-z0-9-]+)([^>]*)>/gi, (match, rawTag, rawAttrs) => {
     const tag = String(rawTag).toLowerCase()
     if (!allowedTags.has(tag)) return ''
@@ -62,8 +95,11 @@ export const sanitizeRichTextHtml = (raw: string, maxLength = MAX_FOOTER_NOTES_H
         styleSegments.push(`font-size: ${fontSizeMap[sizeMatch[1]]}`)
       }
       const colorMatch = String(rawAttrs || '').match(/\scolor\s*=\s*["']?([^"'\s>]+)["']?/i)
-      if (colorMatch?.[1] && !/javascript:/i.test(colorMatch[1])) {
-        styleSegments.push(`color: ${colorMatch[1]}`)
+      if (colorMatch?.[1]) {
+        const safeColorStyle = sanitizeStyleDeclaration('color', colorMatch[1])
+        if (safeColorStyle) {
+          styleSegments.push(safeColorStyle)
+        }
       }
     }
 
@@ -75,11 +111,7 @@ export const sanitizeRichTextHtml = (raw: string, maxLength = MAX_FOOTER_NOTES_H
       .filter(Boolean)
       .map(part => {
         const [propRaw, ...valueParts] = part.split(':')
-        const prop = (propRaw || '').trim().toLowerCase()
-        if (!allowedStyleProps.has(prop)) return null
-        const value = valueParts.join(':').trim()
-        if (!value || /url\(|expression\(|javascript:/i.test(value)) return null
-        return `${prop}: ${value}`
+        return sanitizeStyleDeclaration(propRaw || '', valueParts.join(':'))
       })
       .filter(Boolean) as string[]
 
