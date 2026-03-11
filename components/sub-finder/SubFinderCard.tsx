@@ -81,6 +81,8 @@ interface SubFinderCardProps {
   condensedStatus?: boolean // Experimental: single-line status summary
   showPrimaryShiftChips?: boolean // Experimental: hide inline chips, show only "View all shifts"
   useStatusBadgeOnly?: boolean // Show compact status badge by name instead of right status stack
+  /** When true, hide Contact & Assign (and Update) buttons. Use in Sub Finder preview mode. */
+  previewMode?: boolean
 }
 
 export default function SubFinderCard({
@@ -116,6 +118,7 @@ export default function SubFinderCard({
   condensedStatus = false,
   showPrimaryShiftChips = true,
   useStatusBadgeOnly = false,
+  previewMode = false,
 }: SubFinderCardProps) {
   const [isAllShiftsExpanded, setIsAllShiftsExpanded] = useState(false)
   const [noteDraft, setNoteDraft] = useState(notes || '')
@@ -240,7 +243,12 @@ export default function SubFinderCard({
               statusBadge={showCompactStatusBadge ? statusBadge : null}
               statusLine={
                 contactStatusLine ? (
-                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-sm font-medium text-slate-600">
+                  <span
+                    className={cn(
+                      'inline-flex items-center rounded-full border border-slate-200 bg-slate-100 font-medium text-slate-600',
+                      isCompactLayout ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-sm'
+                    )}
+                  >
                     {contactStatusLine}
                   </span>
                 ) : undefined
@@ -252,6 +260,7 @@ export default function SubFinderCard({
               showCoverageBadge={true}
               hideContactInHeader
               compactSpacing={isCompactLayout}
+              compactBadge={isCompactLayout}
             />
           </div>
         </div>
@@ -331,7 +340,7 @@ export default function SubFinderCard({
               recommendedShifts={recommendedShifts ?? canCover}
               softAvailableStyle={softChipColors}
             />
-            {onContact && (
+            {!previewMode && onContact && (
               <div className="mt-6 border-t border-slate-200 pt-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
                   {phone && (
@@ -540,7 +549,7 @@ export default function SubFinderCard({
           )}
 
         {/* Bottom section: divider above, then phone/email bottom left, Update / Contact & Assign right */}
-        {!hasRecommendedSubset && onContact && (
+        {!previewMode && !hasRecommendedSubset && onContact && (
           <div
             className={cn('mt-6 border-t border-slate-200 pt-4 pb-4', isCompactLayout && '-mt-2')}
           >

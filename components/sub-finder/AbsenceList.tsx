@@ -170,7 +170,10 @@ export default function AbsenceList({
           <AlertCircle className="h-8 w-8 text-slate-400" />
         </div>
         <p className="mb-2 font-medium">No absences found</p>
-        <p className="text-sm">All absences are fully covered or no time-off requests exist</p>
+        <p className="text-sm">
+          All absences are fully covered or no time-off requests exist. Select a date above to
+          record a new absence or to preview a list of available subs.
+        </p>
       </div>
     )
   }

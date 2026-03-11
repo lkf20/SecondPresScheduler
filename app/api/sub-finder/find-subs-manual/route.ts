@@ -5,6 +5,7 @@ import { getSubAvailability, getSubAvailabilityExceptions } from '@/lib/api/sub-
 import { getTeacherScheduledShifts, getTimeOffShifts } from '@/lib/api/time-off-shifts'
 import { getTimeOffRequests } from '@/lib/api/time-off'
 import { createErrorResponse } from '@/lib/utils/errors'
+import { toDateStringISO } from '@/lib/utils/date'
 import { findTopCombinations } from '@/lib/utils/sub-combination'
 import { buildShiftChips } from '@/lib/server/coverage/shift-chips'
 
@@ -115,11 +116,11 @@ export async function POST(request: NextRequest) {
     const assignmentMap = new Map<string, { sub_name: string; is_partial: boolean }>()
 
     shifts.forEach(shift => {
-      const key = `${shift.date}|${shift.time_slot_id}`
+      const key = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
       coverageMap.set(key, 'uncovered')
     })
     ;(subAssignments || []).forEach((assignment: any) => {
-      const key = `${assignment.date}|${assignment.time_slot_id}`
+      const key = `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`
       if (!coverageMap.has(key)) return
       const sub = assignment.sub as any
       const sub_name =
@@ -137,7 +138,7 @@ export async function POST(request: NextRequest) {
     })
 
     const shiftDetails: ShiftDetail[] = shifts.map(shift => {
-      const key = `${shift.date}|${shift.time_slot_id}`
+      const key = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
       const status = coverageMap.get(key) || 'uncovered'
       const assignment = assignmentMap.get(key)
       const scheduleKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
@@ -200,14 +201,14 @@ export async function POST(request: NextRequest) {
         })
 
         availabilityExceptions.forEach((exception: any) => {
-          const key = `${exception.date}|${exception.time_slot_id}`
+          const key = `${toDateStringISO(exception.date)}|${exception.time_slot_id}`
           availabilityMap.set(key, exception.available)
         })
 
         const subScheduledShifts = await getTeacherScheduledShifts(sub.id, start_date, end_date)
         const scheduleConflicts = new Set<string>()
         subScheduledShifts.forEach(scheduledShift => {
-          const key = `${scheduledShift.date}|${scheduledShift.time_slot_id}`
+          const key = `${toDateStringISO(scheduledShift.date)}|${scheduledShift.time_slot_id}`
           scheduleConflicts.add(key)
         })
 
@@ -217,7 +218,7 @@ export async function POST(request: NextRequest) {
           try {
             const reqShifts = await getTimeOffShifts(req.id)
             reqShifts.forEach((shift: any) => {
-              const key = `${shift.date}|${shift.time_slot_id}`
+              const key = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
               timeOffConflicts.add(key)
             })
           } catch (error) {
@@ -236,7 +237,7 @@ export async function POST(request: NextRequest) {
 
         shifts.forEach(shift => {
           const availabilityKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
-          const conflictKey = `${shift.date}|${shift.time_slot_id}`
+          const conflictKey = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
           const isAvailable = availabilityMap.has(availabilityKey)
             ? availabilityMap.get(availabilityKey)!
             : false

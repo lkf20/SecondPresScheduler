@@ -5,16 +5,168 @@ import { getTeacherScheduledShifts } from '@/lib/api/time-off-shifts'
 import { getTimeOffRequests } from '@/lib/api/time-off'
 import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
 import { createErrorResponse } from '@/lib/utils/errors'
+import { toDateStringISO } from '@/lib/utils/date'
+
+/** Shift input when not using coverage_request_id (e.g. Assign Sub panel) */
+interface ShiftInput {
+  date: string
+  time_slot_id: string
+  day_of_week_id: string
+  classroom_id?: string | null
+}
 
 /**
  * POST /api/sub-finder/check-conflicts
- * Check conflicts for a sub and specific shifts
+ * Check conflicts for a sub and specific shifts.
+ * Either: (coverage_request_id + shift_ids) OR (teacher_id + shifts array).
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { sub_id, coverage_request_id, shift_ids } = body
+    const { sub_id, coverage_request_id, shift_ids, teacher_id, shifts: shiftsInput } = body
 
+    const useShiftsArray =
+      Array.isArray(shiftsInput) &&
+      shiftsInput.length > 0 &&
+      teacher_id &&
+      sub_id &&
+      !coverage_request_id
+
+    if (useShiftsArray) {
+      // Path for Assign Sub: no coverage request, shifts array provided
+      const shifts = shiftsInput as ShiftInput[]
+      const dates = shifts.map((s: ShiftInput) => s.date)
+      const startDate = dates.reduce((a, b) => (a < b ? a : b))
+      const endDate = dates.reduce((a, b) => (a > b ? a : b))
+
+      const supabase = await createClient()
+
+      const availability = await getSubAvailability(sub_id)
+      const availabilityExceptions = await getSubAvailabilityExceptions(sub_id, {
+        start_date: startDate,
+        end_date: endDate,
+      })
+
+      const dayBasedAvailabilityMap = new Map<string, boolean>()
+      const dateBasedAvailabilityMap = new Map<string, boolean>()
+      availability.forEach((avail: any) => {
+        if (avail.available) {
+          dayBasedAvailabilityMap.set(`${avail.day_of_week_id}|${avail.time_slot_id}`, true)
+        }
+      })
+      availabilityExceptions.forEach((exception: any) => {
+        dateBasedAvailabilityMap.set(
+          `${toDateStringISO(exception.date)}|${exception.time_slot_id}`,
+          exception.available
+        )
+      })
+
+      const subScheduledShifts = await getTeacherScheduledShifts(sub_id, startDate, endDate)
+      const scheduleConflicts = new Set(
+        subScheduledShifts.map(
+          (s: { date: string; time_slot_id: string }) =>
+            `${toDateStringISO(s.date)}|${s.time_slot_id}`
+        )
+      )
+
+      const timeOffRequests = await getTimeOffRequests({
+        teacher_id: sub_id,
+        start_date: startDate,
+        end_date: endDate,
+      })
+      const timeOffConflicts = new Set<string>()
+      for (const req of timeOffRequests) {
+        try {
+          const reqShifts = await getTimeOffShifts(req.id)
+          reqShifts.forEach((shift: any) => {
+            timeOffConflicts.add(`${toDateStringISO(shift.date)}|${shift.time_slot_id}`)
+          })
+        } catch (error) {
+          console.error(`Error fetching shifts for time off request ${req.id}:`, error)
+        }
+      }
+
+      const { data: existingAssignments } = await supabase
+        .from('sub_assignments')
+        .select(
+          'date, time_slot_id, teacher_id, classroom_id, staff:teacher_id(first_name, last_name, display_name)'
+        )
+        .eq('sub_id', sub_id)
+        .eq('status', 'active')
+        .eq('assignment_type', 'Substitute Shift')
+        .gte('date', startDate)
+        .lte('date', endDate)
+
+      const assignmentConflicts = new Map<
+        string,
+        { teacher_name: string; classroom_name: string | null }
+      >()
+      if (existingAssignments) {
+        for (const assignment of existingAssignments) {
+          const key = `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`
+          const teacher = assignment.staff as any
+          const teacherName =
+            teacher?.display_name ||
+            `${teacher?.first_name || ''} ${teacher?.last_name || ''}`.trim() ||
+            'Unknown'
+          let classroomName: string | null = null
+          if (assignment.classroom_id) {
+            const { data: classroom } = await supabase
+              .from('classrooms')
+              .select('name')
+              .eq('id', assignment.classroom_id)
+              .single()
+            classroomName = classroom?.name || null
+          }
+          assignmentConflicts.set(key, { teacher_name: teacherName, classroom_name: classroomName })
+        }
+      }
+
+      const conflicts = shifts.map((shift: ShiftInput) => {
+        const dayBasedKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
+        const dateBasedKey = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
+
+        const isAvailable = dateBasedAvailabilityMap.has(dateBasedKey)
+          ? dateBasedAvailabilityMap.get(dateBasedKey)!
+          : dayBasedAvailabilityMap.has(dayBasedKey)
+            ? dayBasedAvailabilityMap.get(dayBasedKey)!
+            : false
+
+        const hasScheduleConflict = scheduleConflicts.has(dateBasedKey)
+        const hasTimeOffConflict = timeOffConflicts.has(dateBasedKey)
+        const assignmentConflict = assignmentConflicts.get(dateBasedKey)
+
+        let status: 'available' | 'unavailable' | 'conflict_teaching' | 'conflict_sub' = 'available'
+        let message = ''
+
+        if (!isAvailable) {
+          status = 'unavailable'
+          message = 'Marked unavailable'
+        } else if (hasScheduleConflict) {
+          status = 'conflict_teaching'
+          message = `Conflict: Assigned to ${shift.classroom_id ? 'classroom' : 'teach'}`
+        } else if (assignmentConflict) {
+          status = 'conflict_sub'
+          const classroomPart = assignmentConflict.classroom_name
+            ? ` in ${assignmentConflict.classroom_name}`
+            : ''
+          message = `Conflict: Assigned to sub for ${assignmentConflict.teacher_name}${classroomPart}`
+        } else if (hasTimeOffConflict) {
+          status = 'unavailable'
+          message = 'Has time off'
+        }
+
+        return {
+          shift_key: dateBasedKey,
+          status,
+          message,
+        }
+      })
+
+      return NextResponse.json(conflicts)
+    }
+
+    // Original path: coverage_request_id + shift_ids
     if (!sub_id || !coverage_request_id || !shift_ids || !Array.isArray(shift_ids)) {
       return createErrorResponse(
         'Missing required fields: sub_id, coverage_request_id, shift_ids',
@@ -75,7 +227,7 @@ export async function POST(request: NextRequest) {
 
     // Date-based exceptions override day-based availability
     availabilityExceptions.forEach((exception: any) => {
-      const key = `${exception.date}|${exception.time_slot_id}`
+      const key = `${toDateStringISO(exception.date)}|${exception.time_slot_id}`
       dateBasedAvailabilityMap.set(key, exception.available)
     })
 
@@ -83,7 +235,7 @@ export async function POST(request: NextRequest) {
     const subScheduledShifts = await getTeacherScheduledShifts(sub_id, startDate, endDate)
     const scheduleConflicts = new Set<string>()
     subScheduledShifts.forEach(scheduledShift => {
-      const key = `${scheduledShift.date}|${scheduledShift.time_slot_id}`
+      const key = `${toDateStringISO(scheduledShift.date)}|${scheduledShift.time_slot_id}`
       scheduleConflicts.add(key)
     })
 
@@ -99,7 +251,7 @@ export async function POST(request: NextRequest) {
       try {
         const reqShifts = await getTimeOffShifts(req.id)
         reqShifts.forEach((shift: any) => {
-          const key = `${shift.date}|${shift.time_slot_id}`
+          const key = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
           timeOffConflicts.add(key)
         })
       } catch (error) {
@@ -125,7 +277,7 @@ export async function POST(request: NextRequest) {
     >()
     if (existingAssignments) {
       for (const assignment of existingAssignments) {
-        const key = `${assignment.date}|${assignment.time_slot_id}`
+        const key = `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`
         const teacher = assignment.staff as any
         const teacherName =
           teacher?.display_name ||
@@ -153,7 +305,7 @@ export async function POST(request: NextRequest) {
     // Check each shift for conflicts
     const conflicts = coverageRequestShifts.map(shift => {
       const dayBasedKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
-      const dateBasedKey = `${shift.date}|${shift.time_slot_id}`
+      const dateBasedKey = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
       const conflictKey = dateBasedKey
 
       // Check date-based exception first, then fall back to day-based availability

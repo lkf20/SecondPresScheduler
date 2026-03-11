@@ -10,7 +10,10 @@ import SubFinderCard from '@/components/sub-finder/SubFinderCard'
 
 interface RecommendedCombinationProps {
   combinations: RecommendedCombinationType[]
-  onContactSub: (subId: string) => void
+  /** Omit or pass undefined in preview mode to hide Contact & Assign */
+  onContactSub?: (subId: string) => void
+  /** When true, sub cards hide Contact & Assign buttons (preview-only mode). */
+  previewMode?: boolean
   totalShifts: number
   useRemainingLabel?: boolean
   allSubs?: SubCandidate[] // All subs data to find can_cover/cannot_cover
@@ -22,6 +25,7 @@ interface RecommendedCombinationProps {
 export default function RecommendedCombination({
   combinations,
   onContactSub,
+  previewMode = false,
   totalShifts,
   useRemainingLabel = false,
   allSubs = [],
@@ -163,7 +167,8 @@ export default function RecommendedCombination({
               assigned={[]}
               conflicts={assignment.conflicts}
               contactStatusLine="Not contacted."
-              onContact={() => onContactSub(assignment.subId)}
+              onContact={onContactSub ? () => onContactSub(assignment.subId) : undefined}
+              previewMode={previewMode}
               recommendedShifts={visibleRecommendedShifts}
               recommendedShiftCount={visibleRecommendedShifts.length}
               allShifts={visibleAllShifts}

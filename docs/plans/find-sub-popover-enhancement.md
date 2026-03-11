@@ -100,7 +100,7 @@ Find sub for:
   -- OR (only when has existing absences) --
   ○ [Absence 1: Mon, Apr 4 – Tue, Apr 5]
   ○ [Absence 2: Mon, May 4]
-  ○ Different dates: Today / Tomorrow / Custom
+  ○ Pick dates: Today / Tomorrow / Custom
 
 [Go]
 ```
@@ -109,7 +109,7 @@ Find sub for:
 - [ ] When "Custom" is selected, show `DatePickerInput` for Start and End. Default End = Start. Use same component as in TimeOffForm and Manual Coverage.
 - [ ] When teacher has existing absences:
   - One radio per absence (use `formatAbsenceDateRange` from `lib/utils/date-format.ts`).
-  - One "Different dates" option that reveals Today / Tomorrow / Custom (nested radios or sub-section).
+  - One "Pick dates" option that reveals Today / Tomorrow / Custom (nested radios or sub-section).
 - [ ] If 3+ absences: consider collapsible "Show all X absences" or scrollable list so popover doesn't grow too tall.
 - [ ] **Popover width:** Current `w-80` may be tight; consider `w-96` or `min-w-80 max-w-md` if needed. Test with Custom date pickers open.
 
@@ -223,7 +223,7 @@ Find sub for:
 3. **Teacher with no time off:** Status “has no upcoming time off”; Today, Tomorrow, Custom options; no default selection; Go disabled until one option is selected.
 4. **Today + Go:** Navigates to Sub Finder manual with `teacher_id`, `start_date`, `end_date` (today).
 5. **Tomorrow + Go:** Navigates to Sub Finder manual with tomorrow’s dates.
-6. **Teacher with existing time off:** Status “has existing upcoming time off”; Existing time off list (soonest first) with Covered/uncovered chips; Different dates (Today/Tomorrow/Custom); Go disabled until one option is selected.
+6. **Teacher with existing time off:** Status “has existing upcoming time off”; Existing time off list (soonest first) with Covered/uncovered chips; Pick dates (Today/Tomorrow/Custom); Go disabled until one option is selected.
 7. **Existing absence + Go:** Navigates to `/sub-finder?absence_id=<id>`.
 8. **Time-off fetch error:** Fallback message “Couldn’t load time off. You can still find subs for today.”; user can choose Today and Go to manual with dates.
 
@@ -237,7 +237,7 @@ Find sub for:
 
 - [ ] Find Sub → select teacher with no time off → choose Today → Go → Sub Finder Manual with today's date and teacher prefilled.
 - [ ] Find Sub → select teacher with time off → choose existing absence → Go → Sub Finder Existing with that absence selected.
-- [ ] Find Sub → select teacher with time off → choose Different dates → Today → Go → Sub Finder Manual.
+- [ ] Find Sub → select teacher with time off → choose Pick dates → Today → Go → Sub Finder Manual.
 - [ ] Error case: mock time-off API failure → assert fallback message and ability to still choose Today and Go.
 
 ### 6.3 Manual QA
@@ -284,7 +284,7 @@ Find sub for:
 
 - [ ] User clicks Find Sub → selects teacher → sees correct status (no time off / has existing time off).
 - [ ] With no time off: can choose Today, Tomorrow, or Custom → Go → Sub Finder Manual with teacher and dates prefilled.
-- [ ] With existing time off: can choose an existing absence or "Different dates" (Today/Tomorrow/Custom) → Go → Sub Finder in correct mode with correct prefill.
+- [ ] With existing time off: can choose an existing absence or "Pick dates" (Today/Tomorrow/Custom) → Go → Sub Finder in correct mode with correct prefill.
 - [ ] Custom date: end date defaults to start; both required when Custom is selected.
 - [ ] Loading and error states in popover are clear and non-blocking.
 - [ ] URL params correctly drive Sub Finder mode and prefill.

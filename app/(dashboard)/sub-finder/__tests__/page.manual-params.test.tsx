@@ -31,6 +31,7 @@ jest.mock('next/navigation', () => ({
       urlParamsState.current = url === '/sub-finder' ? '' : url.replace(/^\/sub-finder\?/, '')
     },
   }),
+  usePathname: () => '/sub-finder',
   useSearchParams: () => new URLSearchParams(urlParamsState.current),
 }))
 

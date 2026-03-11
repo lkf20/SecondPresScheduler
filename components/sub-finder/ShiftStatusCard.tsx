@@ -37,6 +37,8 @@ interface ShiftStatusCardProps {
   onChangeSub?: (shift: SubFinderShift) => void
   /** When provided, tooltip names are clickable and open the Contact & Assign panel for that sub. */
   onSelectSubForContact?: (subId: string) => void
+  /** When true, hide Find Sub button (Sub Finder preview-only mode). */
+  previewMode?: boolean
 }
 
 function formatShiftLabel(shift: SubFinderShift) {
@@ -274,6 +276,7 @@ export default function ShiftStatusCard({
   onRemoveSub,
   onChangeSub,
   onSelectSubForContact,
+  previewMode = false,
 }: ShiftStatusCardProps) {
   const coverage = getCoverageStatus(shift)
   const contact = getContactStatus(contactedAvailableSubCount)
@@ -346,7 +349,7 @@ export default function ShiftStatusCard({
               statusIconCircleClass={statusIconCircleClass}
               onSelectSubForContact={onSelectSubForContact}
             />
-            {onSelectShift && (
+            {!previewMode && onSelectShift && (
               <Button
                 type="button"
                 variant="teal"
@@ -419,7 +422,7 @@ export default function ShiftStatusCard({
                           <TooltipContent>Remove sub</TooltipContent>
                         </Tooltip>
                       )}
-                      {(onChangeSub || onSelectShift) && (
+                      {!previewMode && (onChangeSub || onSelectShift) && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <button

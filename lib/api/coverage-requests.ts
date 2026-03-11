@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { parseLocalDate } from '@/lib/utils/date'
+import { parseLocalDate, expandDateRangeWithTimeZone, toDateStringISO } from '@/lib/utils/date'
 
 // See docs/data-lifecycle.md: coverage_requests lifecycle
 /**
@@ -117,6 +117,178 @@ export interface CoverageRequestWithShifts {
   }>
 }
 
+export interface AssignSubShiftRow {
+  id: string
+  date: string
+  day_of_week_id: string
+  time_slot_id: string
+  time_slot_code: string
+  classroom_id: string | null
+  has_time_off: boolean
+  time_off_request_id: string | null
+}
+
+/**
+ * Get teacher's scheduled shifts for a date range with time-off info.
+ * Does NOT create a coverage request (aligns with Sub Finder pattern).
+ */
+export async function getTeacherShiftsForAssignSub(
+  teacherId: string,
+  startDate: string,
+  endDate: string
+): Promise<AssignSubShiftRow[]> {
+  const supabase = await createClient()
+
+  const { data: schedule, error: scheduleError } = await supabase
+    .from('teacher_schedules')
+    .select(
+      `
+      day_of_week_id, 
+      time_slot_id,
+      classroom_id,
+      days_of_week(name, day_number), 
+      time_slots(code, name)
+    `
+    )
+    .eq('teacher_id', teacherId)
+    .not('day_of_week_id', 'is', null)
+    .not('time_slot_id', 'is', null)
+
+  if (scheduleError) {
+    console.error('Error fetching teacher schedule:', scheduleError)
+    throw scheduleError
+  }
+
+  if (!schedule || schedule.length === 0) {
+    return []
+  }
+
+  const transformedSchedule = schedule.map(
+    (entry: {
+      day_of_week_id: string
+      time_slot_id: string
+      classroom_id: string | null
+      days_of_week?:
+        | Array<{ name: string; day_number: number }>
+        | { name: string; day_number: number }
+        | null
+      time_slots?: Array<{ code: string; name: string }> | { code: string; name: string } | null
+    }) => {
+      let daysOfWeek = null
+      if (entry.days_of_week) {
+        if (Array.isArray(entry.days_of_week) && entry.days_of_week.length > 0) {
+          daysOfWeek = {
+            name: entry.days_of_week[0]?.name ?? null,
+            day_number: entry.days_of_week[0]?.day_number ?? null,
+          }
+        } else if (typeof entry.days_of_week === 'object' && !Array.isArray(entry.days_of_week)) {
+          const dow = entry.days_of_week as { name?: string; day_number?: number }
+          daysOfWeek = { name: dow.name ?? null, day_number: dow.day_number ?? null }
+        }
+      }
+      let timeSlots = null
+      if (entry.time_slots) {
+        if (Array.isArray(entry.time_slots) && entry.time_slots.length > 0) {
+          timeSlots = {
+            code: entry.time_slots[0]?.code ?? null,
+            name: entry.time_slots[0]?.name ?? null,
+          }
+        } else if (typeof entry.time_slots === 'object' && !Array.isArray(entry.time_slots)) {
+          const ts = entry.time_slots as { code?: string; name?: string }
+          timeSlots = { code: ts.code ?? null, name: ts.name ?? null }
+        }
+      }
+      return {
+        day_of_week_id: entry.day_of_week_id,
+        time_slot_id: entry.time_slot_id,
+        classroom_id: entry.classroom_id,
+        days_of_week: daysOfWeek,
+        time_slots: timeSlots,
+      }
+    }
+  )
+
+  const scheduleByDayNumber = new Map<number, typeof transformedSchedule>()
+  const timeSlotCodeMap = new Map<string, string>()
+  transformedSchedule.forEach(entry => {
+    const dayNumber = entry.days_of_week?.day_number
+    if (typeof dayNumber === 'number') {
+      if (!scheduleByDayNumber.has(dayNumber)) {
+        scheduleByDayNumber.set(dayNumber, [])
+      }
+      scheduleByDayNumber.get(dayNumber)!.push(entry)
+      if (entry.time_slots?.code) {
+        timeSlotCodeMap.set(entry.time_slot_id, entry.time_slots.code)
+      }
+    }
+  })
+
+  const expandedDates = expandDateRangeWithTimeZone(startDate, endDate, 'UTC')
+  const shiftsByDate = new Map<
+    string,
+    Array<{ day_of_week_id: string; time_slot_id: string; classroom_id: string | null }>
+  >()
+
+  expandedDates.forEach(entry => {
+    const shiftsForDay = scheduleByDayNumber.get(entry.day_number)
+    if (shiftsForDay && shiftsForDay.length > 0) {
+      if (!shiftsByDate.has(entry.date)) {
+        shiftsByDate.set(entry.date, [])
+      }
+      shiftsForDay.forEach(shift => {
+        shiftsByDate.get(entry.date)!.push({
+          day_of_week_id: shift.day_of_week_id,
+          time_slot_id: shift.time_slot_id,
+          classroom_id: shift.classroom_id,
+        })
+      })
+    }
+  })
+
+  const timeOffShiftsMap = new Map<string, { time_off_request_id: string }>()
+  const { data: timeOffRequests } = await supabase
+    .from('time_off_requests')
+    .select('id, start_date, end_date')
+    .eq('teacher_id', teacherId)
+    .lte('start_date', endDate)
+    .gte('end_date', startDate)
+
+  if (timeOffRequests && timeOffRequests.length > 0) {
+    const requestIds = timeOffRequests.map(req => req.id)
+    const { data: timeOffShifts } = await supabase
+      .from('time_off_shifts')
+      .select('time_off_request_id, date, day_of_week_id, time_slot_id')
+      .in('time_off_request_id', requestIds)
+
+    if (timeOffShifts) {
+      for (const toShift of timeOffShifts) {
+        const key = `${toDateStringISO(toShift.date)}|${toShift.day_of_week_id}|${toShift.time_slot_id}`
+        timeOffShiftsMap.set(key, { time_off_request_id: toShift.time_off_request_id })
+      }
+    }
+  }
+
+  const result: AssignSubShiftRow[] = []
+  for (const [date, shiftList] of shiftsByDate.entries()) {
+    for (const shift of shiftList) {
+      const key = `${date}|${shift.day_of_week_id}|${shift.time_slot_id}`
+      const timeOffInfo = timeOffShiftsMap.get(key)
+      result.push({
+        id: key,
+        date,
+        day_of_week_id: shift.day_of_week_id,
+        time_slot_id: shift.time_slot_id,
+        time_slot_code: timeSlotCodeMap.get(shift.time_slot_id) || '',
+        classroom_id: shift.classroom_id,
+        has_time_off: !!timeOffInfo,
+        time_off_request_id: timeOffInfo?.time_off_request_id ?? null,
+      })
+    }
+  }
+
+  return result
+}
+
 /**
  * Ensure a coverage request exists for quick assign
  * Reuses existing coverage_requests or creates new ones
@@ -179,7 +351,7 @@ export async function ensureCoverageRequestForQuickAssign(
       const { data: newRequest, error: createError } = await supabase
         .from('coverage_requests')
         .insert({
-          request_type: 'manual_coverage',
+          request_type: 'extra_coverage',
           teacher_id: teacherId,
           start_date: startDate,
           end_date: endDate,
@@ -275,57 +447,30 @@ export async function ensureCoverageRequestForQuickAssign(
     }
   })
 
-  // Generate all dates in the range and build shifts
-  const parseDateStr = (dateStr: string) => {
-    const [year, month, day] = dateStr.split('-').map(Number)
-    return { year, month, day }
-  }
+  // Use the same date expansion as getTeacherScheduledShifts so single-date and range
+  // both return all scheduled shifts (regardless of time-off).
+  const expandedDates = expandDateRangeWithTimeZone(startDate, endDate, 'UTC')
 
-  const getDayOfWeek = (dateStr: string) => {
-    const { year, month, day } = parseDateStr(dateStr)
-    const date = new Date(year, month - 1, day)
-    const jsDay = date.getDay()
-    return jsDay === 0 ? 7 : jsDay
-  }
-
-  const compareDates = (date1: string, date2: string) => {
-    if (date1 < date2) return -1
-    if (date1 > date2) return 1
-    return 0
-  }
-
-  // Build a map of date -> shifts for that date
   const shiftsByDate = new Map<
     string,
     Array<{ day_of_week_id: string; time_slot_id: string; classroom_id: string | null }>
   >()
 
-  let currentDateStr = startDate
-  while (compareDates(currentDateStr, endDate) <= 0) {
-    const dayNumber = getDayOfWeek(currentDateStr)
-    const shiftsForDay = scheduleByDayNumber.get(dayNumber)
-
+  expandedDates.forEach(entry => {
+    const shiftsForDay = scheduleByDayNumber.get(entry.day_number)
     if (shiftsForDay && shiftsForDay.length > 0) {
-      if (!shiftsByDate.has(currentDateStr)) {
-        shiftsByDate.set(currentDateStr, [])
+      if (!shiftsByDate.has(entry.date)) {
+        shiftsByDate.set(entry.date, [])
       }
       shiftsForDay.forEach(shift => {
-        shiftsByDate.get(currentDateStr)!.push({
+        shiftsByDate.get(entry.date)!.push({
           day_of_week_id: shift.day_of_week_id,
           time_slot_id: shift.time_slot_id,
           classroom_id: shift.classroom_id,
         })
       })
     }
-
-    // Move to next day
-    const { year, month, day } = parseDateStr(currentDateStr)
-    const nextDate = new Date(year, month - 1, day + 1)
-    const nextYear = nextDate.getFullYear()
-    const nextMonth = String(nextDate.getMonth() + 1).padStart(2, '0')
-    const nextDay = String(nextDate.getDate()).padStart(2, '0')
-    currentDateStr = `${nextYear}-${nextMonth}-${nextDay}`
-  }
+  })
 
   // Check which shifts already have time off requests
   const timeOffShiftsMap = new Map<string, { time_off_request_id: string }>()
@@ -360,7 +505,7 @@ export async function ensureCoverageRequestForQuickAssign(
 
     if (timeOffShifts) {
       for (const toShift of timeOffShifts) {
-        const key = `${toShift.date}|${toShift.day_of_week_id}|${toShift.time_slot_id}`
+        const key = `${toDateStringISO(toShift.date)}|${toShift.day_of_week_id}|${toShift.time_slot_id}`
         timeOffShiftsMap.set(key, {
           time_off_request_id: toShift.time_off_request_id,
         })
@@ -385,7 +530,9 @@ export async function ensureCoverageRequestForQuickAssign(
 
     // Build a set of existing shift keys
     const existingShiftKeys = new Set(
-      (existingShifts || []).map(s => `${s.date}|${s.day_of_week_id}|${s.time_slot_id}`)
+      (existingShifts || []).map(
+        s => `${toDateStringISO(s.date)}|${s.day_of_week_id}|${s.time_slot_id}`
+      )
     )
 
     // Get school_id from the existing coverage request
@@ -453,7 +600,7 @@ export async function ensureCoverageRequestForQuickAssign(
 
     // Map shifts with time off info
     const shiftsWithTimeOff = (allShifts || []).map(shift => {
-      const key = `${shift.date}|${shift.day_of_week_id}|${shift.time_slot_id}`
+      const key = `${toDateStringISO(shift.date)}|${shift.day_of_week_id}|${shift.time_slot_id}`
       const timeOffInfo = timeOffShiftsMap.get(key)
       return {
         id: shift.id,
@@ -497,7 +644,7 @@ export async function ensureCoverageRequestForQuickAssign(
   const { data: newRequest, error: createError } = await supabase
     .from('coverage_requests')
     .insert({
-      request_type: 'manual_coverage',
+      request_type: 'extra_coverage',
       teacher_id: teacherId,
       start_date: startDate,
       end_date: endDate,
@@ -538,7 +685,7 @@ export async function ensureCoverageRequestForQuickAssign(
 
   // Map shifts with time off info
   const shiftsWithTimeOff = (createdShifts || []).map(shift => {
-    const key = `${shift.date}|${shift.day_of_week_id}|${shift.time_slot_id}`
+    const key = `${toDateStringISO(shift.date)}|${shift.day_of_week_id}|${shift.time_slot_id}`
     const timeOffInfo = timeOffShiftsMap.get(key)
     return {
       id: shift.id,

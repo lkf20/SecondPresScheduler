@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { usePathname, useSearchParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { ArrowRight, ChevronDown, ChevronLeft, ChevronUp, RefreshCw, Search, X } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Dialog,
   DialogContent,
@@ -28,13 +29,14 @@ import {
   type Absence,
   type SubCandidate,
 } from '@/components/sub-finder/hooks/useSubFinderData'
-import ShiftSelectionTable from '@/components/time-off/ShiftSelectionTable'
+import ShiftSelectionTable, { type SelectedShift } from '@/components/time-off/ShiftSelectionTable'
 import DatePickerInput from '@/components/ui/date-picker-input'
 import {
   formatAbsenceDateRange,
   formatShortDate,
   formatLastContactedDateTime,
 } from '@/lib/utils/date-format'
+import { getTodayISO, getTomorrowISO } from '@/lib/utils/date'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -45,6 +47,8 @@ import CoverageSummary from '@/components/sub-finder/CoverageSummary'
 import ShiftStatusCard from '@/components/sub-finder/ShiftStatusCard'
 import { useSubFinderShifts } from '@/components/sub-finder/hooks/useSubFinderShifts'
 import type { SubFinderShift } from '@/lib/sub-finder/types'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
 
 export default function SubFinderPage() {
   const ENABLE_SHIFT_FOCUS_MODE = true
@@ -52,6 +56,7 @@ export default function SubFinderPage() {
   const SHOW_MIDDLE_COLUMN_DEBUG_BORDERS = false
   const SHOW_RIGHT_PANEL_DEBUG_BORDERS = false
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const requestedAbsenceId = searchParams.get('absence_id')
   const requestedTeacherId = searchParams.get('teacher_id')
@@ -59,6 +64,7 @@ export default function SubFinderPage() {
   const requestedMode = searchParams.get('mode')
   const requestedStartDate = searchParams.get('start_date')
   const requestedEndDate = searchParams.get('end_date')
+  const requestedPreview = searchParams.get('preview') === 'true'
   const [mode, setMode] = useState<Mode>('existing')
   const [includePastShifts, setIncludePastShifts] = useState(false)
   const [shiftFilters, setShiftFilters] = useState<string[]>(['all'])
@@ -91,12 +97,9 @@ export default function SubFinderPage() {
     skipInitialFetch: true, // Skip initial fetch to allow state restoration first
     subRecommendationParams,
   })
-  const [searchQuery, setSearchQuery] = useState('')
-  const [teacherSearchInput, setTeacherSearchInput] = useState('') // Separate state for dropdown input
   const [selectedTeacherIds, setSelectedTeacherIds] = useState<string[]>([]) // Array of selected teacher IDs
   const [subSearch, setSubSearch] = useState('')
   const [isSubSearchOpen, setIsSubSearchOpen] = useState(false)
-  const teacherSearchRef = useRef<HTMLInputElement | null>(null)
   const [selectedSub, setSelectedSub] = useState<SubCandidate | null>(null)
   const [isContactPanelOpen, setIsContactPanelOpen] = useState(false)
   const [selectedShift, setSelectedShift] = useState<SubFinderShift | null>(null)
@@ -109,7 +112,6 @@ export default function SubFinderPage() {
   const [isAllSubsOpen, setIsAllSubsOpen] = useState(false)
   const [selectedSubIds, setSelectedSubIds] = useState<string[]>([])
   const [rightPanelActiveFilter, setRightPanelActiveFilter] = useState<string | null>('available')
-  const [isTeacherSearchOpen, setIsTeacherSearchOpen] = useState(false)
   const { setActivePanel, previousPanel, restorePreviousPanel, registerPanelCloseHandler } =
     usePanelManager()
   const savedSubRef = useRef<SubCandidate | null>(null)
@@ -168,6 +170,21 @@ export default function SubFinderPage() {
   const [manualTeacherId, setManualTeacherId] = useState<string>('')
   const [manualStartDate, setManualStartDate] = useState<string>('')
   const [manualEndDate, setManualEndDate] = useState<string>('')
+  const openTimeOffPanel = useCallback(() => {
+    const p = new URLSearchParams(searchParams.toString())
+    p.set('open_time_off', '1')
+    if (manualTeacherId) p.set('teacher_id', manualTeacherId)
+    if (manualStartDate) p.set('start_date', manualStartDate)
+    if (manualEndDate) p.set('end_date', manualEndDate || manualStartDate)
+    router.replace(`${pathname}?${p.toString()}`)
+  }, [pathname, router, searchParams, manualTeacherId, manualStartDate, manualEndDate])
+
+  /** When set, open the Edit Time Off panel in-place (no navigation). Pass manualSelectedShifts so the form can merge them. */
+  const [editingTimeOffRequestId, setEditingTimeOffRequestId] = useState<string | null>(null)
+
+  const openEditTimeOffPanel = useCallback((requestId: string) => {
+    setEditingTimeOffRequestId(requestId)
+  }, [])
   const [manualSelectedShifts, setManualSelectedShifts] = useState<
     Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
   >([])
@@ -183,19 +200,64 @@ export default function SubFinderPage() {
     conflictCount: 0,
     totalScheduled: 0,
   })
+  const [manualConflictShifts, setManualConflictShifts] = useState<SelectedShift[]>([])
   const [manualConflictingRequests, setManualConflictingRequests] = useState<
     Array<{ id: string; start_date: string; end_date: string | null; reason: string | null }>
   >([])
-  /** 'unset' = show banner; 'browsing' = user chose just browsing; 'create' = user chose to create (or created) */
-  const [manualTimeOffChoice, setManualTimeOffChoice] = useState<'unset' | 'browsing' | 'create'>(
-    'unset'
+  /** When 2+ conflicting requests, which one to extend; null until user selects. Not used when only 1 request. */
+  const [manualExtendSelectedRequestId, setManualExtendSelectedRequestId] = useState<string | null>(
+    null
   )
+  /** When user clicks Extend without selecting a request (2+ case), show inline red warning. */
+  const [manualExtendShowSelectWarning, setManualExtendShowSelectWarning] = useState(false)
+  /** True only after ShiftSelectionTable has finished loading scheduled + existing time off. Gates yellow box and Find Subs. */
+  const [manualConflictCheckReady, setManualConflictCheckReady] = useState(false)
+  /** Increment to force ShiftSelectionTable to remount and refetch (e.g. after editing time off from this panel). */
+  const [manualLeftPanelRefreshKey, setManualLeftPanelRefreshKey] = useState(0)
+  /** Tracks user intent when opening time off panel from manual flow (e.g. 'create' from Find Sub popover). */
+  const [manualTimeOffChoice, setManualTimeOffChoice] = useState<'unset' | 'create'>('unset')
+  const [pickDateChoice, setPickDateChoice] = useState<'' | 'today' | 'tomorrow' | 'custom'>('')
+  /** When last Find Subs run used 100% overlapping shifts (all have existing time off), don't show preview mode. */
+  const [lastManualRunHadAllShiftsWithTimeOff, setLastManualRunHadAllShiftsWithTimeOff] =
+    useState(false)
+  /** Show success banner after adding/extending time off from this panel; cleared when teacher or dates change. */
+  const [manualTimeOffSuccessBanner, setManualTimeOffSuccessBanner] = useState(false)
+  /** After time off success, auto-run Find Subs once the left panel has refreshed. */
+  const [shouldAutoRunFindSubsAfterRefresh, setShouldAutoRunFindSubsAfterRefresh] = useState(false)
+  const isPreviewMode =
+    (selectedAbsence?.id?.startsWith('manual-') && !lastManualRunHadAllShiftsWithTimeOff) ?? false
   const subSearchRef = useRef<HTMLDivElement | null>(null)
   const rightPanelRef = useRef<HTMLDivElement | null>(null)
   const manualEndDateRef = useRef<HTMLButtonElement | null>(null)
   const [endDateCorrected, setEndDateCorrected] = useState(false)
   const correctionTimeoutRef = useRef<number | null>(null)
   const isFlexibleStaffChangeUserInitiatedRef = useRef(false)
+
+  /** Reset conflict-check ready when manual flow table is not mounted so we don't keep a stale true. */
+  const manualTableRendered =
+    !!manualTeacherId &&
+    (pickDateChoice === 'today' || pickDateChoice === 'tomorrow' || pickDateChoice === 'custom')
+  useEffect(() => {
+    if (!manualTableRendered) setManualConflictCheckReady(false)
+  }, [manualTableRendered])
+
+  /** Clear extend selection and warning when conflicting requests change (e.g. different date) or when not 2+. */
+  useEffect(() => {
+    if (manualConflictingRequests.length !== 1) {
+      setManualExtendSelectedRequestId(null)
+      setManualExtendShowSelectWarning(false)
+    }
+  }, [manualConflictingRequests])
+
+  /** Hide "select a request" warning when user selects a radio. */
+  useEffect(() => {
+    if (manualExtendSelectedRequestId) setManualExtendShowSelectWarning(false)
+  }, [manualExtendSelectedRequestId])
+
+  /** Clear time-off success banner when user changes teacher or dates. */
+  useEffect(() => {
+    setManualTimeOffSuccessBanner(false)
+  }, [manualTeacherId, pickDateChoice, manualStartDate, manualEndDate])
 
   useEffect(() => {
     if (!selectedShift) {
@@ -206,6 +268,7 @@ export default function SubFinderPage() {
   useEffect(() => {
     setIsMiddleShiftListExpanded(false)
   }, [selectedAbsence?.id])
+
   const isRestoringStateRef = useRef(false) // Track if we're restoring state to avoid saving during restoration
   const hasRestoredStateRef = useRef(false) // Track if we've completed initial state restoration
   const displayRecommendedCombinations = useMemo(() => {
@@ -229,16 +292,20 @@ export default function SubFinderPage() {
     </div>
   )
 
-  const runManualFinder = useCallback(async () => {
-    if (!manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0) return
-    setHighlightedSubId(null)
-    await handleFindManualSubs({
-      teacherId: manualTeacherId,
-      startDate: manualStartDate,
-      endDate: manualEndDate || manualStartDate,
-      shifts: manualSelectedShifts,
-    })
-  }, [manualTeacherId, manualStartDate, manualEndDate, manualSelectedShifts, handleFindManualSubs])
+  const runManualFinder = useCallback(
+    async (shiftsOverride?: SelectedShift[]) => {
+      const shiftsToUse = shiftsOverride || manualSelectedShifts
+      if (!manualTeacherId || !manualStartDate || shiftsToUse.length === 0) return
+      setHighlightedSubId(null)
+      await handleFindManualSubs({
+        teacherId: manualTeacherId,
+        startDate: manualStartDate,
+        endDate: manualEndDate || manualStartDate,
+        shifts: shiftsToUse,
+      })
+    },
+    [manualTeacherId, manualStartDate, manualEndDate, manualSelectedShifts, handleFindManualSubs]
+  )
   const runFinderForAbsence = useCallback(
     async (absence: Absence) => {
       await handleFindSubs(absence)
@@ -253,11 +320,38 @@ export default function SubFinderPage() {
     },
     [handleFindSubs]
   )
-  const runManualFinderAndCollapse = useCallback(async () => {
-    await runManualFinder()
-    setIsLeftRailCollapsed(true)
-    setMobileView('shifts')
-  }, [runManualFinder])
+  const runManualFinderAndCollapse = useCallback(
+    async (openRightPanel: boolean = true, shiftsOverride?: SelectedShift[]) => {
+      await runManualFinder(shiftsOverride)
+      setIsLeftRailCollapsed(true)
+      setMobileView('shifts')
+      if (openRightPanel) setIsAllSubsOpen(true)
+    },
+    [runManualFinder]
+  )
+
+  /** Auto-run Find Subs once left panel has refreshed after time off success (edit/extend in-place). */
+  useEffect(() => {
+    if (!manualConflictCheckReady || !shouldAutoRunFindSubsAfterRefresh) return
+    setShouldAutoRunFindSubsAfterRefresh(false)
+    const allShiftsHaveTimeOff =
+      manualConflictSummary.conflictCount > 0 &&
+      manualConflictSummary.conflictCount === manualConflictSummary.totalScheduled
+    if (allShiftsHaveTimeOff && manualConflictShifts.length > 0) {
+      setLastManualRunHadAllShiftsWithTimeOff(true)
+      runManualFinderAndCollapse(false, manualConflictShifts)
+    } else {
+      runManualFinderAndCollapse(false, undefined)
+    }
+  }, [
+    manualConflictCheckReady,
+    shouldAutoRunFindSubsAfterRefresh,
+    manualConflictSummary.conflictCount,
+    manualConflictSummary.totalScheduled,
+    manualConflictShifts,
+    runManualFinderAndCollapse,
+  ])
+
   const {
     shiftDetails,
     visibleShiftDetails,
@@ -1091,16 +1185,33 @@ export default function SubFinderPage() {
     }
   }
 
-  // Set selected teachers when teacher_id is provided from URL (only for existing-absences mode, not manual)
+  // Set teacher when teacher_id is provided from URL (integrated view uses manualTeacherId; sync drives selectedTeacherIds)
   useEffect(() => {
     if (requestedMode === 'manual') return
-    if (requestedTeacherId && !selectedTeacherIds.includes(requestedTeacherId)) {
-      setSelectedTeacherIds([requestedTeacherId])
+    if (requestedTeacherId && manualTeacherId !== requestedTeacherId) {
+      const teacher = teachers.find(t => t.id === requestedTeacherId)
+      if (teacher) {
+        setManualTeacherId(requestedTeacherId)
+        setManualTeacherSearch(getDisplayName(teacher))
+      }
       const newSearchParams = new URLSearchParams(searchParams.toString())
       newSearchParams.delete('teacher_id')
       router.replace(`/sub-finder?${newSearchParams.toString()}`)
     }
-  }, [requestedMode, requestedTeacherId, selectedTeacherIds, searchParams, router])
+  }, [
+    requestedMode,
+    requestedTeacherId,
+    manualTeacherId,
+    teachers,
+    getDisplayName,
+    searchParams,
+    router,
+  ])
+
+  // In integrated view: sync selectedTeacherIds with manualTeacherId for absences list filtering
+  useEffect(() => {
+    setSelectedTeacherIds(manualTeacherId ? [manualTeacherId] : [])
+  }, [manualTeacherId])
 
   // Filter absences based on selected teachers
   const filteredAbsences = useMemo(() => {
@@ -1114,21 +1225,6 @@ export default function SubFinderPage() {
 
     return filtered
   }, [absences, selectedTeacherIds])
-
-  // Add teacher to selection
-  const addTeacherToSelection = (teacherId: string) => {
-    if (!selectedTeacherIds.includes(teacherId)) {
-      setSelectedTeacherIds([...selectedTeacherIds, teacherId])
-    }
-    setTeacherSearchInput('')
-    setIsTeacherSearchOpen(false)
-    teacherSearchRef.current?.blur()
-  }
-
-  // Remove teacher from selection
-  const removeTeacherFromSelection = (teacherId: string) => {
-    setSelectedTeacherIds(selectedTeacherIds.filter(id => id !== teacherId))
-  }
 
   // Auto-select first absence if exactly one absence matches selected teachers
   useEffect(() => {
@@ -1150,6 +1246,16 @@ export default function SubFinderPage() {
     setManualSelectedShifts([])
     setSelectedAbsence(null)
     setManualTimeOffChoice('unset')
+    setLastManualRunHadAllShiftsWithTimeOff(false)
+    const today = getTodayISO()
+    const tomorrow = getTomorrowISO()
+    if (requestedStartDate === today) {
+      setPickDateChoice('today')
+    } else if (requestedStartDate === tomorrow) {
+      setPickDateChoice('tomorrow')
+    } else {
+      setPickDateChoice('custom')
+    }
     const teacher = teachers.find(t => t.id === requestedTeacherId)
     if (teacher) {
       setManualTeacherSearch(getDisplayName(teacher))
@@ -1159,6 +1265,7 @@ export default function SubFinderPage() {
     newSearchParams.delete('teacher_id')
     newSearchParams.delete('start_date')
     newSearchParams.delete('end_date')
+    newSearchParams.delete('preview')
     const newUrl = newSearchParams.toString()
       ? `/sub-finder?${newSearchParams.toString()}`
       : '/sub-finder'
@@ -1168,6 +1275,7 @@ export default function SubFinderPage() {
     requestedTeacherId,
     requestedStartDate,
     requestedEndDate,
+    requestedPreview,
     searchParams,
     router,
     teachers,
@@ -1182,6 +1290,31 @@ export default function SubFinderPage() {
       setManualTeacherSearch(getDisplayName(teacher))
     }
   }, [mode, manualTeacherId, manualTeacherSearch, teachers, getDisplayName])
+
+  // Sync pickDateChoice to 'custom' when date range is set and doesn't match today/tomorrow.
+  // Do not sync to 'today' or 'tomorrow' from dates, so that clicking "Custom date range"
+  // (which defaults start/end to today) is not overwritten back to Today.
+  useEffect(() => {
+    if (mode !== 'manual' || !manualStartDate) return
+    const today = getTodayISO()
+    const tomorrow = getTomorrowISO()
+    const end = manualEndDate || manualStartDate
+    if (manualStartDate === today && end === today) {
+      // Leave choice as-is so "Custom date range" with today default stays custom
+    } else if (manualStartDate === tomorrow && end === tomorrow) {
+      // Leave choice as-is
+    } else {
+      setPickDateChoice(prev => (prev !== 'custom' ? 'custom' : prev))
+    }
+  }, [mode, manualStartDate, manualEndDate])
+
+  // When switching to assignment mode (existing absence selected), unselect Pick dates so date fields and shift selector are hidden
+  useEffect(() => {
+    if (selectedAbsence && !selectedAbsence.id.startsWith('manual-')) {
+      setPickDateChoice('')
+      setLastManualRunHadAllShiftsWithTimeOff(false)
+    }
+  }, [selectedAbsence])
 
   // Load saved state on mount (only if no URL params override)
   useEffect(() => {
@@ -1206,16 +1339,13 @@ export default function SubFinderPage() {
       setMode(savedState.mode)
     }
 
-    // Restore selected teachers
-    if (savedState.selectedTeacherIds && savedState.selectedTeacherIds.length > 0) {
-      setSelectedTeacherIds(savedState.selectedTeacherIds)
-    }
+    // Do not restore manualTeacherId from saved state so that when Sub Finder initially
+    // loads with no teacher_id in the URL, Pick dates and the rest of the flow stay hidden
+    // until the user selects a teacher. (Teacher can still be set via URL param ?teacher_id=.)
 
-    // Restore manual coverage state
+    // Restore manual coverage state (dates, shifts) only when we have a teacher from URL;
+    // otherwise keep dates/shifts empty so Pick dates area stays hidden until teacher is selected.
     if (savedState.mode === 'manual') {
-      if (savedState.manualTeacherId) {
-        setManualTeacherId(savedState.manualTeacherId)
-      }
       if (savedState.manualStartDate) {
         setManualStartDate(savedState.manualStartDate)
       }
@@ -1248,15 +1378,14 @@ export default function SubFinderPage() {
     // Reset flag after a short delay to allow other effects to run
     setTimeout(() => {
       isRestoringStateRef.current = false
-      if (mode === 'existing') {
-        fetchAbsences()
-      }
+      fetchAbsences() // Always fetch for integrated view absences list
     }, 500) // Give enough time for all restoration effects to complete
   }, [
     fetchAbsences,
-    mode,
     requestedAbsenceId,
     requestedTeacherId,
+    teachers,
+    getDisplayName,
     setIncludeFlexibleStaff,
     setIncludeOnlyRecommended,
     setIncludePartiallyCovered,
@@ -1266,6 +1395,8 @@ export default function SubFinderPage() {
   useEffect(() => {
     if (requestedAbsenceId || mode !== 'existing') return // URL param takes precedence, or skip if manual mode
     if (absences.length === 0) return // Wait for absences to load
+    // Do not overwrite a freshly-set manual absence (from Find Subs in Pick dates flow)
+    if (selectedAbsence?.id?.startsWith('manual-')) return
 
     const savedState = loadSubFinderState()
     // Use ref first (most recent), then saved state, then current selection
@@ -1381,29 +1512,7 @@ export default function SubFinderPage() {
     }
   }, [requestedSubId, requestedAbsenceId, selectedAbsence, recommendedSubs, allSubs])
 
-  // Restore manual mode results after form data is restored
-  useEffect(() => {
-    if (
-      mode !== 'manual' ||
-      !manualTeacherId ||
-      !manualStartDate ||
-      manualSelectedShifts.length === 0
-    )
-      return
-    if (selectedAbsence) return
-
-    runManualFinder().catch(error => {
-      console.error('[SubFinder] Failed to restore manual results:', error)
-    })
-  }, [
-    mode,
-    manualTeacherId,
-    manualStartDate,
-    manualEndDate,
-    manualSelectedShifts,
-    selectedAbsence,
-    runManualFinder,
-  ])
+  // Sub finder from the left panel runs only when the user clicks Find Subs or an Existing time off card (not when teacher/date/shifts are merely set).
 
   // Save state whenever it changes (but not during restoration or before initial restoration)
   useEffect(() => {
@@ -1443,18 +1552,19 @@ export default function SubFinderPage() {
   ])
 
   const renderLeftRail = (railCollapsed: boolean, allowCollapse: boolean) => {
-    const railWidth = railCollapsed ? '4.25rem' : '26rem'
+    const railWidth = railCollapsed ? '4.25rem' : '30rem'
     return (
       <div
         className={cn(
-          'relative flex-none border-r border-slate-200 bg-slate-100 shadow-[2px_0_6px_rgba(0,0,0,0.03)] flex flex-col overflow-y-auto transition-all h-full',
-          railCollapsed ? 'w-[4.25rem]' : 'w-[26rem]'
+          'relative flex-none border-r border-slate-200 bg-slate-100 shadow-[2px_0_6px_rgba(0,0,0,0.03)] flex flex-col min-h-0 transition-all h-full',
+          railCollapsed ? 'w-[4.25rem]' : 'w-[30rem]'
         )}
         style={{ width: railWidth, minWidth: railWidth, maxWidth: railWidth }}
       >
+        {/* Sticky header: only title row so the rest of the panel can scroll */}
         <div
           className={cn(
-            'sticky top-6 z-10 border-b border-slate-200 bg-slate-100 flex flex-col',
+            'sticky top-6 z-10 shrink-0 border-b border-slate-200 bg-slate-100 flex flex-col',
             railCollapsed ? 'px-2 pt-6 pb-3 items-center' : 'px-6 pt-10 pb-4'
           )}
         >
@@ -1466,19 +1576,27 @@ export default function SubFinderPage() {
           >
             {!railCollapsed ? (
               <>
-                <h1 className="text-xl font-bold text-slate-900 pl-2">Sub Finder</h1>
-                {allowCollapse && (
-                  <button
-                    type="button"
-                    aria-label="Collapse left panel"
-                    className={cn(
-                      'inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900'
+                <div className="flex flex-col gap-1 w-full min-w-0">
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <h1 className="text-xl font-bold text-slate-900 pl-2 shrink-0">Sub Finder</h1>
+                    {allowCollapse && (
+                      <button
+                        type="button"
+                        aria-label="Collapse left panel"
+                        className={cn(
+                          'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900'
+                        )}
+                        onClick={() => setIsLeftRailCollapsed(true)}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
                     )}
-                    onClick={() => setIsLeftRailCollapsed(true)}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                )}
+                  </div>
+                  <p className="text-xs text-slate-600 pl-2">
+                    Select a teacher absence below or search for a teacher to see a list of
+                    recommended subs.
+                  </p>
+                </div>
               </>
             ) : (
               <button
@@ -1498,344 +1616,409 @@ export default function SubFinderPage() {
               </button>
             )}
           </div>
+        </div>
 
-          {!railCollapsed && (
-            <>
-              {/* Mode Toggle - Pill */}
-              <div className="mt-4 mb-4 rounded-full border border-slate-200 bg-white/70 p-1">
-                <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setMode('existing')}
-                    className={cn(
-                      'flex-1 rounded-full text-xs font-semibold transition-all',
-                      mode === 'existing'
-                        ? '!bg-button-fill !text-button-fill-foreground shadow-sm'
-                        : 'text-slate-600 hover:bg-white hover:text-slate-900'
-                    )}
-                  >
-                    Existing Absences
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setMode('manual')}
-                    className={cn(
-                      'flex-1 rounded-full text-xs font-semibold transition-all',
-                      mode === 'manual'
-                        ? '!bg-button-fill !text-button-fill-foreground shadow-sm'
-                        : 'text-slate-600 hover:bg-white hover:text-slate-900'
-                    )}
-                  >
-                    Manual Coverage
-                  </Button>
-                </div>
-              </div>
-
-              {/* Search/Filter (for existing absences mode) */}
-              {mode === 'existing' && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Search className="h-4 w-4 text-slate-400" />
-                    <div className="flex-1">
-                      <div className="rounded-md border border-slate-200 bg-white/80">
-                        <div className="px-2 py-1">
-                          <input
-                            type="text"
-                            placeholder="Search teachers..."
-                            value={isTeacherSearchOpen ? teacherSearchInput : searchQuery}
-                            ref={teacherSearchRef}
-                            onChange={e => {
-                              if (isTeacherSearchOpen) {
-                                setTeacherSearchInput(e.target.value)
-                              } else {
-                                setSearchQuery(e.target.value)
-                              }
+        {/* Scrollable content: teacher, pick dates, overlap, table, Find Subs, absences list */}
+        {!railCollapsed ? (
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-4 pb-4">
+            <div className="space-y-4">
+              {/* Teacher selector (always); Pick dates and below only when teacher selected */}
+              <div className="mt-4 space-y-2">
+                <div>
+                  <div>
+                    <div className="rounded-md border border-slate-200 bg-white">
+                      <div className="flex items-center border-b border-slate-100 px-2 py-1 gap-1">
+                        <Input
+                          placeholder="Search or select a teacher..."
+                          value={manualTeacherSearch}
+                          onChange={event => setManualTeacherSearch(event.target.value)}
+                          onFocus={() => setIsManualTeacherSearchOpen(true)}
+                          onBlur={() => {
+                            setTimeout(() => setIsManualTeacherSearchOpen(false), 150)
+                          }}
+                          className="h-8 flex-1 border-0 bg-slate-50 text-sm focus-visible:ring-0"
+                        />
+                        {manualTeacherId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setManualTeacherId('')
+                              setManualTeacherSearch('')
+                              setPickDateChoice('')
+                              setManualStartDate('')
+                              setManualEndDate('')
+                              setSelectedAbsence(null)
+                              setIsAllSubsOpen(false)
+                              setSelectedSub(null)
+                              setSelectedShift(null)
                             }}
-                            onFocus={() => {
-                              setTeacherSearchInput('') // Clear dropdown input when opening
-                              setIsTeacherSearchOpen(true)
-                            }}
-                            onBlur={() => {
-                              setTimeout(() => {
-                                setIsTeacherSearchOpen(false)
-                                setTeacherSearchInput('')
-                              }, 150)
-                            }}
-                            className="w-full bg-transparent text-sm focus:outline-none"
-                          />
-                        </div>
-                        {isTeacherSearchOpen && (
-                          <div className="border-t border-slate-100 max-h-40 overflow-y-auto px-2 py-1">
-                            {teacherNames
-                              .filter(name => {
-                                const query = teacherSearchInput.toLowerCase()
-                                // If there's a query in the dropdown input, filter by it. Otherwise show all teachers
-                                return !query || name.toLowerCase().includes(query)
-                              })
-                              .map(name => {
-                                const teacher = teachers.find(t => getDisplayName(t) === name)
-                                const teacherId = teacher?.id
-                                const isSelected = Boolean(
-                                  teacherId && selectedTeacherIds.includes(teacherId)
-                                )
-                                return (
-                                  <button
-                                    key={name}
-                                    type="button"
-                                    className={cn(
-                                      'w-full rounded px-1.5 py-1 text-left text-sm text-slate-700 hover:bg-slate-100',
-                                      isSelected && 'bg-slate-100 opacity-60'
-                                    )}
-                                    onClick={() => {
-                                      if (teacherId && !isSelected) {
-                                        addTeacherToSelection(teacherId)
-                                      }
-                                    }}
-                                    disabled={isSelected}
-                                  >
-                                    {name}
-                                  </button>
-                                )
-                              })}
-                            {teacherNames.filter(name => {
-                              const query = teacherSearchInput.toLowerCase()
-                              return !query || name.toLowerCase().includes(query)
-                            }).length === 0 && (
-                              <div className="px-1.5 py-1 text-xs text-muted-foreground">
-                                No matches
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  {/* Selected Teachers Pills */}
-                  {selectedTeacherIds.length > 0 && (
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      {selectedTeacherIds.map(teacherId => {
-                        const teacher = teachers.find(t => t.id === teacherId)
-                        if (!teacher) return null
-                        const teacherName = getDisplayName(teacher)
-                        return (
-                          <div
-                            key={teacherId}
-                            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600"
+                            className="shrink-0 p-1 rounded text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                            aria-label="Clear teacher"
                           >
-                            <span>{teacherName}</span>
-                            <button
-                              type="button"
-                              onClick={() => removeTeacherFromSelection(teacherId)}
-                              className="hover:bg-slate-200 rounded-full p-0.5 -mr-1 ml-0.5"
-                              aria-label={`Remove ${teacherName}`}
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Manual Coverage Form (for manual mode) */}
-              {mode === 'manual' && (
-                <div className="mt-3 space-y-2">
-                  <div>
-                    <Label className="text-sm">Teacher</Label>
-                    <div className="mt-1">
-                      <div className="rounded-md border border-slate-200 bg-white">
-                        <div className="border-b border-slate-100 px-2 py-1">
-                          <Input
-                            placeholder="Search teachers..."
-                            value={manualTeacherSearch}
-                            onChange={event => setManualTeacherSearch(event.target.value)}
-                            onFocus={() => setIsManualTeacherSearchOpen(true)}
-                            onBlur={() => {
-                              setTimeout(() => setIsManualTeacherSearchOpen(false), 150)
-                            }}
-                            className="h-8 border-0 bg-slate-50 text-sm focus-visible:ring-0"
-                          />
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                      {isManualTeacherSearchOpen && (
+                        <div className="max-h-52 overflow-y-auto p-2">
+                          {filteredManualTeachers.map(teacher => {
+                            const name = getDisplayName(teacher)
+                            return (
+                              <button
+                                key={teacher.id}
+                                type="button"
+                                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
+                                onClick={() => {
+                                  setManualTeacherId(teacher.id)
+                                  setManualTeacherSearch(name)
+                                  setIsManualTeacherSearchOpen(false)
+                                }}
+                              >
+                                {name}
+                              </button>
+                            )
+                          })}
+                          {filteredManualTeachers.length === 0 && (
+                            <div className="px-2 py-1 text-xs text-muted-foreground">
+                              No matches
+                            </div>
+                          )}
                         </div>
-                        {isManualTeacherSearchOpen && (
-                          <div className="max-h-52 overflow-y-auto p-2">
-                            {filteredManualTeachers.map(teacher => {
-                              const name = getDisplayName(teacher)
-                              return (
-                                <button
-                                  key={teacher.id}
-                                  type="button"
-                                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-800 hover:bg-slate-100"
-                                  onClick={() => {
-                                    setManualTeacherId(teacher.id)
-                                    setManualTeacherSearch(name)
-                                    setIsManualTeacherSearchOpen(false)
-                                  }}
-                                >
-                                  {name}
-                                </button>
-                              )
-                            })}
-                            {filteredManualTeachers.length === 0 && (
-                              <div className="px-2 py-1 text-xs text-muted-foreground">
-                                No matches
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
-                  <div>
-                    <Label className="text-sm">Start Date</Label>
-                    <div className="mt-1">
-                      <DatePickerInput
-                        value={manualStartDate}
-                        onChange={value => {
-                          setManualStartDate(value)
-                          if (manualEndDate && value && manualEndDate < value) {
-                            setManualEndDate(value)
-                            setCorrectionNotice()
-                          } else if (manualEndDate) {
-                            setEndDateCorrected(false)
-                          }
-                          setTimeout(() => {
-                            manualEndDateRef.current?.focus()
-                            manualEndDateRef.current?.click()
-                          }, 0)
-                        }}
-                        placeholder="Select start date"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-sm">End Date</Label>
-                    <div className="mt-1">
-                      <DatePickerInput
-                        ref={manualEndDateRef}
-                        value={manualEndDate}
-                        onChange={value => {
-                          if (manualStartDate && value && value < manualStartDate) {
-                            setManualEndDate(manualStartDate)
-                            setCorrectionNotice()
-                            return
-                          }
-                          setManualEndDate(value)
-                          setEndDateCorrected(false)
-                        }}
-                        placeholder="Select end date"
-                        allowClear
-                        closeOnSelect
-                      />
-                    </div>
-                    {endDateCorrected && (
-                      <p className="text-xs text-amber-600 mt-1">
-                        End date adjusted to match start date.
+                </div>
+
+                {manualTeacherId && (
+                  <>
+                    {/* Pick dates - segmented control: click to select, click again to deselect */}
+                    <div className="pt-6">
+                      <p className="text-xs font-medium text-slate-500 pt-1 pb-0.5 mb-3">
+                        Pick dates
                       </p>
-                    )}
-                  </div>
-                  <div className="pt-3 mt-2 border-t border-slate-200">
-                    {manualConflictSummary.conflictCount > 0 && (
-                      <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 mb-3 space-y-2">
-                        <p className="text-sm text-amber-800">
-                          This teacher already has time off for{' '}
-                          {manualConflictSummary.conflictCount} of the shifts in this range. Those
-                          shifts are excluded; we&apos;ll find subs for the remaining shifts only.
-                        </p>
-                        {manualConflictingRequests.length > 0 && (
-                          <div className="text-xs text-amber-700">
-                            <span className="font-medium">Existing time off: </span>
-                            {manualConflictingRequests
-                              .map(req => formatAbsenceDateRange(req.start_date, req.end_date))
-                              .join(', ')}
-                          </div>
-                        )}
+                      <div className="flex justify-center">
+                        <div
+                          className="inline-flex items-center rounded-full border p-1"
+                          style={{
+                            borderColor: '#e2e8f0',
+                            backgroundColor: '#ffffff',
+                          }}
+                          role="group"
+                          aria-label="Pick dates"
+                        >
+                          {(
+                            [
+                              { value: 'today' as const, label: 'Today' },
+                              { value: 'tomorrow' as const, label: 'Tomorrow' },
+                              { value: 'custom' as const, label: 'Custom date range' },
+                            ] as const
+                          ).map(({ value, label }) => {
+                            const isSelected = pickDateChoice === value
+                            return (
+                              <button
+                                key={value}
+                                type="button"
+                                id={
+                                  value === 'today'
+                                    ? 'pick-dates-today'
+                                    : value === 'tomorrow'
+                                      ? 'pick-dates-tomorrow'
+                                      : 'pick-dates-custom'
+                                }
+                                className={cn(
+                                  'rounded-full py-1.5 px-4 text-sm font-medium transition-[color,background-color] duration-150',
+                                  isSelected
+                                    ? 'bg-[#172554] text-white'
+                                    : 'bg-transparent text-[#475569] hover:bg-slate-100/80'
+                                )}
+                                onClick={() => {
+                                  const today = getTodayISO()
+                                  const tomorrow = getTomorrowISO()
+                                  if (isSelected) {
+                                    setPickDateChoice('')
+                                    setManualStartDate('')
+                                    setManualEndDate('')
+                                    return
+                                  }
+                                  setPickDateChoice(value)
+                                  if (value === 'today') {
+                                    setManualStartDate(today)
+                                    setManualEndDate(today)
+                                  } else if (value === 'tomorrow') {
+                                    setManualStartDate(tomorrow)
+                                    setManualEndDate(tomorrow)
+                                  } else {
+                                    if (!manualStartDate) {
+                                      setManualStartDate(today)
+                                      setManualEndDate(today)
+                                    }
+                                  }
+                                }}
+                              >
+                                {label}
+                              </button>
+                            )
+                          })}
+                        </div>
                       </div>
-                    )}
+                      {pickDateChoice === 'custom' && (
+                        <div className="pl-6 space-y-2 border-l-2 border-slate-200 ml-1 mt-2">
+                          <div>
+                            <Label className="text-xs">Start date</Label>
+                            <DatePickerInput
+                              value={manualStartDate}
+                              onChange={value => {
+                                setManualStartDate(value)
+                                if (manualEndDate && value && manualEndDate < value) {
+                                  setManualEndDate(value)
+                                  setCorrectionNotice()
+                                } else if (manualEndDate) {
+                                  setEndDateCorrected(false)
+                                }
+                                // Open end date picker after start date selected (end date is uncontrolled; one click opens it)
+                                setTimeout(() => manualEndDateRef.current?.click(), 400)
+                              }}
+                              placeholder="Select start date"
+                              className="mt-1 h-8 text-sm"
+                              closeOnSelect
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">End date</Label>
+                            <DatePickerInput
+                              ref={manualEndDateRef}
+                              value={manualEndDate}
+                              onChange={value => {
+                                if (manualStartDate && value && value < manualStartDate) {
+                                  setManualEndDate(manualStartDate)
+                                  setCorrectionNotice()
+                                  return
+                                }
+                                setManualEndDate(value)
+                                setEndDateCorrected(false)
+                              }}
+                              placeholder="Select end date"
+                              allowClear
+                              closeOnSelect
+                              className="mt-1 h-8 text-sm"
+                              openToDate={manualStartDate || undefined}
+                            />
+                          </div>
+                          {endDateCorrected && (
+                            <p className="text-xs text-amber-600 mt-1">
+                              End date adjusted to match start date.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+              {manualTeacherId &&
+                (pickDateChoice === 'today' ||
+                  pickDateChoice === 'tomorrow' ||
+                  pickDateChoice === 'custom') && (
+                  <div className="pt-3 mt-2">
                     <ShiftSelectionTable
+                      key={`manual-shifts-${manualTeacherId}-${manualStartDate}-${manualLeftPanelRefreshKey}`}
                       teacherId={manualTeacherId || null}
                       startDate={manualStartDate}
                       endDate={manualEndDate || manualStartDate}
                       selectedShifts={manualSelectedShifts}
                       onShiftsChange={onManualShiftsChange}
                       onConflictSummaryChange={setManualConflictSummary}
+                      onConflictCheckReady={setManualConflictCheckReady}
                       onConflictRequestsChange={setManualConflictingRequests}
-                      validateConflicts
+                      onConflictShiftsChange={setManualConflictShifts}
+                      validateConflicts={true}
                       autoSelectScheduled
                       tableClassName="text-xs [&_th]:px-2 [&_td]:px-2"
                     />
-                    {manualSelectedShifts.length === 0 && (
-                      <p className="text-xs text-amber-600 mt-2">Select at least one shift.</p>
-                    )}
+                    {manualSelectedShifts.length === 0 &&
+                      !(
+                        manualConflictSummary.conflictCount ===
+                          manualConflictSummary.totalScheduled &&
+                        manualConflictSummary.totalScheduled > 0
+                      ) && (
+                        <p className="text-xs text-amber-600 mt-2">Select at least one shift.</p>
+                      )}
+                    {/* No time off: alert and Create button (only after conflict check is ready to avoid flash) */}
+                    {manualConflictCheckReady &&
+                      manualConflictSummary.conflictCount === 0 &&
+                      manualConflictSummary.totalScheduled > 0 &&
+                      manualSelectedShifts.length > 0 && (
+                        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-3">
+                          <p className="text-sm text-amber-900">
+                            No time off request for these dates yet. Create one to contact and
+                            assign subs.
+                          </p>
+                          <div className="mt-2 flex justify-end">
+                            <Button
+                              size="sm"
+                              className="shrink-0 bg-white text-teal-600 border border-slate-200 hover:bg-slate-50 hover:text-teal-700"
+                              onClick={openTimeOffPanel}
+                            >
+                              Create time off request
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    {/* Partial overlap: Extend vs Create new */}
+                    {manualConflictSummary.conflictCount > 0 &&
+                      manualConflictSummary.conflictCount < manualConflictSummary.totalScheduled &&
+                      manualSelectedShifts.length > 0 && (
+                        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-3 space-y-3">
+                          <p className="text-sm text-amber-900">
+                            {manualConflictSummary.conflictCount} of{' '}
+                            {manualConflictSummary.totalScheduled} shifts overlap with existing time
+                            off.
+                          </p>
+                          {manualConflictingRequests.length > 1 ? (
+                            <RadioGroup
+                              value={manualExtendSelectedRequestId ?? ''}
+                              onValueChange={setManualExtendSelectedRequestId}
+                              className="space-y-2"
+                            >
+                              <ul className="list-none space-y-1.5 text-sm text-amber-900">
+                                {manualConflictingRequests.map(req => {
+                                  const label = `${req.reason ?? 'Unspecified'}, ${formatAbsenceDateRange(req.start_date, req.end_date)}`
+                                  return (
+                                    <li key={req.id} className="flex items-center gap-2">
+                                      <RadioGroupItem value={req.id} id={`extend-${req.id}`} />
+                                      <Label
+                                        htmlFor={`extend-${req.id}`}
+                                        className="cursor-pointer font-normal text-amber-900"
+                                      >
+                                        {label}
+                                      </Label>
+                                    </li>
+                                  )
+                                })}
+                              </ul>
+                            </RadioGroup>
+                          ) : (
+                            <ul className="list-disc list-inside text-sm text-amber-900 space-y-1">
+                              {manualConflictingRequests.map(req => {
+                                const label = `${req.reason ?? 'Unspecified'}, ${formatAbsenceDateRange(req.start_date, req.end_date)}`
+                                return <li key={req.id}>{label}</li>
+                              })}
+                            </ul>
+                          )}
+                          <div className="pt-4 flex flex-col items-center gap-1">
+                            <Button
+                              size="sm"
+                              className="w-full sm:w-auto shrink-0 bg-white text-teal-600 border border-slate-200 hover:bg-slate-50 hover:text-teal-700"
+                              onClick={() => {
+                                const id =
+                                  manualConflictingRequests.length === 1
+                                    ? manualConflictingRequests[0]?.id
+                                    : manualExtendSelectedRequestId
+                                if (id) {
+                                  setManualExtendShowSelectWarning(false)
+                                  openEditTimeOffPanel(id)
+                                } else {
+                                  setManualExtendShowSelectWarning(true)
+                                }
+                              }}
+                            >
+                              Extend existing request
+                            </Button>
+                            {manualExtendShowSelectWarning && (
+                              <p
+                                className="text-sm font-medium"
+                                style={{ color: 'rgb(185, 28, 28)' }}
+                                role="alert"
+                              >
+                                Select a request to extend first.
+                              </p>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-teal-600 hover:text-teal-700 hover:bg-transparent"
+                              onClick={openTimeOffPanel}
+                            >
+                              Or create new time off request
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    {/* 100% overlap: success banner after add/extend, or helper text per AGENTS.md */}
+                    {manualConflictSummary.conflictCount === manualConflictSummary.totalScheduled &&
+                      manualConflictSummary.totalScheduled > 0 &&
+                      (manualTimeOffSuccessBanner ? (
+                        <div
+                          className="mt-2 rounded-lg border px-4 py-2.5 text-sm"
+                          style={{
+                            backgroundColor: '#dcfce7',
+                            color: '#166534',
+                            borderColor: '#86efac',
+                          }}
+                          role="status"
+                        >
+                          Time off successfully added for these shifts. Finding recommended subs…
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Teacher already has recorded time off for these shifts. Use Find Subs to
+                          see recommended subs, or select the existing absence below.
+                        </p>
+                      ))}
                   </div>
+                )}
+              {manualTeacherId &&
+                (pickDateChoice === 'today' ||
+                  pickDateChoice === 'tomorrow' ||
+                  (pickDateChoice === 'custom' && manualStartDate)) && (
                   <Button
                     size="sm"
-                    variant="outline"
-                    className="w-full border-slate-200 text-primary hover:bg-button-fill hover:text-button-fill-foreground focus:bg-button-fill focus:text-button-fill-foreground"
+                    variant="default"
+                    className="w-full"
                     disabled={
-                      !manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0
+                      !manualConflictCheckReady ||
+                      (manualSelectedShifts.length === 0 &&
+                        manualConflictSummary.conflictCount !==
+                          manualConflictSummary.totalScheduled)
                     }
-                    onClick={runManualFinderAndCollapse}
+                    onClick={() => {
+                      const allShiftsHaveTimeOff =
+                        manualConflictSummary.conflictCount > 0 &&
+                        manualConflictSummary.conflictCount === manualConflictSummary.totalScheduled
+                      setLastManualRunHadAllShiftsWithTimeOff(allShiftsHaveTimeOff)
+                      if (allShiftsHaveTimeOff) {
+                        runManualFinderAndCollapse(false, manualConflictShifts)
+                        return
+                      }
+                      runManualFinderAndCollapse(false, undefined)
+                    }}
                   >
-                    Find Subs
+                    {manualSelectedShifts.length > 0 &&
+                    manualConflictSummary.conflictCount < manualConflictSummary.totalScheduled
+                      ? 'Find Subs in Preview Mode'
+                      : 'Find Subs'}
                   </Button>
-                  {selectedAbsence?.id?.startsWith('manual-') &&
-                    !loading &&
-                    manualTimeOffChoice === 'unset' && (
-                      <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50/80 p-3 space-y-2">
-                        <p className="text-sm text-slate-700">
-                          No time off request for this range yet. Create one so you can contact and
-                          assign subs?
-                        </p>
-                        <div className="flex flex-col gap-2">
-                          <Button
-                            size="sm"
-                            className="w-full"
-                            onClick={() => {
-                              const params = new URLSearchParams()
-                              if (manualTeacherId) params.set('teacher_id', manualTeacherId)
-                              if (manualStartDate) params.set('start_date', manualStartDate)
-                              if (manualEndDate)
-                                params.set('end_date', manualEndDate || manualStartDate)
-                              params.set('return_to', 'sub-finder')
-                              router.push(`/time-off/new?${params.toString()}`)
-                              setManualTimeOffChoice('create')
-                            }}
-                          >
-                            Create time off for this range
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="w-full text-slate-600"
-                            onClick={() => setManualTimeOffChoice('browsing')}
-                          >
-                            Just browsing
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                </div>
-              )}
-            </>
-          )}
-        </div>
+                )}
 
-        {/* Absences List */}
-        {!railCollapsed && mode === 'existing' && (
-          <div className="flex-1 px-6 pb-4">
-            <AbsenceList
-              absences={filteredAbsences}
-              selectedAbsence={selectedAbsence}
-              onSelectAbsence={setSelectedAbsence}
-              onFindSubs={runFinderForAbsenceAndCollapse}
-              loading={loading}
-            />
+              {/* Absences List - always visible, filtered by selected teacher when one is selected */}
+              <AbsenceList
+                absences={filteredAbsences}
+                selectedAbsence={selectedAbsence}
+                onSelectAbsence={absence => {
+                  setSelectedAbsence(absence)
+                  setMode('existing')
+                  const teacher = teachers.find(t => t.id === absence.teacher_id)
+                  if (teacher) {
+                    setManualTeacherId(absence.teacher_id)
+                    setManualTeacherSearch(getDisplayName(teacher))
+                  }
+                }}
+                onFindSubs={runFinderForAbsenceAndCollapse}
+                loading={loading}
+              />
+            </div>
           </div>
-        )}
+        ) : null}
       </div>
     )
   }
@@ -1877,6 +2060,27 @@ export default function SubFinderPage() {
         {mobileView === 'shifts' && (
           <>
             <div className="px-4">
+              {isPreviewMode && selectedAbsence?.id?.startsWith('manual-') && (
+                <div className="mt-4 mb-5 rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-amber-900">
+                        Preview only — assignment is not available.
+                      </p>
+                      <p className="mt-1 text-sm text-amber-800">
+                        Create a time off request for this range to contact and assign subs.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="shrink-0 bg-white text-teal-600 border border-slate-200 hover:bg-slate-50 hover:text-teal-700 sm:ml-auto"
+                      onClick={openTimeOffPanel}
+                    >
+                      Create time off request
+                    </Button>
+                  </div>
+                </div>
+              )}
               {selectedAbsence && (
                 <div className="py-4 flex flex-col gap-6 w-full">
                   {ENABLE_COLLAPSE_RECOMMENDED_ON_SHIFT &&
@@ -1898,7 +2102,8 @@ export default function SubFinderPage() {
                       <div className="mt-2">
                         <RecommendedCombination
                           combinations={displayRecommendedCombinations}
-                          onContactSub={handleCombinationContact}
+                          onContactSub={isPreviewMode ? undefined : handleCombinationContact}
+                          previewMode={isPreviewMode}
                           totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
                           useRemainingLabel={
                             (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
@@ -1959,7 +2164,8 @@ export default function SubFinderPage() {
                         onSelectShift={handleSelectShift}
                         onChangeSub={handleOpenChangeDialog}
                         onRemoveSub={handleOpenRemoveDialog}
-                        onSelectSubForContact={handleCombinationContact}
+                        onSelectSubForContact={isPreviewMode ? undefined : handleCombinationContact}
+                        previewMode={isPreviewMode}
                       />
                     ))
                   ) : (
@@ -1981,6 +2187,7 @@ export default function SubFinderPage() {
                 sub={selectedSub as RecommendedSub}
                 absence={selectedAbsence}
                 variant="inline"
+                previewMode={isPreviewMode}
                 initialContactData={
                   selectedSub && selectedAbsence
                     ? contactDataCache.get(getCacheKey(selectedSub.id, selectedAbsence.id))
@@ -2044,6 +2251,27 @@ export default function SubFinderPage() {
                     <X className="h-4 w-4" />
                   </button>
                 </div>
+                {isPreviewMode && selectedAbsence?.id?.startsWith('manual-') && (
+                  <div className="border-b border-amber-200 bg-amber-50/80 px-4 py-3 mb-5">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-amber-900">
+                          Preview only — assignment is not available.
+                        </p>
+                        <p className="mt-1 text-sm text-amber-800">
+                          Create a time off request for this range to contact and assign subs.
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="shrink-0 bg-white text-teal-600 border border-slate-200 hover:bg-slate-50 hover:text-teal-700 sm:ml-auto"
+                        onClick={openTimeOffPanel}
+                      >
+                        Create time off request
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 <div className="p-4 space-y-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
@@ -2133,12 +2361,13 @@ export default function SubFinderPage() {
                     absence={absenceForUI ?? selectedAbsence}
                     shiftDetails={shiftDetails}
                     showAllSubs
-                    onContactSub={handleContactSub}
+                    onContactSub={isPreviewMode ? undefined : handleContactSub}
                     onSaveNote={handleSaveSubNote}
                     getContactStatusLine={getContactStatusLine}
                     hideHeader
                     highlightedSubId={highlightedSubId}
                     includePastShifts={includePastShifts}
+                    previewMode={isPreviewMode}
                     selectedShift={selectedShift}
                     activeFilter={rightPanelActiveFilter}
                     onActiveFilterChange={setRightPanelActiveFilter}
@@ -2156,9 +2385,9 @@ export default function SubFinderPage() {
       <div
         className="hidden md:flex h-full"
         style={{
-          width: isLeftRailCollapsed ? '4.25rem' : '26rem',
-          minWidth: isLeftRailCollapsed ? '4.25rem' : '26rem',
-          maxWidth: isLeftRailCollapsed ? '4.25rem' : '26rem',
+          width: isLeftRailCollapsed ? '4.25rem' : '30rem',
+          minWidth: isLeftRailCollapsed ? '4.25rem' : '30rem',
+          maxWidth: isLeftRailCollapsed ? '4.25rem' : '30rem',
           filter: isRightPanelOpen && !isContactPanelOpen ? 'brightness(0.9)' : undefined,
         }}
       >
@@ -2235,6 +2464,28 @@ export default function SubFinderPage() {
                         )}
                       </h2>
                     </div>
+
+                    {isPreviewMode && selectedAbsence?.id?.startsWith('manual-') && (
+                      <div className="mt-4 mb-5 rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-amber-900">
+                              Preview only — assignment is not available.
+                            </p>
+                            <p className="mt-1 text-sm text-amber-800">
+                              Create a time off request for this range to contact and assign subs.
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="shrink-0 bg-white text-teal-600 border border-slate-200 hover:bg-slate-50 hover:text-teal-700 sm:ml-auto"
+                            onClick={openTimeOffPanel}
+                          >
+                            Create time off request
+                          </Button>
+                        </div>
+                      </div>
+                    )}
 
                     {visibleShiftSummary && visibleShiftSummary.total > 0 && (
                       <div className="mt-1 mb-2 flex flex-wrap items-end justify-between gap-4">
@@ -2320,7 +2571,8 @@ export default function SubFinderPage() {
                     <div className="mt-2">
                       <RecommendedCombination
                         combinations={displayRecommendedCombinations}
-                        onContactSub={handleCombinationContact}
+                        onContactSub={isPreviewMode ? undefined : handleCombinationContact}
+                        previewMode={isPreviewMode}
                         totalShifts={visibleShiftSummary?.total ?? selectedAbsence.shifts.total}
                         useRemainingLabel={
                           (visibleShiftSummary?.total ?? selectedAbsence.shifts.total) >
@@ -2484,7 +2736,10 @@ export default function SubFinderPage() {
                           onSelectShift={handleSelectShift}
                           onChangeSub={handleOpenChangeDialog}
                           onRemoveSub={handleOpenRemoveDialog}
-                          onSelectSubForContact={handleCombinationContact}
+                          onSelectSubForContact={
+                            isPreviewMode ? undefined : handleCombinationContact
+                          }
+                          previewMode={isPreviewMode}
                         />
                       ))
                     ) : (
@@ -2597,6 +2852,28 @@ export default function SubFinderPage() {
                     </div>
                   </div>
 
+                  {isPreviewMode && selectedAbsence?.id?.startsWith('manual-') && (
+                    <div className="border-b border-amber-200 bg-amber-50/80 px-8 py-3 mb-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-amber-900">
+                            Preview only — assignment is not available.
+                          </p>
+                          <p className="mt-1 text-sm text-amber-800">
+                            Create a time off request for this range to contact and assign subs.
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          className="shrink-0 bg-white text-teal-600 border border-slate-200 hover:bg-slate-50 hover:text-teal-700 sm:ml-auto"
+                          onClick={openTimeOffPanel}
+                        >
+                          Create time off request
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   <div
                     className={cn(
                       'pt-3 space-y-2',
@@ -2707,6 +2984,7 @@ export default function SubFinderPage() {
                       getContactStatusLine={getContactStatusLine}
                       hideHeader
                       includePastShifts={includePastShifts}
+                      previewMode={isPreviewMode}
                       selectedShift={selectedShift}
                       activeFilter={rightPanelActiveFilter}
                       onActiveFilterChange={setRightPanelActiveFilter}
@@ -2728,12 +3006,13 @@ export default function SubFinderPage() {
                     absence={absenceForUI ?? selectedAbsence}
                     shiftDetails={shiftDetails}
                     showAllSubs
-                    onContactSub={handleContactSub}
+                    onContactSub={isPreviewMode ? undefined : handleContactSub}
                     onSaveNote={handleSaveSubNote}
                     getContactStatusLine={getContactStatusLine}
                     hideHeader
                     highlightedSubId={highlightedSubId}
                     includePastShifts={includePastShifts}
+                    previewMode={isPreviewMode}
                     selectedShift={selectedShift}
                     stickyControls
                     activeFilter={rightPanelActiveFilter}
@@ -2833,6 +3112,7 @@ export default function SubFinderPage() {
             sub={selectedSub as RecommendedSub}
             absence={selectedAbsence}
             variant="sheet"
+            previewMode={isPreviewMode}
             onChangeShift={shift => {
               const match = selectedAbsence.shifts.shift_details.find(
                 detail =>
@@ -2869,12 +3149,7 @@ export default function SubFinderPage() {
             onCreateTimeOffRequest={
               selectedAbsence?.id?.startsWith('manual-')
                 ? () => {
-                    const params = new URLSearchParams()
-                    if (manualTeacherId) params.set('teacher_id', manualTeacherId)
-                    if (manualStartDate) params.set('start_date', manualStartDate)
-                    if (manualEndDate) params.set('end_date', manualEndDate || manualStartDate)
-                    params.set('return_to', 'sub-finder')
-                    router.push(`/time-off/new?${params.toString()}`)
+                    openTimeOffPanel()
                     setManualTimeOffChoice('create')
                   }
                 : undefined
@@ -2888,6 +3163,22 @@ export default function SubFinderPage() {
                   }
                 : undefined
             }
+          />
+        )}
+
+        {editingTimeOffRequestId && (
+          <AddTimeOffButton
+            timeOffRequestId={editingTimeOffRequestId}
+            initialSelectedShifts={manualSelectedShifts}
+            initialStartDate={manualStartDate}
+            initialEndDate={manualEndDate || manualStartDate}
+            onClose={() => setEditingTimeOffRequestId(null)}
+            onSuccess={() => {
+              setManualTimeOffSuccessBanner(true)
+              setManualConflictCheckReady(false)
+              setManualLeftPanelRefreshKey(k => k + 1)
+              setShouldAutoRunFindSubsAfterRefresh(true)
+            }}
           />
         )}
       </div>

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
+import { toDateStringISO } from '@/lib/utils/date'
 
 type UnassignScope = 'single' | 'all_for_absence'
 
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
     }
 
     const timeOffShiftKeys = new Set(
-      (timeOffShifts || []).map(shift => `${shift.date}|${shift.time_slot_id}`)
+      (timeOffShifts || []).map(shift => `${toDateStringISO(shift.date)}|${shift.time_slot_id}`)
     )
     const timeOffShiftIds = new Set((timeOffShifts || []).map(shift => shift.id))
     const rangeEnd = timeOffRequest.end_date || timeOffRequest.start_date
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
     }
 
     const matchingAssignments = (activeAssignments || []).filter(assignment => {
-      const key = `${assignment.date}|${assignment.time_slot_id}`
+      const key = `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`
       return (
         timeOffShiftKeys.has(key) ||
         (assignment.coverage_request_shift_id
@@ -132,7 +133,7 @@ export async function POST(request: NextRequest) {
           { status: 409 }
         )
       }
-      targetShiftKey = `${target.date}|${target.time_slot_id}`
+      targetShiftKey = `${toDateStringISO(target.date)}|${target.time_slot_id}`
       targetDate = target.date
       targetTimeSlotId = target.time_slot_id
       assignmentIdsToCancel = [target.id]
