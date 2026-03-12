@@ -193,7 +193,7 @@ export default function SubFinderPage() {
     p.set('open_time_off', '1')
     if (manualTeacherId) p.set('teacher_id', manualTeacherId)
     if (manualStartDate) p.set('start_date', manualStartDate)
-    if (manualEndDate) p.set('end_date', manualEndDate || manualStartDate)
+    if (manualStartDate || manualEndDate) p.set('end_date', manualEndDate || manualStartDate)
     router.replace(`${pathname}?${p.toString()}`)
   }, [pathname, router, searchParams, manualTeacherId, manualStartDate, manualEndDate])
 
@@ -1210,19 +1210,19 @@ export default function SubFinderPage() {
     }
   }
 
-  // Set teacher when teacher_id is provided from URL (integrated view uses manualTeacherId; sync drives selectedTeacherIds)
+  // Set teacher when teacher_id is provided from URL (integrated view uses manualTeacherId; sync drives selectedTeacherIds).
+  // Only remove teacher_id from URL after we've applied it (when teacher is found). If teachers haven't loaded yet,
+  // bail out so the param stays and this effect can run again when teachers loads.
   useEffect(() => {
     if (requestedMode === 'manual') return
-    if (requestedTeacherId && manualTeacherId !== requestedTeacherId) {
-      const teacher = teachers.find(t => t.id === requestedTeacherId)
-      if (teacher) {
-        setManualTeacherId(requestedTeacherId)
-        setManualTeacherSearch(getDisplayName(teacher))
-      }
-      const newSearchParams = new URLSearchParams(searchParams.toString())
-      newSearchParams.delete('teacher_id')
-      router.replace(`/sub-finder?${newSearchParams.toString()}`)
-    }
+    if (!requestedTeacherId || manualTeacherId === requestedTeacherId) return
+    const teacher = teachers.find(t => t.id === requestedTeacherId)
+    if (!teacher) return
+    setManualTeacherId(requestedTeacherId)
+    setManualTeacherSearch(getDisplayName(teacher))
+    const newSearchParams = new URLSearchParams(searchParams.toString())
+    newSearchParams.delete('teacher_id')
+    router.replace(`/sub-finder?${newSearchParams.toString()}`)
   }, [
     requestedMode,
     requestedTeacherId,
