@@ -259,6 +259,11 @@ export default function SubFinderPage() {
     if (!manualTableRendered) setManualConflictCheckReady(false)
   }, [manualTableRendered])
 
+  /** Reset when teacher or date range changes so we don't use stale conflict data; table key changes and it remounts. */
+  useEffect(() => {
+    setManualConflictCheckReady(false)
+  }, [manualTeacherId, manualStartDate, manualEndDate])
+
   /** Clear extend selection and warning when conflicting requests change (e.g. different date) or when not 2+. */
   useEffect(() => {
     if (manualConflictingRequests.length < 2) {
