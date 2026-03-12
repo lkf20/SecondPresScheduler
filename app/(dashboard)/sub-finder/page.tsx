@@ -1904,8 +1904,9 @@ export default function SubFinderPage() {
                           </div>
                         </div>
                       )}
-                    {/* Partial overlap: Extend vs Create new */}
-                    {manualConflictSummary.conflictCount > 0 &&
+                    {/* Partial overlap: Extend vs Create new (gate on ready to avoid stale data after teacher/date change) */}
+                    {manualConflictCheckReady &&
+                      manualConflictSummary.conflictCount > 0 &&
                       manualConflictSummary.conflictCount < manualConflictSummary.totalScheduled &&
                       manualSelectedShifts.length > 0 && (
                         <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-3 space-y-3">
@@ -1984,8 +1985,10 @@ export default function SubFinderPage() {
                           </div>
                         </div>
                       )}
-                    {/* 100% overlap: success banner after add/extend, or helper text per AGENTS.md */}
-                    {manualConflictSummary.conflictCount === manualConflictSummary.totalScheduled &&
+                    {/* 100% overlap: success banner after add/extend, or helper text per AGENTS.md (gate on ready to avoid stale data) */}
+                    {manualConflictCheckReady &&
+                      manualConflictSummary.conflictCount ===
+                        manualConflictSummary.totalScheduled &&
                       manualConflictSummary.totalScheduled > 0 &&
                       (manualTimeOffSuccessBanner ? (
                         <div
