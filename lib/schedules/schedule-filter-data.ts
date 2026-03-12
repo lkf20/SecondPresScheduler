@@ -77,7 +77,7 @@ function slotPassesStaffingFilter(
     ? Math.ceil(totalEnrollment / classGroupForRatio.required_ratio)
     : undefined
   const calculatedPreferred = classGroupForRatio.preferred_ratio
-    ? Math.ceil(totalEnrollment / (classGroupForRatio.preferred_ratio ?? 1))
+    ? Math.ceil(totalEnrollment / classGroupForRatio.preferred_ratio)
     : undefined
   const requiredTeachers =
     scheduleCell.required_staff_override != null
@@ -130,7 +130,7 @@ export function getSlotRequiredPreferred(
     ? Math.ceil(totalEnrollment / classGroupForRatio.required_ratio)
     : undefined
   const calculatedPreferred = classGroupForRatio.preferred_ratio
-    ? Math.ceil(totalEnrollment / (classGroupForRatio.preferred_ratio ?? 1))
+    ? Math.ceil(totalEnrollment / classGroupForRatio.preferred_ratio)
     : undefined
   const required =
     scheduleCell.required_staff_override != null
