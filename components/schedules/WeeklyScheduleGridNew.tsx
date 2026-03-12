@@ -75,6 +75,8 @@ interface WeeklyScheduleGridNewProps {
   leadingFilterContent?: React.ReactNode
   /** Renders on the right side of the filter row (e.g. Manage Calendar). Only used when showFilterChips is true. */
   trailingFilterContent?: React.ReactNode
+  /** Renders immediately to the left of "Showing X of Y slots". Only used when showFilterChips is true and slotCounts is set. */
+  contentBeforeSlotCount?: React.ReactNode
   /** School closures for the displayed week; used to render "School Closed" on closed cells. */
   schoolClosures?: Array<{
     id: string
@@ -168,92 +170,94 @@ function ScheduleLegend({
   showLegendSubstitutes,
   showLegendTemporaryCoverage = true,
   showSchoolClosed = false,
+  noWrapper = false,
 }: {
   showLegendSubstitutes: boolean
   showLegendTemporaryCoverage?: boolean
   showSchoolClosed?: boolean
+  noWrapper?: boolean
 }) {
-  return (
-    <div className="mb-6 p-3 bg-gray-100 rounded-md border border-gray-200">
-      <div className="flex flex-wrap items-center gap-4 text-sm">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-gray-700">Key:</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300"
-            style={{ borderColor: '#93c5fd' }}
-          >
-            Permanent Teacher
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-500 border-dashed"
-            style={{ borderColor: '#3b82f6' }}
-          >
-            Flex Teacher
-          </span>
-        </div>
-        {showLegendTemporaryCoverage && (
-          <div className="flex items-center gap-2">
-            <span
-              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border border-dashed"
-              style={{
-                borderColor: '#f9a8d4',
-                backgroundColor: '#fdf2f8',
-                color: '#db2777',
-              }}
-            >
-              Temporary Coverage
-            </span>
-          </div>
-        )}
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-300 border-dashed">
-            Floater
-          </span>
-        </div>
-        {showLegendSubstitutes && (
-          <>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200">
-                Substitute
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
-                Absent
-              </span>
-            </div>
-          </>
-        )}
-        <div className="flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-green-600" />
-          <span className="text-gray-600">Meets preferred</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-amber-700" />
-          <span className="text-gray-600">Below preferred</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <XCircle className="h-4 w-4 text-red-600" />
-          <span className="text-gray-600">Below required</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={SCHEDULE_INACTIVE_LEGEND_DOT_CLASS} />
-          <span className="text-gray-600">Inactive</span>
-        </div>
-        {showSchoolClosed && (
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
-              School Closed
-            </span>
-          </div>
-        )}
+  const content = (
+    <div className="flex flex-wrap items-center gap-4 text-sm">
+      <div className="flex items-center gap-2">
+        <span className="font-semibold text-gray-700">Key:</span>
       </div>
+      <div className="flex items-center gap-2">
+        <span
+          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300"
+          style={{ borderColor: '#93c5fd' }}
+        >
+          Permanent Teacher
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span
+          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-500 border-dashed"
+          style={{ borderColor: '#3b82f6' }}
+        >
+          Flex Teacher
+        </span>
+      </div>
+      {showLegendTemporaryCoverage && (
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border border-dashed"
+            style={{
+              borderColor: '#f9a8d4',
+              backgroundColor: '#fdf2f8',
+              color: '#db2777',
+            }}
+          >
+            Temporary Coverage
+          </span>
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-300 border-dashed">
+          Floater
+        </span>
+      </div>
+      {showLegendSubstitutes && (
+        <>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-600 border border-teal-200">
+              Substitute
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+              Absent
+            </span>
+          </div>
+        </>
+      )}
+      <div className="flex items-center gap-2">
+        <CheckCircle2 className="h-4 w-4 text-green-600" />
+        <span className="text-gray-600">Meets preferred</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 text-amber-700" />
+        <span className="text-gray-600">Below preferred</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <XCircle className="h-4 w-4 text-red-600" />
+        <span className="text-gray-600">Below required</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className={SCHEDULE_INACTIVE_LEGEND_DOT_CLASS} />
+        <span className="text-gray-600">Inactive</span>
+      </div>
+      {showSchoolClosed && (
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+            School Closed
+          </span>
+        </div>
+      )}
     </div>
   )
+  if (noWrapper) return content
+  return <div className="mb-6 p-3 bg-gray-100 rounded-md border border-gray-200">{content}</div>
 }
 export function calculateAssignmentCounts(data: WeeklyScheduleDataByClassroom[]) {
   let allCount = 0
@@ -489,6 +493,7 @@ export default function WeeklyScheduleGridNew({
   showDateInHeader = true,
   leadingFilterContent,
   trailingFilterContent,
+  contentBeforeSlotCount,
   schoolClosures = [],
   onClosureMarkOpen,
   onClosureMarkOpenForDay,
@@ -809,310 +814,315 @@ export default function WeeklyScheduleGridNew({
   if (layout === 'days-x-classrooms' && daysXClassroomsData && daysXClassroomsGrid) {
     return (
       <>
-        {/* Legend */}
-        <ScheduleLegend
-          showLegendSubstitutes={showLegendSubstitutes}
-          showLegendTemporaryCoverage={showLegendTemporaryCoverage}
-          showSchoolClosed={schoolClosures.length > 0}
-        />
-        {contentBelowLegend && (
-          <div className="mb-4 flex flex-wrap items-center gap-3">{contentBelowLegend}</div>
-        )}
-        {/* Filter chips - separate row below legend */}
-        {showFilterChips && (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              {leadingFilterContent}
-              {[
-                { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
-                {
-                  value: 'coverage-issues' as const,
-                  label: `Coverage Issues (${countsForChips.coverageIssues})`,
-                },
-                { value: 'substitutes-only' as const, label: `Subs (${countsForChips.subs})` },
-                { value: 'absences' as const, label: `Absences (${countsForChips.absences})` },
-                {
-                  value: 'permanent-only' as const,
-                  label: `Permanent staff (${countsForChips.permanent})`,
-                },
-              ].map(option => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={e => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    onDisplayModeChange?.(option.value)
-                  }}
-                  className={
-                    displayMode === option.value
-                      ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
-                      : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
-                  }
-                >
-                  {option.label}
-                </button>
-              ))}
-              {slotCounts && (
-                <p className="ml-4 text-sm text-muted-foreground italic">
-                  Showing {slotCounts.shown} of {slotCounts.total} slots
-                </p>
-              )}
+        <div className="mb-6 rounded-md border border-gray-200 bg-gray-100 p-3 space-y-4">
+          <ScheduleLegend
+            showLegendSubstitutes={showLegendSubstitutes}
+            showLegendTemporaryCoverage={showLegendTemporaryCoverage}
+            showSchoolClosed={schoolClosures.length > 0}
+            noWrapper
+          />
+          {contentBelowLegend && (
+            <div className="flex flex-wrap items-center gap-3">{contentBelowLegend}</div>
+          )}
+          {showFilterChips && (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {leadingFilterContent}
+                {[
+                  { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
+                  {
+                    value: 'coverage-issues' as const,
+                    label: `Coverage Issues (${countsForChips.coverageIssues})`,
+                  },
+                  { value: 'substitutes-only' as const, label: `Subs (${countsForChips.subs})` },
+                  { value: 'absences' as const, label: `Absences (${countsForChips.absences})` },
+                  {
+                    value: 'permanent-only' as const,
+                    label: `Permanent staff (${countsForChips.permanent})`,
+                  },
+                ].map(option => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={e => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      onDisplayModeChange?.(option.value)
+                    }}
+                    className={
+                      displayMode === option.value
+                        ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
+                        : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
+                    }
+                  >
+                    {option.label}
+                  </button>
+                ))}
+                {slotCounts && (
+                  <div className="ml-4 flex items-center gap-2">
+                    {contentBeforeSlotCount}
+                    <p className="text-sm text-muted-foreground italic">
+                      Showing {slotCounts.shown} of {slotCounts.total} slots
+                    </p>
+                  </div>
+                )}
+              </div>
+              {trailingFilterContent}
             </div>
-            {trailingFilterContent}
-          </div>
-        )}
+          )}
+        </div>
 
-        <div
-          className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)]"
-          style={{ position: 'relative' }}
-        >
-          <div
-            className="grid"
-            style={{
-              gridTemplateColumns: daysXClassroomsGrid.columns,
-              gridTemplateRows: daysXClassroomsGrid.rows,
-              minWidth: 'fit-content',
-              position: 'relative',
-              rowGap: '12px',
-              columnGap: '20px',
-            }}
-          >
-            {/* Header Row - Time column corner (pale gray to match page; hides time slots when scrolling) */}
+        <div className="border-t border-slate-200 bg-white -ml-4 -mr-4 md:-ml-8">
+          <div className="px-4 md:pl-8">
             <div
-              className="sticky top-0 z-20 text-center pt-2 pb-0.5"
-              style={{
-                position: 'sticky',
-                top: 0,
-                left: 0,
-                backgroundColor: '#f9fafb',
-                gridColumn: 1,
-                gridRow: 1,
-                minWidth: '120px', // Match the column width
-                zIndex: 20, // Keep below sidebar when expanded
-              }}
-            />
-            {data.map((classroom, index) => {
-              const classroomColor = classroom.classroom_color || undefined
-              return (
+              className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)]"
+              style={{ position: 'relative' }}
+            >
+              <div
+                className="grid"
+                style={{
+                  gridTemplateColumns: daysXClassroomsGrid.columns,
+                  gridTemplateRows: daysXClassroomsGrid.rows,
+                  minWidth: 'fit-content',
+                  position: 'relative',
+                  rowGap: '12px',
+                  columnGap: '20px',
+                }}
+              >
+                {/* Header Row - Time column corner (white; hides time slots when scrolling) */}
                 <div
-                  key={classroom.classroom_id}
                   className="sticky top-0 z-20 text-center pt-2 pb-0.5"
                   style={{
+                    position: 'sticky',
+                    top: 0,
+                    left: 0,
                     backgroundColor: 'white',
-                    gridColumn: index + 2,
+                    gridColumn: 1,
                     gridRow: 1,
+                    minWidth: '120px', // Match the column width
+                    zIndex: 20, // Keep below sidebar when expanded
                   }}
-                >
-                  <div
-                    className="inline-flex items-center justify-center gap-1.5 text-sm font-semibold"
-                    style={{
-                      color: classroomColor || '#1f2937',
-                    }}
-                  >
-                    <span>{classroom.classroom_name}</span>
-                    {!classroom.classroom_is_active && (
-                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium leading-none text-slate-600">
-                        Inactive
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-
-            {/* Data Rows - Build rows explicitly by day and time slot (per-day time slots so empty rows collapse) */}
-            {daysWithTimeSlots.map(({ day, timeSlots: dayTimeSlots }, dayIndex) => {
-              // Row indices: row 1 = global header; each day uses 1 (day header) + n slots; days after the first also have 1 spacer before their header.
-              // So "rows before this day" = 1 (global) + for each previous day: (day 0: 1+n0; day i>0: 1 spacer + 1 header + n_i slots = 2+n_i).
-              let rowsBeforeThisDay = 1 // row 1 is the global header
-              for (let i = 0; i < dayIndex; i++) {
-                const daySlotCount = daysWithTimeSlots[i].timeSlots.length
-                rowsBeforeThisDay += i === 0 ? 1 + daySlotCount : 2 + daySlotCount // day 0: header+slots; later days: spacer+header+slots
-              }
-              const spacerRow = dayIndex > 0 ? rowsBeforeThisDay + 1 : null // first row of this day's block is the spacer
-              const dayHeaderRow = dayIndex > 0 ? rowsBeforeThisDay + 2 : 2 // day header: skip spacer when dayIndex > 0
-              const firstTimeSlotRow = dayHeaderRow + 1
-
-              return (
-                <React.Fragment key={`day-group-${day.id}`}>
-                  {/* Spacer Row - only for days after the first */}
-                  {spacerRow && (
-                    <>
-                      {/* Time column spacer (transparent, no border or shadow) */}
+                />
+                {data.map((classroom, index) => {
+                  const classroomColor = classroom.classroom_color || undefined
+                  return (
+                    <div
+                      key={classroom.classroom_id}
+                      className="sticky top-0 z-20 text-center pt-2 pb-0.5"
+                      style={{
+                        backgroundColor: 'white',
+                        gridColumn: index + 2,
+                        gridRow: 1,
+                      }}
+                    >
                       <div
+                        className="inline-flex items-center justify-center gap-1.5 text-sm font-semibold"
+                        style={{
+                          color: classroomColor || '#1f2937',
+                        }}
+                      >
+                        <span>{classroom.classroom_name}</span>
+                        {!classroom.classroom_is_active && (
+                          <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium leading-none text-slate-600">
+                            Inactive
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* Data Rows - Build rows explicitly by day and time slot (per-day time slots so empty rows collapse) */}
+                {daysWithTimeSlots.map(({ day, timeSlots: dayTimeSlots }, dayIndex) => {
+                  // Row indices: row 1 = global header; each day uses 1 (day header) + n slots; days after the first also have 1 spacer before their header.
+                  // So "rows before this day" = 1 (global) + for each previous day: (day 0: 1+n0; day i>0: 1 spacer + 1 header + n_i slots = 2+n_i).
+                  let rowsBeforeThisDay = 1 // row 1 is the global header
+                  for (let i = 0; i < dayIndex; i++) {
+                    const daySlotCount = daysWithTimeSlots[i].timeSlots.length
+                    rowsBeforeThisDay += i === 0 ? 1 + daySlotCount : 2 + daySlotCount // day 0: header+slots; later days: spacer+header+slots
+                  }
+                  const spacerRow = dayIndex > 0 ? rowsBeforeThisDay + 1 : null // first row of this day's block is the spacer
+                  const dayHeaderRow = dayIndex > 0 ? rowsBeforeThisDay + 2 : 2 // day header: skip spacer when dayIndex > 0
+                  const firstTimeSlotRow = dayHeaderRow + 1
+
+                  return (
+                    <React.Fragment key={`day-group-${day.id}`}>
+                      {/* Spacer Row - only for days after the first */}
+                      {spacerRow && (
+                        <>
+                          {/* Time column spacer (transparent, no border or shadow) */}
+                          <div
+                            style={{
+                              position: 'sticky',
+                              left: 0,
+                              gridColumn: 1,
+                              gridRow: spacerRow,
+                              zIndex: 10,
+                            }}
+                          />
+                          {/* Classroom column spacers (white) */}
+                          {data.map((classroom, classroomIndex) => (
+                            <div
+                              key={`spacer-${classroom.classroom_id}-${day.id}`}
+                              style={{
+                                backgroundColor: 'white',
+                                gridColumn: classroomIndex + 2,
+                                gridRow: spacerRow,
+                              }}
+                            />
+                          ))}
+                        </>
+                      )}
+
+                      {/* Day Section Header */}
+                      <div
+                        className="sticky rounded-lg flex items-center"
                         style={{
                           position: 'sticky',
+                          top: '30px',
                           left: 0,
-                          gridColumn: 1,
-                          gridRow: spacerRow,
-                          zIndex: 10,
+                          zIndex: 20,
+                          backgroundColor: '#f3f4f6',
+                          borderTop: '1px solid #e5e7eb',
+                          borderLeft: '1px solid #e5e7eb',
+                          borderRight: '1px solid #e5e7eb',
+                          borderBottom: '1px solid #e5e7eb',
+                          gridColumn: '1 / -1',
+                          gridRow: dayHeaderRow,
+                          marginLeft: 0,
+                          paddingTop: '6px',
+                          paddingBottom: '6px',
+                          height: '36px',
+                          maxHeight: '36px',
                         }}
-                      />
-                      {/* Classroom column spacers (neutral so day separation is clear, not colored) */}
-                      {data.map((classroom, classroomIndex) => (
+                      >
                         <div
-                          key={`spacer-${classroom.classroom_id}-${day.id}`}
-                          style={{
-                            backgroundColor: '#f9fafb',
-                            gridColumn: classroomIndex + 2,
-                            gridRow: spacerRow,
-                          }}
-                        />
-                      ))}
-                    </>
-                  )}
-
-                  {/* Day Section Header */}
-                  <div
-                    className="sticky rounded-lg flex items-center"
-                    style={{
-                      position: 'sticky',
-                      top: '30px',
-                      left: 0,
-                      zIndex: 20,
-                      backgroundColor: '#f9fafb',
-                      borderTop: '1px solid #e5e7eb',
-                      borderLeft: '1px solid #e5e7eb',
-                      borderRight: '1px solid #f3f4f6',
-                      borderBottom: '2px solid #e5e7eb',
-                      boxShadow: '0 2px 4px -2px rgba(0, 0, 0, 0.1)',
-                      gridColumn: '1 / -1',
-                      gridRow: dayHeaderRow,
-                      marginLeft: 0,
-                      paddingTop: '6px',
-                      paddingBottom: '6px',
-                      height: '36px',
-                      maxHeight: '36px',
-                    }}
-                  >
-                    <div
-                      className="text-base font-bold text-gray-800 px-4"
-                      style={{ position: 'sticky', left: 0 }}
-                    >
-                      {day.name}
-                    </div>
-                  </div>
-
-                  {/* Time Slot Rows for this day (only slots that have data for this day) */}
-                  {dayTimeSlots.map((timeSlot, timeSlotIndex) => {
-                    const item = daysXClassroomsData.find(
-                      d => d.day.id === day.id && d.timeSlot.id === timeSlot.id
-                    )
-                    if (!item) return null
-
-                    const dataRow = firstTimeSlotRow + timeSlotIndex
-
-                    return (
-                      <React.Fragment key={`time-slot-${day.id}-${timeSlot.id}`}>
-                        {/* Combined Day/Time Column */}
-                        <div
-                          className="flex items-center justify-center"
-                          style={{
-                            position: 'sticky',
-                            left: 0, // Only sticky horizontally, not vertically
-                            backgroundColor: 'white',
-                            gridColumn: 1,
-                            gridRow: dataRow,
-                            minHeight: '120px', // Ensure minimum height to prevent squishing
-                            paddingTop: '8px',
-                            zIndex: 10, // Above scrolling content but below day headers
-                            borderRight: '1px solid #f3f4f6',
-                            boxShadow: '2px 0 8px -2px rgba(0, 0, 0, 0.1)',
-                          }}
+                          className="text-base font-bold text-gray-800 px-4"
+                          style={{ position: 'sticky', left: 0 }}
                         >
-                          <div className="flex flex-col items-center gap-1">
-                            <span className="inline-flex items-center px-4 py-2.5 rounded-full bg-gray-100 text-gray-700 text-sm font-medium">
-                              {timeSlot.code}
-                            </span>
-                            {!timeSlot.is_active && (
-                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium leading-none text-slate-600">
-                                Inactive
-                              </span>
-                            )}
-                          </div>
+                          {day.name}
                         </div>
+                      </div>
 
-                        {/* Classroom Cells */}
-                        {item.classrooms.map((classroom, classroomIndex) => {
-                          const isInactive = isSlotEffectivelyInactive({
-                            schedule_cell: classroom.cellData?.schedule_cell,
-                            classroom_is_active: data.find(
-                              c => c.classroom_id === classroom.classroomId
-                            )?.classroom_is_active,
-                            time_slot_is_active: classroom.cellData?.time_slot_is_active,
-                          })
-                          const classroomColor =
-                            data.find(c => c.classroom_id === classroom.classroomId)
-                              ?.classroom_color || undefined
-                          return (
+                      {/* Time Slot Rows for this day (only slots that have data for this day) */}
+                      {dayTimeSlots.map((timeSlot, timeSlotIndex) => {
+                        const item = daysXClassroomsData.find(
+                          d => d.day.id === day.id && d.timeSlot.id === timeSlot.id
+                        )
+                        if (!item) return null
+
+                        const dataRow = firstTimeSlotRow + timeSlotIndex
+
+                        return (
+                          <React.Fragment key={`time-slot-${day.id}-${timeSlot.id}`}>
+                            {/* Combined Day/Time Column */}
                             <div
-                              key={`cell-${classroom.classroomId}-${day.id}-${timeSlot.id}`}
-                              className="flex items-stretch h-full p-1.5"
+                              className="flex items-center justify-center"
                               style={{
-                                backgroundColor: classroomColor
-                                  ? hexToRgba(classroomColor, 0.08)
-                                  : 'transparent',
-                                gridColumn: classroomIndex + 2,
+                                position: 'sticky',
+                                left: 0, // Only sticky horizontally, not vertically
+                                backgroundColor: 'white',
+                                gridColumn: 1,
                                 gridRow: dataRow,
-                                minHeight: '120px', // Ensure minimum height for Safari compatibility (matches grid row minmax)
+                                minHeight: '120px', // Ensure minimum height to prevent squishing
+                                paddingTop: '8px',
+                                zIndex: 10, // Above scrolling content but below day headers
                               }}
                             >
-                              <ScheduleGridCellCard
-                                data={classroom.cellData}
-                                displayMode={displayMode}
-                                showNotes={showNotes}
-                                allowCardClick={allowCardClick}
-                                isInactive={isInactive}
-                                allClassGroupIds={allClassGroupIds}
-                                isClosed={
-                                  weekStartISO
-                                    ? isCellClosed(
-                                        weekStartISO,
-                                        day.number,
-                                        timeSlot.id,
-                                        schoolClosures
-                                      )
-                                    : false
-                                }
-                                closureMetadata={
-                                  weekStartISO
-                                    ? getMatchingClosure(
-                                        weekStartISO,
-                                        day.number,
-                                        timeSlot.id,
-                                        schoolClosures as Array<{
-                                          id: string
-                                          date: string
-                                          time_slot_id: string | null
-                                          reason: string | null
-                                        }>
-                                      )
-                                    : null
-                                }
-                                onClosureMarkOpen={onClosureMarkOpen}
-                                onClosureMarkOpenForDay={onClosureMarkOpenForDay}
-                                onClosureChangeReason={onClosureChangeReason}
-                                onClick={() =>
-                                  handleCellClick(
-                                    day.id,
-                                    day.name,
-                                    timeSlot.id,
-                                    item.timeSlot.name || timeSlot.code,
-                                    classroom.classroomId,
-                                    classroom.classroomName
-                                  )
-                                }
-                              />
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="inline-flex items-center px-4 py-2.5 rounded-full bg-gray-100 text-gray-700 text-sm font-medium">
+                                  {timeSlot.code}
+                                </span>
+                                {!timeSlot.is_active && (
+                                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium leading-none text-slate-600">
+                                    Inactive
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          )
-                        })}
-                      </React.Fragment>
-                    )
-                  })}
-                </React.Fragment>
-              )
-            })}
+
+                            {/* Classroom Cells */}
+                            {item.classrooms.map((classroom, classroomIndex) => {
+                              const isInactive = isSlotEffectivelyInactive({
+                                schedule_cell: classroom.cellData?.schedule_cell,
+                                classroom_is_active: data.find(
+                                  c => c.classroom_id === classroom.classroomId
+                                )?.classroom_is_active,
+                                time_slot_is_active: classroom.cellData?.time_slot_is_active,
+                              })
+                              const classroomColor =
+                                data.find(c => c.classroom_id === classroom.classroomId)
+                                  ?.classroom_color || undefined
+                              return (
+                                <div
+                                  key={`cell-${classroom.classroomId}-${day.id}-${timeSlot.id}`}
+                                  className="flex items-stretch h-full p-1.5"
+                                  style={{
+                                    backgroundColor: classroomColor
+                                      ? hexToRgba(classroomColor, 0.08)
+                                      : 'transparent',
+                                    gridColumn: classroomIndex + 2,
+                                    gridRow: dataRow,
+                                    minHeight: '120px', // Ensure minimum height for Safari compatibility (matches grid row minmax)
+                                  }}
+                                >
+                                  <ScheduleGridCellCard
+                                    data={classroom.cellData}
+                                    displayMode={displayMode}
+                                    showNotes={showNotes}
+                                    allowCardClick={allowCardClick}
+                                    isInactive={isInactive}
+                                    allClassGroupIds={allClassGroupIds}
+                                    isClosed={
+                                      weekStartISO
+                                        ? isCellClosed(
+                                            weekStartISO,
+                                            day.number,
+                                            timeSlot.id,
+                                            schoolClosures
+                                          )
+                                        : false
+                                    }
+                                    closureMetadata={
+                                      weekStartISO
+                                        ? getMatchingClosure(
+                                            weekStartISO,
+                                            day.number,
+                                            timeSlot.id,
+                                            schoolClosures as Array<{
+                                              id: string
+                                              date: string
+                                              time_slot_id: string | null
+                                              reason: string | null
+                                            }>
+                                          )
+                                        : null
+                                    }
+                                    onClosureMarkOpen={onClosureMarkOpen}
+                                    onClosureMarkOpenForDay={onClosureMarkOpenForDay}
+                                    onClosureChangeReason={onClosureChangeReason}
+                                    onClick={() =>
+                                      handleCellClick(
+                                        day.id,
+                                        day.name,
+                                        timeSlot.id,
+                                        item.timeSlot.name || timeSlot.code,
+                                        classroom.classroomId,
+                                        classroom.classroomName
+                                      )
+                                    }
+                                  />
+                                </div>
+                              )
+                            })}
+                          </React.Fragment>
+                        )
+                      })}
+                    </React.Fragment>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1150,324 +1160,339 @@ export default function WeeklyScheduleGridNew({
   if (layout === 'classrooms-x-days' && classroomsXDaysGrid) {
     return (
       <div className="space-y-4">
-        {/* Legend */}
-        <ScheduleLegend
-          showLegendSubstitutes={showLegendSubstitutes}
-          showLegendTemporaryCoverage={showLegendTemporaryCoverage}
-          showSchoolClosed={schoolClosures.length > 0}
-        />
-        {contentBelowLegend && (
-          <div className="mb-4 flex flex-wrap items-center gap-3">{contentBelowLegend}</div>
-        )}
-        {/* Filter chips - separate row below legend */}
-        {showFilterChips && (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              {leadingFilterContent}
-              {[
-                { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
-                {
-                  value: 'coverage-issues' as const,
-                  label: `Coverage Issues (${countsForChips.coverageIssues})`,
-                },
-                { value: 'substitutes-only' as const, label: `Subs (${countsForChips.subs})` },
-                { value: 'absences' as const, label: `Absences (${countsForChips.absences})` },
-                {
-                  value: 'permanent-only' as const,
-                  label: `Permanent staff (${countsForChips.permanent})`,
-                },
-              ].map(option => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={e => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    onDisplayModeChange?.(option.value)
-                  }}
-                  className={
-                    displayMode === option.value
-                      ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
-                      : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
-                  }
-                >
-                  {option.label}
-                </button>
-              ))}
-              {slotCounts && (
-                <p className="ml-4 text-sm text-muted-foreground italic">
-                  Showing {slotCounts.shown} of {slotCounts.total} slots
-                </p>
-              )}
-            </div>
-            {trailingFilterContent}
-          </div>
-        )}
-
-        <div>
-          <div
-            className="grid overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)]"
-            style={
-              {
-                gridTemplateColumns: classroomsXDaysGrid.columns,
-                gridTemplateRows: classroomsXDaysGrid.rows,
-                width: 'fit-content',
-                minWidth: 'fit-content',
-                rowGap: '12px',
-                columnGap: '20px',
-                // CSS custom properties for header heights and column widths
-                '--header-row-1-height': 'calc(0.5rem + 1.5rem + 0.125rem)', // Day header: pt-2 + text-base line-height + pb-0.5
-                '--header-row-2-height': 'calc(0.5rem + 1.5rem + 0.75rem)', // Time slot header: pt-2 + chip height ~1.5rem + pb-3
-                '--classroom-column-width': '110px', // Classroom column width
-              } as React.CSSProperties
-            }
-          >
-            {/* Header Row 1: Day Names */}
-            {/* Empty cell in column 1 to prevent classroom column from scrolling into header area */}
-            <div
-              style={{
-                gridColumn: 1,
-                gridRow: 1,
-                backgroundColor: 'transparent',
-              }}
-            />
-            {filteredDays.map((day, dayIndex) => (
-              <div
-                key={`day-header-${day.id}`}
-                className="sticky top-0 z-20 text-center pt-2 pb-0.5"
-                style={{
-                  backgroundColor: dayIndex % 2 === 0 ? 'white' : '#f3f4f6',
-                  gridColumn: `${dayIndex * timeSlots.length + 2} / ${(dayIndex + 1) * timeSlots.length + 2}`,
-                  gridRow: 1,
-                  borderBottom: '1px solid #e5e7eb',
-                  borderRight: dayIndex < filteredDays.length - 1 ? '1px solid #e5e7eb' : 'none',
-                  position: 'sticky',
-                  top: 0,
-                  left: 'var(--classroom-column-width)', // Stop at right edge of classroom column
-                }}
-              >
-                <div className="text-base font-bold text-gray-800">{day.name}</div>
-              </div>
-            ))}
-
-            {/* Header Row 2: Time Slot Codes */}
-            {/* Empty cell in column 1 to prevent classroom column from scrolling into header area */}
-            <div
-              style={{
-                gridColumn: 1,
-                gridRow: 2,
-                backgroundColor: 'transparent',
-              }}
-            />
-            {filteredDays.map((day, dayIndex) =>
-              timeSlots.map((slot, slotIndex) => (
-                <div
-                  key={`time-header-${day.id}-${slot.id}`}
-                  className="sticky z-20 text-center pt-2 pb-3"
-                  style={{
-                    backgroundColor: 'white',
-                    gridColumn: dayIndex * timeSlots.length + slotIndex + 2,
-                    gridRow: 2,
-                    borderBottom: '1px solid #e5e7eb',
-                    borderRight:
-                      slotIndex < timeSlots.length - 1 ||
-                      (slotIndex === timeSlots.length - 1 && dayIndex < filteredDays.length - 1)
-                        ? '1px solid #e5e7eb'
-                        : 'none',
-                    borderLeft: 'none',
-                    boxShadow: '0 2px 4px -2px rgba(0, 0, 0, 0.08)',
-                    position: 'sticky',
-                    top: 'calc(0.5rem + 1.5rem + 0.125rem)', // Match day header height exactly
-                    left: 'var(--classroom-column-width)', // Stop at right edge of classroom column
-                  }}
-                >
-                  <div className="flex items-center justify-center gap-1.5">
-                    <span className="inline-flex items-center px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
-                      {slot.code}
-                    </span>
-                    {!slot.is_active && (
-                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium leading-none text-slate-600">
-                        Inactive
-                      </span>
-                    )}
+        <div className="rounded-md border border-gray-200 bg-gray-100 p-3 space-y-4">
+          <ScheduleLegend
+            showLegendSubstitutes={showLegendSubstitutes}
+            showLegendTemporaryCoverage={showLegendTemporaryCoverage}
+            showSchoolClosed={schoolClosures.length > 0}
+            noWrapper
+          />
+          {contentBelowLegend && (
+            <div className="flex flex-wrap items-center gap-3">{contentBelowLegend}</div>
+          )}
+          {showFilterChips && (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {leadingFilterContent}
+                {[
+                  { value: 'all-scheduled-staff' as const, label: `All (${countsForChips.all})` },
+                  {
+                    value: 'coverage-issues' as const,
+                    label: `Coverage Issues (${countsForChips.coverageIssues})`,
+                  },
+                  { value: 'substitutes-only' as const, label: `Subs (${countsForChips.subs})` },
+                  { value: 'absences' as const, label: `Absences (${countsForChips.absences})` },
+                  {
+                    value: 'permanent-only' as const,
+                    label: `Permanent staff (${countsForChips.permanent})`,
+                  },
+                ].map(option => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={e => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      onDisplayModeChange?.(option.value)
+                    }}
+                    className={
+                      displayMode === option.value
+                        ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
+                        : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
+                    }
+                  >
+                    {option.label}
+                  </button>
+                ))}
+                {slotCounts && (
+                  <div className="ml-4 flex items-center gap-2">
+                    {contentBeforeSlotCount}
+                    <p className="text-sm text-muted-foreground italic">
+                      Showing {slotCounts.shown} of {slotCounts.total} slots
+                    </p>
                   </div>
-                </div>
-              ))
-            )}
+                )}
+              </div>
+              {trailingFilterContent}
+            </div>
+          )}
+        </div>
 
-            {/* Data Rows: Classrooms */}
-            {data.map((classroom, classroomIndex) => {
-              const rowIndex = classroomIndex + 3 // After 2 header rows
-              return (
-                <React.Fragment key={`classroom-row-${classroom.classroom_id}`}>
-                  {/* Classroom Name Column */}
+        <div className="border-t border-slate-200 bg-white -ml-4 -mr-4 md:-ml-8">
+          <div className="px-4 md:pl-8">
+            <div>
+              <div
+                className="grid overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)]"
+                style={
+                  {
+                    gridTemplateColumns: classroomsXDaysGrid.columns,
+                    gridTemplateRows: classroomsXDaysGrid.rows,
+                    width: 'fit-content',
+                    minWidth: 'fit-content',
+                    rowGap: '12px',
+                    columnGap: '20px',
+                    // CSS custom properties for header heights and column widths
+                    '--header-row-1-height': 'calc(0.5rem + 1.5rem + 0.125rem)', // Day header: pt-2 + text-base line-height + pb-0.5
+                    '--header-row-2-height': 'calc(0.5rem + 1.5rem + 0.75rem)', // Time slot header: pt-2 + chip height ~1.5rem + pb-3
+                    '--classroom-column-width': '110px', // Classroom column width
+                  } as React.CSSProperties
+                }
+              >
+                {/* Header Row 1: Day Names */}
+                {/* Empty cell in column 1 to prevent classroom column from scrolling into header area */}
+                <div
+                  style={{
+                    gridColumn: 1,
+                    gridRow: 1,
+                    backgroundColor: 'transparent',
+                  }}
+                />
+                {filteredDays.map((day, dayIndex) => (
                   <div
-                    className="z-20 flex items-center justify-center"
+                    key={`day-header-${day.id}`}
+                    className="sticky top-0 z-20 text-center pt-2 pb-0.5"
                     style={{
-                      backgroundColor: 'white',
-                      gridColumn: 1, // Use simple column index
-                      gridRow: rowIndex,
+                      backgroundColor: '#f3f4f6',
+                      gridColumn: `${dayIndex * timeSlots.length + 2} / ${(dayIndex + 1) * timeSlots.length + 2}`,
+                      gridRow: 1,
+                      borderBottom: '1px solid #e5e7eb',
+                      borderRight:
+                        dayIndex < filteredDays.length - 1 ? '1px solid #e5e7eb' : 'none',
                       position: 'sticky',
-                      left: 0,
-                      top: 'calc(var(--header-row-1-height) + var(--header-row-2-height) + 5px)', // Sum of both header rows + small offset for borders/padding
-                      width: '110px', // Fixed width to match column width
-                      minWidth: '110px', // Ensure minimum width
-                      maxWidth: '110px', // Constrain to column width to prevent scrolling into header area
-                      borderRight: '1px solid #e5e7eb',
-                      borderBottom: classroomIndex < data.length - 1 ? '1px solid #e5e7eb' : 'none',
-                      boxShadow: '2px 0 8px -2px rgba(0, 0, 0, 0.1)',
+                      top: 0,
+                      left: 'var(--classroom-column-width)', // Stop at right edge of classroom column
                     }}
                   >
+                    <div className="text-base font-bold text-gray-800">{day.name}</div>
+                  </div>
+                ))}
+
+                {/* Header Row 2: Time Slot Codes */}
+                {/* Empty cell in column 1 to prevent classroom column from scrolling into header area */}
+                <div
+                  style={{
+                    gridColumn: 1,
+                    gridRow: 2,
+                    backgroundColor: 'transparent',
+                  }}
+                />
+                {filteredDays.map((day, dayIndex) =>
+                  timeSlots.map((slot, slotIndex) => (
                     <div
-                      className="text-sm font-semibold text-center"
+                      key={`time-header-${day.id}-${slot.id}`}
+                      className="sticky z-20 text-center pt-2 pb-3"
                       style={{
-                        color: classroom.classroom_color || '#1f2937',
+                        backgroundColor: 'white',
+                        gridColumn: dayIndex * timeSlots.length + slotIndex + 2,
+                        gridRow: 2,
+                        borderBottom: '1px solid #e5e7eb',
+                        borderRight:
+                          slotIndex < timeSlots.length - 1 ||
+                          (slotIndex === timeSlots.length - 1 && dayIndex < filteredDays.length - 1)
+                            ? '1px solid #e5e7eb'
+                            : 'none',
+                        borderLeft: 'none',
+                        boxShadow: '0 2px 4px -2px rgba(0, 0, 0, 0.08)',
+                        position: 'sticky',
+                        top: 'calc(0.5rem + 1.5rem + 0.125rem)', // Match day header height exactly
+                        left: 'var(--classroom-column-width)', // Stop at right edge of classroom column
                       }}
                     >
-                      <div className="inline-flex flex-col items-center gap-1">
-                        <span>
-                          {(() => {
-                            const name = classroom.classroom_name
-                            const roomIndex = name.indexOf(' Room')
-                            if (roomIndex > 0) {
-                              // Split before "Room" - e.g., "Toddler A Room" -> "Toddler A<br>Room"
-                              const beforeRoom = name.substring(0, roomIndex)
-                              const room = name.substring(roomIndex + 1) // +1 to skip the space
-                              return (
-                                <>
-                                  {beforeRoom}
-                                  <br />
-                                  {room}
-                                </>
-                              )
-                            }
-                            // If no " Room" found, split on last space as fallback
-                            const lastSpaceIndex = name.lastIndexOf(' ')
-                            if (lastSpaceIndex > 0) {
-                              const firstPart = name.substring(0, lastSpaceIndex)
-                              const secondPart = name.substring(lastSpaceIndex + 1)
-                              return (
-                                <>
-                                  {firstPart}
-                                  <br />
-                                  {secondPart}
-                                </>
-                              )
-                            }
-                            // If no space found, return as-is
-                            return name
-                          })()}
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
+                          {slot.code}
                         </span>
-                        {!classroom.classroom_is_active && (
+                        {!slot.is_active && (
                           <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium leading-none text-slate-600">
                             Inactive
                           </span>
                         )}
                       </div>
                     </div>
-                  </div>
+                  ))
+                )}
 
-                  {/* Day/Time Slot Cells */}
-                  {filteredDays.map((day, dayIndex) => {
-                    const dayData = classroom.days.find(d => d.day_of_week_id === day.id)
-                    const classroomColor = classroom.classroom_color || undefined
-
-                    return timeSlots.map((slot, slotIndex) => {
-                      const timeSlotData = dayData?.time_slots.find(
-                        ts => ts.time_slot_id === slot.id
-                      )
-                      const cellData = timeSlotData
-                        ? {
-                            day_of_week_id: day.id,
-                            day_name: day.name,
-                            day_number: day.number,
-                            time_slot_id: slot.id,
-                            time_slot_code: slot.code,
-                            time_slot_name: slot.name,
-                            time_slot_display_order: slot.display_order,
-                            time_slot_is_active: timeSlotData.time_slot_is_active,
-                            assignments: timeSlotData.assignments,
-                            schedule_cell: timeSlotData.schedule_cell || null,
-                            absences: timeSlotData.absences,
-                          }
-                        : undefined
-
-                      const isInactive = isSlotEffectivelyInactive({
-                        schedule_cell: cellData?.schedule_cell,
-                        classroom_is_active: classroom.classroom_is_active,
-                        time_slot_is_active: timeSlotData?.time_slot_is_active,
-                      })
-                      const colIndex = dayIndex * timeSlots.length + slotIndex + 2
-
-                      return (
+                {/* Data Rows: Classrooms */}
+                {data.map((classroom, classroomIndex) => {
+                  const rowIndex = classroomIndex + 3 // After 2 header rows
+                  return (
+                    <React.Fragment key={`classroom-row-${classroom.classroom_id}`}>
+                      {/* Classroom Name Column */}
+                      <div
+                        className="z-20 flex items-center justify-center"
+                        style={{
+                          backgroundColor: 'white',
+                          gridColumn: 1, // Use simple column index
+                          gridRow: rowIndex,
+                          position: 'sticky',
+                          left: 0,
+                          top: 'calc(var(--header-row-1-height) + var(--header-row-2-height) + 5px)', // Sum of both header rows + small offset for borders/padding
+                          width: '110px', // Fixed width to match column width
+                          minWidth: '110px', // Ensure minimum width
+                          maxWidth: '110px', // Constrain to column width to prevent scrolling into header area
+                          borderRight: '1px solid #e5e7eb',
+                          borderBottom:
+                            classroomIndex < data.length - 1 ? '1px solid #e5e7eb' : 'none',
+                          boxShadow: '2px 0 8px -2px rgba(0, 0, 0, 0.1)',
+                        }}
+                      >
                         <div
-                          key={`cell-${classroom.classroom_id}-${day.id}-${slot.id}`}
-                          className="flex items-stretch h-full p-1.5"
+                          className="text-sm font-semibold text-center"
                           style={{
-                            backgroundColor: classroomColor
-                              ? hexToRgba(classroomColor, 0.08)
-                              : 'transparent',
-                            gridColumn: colIndex,
-                            gridRow: rowIndex,
-                            borderRight:
-                              slotIndex < timeSlots.length - 1 ||
-                              (slotIndex === timeSlots.length - 1 &&
-                                dayIndex < filteredDays.length - 1)
-                                ? '1px solid #e5e7eb'
-                                : 'none',
-                            width: '100%',
-                            height: '100%',
-                            minHeight: '120px', // Ensure minimum height for Safari compatibility (matches grid row minmax)
+                            color: classroom.classroom_color || '#1f2937',
                           }}
                         >
-                          <ScheduleGridCellCard
-                            data={cellData}
-                            displayMode={displayMode}
-                            showNotes={showNotes}
-                            allowCardClick={allowCardClick}
-                            isInactive={isInactive}
-                            allClassGroupIds={allClassGroupIds}
-                            isClosed={
-                              weekStartISO
-                                ? isCellClosed(weekStartISO, day.number, slot.id, schoolClosures)
-                                : false
-                            }
-                            closureMetadata={
-                              weekStartISO
-                                ? getMatchingClosure(
-                                    weekStartISO,
-                                    day.number,
-                                    slot.id,
-                                    schoolClosures as Array<{
-                                      id: string
-                                      date: string
-                                      time_slot_id: string | null
-                                      reason: string | null
-                                    }>
+                          <div className="inline-flex flex-col items-center gap-1">
+                            <span>
+                              {(() => {
+                                const name = classroom.classroom_name
+                                const roomIndex = name.indexOf(' Room')
+                                if (roomIndex > 0) {
+                                  // Split before "Room" - e.g., "Toddler A Room" -> "Toddler A<br>Room"
+                                  const beforeRoom = name.substring(0, roomIndex)
+                                  const room = name.substring(roomIndex + 1) // +1 to skip the space
+                                  return (
+                                    <>
+                                      {beforeRoom}
+                                      <br />
+                                      {room}
+                                    </>
                                   )
-                                : null
-                            }
-                            onClosureMarkOpen={onClosureMarkOpen}
-                            onClosureMarkOpenForDay={onClosureMarkOpenForDay}
-                            onClosureChangeReason={onClosureChangeReason}
-                            onClick={() =>
-                              handleCellClick(
-                                day.id,
-                                day.name,
-                                slot.id,
-                                slot.name || slot.code,
-                                classroom.classroom_id,
-                                classroom.classroom_name
-                              )
-                            }
-                          />
+                                }
+                                // If no " Room" found, split on last space as fallback
+                                const lastSpaceIndex = name.lastIndexOf(' ')
+                                if (lastSpaceIndex > 0) {
+                                  const firstPart = name.substring(0, lastSpaceIndex)
+                                  const secondPart = name.substring(lastSpaceIndex + 1)
+                                  return (
+                                    <>
+                                      {firstPart}
+                                      <br />
+                                      {secondPart}
+                                    </>
+                                  )
+                                }
+                                // If no space found, return as-is
+                                return name
+                              })()}
+                            </span>
+                            {!classroom.classroom_is_active && (
+                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium leading-none text-slate-600">
+                                Inactive
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      )
-                    })
-                  })}
-                </React.Fragment>
-              )
-            })}
+                      </div>
+
+                      {/* Day/Time Slot Cells */}
+                      {filteredDays.map((day, dayIndex) => {
+                        const dayData = classroom.days.find(d => d.day_of_week_id === day.id)
+                        const classroomColor = classroom.classroom_color || undefined
+
+                        return timeSlots.map((slot, slotIndex) => {
+                          const timeSlotData = dayData?.time_slots.find(
+                            ts => ts.time_slot_id === slot.id
+                          )
+                          const cellData = timeSlotData
+                            ? {
+                                day_of_week_id: day.id,
+                                day_name: day.name,
+                                day_number: day.number,
+                                time_slot_id: slot.id,
+                                time_slot_code: slot.code,
+                                time_slot_name: slot.name,
+                                time_slot_display_order: slot.display_order,
+                                time_slot_is_active: timeSlotData.time_slot_is_active,
+                                assignments: timeSlotData.assignments,
+                                schedule_cell: timeSlotData.schedule_cell || null,
+                                absences: timeSlotData.absences,
+                              }
+                            : undefined
+
+                          const isInactive = isSlotEffectivelyInactive({
+                            schedule_cell: cellData?.schedule_cell,
+                            classroom_is_active: classroom.classroom_is_active,
+                            time_slot_is_active: timeSlotData?.time_slot_is_active,
+                          })
+                          const colIndex = dayIndex * timeSlots.length + slotIndex + 2
+
+                          return (
+                            <div
+                              key={`cell-${classroom.classroom_id}-${day.id}-${slot.id}`}
+                              className="flex items-stretch h-full p-1.5"
+                              style={{
+                                backgroundColor: classroomColor
+                                  ? hexToRgba(classroomColor, 0.08)
+                                  : 'transparent',
+                                gridColumn: colIndex,
+                                gridRow: rowIndex,
+                                borderRight:
+                                  slotIndex < timeSlots.length - 1 ||
+                                  (slotIndex === timeSlots.length - 1 &&
+                                    dayIndex < filteredDays.length - 1)
+                                    ? '1px solid #e5e7eb'
+                                    : 'none',
+                                width: '100%',
+                                height: '100%',
+                                minHeight: '120px', // Ensure minimum height for Safari compatibility (matches grid row minmax)
+                              }}
+                            >
+                              <ScheduleGridCellCard
+                                data={cellData}
+                                displayMode={displayMode}
+                                showNotes={showNotes}
+                                allowCardClick={allowCardClick}
+                                isInactive={isInactive}
+                                allClassGroupIds={allClassGroupIds}
+                                isClosed={
+                                  weekStartISO
+                                    ? isCellClosed(
+                                        weekStartISO,
+                                        day.number,
+                                        slot.id,
+                                        schoolClosures
+                                      )
+                                    : false
+                                }
+                                closureMetadata={
+                                  weekStartISO
+                                    ? getMatchingClosure(
+                                        weekStartISO,
+                                        day.number,
+                                        slot.id,
+                                        schoolClosures as Array<{
+                                          id: string
+                                          date: string
+                                          time_slot_id: string | null
+                                          reason: string | null
+                                        }>
+                                      )
+                                    : null
+                                }
+                                onClosureMarkOpen={onClosureMarkOpen}
+                                onClosureMarkOpenForDay={onClosureMarkOpenForDay}
+                                onClosureChangeReason={onClosureChangeReason}
+                                onClick={() =>
+                                  handleCellClick(
+                                    day.id,
+                                    day.name,
+                                    slot.id,
+                                    slot.name || slot.code,
+                                    classroom.classroom_id,
+                                    classroom.classroom_name
+                                  )
+                                }
+                              />
+                            </div>
+                          )
+                        })
+                      })}
+                    </React.Fragment>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         </div>
 

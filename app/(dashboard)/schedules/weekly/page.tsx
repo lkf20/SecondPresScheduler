@@ -592,33 +592,44 @@ export default function WeeklySchedulePage() {
   return (
     <div>
       <div className="mb-8">
-        <div className="flex items-center gap-4 mb-2">
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Weekly Schedule</h1>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleRefresh}
-                    disabled={isFetchingSchedule}
-                    className="h-10 w-10 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-60"
-                  >
-                    <RefreshCw className={`h-4 w-4 ${isFetchingSchedule ? 'animate-spin' : ''}`} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Refresh schedule</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-2">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Weekly Schedule</h1>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleRefresh}
+                      disabled={isFetchingSchedule}
+                      className="h-10 w-10 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                    >
+                      <RefreshCw
+                        className={`h-4 w-4 ${isFetchingSchedule ? 'animate-spin' : ''}`}
+                      />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Refresh schedule</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            <WeekPicker
+              weekStartISO={weekStartISO}
+              onWeekChange={setWeekStartISO}
+              onTodayClick={handleTodayClick}
+            />
           </div>
-          <WeekPicker
-            weekStartISO={weekStartISO}
-            onWeekChange={setWeekStartISO}
-            onTodayClick={handleTodayClick}
-          />
+          <Link
+            href="/settings/calendar"
+            className="flex shrink-0 items-center gap-2 rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 hover:border-slate-400 transition-colors"
+          >
+            <Calendar className="h-4 w-4" />
+            Manage Calendar
+          </Link>
         </div>
         <p className="text-muted-foreground">View staffing by classroom, day, and time slot</p>
       </div>
@@ -655,53 +666,46 @@ export default function WeeklySchedulePage() {
                   onChange={setTeacherFilterId}
                   placeholder="Filter by teacher"
                 />
-                {filters &&
-                  (() => {
-                    const defaultDayIds =
-                      selectedDayIds.length > 0 ? selectedDayIds : availableDays.map(d => d.id)
-                    const defaultDayCount = defaultDayIds.length
-                    const active = hasActiveScheduleFilters(filters, {
-                      defaultDayCount,
-                      totalTimeSlots: availableTimeSlots.length,
-                      totalClassrooms: availableClassrooms.length,
-                      teacherFilterId,
-                      defaultDisplayMode: 'all-scheduled-staff',
-                    })
-                    if (!active) return null
-                    return (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900"
-                        onClick={() => {
-                          setTeacherFilterId(null)
-                          setFilters(prev =>
-                            prev
-                              ? getClearedScheduleFilters(prev, {
-                                  defaultDayIds,
-                                  allTimeSlotIds: availableTimeSlots.map(ts => ts.id),
-                                  allClassroomIds: availableClassrooms.map(c => c.id),
-                                  defaultDisplayMode: 'all-scheduled-staff',
-                                })
-                              : prev
-                          )
-                        }}
-                      >
-                        <X className="h-3.5 w-3.5 shrink-0" />
-                        Clear all filters
-                      </Button>
-                    )
-                  })()}
               </div>
             }
-            trailingFilterContent={
-              <Link
-                href="/settings/calendar"
-                className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors"
-              >
-                <Calendar className="h-4 w-4" />
-                Manage Calendar
-              </Link>
+            contentBeforeSlotCount={
+              filters &&
+              (() => {
+                const defaultDayIds =
+                  selectedDayIds.length > 0 ? selectedDayIds : availableDays.map(d => d.id)
+                const defaultDayCount = defaultDayIds.length
+                const active = hasActiveScheduleFilters(filters, {
+                  defaultDayCount,
+                  totalTimeSlots: availableTimeSlots.length,
+                  totalClassrooms: availableClassrooms.length,
+                  teacherFilterId,
+                  defaultDisplayMode: 'all-scheduled-staff',
+                })
+                if (!active) return null
+                return (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900"
+                    onClick={() => {
+                      setTeacherFilterId(null)
+                      setFilters(prev =>
+                        prev
+                          ? getClearedScheduleFilters(prev, {
+                              defaultDayIds,
+                              allTimeSlotIds: availableTimeSlots.map(ts => ts.id),
+                              allClassroomIds: availableClassrooms.map(c => c.id),
+                              defaultDisplayMode: 'all-scheduled-staff',
+                            })
+                          : prev
+                      )
+                    }}
+                  >
+                    <X className="h-3.5 w-3.5 shrink-0" />
+                    Clear all filters
+                  </Button>
+                )
+              })()
             }
             displayModeCounts={displayModeCounts}
             displayMode={filters?.displayMode ?? 'all-scheduled-staff'}
