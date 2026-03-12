@@ -242,6 +242,19 @@ export default function SubFinderPage() {
   const [manualTimeOffSuccessBanner, setManualTimeOffSuccessBanner] = useState(false)
   /** After time off success, auto-run Find Subs once the left panel has refreshed. */
   const [shouldAutoRunFindSubsAfterRefresh, setShouldAutoRunFindSubsAfterRefresh] = useState(false)
+  /** Set false when requesting auto-run; set true when table sends conflict summary/shifts. Ensures we don't run with stale data. */
+  const hasReceivedConflictDataForAutoRunRef = useRef(false)
+  const onConflictSummaryChangeForTable = useCallback(
+    (summary: { conflictCount: number; totalScheduled: number }) => {
+      hasReceivedConflictDataForAutoRunRef.current = true
+      setManualConflictSummary(summary)
+    },
+    []
+  )
+  const onConflictShiftsChangeForTable = useCallback((shifts: SelectedShift[]) => {
+    hasReceivedConflictDataForAutoRunRef.current = true
+    setManualConflictShifts(shifts)
+  }, [])
   const isPreviewMode =
     (selectedAbsence?.id?.startsWith('manual-') && !lastManualRunHadAllShiftsWithTimeOff) ?? false
   const subSearchRef = useRef<HTMLDivElement | null>(null)
@@ -353,9 +366,12 @@ export default function SubFinderPage() {
     [runManualFinder]
   )
 
-  /** Auto-run Find Subs once left panel has refreshed after time off success (edit/extend in-place). */
+  /** Auto-run Find Subs once left panel has refreshed after time off success (edit/extend in-place).
+   * Only run after the table has sent conflict data (onConflictSummaryChange/onConflictShiftsChange) so we don't
+   * use stale manualConflictSummary/manualConflictShifts if onConflictCheckReady fires first. */
   useEffect(() => {
     if (!manualConflictCheckReady || !shouldAutoRunFindSubsAfterRefresh) return
+    if (!hasReceivedConflictDataForAutoRunRef.current) return
     setShouldAutoRunFindSubsAfterRefresh(false)
     const allShiftsHaveTimeOff =
       manualConflictSummary.conflictCount > 0 &&
@@ -1851,10 +1867,10 @@ export default function SubFinderPage() {
                       endDate={manualEndDate || manualStartDate}
                       selectedShifts={manualSelectedShifts}
                       onShiftsChange={onManualShiftsChange}
-                      onConflictSummaryChange={setManualConflictSummary}
+                      onConflictSummaryChange={onConflictSummaryChangeForTable}
                       onConflictCheckReady={setManualConflictCheckReady}
                       onConflictRequestsChange={setManualConflictingRequests}
-                      onConflictShiftsChange={setManualConflictShifts}
+                      onConflictShiftsChange={onConflictShiftsChangeForTable}
                       validateConflicts={true}
                       autoSelectScheduled
                       tableClassName="text-xs [&_th]:px-2 [&_td]:px-2"
@@ -3202,6 +3218,7 @@ export default function SubFinderPage() {
               setManualTimeOffSuccessBanner(true)
               setManualConflictCheckReady(false)
               setManualLeftPanelRefreshKey(k => k + 1)
+              hasReceivedConflictDataForAutoRunRef.current = false
               setShouldAutoRunFindSubsAfterRefresh(true)
             }}
           />

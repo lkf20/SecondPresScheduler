@@ -71,7 +71,6 @@ export default function BaselineSchedulePage() {
       ),
     [scheduleResponse?.classrooms]
   )
-  const schoolClosures = scheduleResponse?.school_closures ?? []
   const { data: scheduleSettings, isLoading: isLoadingSettings } = useScheduleSettings()
   const { data: filterOptions, isLoading: isLoadingFilters } = useFilterOptions()
 
