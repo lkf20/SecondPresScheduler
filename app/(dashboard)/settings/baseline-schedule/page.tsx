@@ -399,14 +399,7 @@ export default function BaselineSchedulePage() {
         availableClassrooms,
         applyDisplayMode: false,
       }),
-    [
-      scheduleData,
-      filters,
-      teacherFilterId,
-      availableDays,
-      availableTimeSlots,
-      availableClassrooms,
-    ]
+    [scheduleData, filters, teacherFilterId, availableDays, availableTimeSlots, availableClassrooms]
   )
 
   // Calculate slot counts for display

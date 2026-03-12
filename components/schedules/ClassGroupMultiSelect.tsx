@@ -82,10 +82,7 @@ export default function ClassGroupMultiSelect({
   }
 
   const handleSelectAll = () => {
-    onSelectionChange([
-      ...selectedClassGroupIds,
-      ...addableClassGroups.map(cg => cg.id),
-    ])
+    onSelectionChange([...selectedClassGroupIds, ...addableClassGroups.map(cg => cg.id)])
     setPopoverOpen(false)
   }
 

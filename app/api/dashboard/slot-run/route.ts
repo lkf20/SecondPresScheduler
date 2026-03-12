@@ -8,10 +8,7 @@ import {
   getStaffingEndDate,
   getStaffingWeeksLabelFromCount,
 } from '@/lib/dashboard/staffing-boundary'
-import {
-  getCalendarSettings,
-  getSchoolClosuresForDateRange,
-} from '@/lib/api/school-calendar'
+import { getCalendarSettings, getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 
 /**

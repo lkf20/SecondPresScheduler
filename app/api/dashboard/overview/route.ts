@@ -3,14 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { parseLocalDate, expandDateRangeWithTimeZone } from '@/lib/utils/date'
-import {
-  getDefaultLastDayOfSchool,
-  getStaffingEndDate,
-} from '@/lib/dashboard/staffing-boundary'
-import {
-  getCalendarSettings,
-  getSchoolClosuresForDateRange,
-} from '@/lib/api/school-calendar'
+import { getDefaultLastDayOfSchool, getStaffingEndDate } from '@/lib/dashboard/staffing-boundary'
+import { getCalendarSettings, getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import { MONTH_NAMES } from '@/lib/utils/date-format'
 import { getStaffDisplayName, type DisplayNameFormat } from '@/lib/utils/staff-display-name'
 import { filterCoverageRequestsToActiveTimeOffOnly } from '@/lib/dashboard/filter-draft-time-off'

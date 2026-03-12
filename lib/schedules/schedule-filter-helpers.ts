@@ -98,13 +98,8 @@ export function hasActiveScheduleFilters(
     defaultDisplayMode?: string
   }
 ): boolean {
-  const {
-    defaultDayCount,
-    totalTimeSlots,
-    totalClassrooms,
-    teacherFilterId,
-    defaultDisplayMode,
-  } = context
+  const { defaultDayCount, totalTimeSlots, totalClassrooms, teacherFilterId, defaultDisplayMode } =
+    context
   return (
     filters.slotFilterMode === 'select' ||
     !filters.displayFilters.belowRequired ||

@@ -47,11 +47,6 @@ export function getSlotCoverageTotalWeekly(slot: SlotLike): number {
  */
 export function getSlotCoverageTotalBaseline(slot: SlotLike): number {
   const assignments = slot.assignments ?? []
-  const baselineAssignments = assignments.filter(
-    a => a.teacher_id && !a.is_substitute
-  )
-  return baselineAssignments.reduce(
-    (sum, a) => sum + getAssignmentCoverageWeight(a),
-    0
-  )
+  const baselineAssignments = assignments.filter(a => a.teacher_id && !a.is_substitute)
+  return baselineAssignments.reduce((sum, a) => sum + getAssignmentCoverageWeight(a), 0)
 }

@@ -39,8 +39,7 @@ export default function StaffUnsavedChangesDialog({
   saveLabel = 'Save',
 }: StaffUnsavedChangesDialogProps) {
   const resolvedDescription =
-    description ??
-    `You have unsaved changes in ${tabName}. What would you like to do?`
+    description ?? `You have unsaved changes in ${tabName}. What would you like to do?`
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -56,9 +55,7 @@ export default function StaffUnsavedChangesDialog({
           <Button variant="outline" onClick={onDiscardAndLeave} className="border-slate-300">
             {discardLabel}
           </Button>
-          {onSaveAndContinue && (
-            <Button onClick={onSaveAndContinue}>{saveLabel}</Button>
-          )}
+          {onSaveAndContinue && <Button onClick={onSaveAndContinue}>{saveLabel}</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

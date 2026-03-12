@@ -45,7 +45,10 @@ export async function getStaff() {
 
   const prefsBySub = new Map<string, PreferredClassGroup[]>()
   for (const row of prefs ?? []) {
-    const r = row as unknown as { sub_id: string; class_group?: { id: string; name: string } | null }
+    const r = row as unknown as {
+      sub_id: string
+      class_group?: { id: string; name: string } | null
+    }
     const cg = r.class_group
     if (!cg?.id) continue
     const list = prefsBySub.get(r.sub_id) ?? []

@@ -34,10 +34,7 @@ function getBoundaryDate(startDate: string, lastDayOfSchool?: string | null): st
  * Returns the end date for staffing lookahead: min(startDate + 12 weeks, boundary).
  * Boundary comes from lastDayOfSchool (e.g. from school calendar) or fallback to last Friday of May.
  */
-export function getStaffingEndDate(
-  startDate: string,
-  lastDayOfSchool?: string | null
-): string {
+export function getStaffingEndDate(startDate: string, lastDayOfSchool?: string | null): string {
   const boundary = getBoundaryDate(startDate, lastDayOfSchool)
   const start = parseLocalDate(startDate)
   const endFromWeeks = new Date(start)
@@ -102,8 +99,7 @@ export function getStaffingWeeksNumber(
 ): number {
   const boundary = getBoundaryDate(dateStart, lastDayOfSchool)
   const start = parseLocalDate(dateStart)
-  const end =
-    dateEnd <= boundary ? parseLocalDate(dateEnd) : parseLocalDate(boundary)
+  const end = dateEnd <= boundary ? parseLocalDate(dateEnd) : parseLocalDate(boundary)
   const diffTime = end.getTime() - start.getTime()
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
   return Math.max(0, Math.ceil(diffDays / 7))

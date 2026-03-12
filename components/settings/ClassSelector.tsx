@@ -89,8 +89,7 @@ export default function ClassSelector({
 
   // Hide dropdown only when every selectable class group is already selected (not when addable list is empty for other reasons)
   const allSelected =
-    selectableForRoom.length > 0 &&
-    selectableForRoom.every(cls => selectedIdSet.has(cls.id))
+    selectableForRoom.length > 0 && selectableForRoom.every(cls => selectedIdSet.has(cls.id))
 
   // When only one class group is available for the classroom, auto-select it once to save a step
   useEffect(() => {

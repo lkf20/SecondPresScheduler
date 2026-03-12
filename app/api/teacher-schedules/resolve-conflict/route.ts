@@ -223,8 +223,7 @@ export async function POST(request: NextRequest) {
         // Teacher may already have a row in target (e.g. added to cell then conflict resolved).
         // If so, update it to is_floater; otherwise create.
         const schoolId =
-          (conflictingSchedules[0] as { school_id?: string }).school_id ??
-          (await getUserSchoolId())
+          (conflictingSchedules[0] as { school_id?: string }).school_id ?? (await getUserSchoolId())
         type ExistingRow = { id: string; is_floater: boolean | null } | null
         let existingInTarget: ExistingRow = null
         if (schoolId) {
@@ -256,7 +255,10 @@ export async function POST(request: NextRequest) {
               teacher_name: teacherName ?? undefined,
               action: 'updated',
               action_details: {
-                before: { classroom_id: target_classroom_id, is_floater: existingInTarget.is_floater ?? false },
+                before: {
+                  classroom_id: target_classroom_id,
+                  is_floater: existingInTarget.is_floater ?? false,
+                },
                 after: { classroom_id: target_classroom_id, is_floater: true },
                 reason: 'conflict_resolution_mark_floater',
               },

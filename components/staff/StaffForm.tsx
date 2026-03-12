@@ -343,7 +343,10 @@ export default function StaffForm({
 
         <div className="md:col-span-2 space-y-2">
           <FormField label="Display Name" error={errors.display_name?.message} required>
-            <div style={{ backgroundColor: '#f1f5f9' }} className="rounded-md border border-slate-200">
+            <div
+              style={{ backgroundColor: '#f1f5f9' }}
+              className="rounded-md border border-slate-200"
+            >
               <Input
                 {...register('display_name')}
                 disabled={useDefaultDisplayName}
@@ -403,12 +406,11 @@ export default function StaffForm({
               {(() => {
                 const permanentType = roleTypes.find(r => r.code === 'PERMANENT')
                 const flexibleType = roleTypes.find(r => r.code === 'FLEXIBLE')
-                const permanentOrFlexibleValue =
-                  roleTypeIds.includes(permanentType?.id ?? '')
-                    ? 'permanent'
-                    : roleTypeIds.includes(flexibleType?.id ?? '')
-                      ? 'flexible'
-                      : ''
+                const permanentOrFlexibleValue = roleTypeIds.includes(permanentType?.id ?? '')
+                  ? 'permanent'
+                  : roleTypeIds.includes(flexibleType?.id ?? '')
+                    ? 'flexible'
+                    : ''
                 return (
                   <>
                     <RadioGroup
@@ -429,10 +431,7 @@ export default function StaffForm({
                     >
                       {permanentType && (
                         <div className="flex items-center space-x-2">
-                          <RadioGroupItem
-                            value="permanent"
-                            id={`role-${permanentType.id}`}
-                          />
+                          <RadioGroupItem value="permanent" id={`role-${permanentType.id}`} />
                           <Label
                             htmlFor={`role-${permanentType.id}`}
                             className="font-normal cursor-pointer"
@@ -443,10 +442,7 @@ export default function StaffForm({
                       )}
                       {flexibleType && (
                         <div className="flex items-center space-x-2">
-                          <RadioGroupItem
-                            value="flexible"
-                            id={`role-${flexibleType.id}`}
-                          />
+                          <RadioGroupItem value="flexible" id={`role-${flexibleType.id}`} />
                           <Label
                             htmlFor={`role-${flexibleType.id}`}
                             className="font-normal cursor-pointer"

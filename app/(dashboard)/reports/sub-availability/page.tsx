@@ -5,10 +5,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import ReportRichTextEditors from '@/components/reports/ReportRichTextEditors'
-import {
-  hasRichTextContent,
-  sanitizeRichTextHtml,
-} from '@/lib/reports/rich-text'
+import { hasRichTextContent, sanitizeRichTextHtml } from '@/lib/reports/rich-text'
 import { useReportDefaults } from '@/lib/hooks/use-report-defaults'
 import { getHeaderClasses } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'

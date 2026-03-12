@@ -2349,8 +2349,7 @@ export default function ScheduleSidePanel({
       } else if (applyScope === 'day') {
         // All time slots for the same day
         daysToUpdate = [dayId]
-        timeSlotsToUpdate =
-          applyTimeSlotIds.length > 0 ? applyTimeSlotIds : [timeSlotId]
+        timeSlotsToUpdate = applyTimeSlotIds.length > 0 ? applyTimeSlotIds : [timeSlotId]
       } else {
         // Single cell
         daysToUpdate = [dayId]

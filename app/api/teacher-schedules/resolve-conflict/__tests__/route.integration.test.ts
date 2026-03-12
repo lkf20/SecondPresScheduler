@@ -235,7 +235,11 @@ describe('POST /api/teacher-schedules/resolve-conflict integration', () => {
 
     expect(response.status).toBe(200)
     expect(deleteTeacherSchedule).not.toHaveBeenCalled()
-    expect(updateTeacherSchedule).toHaveBeenCalledWith('conflict-1', { is_floater: true }, undefined)
+    expect(updateTeacherSchedule).toHaveBeenCalledWith(
+      'conflict-1',
+      { is_floater: true },
+      undefined
+    )
     expect(createTeacherSchedule).toHaveBeenCalledWith({
       teacher_id: 'teacher-1',
       day_of_week_id: 'day-mon',
@@ -293,7 +297,11 @@ describe('POST /api/teacher-schedules/resolve-conflict integration', () => {
 
     expect(response.status).toBe(200)
     expect(deleteTeacherSchedule).not.toHaveBeenCalled()
-    expect(updateTeacherSchedule).toHaveBeenCalledWith('conflict-1', { is_floater: true }, undefined)
+    expect(updateTeacherSchedule).toHaveBeenCalledWith(
+      'conflict-1',
+      { is_floater: true },
+      undefined
+    )
     expect(json.updated).toHaveLength(1)
     expect(json.created.id).toBe('new-floater-schedule')
     expect(json.created.is_floater).toBe(true)

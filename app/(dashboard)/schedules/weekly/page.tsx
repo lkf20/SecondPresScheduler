@@ -464,14 +464,7 @@ export default function WeeklySchedulePage() {
         availableClassrooms,
         applyDisplayMode: true,
       }),
-    [
-      scheduleData,
-      filters,
-      teacherFilterId,
-      availableDays,
-      availableTimeSlots,
-      availableClassrooms,
-    ]
+    [scheduleData, filters, teacherFilterId, availableDays, availableTimeSlots, availableClassrooms]
   )
 
   // Base data for chip counts: apply only day/time/classroom selections, but NOT displayMode.
@@ -661,14 +654,13 @@ export default function WeeklySchedulePage() {
                     const defaultDayIds =
                       selectedDayIds.length > 0 ? selectedDayIds : availableDays.map(d => d.id)
                     const defaultDayCount = defaultDayIds.length
-                    const active =
-                      hasActiveScheduleFilters(filters, {
-                        defaultDayCount,
-                        totalTimeSlots: availableTimeSlots.length,
-                        totalClassrooms: availableClassrooms.length,
-                        teacherFilterId,
-                        defaultDisplayMode: 'all-scheduled-staff',
-                      })
+                    const active = hasActiveScheduleFilters(filters, {
+                      defaultDayCount,
+                      totalTimeSlots: availableTimeSlots.length,
+                      totalClassrooms: availableClassrooms.length,
+                      teacherFilterId,
+                      defaultDisplayMode: 'all-scheduled-staff',
+                    })
                     if (!active) return null
                     return (
                       <Button

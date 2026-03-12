@@ -130,7 +130,7 @@ describe('ClassSelector', () => {
       expect(screen.queryByText('Toddler B')).not.toBeInTheDocument()
     })
     expect(
-      screen.getByText((content) =>
+      screen.getByText(content =>
         content.includes('Showing only class groups allowed in this classroom')
       )
     ).toBeInTheDocument()
