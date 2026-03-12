@@ -259,9 +259,10 @@ export async function getAllTeacherSchedules(
     .order('time_slot_id', { ascending: true })
 
   const effectiveSchoolId = schoolId || (await getUserSchoolId())
-  if (effectiveSchoolId) {
-    query = query.eq('school_id', effectiveSchoolId)
+  if (!effectiveSchoolId) {
+    throw new Error('school_id is required to fetch teacher schedules')
   }
+  query = query.eq('school_id', effectiveSchoolId)
 
   if (filters?.teacher_id) {
     query = query.eq('teacher_id', filters.teacher_id)

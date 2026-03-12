@@ -570,7 +570,8 @@ export async function getScheduleSnapshotData({
         scheduleCells = null
       }
     } else {
-      // Transform the nested structure to flatten class_groups array (include enrollment per class group)
+      // Transform the nested structure to flatten class_groups array (include enrollment per class group).
+      // Sort by class group order from Settings (DB), then by name.
       scheduleCells = (data || []).map(cell => {
         const raw = cell as ScheduleCellRaw
         const classGroups = raw.schedule_cell_class_groups
@@ -580,9 +581,15 @@ export async function getScheduleSnapshotData({
               )
               .filter((cg): cg is NonNullable<typeof cg> => cg !== null)
           : []
+        const sorted = [...classGroups].sort((a, b) => {
+          const orderA = (a as { order?: number | null }).order ?? Infinity
+          const orderB = (b as { order?: number | null }).order ?? Infinity
+          if (orderA !== orderB) return orderA - orderB
+          return a.name.localeCompare(b.name)
+        })
         const flattened: ScheduleCellRaw = {
           ...raw,
-          class_groups: classGroups,
+          class_groups: sorted,
         }
         delete flattened.schedule_cell_class_groups
         return flattened

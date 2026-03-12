@@ -43,22 +43,47 @@ function toRelativeTime(dateString: string) {
   return new Date(dateString).toLocaleDateString()
 }
 
+function formatMonthDay(dateStr: string): string {
+  if (!dateStr || typeof dateStr !== 'string') return ''
+  const [y, m, d] = dateStr.split('-').map(Number)
+  if (!y || !m || !d) return ''
+  const date = new Date(y, m - 1, d)
+  const month = date.toLocaleString('en-US', { month: 'long' })
+  return `${month} ${date.getDate()}`
+}
+
+function formatTimeOffDateRange(details: Record<string, any>): string {
+  const start = details.start_date ?? details.after?.start_date
+  const end = details.end_date ?? details.after?.end_date
+  if (!start) return ''
+  const startStr = formatMonthDay(start)
+  if (!startStr) return ''
+  if (!end || end === start) return ` for ${startStr}`
+  const endStr = formatMonthDay(end)
+  if (!endStr) return ` for ${startStr}`
+  return ` for ${startStr} - ${endStr}`
+}
+
 function formatDescription(row: ActivityRow) {
   const details = row.details || {}
 
   if (row.category === 'time_off') {
     const teacherName = details.teacher_name ? ` for ${details.teacher_name}` : ''
-    if (row.action === 'create') return `Created time off request${teacherName}`
+    const dateRange = formatTimeOffDateRange(details)
+    if (row.action === 'create') return `Created time off request${teacherName}${dateRange}`
     if (row.action === 'cancel') return `Cancelled time off request${teacherName}`
     if (row.action === 'status_change') {
       const before = details.before?.status ? `from ${details.before.status} ` : ''
       const after = details.after?.status ? `to ${details.after.status}` : ''
-      return `Updated time off request${teacherName} ${before}${after}`.trim()
+      return `Updated time off request${teacherName}${dateRange} ${before}${after}`.trim()
     }
-    return `Updated time off request${teacherName}`.trim()
+    return `Updated time off request${teacherName}${dateRange}`.trim()
   }
 
   if (row.category === 'sub_assignment') {
+    if (details.summary && typeof details.summary === 'string') {
+      return details.summary
+    }
     const count = Array.isArray(details.assignment_ids) ? details.assignment_ids.length : null
     return count ? `Assigned sub coverage (${count} shifts)` : 'Assigned sub coverage'
   }
@@ -85,18 +110,38 @@ function formatDescription(row: ActivityRow) {
 
   if (row.category === 'baseline_schedule') {
     if (row.entity_type === 'schedule_cell') {
-      if (row.action === 'create') return 'Created baseline schedule cell'
-      if (row.action === 'update') {
-        const count = details.cell_count
-        return count
-          ? `Updated baseline schedule (${count} cell${count !== 1 ? 's' : ''})`
-          : 'Updated baseline schedule cell'
+      const slotLabel = [details.day_name, details.time_slot_code, details.classroom_name]
+        .filter(Boolean)
+        .join(' ')
+      if (row.action === 'create') {
+        return slotLabel ? `Created ${slotLabel}` : 'Created baseline schedule cell'
       }
-      if (row.action === 'delete') return 'Deactivated baseline schedule cell'
+      if (row.action === 'update') {
+        if (details.bulk && details.summary) return `Updated ${details.summary}`
+        if (details.bulk && details.cell_count) {
+          return `Updated baseline schedule (${details.cell_count} cell${details.cell_count !== 1 ? 's' : ''})`
+        }
+        return slotLabel ? `Updated ${slotLabel}` : 'Updated baseline schedule cell'
+      }
+      if (row.action === 'delete') {
+        return slotLabel ? `Deactivated ${slotLabel}` : 'Deactivated baseline schedule cell'
+      }
     }
     if (row.entity_type === 'teacher_schedule') {
-      if (row.action === 'assign') return 'Assigned teacher to baseline schedule'
-      if (row.action === 'unassign') return 'Removed teacher from baseline schedule'
+      const teacherName = details.teacher_name ?? 'teacher'
+      const slotLabel = [details.classroom_name, details.day_name, details.time_slot_code]
+        .filter(Boolean)
+        .join(' ')
+      if (row.action === 'assign') {
+        return slotLabel
+          ? `Assigned ${teacherName} to ${slotLabel} baseline schedule`
+          : `Assigned ${teacherName} to baseline schedule`
+      }
+      if (row.action === 'unassign') {
+        return slotLabel
+          ? `Removed ${teacherName} from ${slotLabel} baseline schedule`
+          : `Removed ${teacherName} from baseline schedule`
+      }
       if (row.action === 'update') return 'Updated teacher assignment in baseline schedule'
       if (details.reason?.startsWith('conflict_resolution'))
         return 'Resolved baseline schedule conflict'
@@ -114,12 +159,31 @@ function getEntityHref(row: ActivityRow) {
     return `/sub-finder?coverage_request_id=${row.entity_id}`
   }
   if (row.category === 'baseline_schedule') {
+    const details = row.details || {}
+    const classroomId = details.classroom_id
+    const dayId = details.day_of_week_id
+    const slotId = details.time_slot_id
+    if (classroomId != null && dayId != null && slotId != null) {
+      const params = new URLSearchParams({
+        classroom_id: String(classroomId),
+        day_of_week_id: String(dayId),
+        time_slot_id: String(slotId),
+      })
+      return `/settings/baseline-schedule?${params.toString()}`
+    }
     return '/settings/baseline-schedule'
   }
   return null
 }
 
-export function ActivityFeed({ className }: { className?: string }) {
+export function ActivityFeed({
+  className,
+  onNavigateToView,
+}: {
+  className?: string
+  /** Called when View is clicked (e.g. to close a sheet so navigation is visible) */
+  onNavigateToView?: () => void
+}) {
   const makeCacheKey = (category: string, actorId: string) => `${category}::${actorId || 'all'}`
   const [rows, setRows] = useState<ActivityRow[]>([])
   const [actors, setActors] = useState<ActorOption[]>([])
@@ -303,7 +367,11 @@ export function ActivityFeed({ className }: { className?: string }) {
                       {row.category}
                     </span>
                     {viewHref ? (
-                      <Link href={viewHref} className="ml-auto text-slate-700 underline">
+                      <Link
+                        href={viewHref}
+                        className="ml-auto text-slate-700 underline"
+                        onClick={() => onNavigateToView?.()}
+                      >
                         View
                       </Link>
                     ) : null}

@@ -10,6 +10,7 @@
 /coverage
 playwright-report/
 test-results/
+tests/e2e/.auth/
 
 # local / temporary scripts (remove from gitignore if keeping in repo)
 replace.py

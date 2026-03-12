@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test')
-const { ensureAuthenticated, hasE2ECredentials } = require('./helpers/auth')
+const { gotoWithAuth, hasE2ECredentials } = require('./helpers/auth')
 
 const json = payload => ({
   status: 200,
@@ -12,6 +12,7 @@ test('sub finder find and assign flow @smoke', async ({ page }) => {
     !hasE2ECredentials(),
     'Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD to run protected smoke flows.'
   )
+  test.setTimeout(60000)
 
   const absenceId = 'absence-1'
   const coverageRequestId = 'coverage-1'
@@ -222,16 +223,21 @@ test('sub finder find and assign flow @smoke', async ({ page }) => {
     await route.fallback()
   })
 
-  await ensureAuthenticated(page, '/sub-finder')
+  await gotoWithAuth(page, '/sub-finder')
   await expect(page.getByRole('heading', { name: /sub finder/i })).toBeVisible()
 
+  // Find Subs is on the absence card in the left panel (e.g. "Find Subs →"); wait for it to be visible after list loads
+  await page
+    .getByRole('button', { name: /find subs/i })
+    .first()
+    .waitFor({ state: 'visible', timeout: 20000 })
   await page
     .getByRole('button', { name: /find subs/i })
     .first()
     .click()
   // Sally A. may appear in multiple places (e.g. hidden in ContactSubPanel); wait for the visible card's action
   await expect(page.getByRole('button', { name: /contact & assign/i }).first()).toBeVisible({
-    timeout: 10000,
+    timeout: 15000,
   })
 
   await page

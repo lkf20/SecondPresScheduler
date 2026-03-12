@@ -26,6 +26,7 @@
 
 - **Commit (Save):** A single “Save” or “Assign” action must result in a consistent persisted state. If multiple API calls are required, they must be ordered and handled so that a partial failure does not leave the system in an invalid state (e.g. one record updated and another not). After success, the UI must refresh or update so the user sees the new state.
 - **Cancel:** Cancel must discard in-memory or in-form edits and close without persisting. No API calls that write data on cancel.
+- **Inactive cells:** When the schedule cell is inactive, the user can save without assigning class groups (class groups are required only when the slot is active). Save is disabled only when the parent classroom or time slot is inactive, not when the cell itself is inactive, so the user can persist deactivation or other edits. Unsaved-changes logic treats the inactive cell’s teacher count as 0 and, when the user confirms “Deactivate slot,” clears assigned teachers in state so toggling active → inactive without other edits does not show a false unsaved dialog on close.
 - **No partial writes:** A user action must not trigger a write that updates only part of the intended change (e.g. updating one cell but not the related teacher_schedule) unless that partial update is documented and intentional.
 
 ### 4. Conflict handling

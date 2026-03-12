@@ -19,12 +19,14 @@ npm run test
 # Coverage output
 npm run test:coverage
 
-# E2E smoke
+# E2E smoke (starts app on port 3001 by default to avoid conflict with dev on 3000)
 npm run test:e2e:smoke
 
 # Full E2E suite
 npm run test:e2e
 ```
+
+To use an already-running dev server (e.g. on port 3000) instead of Playwright starting one, set `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000` before running E2E.
 
 ## Local DB Test Harness (Supabase)
 
@@ -55,6 +57,7 @@ Seed file:
 - Validate route-level behavior and error contracts
 - Favor real query paths against local Supabase where practical
 - Mock only external dependencies that are not under test
+- **School closures:** Routes that respect school closures (time off, assign-shifts, flex, dashboard) call `getSchoolClosuresForDateRange`. In tests that do not assert closure behavior, mock it to return `[]` (e.g. `jest.mock('@/lib/api/school-calendar', () => ({ getSchoolClosuresForDateRange: jest.fn().mockResolvedValue([]) }))`). When testing closure behavior, override the mock to return closures for specific dates/slots and assert filtering or 409 responses; see AGENTS.md “Testing school closures.”
 
 ## Component
 
@@ -71,6 +74,33 @@ Seed file:
   - `E2E_TEST_EMAIL`
   - `E2E_TEST_PASSWORD`
 - If those credentials are not set, protected smoke specs are skipped and login smoke still runs
+
+### E2E auth troubleshooting (login did not redirect)
+
+If smoke tests fail with "Login did not redirect away from /login" or time out after clicking Sign in:
+
+1. **Verify login in the same environment**
+   - Start the app (`npm run dev`), open `http://127.0.0.1:3000/login` in a normal browser.
+   - Sign in with the same `E2E_TEST_EMAIL` and `E2E_TEST_PASSWORD` from `.env.local`.
+   - If that fails, fix credentials or Supabase (user must exist in the same project the app uses).
+
+2. **Same Supabase project**
+   - The app must use the same Supabase URL and key as in `.env.local` (and `.env.local` must be in the project root so Playwright loads it). If the app was started with a different env, auth cookies won’t match.
+
+3. **Watch what Playwright does**
+   - Run with a visible browser:  
+     `npx playwright test --grep @smoke --headed`
+   - See whether an error appears on the login page after click (wrong password, etc.) or the page just never redirects.
+
+4. **Slower machine / CI**
+   - Initial navigation timeout is 30s, post-login wait 45s. If the app or Supabase is slow, increase timeouts in `tests/e2e/helpers/auth.js` or `playwright.config.js`.
+
+5. **Manual auth capture (if automated login never redirects)**
+   - E2E uses a saved auth state so tests don’t log in every run. If the automated setup never redirects off `/login`, capture a session once by hand:
+   - Start the app (`npm run dev`). From the project root run:
+     `E2E_AUTH_MANUAL=1 npx playwright test tests/e2e/auth.setup.js -g "authenticate-manual" --headed`
+   - When the browser opens at `/login`, sign in with `E2E_TEST_EMAIL` and `E2E_TEST_PASSWORD`. In the Playwright inspector, click **Resume**. The test will save `tests/e2e/.auth/user.json` and exit.
+   - After that, run smoke tests as usual; they will use the saved state and no longer perform login.
 
 ## One-command QA scripts (Phase 1)
 

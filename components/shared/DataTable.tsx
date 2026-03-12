@@ -38,6 +38,10 @@ interface DataTableProps<T> {
   emptyMessage?: string
   paginate?: boolean
   fixedLayout?: boolean
+  /** Default sort key when URL has no sort param (e.g. "full_name") */
+  initialSortKey?: string | null
+  /** Default sort direction when URL has no sort param */
+  initialSortDirection?: 'asc' | 'desc'
 }
 
 export default function DataTable<T extends Record<string, unknown>>({
@@ -51,6 +55,8 @@ export default function DataTable<T extends Record<string, unknown>>({
   emptyMessage = 'No data available',
   paginate = true,
   fixedLayout = false,
+  initialSortKey = null,
+  initialSortDirection = 'asc',
 }: DataTableProps<T>) {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -59,9 +65,11 @@ export default function DataTable<T extends Record<string, unknown>>({
   // Get page from URL params, default to 1
   const pageFromUrl = parseInt(searchParams.get('page') || '1', 10)
   const [search, setSearch] = useState(searchParams.get('search') || '')
-  const [sortKey, setSortKey] = useState<string | null>(searchParams.get('sort') || null)
+  const [sortKey, setSortKey] = useState<string | null>(
+    searchParams.get('sort') || initialSortKey || null
+  )
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(
-    (searchParams.get('dir') as 'asc' | 'desc') || 'asc'
+    (searchParams.get('dir') as 'asc' | 'desc') || initialSortDirection
   )
   const [currentPage, setCurrentPage] = useState(pageFromUrl)
   const itemsPerPage = 10

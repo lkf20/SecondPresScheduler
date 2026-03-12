@@ -199,7 +199,12 @@ describe('TimeOffForm', () => {
     await user.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() =>
-      expect(onSuccess).toHaveBeenCalledWith('Bella Wilbanks', '2026-02-09', '2026-02-09')
+      expect(onSuccess).toHaveBeenCalledWith(
+        'Bella Wilbanks',
+        '2026-02-09',
+        '2026-02-09',
+        undefined
+      )
     )
 
     const submitCall = (global.fetch as jest.Mock).mock.calls.find(
@@ -594,7 +599,12 @@ describe('TimeOffForm', () => {
     await user.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() =>
-      expect(onSuccess).toHaveBeenCalledWith('Bella Wilbanks', '2026-02-09', '2026-02-09')
+      expect(onSuccess).toHaveBeenCalledWith(
+        'Bella Wilbanks',
+        '2026-02-09',
+        '2026-02-09',
+        undefined
+      )
     )
 
     const submitCall = (global.fetch as jest.Mock).mock.calls.find(

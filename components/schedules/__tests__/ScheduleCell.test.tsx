@@ -398,6 +398,37 @@ describe('ScheduleCell', () => {
     )
 
     expect(screen.getByText('Toddler A (3), Toddler B (2)')).toBeInTheDocument()
+    expect(screen.getByText(/\(5\)/)).toBeInTheDocument() // total shown for multiple groups
+  })
+
+  it('shows single class group with enrollment once (no duplicate total in parentheses)', () => {
+    render(
+      <ScheduleCell
+        data={{
+          ...baseData,
+          schedule_cell: {
+            ...baseData.schedule_cell,
+            enrollment_for_staffing: null,
+            class_groups: [
+              {
+                id: 'cg-1',
+                name: 'Toddler A',
+                age_unit: 'months',
+                min_age: 24,
+                max_age: 36,
+                required_ratio: 8,
+                preferred_ratio: 6,
+                enrollment: 3,
+              },
+            ],
+          },
+        }}
+      />
+    )
+    // Single class group: show "Toddler A (3)" once (total = per-class when only one), no " (3)" again
+    expect(screen.getByText('Toddler A (3)')).toBeInTheDocument()
+    const labelDiv = screen.getByText('Toddler A (3)').closest('.text-muted-foreground')
+    expect(labelDiv?.textContent).toBe('Toddler A (3)')
   })
 
   it('uses required_staff_override when set for staffing status', () => {

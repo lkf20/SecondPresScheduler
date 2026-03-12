@@ -11,6 +11,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
@@ -27,22 +28,31 @@ interface TimeSlot {
   code: string
   name: string | null
   display_order: number | null
+  is_active?: boolean
 }
 
 interface Classroom {
   id: string
   name: string
+  is_active?: boolean
 }
 
 export interface FilterState {
   selectedDayIds: string[]
   selectedTimeSlotIds: string[]
   selectedClassroomIds: string[]
+  /** When false, hide inactive classroom columns (only active classrooms shown). */
+  showInactiveClassrooms: boolean
+  /** When false, hide inactive time slot rows (only active time slots shown). */
+  showInactiveTimeSlots: boolean
+  /** When 'all', show every slot (active and inactive). When 'select', filter by checkboxes below. */
+  slotFilterMode: 'all' | 'select'
   displayFilters: {
     belowRequired: boolean
     belowPreferred: boolean
     fullyStaffed: boolean
     inactive: boolean
+    viewNotes: boolean
   }
   displayMode:
     | 'permanent-only'
@@ -90,17 +100,26 @@ export default function FilterPanel({
       ? 'permanent-only'
       : (initialFilters?.displayMode ?? 'all-scheduled-staff')
 
+    const slotFilterMode =
+      initialFilters?.slotFilterMode ??
+      ((initialFilters?.displayFilters as { showAll?: boolean } | undefined)?.showAll === false
+        ? 'select'
+        : 'all')
     return {
       selectedDayIds: initialFilters?.selectedDayIds ?? daysToShow.map(d => d.id),
       selectedTimeSlotIds:
         initialFilters?.selectedTimeSlotIds ?? availableTimeSlots.map(ts => ts.id),
       selectedClassroomIds:
         initialFilters?.selectedClassroomIds ?? availableClassrooms.map(c => c.id),
+      showInactiveClassrooms: initialFilters?.showInactiveClassrooms ?? false,
+      showInactiveTimeSlots: initialFilters?.showInactiveTimeSlots ?? false,
+      slotFilterMode,
       displayFilters: {
         belowRequired: initialFilters?.displayFilters?.belowRequired ?? true,
         belowPreferred: initialFilters?.displayFilters?.belowPreferred ?? true,
         fullyStaffed: initialFilters?.displayFilters?.fullyStaffed ?? true,
         inactive: initialFilters?.displayFilters?.inactive ?? true,
+        viewNotes: initialFilters?.displayFilters?.viewNotes ?? false,
       },
       displayMode,
       layout: initialFilters?.layout ?? 'days-x-classrooms', // Default: Days across the top
@@ -165,28 +184,104 @@ export default function FilterPanel({
   // Track previous initialFilters to detect external changes (like from filter chips)
   const prevInitialFiltersRef = useRef<Partial<FilterState> | undefined>(initialFilters)
 
-  // Sync internal state when initialFilters changes from external sources (like filter chips)
-  // Only sync displayMode since that's what the filter chips control
+  // Sync internal state when initialFilters changes from external sources (e.g. Clear all filters, filter chips)
   useEffect(() => {
-    if (initialFilters && initialFilters.displayMode !== undefined) {
-      const prevInitialFilters = prevInitialFiltersRef.current
-      prevInitialFiltersRef.current = initialFilters
+    if (!initialFilters) return
 
-      // Only sync if displayMode actually changed from external source
-      if (
-        prevInitialFilters?.displayMode !== initialFilters.displayMode &&
-        filters.displayMode !== initialFilters.displayMode
-      ) {
-        changeSourceRef.current = 'external'
-        setFilters(prev => ({
-          ...prev,
+    const prevInitialFilters = prevInitialFiltersRef.current
+    prevInitialFiltersRef.current = initialFilters
+
+    const targetDisplayMode = hideStaffSection
+      ? 'permanent-only'
+      : (initialFilters.displayMode ?? filters.displayMode)
+    const displayModeChanged =
+      initialFilters.displayMode !== undefined && filters.displayMode !== targetDisplayMode
+
+    const df = initialFilters.displayFilters
+    const slotFilterModeChanged =
+      initialFilters.slotFilterMode !== undefined &&
+      initialFilters.slotFilterMode !== filters.slotFilterMode
+    const displayFiltersChanged =
+      df &&
+      (df.belowRequired !== filters.displayFilters.belowRequired ||
+        df.belowPreferred !== filters.displayFilters.belowPreferred ||
+        df.fullyStaffed !== filters.displayFilters.fullyStaffed ||
+        df.inactive !== filters.displayFilters.inactive ||
+        df.viewNotes !== filters.displayFilters.viewNotes)
+
+    const arraysEqual = (a: string[] | undefined, b: string[]) => {
+      if (a === undefined || a.length !== b.length) return false
+      const setB = new Set(b)
+      return a.every(id => setB.has(id))
+    }
+    const selectedDayIdsChanged =
+      initialFilters.selectedDayIds !== undefined &&
+      !arraysEqual(initialFilters.selectedDayIds, filters.selectedDayIds)
+    const selectedTimeSlotIdsChanged =
+      initialFilters.selectedTimeSlotIds !== undefined &&
+      !arraysEqual(initialFilters.selectedTimeSlotIds, filters.selectedTimeSlotIds)
+    const selectedClassroomIdsChanged =
+      initialFilters.selectedClassroomIds !== undefined &&
+      !arraysEqual(initialFilters.selectedClassroomIds, filters.selectedClassroomIds)
+    const showInactiveClassroomsChanged =
+      initialFilters.showInactiveClassrooms !== undefined &&
+      initialFilters.showInactiveClassrooms !== filters.showInactiveClassrooms
+    const showInactiveTimeSlotsChanged =
+      initialFilters.showInactiveTimeSlots !== undefined &&
+      initialFilters.showInactiveTimeSlots !== filters.showInactiveTimeSlots
+
+    if (
+      displayModeChanged ||
+      slotFilterModeChanged ||
+      displayFiltersChanged ||
+      selectedDayIdsChanged ||
+      selectedTimeSlotIdsChanged ||
+      selectedClassroomIdsChanged ||
+      showInactiveClassroomsChanged ||
+      showInactiveTimeSlotsChanged
+    ) {
+      changeSourceRef.current = 'external'
+      setFilters(prev => ({
+        ...prev,
+        ...(initialFilters.displayMode !== undefined && {
           displayMode: hideStaffSection
             ? 'permanent-only'
             : (initialFilters.displayMode ?? prev.displayMode),
-        }))
-      }
+        }),
+        ...(initialFilters.slotFilterMode !== undefined && {
+          slotFilterMode: initialFilters.slotFilterMode,
+        }),
+        ...(initialFilters.selectedDayIds !== undefined && {
+          selectedDayIds: initialFilters.selectedDayIds,
+        }),
+        ...(initialFilters.selectedTimeSlotIds !== undefined && {
+          selectedTimeSlotIds: initialFilters.selectedTimeSlotIds,
+        }),
+        ...(initialFilters.selectedClassroomIds !== undefined && {
+          selectedClassroomIds: initialFilters.selectedClassroomIds,
+        }),
+        ...(initialFilters.showInactiveClassrooms !== undefined && {
+          showInactiveClassrooms: initialFilters.showInactiveClassrooms,
+        }),
+        ...(initialFilters.showInactiveTimeSlots !== undefined && {
+          showInactiveTimeSlots: initialFilters.showInactiveTimeSlots,
+        }),
+        ...(df && {
+          displayFilters: {
+            ...prev.displayFilters,
+            belowRequired: df.belowRequired ?? prev.displayFilters.belowRequired,
+            belowPreferred: df.belowPreferred ?? prev.displayFilters.belowPreferred,
+            fullyStaffed: df.fullyStaffed ?? prev.displayFilters.fullyStaffed,
+            inactive: df.inactive ?? prev.displayFilters.inactive,
+            viewNotes: df.viewNotes ?? prev.displayFilters.viewNotes,
+          },
+        }),
+      }))
     }
-  }, [initialFilters, hideStaffSection, filters.displayMode])
+    // Only depend on initialFilters (and hideStaffSection). Do NOT depend on filters.* so we
+    // don't re-run when the user toggles days/slots/classrooms in the panel—otherwise we'd
+    // overwrite with stale initialFilters before the parent has re-rendered with the new state.
+  }, [initialFilters, hideStaffSection])
 
   // Ensure displayMode is permanent-only when hideStaffSection is true
   useEffect(() => {
@@ -488,7 +583,29 @@ export default function FilterPanel({
 
           {/* Time Slot Selector */}
           <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
-            <Label className="text-base font-medium">Show Time Slots</Label>
+            <div className="flex items-center justify-between gap-4">
+              <Label className="text-base font-medium">Show Time Slots</Label>
+              {availableTimeSlots.some(ts => ts.is_active === false) && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <Label
+                    htmlFor="show-inactive-time-slots"
+                    className="text-sm font-normal text-muted-foreground cursor-pointer whitespace-nowrap"
+                  >
+                    Show inactive
+                  </Label>
+                  <Switch
+                    id="show-inactive-time-slots"
+                    checked={filters.showInactiveTimeSlots}
+                    onCheckedChange={checked =>
+                      setFilters(prev => ({
+                        ...prev,
+                        showInactiveTimeSlots: checked,
+                      }))
+                    }
+                  />
+                </div>
+              )}
+            </div>
             <RadioGroup
               value={timeSlotSelectionMode}
               onValueChange={value => {
@@ -626,7 +743,29 @@ export default function FilterPanel({
 
           {/* Classroom Selector */}
           <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
-            <Label className="text-base font-medium">Show Classrooms</Label>
+            <div className="flex items-center justify-between gap-4">
+              <Label className="text-base font-medium">Show Classrooms</Label>
+              {availableClassrooms.some(c => c.is_active === false) && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <Label
+                    htmlFor="show-inactive-classrooms"
+                    className="text-sm font-normal text-muted-foreground cursor-pointer whitespace-nowrap"
+                  >
+                    Show inactive
+                  </Label>
+                  <Switch
+                    id="show-inactive-classrooms"
+                    checked={filters.showInactiveClassrooms}
+                    onCheckedChange={checked =>
+                      setFilters(prev => ({
+                        ...prev,
+                        showInactiveClassrooms: checked,
+                      }))
+                    }
+                  />
+                </div>
+              )}
+            </div>
             <RadioGroup
               value={classroomSelectionMode}
               onValueChange={value => {
@@ -764,65 +903,115 @@ export default function FilterPanel({
             )}
           </div>
 
-          {/* Display Filter */}
+          {/* Slot filter: All slots vs Select slots */}
           <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
-            <Label className="text-base font-medium">Show Slots With</Label>
-            <div className="space-y-3">
+            <Label className="text-base font-medium">Show Slots</Label>
+            <RadioGroup
+              value={filters.slotFilterMode}
+              onValueChange={value =>
+                setFilters(prev => ({
+                  ...prev,
+                  slotFilterMode: value as 'all' | 'select',
+                }))
+              }
+              className="space-y-3"
+            >
               <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="below-required"
-                  checked={filters.displayFilters.belowRequired}
-                  onCheckedChange={() => toggleDisplayFilter('belowRequired')}
-                />
+                <RadioGroupItem value="all" id="slot-filter-all" />
                 <label
-                  htmlFor="below-required"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  htmlFor="slot-filter-all"
+                  className="text-sm font-medium leading-none cursor-pointer"
                 >
-                  Below required staffing
+                  All slots (active and inactive)
                 </label>
               </div>
               <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="below-preferred"
-                  checked={filters.displayFilters.belowPreferred}
-                  onCheckedChange={() => toggleDisplayFilter('belowPreferred')}
-                />
+                <RadioGroupItem value="select" id="slot-filter-select" />
                 <label
-                  htmlFor="below-preferred"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  htmlFor="slot-filter-select"
+                  className="text-sm font-medium leading-none cursor-pointer"
                 >
-                  Below preferred staffing
+                  Select slots
                 </label>
               </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="fully-staffed"
-                  checked={filters.displayFilters.fullyStaffed}
-                  onCheckedChange={() => toggleDisplayFilter('fullyStaffed')}
-                />
-                <label
-                  htmlFor="fully-staffed"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                >
-                  Fully staffed
-                </label>
-              </div>
-              <div className="border-t border-gray-200 my-3"></div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="inactive"
-                  checked={filters.displayFilters.inactive}
-                  onCheckedChange={() => toggleDisplayFilter('inactive')}
-                />
-                <label
-                  htmlFor="inactive"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                >
-                  Inactive
-                </label>
-              </div>
+            </RadioGroup>
+            {filters.slotFilterMode === 'select' && (
+              <>
+                <div className="border-t border-gray-200 my-3 pt-3 space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="below-required"
+                      checked={filters.displayFilters.belowRequired}
+                      onCheckedChange={() => toggleDisplayFilter('belowRequired')}
+                    />
+                    <label
+                      htmlFor="below-required"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      Below required staffing
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="below-preferred"
+                      checked={filters.displayFilters.belowPreferred}
+                      onCheckedChange={() => toggleDisplayFilter('belowPreferred')}
+                    />
+                    <label
+                      htmlFor="below-preferred"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      Below preferred staffing
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="fully-staffed"
+                      checked={filters.displayFilters.fullyStaffed}
+                      onCheckedChange={() => toggleDisplayFilter('fullyStaffed')}
+                    />
+                    <label
+                      htmlFor="fully-staffed"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      Fully staffed
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="inactive"
+                      checked={filters.displayFilters.inactive}
+                      onCheckedChange={() => toggleDisplayFilter('inactive')}
+                    />
+                    <label
+                      htmlFor="inactive"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      Inactive
+                    </label>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">Unchecked items will be hidden</p>
+              </>
+            )}
+          </div>
+
+          {/* Show notes - display toggle only, does not filter cells */}
+          <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
+            <Label className="text-base font-medium">Show notes</Label>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="show-notes"
+                checked={filters.displayFilters.viewNotes}
+                onCheckedChange={() => toggleDisplayFilter('viewNotes')}
+              />
+              <label
+                htmlFor="show-notes"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+              >
+                Show notes
+              </label>
             </div>
-            <p className="text-xs text-muted-foreground">Unchecked items will be hidden</p>
           </div>
 
           {/* Layout */}

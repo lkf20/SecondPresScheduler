@@ -93,7 +93,7 @@ export default function CoverageSummary({
   ) as string[]
   const headerLabel = headerText ?? `${uncovered} of ${totalShifts} Shifts Require Subs`
   const headerClass =
-    variant === 'compact' ? 'text-lg font-semibold text-slate-700' : getHeaderClasses('xl')
+    variant === 'compact' ? 'text-lg font-normal text-slate-700' : getHeaderClasses('xl')
   return (
     <div
       className={cn(

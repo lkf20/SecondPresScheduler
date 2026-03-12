@@ -74,6 +74,8 @@ interface RecommendedSubsListProps {
   className?: string
   /** Optional: return contact status line for a sub (e.g. "Not contacted." or "Pending · Last contacted Monday Feb 4 at 2:15pm."). When not provided, a status-only line is used. */
   getContactStatusLine?: (sub: SubCandidate) => string | null
+  /** When true, sub cards hide Contact & Assign buttons (Sub Finder preview-only mode). */
+  previewMode?: boolean
 }
 
 export default function RecommendedSubsList({
@@ -87,6 +89,7 @@ export default function RecommendedSubsList({
   hideHeader = false,
   highlightedSubId = null,
   includePastShifts = false,
+  previewMode = false,
   selectedShift = null,
   stickyControls = false,
   activeFilter: controlledActiveFilter,
@@ -599,7 +602,8 @@ export default function RecommendedSubsList({
         }
         onSaveNote={onSaveNote ? next => onSaveNote(sub, next) : undefined}
         highlighted={highlightedSubId === sub.id}
-        onContact={() => onContactSub?.(sub)}
+        onContact={onContactSub ? () => onContactSub(sub) : undefined}
+        previewMode={previewMode}
         allShifts={visibleAbsenceShifts}
         allCanCover={visibleCanCover}
         allCannotCover={visibleCannotCover}

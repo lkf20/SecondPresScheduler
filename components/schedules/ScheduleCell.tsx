@@ -25,6 +25,7 @@ interface ScheduleCellProps {
         max_age: number | null
         required_ratio: number
         preferred_ratio: number | null
+        order?: number | null
         enrollment?: number | null
       }>
     } | null
@@ -45,32 +46,67 @@ interface ScheduleCellProps {
     | 'all-scheduled-staff'
     | 'coverage-issues'
     | 'absences'
+  /** When true, show cell notes at the bottom with a light gray divider (from Views & Filters) */
+  showNotes?: boolean
+  /** When provided, if the cell has all of these class groups we show "All class groups" instead of listing them */
+  allClassGroupIds?: string[]
 }
 
 export default function ScheduleCell({
   data,
   onClick,
   displayMode = 'all-scheduled-staff',
+  showNotes = false,
+  allClassGroupIds,
 }: ScheduleCellProps) {
   const scheduleCell = data?.schedule_cell
+  const notesText = scheduleCell?.notes?.trim() ?? ''
+  const showNotesBlock = showNotes && notesText.length > 0
   const isInactive = scheduleCell && !scheduleCell.is_active
   const isActive = scheduleCell?.is_active ?? false
-
-  // Get class group names from schedule_cell; show "Name (n)" when per-class enrollment is set
-  const classGroupNames =
-    scheduleCell?.class_groups && scheduleCell.class_groups.length > 0
-      ? scheduleCell.class_groups
-          .map(cg => (cg.enrollment != null ? `${cg.name} (${cg.enrollment})` : cg.name))
-          .join(', ')
-      : data?.assignments && data.assignments.length > 0
-        ? data.assignments.find(a => a.class_name)?.class_name
-        : null
 
   // Total enrollment: per-class sum if any set, else cell enrollment_for_staffing
   const enrollment = getTotalEnrollmentForCalculation(
     scheduleCell?.class_groups ?? [],
     scheduleCell?.enrollment_for_staffing ?? null
   )
+
+  // Sort class groups by order from Class Group settings (DB), then by name
+  const classGroupsSorted =
+    scheduleCell?.class_groups && scheduleCell.class_groups.length > 0
+      ? [...scheduleCell.class_groups].sort((a, b) => {
+          const orderA = (a as { order?: number | null }).order ?? Infinity
+          const orderB = (b as { order?: number | null }).order ?? Infinity
+          if (orderA !== orderB) return orderA - orderB
+          return a.name.localeCompare(b.name)
+        })
+      : []
+
+  // When cell has all class groups (school-wide), show "All class groups" instead of listing
+  const cellClassGroupIds = new Set(classGroupsSorted.map(cg => cg.id))
+  const hasAllClassGroups =
+    allClassGroupIds &&
+    allClassGroupIds.length > 0 &&
+    allClassGroupIds.length === classGroupsSorted.length &&
+    allClassGroupIds.every(id => cellClassGroupIds.has(id))
+
+  // Build label: for single class group show only total (avoid redundant "Name (3) (3)"); for multiple show "Name (n), ..." and total
+  const classGroupNames =
+    classGroupsSorted.length > 0
+      ? hasAllClassGroups
+        ? enrollment != null
+          ? `All class groups (${enrollment})`
+          : 'All class groups'
+        : classGroupsSorted.length === 1
+          ? enrollment != null
+            ? `${classGroupsSorted[0].name} (${enrollment})`
+            : classGroupsSorted[0].name
+          : classGroupsSorted
+              .map(cg => (cg.enrollment != null ? `${cg.name} (${cg.enrollment})` : cg.name))
+              .join(', ')
+      : data?.assignments && data.assignments.length > 0
+        ? data.assignments.find(a => a.class_name)?.class_name
+        : null
 
   // Calculate staffing status and tooltip message
   const getStaffingStatus = () => {
@@ -159,14 +195,17 @@ export default function ScheduleCell({
       }`}
       onClick={onClick}
     >
-      {(isActive || scheduleCell) && (
+      {!isInactive && (isActive || scheduleCell) && (
         <div className="flex items-start justify-between mb-1">
           {classGroupNames && (
             <div className="text-xs font-normal text-muted-foreground">
               {classGroupNames}
-              {enrollment !== null && enrollment !== undefined && (
-                <span className="text-muted-foreground/70"> ({enrollment})</span>
-              )}
+              {classGroupsSorted.length > 1 &&
+                !hasAllClassGroups &&
+                enrollment !== null &&
+                enrollment !== undefined && (
+                  <span className="text-muted-foreground/70"> ({enrollment})</span>
+                )}
             </div>
           )}
           {isActive && staffingStatus && staffingMessage && (
@@ -191,9 +230,10 @@ export default function ScheduleCell({
           )}
         </div>
       )}
-      {scheduleCell &&
+      {!isInactive &&
+        scheduleCell &&
         ((scheduleCell.class_groups?.length ?? 0) > 0 || (data?.assignments?.length ?? 0) > 0) && (
-          <div className="flex flex-col gap-1.5 mt-1">
+          <div className="flex flex-col gap-1.5 mt-1 overflow-visible">
             {(() => {
               // Filter assignments for this slot (teachers are assigned to the slot, not individual class groups)
               const classGroupIds = scheduleCell.class_groups?.map(cg => cg.id) ?? []
@@ -472,6 +512,12 @@ export default function ScheduleCell({
             })()}
           </div>
         )}
+      {showNotesBlock && (
+        <>
+          <div className="border-t border-gray-200 mt-2 pt-2 flex-shrink-0" aria-hidden />
+          <p className="text-xs text-muted-foreground mt-1 break-words">{notesText}</p>
+        </>
+      )}
     </div>
   )
 }

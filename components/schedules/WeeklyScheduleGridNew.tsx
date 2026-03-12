@@ -6,6 +6,8 @@ import ScheduleGridCellCard from './ScheduleGridCellCard'
 import ScheduleSidePanel from './ScheduleSidePanel'
 import type { WeeklyScheduleData, WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
+import { getSlotCoverageTotalWeekly } from '@/lib/schedules/coverage-weights'
+import { getSlotRequiredPreferred } from '@/lib/schedules/schedule-filter-data'
 import { parseLocalDate } from '@/lib/utils/date'
 import { isCellClosed, getMatchingClosure } from '@/lib/utils/school-closures'
 import { isSlotEffectivelyInactive } from '@/lib/utils/schedule-slot-activity'
@@ -37,6 +39,8 @@ interface WeeklyScheduleGridNewProps {
     | 'all-scheduled-staff'
     | 'coverage-issues'
     | 'absences'
+  /** When true, show cell notes at the bottom (from Views & Filters > Show notes) */
+  showNotes?: boolean
   onDisplayModeChange?: (
     mode:
       | 'permanent-only'
@@ -60,9 +64,13 @@ interface WeeklyScheduleGridNewProps {
   /** When false (e.g. Baseline), legend omits overlay items: Substitute, Absent, Temporary Coverage. Default true for Weekly. */
   showLegendTemporaryCoverage?: boolean
   showFilterChips?: boolean
+  /** Rendered below the Key (e.g. Views & Filters + slot count on Baseline). Matches Weekly layout. */
+  contentBelowLegend?: React.ReactNode
   readOnly?: boolean
   /** When true, Save button shows "Save & Return to Weekly Schedule" and parent onRefresh may navigate back */
   returnToWeekly?: boolean
+  /** When false, side panel header omits calendar date (Baseline only). Default true (Weekly shows date). */
+  showDateInHeader?: boolean
   /** Renders to the left of filter chips (e.g. Views & Filters button). Only used when showFilterChips is true. */
   leadingFilterContent?: React.ReactNode
   /** Renders on the right side of the filter row (e.g. Manage Calendar). Only used when showFilterChips is true. */
@@ -80,6 +88,8 @@ interface WeeklyScheduleGridNewProps {
   onClosureMarkOpenForDay?: (date: string) => void | Promise<void>
   /** Called when user changes a closure's reason. */
   onClosureChangeReason?: (closureId: string, newReason: string) => void | Promise<void>
+  /** Day IDs selected in Settings (Days & Time slots). Used for Apply Changes to day checkboxes only. */
+  scheduleDayIdsFromSettings?: string[]
 }
 
 type WeeklyScheduleCellData = WeeklyScheduleData & {
@@ -107,24 +117,24 @@ export function hexToRgba(hex: string, opacity: number = 0.08): string {
 }
 
 // Helper function to generate grid template for days-x-classrooms layout
+// daysWithTimeSlots: per-day time slots so we can collapse empty time-slot rows (e.g. when filtering by teacher)
 export function generateDaysXClassroomsGridTemplate(
   classroomCount: number,
-  days: Array<{ id: string; name: string; number: number }>,
-  timeSlots: Array<{ id: string; code: string }>
+  daysWithTimeSlots: Array<{
+    day: { id: string; name: string; number: number }
+    timeSlots: Array<{ id: string; code: string }>
+  }>
 ): { columns: string; rows: string } {
   // Columns: Combined Day/Time (120px) + fixed classroom columns.
   // Keep columns fixed so selecting fewer classrooms makes the grid narrower
   // instead of stretching each column.
-  const columns = `120px repeat(${classroomCount}, 240px)`
+  const columns = `120px repeat(${classroomCount}, 220px)`
 
-  // Rows: Header (auto) + (Spacer row + Day header + time slots for each day)
-  // For the first day: no spacer, just day header + time slots
-  // For subsequent days: spacer row + day header + time slots
-  const dayRows = days
-    .map((day, dayIndex) => {
+  // Rows: Header (auto) + (Spacer row + Day header + time slots for each day) — time slot count per day can differ
+  const dayRows = daysWithTimeSlots
+    .map(({ timeSlots }, dayIndex) => {
       const spacerRow = dayIndex === 0 ? '' : '16px' // Add spacer before each day except the first
       const dayHeaderRow = '36px' // Fixed small height for day headers (accommodates padding + text)
-      // Use 120px minimum to match Classrooms x Days layout
       const timeSlotRows = timeSlots.map(() => 'minmax(120px, auto)').join(' ')
       return dayIndex === 0
         ? `${dayHeaderRow} ${timeSlotRows}`
@@ -140,16 +150,16 @@ export function generateDaysXClassroomsGridTemplate(
 // Helper function to generate grid template for classrooms-x-days layout
 export function generateClassroomsXDaysGridTemplate(
   dayCount: number,
-  timeSlotCount: number
+  timeSlotCount: number,
+  classroomCount: number
 ): { columns: string; rows: string } {
   // Columns: Classroom (110px - reduced to fit "Kindergarten" while saving space) + (Day columns: each day has timeSlotCount columns)
-  // Column width: 220px card + 10px left margin + 10px right margin = 240px.
-  // Keep columns fixed so grid width reflects number of selected filters.
-  const dayColumns = Array(dayCount).fill(`repeat(${timeSlotCount}, 240px)`).join(' ')
+  // Column width: 220px (card fills cell; columnGap on grid provides spacing).
+  const dayColumns = Array(dayCount).fill(`repeat(${timeSlotCount}, 220px)`).join(' ')
   const columns = `110px ${dayColumns}`
 
-  // Rows: 2 header rows + 1 row per classroom
-  const rows = `auto auto repeat(${dayCount > 0 ? 'auto' : '0'}, minmax(120px, auto))`
+  // Rows: 2 header rows + 1 row per classroom (must match number of data rows to avoid implicit rows and overlap)
+  const rows = `auto auto repeat(${classroomCount > 0 ? classroomCount : '0'}, minmax(120px, auto))`
 
   return { columns, rows }
 }
@@ -174,7 +184,7 @@ function ScheduleLegend({
             className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300"
             style={{ borderColor: '#93c5fd' }}
           >
-            Teacher
+            Permanent Teacher
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -272,34 +282,17 @@ export function calculateAssignmentCounts(data: WeeklyScheduleDataByClassroom[])
         }
 
         const scheduleCell = slot.schedule_cell
-        if (
-          scheduleCell &&
-          scheduleCell.is_active &&
-          scheduleCell.class_groups &&
-          scheduleCell.class_groups.length > 0
-        ) {
-          const classGroupForRatio = scheduleCell.class_groups.reduce((lowest, current) => {
-            const currentMinAge = current.min_age ?? Infinity
-            const lowestMinAge = lowest.min_age ?? Infinity
-            return currentMinAge < lowestMinAge ? current : lowest
-          })
-
-          const requiredTeachers = classGroupForRatio.required_ratio
-            ? Math.ceil(scheduleCell.enrollment_for_staffing! / classGroupForRatio.required_ratio)
-            : undefined
-          const preferredTeachers = classGroupForRatio.preferred_ratio
-            ? Math.ceil(scheduleCell.enrollment_for_staffing! / classGroupForRatio.preferred_ratio)
-            : undefined
-
-          const assignedCount = slot.assignments.filter(
-            a => a.teacher_id && !a.is_substitute
-          ).length
-          const belowRequired = requiredTeachers !== undefined && assignedCount < requiredTeachers
-          const belowPreferred =
-            preferredTeachers !== undefined && assignedCount < preferredTeachers
-
-          if (belowRequired || belowPreferred) {
-            coverageIssuesCount++
+        if (scheduleCell?.is_active) {
+          const thresholds = getSlotRequiredPreferred(slot)
+          if (thresholds) {
+            const coverageTotal = getSlotCoverageTotalWeekly(slot)
+            const belowRequired =
+              thresholds.required !== undefined && coverageTotal < thresholds.required
+            const belowPreferred =
+              thresholds.preferred !== undefined && coverageTotal < thresholds.preferred
+            if (belowRequired || belowPreferred) {
+              coverageIssuesCount++
+            }
           }
         }
       })
@@ -315,23 +308,24 @@ export function calculateAssignmentCounts(data: WeeklyScheduleDataByClassroom[])
   }
 }
 
+export type TimeSlotInfo = {
+  id: string
+  code: string
+  name: string | null
+  display_order: number | null
+  default_start_time: string | null
+  default_end_time: string | null
+  is_active: boolean
+}
+
 export function extractDaysAndTimeSlots(
   data: WeeklyScheduleDataByClassroom[],
   selectedDayIds: string[]
 ) {
   const daySet = new Map<string, { id: string; name: string; number: number }>()
-  const timeSlotSet = new Map<
-    string,
-    {
-      id: string
-      code: string
-      name: string | null
-      display_order: number | null
-      default_start_time: string | null
-      default_end_time: string | null
-      is_active: boolean
-    }
-  >()
+  const timeSlotSet = new Map<string, TimeSlotInfo>()
+  /** Per-day time slots: only slots that appear in the data for that day (so empty rows can be collapsed) */
+  const timeSlotsByDayMap = new Map<string, Map<string, TimeSlotInfo>>()
 
   const daysToProcess = selectedDayIds.length > 0 ? selectedDayIds : []
 
@@ -348,17 +342,26 @@ export function extractDaysAndTimeSlots(
           number: day.day_number,
         })
       }
+      if (!timeSlotsByDayMap.has(day.day_of_week_id)) {
+        timeSlotsByDayMap.set(day.day_of_week_id, new Map())
+      }
+      const dayTimeSlots = timeSlotsByDayMap.get(day.day_of_week_id)!
+
       day.time_slots.forEach(slot => {
+        const info: TimeSlotInfo = {
+          id: slot.time_slot_id,
+          code: slot.time_slot_code,
+          name: slot.time_slot_name,
+          display_order: slot.time_slot_display_order,
+          default_start_time: null,
+          default_end_time: null,
+          is_active: slot.time_slot_is_active !== false,
+        }
         if (!timeSlotSet.has(slot.time_slot_id)) {
-          timeSlotSet.set(slot.time_slot_id, {
-            id: slot.time_slot_id,
-            code: slot.time_slot_code,
-            name: slot.time_slot_name,
-            display_order: slot.time_slot_display_order,
-            default_start_time: null,
-            default_end_time: null,
-            is_active: slot.time_slot_is_active !== false,
-          })
+          timeSlotSet.set(slot.time_slot_id, info)
+        }
+        if (!dayTimeSlots.has(slot.time_slot_id)) {
+          dayTimeSlots.set(slot.time_slot_id, info)
         }
       })
     })
@@ -383,7 +386,21 @@ export function extractDaysAndTimeSlots(
     return orderA - orderB
   })
 
-  return { days, timeSlots }
+  /** For each day, time slots that have at least one cell in the data (sorted by display_order). Used to collapse empty time-slot rows. */
+  const timeSlotsByDay = new Map<string, TimeSlotInfo[]>()
+  days.forEach(day => {
+    const slotMap = timeSlotsByDayMap.get(day.id)
+    const list = slotMap
+      ? Array.from(slotMap.values()).sort((a, b) => {
+          const orderA = a.display_order ?? 999
+          const orderB = b.display_order ?? 999
+          return orderA - orderB
+        })
+      : []
+    timeSlotsByDay.set(day.id, list)
+  })
+
+  return { days, timeSlots, timeSlotsByDay }
 }
 
 export function resolveTimeSlotPresentation({
@@ -459,20 +476,24 @@ export default function WeeklyScheduleGridNew({
   initialSelectedCell = null,
   allowCardClick = true, // Default to allowing clicks
   displayMode = 'all-scheduled-staff',
+  showNotes = false,
   onDisplayModeChange,
   displayModeCounts,
   slotCounts,
   showLegendSubstitutes = true,
   showLegendTemporaryCoverage = true,
   showFilterChips = true,
+  contentBelowLegend,
   readOnly = false,
   returnToWeekly = false,
+  showDateInHeader = true,
   leadingFilterContent,
   trailingFilterContent,
   schoolClosures = [],
   onClosureMarkOpen,
   onClosureMarkOpenForDay,
   onClosureChangeReason,
+  scheduleDayIdsFromSettings,
 }: WeeklyScheduleGridNewProps) {
   const [selectedCell, setSelectedCell] = useState<{
     dayId: string
@@ -486,6 +507,7 @@ export default function WeeklyScheduleGridNew({
     classroomName: string
     classroomColor: string | null
   } | null>(null)
+  const [allClassGroupIds, setAllClassGroupIds] = useState<string[]>([])
   const [selectedCellSnapshot, setSelectedCellSnapshot] = useState<{
     day_of_week_id: string
     day_name: string
@@ -532,10 +554,18 @@ export default function WeeklyScheduleGridNew({
   const countsForChips = displayModeCounts ?? assignmentCounts
 
   // Extract unique days and time slots from data, filtered by selectedDayIds
-  const { days, timeSlots } = useMemo(
+  const { days, timeSlots, timeSlotsByDay } = useMemo(
     () => extractDaysAndTimeSlots(data, selectedDayIds),
     [data, selectedDayIds]
   )
+
+  // Fetch all active class group IDs once so cells can show "All class groups" when the cell has all of them
+  useEffect(() => {
+    fetch('/api/class-groups')
+      .then(r => r.json())
+      .then((rows: Array<{ id: string }>) => setAllClassGroupIds(rows.map(r => r.id)))
+      .catch(() => {})
+  }, [])
 
   const hasAppliedInitialSelection = useRef(false)
 
@@ -614,10 +644,13 @@ export default function WeeklyScheduleGridNew({
   }
 
   const handleSave = async () => {
-    // Clear snapshot so selected cell reads from refreshed query data.
+    // Close the panel first so it doesn't re-render with post-refresh data. Otherwise
+    // we'd refresh, then clear the snapshot, and for one render the panel would show
+    // selectedCellData from the refreshed grid (e.g. different staffing count) and the
+    // badge could flash from "meets required" to "below required" before the panel closes.
     setSelectedCellSnapshot(undefined)
-
-    // Trigger refresh
+    setSelectedCell(null)
+    setActivePanel(null)
     if (onRefresh) {
       await Promise.resolve(onRefresh())
     }
@@ -685,11 +718,20 @@ export default function WeeklyScheduleGridNew({
     return days.filter(day => selectedDayIds.includes(day.id))
   }, [days, selectedDayIds])
 
-  // Transform data for days-x-classrooms layout
+  // Per-day time slots (collapse empty time-slot rows when e.g. filtering by teacher)
+  const daysWithTimeSlots = useMemo(
+    () =>
+      filteredDays.map(day => ({
+        day,
+        timeSlots: timeSlotsByDay.get(day.id) ?? [],
+      })),
+    [filteredDays, timeSlotsByDay]
+  )
+
+  // Transform data for days-x-classrooms layout (only (day, timeSlot) rows that have data for that day)
   const daysXClassroomsData = useMemo(() => {
     if (layout !== 'days-x-classrooms') return null
 
-    // Reorganize: day → timeSlot → classrooms
     const result: Array<{
       day: { id: string; name: string; number: number }
       timeSlot: {
@@ -706,8 +748,8 @@ export default function WeeklyScheduleGridNew({
       }>
     }> = []
 
-    filteredDays.forEach(day => {
-      timeSlots.forEach(timeSlot => {
+    daysWithTimeSlots.forEach(({ day, timeSlots: dayTimeSlots }) => {
+      dayTimeSlots.forEach(timeSlot => {
         const classrooms: Array<{
           classroomId: string
           classroomName: string
@@ -750,18 +792,18 @@ export default function WeeklyScheduleGridNew({
     })
 
     return result
-  }, [data, filteredDays, timeSlots, layout])
+  }, [data, daysWithTimeSlots, layout])
 
   // Generate grid templates
   const daysXClassroomsGrid = useMemo(() => {
     if (layout !== 'days-x-classrooms') return null
-    return generateDaysXClassroomsGridTemplate(data.length, filteredDays, timeSlots)
-  }, [layout, data.length, filteredDays, timeSlots])
+    return generateDaysXClassroomsGridTemplate(data.length, daysWithTimeSlots)
+  }, [layout, data.length, daysWithTimeSlots])
 
   const classroomsXDaysGrid = useMemo(() => {
     if (layout !== 'classrooms-x-days') return null
-    return generateClassroomsXDaysGridTemplate(filteredDays.length, timeSlots.length)
-  }, [layout, filteredDays.length, timeSlots.length])
+    return generateClassroomsXDaysGridTemplate(filteredDays.length, timeSlots.length, data.length)
+  }, [layout, filteredDays.length, timeSlots.length, data.length])
 
   // Render days-x-classrooms layout
   if (layout === 'days-x-classrooms' && daysXClassroomsData && daysXClassroomsGrid) {
@@ -773,6 +815,9 @@ export default function WeeklyScheduleGridNew({
           showLegendTemporaryCoverage={showLegendTemporaryCoverage}
           showSchoolClosed={schoolClosures.length > 0}
         />
+        {contentBelowLegend && (
+          <div className="mb-4 flex flex-wrap items-center gap-3">{contentBelowLegend}</div>
+        )}
         {/* Filter chips - separate row below legend */}
         {showFilterChips && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -829,22 +874,24 @@ export default function WeeklyScheduleGridNew({
               gridTemplateRows: daysXClassroomsGrid.rows,
               minWidth: 'fit-content',
               position: 'relative',
+              rowGap: '12px',
+              columnGap: '20px',
             }}
           >
-            {/* Header Row - Time Column Header */}
+            {/* Header Row - Time column corner (pale gray to match page; hides time slots when scrolling) */}
             <div
               className="sticky top-0 z-20 text-center pt-2 pb-0.5"
               style={{
                 position: 'sticky',
                 top: 0,
                 left: 0,
-                backgroundColor: 'white',
+                backgroundColor: '#f9fafb',
                 gridColumn: 1,
                 gridRow: 1,
                 minWidth: '120px', // Match the column width
                 zIndex: 20, // Keep below sidebar when expanded
               }}
-            ></div>
+            />
             {data.map((classroom, index) => {
               const classroomColor = classroom.classroom_color || undefined
               return (
@@ -874,53 +921,45 @@ export default function WeeklyScheduleGridNew({
               )
             })}
 
-            {/* Data Rows - Build rows explicitly by day and time slot */}
-            {filteredDays.map((day, dayIndex) => {
-              const dayTimeSlots = daysXClassroomsData.filter(item => item.day.id === day.id)
-
-              // Calculate rows: account for spacer rows before each day (except first)
-              // Row 1: Header
-              // For each previous day: 1 spacer row (if not first) + 1 day header row + timeSlots.length data rows
-              const spacerRowsBeforeThisDay = dayIndex > 0 ? dayIndex : 0 // One spacer per day except first
-              const rowsBeforeThisDay = dayIndex * (1 + timeSlots.length) + spacerRowsBeforeThisDay
-              const spacerRow = dayIndex > 0 ? 2 + rowsBeforeThisDay - 1 : null // Spacer row number (if exists)
-              const dayHeaderRow = 2 + rowsBeforeThisDay // Day header row
-              const firstTimeSlotRow = dayHeaderRow + 1 // Time slots start after day header
+            {/* Data Rows - Build rows explicitly by day and time slot (per-day time slots so empty rows collapse) */}
+            {daysWithTimeSlots.map(({ day, timeSlots: dayTimeSlots }, dayIndex) => {
+              // Row indices: row 1 = global header; each day uses 1 (day header) + n slots; days after the first also have 1 spacer before their header.
+              // So "rows before this day" = 1 (global) + for each previous day: (day 0: 1+n0; day i>0: 1 spacer + 1 header + n_i slots = 2+n_i).
+              let rowsBeforeThisDay = 1 // row 1 is the global header
+              for (let i = 0; i < dayIndex; i++) {
+                const daySlotCount = daysWithTimeSlots[i].timeSlots.length
+                rowsBeforeThisDay += i === 0 ? 1 + daySlotCount : 2 + daySlotCount // day 0: header+slots; later days: spacer+header+slots
+              }
+              const spacerRow = dayIndex > 0 ? rowsBeforeThisDay + 1 : null // first row of this day's block is the spacer
+              const dayHeaderRow = dayIndex > 0 ? rowsBeforeThisDay + 2 : 2 // day header: skip spacer when dayIndex > 0
+              const firstTimeSlotRow = dayHeaderRow + 1
 
               return (
                 <React.Fragment key={`day-group-${day.id}`}>
                   {/* Spacer Row - only for days after the first */}
                   {spacerRow && (
                     <>
-                      {/* Time column spacer (white background) */}
+                      {/* Time column spacer (transparent, no border or shadow) */}
                       <div
                         style={{
                           position: 'sticky',
-                          left: 0, // Only sticky horizontally, not vertically
-                          backgroundColor: 'white',
+                          left: 0,
                           gridColumn: 1,
                           gridRow: spacerRow,
                           zIndex: 10,
-                          borderRight: '1px solid #f3f4f6',
-                          boxShadow: '2px 0 8px -2px rgba(0, 0, 0, 0.1)',
                         }}
                       />
-                      {/* Classroom column spacers (with classroom colors) */}
-                      {data.map((classroom, classroomIndex) => {
-                        const classroomColor = classroom.classroom_color || undefined
-                        return (
-                          <div
-                            key={`spacer-${classroom.classroom_id}-${day.id}`}
-                            style={{
-                              backgroundColor: classroomColor
-                                ? hexToRgba(classroomColor, 0.08)
-                                : 'transparent',
-                              gridColumn: classroomIndex + 2,
-                              gridRow: spacerRow,
-                            }}
-                          />
-                        )
-                      })}
+                      {/* Classroom column spacers (neutral so day separation is clear, not colored) */}
+                      {data.map((classroom, classroomIndex) => (
+                        <div
+                          key={`spacer-${classroom.classroom_id}-${day.id}`}
+                          style={{
+                            backgroundColor: '#f9fafb',
+                            gridColumn: classroomIndex + 2,
+                            gridRow: spacerRow,
+                          }}
+                        />
+                      ))}
                     </>
                   )}
 
@@ -955,9 +994,11 @@ export default function WeeklyScheduleGridNew({
                     </div>
                   </div>
 
-                  {/* Time Slot Rows for this day */}
-                  {timeSlots.map((timeSlot, timeSlotIndex) => {
-                    const item = dayTimeSlots.find(ts => ts.timeSlot.id === timeSlot.id)
+                  {/* Time Slot Rows for this day (only slots that have data for this day) */}
+                  {dayTimeSlots.map((timeSlot, timeSlotIndex) => {
+                    const item = daysXClassroomsData.find(
+                      d => d.day.id === day.id && d.timeSlot.id === timeSlot.id
+                    )
                     if (!item) return null
 
                     const dataRow = firstTimeSlotRow + timeSlotIndex
@@ -1007,7 +1048,7 @@ export default function WeeklyScheduleGridNew({
                           return (
                             <div
                               key={`cell-${classroom.classroomId}-${day.id}-${timeSlot.id}`}
-                              className="p-0 flex items-center justify-center"
+                              className="flex items-stretch h-full p-1.5"
                               style={{
                                 backgroundColor: classroomColor
                                   ? hexToRgba(classroomColor, 0.08)
@@ -1020,8 +1061,10 @@ export default function WeeklyScheduleGridNew({
                               <ScheduleGridCellCard
                                 data={classroom.cellData}
                                 displayMode={displayMode}
+                                showNotes={showNotes}
                                 allowCardClick={allowCardClick}
                                 isInactive={isInactive}
+                                allClassGroupIds={allClassGroupIds}
                                 isClosed={
                                   weekStartISO
                                     ? isCellClosed(
@@ -1088,11 +1131,14 @@ export default function WeeklyScheduleGridNew({
             classroomName={selectedCell.classroomName}
             classroomColor={selectedCell.classroomColor}
             selectedDayIds={selectedDayIds}
+            scheduleDayIdsFromSettings={scheduleDayIdsFromSettings}
             selectedCellData={selectedCellData}
             onSave={handleSave}
+            onRefresh={onRefresh}
             weekStartISO={weekStartISO}
             readOnly={readOnly}
             returnToWeekly={returnToWeekly}
+            showDateInHeader={showDateInHeader}
             cellDateISO={cellDateISO}
           />
         )}
@@ -1110,6 +1156,9 @@ export default function WeeklyScheduleGridNew({
           showLegendTemporaryCoverage={showLegendTemporaryCoverage}
           showSchoolClosed={schoolClosures.length > 0}
         />
+        {contentBelowLegend && (
+          <div className="mb-4 flex flex-wrap items-center gap-3">{contentBelowLegend}</div>
+        )}
         {/* Filter chips - separate row below legend */}
         {showFilterChips && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -1164,6 +1213,8 @@ export default function WeeklyScheduleGridNew({
                 gridTemplateRows: classroomsXDaysGrid.rows,
                 width: 'fit-content',
                 minWidth: 'fit-content',
+                rowGap: '12px',
+                columnGap: '20px',
                 // CSS custom properties for header heights and column widths
                 '--header-row-1-height': 'calc(0.5rem + 1.5rem + 0.125rem)', // Day header: pt-2 + text-base line-height + pb-0.5
                 '--header-row-2-height': 'calc(0.5rem + 1.5rem + 0.75rem)', // Time slot header: pt-2 + chip height ~1.5rem + pb-3
@@ -1351,7 +1402,7 @@ export default function WeeklyScheduleGridNew({
                       return (
                         <div
                           key={`cell-${classroom.classroom_id}-${day.id}-${slot.id}`}
-                          className="p-0"
+                          className="flex items-stretch h-full p-1.5"
                           style={{
                             backgroundColor: classroomColor
                               ? hexToRgba(classroomColor, 0.08)
@@ -1364,9 +1415,6 @@ export default function WeeklyScheduleGridNew({
                                 dayIndex < filteredDays.length - 1)
                                 ? '1px solid #e5e7eb'
                                 : 'none',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
                             width: '100%',
                             height: '100%',
                             minHeight: '120px', // Ensure minimum height for Safari compatibility (matches grid row minmax)
@@ -1375,8 +1423,10 @@ export default function WeeklyScheduleGridNew({
                           <ScheduleGridCellCard
                             data={cellData}
                             displayMode={displayMode}
+                            showNotes={showNotes}
                             allowCardClick={allowCardClick}
                             isInactive={isInactive}
+                            allClassGroupIds={allClassGroupIds}
                             isClosed={
                               weekStartISO
                                 ? isCellClosed(weekStartISO, day.number, slot.id, schoolClosures)
@@ -1436,11 +1486,14 @@ export default function WeeklyScheduleGridNew({
             classroomName={selectedCell.classroomName}
             classroomColor={selectedCell.classroomColor}
             selectedDayIds={selectedDayIds}
+            scheduleDayIdsFromSettings={scheduleDayIdsFromSettings}
             selectedCellData={selectedCellData}
             onSave={handleSave}
+            onRefresh={onRefresh}
             weekStartISO={weekStartISO}
             readOnly={readOnly}
             returnToWeekly={returnToWeekly}
+            showDateInHeader={showDateInHeader}
             cellDateISO={cellDateISO}
           />
         )}

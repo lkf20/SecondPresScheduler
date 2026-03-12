@@ -13,10 +13,9 @@ Define “done right” for **Add Temporary Coverage** so behavior is consistent
 
 ## Review dimensions
 
-### 1. Staffing boundary (12 weeks vs May 14, 2026)
+### 1. Staffing boundary (12 weeks vs last day of school)
 
-- [ ] **Whichever is sooner:** Staffing lookahead uses the **earlier** of (start date + 12 weeks) and **May 14, 2026**. API and panel use the same rule (e.g. `getStaffingEndDate` in `lib/dashboard/staffing-boundary.ts`).
-- [ ] **TODO:** May 14, 2026 is a placeholder; replace with last day of school from School Calendar Settings when available.
+- [ ] **Whichever is sooner:** Staffing lookahead uses the **earlier** of (start date + 12 weeks) and **last day of school**. Last day of school comes from School Calendar Settings (`schedule_settings.last_day_of_school`); when not set, fallback is the **last Friday of May** for the relevant year (e.g. `getStaffingEndDate` in `lib/dashboard/staffing-boundary.ts`).
 - [ ] **Weeks label when capped:** When the run end date is at or after May 14, the copy shows “X weeks” (weeks from run start to May 14). Example: run Mar 9 – May 14 → “10 weeks.”
 - [ ] **Weeks label when not capped:** When the run is shorter than 12 weeks, show “X weeks.” When the run spans 12+ weeks and ends before May 14, show “12 or more weeks.”
 

@@ -5,7 +5,7 @@
  * Assert the UI shows "Meets Preferred".
  */
 const { test, expect } = require('@playwright/test')
-const { ensureAuthenticated, hasE2ECredentials } = require('../helpers/auth')
+const { gotoWithAuth, hasE2ECredentials } = require('../helpers/auth')
 
 const json = payload => ({
   status: 200,
@@ -105,7 +105,7 @@ test('Floater math correctly calculates staffing status @gold', async ({ page })
     )
   })
 
-  await ensureAuthenticated(page, '/schedules/weekly')
+  await gotoWithAuth(page, '/schedules/weekly')
   await expect(page.getByRole('heading', { name: 'Weekly Schedule' })).toBeVisible({
     timeout: 15000,
   })

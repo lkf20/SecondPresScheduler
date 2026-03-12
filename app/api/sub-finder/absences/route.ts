@@ -5,7 +5,10 @@ import { sortCoverageShifts, buildCoverageSegments } from '@/lib/server/coverage
 import { getTimeOffRequests, getActiveSubAssignmentsForTimeOffRequest } from '@/lib/api/time-off'
 import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
 import { transformTimeOffCardData } from '@/lib/utils/time-off-card-data'
+import { toDateStringISO } from '@/lib/utils/date'
 import { getUserSchoolId } from '@/lib/utils/auth'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
+import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,6 +33,23 @@ export async function GET(request: NextRequest) {
 
     // Fetch time off requests directly
     const timeOffRequests = await getTimeOffRequests({ statuses: ['active'] })
+
+    // Fetch school closures for the full date range so we exclude closed-day shifts from counts and display
+    const dateRangeStart =
+      timeOffRequests.length > 0
+        ? timeOffRequests.map(r => r.start_date).reduce((a, b) => (a && b && a < b ? a : b))
+        : null
+    const dateRangeEnd =
+      timeOffRequests.length > 0
+        ? timeOffRequests
+            .map(r => r.end_date || r.start_date)
+            .reduce((a, b) => (a && b && a > b ? a : b))
+        : null
+    const schoolClosures =
+      dateRangeStart && dateRangeEnd
+        ? await getSchoolClosuresForDateRange(schoolId, dateRangeStart, dateRangeEnd)
+        : []
+    const closureList = schoolClosures.map(c => ({ date: c.date, time_slot_id: c.time_slot_id }))
 
     // Build schedule lookup for classrooms
     const teacherIds = Array.from(new Set(timeOffRequests.map(r => r.teacher_id).filter(Boolean)))
@@ -71,15 +91,23 @@ export async function GET(request: NextRequest) {
       timeOffRequests.map(async request => {
         const coverageRequestId = (request as { coverage_request_id?: string | null })
           .coverage_request_id
-        // Get shifts
+        // Get shifts (exclude shifts on school closed days, e.g. snow day added after request was created)
         let shifts: Awaited<ReturnType<typeof getTimeOffShifts>>
         try {
-          shifts = await getTimeOffShifts(request.id)
+          const allShifts = await getTimeOffShifts(request.id)
+          shifts =
+            closureList.length > 0
+              ? allShifts.filter(
+                  s => !isSlotClosedOnDate(toDateStringISO(s.date), s.time_slot_id, closureList)
+                )
+              : allShifts
         } catch (error) {
           console.error(`Error fetching shifts for time off request ${request.id}:`, error)
           shifts = []
         }
-        const timeOffShiftKeys = new Set(shifts.map(shift => `${shift.date}|${shift.time_slot_id}`))
+        const timeOffShiftKeys = new Set(
+          shifts.map(shift => `${toDateStringISO(shift.date)}|${shift.time_slot_id}`)
+        )
         const loggedMissingShiftKeys = new Set<string>()
 
         // Get assignments
@@ -99,7 +127,7 @@ export async function GET(request: NextRequest) {
                 const coverageShift = assignment.coverage_request_shift
                 const shiftDate = coverageShift?.date || assignment.date
                 const shiftTimeSlotId = coverageShift?.time_slot_id || assignment.time_slot_id
-                const shiftKey = `${shiftDate}|${shiftTimeSlotId}`
+                const shiftKey = `${toDateStringISO(shiftDate)}|${shiftTimeSlotId}`
                 if (
                   shiftDate &&
                   shiftTimeSlotId &&
@@ -116,15 +144,17 @@ export async function GET(request: NextRequest) {
                     time_slot_id: shiftTimeSlotId,
                   })
                 }
-                assignmentMap.set(shiftKey, {
-                  id: assignment.id,
-                  date: shiftDate,
-                  time_slot_id: shiftTimeSlotId,
-                  is_partial: assignment.is_partial,
-                  assignment_type: assignment.assignment_type || null,
-                  sub: assignment.sub,
-                  source: 'coverage_request',
-                })
+                if (timeOffShiftKeys.has(shiftKey)) {
+                  assignmentMap.set(shiftKey, {
+                    id: assignment.id,
+                    date: shiftDate,
+                    time_slot_id: shiftTimeSlotId,
+                    is_partial: assignment.is_partial,
+                    assignment_type: assignment.assignment_type || null,
+                    sub: assignment.sub,
+                    source: 'coverage_request',
+                  })
+                }
               })
             } catch (error) {
               console.error('[Sub Finder Absences] Failed to load coverage request assignments:', {
@@ -148,7 +178,7 @@ export async function GET(request: NextRequest) {
           ;(subAssignments || []).forEach(assignment => {
             const shiftDate = assignment.date
             const shiftTimeSlotId = assignment.time_slot_id
-            const shiftKey = `${shiftDate}|${shiftTimeSlotId}`
+            const shiftKey = `${toDateStringISO(shiftDate)}|${shiftTimeSlotId}`
             if (!assignment.coverage_request_shift_id && timeOffShiftKeys.has(shiftKey)) {
               if (!loggedMissingCoverageLinkKeys.has(shiftKey)) {
                 loggedMissingCoverageLinkKeys.add(shiftKey)
@@ -160,8 +190,8 @@ export async function GET(request: NextRequest) {
                 })
               }
             }
-            if (!assignmentMap.has(shiftKey)) {
-              if (isDev && timeOffShiftKeys.has(shiftKey)) {
+            if (!assignmentMap.has(shiftKey) && timeOffShiftKeys.has(shiftKey)) {
+              if (isDev) {
                 console.warn(
                   '[Sub Finder Absences Debug] Using teacher/date fallback assignment for coverage',
                   {
@@ -190,7 +220,7 @@ export async function GET(request: NextRequest) {
         if (assignments.length > 0 && timeOffShiftKeys.size > 0) {
           const assignmentKeys = new Set(
             assignments
-              .map(assignment => `${assignment.date}|${assignment.time_slot_id}`)
+              .map(assignment => `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`)
               .filter(key => Boolean(key))
           )
           const overlapKeys = Array.from(assignmentKeys).filter(key => timeOffShiftKeys.has(key))
@@ -287,7 +317,7 @@ export async function GET(request: NextRequest) {
         )
         const assignmentKeys = new Set(
           assignments
-            .map(assignment => `${assignment.date}|${assignment.time_slot_id}`)
+            .map(assignment => `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`)
             .filter(key => Boolean(key))
         )
         const hasAssignmentOverlap = Array.from(assignmentKeys).some(key =>

@@ -278,7 +278,7 @@ describe('StaffFormClient', () => {
     expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute('data-active-tab', 'overview')
     expect(screen.getByTestId('unsaved-dialog')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Discard and continue' }))
+    await user.click(screen.getByRole('button', { name: 'Discard' }))
 
     await waitFor(() => {
       expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute(
@@ -343,7 +343,7 @@ describe('StaffFormClient', () => {
 
     expect(screen.getByTestId('unsaved-dialog')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Discard and continue' }))
+    await user.click(screen.getByRole('button', { name: 'Discard' }))
 
     await waitFor(() => {
       expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute(

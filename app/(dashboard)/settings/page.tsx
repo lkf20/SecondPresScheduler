@@ -82,11 +82,11 @@ export default function SettingsPage() {
         {settingsSections.map(section => (
           <section key={section.title}>
             <h2 className="mb-3 text-base font-semibold text-slate-700">{section.title}</h2>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-stretch">
               {section.categories.map(category => (
-                <Link key={category.name} href={category.href}>
+                <Link key={category.name} href={category.href} className="h-full flex">
                   <Card
-                    className={`transition-colors cursor-pointer h-full flex flex-col ${
+                    className={`transition-colors cursor-pointer h-full flex flex-col flex-1 min-w-0 ${
                       category.accent
                         ? 'bg-white hover:bg-accent border-slate-200'
                         : 'hover:bg-accent'

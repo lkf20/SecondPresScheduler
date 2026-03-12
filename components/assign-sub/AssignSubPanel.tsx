@@ -13,7 +13,15 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
-import { AlertTriangle, Info, X, ExternalLink } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { AlertTriangle, Check, Info, X, ExternalLink } from 'lucide-react'
 import { parseLocalDate } from '@/lib/utils/date'
 import { DAY_NAMES, MONTH_NAMES, FULL_DAY_NAMES } from '@/lib/utils/date-format'
 import SearchableSelect, { type SearchableSelectOption } from '@/components/shared/SearchableSelect'
@@ -38,6 +46,9 @@ interface Sub {
   first_name?: string | null
   last_name?: string | null
   display_name?: string | null
+  can_change_diapers?: boolean | null
+  can_lift_children?: boolean | null
+  can_assist_with_toileting?: boolean | null
 }
 
 interface Shift {
@@ -84,14 +95,15 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
   const [endDate, setEndDate] = useState<string>('')
   const [selectedShiftIds, setSelectedShiftIds] = useState<Set<string>>(new Set())
   const [shifts, setShifts] = useState<Shift[]>([])
-  const [coverageRequestId, setCoverageRequestId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [subs, setSubs] = useState<Sub[]>([])
   const [subQualifications, setSubQualifications] = useState<Qualification[]>([])
   const [teacherClasses, setTeacherClasses] = useState<string[]>([])
-  const [createTimeOffForMissing, setCreateTimeOffForMissing] = useState(false)
+  const [timeOffReason, setTimeOffReason] = useState<string>('Sick Day')
+  const [timeOffNotes, setTimeOffNotes] = useState<string>('')
+  const [subNotes, setSubNotes] = useState<string>('')
   const { format: displayNameFormat } = useDisplayNameFormat()
   const isInitialMountRef = useRef(true)
   const shiftIdsKey = useMemo(() => shifts.map(shift => shift.id).join('|'), [shifts])
@@ -168,7 +180,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
       setLoading(true)
       try {
         const effectiveEndDate = endDate || startDate
-        const response = await fetch('/api/coverage-requests/ensure-for-quick-assign', {
+        const response = await fetch('/api/assign-sub/shifts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -184,18 +196,11 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
         }
 
         const data = await response.json()
-        setCoverageRequestId(data.coverage_request_id)
+        const rawShifts = data.shifts || []
 
-        // Fetch timeslots once for lookup
+        // Fetch timeslots once for display_order sorting
         const timeslotsResponse = await fetch('/api/timeslots').catch(() => null)
-
         const timeslots = timeslotsResponse?.ok ? await timeslotsResponse.json() : []
-
-        const timeslotsMap = new Map(
-          timeslots.map((t: { id: string; code: string }) => [t.id, t.code])
-        )
-
-        // Create a map of time slot code to display_order for sorting
         const timeSlotOrderMap = new Map<string, number>()
         timeslots.forEach((slot: { code?: string; display_order?: number }) => {
           if (slot.code) {
@@ -203,19 +208,20 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
           }
         })
 
-        // Fetch shift details with day/time slot names
+        // Enrich with day_name and classroom_name
         const shiftDetails = await Promise.all(
-          data.coverage_request_shifts.map(
+          rawShifts.map(
             async (shift: {
               id: string
               date: string
               day_of_week_id: string
               time_slot_id: string
+              time_slot_code: string
               classroom_id?: string | null
-              time_off_request_id?: string | null
+              has_time_off: boolean
+              time_off_request_id: string | null
             }) => {
-              // Fetch classroom name if available
-              let classroomName = null
+              let classroomName: string | null = null
               if (shift.classroom_id) {
                 const classroomResponse = await fetch(
                   `/api/classrooms/${shift.classroom_id}`
@@ -225,35 +231,27 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
                   classroomName = classroomData.name || null
                 }
               }
-
-              // Get day name from date
               const date = parseLocalDate(shift.date)
               const dayName = FULL_DAY_NAMES[date.getDay()]
-
               return {
                 ...shift,
                 day_name: dayName,
-                time_slot_code: timeslotsMap.get(shift.time_slot_id) || '',
                 classroom_name: classroomName,
               }
             }
           )
         )
 
-        // Sort shifts: earliest date first, then by time slot display_order from settings
         const sortedShifts = shiftDetails.sort((a, b) => {
-          // First, sort by date (earliest first)
           const dateCompare = a.date.localeCompare(b.date)
           if (dateCompare !== 0) return dateCompare
-
-          // Then, sort by time slot display_order
-          const aOrder = timeSlotOrderMap.get(a.time_slot_code) ?? 999
-          const bOrder = timeSlotOrderMap.get(b.time_slot_code) ?? 999
+          const aOrder = timeSlotOrderMap.get(a.time_slot_code ?? '') ?? 999
+          const bOrder = timeSlotOrderMap.get(b.time_slot_code ?? '') ?? 999
           return aOrder - bOrder
         })
 
         setShifts(sortedShifts)
-        setSelectedShiftIds(new Set()) // Reset selections
+        setSelectedShiftIds(new Set())
       } catch (error) {
         console.error('Error fetching shifts:', error)
         toast.error('Failed to load shifts')
@@ -319,20 +317,24 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
     }
   }, [teacherId, startDate, endDate])
 
-  // Check conflicts when sub and shifts are available
+  // Check conflicts when sub and shifts are available (no coverage request; use shifts array)
   useEffect(() => {
-    if (!subId || !coverageRequestId || !shiftIdsKey) return
+    if (!subId || !teacherId || shifts.length === 0) return
 
     const checkConflicts = async () => {
       try {
-        const shiftIds = shiftIdsKey.split('|').filter(Boolean)
         const response = await fetch('/api/sub-finder/check-conflicts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             sub_id: subId,
-            coverage_request_id: coverageRequestId,
-            shift_ids: shiftIds,
+            teacher_id: teacherId,
+            shifts: shifts.map(s => ({
+              date: s.date,
+              time_slot_id: s.time_slot_id,
+              day_of_week_id: s.day_of_week_id,
+              classroom_id: s.classroom_id ?? null,
+            })),
           }),
         })
 
@@ -341,11 +343,17 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
           return
         }
 
-        const conflictData: ConflictEntry[] = await response.json()
-        // Update shifts with conflict status
+        const conflictData: Array<{
+          shift_key: string
+          status: Shift['status']
+          message?: string
+        }> = await response.json()
+        const byKey = new Map(conflictData.map(c => [c.shift_key, c]))
+
         setShifts(prevShifts =>
           prevShifts.map(shift => {
-            const conflict = conflictData.find(c => c.shift_id === shift.id)
+            const key = `${shift.date}|${shift.time_slot_id}`
+            const conflict = byKey.get(key)
             if (!conflict) return shift
             return {
               ...shift,
@@ -360,7 +368,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
     }
 
     checkConflicts()
-  }, [subId, coverageRequestId, shiftIdsKey])
+  }, [subId, teacherId, shiftIdsKey])
 
   // Format date for display
   const formatDate = (dateString: string) => {
@@ -413,15 +421,15 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
     })
   }, [subQualifications, teacherClasses])
 
-  // Keep explicit user control of shift selection.
-  // Auto-selecting on every shifts update can silently re-select extra shifts.
+  // Clear shift selection only when the shift list changes (e.g. new teacher/date range).
+  // Do not clear when subId changes, so the user can select shifts then pick a sub and assign.
   useEffect(() => {
-    if (!subId || shifts.length === 0) {
+    if (shifts.length === 0) {
       setSelectedShiftIds(new Set())
       return
     }
     setSelectedShiftIds(new Set())
-  }, [subId, shifts])
+  }, [shiftIdsKey])
 
   // Calculate summary stats
   const summaryStats = useMemo(() => {
@@ -453,22 +461,27 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
     })
   }
 
-  // Handle assign
+  // Handle assign (no coverage request up front; create time off if needed, then get coverage request per absence)
   const handleAssign = async () => {
-    if (!coverageRequestId || !subId || selectedShiftIds.size === 0) {
+    if (!teacherId || !subId || selectedShiftIds.size === 0) {
       toast.error('Please select a teacher, sub, and at least one shift')
       return
     }
 
     setSubmitting(true)
     try {
-      // First, create time off requests for shifts without time off if checkbox is checked
       const selectedShifts = shifts.filter(s => selectedShiftIds.has(s.id))
       const shiftsWithoutTimeOff = selectedShifts.filter(s => !s.has_time_off)
 
-      if (createTimeOffForMissing && shiftsWithoutTimeOff.length > 0 && teacherId) {
-        // Create time off request
+      if (shiftsWithoutTimeOff.length > 0 && !timeOffReason?.trim()) {
+        toast.error('Please select a reason for the time off request.')
+        setSubmitting(false)
+        return
+      }
 
+      let createdTimeOffRequestId: string | null = null
+
+      if (shiftsWithoutTimeOff.length > 0 && teacherId) {
         const timeOffResponse = await fetch('/api/time-off', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -477,7 +490,8 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
             start_date: shiftsWithoutTimeOff[0].date,
             end_date: shiftsWithoutTimeOff[shiftsWithoutTimeOff.length - 1].date,
             shift_selection_mode: 'select_shifts',
-            reason: 'Other', // Generic reason for quick assign
+            reason: timeOffReason,
+            notes: timeOffNotes || null,
             shifts: shiftsWithoutTimeOff.map(s => ({
               date: s.date,
               day_of_week_id: s.day_of_week_id,
@@ -503,25 +517,92 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
           throw new Error(errorMessage)
         }
 
-        await timeOffResponse.json()
+        const timeOffData = await timeOffResponse.json()
+        createdTimeOffRequestId = timeOffData?.id ?? null
       }
 
-      // Assign shifts
-      const assignResponse = await fetch('/api/sub-finder/assign-shifts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          coverage_request_id: coverageRequestId,
-          sub_id: subId,
-          selected_shift_ids: Array.from(selectedShiftIds),
-        }),
-      })
+      // Group selected shifts by time_off_request_id (use created id for shifts we just created time off for)
+      const getTimeOffRequestId = (s: Shift) =>
+        s.has_time_off ? s.time_off_request_id : createdTimeOffRequestId
 
-      if (!assignResponse.ok) {
-        const errorData = await assignResponse.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(errorData.error || 'Failed to assign shifts')
+      const shiftsByTimeOffRequest = new Map<string | null, Shift[]>()
+      for (const s of selectedShifts) {
+        const torId = getTimeOffRequestId(s)
+        if (!shiftsByTimeOffRequest.has(torId)) {
+          shiftsByTimeOffRequest.set(torId, [])
+        }
+        shiftsByTimeOffRequest.get(torId)!.push(s)
       }
-      const assignResult = await assignResponse.json()
+
+      let totalAssigned = 0
+
+      for (const [timeOffRequestId, shiftsInGroup] of shiftsByTimeOffRequest) {
+        if (!timeOffRequestId) {
+          toast.error(
+            'One or more selected shifts have no time off request and could not be assigned.'
+          )
+          continue
+        }
+
+        const covRes = await fetch(`/api/sub-finder/coverage-request/${timeOffRequestId}`)
+        if (!covRes.ok) {
+          console.error('[AssignSubPanel] Failed to get coverage request for', timeOffRequestId)
+          toast.error('Failed to resolve coverage for absence.')
+          continue
+        }
+        const covData = await covRes.json()
+        const coverageRequestId = covData.coverage_request_id
+        const shiftMap = covData.shift_map || {}
+
+        const coverageRequestShiftIds: string[] = []
+        for (const s of shiftsInGroup) {
+          const keyWithClass = `${s.date}|${s.time_slot_code ?? ''}|${s.classroom_id ?? ''}`
+          const keySimple = `${s.date}|${s.time_slot_code ?? ''}`
+          const id = shiftMap[keyWithClass] ?? shiftMap[keySimple]
+          if (id) coverageRequestShiftIds.push(id)
+        }
+
+        if (coverageRequestShiftIds.length === 0) continue
+
+        if (subId && coverageRequestId) {
+          const contactResponse = await fetch(
+            `/api/sub-finder/substitute-contacts?coverage_request_id=${coverageRequestId}&sub_id=${subId}`
+          )
+          if (contactResponse.ok) {
+            const contactData = await contactResponse.json()
+            await fetch('/api/sub-finder/substitute-contacts', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: contactData.id,
+                contact_status: 'confirmed',
+                response_status: 'confirmed',
+                is_contacted: true,
+                notes: subNotes || null,
+              }),
+            })
+          }
+        }
+
+        const assignResponse = await fetch('/api/sub-finder/assign-shifts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            coverage_request_id: coverageRequestId,
+            sub_id: subId,
+            selected_shift_ids: coverageRequestShiftIds,
+          }),
+        })
+
+        if (!assignResponse.ok) {
+          const errorData = await assignResponse.json().catch(() => ({ error: 'Unknown error' }))
+          throw new Error(errorData.error || 'Failed to assign shifts')
+        }
+        const loopResult = await assignResponse.json()
+        totalAssigned += loopResult?.assignments_created ?? coverageRequestShiftIds.length
+      }
+
+      const assignResult = { assignments_created: totalAssigned }
 
       const sub = subs.find(s => s.id === subId)
       const teacher = teachers.find(t => t.id === teacherId)
@@ -535,7 +616,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
         `Assigned ${subName} to ${assignedShiftCount} shift${assignedShiftCount !== 1 ? 's' : ''} for ${teacherName}${
           skippedShiftCount > 0 ? ` (${skippedShiftCount} already assigned and skipped).` : ''
         }${
-          createTimeOffForMissing && shiftsWithoutTimeOff.length > 0
+          shiftsWithoutTimeOff.length > 0
             ? `. Time off request created for ${shiftsWithoutTimeOff.length} shift${shiftsWithoutTimeOff.length !== 1 ? 's' : ''}.`
             : ''
         }`
@@ -572,8 +653,9 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
       setEndDate('')
       setSelectedShiftIds(new Set())
       setShifts([])
-      setCoverageRequestId(null)
-      setCreateTimeOffForMissing(false)
+      setTimeOffReason('Sick Day')
+      setTimeOffNotes('')
+      setSubNotes('')
       isInitialMountRef.current = true
     }
   }, [isOpen])
@@ -615,7 +697,9 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
             {/* Teacher and Sub Selection */}
             <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="teacher-select">Teacher</Label>
+                <Label htmlFor="teacher-select">
+                  Teacher <span className="text-destructive">*</span>
+                </Label>
                 <SearchableSelect
                   options={teacherOptions}
                   value={teacherId}
@@ -626,7 +710,9 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="sub-select">Sub to assign</Label>
+                <Label htmlFor="sub-select">
+                  Sub to assign <span className="text-destructive">*</span>
+                </Label>
                 <SearchableSelect
                   options={subOptions}
                   value={subId}
@@ -634,60 +720,104 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
                   placeholder="Search or select a substitute..."
                   className="w-full"
                 />
-                {/* Qualifications Badges */}
-                {selectedSub && relevantQualifications.length > 0 && (
+                {/* Capabilities: badges with green check or red X */}
+                {selectedSub && (
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {relevantQualifications.map(qual => {
+                    {[
+                      {
+                        key: 'diapers',
+                        label: 'Can change diapers',
+                        value: selectedSub.can_change_diapers === true,
+                      },
+                      {
+                        key: 'lift',
+                        label: 'Can lift children',
+                        value: selectedSub.can_lift_children === true,
+                      },
+                      {
+                        key: 'toileting',
+                        label: 'Can assist with toileting',
+                        value: selectedSub.can_assist_with_toileting === true,
+                      },
+                    ].map(({ key, label, value }) => (
+                      <Badge
+                        key={key}
+                        variant="outline"
+                        className="text-xs inline-flex items-center gap-1.5 font-normal"
+                        style={
+                          value
+                            ? {
+                                backgroundColor: 'rgb(240, 253, 244)',
+                                borderColor: 'rgb(134, 239, 172)',
+                                color: 'rgb(22, 101, 52)',
+                              }
+                            : {
+                                backgroundColor: 'rgb(254, 242, 242)',
+                                borderColor: 'rgb(252, 165, 165)',
+                                color: 'rgb(153, 27, 27)',
+                              }
+                        }
+                      >
+                        {value ? (
+                          <Check className="h-3 w-3 shrink-0" />
+                        ) : (
+                          <X className="h-3 w-3 shrink-0" />
+                        )}
+                        {label}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {/* Certifications / qualifications: gray badge with name only; amber only when we have teacher classes and qual doesn't match */}
+                {selectedSub && subQualifications.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {subQualifications.map(qual => {
                       const qualName = qual.qualification?.name || 'Unknown'
-                      return (
+                      const matchesTeacherClass =
+                        teacherClasses.length > 0 &&
+                        teacherClasses.some(className => {
+                          const classNameLower = className.toLowerCase()
+                          const qualNameLower = qualName.toLowerCase()
+                          return (
+                            qualNameLower.includes(classNameLower) ||
+                            classNameLower.includes(qualNameLower)
+                          )
+                        })
+                      const showNotQualified = teacherClasses.length > 0 && !matchesTeacherClass
+                      return showNotQualified ? (
                         <Badge
                           key={qual.id}
                           variant="outline"
-                          className="text-xs bg-slate-50 text-slate-600 border-slate-200"
+                          className="text-xs bg-amber-50 text-amber-700 border-amber-200 font-normal"
                         >
-                          Qualified for {qualName}
+                          Not qualified for {qualName}
+                        </Badge>
+                      ) : (
+                        <Badge
+                          key={qual.id}
+                          variant="outline"
+                          className="text-xs font-normal"
+                          style={{
+                            backgroundColor: 'rgb(248, 250, 252)',
+                            borderColor: 'rgb(226, 232, 240)',
+                            color: 'rgb(71, 85, 105)',
+                          }}
+                        >
+                          {qualName}
                         </Badge>
                       )
                     })}
                   </div>
                 )}
-                {selectedSub &&
-                  relevantQualifications.length === 0 &&
-                  subQualifications.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {subQualifications
-                        .filter(qual => {
-                          const qualName = qual.qualification?.name || ''
-                          return !teacherClasses.some(className => {
-                            const classNameLower = className.toLowerCase()
-                            const qualNameLower = qualName.toLowerCase()
-                            return (
-                              qualNameLower.includes(classNameLower) ||
-                              classNameLower.includes(qualNameLower)
-                            )
-                          })
-                        })
-                        .map(qual => {
-                          const qualName = qual.qualification?.name || 'Unknown'
-                          return (
-                            <Badge
-                              key={qual.id}
-                              variant="outline"
-                              className="text-xs bg-amber-50 text-amber-700 border-amber-200"
-                            >
-                              Not marked qualified for {qualName}
-                            </Badge>
-                          )
-                        })}
-                    </div>
-                  )}
               </div>
             </div>
 
             {/* Date Range */}
             <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
               <div>
-                <Label htmlFor="start-date">Start date</Label>
+                <Label htmlFor="start-date">
+                  Start date <span className="text-destructive">*</span>
+                </Label>
                 <div className="mt-1">
                   <DatePickerInput
                     value={startDate}
@@ -719,14 +849,14 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
               </div>
             ) : shifts.length > 0 ? (
               <div className="space-y-2">
-                <Label>Shifts</Label>
+                <Label>
+                  Shifts <span className="text-destructive">*</span>
+                </Label>
                 <div className="space-y-2 border rounded-lg p-4 bg-white">
                   {shifts.map(shift => {
                     const isSelected = selectedShiftIds.has(shift.id)
                     const isConflictShift =
-                      shift.status === 'unavailable' ||
-                      shift.status === 'conflict_teaching' ||
-                      shift.status === 'conflict_sub'
+                      shift.status === 'conflict_teaching' || shift.status === 'conflict_sub'
                     return (
                       <div
                         key={shift.id}
@@ -762,26 +892,39 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
                                 }
                               >
                                 <Info className="h-3 w-3" />
-                                No absence recorded - this will be extra coverage
+                                No absence recorded yet — a time off request will be created when
+                                you assign
                               </span>
                             )}
                             {shift.status === 'unavailable' && (
-                              <Badge
-                                variant="outline"
-                                className="text-xs"
-                                style={
-                                  {
-                                    backgroundColor: 'rgb(255, 251, 235)', // amber-50
-                                    borderWidth: '1px',
-                                    borderStyle: 'solid',
-                                    borderColor: 'rgb(252, 211, 77)', // amber-300
-                                    color: 'rgb(146, 64, 14)', // amber-800
-                                  } as React.CSSProperties
-                                }
-                              >
-                                <AlertTriangle className="h-3 w-3 mr-1" />
-                                Marked unavailable
-                              </Badge>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs cursor-help"
+                                      style={
+                                        {
+                                          backgroundColor: 'rgb(255, 251, 235)', // amber-50
+                                          borderWidth: '1px',
+                                          borderStyle: 'solid',
+                                          borderColor: 'rgb(252, 211, 77)', // amber-300
+                                          color: 'rgb(146, 64, 14)', // amber-800
+                                        } as React.CSSProperties
+                                      }
+                                    >
+                                      <AlertTriangle className="h-3 w-3 mr-1" />
+                                      Marked unavailable
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p className="text-sm">
+                                      Sub is marked as unavailable for this day and time in Settings
+                                      → Staff
+                                    </p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             )}
                             {shift.status === 'conflict_teaching' && (
                               <Badge
@@ -844,74 +987,132 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
               </div>
             ) : null}
 
-            {/* Summary Section */}
-            {(summaryStats.noTimeOffCount > 0 || summaryStats.conflictCount > 0) && (
-              <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/40 p-4">
+            {/* Summary and Additional Details */}
+            {selectedShiftIds.size > 0 && (
+              <div className="space-y-4">
                 {summaryStats.noTimeOffCount > 0 && (
-                  <div className="flex items-start gap-2">
-                    <Info className="h-4 w-4 text-amber-600 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-sm text-amber-800">
-                        {summaryStats.noTimeOffCount} of {summaryStats.totalSelected} selected
-                        shifts {summaryStats.noTimeOffCount === 1 ? 'does' : 'do'} not have a time
-                        off request for this teacher.
-                      </p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <Checkbox
-                          id="create-time-off"
-                          checked={createTimeOffForMissing}
-                          onCheckedChange={checked => setCreateTimeOffForMissing(checked === true)}
-                        />
-                        <Label
-                          htmlFor="create-time-off"
-                          className="text-sm font-normal cursor-pointer text-amber-800"
-                        >
-                          {summaryStats.noTimeOffCount === 1
-                            ? 'Create a time off request for this 1 shift.'
-                            : `Create a time off request for these ${summaryStats.noTimeOffCount} shifts.`}
-                        </Label>
+                  <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/40 p-4">
+                    <div className="flex items-start gap-2">
+                      <Info className="h-4 w-4 text-amber-600 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-amber-800 mb-2">
+                          Create Time Off Request
+                        </p>
+                        <p className="text-sm text-amber-800 mb-4">
+                          {summaryStats.noTimeOffCount} of {summaryStats.totalSelected} selected
+                          shifts {summaryStats.noTimeOffCount === 1 ? 'does' : 'do'} not have a time
+                          off request. A time off request will be created automatically.
+                        </p>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="time-off-reason" className="text-amber-900">
+                              Reason <span className="text-amber-700">*</span>
+                            </Label>
+                            <Select value={timeOffReason} onValueChange={setTimeOffReason}>
+                              <SelectTrigger id="time-off-reason" className="bg-white">
+                                <SelectValue placeholder="Select reason" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Sick Day">Sick Day</SelectItem>
+                                <SelectItem value="Vacation">Vacation</SelectItem>
+                                <SelectItem value="Training">Training</SelectItem>
+                                <SelectItem value="Other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="time-off-notes" className="text-amber-900">
+                              Notes (optional)
+                            </Label>
+                            <Textarea
+                              id="time-off-notes"
+                              value={timeOffNotes}
+                              onChange={e => setTimeOffNotes(e.target.value)}
+                              placeholder="Add any notes about this time off..."
+                              className="bg-white resize-none"
+                              rows={2}
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 )}
+
                 {summaryStats.conflictCount > 0 && (
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
-                    <p className="text-sm text-amber-800">
-                      {summaryStats.conflictCount} selected shift
-                      {summaryStats.conflictCount !== 1 ? 's' : ''} override
-                      {summaryStats.conflictCount === 1 ? 's' : ''} the sub&apos;s availability or
-                      existing assignment.
-                    </p>
+                  <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/40 p-4">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
+                      <p className="text-sm text-amber-800">
+                        {summaryStats.conflictCount} selected shift
+                        {summaryStats.conflictCount !== 1 ? 's' : ''} override
+                        {summaryStats.conflictCount === 1 ? 's' : ''} the sub&apos;s availability or
+                        existing assignment.
+                      </p>
+                    </div>
                   </div>
                 )}
+
+                <div className="space-y-2 rounded-lg border border-gray-200 bg-white p-4">
+                  <Label htmlFor="sub-notes">Notes for Sub (optional)</Label>
+                  <Textarea
+                    id="sub-notes"
+                    value={subNotes}
+                    onChange={e => setSubNotes(e.target.value)}
+                    placeholder="Add any notes about contacting this sub..."
+                    className="resize-none"
+                    rows={2}
+                  />
+                </div>
               </div>
             )}
 
             {/* Footer Actions */}
-            <div className="flex justify-end gap-4 pt-6 pb-8 border-t mt-6">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={handleViewInSubFinder}
-                disabled={!teacherId || !startDate}
-                className="text-primary hover:text-primary hover:bg-primary/10"
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                View in Sub Finder
-              </Button>
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={handleAssign}
-                disabled={submitting || selectedShiftIds.size === 0 || !coverageRequestId || !subId}
-              >
-                {submitting
-                  ? 'Assigning...'
-                  : `Assign ${selectedShiftIds.size} shift${selectedShiftIds.size !== 1 ? 's' : ''}`}
-              </Button>
+            <div className="space-y-3 pt-6 border-t mt-6">
+              {!submitting &&
+                (selectedShiftIds.size === 0 || !subId || !teacherId || !startDate) && (
+                  <p className="text-sm text-amber-800">
+                    Select{' '}
+                    {(() => {
+                      const items = [
+                        !teacherId && 'a teacher',
+                        !startDate && 'a start date',
+                        selectedShiftIds.size === 0 && 'at least one shift',
+                        !subId && 'a sub to assign',
+                      ].filter(Boolean) as string[]
+                      if (items.length === 0) return ''
+                      if (items.length === 1) return items[0]
+                      return items.slice(0, -1).join(', ') + ', and ' + items[items.length - 1]
+                    })()}
+                    .
+                  </p>
+                )}
+              <div className="flex justify-end gap-4 pb-8">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={handleViewInSubFinder}
+                  disabled={!teacherId || !startDate}
+                  className="text-primary hover:text-primary hover:bg-primary/10"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View in Sub Finder
+                </Button>
+                <Button type="button" variant="outline" onClick={onClose}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleAssign}
+                  disabled={submitting || selectedShiftIds.size === 0 || !subId}
+                >
+                  {submitting
+                    ? 'Processing...'
+                    : summaryStats.noTimeOffCount > 0
+                      ? `Create Time Off & Assign Sub`
+                      : `Assign ${selectedShiftIds.size} shift${selectedShiftIds.size !== 1 ? 's' : ''}`}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

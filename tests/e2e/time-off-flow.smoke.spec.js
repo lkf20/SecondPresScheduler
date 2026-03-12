@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test')
-const { ensureAuthenticated, hasE2ECredentials } = require('./helpers/auth')
+const { gotoWithAuth, hasE2ECredentials } = require('./helpers/auth')
 
 const json = payload => ({
   status: 200,
@@ -150,7 +150,7 @@ test('time off create and edit flow @smoke', async ({ page }) => {
     await route.fulfill(json({ id: created.id }))
   })
 
-  await ensureAuthenticated(page, '/time-off')
+  await gotoWithAuth(page, '/time-off')
 
   await expect(page.getByRole('heading', { name: /time off requests/i })).toBeVisible()
 

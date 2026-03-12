@@ -9,7 +9,7 @@ From the project root (`scheduler-app/`), run in order:
 - [ ] `npm run lint`
 - [ ] `npm run type-check`
 - [ ] `npm run test` (or `npm run test:coverage:phase3` to mirror CI)
-- [ ] `npm run test:e2e:smoke` (or `npm run test:all` for Jest + smoke)
+- [ ] `npm run test:e2e:smoke` (or `npm run test:all` for Jest + smoke). E2E starts the app on port 3001 by default so it does not conflict with a dev server on 3000.
 - [ ] Optionally: `npm run test:e2e:gold` if `E2E_TEST_EMAIL` and `E2E_TEST_PASSWORD` are set
 
 Fix any failures before opening the PR.

@@ -71,7 +71,28 @@ We store project refs in local env files and provide a helper script so you don'
 ```
 ./scripts/supabase-link.sh staging
 ./scripts/supabase-link.sh prod
+# or: ./scripts/supabase-link.sh production  (uses .env.supabase.production if present)
 ```
+
+**Important:** The link script only connects the **Supabase CLI** to a project (for migrations, `supabase db push`, etc.). It does **not** change which database your Next.js app uses when you run `npm run dev`.
+
+**To use the production database on localhost:**
+
+1. Put the **production** Supabase URL and keys in `.env.local`:
+   - `NEXT_PUBLIC_SUPABASE_URL` = your production project URL (e.g. `https://xxxxx.supabase.co`)
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` = production anon/publishable key
+   - If you use server-side Supabase (e.g. API routes), set `SUPABASE_SERVICE_ROLE_KEY` to the production service role key as well.
+2. Set `NEXT_PUBLIC_SUPABASE_ENV=production` in `.env.local` so the dev badge shows "Supabase: Production".
+3. Restart the dev server (`npm run dev`).
+
+Use a separate env file (e.g. `.env.local.prod`) to store production values and copy them into `.env.local` when you want to point localhost at production; switch back to staging URL/keys when you're done.
+
+**Dev badge (localhost):** In development, a small badge at the bottom-left shows which Supabase environment you're using (Staging vs Production). Set in `.env.local`:
+
+- `NEXT_PUBLIC_SUPABASE_ENV=staging` — badge shows "Supabase: Staging"
+- `NEXT_PUBLIC_SUPABASE_ENV=production` — badge shows "Supabase: Production"
+
+If unset, the badge shows "(not set)" as a reminder to configure it.
 
 ## Project Structure
 

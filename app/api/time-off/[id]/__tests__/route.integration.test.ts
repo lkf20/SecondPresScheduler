@@ -21,6 +21,7 @@ import {
 import { updateTimeOffRequest } from '@/lib/api/time-off'
 import { revalidatePath } from 'next/cache'
 import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 
 jest.mock('@/lib/api/time-off', () => ({
   getTimeOffRequestById: jest.fn(),
@@ -36,6 +37,10 @@ jest.mock('@/lib/utils/auth', () => ({
 
 jest.mock('@/lib/api/schedule-settings', () => ({
   getScheduleSettings: jest.fn(),
+}))
+
+jest.mock('@/lib/api/school-calendar', () => ({
+  getSchoolClosuresForDateRange: jest.fn().mockResolvedValue([]),
 }))
 
 const mockEq = jest.fn()
@@ -73,6 +78,7 @@ jest.mock('@/lib/audit/logAuditEvent', () => ({
 
 describe('PUT /api/time-off/[id] integration', () => {
   beforeEach(() => {
+    ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
     jest.spyOn(console, 'log').mockImplementation(() => {})
     ;(findOverlappingTimeOffRequest as jest.Mock).mockResolvedValue(null)
     ;(getTimeOffShifts as jest.Mock).mockResolvedValue([])
@@ -229,6 +235,66 @@ describe('PUT /api/time-off/[id] integration', () => {
     process.env.NODE_ENV = previousNodeEnv
   })
 
+  it('PUT excludes shifts on school closed days from shiftsToCreate', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+    ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([
+      { date: '2026-02-20', time_slot_id: null },
+    ])
+    mockSingle.mockResolvedValue({
+      data: { coverage_request_id: null, start_date: '2026-02-20', end_date: '2026-02-20' },
+      error: null,
+    })
+    mockEq.mockReturnValue({ single: mockSingle })
+    mockSelect.mockReturnValue({ eq: mockEq })
+    mockFrom.mockReturnValue({ select: mockSelect })
+    ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
+      id: 'timeoff-1',
+      school_id: 'school-1',
+      status: 'active',
+      start_date: '2026-02-20',
+      end_date: '2026-02-20',
+      teacher_id: 'teacher-1',
+      shift_selection_mode: 'select_shifts',
+    })
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
+    ;(canTransitionTimeOffStatus as jest.Mock).mockReturnValue(true)
+    ;(getTeacherTimeOffShifts as jest.Mock).mockResolvedValue([])
+    ;(updateTimeOffRequest as jest.Mock).mockResolvedValue({
+      id: 'timeoff-1',
+      school_id: 'school-1',
+      status: 'active',
+      start_date: '2026-02-20',
+      end_date: '2026-02-20',
+      teacher_id: 'teacher-1',
+      shift_selection_mode: 'select_shifts',
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/time-off/timeoff-1', 'PUT', {
+      status: 'active',
+      teacher_id: 'teacher-1',
+      start_date: '2026-02-20',
+      end_date: '2026-02-20',
+      shift_selection_mode: 'select_shifts',
+      shifts: [{ date: '2026-02-20', day_of_week_id: 'day-1', time_slot_id: 'slot-1' }],
+    })
+
+    const response = await PUT(request as any, { params: Promise.resolve({ id: 'timeoff-1' }) })
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(getSchoolClosuresForDateRange).toHaveBeenCalledWith(
+      'school-1',
+      '2026-02-20',
+      '2026-02-20'
+    )
+    expect(deleteTimeOffShifts).toHaveBeenCalledWith('timeoff-1')
+    expect(createTimeOffShifts).not.toHaveBeenCalled()
+
+    process.env.NODE_ENV = previousNodeEnv
+  })
+
   it('PUT all_scheduled mode excludes conflicting shifts and returns warning metadata', async () => {
     const previousNodeEnv = process.env.NODE_ENV
     process.env.NODE_ENV = 'production'
@@ -276,10 +342,16 @@ describe('PUT /api/time-off/[id] integration', () => {
         }),
     }
 
+    const timeOffShiftsTable = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gt: jest.fn().mockResolvedValue({ data: [] }),
+    }
     mockFrom.mockImplementation((table: string) => {
       if (table === 'time_off_requests') return timeOffRequestsTable
       if (table === 'coverage_requests') return coverageRequestsTable
       if (table === 'coverage_request_shifts') return coverageRequestShiftsTable
+      if (table === 'time_off_shifts') return timeOffShiftsTable
       return { select: jest.fn().mockReturnThis(), eq: jest.fn().mockResolvedValue({ data: null }) }
     })
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
@@ -311,6 +383,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(getTeacherTimeOffShifts as jest.Mock).mockResolvedValue([
       { date: '2026-02-20', time_slot_id: 'slot-1' },
     ])
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValue([])
 
     const request = createJsonRequest('http://localhost:3000/api/time-off/timeoff-1', 'PUT', {
       status: 'active',

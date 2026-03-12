@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache'
 import {
   getTimeOffRequests,
   createTimeOffRequest,
+  updateTimeOffRequest,
   findOverlappingTimeOffRequest,
 } from '@/lib/api/time-off'
 import {
@@ -13,9 +14,11 @@ import {
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { formatDateISOInTimeZone } from '@/lib/utils/date'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 import { createClient } from '@/lib/supabase/server'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
+import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 
 // Helper function to format date as "Mon Jan 20"
 function formatExcludedDate(dateStr: string, timeZone: string): string {
@@ -107,6 +110,17 @@ export async function POST(request: NextRequest) {
       }))
     }
 
+    // Exclude shifts on school closed days (no coverage needed)
+    const schoolClosures = await getSchoolClosuresForDateRange(
+      schoolId,
+      requestData.start_date,
+      effectiveEndDate
+    )
+    const closureList = schoolClosures.map(c => ({ date: c.date, time_slot_id: c.time_slot_id }))
+    requestedShifts = requestedShifts.filter(
+      s => !isSlotClosedOnDate(normalizeDate(s.date), s.time_slot_id, closureList)
+    )
+
     // Block if new request would overlap another draft/active request for this teacher
     if (requestedShifts.length > 0) {
       const overlapping = await findOverlappingTimeOffRequest(
@@ -181,10 +195,14 @@ export async function POST(request: NextRequest) {
           date: normalizeDate(shift.date),
         }))
 
-        shiftsToCreate = shifts.filter(shift => {
-          const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
-          return !existingShiftKeys.has(shiftKey)
-        })
+        shiftsToCreate = shifts
+          .filter(shift => {
+            const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
+            return !existingShiftKeys.has(shiftKey)
+          })
+          .filter(
+            shift => !isSlotClosedOnDate(normalizeDate(shift.date), shift.time_slot_id, closureList)
+          )
         excludedShiftCount = excludedShifts.length
       } else if (requestData.shift_selection_mode === 'all_scheduled') {
         // If "all_scheduled" mode, fetch all scheduled shifts and filter out conflicts
@@ -217,6 +235,9 @@ export async function POST(request: NextRequest) {
             const shiftKey = `${normalizeDate(shift.date)}::${shift.time_slot_id}`
             return !existingShiftKeys.has(shiftKey)
           })
+          .filter(
+            shift => !isSlotClosedOnDate(normalizeDate(shift.date), shift.time_slot_id, closureList)
+          )
         excludedShiftCount = excludedShifts.length
       }
 
@@ -252,7 +273,9 @@ export async function POST(request: NextRequest) {
     } else {
       // No conflicts to check, use all requested shifts
       if (shifts && Array.isArray(shifts) && shifts.length > 0) {
-        shiftsToCreate = shifts
+        shiftsToCreate = shifts.filter(
+          shift => !isSlotClosedOnDate(normalizeDate(shift.date), shift.time_slot_id, closureList)
+        )
       } else if (requestData.shift_selection_mode === 'all_scheduled') {
         const scheduledShifts = await getTeacherScheduledShifts(
           requestData.teacher_id,
@@ -260,14 +283,18 @@ export async function POST(request: NextRequest) {
           effectiveEndDate,
           timeZone
         )
-        shiftsToCreate = scheduledShifts.map(shift => ({
-          date: shift.date,
-          day_of_week_id: shift.day_of_week_id,
-          time_slot_id: shift.time_slot_id,
-          is_partial: false,
-          start_time: null,
-          end_time: null,
-        }))
+        shiftsToCreate = scheduledShifts
+          .map(shift => ({
+            date: shift.date,
+            day_of_week_id: shift.day_of_week_id,
+            time_slot_id: shift.time_slot_id,
+            is_partial: false,
+            start_time: null,
+            end_time: null,
+          }))
+          .filter(
+            shift => !isSlotClosedOnDate(normalizeDate(shift.date), shift.time_slot_id, closureList)
+          )
       }
     }
 
@@ -278,9 +305,24 @@ export async function POST(request: NextRequest) {
       school_id: schoolId,
     })
 
+    let createdStart = createdRequest.start_date
+    let createdEnd = createdRequest.end_date || createdRequest.start_date
+
     // Create shifts (only non-conflicting ones)
     if (shiftsToCreate.length > 0) {
       await createTimeOffShifts(createdRequest.id, shiftsToCreate)
+      const dates = shiftsToCreate
+        .map(s => (s.date || '').replace(/T.*/, ''))
+        .filter(Boolean)
+        .sort()
+      if (dates.length > 0) {
+        createdStart = dates[0]
+        createdEnd = dates[dates.length - 1]
+        await updateTimeOffRequest(createdRequest.id, {
+          start_date: createdStart,
+          end_date: createdEnd,
+        })
+      }
     }
 
     // Revalidate all pages that might show this data
@@ -312,17 +354,19 @@ export async function POST(request: NextRequest) {
         teacher_id: requestData.teacher_id,
         teacher_name: teacherName,
         status,
-        start_date: requestData.start_date,
-        end_date: effectiveEndDate,
+        start_date: createdStart,
+        end_date: createdEnd,
         shifts_created: shiftsToCreate.length,
         shifts_excluded: excludedShiftCount,
       },
     })
 
-    // Return the created request with optional warning
+    // Return the created request with optional warning (dates reflect actual shifts)
     return NextResponse.json(
       {
         ...createdRequest,
+        start_date: createdStart,
+        end_date: createdEnd,
         warning,
         excludedShiftCount,
       },

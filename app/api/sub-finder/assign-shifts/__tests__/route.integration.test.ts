@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 import { revalidatePath } from 'next/cache'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 
 jest.mock('@/lib/supabase/server', () => ({
   createClient: jest.fn(),
@@ -22,6 +23,10 @@ jest.mock('@/lib/audit/logAuditEvent', () => ({
 
 jest.mock('next/cache', () => ({
   revalidatePath: jest.fn(),
+}))
+
+jest.mock('@/lib/api/school-calendar', () => ({
+  getSchoolClosuresForDateRange: jest.fn().mockResolvedValue([]),
 }))
 
 const createStaffQuery = () => ({
@@ -298,6 +303,119 @@ describe('POST /api/sub-finder/assign-shifts integration', () => {
     })
   })
 
+  it('returns 409 when a selected shift falls on a school closed day', async () => {
+    ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([
+      { date: '2099-02-10', time_slot_id: null },
+    ])
+    let coverageRequestShiftsSelectCount = 0
+    const coverageRequestsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      update: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          in: jest.fn().mockResolvedValue({ error: null }),
+        }),
+      }),
+      single: jest.fn().mockResolvedValue({
+        data: {
+          teacher_id: 'teacher-1',
+          source_request_id: 'timeoff-1',
+          request_type: 'absence',
+          school_id: 'school-1',
+        },
+        error: null,
+      }),
+    }
+    const coverageRequestShiftsQuery = {
+      select: jest.fn().mockImplementation((columns?: string, options?: { head?: boolean }) => {
+        coverageRequestShiftsSelectCount += 1
+        if (options?.head) {
+          return {
+            eq: jest.fn().mockReturnValue({
+              eq: jest.fn().mockResolvedValue({ count: 1, error: null }),
+            }),
+          }
+        }
+        if (columns?.includes('classroom_id')) {
+          return {
+            eq: jest.fn().mockReturnThis(),
+            in: jest.fn().mockResolvedValue({
+              data: [
+                {
+                  id: 'shift-1',
+                  date: '2099-02-10',
+                  day_of_week_id: 'day-1',
+                  time_slot_id: 'slot-1',
+                  classroom_id: 'classroom-1',
+                },
+              ],
+              error: null,
+            }),
+          }
+        }
+        return {
+          eq: jest.fn().mockReturnThis(),
+          in: jest.fn().mockResolvedValue({
+            data: [
+              {
+                id: 'shift-1',
+                date: '2099-02-10',
+                days_of_week: { name: 'Monday' },
+                time_slots: { code: 'EM' },
+              },
+            ],
+            error: null,
+          }),
+        }
+      }),
+    }
+    const substituteContactsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({ data: null, error: null }),
+    }
+    const overridesQuery = {
+      select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({ data: [], error: null }),
+    }
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'coverage_requests') return coverageRequestsQuery
+        if (table === 'coverage_request_shifts') return coverageRequestShiftsQuery
+        if (table === 'sub_assignments') return createSubAssignmentsQuery()
+        if (table === 'staff') return createStaffQuery()
+        if (table === 'substitute_contacts') return substituteContactsQuery
+        if (table === 'sub_contact_shift_overrides') return overridesQuery
+        if (table === 'teacher_schedules') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockResolvedValue({ data: [], error: null }),
+          }
+        }
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/assign-shifts',
+      'POST',
+      {
+        coverage_request_id: 'coverage-1',
+        sub_id: 'sub-1',
+        selected_shift_ids: ['shift-1'],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(json.error).toMatch(/school is closed/i)
+    expect(json.error).toMatch(/deselect shifts/i)
+  })
+
   it('returns 404 when coverage request has no teacher_id', async () => {
     const coverageRequestsQuery = {
       select: jest.fn().mockReturnThis(),
@@ -340,6 +458,7 @@ describe('POST /api/sub-finder/assign-shifts integration', () => {
   })
 
   it('returns 500 when fallback classroom lookup fails', async () => {
+    ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
     const coverageRequestsQuery = {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
@@ -415,6 +534,7 @@ describe('POST /api/sub-finder/assign-shifts integration', () => {
   })
 
   it('returns 500 when selected shifts cannot resolve a classroom', async () => {
+    ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
     const coverageRequestsQuery = {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
@@ -589,6 +709,7 @@ describe('POST /api/sub-finder/assign-shifts integration', () => {
   })
 
   it('returns 500 when assignment insert fails and skips contact lookup', async () => {
+    ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
     const coverageRequestsQuery = {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),

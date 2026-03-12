@@ -8,19 +8,23 @@ import FilterPanel, { type FilterState } from '@/components/schedules/FilterPane
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Filter } from 'lucide-react'
+import { ArrowLeft, Filter, X } from 'lucide-react'
+import TeacherFilterSearch from '@/components/schedules/TeacherFilterSearch'
 import Link from 'next/link'
 import { useWeeklySchedule } from '@/lib/hooks/use-weekly-schedule'
 import { useScheduleSettings } from '@/lib/hooks/use-schedule-settings'
 import { useFilterOptions } from '@/lib/hooks/use-filter-options'
 import { invalidateWeeklySchedule } from '@/lib/utils/invalidation'
-import { isSlotInactive } from '@/lib/utils/schedule-slot-activity'
 import {
   includeNewIdsWhenPreviouslyAllSelected,
   reconcileSelectedIdsWithAvailable,
 } from '@/lib/utils/filter-selection'
-import { getTotalEnrollmentForCalculation } from '@/components/schedules/ScheduleSidePanel'
 import { useSchool } from '@/lib/contexts/SchoolContext'
+import {
+  getClearedScheduleFilters,
+  hasActiveScheduleFilters,
+} from '@/lib/schedules/schedule-filter-helpers'
+import { applyScheduleFilters } from '@/lib/schedules/schedule-filter-data'
 import { isNeedsReviewClassroomName } from '@/lib/utils/needs-review-classroom'
 
 // Calculate Monday of current week as ISO string for query key
@@ -59,6 +63,7 @@ export default function BaselineSchedulePage() {
     isLoading: isLoadingSchedule,
     error: scheduleError,
   } = useWeeklySchedule(weekStartISO)
+  // Baseline is permanent (day × slot), not date-based; do not show school closures here (they appear on weekly schedule)
   const scheduleData = useMemo(
     () =>
       (scheduleResponse?.classrooms ?? []).filter(
@@ -66,7 +71,6 @@ export default function BaselineSchedulePage() {
       ),
     [scheduleResponse?.classrooms]
   )
-  const schoolClosures = scheduleResponse?.school_closures ?? []
   const { data: scheduleSettings, isLoading: isLoadingSettings } = useScheduleSettings()
   const { data: filterOptions, isLoading: isLoadingFilters } = useFilterOptions()
 
@@ -100,6 +104,7 @@ export default function BaselineSchedulePage() {
     : null
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
+  const [teacherFilterId, setTeacherFilterId] = useState<string | null>(null)
   const prevAvailableClassroomIdsRef = useRef<string[] | null>(null)
   const prevAvailableTimeSlotIdsRef = useRef<string[] | null>(null)
   const previousAvailableClassroomsStorageKey = 'baseline-schedule-available-classroom-ids'
@@ -117,6 +122,14 @@ export default function BaselineSchedulePage() {
             ...parsed,
             layout: parsed.layout || 'days-x-classrooms',
             displayMode: 'permanent-only',
+            slotFilterMode:
+              parsed.slotFilterMode ??
+              (parsed.displayFilters?.showAll === false ? 'select' : 'all'),
+            showInactiveClassrooms: parsed.showInactiveClassrooms ?? false,
+            showInactiveTimeSlots: parsed.showInactiveTimeSlots ?? false,
+            displayFilters: {
+              ...parsed.displayFilters,
+            },
           }
         } catch (e) {
           console.error('Error parsing saved filters:', e)
@@ -147,6 +160,14 @@ export default function BaselineSchedulePage() {
               ...parsed,
               layout: parsed.layout || 'days-x-classrooms',
               displayMode: 'permanent-only', // Always enforce permanent-only for baseline schedule
+              slotFilterMode:
+                parsed.slotFilterMode ??
+                (parsed.displayFilters?.showAll === false ? 'select' : 'all'),
+              showInactiveClassrooms: parsed.showInactiveClassrooms ?? false,
+              showInactiveTimeSlots: parsed.showInactiveTimeSlots ?? false,
+              displayFilters: {
+                ...parsed.displayFilters,
+              },
             })
             return
           } catch (e) {
@@ -159,11 +180,15 @@ export default function BaselineSchedulePage() {
         selectedDayIds: selectedDayIds.length > 0 ? selectedDayIds : availableDays.map(d => d.id),
         selectedTimeSlotIds: availableTimeSlots.map(ts => ts.id),
         selectedClassroomIds: availableClassrooms.map(c => c.id),
+        slotFilterMode: 'all',
+        showInactiveClassrooms: false,
+        showInactiveTimeSlots: false,
         displayFilters: {
           belowRequired: true,
           belowPreferred: true,
           fullyStaffed: true,
           inactive: true,
+          viewNotes: false,
         },
         displayMode: 'permanent-only', // Baseline schedule only shows permanent teachers
         layout: 'days-x-classrooms', // Default layout
@@ -186,11 +211,15 @@ export default function BaselineSchedulePage() {
       selectedDayIds: [focusDayId],
       selectedTimeSlotIds: [focusTimeSlotId],
       selectedClassroomIds: [focusClassroomId],
+      slotFilterMode: prev?.slotFilterMode ?? 'all',
+      showInactiveClassrooms: prev?.showInactiveClassrooms ?? false,
+      showInactiveTimeSlots: prev?.showInactiveTimeSlots ?? false,
       displayFilters: prev?.displayFilters ?? {
         belowRequired: true,
         belowPreferred: true,
         fullyStaffed: true,
         inactive: true,
+        viewNotes: false,
       },
       displayMode: 'permanent-only', // Baseline schedule only shows permanent teachers
       layout: prev?.layout ?? 'days-x-classrooms',
@@ -360,91 +389,17 @@ export default function BaselineSchedulePage() {
     setFilters({ ...newFilters, displayMode: 'permanent-only' })
   }, [])
 
-  // Apply filters to data
-  const filteredData = useMemo(() => {
-    if (!filters) return scheduleData
-
-    return scheduleData
-      .filter(
-        classroom =>
-          filters.selectedClassroomIds.includes(classroom.classroom_id) &&
-          (filters.displayFilters.inactive || classroom.classroom_is_active !== false)
-      )
-      .map(classroom => ({
-        ...classroom,
-        days: classroom.days
-          .filter(day => filters.selectedDayIds.includes(day.day_of_week_id))
-          .map(day => ({
-            ...day,
-            time_slots: day.time_slots
-              .filter(slot => filters.selectedTimeSlotIds.includes(slot.time_slot_id))
-              .filter(slot => {
-                if (!filters.displayFilters.inactive && slot.time_slot_is_active === false) {
-                  return false
-                }
-
-                if (isSlotInactive(slot)) return filters.displayFilters.inactive
-
-                const scheduleCell = slot.schedule_cell
-                if (!scheduleCell) return false
-
-                // Calculate staffing status
-                const classGroups = scheduleCell.class_groups ?? []
-                const totalEnrollment = getTotalEnrollmentForCalculation(
-                  classGroups,
-                  scheduleCell.enrollment_for_staffing ?? null
-                )
-                if (!classGroups.length || totalEnrollment == null) {
-                  return filters.displayFilters.inactive
-                }
-
-                // Find class group with lowest min_age for ratio calculation
-                const classGroupForRatio = classGroups.reduce((lowest, current) => {
-                  const currentMinAge = current.min_age ?? Infinity
-                  const lowestMinAge = lowest.min_age ?? Infinity
-                  return currentMinAge < lowestMinAge ? current : lowest
-                })
-
-                const calculatedRequired = classGroupForRatio.required_ratio
-                  ? Math.ceil(totalEnrollment / classGroupForRatio.required_ratio)
-                  : undefined
-                const calculatedPreferred = classGroupForRatio.preferred_ratio
-                  ? Math.ceil(totalEnrollment / classGroupForRatio.preferred_ratio)
-                  : undefined
-                const requiredTeachers =
-                  scheduleCell.required_staff_override != null
-                    ? scheduleCell.required_staff_override
-                    : calculatedRequired
-                const preferredTeachers =
-                  scheduleCell.preferred_staff_override != null
-                    ? scheduleCell.preferred_staff_override
-                    : calculatedPreferred
-
-                // Count all teachers assigned to this classroom/day/time slot
-                // Teachers are assigned to classrooms, not specific class groups
-                // All teachers in the assignments array are already filtered by classroom_id in the API
-                const assignedCount = slot.assignments.filter(
-                  a => a.teacher_id && !a.is_substitute // Count regular teachers, exclude substitutes (they're counted separately)
-                ).length
-
-                const belowRequired =
-                  requiredTeachers !== undefined && assignedCount < requiredTeachers
-                const belowPreferred =
-                  preferredTeachers !== undefined && assignedCount < preferredTeachers
-                const fullyStaffed =
-                  requiredTeachers !== undefined &&
-                  assignedCount >= requiredTeachers &&
-                  (preferredTeachers === undefined || assignedCount >= preferredTeachers)
-
-                if (belowRequired) return filters.displayFilters.belowRequired
-                if (belowPreferred) return filters.displayFilters.belowPreferred
-                if (fullyStaffed) return filters.displayFilters.fullyStaffed
-                return false
-              }),
-          })),
-      }))
-      .filter(classroom => classroom.days.length > 0)
-  }, [scheduleData, filters])
+  const filteredData = useMemo(
+    () =>
+      applyScheduleFilters(scheduleData, filters, {
+        teacherFilterId,
+        availableDays,
+        availableTimeSlots,
+        availableClassrooms,
+        applyDisplayMode: false,
+      }),
+    [scheduleData, filters, teacherFilterId, availableDays, availableTimeSlots, availableClassrooms]
+  )
 
   // Calculate slot counts for display
   const slotCounts = useMemo(() => {
@@ -495,24 +450,13 @@ export default function BaselineSchedulePage() {
         <LoadingSpinner />
       ) : (
         <>
-          <div className="mb-4 flex items-center gap-3">
-            <Button
-              variant="outline"
-              onClick={() => setFilterPanelOpen(true)}
-              className="flex items-center gap-2"
-            >
-              <Filter className="h-4 w-4" />
-              Views & Filters
-            </Button>
-            <p className="text-sm text-muted-foreground italic">
-              Showing {slotCounts.shown} of {slotCounts.total} slots
-            </p>
-          </div>
           <WeeklyScheduleGridNew
             data={filteredData}
             selectedDayIds={filters?.selectedDayIds ?? selectedDayIds}
+            scheduleDayIdsFromSettings={selectedDayIds}
             weekStartISO={weekStartISO}
             displayMode={filters?.displayMode ?? 'permanent-only'}
+            showNotes={filters?.displayFilters?.viewNotes ?? false}
             layout={filters?.layout ?? 'days-x-classrooms'}
             onRefresh={handleRefresh}
             onFilterPanelOpenChange={setFilterPanelOpen}
@@ -529,8 +473,66 @@ export default function BaselineSchedulePage() {
             showLegendSubstitutes={false}
             showLegendTemporaryCoverage={false}
             showFilterChips={false}
+            contentBelowLegend={
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setFilterPanelOpen(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <Filter className="h-4 w-4" />
+                    Views & Filters
+                  </Button>
+                  <TeacherFilterSearch
+                    value={teacherFilterId}
+                    onChange={setTeacherFilterId}
+                    placeholder="Filter by teacher"
+                  />
+                  {filters &&
+                    (() => {
+                      const defaultDayIds =
+                        selectedDayIds.length > 0 ? selectedDayIds : availableDays.map(d => d.id)
+                      const defaultDayCount = defaultDayIds.length
+                      const active = hasActiveScheduleFilters(filters, {
+                        defaultDayCount,
+                        totalTimeSlots: availableTimeSlots.length,
+                        totalClassrooms: availableClassrooms.length,
+                        teacherFilterId,
+                      })
+                      if (!active) return null
+                      return (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-slate-600 hover:text-slate-900"
+                          onClick={() => {
+                            setTeacherFilterId(null)
+                            setFilters(prev =>
+                              prev
+                                ? getClearedScheduleFilters(prev, {
+                                    defaultDayIds,
+                                    allTimeSlotIds: availableTimeSlots.map(ts => ts.id),
+                                    allClassroomIds: availableClassrooms.map(c => c.id),
+                                  })
+                                : prev
+                            )
+                          }}
+                        >
+                          <X className="h-3.5 w-3.5 shrink-0" />
+                          Clear all filters
+                        </Button>
+                      )
+                    })()}
+                </div>
+                <p className="text-sm text-muted-foreground italic">
+                  Showing {slotCounts.shown} of {slotCounts.total} slots
+                </p>
+              </>
+            }
             returnToWeekly={returnToWeekly}
-            schoolClosures={schoolClosures}
+            showDateInHeader={false}
+            schoolClosures={[]}
           />
           <FilterPanel
             isOpen={filterPanelOpen}

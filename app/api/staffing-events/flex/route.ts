@@ -3,8 +3,10 @@ import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { expandDateRangeWithTimeZone, parseLocalDate } from '@/lib/utils/date'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
+import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 
 type FlexAssignmentPayload = {
   staff_id: string
@@ -106,6 +108,10 @@ export async function POST(request: NextRequest) {
 
     const selectedDayIds = Array.isArray(day_of_week_ids) ? new Set(day_of_week_ids) : null
 
+    // Fetch school closures so we skip assigning flex staff on closed days
+    const schoolClosures = await getSchoolClosuresForDateRange(schoolId, start_date, end_date)
+    const closureList = schoolClosures.map(c => ({ date: c.date, time_slot_id: c.time_slot_id }))
+
     const { data: eventRow, error: eventError } = await supabase
       .from('staffing_events')
       .insert({
@@ -146,6 +152,8 @@ export async function POST(request: NextRequest) {
       for (const shift of shifts) {
         const shiftDate = parseLocalDate(shift.date)
         if (Number.isNaN(shiftDate.getTime())) continue
+        const dateStr = formatLocalDate(shiftDate)
+        if (isSlotClosedOnDate(dateStr, shift.time_slot_id, closureList)) continue
         const dayNumber = shiftDate.getDay()
         const normalizedDayNumber = dayNumber === 0 ? 7 : dayNumber
         const dayOfWeekId = dayNumberToId.get(normalizedDayNumber) ?? null
@@ -166,6 +174,7 @@ export async function POST(request: NextRequest) {
         const dayOfWeekId = dayNumberToId.get(entry.day_number) ?? null
         if (!selectedDayIds || (dayOfWeekId && selectedDayIds.has(dayOfWeekId))) {
           for (const timeSlotId of time_slot_ids) {
+            if (isSlotClosedOnDate(entry.date, timeSlotId, closureList)) continue
             for (const classroomId of classroom_ids) {
               shiftRows.push({
                 school_id: schoolId,

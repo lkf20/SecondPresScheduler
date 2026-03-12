@@ -3,6 +3,11 @@
 import { GET } from '@/app/api/sub-finder/coverage-request/[absence_id]/assigned-shifts/route'
 import { getTimeOffRequestById } from '@/lib/api/time-off'
 import { createClient } from '@/lib/supabase/server'
+import { getUserSchoolId } from '@/lib/utils/auth'
+
+jest.mock('@/lib/utils/auth', () => ({
+  getUserSchoolId: jest.fn(),
+}))
 
 jest.mock('@/lib/supabase/server', () => ({
   createClient: jest.fn(),
@@ -10,6 +15,10 @@ jest.mock('@/lib/supabase/server', () => ({
 
 jest.mock('@/lib/api/time-off', () => ({
   getTimeOffRequestById: jest.fn(),
+}))
+
+jest.mock('@/lib/api/school-calendar', () => ({
+  getSchoolClosuresForDateRange: jest.fn().mockResolvedValue([]),
 }))
 
 describe('GET /api/sub-finder/coverage-request/[absence_id]/assigned-shifts integration', () => {
@@ -123,6 +132,7 @@ describe('GET /api/sub-finder/coverage-request/[absence_id]/assigned-shifts inte
   })
 
   it('returns assigned and remaining shift details', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'absence-1',
       coverage_request_id: 'coverage-1',

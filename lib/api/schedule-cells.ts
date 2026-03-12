@@ -22,6 +22,7 @@ export interface ScheduleCellWithDetails extends ScheduleCell {
     max_age: number | null
     required_ratio: number
     preferred_ratio: number | null
+    order?: number | null
     enrollment?: number | null
   }>
 }
@@ -29,6 +30,18 @@ export interface ScheduleCellWithDetails extends ScheduleCell {
 type ScheduleCellClassGroupJoin = {
   enrollment?: number | null
   class_group: (ScheduleCellWithDetails['class_groups'] extends Array<infer T> ? T : never) | null
+}
+
+/** Sort class groups by the order from Class Group settings (DB), then by name. */
+function sortClassGroupsByOrder<T extends { name: string; order?: number | null }>(
+  groups: T[]
+): T[] {
+  return [...groups].sort((a, b) => {
+    const orderA = a.order ?? Infinity
+    const orderB = b.order ?? Infinity
+    if (orderA !== orderB) return orderA - orderB
+    return a.name.localeCompare(b.name)
+  })
 }
 
 type ScheduleCellRaw = Omit<ScheduleCellWithDetails, 'class_groups'> & {
@@ -177,21 +190,21 @@ export async function getScheduleCell(
 
   // Transform the nested structure to flatten class_groups array (include enrollment per class group)
   const cell = data as ScheduleCellRaw
+  const mapped =
+    cell.schedule_cell_class_groups
+      ?.map(j => {
+        const cg = j.class_group
+        if (cg == null) return null
+        const withEnrollment = {
+          ...(cg as Record<string, unknown>),
+          enrollment: j.enrollment ?? null,
+        }
+        return withEnrollment as NonNullable<ScheduleCellWithDetails['class_groups']>[number]
+      })
+      .filter((cg): cg is NonNullable<typeof cg> => cg !== null) ?? []
   const flattened: ScheduleCellWithDetails = {
     ...cell,
-    class_groups: cell.schedule_cell_class_groups
-      ? cell.schedule_cell_class_groups
-          .map(j => {
-            const cg = j.class_group
-            if (cg == null) return null
-            const withEnrollment = {
-              ...(cg as Record<string, unknown>),
-              enrollment: j.enrollment ?? null,
-            }
-            return withEnrollment as NonNullable<ScheduleCellWithDetails['class_groups']>[number]
-          })
-          .filter((cg): cg is NonNullable<typeof cg> => cg !== null)
-      : [],
+    class_groups: sortClassGroupsByOrder(mapped),
   }
   delete (flattened as ScheduleCellRaw).schedule_cell_class_groups
   return flattened
@@ -242,21 +255,21 @@ export async function getScheduleCells(
   // Transform the nested structure to flatten class_groups array (include enrollment per class group)
   return (data || []).map(cell => {
     const raw = cell as ScheduleCellRaw
+    const mapped =
+      raw.schedule_cell_class_groups
+        ?.map(j => {
+          const cg = j.class_group
+          if (cg == null) return null
+          const withEnrollment = {
+            ...(cg as Record<string, unknown>),
+            enrollment: j.enrollment ?? null,
+          }
+          return withEnrollment as NonNullable<ScheduleCellWithDetails['class_groups']>[number]
+        })
+        .filter((cg): cg is NonNullable<typeof cg> => cg !== null) ?? []
     const flattened: ScheduleCellWithDetails = {
       ...raw,
-      class_groups: raw.schedule_cell_class_groups
-        ? raw.schedule_cell_class_groups
-            .map(j => {
-              const cg = j.class_group
-              if (cg == null) return null
-              const withEnrollment = {
-                ...(cg as Record<string, unknown>),
-                enrollment: j.enrollment ?? null,
-              }
-              return withEnrollment as NonNullable<ScheduleCellWithDetails['class_groups']>[number]
-            })
-            .filter((cg): cg is NonNullable<typeof cg> => cg !== null)
-        : [],
+      class_groups: sortClassGroupsByOrder(mapped),
     }
     delete (flattened as ScheduleCellRaw).schedule_cell_class_groups
     return flattened
@@ -291,21 +304,21 @@ export async function getScheduleCellById(id: string): Promise<ScheduleCellWithD
   }
 
   const raw = data as ScheduleCellRaw
+  const mapped =
+    raw.schedule_cell_class_groups
+      ?.map(j => {
+        const cg = j.class_group
+        if (cg == null) return null
+        const withEnrollment = {
+          ...(cg as Record<string, unknown>),
+          enrollment: j.enrollment ?? null,
+        }
+        return withEnrollment as NonNullable<ScheduleCellWithDetails['class_groups']>[number]
+      })
+      .filter((cg): cg is NonNullable<typeof cg> => cg !== null) ?? []
   const flattened: ScheduleCellWithDetails = {
     ...raw,
-    class_groups: raw.schedule_cell_class_groups
-      ? raw.schedule_cell_class_groups
-          .map(j => {
-            const cg = j.class_group
-            if (cg == null) return null
-            const withEnrollment = {
-              ...(cg as Record<string, unknown>),
-              enrollment: j.enrollment ?? null,
-            }
-            return withEnrollment as NonNullable<ScheduleCellWithDetails['class_groups']>[number]
-          })
-          .filter((cg): cg is NonNullable<typeof cg> => cg !== null)
-      : [],
+    class_groups: sortClassGroupsByOrder(mapped),
   }
   delete (flattened as ScheduleCellRaw).schedule_cell_class_groups
   return flattened

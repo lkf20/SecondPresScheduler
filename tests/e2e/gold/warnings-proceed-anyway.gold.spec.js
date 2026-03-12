@@ -4,7 +4,7 @@
  * Duplicate warning shows "Proceed anyway"; submit disabled until user checks it.
  */
 const { test, expect } = require('@playwright/test')
-const { ensureAuthenticated, hasE2ECredentials } = require('../helpers/auth')
+const { gotoWithAuth, hasE2ECredentials } = require('../helpers/auth')
 
 const json = payload => ({
   status: 200,
@@ -56,7 +56,7 @@ test('staff form duplicate warning disables submit until Proceed anyway checked 
     )
   })
 
-  await ensureAuthenticated(page, '/staff')
+  await gotoWithAuth(page, '/staff')
   await expect(page.getByRole('heading', { name: /staff/i })).toBeVisible()
 
   await page

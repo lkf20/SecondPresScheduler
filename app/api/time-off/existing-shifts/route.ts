@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getTeacherTimeOffShifts } from '@/lib/api/time-off-shifts'
 
+// Always run on demand so shift table sees latest time_off_shifts after edits
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
@@ -15,7 +18,7 @@ export async function GET(request: NextRequest) {
 
     const shifts = await getTeacherTimeOffShifts(teacherId, startDate, endDate, excludeRequestId)
 
-    return NextResponse.json({ shifts })
+    return NextResponse.json({ shifts }, { headers: { 'Cache-Control': 'no-store, max-age=0' } })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }

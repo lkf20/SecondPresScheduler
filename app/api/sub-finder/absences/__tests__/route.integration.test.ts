@@ -40,6 +40,10 @@ jest.mock('@/lib/server/coverage/coverage-summary', () => ({
   buildCoverageSegments: jest.fn(),
 }))
 
+jest.mock('@/lib/api/school-calendar', () => ({
+  getSchoolClosuresForDateRange: jest.fn().mockResolvedValue([]),
+}))
+
 describe('GET /api/sub-finder/absences integration', () => {
   beforeEach(() => {
     jest.spyOn(console, 'error').mockImplementation(() => {})
@@ -390,6 +394,14 @@ describe('GET /api/sub-finder/absences integration', () => {
         time_slot_id: 'slot-1',
         day_of_week: { name: 'Monday' },
         time_slot: { code: 'EM' },
+      },
+      {
+        id: 'shift-2',
+        date: '2099-03-02',
+        day_of_week_id: 'day-2',
+        time_slot_id: 'slot-2',
+        day_of_week: { name: 'Tuesday' },
+        time_slot: { code: 'PM' },
       },
     ])
     ;(getActiveSubAssignmentsForTimeOffRequest as jest.Mock).mockResolvedValue([

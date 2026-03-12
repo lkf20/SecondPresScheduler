@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
 import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 
 jest.mock('@/lib/supabase/server', () => ({
   createClient: jest.fn(),
@@ -17,6 +18,10 @@ jest.mock('@/lib/utils/auth', () => ({
 
 jest.mock('@/lib/api/schedule-settings', () => ({
   getScheduleSettings: jest.fn(),
+}))
+
+jest.mock('@/lib/api/school-calendar', () => ({
+  getSchoolClosuresForDateRange: jest.fn().mockResolvedValue([]),
 }))
 
 jest.mock('@/lib/audit/logAuditEvent', () => ({
@@ -51,6 +56,7 @@ describe('POST /api/staffing-events/flex integration', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
     mockStaffMaybeSingle.mockResolvedValue({
       data: { first_name: 'Test', last_name: 'Staff', display_name: null },
       error: null,
@@ -303,6 +309,41 @@ describe('POST /api/staffing-events/flex integration', () => {
 
     expect(response.status).toBe(500)
     expect(json.error).toMatch(/insert shift failed/i)
+  })
+
+  it('skips shifts on school closed days when using explicit shifts', async () => {
+    ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([
+      { date: '2026-03-02', time_slot_id: null },
+    ])
+    const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
+      staff_id: 'staff-1',
+      start_date: '2026-03-02',
+      end_date: '2026-03-10',
+      classroom_ids: ['class-1'],
+      time_slot_ids: ['slot-1'],
+      shifts: [
+        { date: '2026-03-02', classroom_id: 'class-1', time_slot_id: 'slot-1' },
+        { date: '2026-03-03', classroom_id: 'class-1', time_slot_id: 'slot-1' },
+      ],
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(getSchoolClosuresForDateRange).toHaveBeenCalledWith(
+      'school-1',
+      '2026-03-02',
+      '2026-03-10'
+    )
+    expect(json.shift_count).toBe(1)
+    expect(mockShiftInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        date: '2026-03-03',
+        time_slot_id: 'slot-1',
+        classroom_id: 'class-1',
+      }),
+    ])
   })
 
   it('creates flex event with explicit shifts and returns created id + shift count', async () => {

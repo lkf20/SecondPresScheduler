@@ -125,6 +125,7 @@ export default function MultiDayApplySelector({
 
   const handleTimeSlotToggle = (timeSlotId: string, checked: boolean) => {
     if (disabled) return
+    if (!checked && timeSlotId === currentTimeSlotId) return // Keep current time slot always selected
     const newSelected = new Set(selectedTimeSlots)
     if (checked) {
       newSelected.add(timeSlotId)
@@ -137,12 +138,25 @@ export default function MultiDayApplySelector({
     }
   }
 
+  // Abbreviate day name for display (Mon, Tues, Wed, Thurs, Fri, Sat, Sun)
+  const abbreviateDayName = (name: string) => {
+    const map: Record<string, string> = {
+      Monday: 'Mon',
+      Tuesday: 'Tues',
+      Wednesday: 'Wed',
+      Thursday: 'Thurs',
+      Friday: 'Fri',
+      Saturday: 'Sat',
+      Sunday: 'Sun',
+    }
+    return map[name] ?? (name.length > 3 ? name.slice(0, 3) : name)
+  }
+
   // Format the option labels with specific examples
-  // Abbreviate day name (e.g., "Monday" -> "Mon")
-  const abbreviatedDayName = currentDayName.length > 3 ? currentDayName.slice(0, 3) : currentDayName
-  const option1Label = `Only this time slot (${currentClassroomName} - ${abbreviatedDayName} - ${currentTimeSlotCode})`
+  const abbreviatedCurrentDay = abbreviateDayName(currentDayName)
+  const option1Label = `Only this time slot (${currentClassroomName} - ${abbreviatedCurrentDay} - ${currentTimeSlotCode})`
   const option2Label = `${currentClassroomName} - ${currentTimeSlotCode} on:`
-  const option3Label = `${currentClassroomName} - ${currentDayName} during:`
+  const option3Label = `${currentClassroomName} - ${abbreviatedCurrentDay} during:`
 
   return (
     <div className={`space-y-4 ${disabled ? 'opacity-60' : ''}`}>
@@ -193,7 +207,7 @@ export default function MultiDayApplySelector({
                         htmlFor={`day-${day.id}`}
                         className={`cursor-pointer text-sm font-normal ${isCurrentDay ? 'font-semibold' : ''} ${scope !== 'timeSlot' ? 'text-muted-foreground' : ''}`}
                       >
-                        {day.name}
+                        {abbreviateDayName(day.name ?? '')}
                         {isCurrentDay && ' (current)'}
                       </Label>
                     </div>
@@ -228,7 +242,7 @@ export default function MultiDayApplySelector({
                         onCheckedChange={checked =>
                           handleTimeSlotToggle(timeSlot.id, checked === true)
                         }
-                        disabled={disabled || scope !== 'day'}
+                        disabled={disabled || isCurrentTimeSlot || scope !== 'day'}
                       />
                       <Label
                         htmlFor={`timeslot-${timeSlot.id}`}

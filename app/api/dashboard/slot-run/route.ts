@@ -4,10 +4,12 @@ import { getUserSchoolId } from '@/lib/utils/auth'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { expandDateRangeWithTimeZone } from '@/lib/utils/date'
 import {
+  getDefaultLastDayOfSchool,
   getStaffingEndDate,
   getStaffingWeeksLabelFromCount,
-  STAFFING_BOUNDARY_DAY,
 } from '@/lib/dashboard/staffing-boundary'
+import { getCalendarSettings, getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
+import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 
 /**
  * GET /api/dashboard/slot-run?classroom_id=&day_of_week_id=&time_slot_id=&start_date=
@@ -47,7 +49,11 @@ export async function GET(request: NextRequest) {
         String(now.getDate()).padStart(2, '0')
     }
 
-    const staffingEndDate = getStaffingEndDate(startDate)
+    const calendar = await getCalendarSettings(schoolId)
+    const boundary =
+      calendar.last_day_of_school ??
+      getDefaultLastDayOfSchool(new Date(startDate + 'T12:00:00').getFullYear())
+    const staffingEndDate = getStaffingEndDate(startDate, boundary)
 
     const supabase = await createClient()
 
@@ -166,6 +172,7 @@ export async function GET(request: NextRequest) {
       return createErrorResponse(tsError, 'Failed to fetch teacher schedules', 500)
     }
 
+    // Dashboard below-staffing: permanent 1, flex 1, floater 0.5, temp +1; subs and absences excluded. See AGENTS.md "Coverage counting".
     const teacherContrib = (teacherSchedules || []).reduce(
       (sum: number, ts: any) => sum + (ts.is_floater ? 0.5 : 1),
       0
@@ -193,10 +200,14 @@ export async function GET(request: NextRequest) {
     })
 
     const expandedDates = expandDateRangeWithTimeZone(startDate, staffingEndDate, timeZone)
+    const schoolClosures = await getSchoolClosuresForDateRange(schoolId, startDate, staffingEndDate)
+    const closureList = schoolClosures.map(c => ({ date: c.date, time_slot_id: c.time_slot_id }))
+
     const belowDates: Array<{ date: string; status: 'below_required' | 'below_preferred' }> = []
 
     for (const dateEntry of expandedDates) {
       if (dateEntry.day_number !== dayNumber) continue
+      if (isSlotClosedOnDate(dateEntry.date, timeSlotId, closureList)) continue
 
       const tempCount = tempByDate.get(dateEntry.date) || 0
       const totalScheduled = teacherContrib + tempCount
@@ -236,7 +247,7 @@ export async function GET(request: NextRequest) {
       weeksLabel,
       targetType,
       datesNeedingCoverage,
-      cappedByBoundary: dateEnd >= STAFFING_BOUNDARY_DAY,
+      cappedByBoundary: dateEnd >= boundary,
     })
   } catch (error) {
     console.error('Error in slot-run:', error)

@@ -136,13 +136,19 @@ interface ScheduleSidePanelProps {
   classroomId: string
   classroomName: string
   classroomColor?: string | null
-  selectedDayIds: string[] // Days that are in the weekly schedule
+  selectedDayIds: string[] // Days that are in the weekly schedule (may be view filter)
+  /** Day IDs from Settings (Days & Time slots). When set, Apply Changes to shows only these days. */
+  scheduleDayIdsFromSettings?: string[]
   selectedCellData?: SelectedCellData // Full cell data from the grid
   onSave?: () => void | Promise<void>
+  /** Refresh grid data without closing panel (e.g. after applying conflict resolutions). */
+  onRefresh?: () => void | Promise<void>
   weekStartISO?: string
   readOnly?: boolean
   /** When true, Save button shows "Save & Return to Weekly Schedule" and parent onSave may navigate back */
   returnToWeekly?: boolean
+  /** When false, header omits the calendar date (e.g. "Mar 10"). Use on Baseline Schedule; Weekly shows date. Default true. */
+  showDateInHeader?: boolean
   /** When 'flex', panel opens directly in Add Temporary Coverage mode (e.g. from dashboard). Back button becomes Close. */
   initialPanelMode?: 'cell' | 'flex'
   /** When provided with initialPanelMode='flex', pre-fill the flex form date range (e.g. from dashboard grouped slot). */
@@ -535,11 +541,14 @@ export default function ScheduleSidePanel({
   classroomName,
   classroomColor = null,
   selectedDayIds,
+  scheduleDayIdsFromSettings,
   selectedCellData,
   onSave,
+  onRefresh,
   weekStartISO,
   readOnly = false,
   returnToWeekly = false,
+  showDateInHeader = true,
   initialPanelMode = 'cell',
   initialFlexStartDate,
   initialFlexEndDate,
@@ -569,6 +578,7 @@ export default function ScheduleSidePanel({
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(false)
   const { format: displayNameFormat } = useDisplayNameFormat()
   const [allowedClassGroupIds, setAllowedClassGroupIds] = useState<string[]>([])
+  const [allowedClassGroupIdsLoaded, setAllowedClassGroupIdsLoaded] = useState(false)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
@@ -579,12 +589,15 @@ export default function ScheduleSidePanel({
   const [applyTimeSlotIds, setApplyTimeSlotIds] = useState<string[]>([timeSlotId])
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const [classGroups, setClassGroups] = useState<ClassGroupWithMeta[]>([])
+  const [enrollmentMode, setEnrollmentMode] = useState<'total' | 'by_class_group'>('total')
   const [allAvailableClassGroups, setAllAvailableClassGroups] = useState<ClassGroupWithMeta[]>([])
   const [classrooms, setClassrooms] = useState<ClassroomWithAllowedClasses[]>([])
   const [conflicts, setConflicts] = useState<Conflict[]>([])
   const [conflictResolutions, setConflictResolutions] = useState<Map<string, ConflictResolution>>(
     new Map()
   )
+  /** After applying "mark as floater" resolution, hold teacher ids so a follow-up effect can set is_floater on chips */
+  const pendingFloaterIdsAfterResolutionRef = useRef<Set<string>>(new Set())
   const router = useRouter()
   const [flexStartDate, setFlexStartDate] = useState<string>('')
   const [flexEndDate, setFlexEndDate] = useState<string>('')
@@ -666,6 +679,7 @@ export default function ScheduleSidePanel({
   const [isNotAvailableExpanded, setIsNotAvailableExpanded] = useState(false)
   // Track the original cell state when first loaded to determine if it was empty
   const originalCellStateRef = useRef<{ isActive: boolean; hasData: boolean } | null>(null)
+  const initialTeacherCountRef = useRef<number>(0)
   // Track if we've loaded initial data to prevent useEffect from clearing classGroups prematurely
   const hasLoadedInitialDataRef = useRef(false)
   // Track the initial classGroupIds to prevent useEffect from running with stale empty state
@@ -681,15 +695,21 @@ export default function ScheduleSidePanel({
   const teacherFetchKeyRef = useRef<string | null>(null)
   const classGroupsRef = useRef<ClassGroupWithMeta[]>([])
   const unsavedDialogReturnToCellRef = useRef(false)
-
-  const fallbackTeachers = selectedCellData?.assignments
-    ? mapAssignmentsToTeachers(selectedCellData.assignments)
-    : []
-  const displayTeachers = selectedTeachers.length > 0 ? selectedTeachers : fallbackTeachers
+  /** Track class group count so we only default to by_class_group when user adds a second group */
+  const previousClassGroupCountRef = useRef<number>(0)
+  /** After applying conflict resolution, preserve current selectedTeachers when grid refresh overwrites cell data */
+  const preserveSelectedTeachersAfterConflictRef = useRef(false)
+  /** Assignment count when we set the preserve ref; only clear preserve when we see different count (new data from refresh) */
+  const assignmentCountWhenPreserveSetRef = useRef<number>(-1)
+  /** When cell data effect preserves after conflict, tell teacher fetch effect to skip overwriting this cycle */
+  const skipNextTeacherFetchAfterPreserveRef = useRef(false)
+  /** After confirming deactivate, save and close the panel (effect runs once state has updated) */
+  const pendingDeactivateAndCloseRef = useRef(false)
 
   useEffect(() => {
     if (!isOpen) return
     if (teachersLoadedRef.current) return
+    if (preserveSelectedTeachersAfterConflictRef.current) return
     const mappedTeachers = mapAssignmentsToTeachers(selectedCellData?.assignments)
     if (mappedTeachers.length === 0) return
 
@@ -700,9 +720,20 @@ export default function ScheduleSidePanel({
     setSelectedFlexTeachers(mappedTeachers.filter(t => t.is_flexible))
   }, [isOpen, selectedCellData?.assignments])
 
+  // Combined list for Assigned Teachers UI and save: permanent first, then flex (matches cell display)
+  const allAssignedTeachers = useMemo(
+    () => [...selectedTeachers, ...selectedFlexTeachers],
+    [selectedTeachers, selectedFlexTeachers]
+  )
+
   useEffect(() => {
-    selectedTeachersRef.current = selectedTeachers
-  }, [selectedTeachers])
+    selectedTeachersRef.current = allAssignedTeachers
+  }, [allAssignedTeachers])
+
+  const handleAssignedTeachersChange = useCallback((teachers: Teacher[]) => {
+    setSelectedTeachers(teachers.filter(t => !t.is_flexible))
+    setSelectedFlexTeachers(teachers.filter(t => t.is_flexible))
+  }, [])
 
   useEffect(() => {
     classGroupsRef.current = classGroups
@@ -1196,13 +1227,25 @@ export default function ScheduleSidePanel({
         hasLoadedInitialDataRef.current = true
       }
       setEnrollment(cellData.enrollment_for_staffing)
+      const hasPerClass =
+        cellData.class_groups?.some(
+          (cg: { enrollment?: number | null }) => cg.enrollment != null
+        ) ?? false
+      const hasMultipleClassGroups = (cellData.class_groups?.length ?? 0) > 1
+      setEnrollmentMode(hasPerClass || hasMultipleClassGroups ? 'by_class_group' : 'total')
       setRequiredStaffOverride(cellData.required_staff_override ?? null)
       setPreferredStaffOverride(cellData.preferred_staff_override ?? null)
       setNotes(cellData.notes)
       const mappedTeachers = mapAssignmentsToTeachers(sourceAssignments)
+      initialTeacherCountRef.current = mappedTeachers.length
       if (mappedTeachers.length > 0 && !teachersLoadedRef.current) {
-        setSelectedTeachers(mappedTeachers.filter(t => !t.is_flexible))
-        setSelectedFlexTeachers(mappedTeachers.filter(t => t.is_flexible))
+        const pending = pendingFloaterIdsAfterResolutionRef.current
+        const withPendingFloaters = mappedTeachers.map(t => {
+          const match = (t.teacher_id && pending.has(t.teacher_id)) || (t.id && pending.has(t.id))
+          return match ? { ...t, is_floater: true } : t
+        })
+        setSelectedTeachers(withPendingFloaters.filter(t => !t.is_flexible))
+        setSelectedFlexTeachers(withPendingFloaters.filter(t => t.is_flexible))
       }
       const originallyHadData = !!(
         mappedClassGroupIds.length > 0 || cellData.enrollment_for_staffing !== null
@@ -1239,22 +1282,42 @@ export default function ScheduleSidePanel({
       initialClassGroupIdsRef.current = null
       preserveTeachersRef.current = false
       teachersLoadedRef.current = false
+      pendingFloaterIdsAfterResolutionRef.current = new Set()
+      skipNextTeacherFetchAfterPreserveRef.current = false
+      assignmentCountWhenPreserveSetRef.current = -1
       return
     }
 
     setLoading(true)
     hasLoadedInitialDataRef.current = false
     initialClassGroupIdsRef.current = null
-    teachersLoadedRef.current = false
+    // Do not reset teachersLoadedRef here: when selectedCellData gets a new reference (e.g. parent
+    // re-render), we must not overwrite selectedTeachers in initializeFromCell or we wipe out
+    // teachers the user just added, and the conflict banner never appears.
+    preserveTeachersRef.current = false
 
     // If selectedCellData is provided and has a schedule_cell, use it
     // Note: selectedCellData structure has schedule_cell nested
     if (selectedCellData?.schedule_cell) {
       const cellData = selectedCellData.schedule_cell
-      initializeFromCell(cellData, selectedCellData.assignments)
+      // After applying conflict resolution we refresh the grid; new cell data has only the resolved assignment.
+      // Preserve current selected teachers (including others not yet saved) by not overwriting from assignments.
+      if (preserveSelectedTeachersAfterConflictRef.current) {
+        initializeFromCell(cellData)
+        // Only clear ref when we see different assignment count = we've received new data from refresh (don't clear on first run with stale data)
+        const assignmentCount = selectedCellData.assignments?.length ?? 0
+        if (assignmentCount !== assignmentCountWhenPreserveSetRef.current) {
+          preserveSelectedTeachersAfterConflictRef.current = false
+          assignmentCountWhenPreserveSetRef.current = -1
+          skipNextTeacherFetchAfterPreserveRef.current = true
+        }
+      } else {
+        initializeFromCell(cellData, selectedCellData.assignments)
+      }
       setLoading(false)
       return
     }
+    teachersLoadedRef.current = false
 
     // Otherwise fetch from API
     fetch(
@@ -1268,6 +1331,7 @@ export default function ScheduleSidePanel({
         } else {
           // No cell exists, create default
           setIsActive(false)
+          initialTeacherCountRef.current = 0
           initialClassGroupIdsRef.current = []
           previousClassGroupIdsRef.current = []
           preserveTeachersRef.current = false
@@ -1291,20 +1355,13 @@ export default function ScheduleSidePanel({
         setLoading(false)
       })
 
-    // Fetch classroom allowed class groups
+    // Fetch classrooms list (for display/other use)
     fetch('/api/classrooms')
       .then(r => r.json())
       .then((data: ClassroomWithAllowedClasses[]) => {
         setClassrooms(Array.isArray(data) ? data : [])
-        const classroom = data.find(c => c.id === classroomId)
-        if (classroom && classroom.allowed_classes) {
-          const ids = classroom.allowed_classes
-            .map(ac => ac.class_group_id ?? ac.class_group?.id)
-            .filter((id): id is string => Boolean(id))
-          setAllowedClassGroupIds(ids)
-        }
       })
-      .catch(console.error)
+      .catch(() => setClassrooms([]))
 
     // Fetch all class groups (including inactive) for updating classGroups when classGroupIds changes
     fetch('/api/class-groups?includeInactive=true')
@@ -1315,6 +1372,37 @@ export default function ScheduleSidePanel({
       })
       .catch(console.error)
   }, [isOpen, classroomId, dayId, timeSlotId, selectedCellData, initializeFromCell])
+
+  // Load allowed class groups for this classroom only when panel opens or classroom changes.
+  // Separate effect so we do not reset when selectedCellData or initializeFromCell change (which would make the dropdown show all class groups).
+  useEffect(() => {
+    if (!isOpen) {
+      setAllowedClassGroupIds([])
+      setAllowedClassGroupIdsLoaded(false)
+      return
+    }
+    if (!classroomId) {
+      setAllowedClassGroupIds([])
+      setAllowedClassGroupIdsLoaded(true)
+      return
+    }
+    setAllowedClassGroupIdsLoaded(false)
+    fetch(`/api/classrooms/${classroomId}/allowed-classes`)
+      .then(res => {
+        if (!res.ok) return []
+        return res.json()
+      })
+      .then((ids: unknown) => {
+        setAllowedClassGroupIds(
+          Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : []
+        )
+        setAllowedClassGroupIdsLoaded(true)
+      })
+      .catch(() => {
+        setAllowedClassGroupIds([])
+        setAllowedClassGroupIdsLoaded(true)
+      })
+  }, [isOpen, classroomId])
 
   // Update classGroups when classGroupIds changes
   useEffect(() => {
@@ -1467,6 +1555,15 @@ export default function ScheduleSidePanel({
     setClassGroups(selectedClassGroups)
   }, [classGroupIds, allAvailableClassGroups, loading])
 
+  // When user adds a second (or more) class group, default enrollment to "By class group"
+  useEffect(() => {
+    const count = classGroupIds.length
+    if (count > 1 && previousClassGroupCountRef.current <= 1) {
+      setEnrollmentMode('by_class_group')
+    }
+    previousClassGroupCountRef.current = count
+  }, [classGroupIds.length])
+
   // Fetch teacher assignments when classGroupIds changes or drawer opens
   // Fetch directly from teacher-schedules API for immediate, accurate data
   // (Weekly schedule API may be cached or have timing issues after saves)
@@ -1474,6 +1571,30 @@ export default function ScheduleSidePanel({
     if (!isOpen) return
 
     if (!hasLoadedInitialDataRef.current) {
+      setIsLoadingTeachers(false)
+      return
+    }
+
+    // Inactive slots have no teacher assignments; don't fetch and don't show loading
+    if (!isActive) {
+      setIsLoadingTeachers(false)
+      return
+    }
+
+    // After conflict resolution we called onRefresh(); grid updated. Cell data effect will preserve teachers and set skipNextTeacherFetchAfterPreserveRef.
+    // Do not clear preserveSelectedTeachersAfterConflictRef here so the cell data effect (which runs when selectedCellData updates) can see it and skip overwriting.
+    if (preserveSelectedTeachersAfterConflictRef.current) {
+      previousClassGroupIdsRef.current = classGroupIds
+      teachersLoadedRef.current = true
+      setIsLoadingTeachers(false)
+      return
+    }
+    // Cell data effect just preserved; skip fetching so we don't overwrite with API data (which may only have the resolved assignment).
+    if (skipNextTeacherFetchAfterPreserveRef.current) {
+      skipNextTeacherFetchAfterPreserveRef.current = false
+      previousClassGroupIdsRef.current = classGroupIds
+      teachersLoadedRef.current = true
+      setIsLoadingTeachers(false)
       return
     }
 
@@ -1501,13 +1622,16 @@ export default function ScheduleSidePanel({
       preserveTeachersRef.current = false
       previousClassGroupIdsRef.current = classGroupIds
       teachersLoadedRef.current = true
+      setIsLoadingTeachers(false)
       return
     }
 
     const cacheKey = `${classroomId}|${dayId}|${timeSlotId}`
     const cachedTeachers = teacherCacheRef.current.get(cacheKey)
     if (cachedTeachers && cachedTeachers.length > 0 && teachersLoadedRef.current) {
-      setSelectedTeachers(cachedTeachers)
+      setSelectedTeachers(cachedTeachers.filter((t: Teacher) => !t.is_flexible))
+      setSelectedFlexTeachers(cachedTeachers.filter((t: Teacher) => t.is_flexible))
+      setIsLoadingTeachers(false)
       return
     }
 
@@ -1532,6 +1656,9 @@ export default function ScheduleSidePanel({
         return r.json()
       })
       .then((data: TeacherSchedule[]) => {
+        // Clear loading as soon as we have a response (including 0 teachers) so inactive→active doesn't stick on "Loading assigned teachers"
+        setIsLoadingTeachers(false)
+
         // Filter by classroom, day, time slot, and class group (if classGroupIds is set)
         // If we're preserving teachers (class groups were just changed), show all teachers for this location
         // regardless of class group, so they don't disappear from the UI
@@ -1602,8 +1729,13 @@ export default function ScheduleSidePanel({
         teachersLoadedRef.current = true
         teacherCacheRef.current.set(cacheKey, teachers)
         setIsLoadingTeachers(false)
-        setSelectedTeachers(teachers.filter(t => !t.is_flexible))
-        setSelectedFlexTeachers(teachers.filter(t => t.is_flexible))
+        const pending = pendingFloaterIdsAfterResolutionRef.current
+        const withPendingFloaters = teachers.map(t => {
+          const match = (t.teacher_id && pending.has(t.teacher_id)) || (t.id && pending.has(t.id))
+          return match ? { ...t, is_floater: true } : t
+        })
+        setSelectedTeachers(withPendingFloaters.filter(t => !t.is_flexible))
+        setSelectedFlexTeachers(withPendingFloaters.filter(t => t.is_flexible))
       })
       .catch(err => {
         console.error('Error fetching teacher assignments:', err)
@@ -1622,10 +1754,23 @@ export default function ScheduleSidePanel({
         setSelectedTeachers([])
         setSelectedFlexTeachers([])
       })
-  }, [isOpen, classroomId, dayId, timeSlotId, classGroupIds, isLoadingTeachers, displayNameFormat])
+  }, [
+    isOpen,
+    isActive,
+    classroomId,
+    dayId,
+    timeSlotId,
+    classGroupIds,
+    isLoadingTeachers,
+    displayNameFormat,
+  ])
 
   // Determine if cell has data (current state)
-  const hasData = !!(classGroupIds.length > 0 || enrollment !== null || selectedTeachers.length > 0)
+  const hasData = !!(
+    classGroupIds.length > 0 ||
+    enrollment !== null ||
+    allAssignedTeachers.length > 0
+  )
 
   const parentInactiveReasons = getSlotInactiveReasons({
     schedule_cell: { is_active: true },
@@ -1663,7 +1808,69 @@ export default function ScheduleSidePanel({
     if (originalState && !originalState.isActive && !originalState.hasData && hasData) {
       setIsActive(true)
     }
-  }, [classGroupIds.length, enrollment, selectedTeachers.length, isActive, hasData])
+  }, [classGroupIds.length, enrollment, allAssignedTeachers.length, isActive, hasData])
+
+  // Check for baseline conflicts: teacher already scheduled (non-floater) in another classroom same day/slot
+  // Run when editing the cell: on Baseline (!readOnly) we're always in edit form; on Weekly (readOnly) only when panelMode === 'editCell'
+  useEffect(() => {
+    if (!isOpen || allAssignedTeachers.length === 0 || !dayId || !timeSlotId || !classroomId) {
+      setConflicts([])
+      return
+    }
+    if (readOnly && panelMode !== 'editCell') {
+      setConflicts([])
+      return
+    }
+    const checks = allAssignedTeachers
+      .filter(t => t.teacher_id)
+      .map(t => ({
+        teacher_id: t.teacher_id!,
+        day_of_week_id: dayId,
+        time_slot_id: timeSlotId,
+        classroom_id: classroomId,
+        is_floater: t.is_floater === true,
+      }))
+    if (checks.length === 0) {
+      setConflicts([])
+      return
+    }
+    let cancelled = false
+    fetch('/api/teacher-schedules/check-conflicts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ checks }),
+    })
+      .then(r => r.json())
+      .then((data: { conflicts?: Conflict[] }) => {
+        if (cancelled) return
+        const list = Array.isArray(data?.conflicts) ? data.conflicts : []
+        const enriched: Conflict[] = list.map(c => ({
+          ...c,
+          added_as_floater:
+            allAssignedTeachers.find(t => t.teacher_id === c.teacher_id)?.is_floater === true,
+        }))
+        setConflicts(enriched)
+      })
+      .catch(() => {
+        if (!cancelled) setConflicts([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, readOnly, panelMode, dayId, timeSlotId, classroomId, allAssignedTeachers])
+
+  // After "Keep both — mark as floater" + Apply, ensure chip shows Floater (re-apply in case another effect overwrote selectedTeachers).
+  // Do not clear pending here so that when onRefresh() updates selectedCellData and initializeFromCell runs, it can still apply floater state.
+  useEffect(() => {
+    const pending = pendingFloaterIdsAfterResolutionRef.current
+    if (conflicts.length !== 0 || pending.size === 0) return
+    const applyFloater = (t: Teacher) => {
+      const match = (t.teacher_id && pending.has(t.teacher_id)) || (t.id && pending.has(t.id))
+      return match ? { ...t, is_floater: true } : t
+    }
+    setSelectedTeachers(prev => prev.map(applyFloater))
+    setSelectedFlexTeachers(prev => prev.map(applyFloater))
+  }, [conflicts.length])
 
   // Fields should be disabled if parent entities are inactive, or if explicitly inactive with existing data.
   const fieldsDisabled = isParentEffectivelyInactive || (!isActive && hasData)
@@ -1680,15 +1887,29 @@ export default function ScheduleSidePanel({
       JSON.stringify(
         (cell?.class_groups ?? []).map(cg => ({ id: cg.id, e: cg.enrollment ?? null })).sort()
       ) === JSON.stringify(classGroups.map(cg => ({ id: cg.id, e: cg.enrollment ?? null })).sort())
+    const intendedEnrollmentTotal =
+      enrollmentMode === 'total'
+        ? enrollment
+        : getTotalEnrollmentForCalculation(classGroups, enrollment)
+    const enrollmentTotalMatch = cell?.enrollment_for_staffing === intendedEnrollmentTotal
+    const enrollmentPerClassMatch =
+      enrollmentMode === 'total'
+        ? (cell?.class_groups ?? []).every(
+            (cg: { enrollment?: number | null }) => cg.enrollment == null
+          )
+        : classGroupEnrollmentMatch
+    // When cell is inactive, saved teacher count is 0 (inactive slots have no assignments)
+    const savedTeacherCount = isActive ? (initialTeacherCountRef.current ?? 0) : 0
+    const teachersMatch = allAssignedTeachers.length === savedTeacherCount
     const hasChanges =
       cell?.is_active !== isActive ||
       JSON.stringify([...cellClassGroupIds].sort()) !== JSON.stringify([...classGroupIds].sort()) ||
-      cell?.enrollment_for_staffing !== enrollment ||
-      !classGroupEnrollmentMatch ||
+      !enrollmentTotalMatch ||
+      !enrollmentPerClassMatch ||
       cell?.required_staff_override !== requiredStaffOverride ||
       cell?.preferred_staff_override !== preferredStaffOverride ||
       cell?.notes !== notes ||
-      selectedTeachers.length !== (cell ? selectedTeachers.length : 0)
+      !teachersMatch
 
     setHasUnsavedChanges(hasChanges)
   }, [
@@ -1698,10 +1919,11 @@ export default function ScheduleSidePanel({
     classGroupIds,
     classGroups,
     enrollment,
+    enrollmentMode,
     notes,
     requiredStaffOverride,
     preferredStaffOverride,
-    selectedTeachers,
+    allAssignedTeachers,
   ])
 
   const handleClose = () => {
@@ -2077,17 +2299,29 @@ export default function ScheduleSidePanel({
   const handleSave = async () => {
     // Block save only when parent (classroom/time slot) is inactive; allow saving when user set cell to inactive
     if (isParentEffectivelyInactive) return
+    // Block save when there are unresolved baseline conflicts (teacher double-booked in another room)
+    if (conflicts.length > 0) return
     setSaving(true)
     try {
-      // Validate - class groups are always required to save
-      if (classGroupIds.length === 0) {
-        alert('At least one class group is required to save the cell')
+      // Class groups required only when slot is active; inactive slots can be saved without class groups
+      if (isActive && classGroupIds.length === 0) {
+        alert('At least one class group is required when slot is active')
         setSaving(false)
         return
       }
 
-      // Total for DB: per-class sum if any set, else single enrollment
-      const totalForDb = getTotalEnrollmentForCalculation(classGroups, enrollment)
+      // Total for DB: when mode is 'total' use single enrollment and clear per-class; otherwise per-class sum if any set, else single enrollment
+      const totalForDb =
+        enrollmentMode === 'total'
+          ? enrollment
+          : getTotalEnrollmentForCalculation(classGroups, enrollment)
+      const enrollmentByClassGroup =
+        enrollmentMode === 'total'
+          ? ({} as Record<string, number>)
+          : classGroups.reduce(
+              (acc, cg) => (cg.enrollment != null ? { ...acc, [cg.id]: cg.enrollment } : acc),
+              {} as Record<string, number>
+            )
 
       // Prepare cell data (enrollment_by_class_group for per-class display; overrides for staffing)
       const cellData = {
@@ -2097,28 +2331,25 @@ export default function ScheduleSidePanel({
         is_active: isActive,
         class_group_ids: classGroupIds,
         enrollment_for_staffing: totalForDb,
-        enrollment_by_class_group: classGroups.reduce(
-          (acc, cg) => (cg.enrollment != null ? { ...acc, [cg.id]: cg.enrollment } : acc),
-          {} as Record<string, number>
-        ),
+        enrollment_by_class_group: enrollmentByClassGroup,
         required_staff_override: requiredStaffOverride,
         preferred_staff_override: preferredStaffOverride,
         notes: notes,
       }
 
       // Determine which days and time slots to update based on scope
+      // Safeguard: if all checkboxes were unchecked, default to this cell only
       let daysToUpdate: string[] = [dayId]
       let timeSlotsToUpdate: string[] = [timeSlotId]
 
       if (applyScope === 'timeSlot') {
         // Same time slot across selected days
-        daysToUpdate = applyDayIds
+        daysToUpdate = applyDayIds.length > 0 ? applyDayIds : [dayId]
         timeSlotsToUpdate = [timeSlotId]
       } else if (applyScope === 'day') {
         // All time slots for the same day
         daysToUpdate = [dayId]
-        timeSlotsToUpdate =
-          applyTimeSlotIds.length > 0 ? applyTimeSlotIds : timeSlots.map(ts => ts.id)
+        timeSlotsToUpdate = applyTimeSlotIds.length > 0 ? applyTimeSlotIds : [timeSlotId]
       } else {
         // Single cell
         daysToUpdate = [dayId]
@@ -2168,10 +2399,16 @@ export default function ScheduleSidePanel({
       }
 
       // Update teacher assignments for each day/time slot combination
-      // Fetch all schedules once at the start to avoid multiple API calls
-      const allSchedulesResponse = await fetch('/api/teacher-schedules')
+      // Fetch all schedules once at the start; use cache: 'no-store' so we see latest state
+      // (e.g. after conflict resolution "remove from other" so we don't overwrite with stale data)
+      const allSchedulesResponse = await fetch('/api/teacher-schedules', { cache: 'no-store' })
       if (!allSchedulesResponse.ok) {
-        throw new Error('Failed to fetch current teacher schedules')
+        const errorBody = await allSchedulesResponse.json().catch(() => ({}))
+        const detail =
+          (errorBody as { error?: string; message?: string }).error ??
+          (errorBody as { message?: string }).message ??
+          allSchedulesResponse.statusText
+        throw new Error(`Failed to fetch current teacher schedules${detail ? `: ${detail}` : ''}`)
       }
       const allSchedules = await allSchedulesResponse.json()
 
@@ -2179,11 +2416,12 @@ export default function ScheduleSidePanel({
       const createPromises: Promise<void>[] = []
 
       log(
-        '[ScheduleSidePanel] Starting save - selectedTeachers:',
-        selectedTeachers.map(t => ({
+        '[ScheduleSidePanel] Starting save - allAssignedTeachers:',
+        allAssignedTeachers.map(t => ({
           name: t.name,
           teacher_id: t.teacher_id,
           is_floater: t.is_floater ?? false,
+          is_flexible: t.is_flexible,
         }))
       )
       log('[ScheduleSidePanel] classGroupIds:', classGroupIds)
@@ -2209,7 +2447,7 @@ export default function ScheduleSidePanel({
           const schedulesForThisSlot = currentSchedules
 
           {
-            const newTeacherIds = new Set(selectedTeachers.map(t => t.teacher_id))
+            const newTeacherIds = new Set(allAssignedTeachers.map(t => t.teacher_id))
 
             // Remove assignments that are no longer selected
             // For schedules with wrong class group, we'll update them instead of deleting
@@ -2241,10 +2479,10 @@ export default function ScheduleSidePanel({
             // If not, check if they have a schedule for a different class - if so, delete it first, then create new one
             log(
               '[ScheduleSidePanel] Processing teachers for save:',
-              selectedTeachers.length,
+              allAssignedTeachers.length,
               'teachers'
             )
-            for (const teacher of selectedTeachers) {
+            for (const teacher of allAssignedTeachers) {
               if (!teacher.teacher_id) {
                 console.warn('[ScheduleSidePanel] Teacher missing teacher_id:', teacher)
                 continue
@@ -2369,7 +2607,7 @@ export default function ScheduleSidePanel({
         // Preserve the just-saved teacher/floater state in the read-only cell view
         // so we don't momentarily fall back to stale assignment snapshot data.
         const cacheKey = `${classroomId}|${dayId}|${timeSlotId}`
-        teacherCacheRef.current.set(cacheKey, selectedTeachers)
+        teacherCacheRef.current.set(cacheKey, allAssignedTeachers)
         teachersLoadedRef.current = true
         toast.success('Baseline schedule saved')
         setPanelMode('cell')
@@ -2388,6 +2626,13 @@ export default function ScheduleSidePanel({
       setSaving(false)
     }
   }
+
+  // After user confirms deactivate: state is updated (isActive false, teachers cleared); save and close.
+  useEffect(() => {
+    if (!pendingDeactivateAndCloseRef.current || isActive) return
+    pendingDeactivateAndCloseRef.current = false
+    void handleSave()
+  }, [isActive])
 
   const handleDiscard = () => {
     setShowUnsavedDialog(false)
@@ -2408,11 +2653,11 @@ export default function ScheduleSidePanel({
     setApplyScope(scope)
     setApplyDayIds(dayIds)
     if (scope === 'day') {
-      // For 'day' scope, use all time slots
-      if (timeSlots.length > 0) {
-        setApplyTimeSlotIds(timeSlots.map(ts => ts.id))
-      } else if (timeSlotIds) {
+      // Use the selected time slot IDs from the selector when provided; otherwise default to all
+      if (timeSlotIds && timeSlotIds.length > 0) {
         setApplyTimeSlotIds(timeSlotIds)
+      } else if (timeSlots.length > 0) {
+        setApplyTimeSlotIds(timeSlots.map(ts => ts.id))
       }
     } else {
       // For other scopes, just use the current time slot
@@ -2429,15 +2674,18 @@ export default function ScheduleSidePanel({
     })
   }
 
-  const handleApplyConflictResolutions = async () => {
-    if (classGroupIds.length === 0) return
+  const handleApplyConflictResolutions = async (
+    resolutionsFromBanner?: Map<string, ConflictResolution>
+  ) => {
+    const resolutions = resolutionsFromBanner ?? conflictResolutions
+    if (resolutions.size === 0) return
 
     try {
       const teachersToRemove: string[] = []
 
-      // Resolve each conflict
+      // Resolve each conflict using passed resolutions (state may not have updated yet)
       for (const conflict of conflicts) {
-        const resolution = conflictResolutions.get(conflict.conflicting_schedule_id)
+        const resolution = resolutions.get(conflict.conflicting_schedule_id)
         if (!resolution) continue
 
         // Only resolve if we have a resolution
@@ -2467,16 +2715,43 @@ export default function ScheduleSidePanel({
         }
       }
 
-      // Remove teachers that were canceled
-      if (teachersToRemove.length > 0) {
-        setSelectedTeachers(prev =>
-          prev.filter(t => t.teacher_id && !teachersToRemove.includes(t.teacher_id))
-        )
-      }
+      // Build set of teacher ids to mark as floater (so chip dropdown shows "Floater")
+      const teacherIdsMarkedFloater = new Set(
+        conflicts
+          .filter(c => resolutions.get(c.conflicting_schedule_id) === 'mark_floater')
+          .map(c => c.teacher_id)
+      )
+
+      // Store for follow-up effect so chip shows Floater even if another effect overwrites selectedTeachers
+      pendingFloaterIdsAfterResolutionRef.current = new Set(teacherIdsMarkedFloater)
+
+      // Single state update: remove canceled teachers and set is_floater for mark_floater teachers (both permanent and flex lists)
+      const matchFloaterId = (t: Teacher) =>
+        (t.teacher_id && teacherIdsMarkedFloater.has(t.teacher_id)) ||
+        (t.id && teacherIdsMarkedFloater.has(t.id))
+      const filterRemoved = (prev: Teacher[]) =>
+        teachersToRemove.length > 0
+          ? prev.filter(t => t.teacher_id && !teachersToRemove.includes(t.teacher_id))
+          : prev
+      const applyFloaterTo = (prev: Teacher[]) =>
+        teacherIdsMarkedFloater.size > 0
+          ? prev.map(t => (matchFloaterId(t) ? { ...t, is_floater: true } : t))
+          : prev
+      setSelectedTeachers(prev => applyFloaterTo(filterRemoved(prev)))
+      setSelectedFlexTeachers(prev => applyFloaterTo(filterRemoved(prev)))
 
       // Clear conflicts and resolutions
       setConflicts([])
       setConflictResolutions(new Map())
+
+      // Preserve current selected teachers when grid refreshes (new cell data only has the resolved assignment)
+      preserveSelectedTeachersAfterConflictRef.current = true
+      assignmentCountWhenPreserveSetRef.current = selectedCellData?.assignments?.length ?? -1
+      // Clear teacher cache for this cell so a later fetch doesn't overwrite with a stale list (e.g. from before user added teachers)
+      const cellCacheKey = `${classroomId}|${dayId}|${timeSlotId}`
+      teacherCacheRef.current.delete(cellCacheKey)
+      // Refresh grid so UI shows updated assignments; use onRefresh so we don't close the panel
+      if (onRefresh) await Promise.resolve(onRefresh())
     } catch (error) {
       console.error('Error resolving conflicts:', error)
       const message = error instanceof Error ? error.message : 'Failed to resolve conflicts'
@@ -2546,9 +2821,9 @@ export default function ScheduleSidePanel({
     return calculateScheduledStaffCount({
       readOnly,
       assignments: selectedCellData?.assignments,
-      selectedTeacherCount: selectedTeachers.length,
+      selectedTeacherCount: allAssignedTeachers.length,
     })
-  }, [readOnly, selectedCellData?.assignments, selectedTeachers.length])
+  }, [readOnly, selectedCellData?.assignments, allAssignedTeachers.length])
 
   // When opened from dashboard (flex mode), use initial staffing so header shows target and scheduled
   const useInitialFlexStaffing =
@@ -2606,7 +2881,8 @@ export default function ScheduleSidePanel({
             <SheetHeader>
               <SheetTitle>
                 {classroomName} • {dayName} {timeSlotCode}
-                {dayNameDateLabel ? ` • ${dayNameDateLabel}` : ''} {timeRange && `(${timeRange})`}
+                {showDateInHeader && dayNameDateLabel ? ` • ${dayNameDateLabel}` : ''}{' '}
+                {timeRange && `(${timeRange})`}
               </SheetTitle>
               <SheetDescription>
                 {readOnly
@@ -4043,7 +4319,9 @@ export default function ScheduleSidePanel({
                           setClassGroupIds(newClassGroupIds)
                         }}
                         allowedClassGroupIds={
-                          allowedClassGroupIds.length > 0 ? allowedClassGroupIds : undefined
+                          classroomId && allowedClassGroupIdsLoaded
+                            ? allowedClassGroupIds
+                            : undefined
                         }
                         includeInactive
                         disabled={fieldsDisabled}
@@ -4080,11 +4358,11 @@ export default function ScheduleSidePanel({
                               )}
                             </div>
                           </div>
-                          <p className="text-sm text-muted-foreground pt-0.5">
+                          <p className="text-xs text-muted-foreground pt-0.5">
                             To update age and ratios, go to{' '}
                             <Link
                               href="/settings/classes"
-                              className="text-primary underline underline-offset-2 hover:text-primary/90"
+                              className="text-teal-700 underline underline-offset-2 hover:text-teal-800"
                             >
                               Settings → Class Groups
                             </Link>
@@ -4098,60 +4376,108 @@ export default function ScheduleSidePanel({
                     <div
                       className={`rounded-lg bg-white border border-gray-200 p-6 space-y-2 ${fieldsDisabled ? 'opacity-60' : ''}`}
                     >
-                      {classGroupsSortedForDisplay.length > 0 && (
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium">Enrollment by class group</Label>
-                          <p className="text-xs text-muted-foreground">
-                            Optional. Enter per group for &quot;Toddler A (3), Toddler B (2)&quot;
-                            display.
-                          </p>
-                          <div className="grid gap-2">
-                            {classGroupsSortedForDisplay.map(group => (
-                              <div key={group.id} className="flex items-center gap-3">
-                                <Label
-                                  htmlFor={`enrollment-${group.id}`}
-                                  className="min-w-[120px] text-sm"
-                                >
-                                  {group.name}
-                                </Label>
-                                <Input
-                                  id={`enrollment-${group.id}`}
-                                  type="number"
-                                  min={0}
-                                  value={group.enrollment ?? ''}
-                                  onChange={e => {
-                                    const raw = e.target.value
-                                    const value =
-                                      raw === '' ? null : Math.max(0, parseInt(raw, 10) || 0)
-                                    setClassGroups(prev =>
-                                      prev.map(cg =>
-                                        cg.id === group.id ? { ...cg, enrollment: value } : cg
-                                      )
-                                    )
-                                  }}
-                                  disabled={fieldsDisabled}
-                                  placeholder="—"
-                                  className="w-20"
-                                />
+                      <Label htmlFor="enrollment" className="text-base font-medium mb-6 block">
+                        Enrollment (for staffing)
+                      </Label>
+                      {classGroupsSortedForDisplay.length > 1 ? (
+                        <>
+                          <RadioGroup
+                            value={enrollmentMode}
+                            onValueChange={(value: 'total' | 'by_class_group') => {
+                              setEnrollmentMode(value)
+                              if (value === 'total' && enrollmentForCalculation != null) {
+                                setEnrollment(enrollmentForCalculation)
+                              }
+                            }}
+                            className="flex flex-row gap-4 pt-1"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem
+                                value="total"
+                                id="enrollment-mode-total"
+                                disabled={fieldsDisabled}
+                              />
+                              <Label
+                                htmlFor="enrollment-mode-total"
+                                className="text-sm font-normal cursor-pointer"
+                              >
+                                By total
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem
+                                value="by_class_group"
+                                id="enrollment-mode-by-class"
+                                disabled={fieldsDisabled}
+                              />
+                              <Label
+                                htmlFor="enrollment-mode-by-class"
+                                className="text-sm font-normal cursor-pointer"
+                              >
+                                By class group
+                              </Label>
+                            </div>
+                          </RadioGroup>
+                          {enrollmentMode === 'total' ? (
+                            <div className="space-y-1 pt-2">
+                              <EnrollmentInput
+                                value={enrollment}
+                                onChange={setEnrollment}
+                                disabled={fieldsDisabled}
+                                hideLabel
+                              />
+                            </div>
+                          ) : (
+                            <div className="space-y-2 pt-1">
+                              <p className="text-xs text-muted-foreground mb-3">
+                                Enter per group for &quot;Toddler A (3), Toddler B (2)&quot; display
+                                in the grid.
+                              </p>
+                              <div className="grid gap-2">
+                                {classGroupsSortedForDisplay.map(group => (
+                                  <div key={group.id} className="flex items-center gap-3">
+                                    <Label
+                                      htmlFor={`enrollment-${group.id}`}
+                                      className="min-w-[120px] text-sm"
+                                    >
+                                      {group.name}
+                                    </Label>
+                                    <Input
+                                      id={`enrollment-${group.id}`}
+                                      type="number"
+                                      min={0}
+                                      value={group.enrollment ?? ''}
+                                      onChange={e => {
+                                        const raw = e.target.value
+                                        const value =
+                                          raw === '' ? null : Math.max(0, parseInt(raw, 10) || 0)
+                                        setClassGroups(prev =>
+                                          prev.map(cg =>
+                                            cg.id === group.id ? { ...cg, enrollment: value } : cg
+                                          )
+                                        )
+                                      }}
+                                      disabled={fieldsDisabled}
+                                      placeholder="—"
+                                      className="w-20"
+                                    />
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                          </div>
-                          <div className="text-sm text-muted-foreground pt-1">
-                            Total for ratio: {enrollmentForCalculation ?? '—'}
-                          </div>
-                          <div className="pt-2 border-b border-gray-200"></div>
-                        </div>
+                              <div className="text-sm text-muted-foreground pt-1">
+                                Total for ratio: {enrollmentForCalculation ?? '—'}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <EnrollmentInput
+                          value={enrollment}
+                          onChange={setEnrollment}
+                          disabled={fieldsDisabled}
+                          hideLabel
+                        />
                       )}
-                      <Label className="text-sm font-medium">Total enrollment</Label>
-                      <EnrollmentInput
-                        value={enrollment}
-                        onChange={setEnrollment}
-                        disabled={fieldsDisabled}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Use total when not splitting by class group. When per-class values are set,
-                        they are used for ratio and display.
-                      </p>
                       <div className="pt-2 pb-3 border-b border-gray-200"></div>
 
                       {/* Staffing requirements: auto-calculated + optional override */}
@@ -4250,21 +4576,21 @@ export default function ScheduleSidePanel({
                       <Label className="text-base font-medium text-foreground block mb-6">
                         Assigned Teachers
                       </Label>
-                      {isLoadingTeachers && displayTeachers.length === 0 && (
+                      {isLoadingTeachers && allAssignedTeachers.length === 0 && (
                         <div className="text-sm text-muted-foreground mb-3">
                           Loading assigned teachers…
                         </div>
                       )}
                       <TeacherMultiSelect
-                        selectedTeachers={displayTeachers}
-                        onTeachersChange={teachers => setSelectedTeachers(teachers)}
+                        selectedTeachers={allAssignedTeachers}
+                        onTeachersChange={handleAssignedTeachersChange}
                         requiredCount={classGroupIds.length > 0 ? requiredTeachers : undefined}
                         preferredCount={classGroupIds.length > 0 ? preferredTeachers : undefined}
                         disabled={fieldsDisabled}
                       />
 
                       {/* Warning message when teachers are assigned but no class groups */}
-                      {classGroupIds.length === 0 && displayTeachers.length > 0 && (
+                      {classGroupIds.length === 0 && allAssignedTeachers.length > 0 && (
                         <div className="bg-amber-50 border border-amber-200 rounded-md p-3 mt-4">
                           <p className="text-sm text-amber-800">
                             Teachers are assigned. Add class groups to filter by qualifications and
@@ -4303,7 +4629,7 @@ export default function ScheduleSidePanel({
                         placeholder="Add notes for baseline planning..."
                         disabled={fieldsDisabled}
                         rows={3}
-                        className="text-lg md:text-lg min-h-[80px]"
+                        className="text-base min-h-[80px]"
                       />
                     </div>
 
@@ -4315,7 +4641,7 @@ export default function ScheduleSidePanel({
                         currentTimeSlotCode={timeSlotCode}
                         currentTimeSlotId={timeSlotId}
                         currentClassroomName={classroomName}
-                        selectedDayIds={selectedDayIds}
+                        selectedDayIds={scheduleDayIdsFromSettings ?? selectedDayIds}
                         timeSlots={timeSlots}
                         disabled={slotIsInactive}
                         onApplyScopeChange={handleApplyScopeChange}
@@ -4330,7 +4656,7 @@ export default function ScheduleSidePanel({
                         enrollmentForCalculation != null &&
                         enrollmentForCalculation > 0 &&
                         requiredTeachers !== undefined &&
-                        selectedTeachers.length < requiredTeachers && (
+                        allAssignedTeachers.length < requiredTeachers && (
                           <p className="text-xs text-muted-foreground italic text-right">
                             This slot will be saved below required staffing
                           </p>
@@ -4354,7 +4680,10 @@ export default function ScheduleSidePanel({
                         >
                           Cancel
                         </Button>
-                        <Button onClick={handleSave} disabled={saving || slotIsInactive}>
+                        <Button
+                          onClick={handleSave}
+                          disabled={saving || isParentEffectivelyInactive || conflicts.length > 0}
+                        >
                           {saving
                             ? 'Saving...'
                             : returnToWeekly
@@ -4401,7 +4730,10 @@ export default function ScheduleSidePanel({
             </Button>
             <Button
               onClick={() => {
+                pendingDeactivateAndCloseRef.current = true
                 setIsActive(false)
+                setSelectedTeachers([])
+                setSelectedFlexTeachers([])
                 setShowDeactivateDialog(false)
               }}
             >

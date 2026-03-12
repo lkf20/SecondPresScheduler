@@ -1,21 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
+import { useState, useEffect, useMemo } from 'react'
+import Link from 'next/link'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
-import { X, Plus } from 'lucide-react'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { X, ChevronDown } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 interface ClassGroup {
   id: string
@@ -40,13 +32,9 @@ export default function ClassGroupMultiSelect({
   existingClassGroups = [],
 }: ClassGroupMultiSelectProps) {
   const [classGroups, setClassGroups] = useState<ClassGroup[]>([])
-  const [searchQuery, setSearchQuery] = useState('')
-  const [showInactive, setShowInactive] = useState(false)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(selectedClassGroupIds))
-  const searchInputRef = useRef<HTMLInputElement>(null)
+  const [popoverOpen, setPopoverOpen] = useState(false)
 
-  // Fetch all class groups once; picker can then toggle inactive visibility.
+  // Fetch all class groups once
   useEffect(() => {
     fetch('/api/class-groups?includeInactive=true')
       .then(r => r.json())
@@ -57,21 +45,14 @@ export default function ClassGroupMultiSelect({
   }, [])
 
   // Merge existing class groups (may include inactive) with active ones from API
-  // This ensures we have all class groups that are selected, even if inactive
   const allClassGroups = useMemo(() => {
     const existingMap = new Map<string, ClassGroup>()
-
-    // Add existing class groups first (these may include inactive ones)
     existingClassGroups.forEach(cg => {
       existingMap.set(cg.id, cg)
     })
-
-    // Add class groups from API (will overwrite if duplicate, but that's fine)
     classGroups.forEach(cg => {
       existingMap.set(cg.id, cg)
     })
-
-    // Convert to array and sort by order, then name
     return Array.from(existingMap.values()).sort((a, b) => {
       const orderA = a.order ?? Infinity
       const orderB = b.order ?? Infinity
@@ -80,51 +61,36 @@ export default function ClassGroupMultiSelect({
     })
   }, [existingClassGroups, classGroups])
 
-  // Sync selectedIds with prop changes
-  useEffect(() => {
-    setSelectedIds(new Set(selectedClassGroupIds))
-  }, [selectedClassGroupIds])
+  // Options available to add: allowed, active, not yet selected
+  const addableClassGroups = useMemo(() => {
+    const selectedSet = new Set(selectedClassGroupIds)
+    return allClassGroups.filter(cg => {
+      if (selectedSet.has(cg.id)) return false
+      if (cg.is_active === false) return false
+      if (allowedClassGroupIds && allowedClassGroupIds.length > 0) {
+        if (!allowedClassGroupIds.includes(cg.id)) return false
+      }
+      return true
+    })
+  }, [allClassGroups, selectedClassGroupIds, allowedClassGroupIds])
 
-  // Filter class groups for dropdown, preserving order from API.
-  const filteredClassGroups = classGroups.filter(cg => {
-    if (!showInactive && cg.is_active === false) {
-      return false
-    }
-    // Filter by allowed IDs if provided
-    if (allowedClassGroupIds && allowedClassGroupIds.length > 0) {
-      if (!allowedClassGroupIds.includes(cg.id)) return false
-    }
-    // Filter by search query
-    return cg.name.toLowerCase().includes(searchQuery.toLowerCase())
-  })
-  // Keep the order from API (already sorted by order field, then name)
+  const selectedClassGroupsList = allClassGroups.filter(cg => selectedClassGroupIds.includes(cg.id))
 
-  const handleToggle = (classGroupId: string, checked: boolean) => {
-    const newSelected = new Set(selectedIds)
-    if (checked) {
-      newSelected.add(classGroupId)
-    } else {
-      newSelected.delete(classGroupId)
-    }
-    setSelectedIds(newSelected)
+  const handleAdd = (classGroupId: string) => {
+    onSelectionChange([...selectedClassGroupIds, classGroupId])
+    setPopoverOpen(false)
   }
 
-  const handleSave = () => {
-    onSelectionChange(Array.from(selectedIds))
-    setIsDialogOpen(false)
-    setSearchQuery('')
+  const handleSelectAll = () => {
+    onSelectionChange([...selectedClassGroupIds, ...addableClassGroups.map(cg => cg.id)])
+    setPopoverOpen(false)
   }
 
   const handleRemove = (classGroupId: string) => {
-    const newSelected = new Set(selectedIds)
-    newSelected.delete(classGroupId)
-    setSelectedIds(newSelected)
-    onSelectionChange(Array.from(newSelected))
+    onSelectionChange(selectedClassGroupIds.filter(id => id !== classGroupId))
   }
 
-  // Get selected class groups (may include inactive ones from existingClassGroups)
-  // Preserve order from allClassGroups which is sorted by order field, then name
-  const selectedClassGroupsList = allClassGroups.filter(cg => selectedIds.has(cg.id))
+  const allSelected = addableClassGroups.length === 0
 
   return (
     <div className="space-y-2">
@@ -152,6 +118,7 @@ export default function ClassGroupMultiSelect({
                   type="button"
                   onClick={() => handleRemove(cg.id)}
                   className="ml-1 hover:bg-destructive/20 rounded-full p-0.5"
+                  aria-label={`Remove ${cg.name}`}
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -159,162 +126,67 @@ export default function ClassGroupMultiSelect({
             </Badge>
           )
         })}
+        {/* Simple dropdown: add a class group */}
         {!disabled && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setIsDialogOpen(true)}
-            className="h-7"
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            Add Class Groups
-          </Button>
+          <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 min-w-[10rem] justify-between gap-2 font-normal text-muted-foreground"
+                disabled={allSelected}
+                aria-label={allSelected ? 'All class groups selected' : 'Add class group'}
+              >
+                <span>{allSelected ? 'All selected' : 'Add class group'}</span>
+                <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-0" align="start">
+              {addableClassGroups.length > 0 && (
+                <div className="border-b border-border px-2 py-1.5">
+                  <button
+                    type="button"
+                    className="w-full px-2 py-1.5 text-left text-sm font-medium text-teal-700 hover:bg-teal-50 focus:bg-teal-50 focus:outline-none rounded"
+                    onClick={handleSelectAll}
+                  >
+                    Select all
+                  </button>
+                </div>
+              )}
+              <ul className="max-h-60 overflow-y-auto py-1">
+                {addableClassGroups.length === 0 ? (
+                  <li className="px-3 py-2 text-sm text-muted-foreground">
+                    No more class groups to add
+                  </li>
+                ) : (
+                  addableClassGroups.map(cg => (
+                    <li key={cg.id}>
+                      <button
+                        type="button"
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-accent focus:bg-accent focus:outline-none"
+                        onClick={() => handleAdd(cg.id)}
+                      >
+                        {cg.name}
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </PopoverContent>
+          </Popover>
         )}
       </div>
 
-      {/* Selection Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md max-h-[80vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Select Class Groups</DialogTitle>
-            <DialogDescription>
-              Choose which class groups are assigned to this slot
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex flex-col flex-1 min-h-0">
-            {/* Search input */}
-            <Input
-              ref={searchInputRef}
-              placeholder="Search class groups..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="mb-3"
-            />
-
-            <div className="mb-3 flex items-center gap-2">
-              <Switch
-                id="show-inactive-class-groups"
-                checked={showInactive}
-                onCheckedChange={setShowInactive}
-              />
-              <Label
-                htmlFor="show-inactive-class-groups"
-                className="cursor-pointer text-sm font-normal"
-              >
-                Show inactive
-              </Label>
-            </div>
-            <p className="mb-3 text-xs text-slate-500">
-              Inactive class groups are shown for reference and can be removed, but cannot be newly
-              selected.
-            </p>
-
-            {/* Select All / Clear All buttons */}
-            <div className="flex gap-2 mb-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const newSelected = new Set(selectedIds)
-                  filteredClassGroups.forEach(cg => {
-                    newSelected.add(cg.id)
-                  })
-                  setSelectedIds(newSelected)
-                }}
-                className="flex-1"
-              >
-                Select All
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const newSelected = new Set(selectedIds)
-                  filteredClassGroups.forEach(cg => {
-                    newSelected.delete(cg.id)
-                  })
-                  setSelectedIds(newSelected)
-                }}
-                className="flex-1"
-              >
-                Clear All
-              </Button>
-            </div>
-
-            {/* Class group list */}
-            <div className="border rounded-md overflow-y-auto flex-1 min-h-0">
-              {filteredClassGroups.length === 0 ? (
-                <div className="p-4 text-sm text-muted-foreground text-center">
-                  No class groups found
-                </div>
-              ) : (
-                <div className="p-2 space-y-1">
-                  {filteredClassGroups.map(cg => {
-                    const isSelected = selectedIds.has(cg.id)
-                    const isInactive = cg.is_active === false
-                    const disableNewInactiveSelection = isInactive && !isSelected
-                    return (
-                      <div
-                        key={cg.id}
-                        className={cn(
-                          'flex items-center space-x-2 rounded p-2',
-                          disableNewInactiveSelection
-                            ? 'cursor-not-allowed opacity-60'
-                            : 'cursor-pointer hover:bg-accent'
-                        )}
-                        onClick={() => {
-                          if (disableNewInactiveSelection) return
-                          handleToggle(cg.id, !isSelected)
-                        }}
-                      >
-                        <Checkbox
-                          checked={isSelected}
-                          disabled={disableNewInactiveSelection}
-                          onCheckedChange={checked => handleToggle(cg.id, checked === true)}
-                        />
-                        <Label
-                          className={cn(
-                            'flex-1',
-                            disableNewInactiveSelection ? 'cursor-not-allowed' : 'cursor-pointer'
-                          )}
-                        >
-                          {cg.name}
-                          {isInactive ? ' (Inactive)' : ''}
-                        </Label>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Footer buttons */}
-            <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setIsDialogOpen(false)
-                  setSearchQuery('')
-                }}
-              >
-                Cancel
-              </Button>
-              <Button type="button" onClick={handleSave}>
-                Save ({selectedIds.size} selected)
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {allowedClassGroupIds && allowedClassGroupIds.length > 0 && (
         <p className="text-xs text-muted-foreground">
-          Showing only class groups allowed in this classroom
+          Showing only class groups allowed in this classroom. To update go to{' '}
+          <Link
+            href="/settings/classrooms"
+            className="text-teal-700 underline underline-offset-2 hover:text-teal-800"
+          >
+            Settings → Classrooms
+          </Link>
         </p>
       )}
     </div>

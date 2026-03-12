@@ -6,6 +6,16 @@ const setActivePanelMock = jest.fn()
 const restorePreviousPanelMock = jest.fn()
 const registerPanelCloseHandlerMock = jest.fn(() => jest.fn())
 
+beforeEach(() => {
+  global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+    const url = typeof input === 'string' ? input : input.toString()
+    if (url.includes('/api/class-groups')) {
+      return { ok: true, json: async () => [] } as Response
+    }
+    return { ok: false, json: async () => ({}) } as Response
+  }) as jest.Mock
+})
+
 jest.mock('@/lib/contexts/PanelManagerContext', () => ({
   usePanelManager: () => ({
     setActivePanel: setActivePanelMock,
@@ -27,7 +37,10 @@ jest.mock('@/components/schedules/ScheduleCell', () => {
 })
 
 jest.mock('@/components/schedules/ScheduleSidePanel', () => {
-  return function MockScheduleSidePanel({
+  const actual = jest.requireActual<typeof import('@/components/schedules/ScheduleSidePanel')>(
+    '@/components/schedules/ScheduleSidePanel'
+  )
+  function MockScheduleSidePanel({
     dayName,
     timeSlotCode,
     classroomName,
@@ -56,6 +69,11 @@ jest.mock('@/components/schedules/ScheduleSidePanel', () => {
         </button>
       </div>
     )
+  }
+  return {
+    ...actual,
+    __esModule: true,
+    default: MockScheduleSidePanel,
   }
 })
 

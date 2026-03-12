@@ -201,6 +201,12 @@ interface ContactSubPanelProps {
   initialContactData?: ContactData // Cached contact data from parent
   onAssignmentComplete?: () => void // Callback to refresh data after assignment
   onChangeShift?: (shift: { date: string; time_slot_code: string }) => void
+  /** When in manual mode with no time off request, called when user clicks "Create time off for this range" */
+  onCreateTimeOffRequest?: () => void
+  /** When in manual mode, called when user clicks "Add extra coverage" (temp coverage, no absence) */
+  onAddExtraCoverage?: () => void
+  /** When true, disable assignment and show "Preview only" banner */
+  previewMode?: boolean
 }
 
 export default function ContactSubPanel({
@@ -212,6 +218,9 @@ export default function ContactSubPanel({
   initialContactData,
   onAssignmentComplete,
   onChangeShift,
+  onCreateTimeOffRequest,
+  onAddExtraCoverage,
+  previewMode = false,
 }: ContactSubPanelProps) {
   const router = useRouter()
   const contactSummaryRef = useRef<HTMLDivElement | null>(null)
@@ -657,11 +666,13 @@ export default function ContactSubPanel({
           )}
           {isInline ? (
             <div className="text-left">
-              <div className="text-lg font-semibold text-slate-900">Contact Sub</div>
+              <div className="text-lg font-semibold text-slate-900">
+                Contact Sub{previewMode ? ' (Preview only)' : ''}
+              </div>
             </div>
           ) : (
             <SheetHeader>
-              <SheetTitle>Contact Sub</SheetTitle>
+              <SheetTitle>Contact Sub{previewMode ? ' (Preview only)' : ''}</SheetTitle>
             </SheetHeader>
           )}
         </div>
@@ -1447,6 +1458,7 @@ export default function ContactSubPanel({
           <div className="text-left">
             <div className="text-2xl font-semibold text-slate-900 mb-1">
               Assign {sub.name} to sub for {absence.teacher_name}
+              {previewMode ? ' (Preview only)' : ''}
             </div>
             <p className="text-base text-muted-foreground mt-1 mb-0 inline-flex flex-wrap items-center gap-1.5">
               {formatDateRange() && (
@@ -1487,6 +1499,7 @@ export default function ContactSubPanel({
           <SheetHeader className="text-left">
             <SheetTitle className="text-2xl mb-1">
               Assign {sub.name} to sub for {absence.teacher_name}
+              {previewMode ? ' (Preview only)' : ''}
             </SheetTitle>
             <p className="text-base text-muted-foreground mt-1 mb-0 inline-flex flex-wrap items-center gap-1.5">
               {formatDateRange() && (
@@ -2209,66 +2222,102 @@ export default function ContactSubPanel({
                 </p>
               </div>
             )}
+            {previewMode && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 mb-2">
+                <p className="text-sm text-amber-800 font-medium">
+                  Preview only — assignment is not available.
+                </p>
+                <p className="mt-1 text-sm text-amber-800">
+                  Create a time off request for this range to contact and assign subs.
+                </p>
+              </div>
+            )}
+            {!previewMode &&
+              absence?.id?.startsWith('manual-') &&
+              !coverageRequestId &&
+              onCreateTimeOffRequest && (
+                <div className="rounded-lg border border-sky-200 bg-sky-50/80 p-3 mb-2">
+                  <p className="text-sm text-slate-700 mb-2">
+                    Assigning requires a time off request for this range.
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <Button size="sm" className="w-full" onClick={onCreateTimeOffRequest}>
+                      Create time off for this range
+                    </Button>
+                    {onAddExtraCoverage && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="w-full text-slate-600"
+                        onClick={onAddExtraCoverage}
+                      >
+                        I meant to add extra coverage (no absence)
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
             <TooltipProvider>
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={onClose} disabled={loading}>
                   Cancel
                 </Button>
-                {isDeclinedWithShiftsSelected ? (
-                  <>
+                {!previewMode &&
+                  (isDeclinedWithShiftsSelected ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={handleMarkAsDeclined}
+                        disabled={loading || fetching || !coverageRequestId}
+                      >
+                        Mark as Declined
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={handleChangeToConfirmed}
+                        disabled={loading || fetching || !coverageRequestId}
+                      >
+                        Change to Confirmed
+                      </Button>
+                    </>
+                  ) : responseStatus === 'declined_all' ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="flex-1">
+                          <Button
+                            variant="outline"
+                            className="flex-1 w-full"
+                            onClick={handleSave}
+                            disabled={true}
+                          >
+                            Save
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Save isn&apos;t applicable when a sub has declined all shifts.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
                     <Button
                       variant="outline"
                       className="flex-1"
-                      onClick={handleMarkAsDeclined}
-                      disabled={loading || fetching || !coverageRequestId}
+                      onClick={handleSave}
+                      disabled={
+                        loading ||
+                        fetching ||
+                        !coverageRequestId ||
+                        (responseStatus === 'confirmed' &&
+                          selectedShiftsCount === 0 &&
+                          !hasAssignedToThisSub)
+                      }
                     >
-                      Mark as Declined
+                      Save
                     </Button>
-                    <Button
-                      variant="outline"
-                      className="flex-1"
-                      onClick={handleChangeToConfirmed}
-                      disabled={loading || fetching || !coverageRequestId}
-                    >
-                      Change to Confirmed
-                    </Button>
-                  </>
-                ) : responseStatus === 'declined_all' ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="flex-1">
-                        <Button
-                          variant="outline"
-                          className="flex-1 w-full"
-                          onClick={handleSave}
-                          disabled={true}
-                        >
-                          Save
-                        </Button>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Save isn&apos;t applicable when a sub has declined all shifts.</p>
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={handleSave}
-                    disabled={
-                      loading ||
-                      fetching ||
-                      !coverageRequestId ||
-                      (responseStatus === 'confirmed' &&
-                        selectedShiftsCount === 0 &&
-                        !hasAssignedToThisSub)
-                    }
-                  >
-                    Save
-                  </Button>
-                )}
-                {!isDeclinedWithShiftsSelected && (
+                  ))}
+                {!previewMode && !isDeclinedWithShiftsSelected && (
                   <Button
                     variant="default"
                     className="flex-1 !bg-teal-600 !text-white hover:!bg-teal-700"

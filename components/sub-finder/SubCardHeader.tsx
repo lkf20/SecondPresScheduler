@@ -30,6 +30,8 @@ interface SubCardHeaderProps {
   /** When true, do not show phone/email below the name (e.g. when shown at bottom of card) */
   hideContactInHeader?: boolean
   compactSpacing?: boolean
+  /** When true, use smaller match badge and status badge (e.g. right panel All Subs cards) */
+  compactBadge?: boolean
 }
 
 export default function SubCardHeader({
@@ -47,6 +49,7 @@ export default function SubCardHeader({
   rightContent = null,
   hideContactInHeader = false,
   compactSpacing = false,
+  compactBadge = false,
 }: SubCardHeaderProps) {
   const coveredSegments = Math.min(shiftsCovered, totalShifts)
   const showBadge = showCoverageBadge && !isDeclined && totalShifts > 0
@@ -67,9 +70,13 @@ export default function SubCardHeader({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span
-                    className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${statusBadge.className}`}
+                    className={cn(
+                      'inline-flex shrink-0 items-center justify-center rounded-full border',
+                      compactBadge ? 'h-5 w-5' : 'h-7 w-7',
+                      statusBadge.className
+                    )}
                   >
-                    <statusBadge.icon className="h-4 w-4" />
+                    <statusBadge.icon className={compactBadge ? 'h-3 w-3' : 'h-4 w-4'} />
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="top">{statusBadge.label}</TooltipContent>
@@ -93,7 +100,8 @@ export default function SubCardHeader({
                     <TooltipTrigger asChild>
                       <span
                         className={cn(
-                          'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm font-medium tabular-nums',
+                          'inline-flex shrink-0 items-center gap-1 rounded-full border font-medium tabular-nums',
+                          compactBadge ? 'px-2 py-0.5 text-xs' : 'gap-1.5 px-2.5 py-1 text-sm',
                           matchPercent !== 100 && 'bg-amber-50'
                         )}
                         style={
@@ -112,13 +120,17 @@ export default function SubCardHeader({
                       >
                         {matchPercent === 100 ? (
                           <CheckCircle
-                            className="h-3.5 w-3.5 shrink-0"
+                            className={compactBadge ? 'h-3 w-3 shrink-0' : 'h-3.5 w-3.5 shrink-0'}
                             style={{ color: 'rgb(15, 118, 110)' }}
                             aria-hidden
                           />
                         ) : (
                           <CheckCircle
-                            className="h-3.5 w-3.5 shrink-0 text-amber-500"
+                            className={
+                              compactBadge
+                                ? 'h-3 w-3 shrink-0 text-amber-500'
+                                : 'h-3.5 w-3.5 shrink-0 text-amber-500'
+                            }
                             aria-hidden
                           />
                         )}

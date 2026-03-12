@@ -1,40 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import ClassSelector from '@/components/settings/ClassSelector'
 
-jest.mock('@/components/ui/checkbox', () => ({
-  Checkbox: ({
-    id,
-    checked,
-    onCheckedChange,
-  }: {
-    id?: string
-    checked?: boolean
-    onCheckedChange?: (checked: boolean) => void
-  }) => (
-    <input
-      id={id}
-      type="checkbox"
-      checked={checked}
-      onChange={e => onCheckedChange?.(e.target.checked)}
-      aria-label={id || 'Class checkbox'}
-    />
-  ),
-}))
-
-jest.mock('@/components/ui/input', () => ({
-  Input: ({
-    value,
-    onChange,
-    placeholder,
-    className,
-  }: {
-    value?: string
-    onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void
-    placeholder?: string
-    className?: string
-  }) => <input value={value} onChange={onChange} placeholder={placeholder} className={className} />,
-}))
-
 jest.mock('@/components/ui/label', () => ({
   Label: ({ children }: { children: React.ReactNode }) => <label>{children}</label>,
 }))
@@ -44,41 +10,37 @@ jest.mock('@/components/ui/button', () => ({
     children,
     onClick,
     type,
+    disabled,
     className,
   }: {
     children: React.ReactNode
     onClick?: () => void
     type?: 'button' | 'submit' | 'reset'
+    disabled?: boolean
     className?: string
   }) => (
-    <button type={type || 'button'} onClick={onClick} className={className}>
+    <button type={type || 'button'} onClick={onClick} disabled={disabled} className={className}>
       {children}
     </button>
   ),
 }))
 
-jest.mock('@/components/ui/dialog', () => ({
-  Dialog: ({ children, open }: { children: React.ReactNode; open?: boolean }) =>
-    open ? <div>{children}</div> : null,
-  DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+jest.mock('@/components/ui/popover', () => ({
+  Popover: ({ children, open }: { children: React.ReactNode; open?: boolean }) => (
+    <div data-popover-open={open}>{children}</div>
+  ),
+  PopoverTrigger: ({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) => (
+    <div data-popover-trigger>{children}</div>
+  ),
+  PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }))
 
 const originalFetch = global.fetch
-const openClassList = () => {
-  const toggleButton = screen.getByRole('button', {
-    name: /expand class groups list|collapse class groups list/i,
-  })
-  if ((toggleButton.getAttribute('aria-label') || '').toLowerCase().includes('expand')) {
-    fireEvent.click(toggleButton)
-  }
-}
-const waitForClassGroupCheckbox = async (id = 'class-group-cg-1') => {
-  openClassList()
-  await screen.findByLabelText(id)
-}
+
+const mockClassGroups = [
+  { id: 'cg-1', name: 'Infant A', order: 1, is_active: true },
+  { id: 'cg-2', name: 'Toddler B', order: 2, is_active: true },
+]
 
 describe('ClassSelector', () => {
   afterEach(() => {
@@ -89,113 +51,96 @@ describe('ClassSelector', () => {
     global.fetch = originalFetch
   })
 
-  it('opens dialog, selects class group, and saves selection', async () => {
+  it('shows Add class group dropdown and adds class group on click', async () => {
     const onSelectionChange = jest.fn()
-    global.fetch = jest.fn(async () => {
-      return {
-        ok: true,
-        json: async () => [
-          { id: 'cg-1', name: 'Infant A' },
-          { id: 'cg-2', name: 'Toddler B' },
-        ],
-      } as Response
-    }) as jest.Mock
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => mockClassGroups,
+    })) as jest.Mock
 
     render(<ClassSelector selectedClassIds={[]} onSelectionChange={onSelectionChange} />)
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('Search class groups...')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /add class group/i })).toBeInTheDocument()
     })
-    await waitForClassGroupCheckbox()
-    fireEvent.click(screen.getByLabelText('class-group-cg-1'))
+
+    fireEvent.click(screen.getByRole('button', { name: /add class group/i }))
+    await waitFor(() => {
+      expect(screen.getByText('Infant A')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByText('Infant A'))
 
     expect(onSelectionChange).toHaveBeenCalledWith(['cg-1'])
   })
 
-  it('filters classes by search query and shows empty state', async () => {
+  it('shows selected class groups as chips and removes on X click', async () => {
     const onSelectionChange = jest.fn()
-    global.fetch = jest.fn(async () => {
-      return {
-        ok: true,
-        json: async () => [{ id: 'cg-1', name: 'Infant A' }],
-      } as Response
-    }) as jest.Mock
-
-    render(<ClassSelector selectedClassIds={[]} onSelectionChange={onSelectionChange} />)
-
-    await waitForClassGroupCheckbox()
-    fireEvent.change(screen.getByPlaceholderText('Search class groups...'), {
-      target: { value: 'NoMatch' },
-    })
-
-    expect(screen.getByText('No class groups found')).toBeInTheDocument()
-  })
-
-  it('supports remove chip and select-all/clear-all dialog actions', async () => {
-    const onSelectionChange = jest.fn()
-    global.fetch = jest.fn(async () => {
-      return {
-        ok: true,
-        json: async () => [
-          { id: 'cg-1', name: 'Infant A' },
-          { id: 'cg-2', name: 'Toddler B' },
-        ],
-      } as Response
-    }) as jest.Mock
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => mockClassGroups,
+    })) as jest.Mock
 
     render(<ClassSelector selectedClassIds={['cg-1']} onSelectionChange={onSelectionChange} />)
 
     expect(await screen.findByText('Infant A')).toBeInTheDocument()
-    const chip = screen.getByText('Infant A').closest('div')
-    const removeButton = chip?.querySelector('button')
-    expect(removeButton).toBeTruthy()
-    fireEvent.click(removeButton as HTMLButtonElement)
+    const removeButton = screen.getByLabelText('Remove Infant A')
+    fireEvent.click(removeButton)
     expect(onSelectionChange).toHaveBeenCalledWith([])
   })
 
-  it('supports select-all and deselect-all actions in the expanded list', async () => {
+  it('shows All selected when all class groups are selected and disables dropdown', async () => {
     const onSelectionChange = jest.fn()
-    global.fetch = jest.fn(async () => {
-      return {
-        ok: true,
-        json: async () => [
-          { id: 'cg-1', name: 'Infant A' },
-          { id: 'cg-2', name: 'Toddler B' },
-        ],
-      } as Response
-    }) as jest.Mock
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => mockClassGroups,
+    })) as jest.Mock
 
-    render(<ClassSelector selectedClassIds={[]} onSelectionChange={onSelectionChange} />)
+    render(
+      <ClassSelector selectedClassIds={['cg-1', 'cg-2']} onSelectionChange={onSelectionChange} />
+    )
 
-    await waitForClassGroupCheckbox()
-    fireEvent.click(screen.getByRole('button', { name: /^select all$/i }))
-    expect(onSelectionChange).toHaveBeenCalledWith(expect.arrayContaining(['cg-1', 'cg-2']))
-    fireEvent.change(screen.getByPlaceholderText('Search class groups...'), {
-      target: { value: 'Toddler' },
+    await waitFor(() => {
+      expect(screen.getByText('Infant A')).toBeInTheDocument()
+      expect(screen.getByText('Toddler B')).toBeInTheDocument()
     })
-    fireEvent.click(screen.getByRole('button', { name: /^deselect all$/i }))
-    expect(onSelectionChange).toHaveBeenCalledWith(expect.not.arrayContaining(['cg-2']))
+    expect(screen.queryByRole('button', { name: /add class group/i })).not.toBeInTheDocument()
   })
 
-  it('deselects via checkbox onCheckedChange and saves empty selection', async () => {
+  it('filters by allowedClassGroupIds when provided', async () => {
     const onSelectionChange = jest.fn()
-    global.fetch = jest.fn(async () => {
-      return {
-        ok: true,
-        json: async () => [{ id: 'cg-1', name: 'Infant A' }],
-      } as Response
-    }) as jest.Mock
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => mockClassGroups,
+    })) as jest.Mock
 
-    render(<ClassSelector selectedClassIds={['cg-1']} onSelectionChange={onSelectionChange} />)
+    render(
+      <ClassSelector
+        selectedClassIds={[]}
+        onSelectionChange={onSelectionChange}
+        allowedClassGroupIds={['cg-1']}
+      />
+    )
 
-    await waitForClassGroupCheckbox()
-    const checkbox = screen.getByLabelText('class-group-cg-1')
-    fireEvent.click(checkbox)
-
-    expect(onSelectionChange).toHaveBeenCalledWith([])
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /add class group/i })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: /add class group/i }))
+    await waitFor(() => {
+      expect(screen.getByText('Infant A')).toBeInTheDocument()
+      expect(screen.queryByText('Toddler B')).not.toBeInTheDocument()
+    })
+    expect(
+      screen.getByText(content =>
+        content.includes('Showing only class groups allowed in this classroom')
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Settings → Classrooms/i })).toHaveAttribute(
+      'href',
+      '/settings/classrooms'
+    )
   })
 
-  it('handles class-group fetch failure gracefully', async () => {
+  it('handles fetch failure gracefully', async () => {
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
     global.fetch = jest.fn(async () => {
       throw new Error('fetch failed')
@@ -206,39 +151,28 @@ describe('ClassSelector', () => {
     await waitFor(() => {
       expect(errorSpy).toHaveBeenCalled()
     })
-
-    openClassList()
-    expect(screen.getByText('No class groups found')).toBeInTheDocument()
+    // Dropdown stays visible so user can retry; list will be empty when opened
+    expect(screen.getByRole('button', { name: /add class group/i })).toBeInTheDocument()
     errorSpy.mockRestore()
   })
 
-  it('syncs selectedIds when selectedClassIds prop changes', async () => {
+  it('syncs chips when selectedClassIds prop changes', async () => {
     const onSelectionChange = jest.fn()
-    global.fetch = jest.fn(async () => {
-      return {
-        ok: true,
-        json: async () => [
-          { id: 'cg-1', name: 'Infant A' },
-          { id: 'cg-2', name: 'Toddler B' },
-        ],
-      } as Response
-    }) as jest.Mock
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => mockClassGroups,
+    })) as jest.Mock
 
     const { rerender } = render(
       <ClassSelector selectedClassIds={['cg-1']} onSelectionChange={onSelectionChange} />
     )
 
-    expect(await screen.findByText('Infant A')).toBeInTheDocument()
-    expect(screen.queryByText('Toddler B')).not.toBeInTheDocument()
+    expect(await screen.findByLabelText('Remove Infant A')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Remove Toddler B')).not.toBeInTheDocument()
 
     rerender(<ClassSelector selectedClassIds={['cg-2']} onSelectionChange={onSelectionChange} />)
 
-    expect(await screen.findByText('Toddler B')).toBeInTheDocument()
-    expect(screen.queryByText('Infant A')).not.toBeInTheDocument()
-
-    await waitForClassGroupCheckbox('class-group-cg-2')
-    fireEvent.click(screen.getByLabelText('class-group-cg-2'))
-
-    expect(onSelectionChange).toHaveBeenLastCalledWith([])
+    expect(await screen.findByLabelText('Remove Toddler B')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Remove Infant A')).not.toBeInTheDocument()
   })
 })

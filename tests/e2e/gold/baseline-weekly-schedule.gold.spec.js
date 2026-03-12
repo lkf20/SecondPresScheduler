@@ -4,7 +4,7 @@
  * Weekly schedule loads and shows structure (classrooms, assignments).
  */
 const { test, expect } = require('@playwright/test')
-const { ensureAuthenticated, hasE2ECredentials } = require('../helpers/auth')
+const { gotoWithAuth, hasE2ECredentials } = require('../helpers/auth')
 
 const json = payload => ({
   status: 200,
@@ -93,7 +93,7 @@ test('weekly schedule loads and shows classroom and assignment @gold', async ({ 
     )
   })
 
-  await ensureAuthenticated(page, '/schedules/weekly')
+  await gotoWithAuth(page, '/schedules/weekly')
   await expect(page.getByRole('heading', { name: 'Weekly Schedule' })).toBeVisible({
     timeout: 15000,
   })

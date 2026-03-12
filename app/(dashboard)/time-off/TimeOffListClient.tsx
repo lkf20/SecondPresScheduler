@@ -74,6 +74,7 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
     isFetching,
   } = useTimeOffRequests({
     statuses: ['active', 'draft'],
+    includeDetailedShifts: true, // Enables large shift chips (same as Dashboard)
   })
 
   // Manual refresh handler

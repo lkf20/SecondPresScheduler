@@ -9,7 +9,8 @@ import WeekPicker from '@/components/schedules/WeekPicker'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
 import { Button } from '@/components/ui/button'
-import { Calendar, Filter, RefreshCw } from 'lucide-react'
+import { Calendar, Filter, RefreshCw, X } from 'lucide-react'
+import TeacherFilterSearch from '@/components/schedules/TeacherFilterSearch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useWeeklySchedule } from '@/lib/hooks/use-weekly-schedule'
 import { useScheduleSettings } from '@/lib/hooks/use-schedule-settings'
@@ -17,13 +18,24 @@ import { useFilterOptions } from '@/lib/hooks/use-filter-options'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { invalidateWeeklySchedule } from '@/lib/utils/invalidation'
-import { isSlotInactive } from '@/lib/utils/schedule-slot-activity'
 import {
   includeNewIdsWhenPreviouslyAllSelected,
   reconcileSelectedIdsWithAvailable,
 } from '@/lib/utils/filter-selection'
 import { isNeedsReviewClassroomName } from '@/lib/utils/needs-review-classroom'
 import { useSchool } from '@/lib/contexts/SchoolContext'
+import type { WeeklyScheduleData } from '@/lib/api/weekly-schedule'
+import { getSlotCoverageTotalWeekly } from '@/lib/schedules/coverage-weights'
+import {
+  getClearedScheduleFilters,
+  getEffectiveClassroomIds,
+  getEffectiveTimeSlotIds,
+  hasActiveScheduleFilters,
+} from '@/lib/schedules/schedule-filter-helpers'
+import {
+  applyScheduleFilters,
+  getSlotRequiredPreferred,
+} from '@/lib/schedules/schedule-filter-data'
 
 // Calculate Monday of current week as ISO string for query key
 function getWeekStartISO(): string {
@@ -95,6 +107,7 @@ export default function WeeklySchedulePage() {
     : null
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
+  const [teacherFilterId, setTeacherFilterId] = useState<string | null>(null)
   const prevAvailableClassroomIdsRef = useRef<string[] | null>(null)
   const prevAvailableTimeSlotIdsRef = useRef<string[] | null>(null)
   const previousAvailableClassroomsStorageKey = 'weekly-schedule-available-classroom-ids'
@@ -112,6 +125,14 @@ export default function WeeklySchedulePage() {
             ...parsed,
             layout: parsed.layout || 'days-x-classrooms',
             displayMode: parsed.displayMode || 'all-scheduled-staff',
+            slotFilterMode:
+              parsed.slotFilterMode ??
+              (parsed.displayFilters?.showAll === false ? 'select' : 'all'),
+            showInactiveClassrooms: parsed.showInactiveClassrooms ?? false,
+            showInactiveTimeSlots: parsed.showInactiveTimeSlots ?? false,
+            displayFilters: {
+              ...parsed.displayFilters,
+            },
           }
         } catch (e) {
           console.error('Error parsing saved filters:', e)
@@ -142,6 +163,14 @@ export default function WeeklySchedulePage() {
               ...parsed,
               layout: parsed.layout || 'days-x-classrooms',
               displayMode: parsed.displayMode || 'all-scheduled-staff',
+              slotFilterMode:
+                parsed.slotFilterMode ??
+                (parsed.displayFilters?.showAll === false ? 'select' : 'all'),
+              showInactiveClassrooms: parsed.showInactiveClassrooms ?? false,
+              showInactiveTimeSlots: parsed.showInactiveTimeSlots ?? false,
+              displayFilters: {
+                ...parsed.displayFilters,
+              },
             })
             return
           } catch (e) {
@@ -154,11 +183,15 @@ export default function WeeklySchedulePage() {
         selectedDayIds: selectedDayIds.length > 0 ? selectedDayIds : availableDays.map(d => d.id),
         selectedTimeSlotIds: availableTimeSlots.map(ts => ts.id),
         selectedClassroomIds: availableClassrooms.map(c => c.id),
+        slotFilterMode: 'all',
+        showInactiveClassrooms: false,
+        showInactiveTimeSlots: false,
         displayFilters: {
           belowRequired: true,
           belowPreferred: true,
           fullyStaffed: true,
           inactive: true,
+          viewNotes: false,
         },
         displayMode: 'all-scheduled-staff',
         layout: 'days-x-classrooms', // Default layout
@@ -181,11 +214,15 @@ export default function WeeklySchedulePage() {
       selectedDayIds: [focusDayId],
       selectedTimeSlotIds: [focusTimeSlotId],
       selectedClassroomIds: [focusClassroomId],
+      slotFilterMode: prev?.slotFilterMode ?? 'all',
+      showInactiveClassrooms: prev?.showInactiveClassrooms ?? false,
+      showInactiveTimeSlots: prev?.showInactiveTimeSlots ?? false,
       displayFilters: prev?.displayFilters ?? {
         belowRequired: true,
         belowPreferred: true,
         fullyStaffed: true,
         inactive: true,
+        viewNotes: false,
       },
       displayMode: prev?.displayMode ?? 'all-scheduled-staff',
       layout: prev?.layout ?? 'days-x-classrooms',
@@ -420,180 +457,42 @@ export default function WeeklySchedulePage() {
     }
   }
 
-  // Apply filters to data
-  const filteredData = useMemo(() => {
-    if (!filters) return scheduleData
+  const filteredData = useMemo(
+    () =>
+      applyScheduleFilters(scheduleData, filters, {
+        teacherFilterId,
+        availableDays,
+        availableTimeSlots,
+        availableClassrooms,
+        applyDisplayMode: true,
+      }),
+    [scheduleData, filters, teacherFilterId, availableDays, availableTimeSlots, availableClassrooms]
+  )
 
-    const result = scheduleData
-      .filter(
-        classroom =>
-          filters.selectedClassroomIds.includes(classroom.classroom_id) &&
-          (filters.displayFilters.inactive || classroom.classroom_is_active !== false)
-      )
-      .map(classroom => ({
-        ...classroom,
-        days: classroom.days
-          .filter(day => filters.selectedDayIds.includes(day.day_of_week_id))
-          .map(day => ({
-            ...day,
-            time_slots: day.time_slots
-              .filter(slot => filters.selectedTimeSlotIds.includes(slot.time_slot_id))
-              .filter(slot => {
-                if (!filters.displayFilters.inactive && slot.time_slot_is_active === false) {
-                  return false
-                }
+  // Effective classroom/time slot IDs match the grid (respect showInactiveClassrooms / showInactiveTimeSlots).
+  const effectiveClassroomIds = useMemo(() => {
+    if (!filters) return []
+    return getEffectiveClassroomIds(
+      filters,
+      availableClassrooms as { id: string; is_active?: boolean }[]
+    )
+  }, [filters, availableClassrooms])
+  const effectiveTimeSlotIds = useMemo(() => {
+    if (!filters) return []
+    return getEffectiveTimeSlotIds(
+      filters,
+      availableTimeSlots as { id: string; is_active?: boolean }[]
+    )
+  }, [filters, availableTimeSlots])
 
-                // In Absences mode, we ONLY want slots that actually contain absences.
-                // Do this before scheduleCell/staffing checks, since those checks can otherwise
-                // "let through" lots of inactive/missing slots via displayFilters.inactive.
-                if (filters.displayMode === 'absences') {
-                  const hasAbsence = slot.absences && slot.absences.length > 0
-                  return hasAbsence
-                }
-
-                // In Subs mode, ONLY show slots that actually have a substitute assignment for this week.
-                // Don't rely on legacy filtering since sub assignments may not have a class group.
-                if (filters.displayMode === 'substitutes-only') {
-                  return (slot.assignments || []).some(a => a.is_substitute === true)
-                }
-
-                // In Permanent staff mode, ONLY show slots that have at least one non-floater, non-substitute teacher.
-                // (This matches the chip intent: show where permanent staff are scheduled.)
-                if (filters.displayMode === 'permanent-only') {
-                  return (slot.assignments || []).some(
-                    a => !!a.teacher_id && !a.is_floater && a.is_substitute !== true
-                  )
-                }
-
-                // In Coverage Issues mode, ONLY show slots that are below required/preferred staffing.
-                // Important: do this before "inactive" checks so we don't accidentally include lots of
-                // inactive/missing scheduleCell slots via displayFilters.inactive.
-                if (filters.displayMode === 'coverage-issues') {
-                  const scheduleCell = slot.schedule_cell
-                  if (!scheduleCell) return false
-                  if (!scheduleCell.is_active) return false
-                  if (
-                    !scheduleCell.class_groups ||
-                    scheduleCell.class_groups.length === 0 ||
-                    !scheduleCell.enrollment_for_staffing
-                  ) {
-                    return false
-                  }
-
-                  const classGroups = scheduleCell.class_groups
-                  const classGroupForRatio = classGroups.reduce((lowest, current) => {
-                    const currentMinAge = current.min_age ?? Infinity
-                    const lowestMinAge = lowest.min_age ?? Infinity
-                    return currentMinAge < lowestMinAge ? current : lowest
-                  })
-
-                  const requiredTeachers = classGroupForRatio.required_ratio
-                    ? Math.ceil(
-                        scheduleCell.enrollment_for_staffing / classGroupForRatio.required_ratio
-                      )
-                    : undefined
-                  const preferredTeachers = classGroupForRatio.preferred_ratio
-                    ? Math.ceil(
-                        scheduleCell.enrollment_for_staffing / classGroupForRatio.preferred_ratio
-                      )
-                    : undefined
-
-                  // Count all teachers assigned to this classroom/day/time slot for coverage
-                  // Teachers are assigned to classrooms, not specific class groups
-                  // All teachers in the assignments array are already filtered by classroom_id in the API
-                  // Exclude floaters from coverage counts
-                  const coverageAssignments = (slot.assignments || []).filter(a => {
-                    if (!a.teacher_id) return false
-                    if (a.is_floater) return false
-                    // Include all regular teachers and substitutes assigned to this classroom
-                    return true
-                  })
-
-                  const assignedCount = coverageAssignments.length
-                  const belowRequired =
-                    requiredTeachers !== undefined && assignedCount < requiredTeachers
-                  const belowPreferred =
-                    preferredTeachers !== undefined && assignedCount < preferredTeachers
-
-                  return belowRequired || belowPreferred
-                }
-
-                if (isSlotInactive(slot)) return filters.displayFilters.inactive
-
-                const scheduleCell = slot.schedule_cell
-                if (!scheduleCell) return false
-
-                // Calculate staffing status
-                if (
-                  !scheduleCell.class_groups ||
-                  scheduleCell.class_groups.length === 0 ||
-                  !scheduleCell.enrollment_for_staffing
-                ) {
-                  return filters.displayFilters.inactive
-                }
-
-                // Get class group data from schedule_cell (use the one with lowest min_age for ratio calculation)
-                const classGroups = scheduleCell.class_groups
-                if (!classGroups || classGroups.length === 0) {
-                  return filters.displayFilters.inactive
-                }
-
-                // Find class group with lowest min_age for ratio calculation
-                const classGroupForRatio = classGroups.reduce((lowest, current) => {
-                  const currentMinAge = current.min_age ?? Infinity
-                  const lowestMinAge = lowest.min_age ?? Infinity
-                  return currentMinAge < lowestMinAge ? current : lowest
-                })
-
-                const requiredTeachers = classGroupForRatio.required_ratio
-                  ? Math.ceil(
-                      scheduleCell.enrollment_for_staffing / classGroupForRatio.required_ratio
-                    )
-                  : undefined
-                const preferredTeachers = classGroupForRatio.preferred_ratio
-                  ? Math.ceil(
-                      scheduleCell.enrollment_for_staffing / classGroupForRatio.preferred_ratio
-                    )
-                  : undefined
-
-                // Count all teachers assigned to this classroom/day/time slot
-                // Teachers are assigned to classrooms, not specific class groups
-                // All teachers in the assignments array are already filtered by classroom_id in the API
-                const slotAssignments = slot.assignments.filter(
-                  a => a.teacher_id && !a.is_substitute // Count regular teachers, exclude substitutes (they're counted separately)
-                )
-                const assignedCount = slotAssignments.length
-
-                const belowRequired =
-                  requiredTeachers !== undefined && assignedCount < requiredTeachers
-                const belowPreferred =
-                  preferredTeachers !== undefined && assignedCount < preferredTeachers
-                const fullyStaffed =
-                  requiredTeachers !== undefined &&
-                  assignedCount >= requiredTeachers &&
-                  (preferredTeachers === undefined || assignedCount >= preferredTeachers)
-
-                // (absences/subs/permanent-only/coverage-issues modes handled above)
-
-                if (belowRequired) return filters.displayFilters.belowRequired
-                if (belowPreferred) return filters.displayFilters.belowPreferred
-                if (fullyStaffed) return filters.displayFilters.fullyStaffed
-                return false
-              }),
-          })),
-      }))
-      .filter(classroom => classroom.days.length > 0)
-
-    return result
-  }, [scheduleData, filters, weekStartISO])
-
-  // Base data for chip counts: apply only day/time/classroom selections, but NOT displayMode.
-  // This keeps chip counts stable and non-confusing when a displayMode is selected.
+  // Base data for chip counts: same structural set as the grid (effective classrooms × days × effective time slots), but NOT displayMode.
+  // So counts match what's on screen and respect "show inactive" toggles.
   const baseDataForCounts = useMemo(() => {
     if (!filters) return scheduleData
+    if (effectiveClassroomIds.length === 0 || effectiveTimeSlotIds.length === 0) return []
 
     return scheduleData
-      .filter(classroom => filters.selectedClassroomIds.includes(classroom.classroom_id))
+      .filter(classroom => effectiveClassroomIds.includes(classroom.classroom_id))
       .map(classroom => ({
         ...classroom,
         days: classroom.days
@@ -601,11 +500,11 @@ export default function WeeklySchedulePage() {
           .map(day => ({
             ...day,
             time_slots: day.time_slots.filter(slot =>
-              filters.selectedTimeSlotIds.includes(slot.time_slot_id)
+              effectiveTimeSlotIds.includes(slot.time_slot_id)
             ),
           })),
       }))
-  }, [scheduleData, filters])
+  }, [scheduleData, filters, effectiveClassroomIds, effectiveTimeSlotIds])
 
   const displayModeCounts = useMemo(() => {
     let all = 0
@@ -639,44 +538,19 @@ export default function WeeklySchedulePage() {
             absences += 1
           }
 
-          // Coverage issues: below required or preferred
+          // Coverage issues: below required or preferred (weekly coverage rules: permanent, flex, temp, sub 1; floater 0.5; absence -1)
           const scheduleCell = slot.schedule_cell
-          if (
-            scheduleCell &&
-            scheduleCell.is_active &&
-            scheduleCell.class_groups &&
-            scheduleCell.class_groups.length > 0 &&
-            scheduleCell.enrollment_for_staffing
-          ) {
-            const classGroupForRatio = scheduleCell.class_groups.reduce((lowest, current) => {
-              const currentMinAge = current.min_age ?? Infinity
-              const lowestMinAge = lowest.min_age ?? Infinity
-              return currentMinAge < lowestMinAge ? current : lowest
-            })
-
-            const requiredTeachers = classGroupForRatio.required_ratio
-              ? Math.ceil(scheduleCell.enrollment_for_staffing / classGroupForRatio.required_ratio)
-              : undefined
-            const preferredTeachers = classGroupForRatio.preferred_ratio
-              ? Math.ceil(scheduleCell.enrollment_for_staffing / classGroupForRatio.preferred_ratio)
-              : undefined
-
-            const classGroupIds = scheduleCell.class_groups.map(cg => cg.id)
-            const coverageAssignments = (slot.assignments || []).filter(a => {
-              if (!a.teacher_id) return false
-              if (a.is_floater) return false
-              if (a.is_substitute === true) return true
-              const classGroupId = a.class_group_id
-              return !!classGroupId && classGroupIds.includes(classGroupId)
-            })
-
-            const assignedCount = coverageAssignments.length
-            const belowRequired = requiredTeachers !== undefined && assignedCount < requiredTeachers
-            const belowPreferred =
-              preferredTeachers !== undefined && assignedCount < preferredTeachers
-
-            if (belowRequired || belowPreferred) {
-              coverageIssues += 1
+          if (scheduleCell?.is_active) {
+            const thresholds = getSlotRequiredPreferred(slot)
+            if (thresholds) {
+              const coverageTotal = getSlotCoverageTotalWeekly(slot)
+              const belowRequired =
+                thresholds.required !== undefined && coverageTotal < thresholds.required
+              const belowPreferred =
+                thresholds.preferred !== undefined && coverageTotal < thresholds.preferred
+              if (belowRequired || belowPreferred) {
+                coverageIssues += 1
+              }
             }
           }
         })
@@ -688,7 +562,7 @@ export default function WeeklySchedulePage() {
 
   // Calculate slot counts for display
   const slotCounts = useMemo(() => {
-    // Count actual slots currently shown
+    // Count actual slots currently shown (after display mode and staffing filters)
     const totalShown = filteredData.reduce((sum, classroom) => {
       return (
         sum +
@@ -698,31 +572,18 @@ export default function WeeklySchedulePage() {
       )
     }, 0)
 
-    // Total possible slots should reflect the actual schedule grid data for the week,
-    // not a theoretical cartesian product (which can include combinations that don't exist).
-    const totalActualForWeek = scheduleData
-      .filter(classroom => filters?.selectedClassroomIds?.includes(classroom.classroom_id) ?? true)
-      .reduce((sum, classroom) => {
-        return (
-          sum +
-          classroom.days
-            .filter(day => filters?.selectedDayIds?.includes(day.day_of_week_id) ?? true)
-            .reduce((daySum, day) => {
-              return (
-                daySum +
-                day.time_slots.filter(
-                  slot => filters?.selectedTimeSlotIds?.includes(slot.time_slot_id) ?? true
-                ).length
-              )
-            }, 0)
-        )
-      }, 0)
+    // Total slots in the current grid structure (same set as baseDataForCounts: effective classrooms × days × effective time slots)
+    const totalActualForWeek = baseDataForCounts.reduce(
+      (sum, classroom) =>
+        sum + classroom.days.reduce((daySum, day) => daySum + day.time_slots.length, 0),
+      0
+    )
 
     return {
       shown: totalShown,
       total: totalActualForWeek,
     }
-  }, [filteredData, scheduleData, filters])
+  }, [filteredData, baseDataForCounts])
 
   const handleTodayClick = () => {
     setWeekStartISO(getWeekStartISO())
@@ -771,6 +632,7 @@ export default function WeeklySchedulePage() {
           <WeeklyScheduleGridNew
             data={filteredData}
             selectedDayIds={filters?.selectedDayIds ?? selectedDayIds}
+            scheduleDayIdsFromSettings={selectedDayIds}
             weekStartISO={weekStartISO}
             layout={filters?.layout ?? 'days-x-classrooms'}
             onRefresh={handleRefresh}
@@ -779,14 +641,58 @@ export default function WeeklySchedulePage() {
             allowCardClick
             readOnly
             leadingFilterContent={
-              <Button
-                variant="outline"
-                onClick={() => setFilterPanelOpen(true)}
-                className="flex items-center gap-2"
-              >
-                <Filter className="h-4 w-4" />
-                Views & Filters
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setFilterPanelOpen(true)}
+                  className="flex items-center gap-2"
+                >
+                  <Filter className="h-4 w-4" />
+                  Views & Filters
+                </Button>
+                <TeacherFilterSearch
+                  value={teacherFilterId}
+                  onChange={setTeacherFilterId}
+                  placeholder="Filter by teacher"
+                />
+                {filters &&
+                  (() => {
+                    const defaultDayIds =
+                      selectedDayIds.length > 0 ? selectedDayIds : availableDays.map(d => d.id)
+                    const defaultDayCount = defaultDayIds.length
+                    const active = hasActiveScheduleFilters(filters, {
+                      defaultDayCount,
+                      totalTimeSlots: availableTimeSlots.length,
+                      totalClassrooms: availableClassrooms.length,
+                      teacherFilterId,
+                      defaultDisplayMode: 'all-scheduled-staff',
+                    })
+                    if (!active) return null
+                    return (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900"
+                        onClick={() => {
+                          setTeacherFilterId(null)
+                          setFilters(prev =>
+                            prev
+                              ? getClearedScheduleFilters(prev, {
+                                  defaultDayIds,
+                                  allTimeSlotIds: availableTimeSlots.map(ts => ts.id),
+                                  allClassroomIds: availableClassrooms.map(c => c.id),
+                                  defaultDisplayMode: 'all-scheduled-staff',
+                                })
+                              : prev
+                          )
+                        }}
+                      >
+                        <X className="h-3.5 w-3.5 shrink-0" />
+                        Clear all filters
+                      </Button>
+                    )
+                  })()}
+              </div>
             }
             trailingFilterContent={
               <Link
@@ -799,6 +705,7 @@ export default function WeeklySchedulePage() {
             }
             displayModeCounts={displayModeCounts}
             displayMode={filters?.displayMode ?? 'all-scheduled-staff'}
+            showNotes={filters?.displayFilters?.viewNotes ?? false}
             onDisplayModeChange={mode => {
               setFilters(prev => {
                 if (prev) {
@@ -810,11 +717,15 @@ export default function WeeklySchedulePage() {
                     selectedDayIds.length > 0 ? selectedDayIds : availableDays.map(d => d.id),
                   selectedTimeSlotIds: availableTimeSlots.map(ts => ts.id),
                   selectedClassroomIds: availableClassrooms.map(c => c.id),
+                  slotFilterMode: 'all',
+                  showInactiveClassrooms: false,
+                  showInactiveTimeSlots: false,
                   displayFilters: {
                     belowRequired: true,
                     belowPreferred: true,
                     fullyStaffed: true,
                     inactive: true,
+                    viewNotes: false,
                   },
                   displayMode: mode,
                   layout: 'days-x-classrooms' as const,
