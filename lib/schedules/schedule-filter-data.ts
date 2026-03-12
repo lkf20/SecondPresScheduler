@@ -59,8 +59,7 @@ function slotPassesStaffingFilter(
   coverageIssuesOnly?: boolean
 ): boolean {
   const scheduleCell = slot.schedule_cell
-  // Cells without schedule data: always hide to match legacy weekly filter (avoid showing empty cells after migration).
-  if (!scheduleCell) return false
+  if (!scheduleCell) return df.inactive
 
   const classGroups = scheduleCell.class_groups ?? []
   const totalEnrollment = getTotalEnrollmentForCalculation(
