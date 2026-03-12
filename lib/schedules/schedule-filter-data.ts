@@ -94,8 +94,7 @@ function slotPassesStaffingFilter(
       : getSlotCoverageTotalWeekly(slot)
 
   const belowRequired = requiredTeachers !== undefined && coverageTotal < requiredTeachers
-  const belowPreferred =
-    preferredTeachers !== undefined && coverageTotal < preferredTeachers
+  const belowPreferred = preferredTeachers !== undefined && coverageTotal < preferredTeachers
   const fullyStaffed =
     requiredTeachers !== undefined &&
     coverageTotal >= requiredTeachers &&
@@ -164,8 +163,13 @@ export function applyScheduleFilters(
   const slotFilterMode = filters.slotFilterMode ?? 'all'
   const showAllSlots = slotFilterMode === 'all'
   const staffingNarrowing = isStaffingNarrowing(filters)
-  const { teacherFilterId, availableDays, availableTimeSlots, availableClassrooms, applyDisplayMode } =
-    options
+  const {
+    teacherFilterId,
+    availableDays,
+    availableTimeSlots,
+    availableClassrooms,
+    applyDisplayMode,
+  } = options
 
   const effectiveClassroomIds = getEffectiveClassroomIds(
     filters,
@@ -182,7 +186,8 @@ export function applyScheduleFilters(
       ts.id,
       {
         ...ts,
-        default_start_time: (ts as { default_start_time?: string | null }).default_start_time ?? null,
+        default_start_time:
+          (ts as { default_start_time?: string | null }).default_start_time ?? null,
         default_end_time: (ts as { default_end_time?: string | null }).default_end_time ?? null,
         is_active: (ts as { is_active?: boolean }).is_active !== false,
       },
@@ -214,7 +219,8 @@ export function applyScheduleFilters(
               time_slot_start_time: ts.default_start_time ?? null,
               time_slot_end_time: ts.default_end_time ?? null,
               time_slot_is_active: ts.is_active,
-              assignments: [] as WeeklyScheduleDataByClassroom['days'][0]['time_slots'][0]['assignments'],
+              assignments:
+                [] as WeeklyScheduleDataByClassroom['days'][0]['time_slots'][0]['assignments'],
               schedule_cell: null,
             }
           })
@@ -237,7 +243,7 @@ export function applyScheduleFilters(
             return false
           }
           if (showAllSlots) {
-            // All slots: displayMode (if any) and staffing checkboxes still apply
+            // All slots: displayMode (if any) still applies below; staffing checkboxes do not—we show every slot
           } else if (!df.inactive && slot.time_slot_is_active === false) {
             return false
           }
