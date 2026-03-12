@@ -28,6 +28,8 @@ import type { WeeklyScheduleData } from '@/lib/api/weekly-schedule'
 import { getSlotCoverageTotalWeekly } from '@/lib/schedules/coverage-weights'
 import {
   getClearedScheduleFilters,
+  getEffectiveClassroomIds,
+  getEffectiveTimeSlotIds,
   hasActiveScheduleFilters,
 } from '@/lib/schedules/schedule-filter-helpers'
 import {
@@ -467,13 +469,30 @@ export default function WeeklySchedulePage() {
     [scheduleData, filters, teacherFilterId, availableDays, availableTimeSlots, availableClassrooms]
   )
 
-  // Base data for chip counts: apply only day/time/classroom selections, but NOT displayMode.
-  // This keeps chip counts stable and non-confusing when a displayMode is selected.
+  // Effective classroom/time slot IDs match the grid (respect showInactiveClassrooms / showInactiveTimeSlots).
+  const effectiveClassroomIds = useMemo(() => {
+    if (!filters) return []
+    return getEffectiveClassroomIds(
+      filters,
+      availableClassrooms as { id: string; is_active?: boolean }[]
+    )
+  }, [filters, availableClassrooms])
+  const effectiveTimeSlotIds = useMemo(() => {
+    if (!filters) return []
+    return getEffectiveTimeSlotIds(
+      filters,
+      availableTimeSlots as { id: string; is_active?: boolean }[]
+    )
+  }, [filters, availableTimeSlots])
+
+  // Base data for chip counts: same structural set as the grid (effective classrooms × days × effective time slots), but NOT displayMode.
+  // So counts match what's on screen and respect "show inactive" toggles.
   const baseDataForCounts = useMemo(() => {
     if (!filters) return scheduleData
+    if (effectiveClassroomIds.length === 0 || effectiveTimeSlotIds.length === 0) return []
 
     return scheduleData
-      .filter(classroom => filters.selectedClassroomIds.includes(classroom.classroom_id))
+      .filter(classroom => effectiveClassroomIds.includes(classroom.classroom_id))
       .map(classroom => ({
         ...classroom,
         days: classroom.days
@@ -481,11 +500,11 @@ export default function WeeklySchedulePage() {
           .map(day => ({
             ...day,
             time_slots: day.time_slots.filter(slot =>
-              filters.selectedTimeSlotIds.includes(slot.time_slot_id)
+              effectiveTimeSlotIds.includes(slot.time_slot_id)
             ),
           })),
       }))
-  }, [scheduleData, filters])
+  }, [scheduleData, filters, effectiveClassroomIds, effectiveTimeSlotIds])
 
   const displayModeCounts = useMemo(() => {
     let all = 0
@@ -543,7 +562,7 @@ export default function WeeklySchedulePage() {
 
   // Calculate slot counts for display
   const slotCounts = useMemo(() => {
-    // Count actual slots currently shown
+    // Count actual slots currently shown (after display mode and staffing filters)
     const totalShown = filteredData.reduce((sum, classroom) => {
       return (
         sum +
@@ -553,31 +572,18 @@ export default function WeeklySchedulePage() {
       )
     }, 0)
 
-    // Total possible slots should reflect the actual schedule grid data for the week,
-    // not a theoretical cartesian product (which can include combinations that don't exist).
-    const totalActualForWeek = scheduleData
-      .filter(classroom => filters?.selectedClassroomIds?.includes(classroom.classroom_id) ?? true)
-      .reduce((sum, classroom) => {
-        return (
-          sum +
-          classroom.days
-            .filter(day => filters?.selectedDayIds?.includes(day.day_of_week_id) ?? true)
-            .reduce((daySum, day) => {
-              return (
-                daySum +
-                day.time_slots.filter(
-                  slot => filters?.selectedTimeSlotIds?.includes(slot.time_slot_id) ?? true
-                ).length
-              )
-            }, 0)
-        )
-      }, 0)
+    // Total slots in the current grid structure (same set as baseDataForCounts: effective classrooms × days × effective time slots)
+    const totalActualForWeek = baseDataForCounts.reduce(
+      (sum, classroom) =>
+        sum + classroom.days.reduce((daySum, day) => daySum + day.time_slots.length, 0),
+      0
+    )
 
     return {
       shown: totalShown,
       total: totalActualForWeek,
     }
-  }, [filteredData, scheduleData, filters])
+  }, [filteredData, baseDataForCounts])
 
   const handleTodayClick = () => {
     setWeekStartISO(getWeekStartISO())
