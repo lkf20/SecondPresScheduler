@@ -59,7 +59,8 @@ function slotPassesStaffingFilter(
   coverageIssuesOnly?: boolean
 ): boolean {
   const scheduleCell = slot.schedule_cell
-  if (!scheduleCell) return df.inactive
+  // Cells without schedule data: always hide to match legacy weekly filter (avoid showing empty cells after migration).
+  if (!scheduleCell) return false
 
   const classGroups = scheduleCell.class_groups ?? []
   const totalEnrollment = getTotalEnrollmentForCalculation(
@@ -221,6 +222,7 @@ export function applyScheduleFilters(
               time_slot_is_active: ts.is_active,
               assignments:
                 [] as WeeklyScheduleDataByClassroom['days'][0]['time_slots'][0]['assignments'],
+              absences: [],
               schedule_cell: null,
             }
           })
