@@ -278,7 +278,17 @@ export function applyScheduleFilters(
       return { ...classroom, days }
     })
 
-  if (!staffingNarrowing) return result
+  // Collapse empty days/classrooms when any filter can zero out slots: staffing checkboxes,
+  // teacher filter, or content display modes (absences, substitutes-only, etc.).
+  const hasNarrowingDisplayMode =
+    !!applyDisplayMode &&
+    !!filters.displayMode &&
+    ['absences', 'substitutes-only', 'permanent-only', 'coverage-issues'].includes(
+      filters.displayMode
+    )
+  const shouldCollapseEmpty = staffingNarrowing || !!teacherFilterId || hasNarrowingDisplayMode
+
+  if (!shouldCollapseEmpty) return result
   return result
     .map(classroom => ({
       ...classroom,
