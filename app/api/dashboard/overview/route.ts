@@ -3,8 +3,14 @@ import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { parseLocalDate, expandDateRangeWithTimeZone } from '@/lib/utils/date'
-import { getStaffingEndDate } from '@/lib/dashboard/staffing-boundary'
-import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
+import {
+  getDefaultLastDayOfSchool,
+  getStaffingEndDate,
+} from '@/lib/dashboard/staffing-boundary'
+import {
+  getCalendarSettings,
+  getSchoolClosuresForDateRange,
+} from '@/lib/api/school-calendar'
 import { MONTH_NAMES } from '@/lib/utils/date-format'
 import { getStaffDisplayName, type DisplayNameFormat } from '@/lib/utils/staff-display-name'
 import { filterCoverageRequestsToActiveTimeOffOnly } from '@/lib/dashboard/filter-draft-time-off'
@@ -35,8 +41,12 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // 12-week lookahead for staffing targets (run length and suggestions), capped by boundary day
-    const staffingEndDateForFetch = getStaffingEndDate(startDate)
+    // 12-week lookahead for staffing targets (run length and suggestions), capped by last day of school
+    const calendar = await getCalendarSettings(schoolId)
+    const boundary =
+      calendar.last_day_of_school ??
+      getDefaultLastDayOfSchool(new Date(startDate + 'T12:00:00').getFullYear())
+    const staffingEndDateForFetch = getStaffingEndDate(startDate, boundary)
 
     const supabase = await createClient()
 

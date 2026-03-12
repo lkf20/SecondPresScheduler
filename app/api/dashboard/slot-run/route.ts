@@ -4,11 +4,14 @@ import { getUserSchoolId } from '@/lib/utils/auth'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { expandDateRangeWithTimeZone } from '@/lib/utils/date'
 import {
+  getDefaultLastDayOfSchool,
   getStaffingEndDate,
   getStaffingWeeksLabelFromCount,
-  STAFFING_BOUNDARY_DAY,
 } from '@/lib/dashboard/staffing-boundary'
-import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
+import {
+  getCalendarSettings,
+  getSchoolClosuresForDateRange,
+} from '@/lib/api/school-calendar'
 import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 
 /**
@@ -49,7 +52,11 @@ export async function GET(request: NextRequest) {
         String(now.getDate()).padStart(2, '0')
     }
 
-    const staffingEndDate = getStaffingEndDate(startDate)
+    const calendar = await getCalendarSettings(schoolId)
+    const boundary =
+      calendar.last_day_of_school ??
+      getDefaultLastDayOfSchool(new Date(startDate + 'T12:00:00').getFullYear())
+    const staffingEndDate = getStaffingEndDate(startDate, boundary)
 
     const supabase = await createClient()
 
@@ -243,7 +250,7 @@ export async function GET(request: NextRequest) {
       weeksLabel,
       targetType,
       datesNeedingCoverage,
-      cappedByBoundary: dateEnd >= STAFFING_BOUNDARY_DAY,
+      cappedByBoundary: dateEnd >= boundary,
     })
   } catch (error) {
     console.error('Error in slot-run:', error)
