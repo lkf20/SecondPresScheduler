@@ -71,6 +71,10 @@ export async function PATCH(request: NextRequest) {
 
     const actor = await getAuditActorContext()
     const body = await request.json()
+    const bodyKeys = Object.keys(body || {}).filter(
+      k => body[k] !== undefined && (typeof body[k] !== 'object' || body[k] !== null)
+    )
+    console.log('[calendar PATCH] body keys:', bodyKeys)
 
     // --- Calendar settings (first/last day of school) ---
     if (body.first_day_of_school !== undefined || body.last_day_of_school !== undefined) {
@@ -115,9 +119,9 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    // --- Update closure (e.g. change reason only) — single operation, no delete+add ---
+    // --- Update closure (e.g. change reason or notes) — single operation, no delete+add ---
     if (body.update_closure && typeof body.update_closure === 'object') {
-      const { id: closureId, reason } = body.update_closure
+      const { id: closureId, reason, notes } = body.update_closure
       if (!closureId || typeof closureId !== 'string') {
         return NextResponse.json({ error: 'update_closure.id is required' }, { status: 400 })
       }
@@ -127,6 +131,7 @@ export async function PATCH(request: NextRequest) {
       }
       const updated = await updateSchoolClosure(schoolId, closureId, {
         reason: reason !== undefined ? reason : before.reason,
+        notes: notes !== undefined ? notes : before.notes,
       })
       const wholeDay = updated.time_slot_id === null
       const summary = wholeDay
@@ -141,8 +146,8 @@ export async function PATCH(request: NextRequest) {
         entityType: 'school_closure',
         entityId: updated.id,
         details: {
-          before: { reason: before.reason },
-          after: { reason: updated.reason },
+          before: { reason: before.reason, notes: before.notes },
+          after: { reason: updated.reason, notes: updated.notes },
           date: updated.date,
           time_slot_id: updated.time_slot_id,
           whole_day: wholeDay,
@@ -154,96 +159,38 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    // --- Add closures first (so a failed add never leaves data lost when combined with deletes) ---
-    const addClosuresList: Array<{
-      date?: string
-      start_date?: string
-      end_date?: string
-      time_slot_id?: string | null
-      reason?: string | null
-    }> = []
-    if (Array.isArray(body.add_closures) && body.add_closures.length > 0) {
-      addClosuresList.push(...body.add_closures)
-    }
-    if (body.add_closure && typeof body.add_closure === 'object') {
-      addClosuresList.push(body.add_closure)
-    }
-    for (const addOne of addClosuresList) {
-      const { date, start_date, end_date, time_slot_id, reason } = addOne
-      if (start_date != null && end_date != null) {
-        if (typeof start_date !== 'string' || typeof end_date !== 'string') {
-          return NextResponse.json(
-            { error: 'add_closure.start_date and end_date must be strings (YYYY-MM-DD)' },
-            { status: 400 }
-          )
+    // --- Update multiple closures in place (preserves row ids and audit links) ---
+    if (Array.isArray(body.update_closures) && body.update_closures.length > 0) {
+      for (const item of body.update_closures) {
+        const { id: closureId, reason, notes } = item
+        if (!closureId || typeof closureId !== 'string') {
+          return NextResponse.json({ error: 'update_closures[].id is required' }, { status: 400 })
         }
-        if (start_date > end_date) {
-          return NextResponse.json(
-            { error: 'add_closure.start_date must be on or before end_date' },
-            { status: 400 }
-          )
+        const before = await getSchoolClosuresByIds(schoolId, [closureId]).then(a => a[0])
+        if (!before) {
+          return NextResponse.json({ error: `Closure not found: ${closureId}` }, { status: 404 })
         }
-        const days =
-          Math.ceil(
-            (new Date(end_date + 'T12:00:00').getTime() -
-              new Date(start_date + 'T12:00:00').getTime()) /
-              (24 * 60 * 60 * 1000)
-          ) + 1
-        if (days > 365) {
-          return NextResponse.json({ error: 'Date range cannot exceed 365 days' }, { status: 400 })
-        }
-        const { created } = await createSchoolClosureRange(
-          schoolId,
-          start_date,
-          end_date,
-          reason ?? null
-        )
-        const summary = `${start_date}–${end_date} (${created} day(s))${reason ? `: ${reason}` : ''}`
-        const auditEntry = {
-          schoolId,
-          actorUserId: actor.actorUserId,
-          actorDisplayName: actor.actorDisplayName,
-          action: 'create' as const,
-          category: 'school_calendar' as const,
-          entityType: 'school_closure',
-          entityId: null,
-          details: {
-            start_date,
-            end_date,
-            reason: reason ?? null,
-            created_count: created,
-            whole_day: true,
-            summary,
-          },
-        }
-        if (validateAuditLogEntry(auditEntry).valid) {
-          await logAuditEvent(auditEntry)
-        }
-      } else {
-        if (!date || typeof date !== 'string') {
-          return NextResponse.json({ error: 'add_closure.date is required' }, { status: 400 })
-        }
-        const created = await createSchoolClosure(schoolId, {
-          date,
-          time_slot_id: time_slot_id ?? null,
-          reason: reason ?? null,
+        const updated = await updateSchoolClosure(schoolId, closureId, {
+          reason: reason !== undefined ? reason : before.reason,
+          notes: notes !== undefined ? notes : before.notes,
         })
-        const wholeDay = created.time_slot_id === null
+        const wholeDay = updated.time_slot_id === null
         const summary = wholeDay
-          ? `${date} (whole day)${reason ? `: ${reason}` : ''}`
-          : `${date} (time slot)${reason ? `: ${reason}` : ''}`
+          ? `${updated.date} (whole day)${updated.reason ? `: ${updated.reason}` : ''}`
+          : `${updated.date} (time slot)${updated.reason ? `: ${updated.reason}` : ''}`
         const auditEntry = {
           schoolId,
           actorUserId: actor.actorUserId,
           actorDisplayName: actor.actorDisplayName,
-          action: 'create' as const,
+          action: 'update' as const,
           category: 'school_calendar' as const,
           entityType: 'school_closure',
-          entityId: created.id,
+          entityId: updated.id,
           details: {
-            date: created.date,
-            time_slot_id: created.time_slot_id,
-            reason: created.reason,
+            before: { reason: before.reason, notes: before.notes },
+            after: { reason: updated.reason, notes: updated.notes },
+            date: updated.date,
+            time_slot_id: updated.time_slot_id,
             whole_day: wholeDay,
             summary,
           },
@@ -254,7 +201,7 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    // --- Delete closures (after adds so a failed add never leaves data lost) ---
+    // --- Delete closures before adds when both are present (e.g. edit changed which slots) ---
     if (Array.isArray(body.delete_closure_ids) && body.delete_closure_ids.length > 0) {
       const toDelete = await getSchoolClosuresByIds(schoolId, body.delete_closure_ids)
       await Promise.all(
@@ -287,6 +234,111 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
+    // --- Add closures ---
+    const addClosuresList: Array<{
+      date?: string
+      start_date?: string
+      end_date?: string
+      time_slot_id?: string | null
+      reason?: string | null
+      notes?: string | null
+    }> = []
+    if (Array.isArray(body.add_closures) && body.add_closures.length > 0) {
+      addClosuresList.push(...body.add_closures)
+    }
+    if (body.add_closure && typeof body.add_closure === 'object') {
+      addClosuresList.push(body.add_closure)
+    }
+    for (const addOne of addClosuresList) {
+      const { date, start_date, end_date, time_slot_id, reason, notes } = addOne
+      if (start_date != null && end_date != null) {
+        if (typeof start_date !== 'string' || typeof end_date !== 'string') {
+          return NextResponse.json(
+            { error: 'add_closure.start_date and end_date must be strings (YYYY-MM-DD)' },
+            { status: 400 }
+          )
+        }
+        if (start_date > end_date) {
+          return NextResponse.json(
+            { error: 'add_closure.start_date must be on or before end_date' },
+            { status: 400 }
+          )
+        }
+        const days =
+          Math.ceil(
+            (new Date(end_date + 'T12:00:00').getTime() -
+              new Date(start_date + 'T12:00:00').getTime()) /
+              (24 * 60 * 60 * 1000)
+          ) + 1
+        if (days > 365) {
+          return NextResponse.json({ error: 'Date range cannot exceed 365 days' }, { status: 400 })
+        }
+        const { created } = await createSchoolClosureRange(
+          schoolId,
+          start_date,
+          end_date,
+          reason ?? null,
+          notes ?? null
+        )
+        const summary = `${start_date}–${end_date} (${created} day(s))${reason ? `: ${reason}` : ''}`
+        const auditEntry = {
+          schoolId,
+          actorUserId: actor.actorUserId,
+          actorDisplayName: actor.actorDisplayName,
+          action: 'create' as const,
+          category: 'school_calendar' as const,
+          entityType: 'school_closure',
+          entityId: null,
+          details: {
+            start_date,
+            end_date,
+            reason: reason ?? null,
+            notes: notes ?? null,
+            created_count: created,
+            whole_day: true,
+            summary,
+          },
+        }
+        if (validateAuditLogEntry(auditEntry).valid) {
+          await logAuditEvent(auditEntry)
+        }
+      } else {
+        if (!date || typeof date !== 'string') {
+          return NextResponse.json({ error: 'add_closure.date is required' }, { status: 400 })
+        }
+        const created = await createSchoolClosure(schoolId, {
+          date,
+          time_slot_id: time_slot_id ?? null,
+          reason: reason ?? null,
+          notes: notes ?? null,
+        })
+        const wholeDay = created.time_slot_id === null
+        const summary = wholeDay
+          ? `${date} (whole day)${reason ? `: ${reason}` : ''}`
+          : `${date} (time slot)${reason ? `: ${reason}` : ''}`
+        const auditEntry = {
+          schoolId,
+          actorUserId: actor.actorUserId,
+          actorDisplayName: actor.actorDisplayName,
+          action: 'create' as const,
+          category: 'school_calendar' as const,
+          entityType: 'school_closure',
+          entityId: created.id,
+          details: {
+            date: created.date,
+            time_slot_id: created.time_slot_id,
+            reason: created.reason,
+            notes: created.notes,
+            whole_day: wholeDay,
+            summary,
+          },
+        }
+        if (validateAuditLogEntry(auditEntry).valid) {
+          await logAuditEvent(auditEntry)
+        }
+      }
+    }
+
     const [settings, closures] = await Promise.all([
       getCalendarSettings(schoolId),
       getSchoolClosuresForDateRange(
@@ -302,10 +354,14 @@ export async function PATCH(request: NextRequest) {
       school_closures: closures,
     })
   } catch (error: unknown) {
-    console.error('Error updating calendar settings:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to update calendar settings' },
-      { status: 500 }
-    )
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof (error as { message?: string })?.message === 'string'
+          ? (error as { message: string }).message
+          : 'Failed to update calendar settings'
+    console.error('[calendar PATCH] error:', message, error)
+    const status = message.includes('already exists') ? 409 : 500
+    return NextResponse.json({ error: message }, { status })
   }
 }

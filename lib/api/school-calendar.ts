@@ -6,6 +6,7 @@ export interface SchoolClosure {
   date: string
   time_slot_id: string | null
   reason: string | null
+  notes: string | null
   created_at: string
 }
 
@@ -106,7 +107,7 @@ export async function getSchoolClosuresForDateRange(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('school_closures')
-    .select('id, school_id, date, time_slot_id, reason, created_at')
+    .select('id, school_id, date, time_slot_id, reason, notes, created_at')
     .eq('school_id', schoolId)
     .gte('date', startDateISO)
     .lte('date', endDateISO)
@@ -126,6 +127,7 @@ export async function getSchoolClosuresForDateRange(
     date: row.date,
     time_slot_id: row.time_slot_id,
     reason: row.reason,
+    notes: row.notes ?? null,
     created_at: row.created_at,
   }))
 }
@@ -134,7 +136,7 @@ export async function getSchoolClosures(schoolId: string): Promise<SchoolClosure
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('school_closures')
-    .select('id, school_id, date, time_slot_id, reason, created_at')
+    .select('id, school_id, date, time_slot_id, reason, notes, created_at')
     .eq('school_id', schoolId)
     .order('date', { ascending: true })
     .order('time_slot_id', { ascending: true, nullsFirst: true })
@@ -152,6 +154,7 @@ export async function getSchoolClosures(schoolId: string): Promise<SchoolClosure
     date: row.date,
     time_slot_id: row.time_slot_id,
     reason: row.reason,
+    notes: row.notes ?? null,
     created_at: row.created_at,
   }))
 }
@@ -165,7 +168,7 @@ export async function getSchoolClosuresByIds(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('school_closures')
-    .select('id, school_id, date, time_slot_id, reason, created_at')
+    .select('id, school_id, date, time_slot_id, reason, notes, created_at')
     .eq('school_id', schoolId)
     .in('id', closureIds)
 
@@ -182,13 +185,19 @@ export async function getSchoolClosuresByIds(
     date: row.date,
     time_slot_id: row.time_slot_id,
     reason: row.reason,
+    notes: row.notes ?? null,
     created_at: row.created_at,
   }))
 }
 
 export async function createSchoolClosure(
   schoolId: string,
-  closure: { date: string; time_slot_id?: string | null; reason?: string | null }
+  closure: {
+    date: string
+    time_slot_id?: string | null
+    reason?: string | null
+    notes?: string | null
+  }
 ): Promise<SchoolClosure> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -198,17 +207,24 @@ export async function createSchoolClosure(
       date: closure.date,
       time_slot_id: closure.time_slot_id ?? null,
       reason: closure.reason ?? null,
+      notes: closure.notes ?? null,
     })
-    .select('id, school_id, date, time_slot_id, reason, created_at')
+    .select('id, school_id, date, time_slot_id, reason, notes, created_at')
     .single()
 
-  if (error) throw error
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error('A closure already exists for this date and time slot.')
+    }
+    throw error
+  }
   return {
     id: data.id,
     school_id: data.school_id,
     date: data.date,
     time_slot_id: data.time_slot_id,
     reason: data.reason,
+    notes: data.notes ?? null,
     created_at: data.created_at,
   }
 }
@@ -236,7 +252,8 @@ export async function createSchoolClosureRange(
   schoolId: string,
   startDateISO: string,
   endDateISO: string,
-  reason: string | null
+  reason: string | null,
+  notes?: string | null
 ): Promise<{ created: number; skipped: number }> {
   const dates = [...dateRange(startDateISO, endDateISO)]
   if (dates.length === 0) return { created: 0, skipped: 0 }
@@ -261,6 +278,7 @@ export async function createSchoolClosureRange(
         date,
         time_slot_id: null,
         reason,
+        notes: notes ?? null,
       })
       created++
       existingWholeDayDates.add(date)
@@ -280,15 +298,18 @@ export async function createSchoolClosureRange(
 export async function updateSchoolClosure(
   schoolId: string,
   closureId: string,
-  updates: { reason?: string | null }
+  updates: { reason?: string | null; notes?: string | null }
 ): Promise<SchoolClosure> {
   const supabase = await createClient()
+  const updatePayload: { reason?: string | null; notes?: string | null } = {}
+  if (updates.reason !== undefined) updatePayload.reason = updates.reason ?? null
+  if (updates.notes !== undefined) updatePayload.notes = updates.notes ?? null
   const { data, error } = await supabase
     .from('school_closures')
-    .update({ reason: updates.reason ?? null })
+    .update(updatePayload)
     .eq('id', closureId)
     .eq('school_id', schoolId)
-    .select('id, school_id, date, time_slot_id, reason, created_at')
+    .select('id, school_id, date, time_slot_id, reason, notes, created_at')
     .single()
 
   if (error) throw error
@@ -298,6 +319,7 @@ export async function updateSchoolClosure(
     date: data.date,
     time_slot_id: data.time_slot_id,
     reason: data.reason,
+    notes: data.notes ?? null,
     created_at: data.created_at,
   }
 }

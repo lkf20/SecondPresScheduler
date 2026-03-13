@@ -8,6 +8,7 @@ import {
   getSchoolClosuresByIds,
   createSchoolClosure,
   createSchoolClosureRange,
+  updateSchoolClosure,
   deleteSchoolClosure,
 } from '@/lib/api/school-calendar'
 import { getUserSchoolId } from '@/lib/utils/auth'
@@ -19,6 +20,7 @@ jest.mock('@/lib/api/school-calendar', () => ({
   getSchoolClosuresByIds: jest.fn(),
   createSchoolClosure: jest.fn(),
   createSchoolClosureRange: jest.fn(),
+  updateSchoolClosure: jest.fn(),
   deleteSchoolClosure: jest.fn(),
 }))
 
@@ -181,6 +183,7 @@ describe('calendar settings route integration', () => {
         date: '2024-12-25',
         time_slot_id: null,
         reason: 'Holiday',
+        notes: null,
       })
     })
 
@@ -206,7 +209,8 @@ describe('calendar settings route integration', () => {
         'school-1',
         '2024-12-24',
         '2024-12-26',
-        'Holiday break'
+        'Holiday break',
+        null
       )
     })
 
@@ -244,6 +248,118 @@ describe('calendar settings route integration', () => {
 
       expect(response.status).toBe(400)
       expect(json.error).toMatch(/on or before end_date/i)
+    })
+
+    it('returns 409 when add_closure would duplicate (school_id, date, time_slot_id)', async () => {
+      const duplicateMessage = 'A closure already exists for this date and time slot.'
+      ;(createSchoolClosure as jest.Mock).mockRejectedValue(new Error(duplicateMessage))
+      ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
+
+      const response = await PATCH(
+        new Request('http://localhost/api/settings/calendar', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            add_closure: {
+              date: '2024-12-25',
+              time_slot_id: 'slot-1',
+              reason: 'Holiday',
+            },
+          }),
+        })
+      )
+      const json = await response.json()
+
+      expect(response.status).toBe(409)
+      expect(json.error).toBe(duplicateMessage)
+    })
+
+    it('edits closure in place via update_closures (preserves row id)', async () => {
+      ;(getSchoolClosuresByIds as jest.Mock).mockResolvedValue([
+        {
+          id: 'c-1',
+          date: '2024-12-25',
+          time_slot_id: null,
+          reason: 'Holiday',
+          notes: null,
+        },
+      ])
+      ;(updateSchoolClosure as jest.Mock).mockResolvedValue({
+        id: 'c-1',
+        date: '2024-12-25',
+        time_slot_id: null,
+        reason: 'Winter break',
+        notes: 'Office closed',
+      })
+      ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
+
+      const response = await PATCH(
+        new Request('http://localhost/api/settings/calendar', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            update_closures: [{ id: 'c-1', reason: 'Winter break', notes: 'Office closed' }],
+          }),
+        })
+      )
+
+      expect(response.status).toBe(200)
+      expect(updateSchoolClosure).toHaveBeenCalledWith('school-1', 'c-1', {
+        reason: 'Winter break',
+        notes: 'Office closed',
+      })
+      expect(deleteSchoolClosure).not.toHaveBeenCalled()
+      expect(createSchoolClosure).not.toHaveBeenCalled()
+    })
+
+    it('edits closure by deleting then adding when shape changes (e.g. slots changed)', async () => {
+      ;(getSchoolClosuresByIds as jest.Mock)
+        .mockResolvedValueOnce([
+          {
+            id: 'c-1',
+            date: '2024-12-25',
+            time_slot_id: null,
+            reason: 'Holiday',
+            notes: null,
+          },
+        ])
+        .mockResolvedValue([])
+      ;(deleteSchoolClosure as jest.Mock).mockResolvedValue(undefined)
+      ;(createSchoolClosure as jest.Mock).mockResolvedValue({
+        id: 'c-new',
+        date: '2024-12-25',
+        time_slot_id: 'slot-1',
+        reason: 'Winter break',
+        notes: null,
+      })
+      ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
+
+      const response = await PATCH(
+        new Request('http://localhost/api/settings/calendar', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            delete_closure_ids: ['c-1'],
+            add_closures: [
+              {
+                date: '2024-12-25',
+                time_slot_id: 'slot-1',
+                reason: 'Winter break',
+                notes: null,
+              },
+            ],
+          }),
+        })
+      )
+
+      expect(response.status).toBe(200)
+      expect(deleteSchoolClosure).toHaveBeenCalledWith('school-1', 'c-1')
+      expect(createSchoolClosure).toHaveBeenCalledWith('school-1', {
+        date: '2024-12-25',
+        time_slot_id: 'slot-1',
+        reason: 'Winter break',
+        notes: null,
+      })
     })
   })
 })

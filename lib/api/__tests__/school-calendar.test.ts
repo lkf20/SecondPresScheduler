@@ -106,7 +106,7 @@ describe('school-calendar', () => {
 
       expect(mockSupabase.from).toHaveBeenCalledWith('school_closures')
       expect(mockSupabase.select).toHaveBeenCalledWith(
-        'id, school_id, date, time_slot_id, reason, created_at'
+        'id, school_id, date, time_slot_id, reason, notes, created_at'
       )
       expect(mockSupabase.eq).toHaveBeenCalledWith('school_id', 'school-1')
       expect(mockSupabase.gte).toHaveBeenCalledWith('date', '2024-12-01')
@@ -154,9 +154,29 @@ describe('school-calendar', () => {
         date: '2024-12-25',
         time_slot_id: null,
         reason: 'Holiday',
+        notes: null,
       })
       expect(result.id).toBe('c-new')
       expect(result.date).toBe('2024-12-25')
+    })
+
+    it('throws user-friendly error when duplicate key (23505)', async () => {
+      mockSupabase.single.mockResolvedValue({
+        data: null,
+        error: {
+          code: '23505',
+          message:
+            'duplicate key value violates unique constraint "idx_school_closures_slot_unique"',
+        },
+      })
+
+      await expect(
+        createSchoolClosure('school-1', {
+          date: '2024-12-25',
+          time_slot_id: 'slot-1',
+          reason: 'Holiday',
+        })
+      ).rejects.toThrow('A closure already exists for this date and time slot.')
     })
   })
 
