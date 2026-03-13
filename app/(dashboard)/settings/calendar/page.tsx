@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import type { Database } from '@/types/database'
+import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
 import ClosurePanel, { type ClosureEditGroup } from './closure-panel'
 
 type TimeSlot = Database['public']['Tables']['time_slots']['Row']
@@ -229,6 +230,7 @@ export default function SchoolCalendarPage() {
       if (!res.ok) throw new Error('Failed to delete')
       toast.success(ids.length > 1 ? 'Closures removed.' : 'Closure removed.')
       setDeleteDialogGroup(null)
+      clearDataHealthCache()
       await fetchData()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete')
@@ -514,7 +516,10 @@ export default function SchoolCalendarPage() {
             editGroup: open ? prev.editGroup : null,
           }))
         }
-        onSuccess={fetchData}
+        onSuccess={() => {
+          clearDataHealthCache()
+          fetchData()
+        }}
         mode={closurePanel.mode}
         editGroup={closurePanel.editGroup}
         activeTimeSlots={activeTimeSlots}

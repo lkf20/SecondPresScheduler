@@ -197,7 +197,7 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    // --- Add closures (before deletes so a failed add never leaves original closures lost) ---
+    // --- Add / delete closures ---
     const addClosuresList: Array<{
       date?: string
       start_date?: string
@@ -212,6 +212,45 @@ export async function PATCH(request: NextRequest) {
     if (body.add_closure && typeof body.add_closure === 'object') {
       addClosuresList.push(body.add_closure)
     }
+    const hasDeletes = Array.isArray(body.delete_closure_ids) && body.delete_closure_ids.length > 0
+    const hasAdds = addClosuresList.length > 0
+
+    // When both delete and add: delete first so overlapping slots (e.g. [1,2] → [2,3]) don't 409.
+    // If add then fails, we restore the deleted closures so no data is lost.
+    let deletedClosuresForRestore: Awaited<ReturnType<typeof getSchoolClosuresByIds>> | null = null
+    if (hasDeletes && hasAdds) {
+      const toDelete = await getSchoolClosuresByIds(schoolId, body.delete_closure_ids)
+      await Promise.all(
+        body.delete_closure_ids.map((id: string) => deleteSchoolClosure(schoolId, id))
+      )
+      for (const c of toDelete) {
+        const wholeDay = c.time_slot_id === null
+        const summary = wholeDay
+          ? `${c.date} (whole day)${c.reason ? `: ${c.reason}` : ''}`
+          : `${c.date} (time slot)${c.reason ? `: ${c.reason}` : ''}`
+        const auditEntry = {
+          schoolId,
+          actorUserId: actor.actorUserId,
+          actorDisplayName: actor.actorDisplayName,
+          action: 'delete' as const,
+          category: 'school_calendar' as const,
+          entityType: 'school_closure',
+          entityId: c.id,
+          details: {
+            date: c.date,
+            time_slot_id: c.time_slot_id,
+            reason: c.reason,
+            whole_day: wholeDay,
+            summary,
+          },
+        }
+        if (validateAuditLogEntry(auditEntry).valid) {
+          await logAuditEvent(auditEntry)
+        }
+      }
+      deletedClosuresForRestore = toDelete
+    }
+
     const createdClosureIdsToRollback: string[] = []
     try {
       for (const addOne of addClosuresList) {
@@ -311,11 +350,21 @@ export async function PATCH(request: NextRequest) {
       for (const id of createdClosureIdsToRollback) {
         await deleteSchoolClosure(schoolId, id)
       }
+      if (deletedClosuresForRestore) {
+        for (const c of deletedClosuresForRestore) {
+          await createSchoolClosure(schoolId, {
+            date: c.date,
+            time_slot_id: c.time_slot_id,
+            reason: c.reason,
+            notes: c.notes ?? null,
+          })
+        }
+      }
       throw addErr
     }
 
-    // --- Delete closures (after adds so we never lose originals if add fails) ---
-    if (Array.isArray(body.delete_closure_ids) && body.delete_closure_ids.length > 0) {
+    // --- Delete-only (when we didn't already delete above) ---
+    if (hasDeletes && !deletedClosuresForRestore) {
       const toDelete = await getSchoolClosuresByIds(schoolId, body.delete_closure_ids)
       await Promise.all(
         body.delete_closure_ids.map((id: string) => deleteSchoolClosure(schoolId, id))

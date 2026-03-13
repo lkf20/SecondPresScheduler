@@ -30,6 +30,7 @@ import { getPanelBackgroundClasses } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
@@ -665,8 +666,8 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
         }`
       )
 
-      // Close panel and refresh
-      // Server-side revalidation will update all pages
+      // Close panel and refresh; invalidate dashboard data-health cache
+      clearDataHealthCache()
       onClose()
       router.refresh()
     } catch (error) {
