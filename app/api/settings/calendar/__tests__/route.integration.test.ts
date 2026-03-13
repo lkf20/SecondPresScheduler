@@ -361,5 +361,37 @@ describe('calendar settings route integration', () => {
         notes: null,
       })
     })
+
+    it('rolls back created closures when a later add_closures item fails (e.g. duplicate)', async () => {
+      ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
+      ;(createSchoolClosure as jest.Mock)
+        .mockResolvedValueOnce({
+          id: 'c-first',
+          date: '2024-12-25',
+          time_slot_id: 'slot-1',
+          reason: 'Test',
+          notes: null,
+        })
+        .mockRejectedValueOnce(Object.assign(new Error('already exists'), { code: '23505' }))
+      ;(deleteSchoolClosure as jest.Mock).mockResolvedValue(undefined)
+
+      const response = await PATCH(
+        new Request('http://localhost/api/settings/calendar', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            add_closures: [
+              { date: '2024-12-25', time_slot_id: 'slot-1', reason: 'Test', notes: null },
+              { date: '2024-12-25', time_slot_id: 'slot-2', reason: 'Test', notes: null },
+            ],
+          }),
+        })
+      )
+
+      expect(response.status).toBe(409)
+      expect(createSchoolClosure).toHaveBeenCalledTimes(2)
+      expect(deleteSchoolClosure).toHaveBeenCalledTimes(1)
+      expect(deleteSchoolClosure).toHaveBeenCalledWith('school-1', 'c-first')
+    })
   })
 })

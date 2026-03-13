@@ -71,10 +71,6 @@ export async function PATCH(request: NextRequest) {
 
     const actor = await getAuditActorContext()
     const body = await request.json()
-    const bodyKeys = Object.keys(body || {}).filter(
-      k => body[k] !== undefined && (typeof body[k] !== 'object' || body[k] !== null)
-    )
-    console.log('[calendar PATCH] body keys:', bodyKeys)
 
     // --- Calendar settings (first/last day of school) ---
     if (body.first_day_of_school !== undefined || body.last_day_of_school !== undefined) {
@@ -249,94 +245,106 @@ export async function PATCH(request: NextRequest) {
     if (body.add_closure && typeof body.add_closure === 'object') {
       addClosuresList.push(body.add_closure)
     }
-    for (const addOne of addClosuresList) {
-      const { date, start_date, end_date, time_slot_id, reason, notes } = addOne
-      if (start_date != null && end_date != null) {
-        if (typeof start_date !== 'string' || typeof end_date !== 'string') {
-          return NextResponse.json(
-            { error: 'add_closure.start_date and end_date must be strings (YYYY-MM-DD)' },
-            { status: 400 }
-          )
-        }
-        if (start_date > end_date) {
-          return NextResponse.json(
-            { error: 'add_closure.start_date must be on or before end_date' },
-            { status: 400 }
-          )
-        }
-        const days =
-          Math.ceil(
-            (new Date(end_date + 'T12:00:00').getTime() -
-              new Date(start_date + 'T12:00:00').getTime()) /
-              (24 * 60 * 60 * 1000)
-          ) + 1
-        if (days > 365) {
-          return NextResponse.json({ error: 'Date range cannot exceed 365 days' }, { status: 400 })
-        }
-        const { created } = await createSchoolClosureRange(
-          schoolId,
-          start_date,
-          end_date,
-          reason ?? null,
-          notes ?? null
-        )
-        const summary = `${start_date}–${end_date} (${created} day(s))${reason ? `: ${reason}` : ''}`
-        const auditEntry = {
-          schoolId,
-          actorUserId: actor.actorUserId,
-          actorDisplayName: actor.actorDisplayName,
-          action: 'create' as const,
-          category: 'school_calendar' as const,
-          entityType: 'school_closure',
-          entityId: null,
-          details: {
+    const createdClosureIdsToRollback: string[] = []
+    try {
+      for (const addOne of addClosuresList) {
+        const { date, start_date, end_date, time_slot_id, reason, notes } = addOne
+        if (start_date != null && end_date != null) {
+          if (typeof start_date !== 'string' || typeof end_date !== 'string') {
+            return NextResponse.json(
+              { error: 'add_closure.start_date and end_date must be strings (YYYY-MM-DD)' },
+              { status: 400 }
+            )
+          }
+          if (start_date > end_date) {
+            return NextResponse.json(
+              { error: 'add_closure.start_date must be on or before end_date' },
+              { status: 400 }
+            )
+          }
+          const days =
+            Math.ceil(
+              (new Date(end_date + 'T12:00:00').getTime() -
+                new Date(start_date + 'T12:00:00').getTime()) /
+                (24 * 60 * 60 * 1000)
+            ) + 1
+          if (days > 365) {
+            return NextResponse.json(
+              { error: 'Date range cannot exceed 365 days' },
+              { status: 400 }
+            )
+          }
+          const { created } = await createSchoolClosureRange(
+            schoolId,
             start_date,
             end_date,
+            reason ?? null,
+            notes ?? null
+          )
+          const summary = `${start_date}–${end_date} (${created} day(s))${reason ? `: ${reason}` : ''}`
+          const auditEntry = {
+            schoolId,
+            actorUserId: actor.actorUserId,
+            actorDisplayName: actor.actorDisplayName,
+            action: 'create' as const,
+            category: 'school_calendar' as const,
+            entityType: 'school_closure',
+            entityId: null,
+            details: {
+              start_date,
+              end_date,
+              reason: reason ?? null,
+              notes: notes ?? null,
+              created_count: created,
+              whole_day: true,
+              summary,
+            },
+          }
+          if (validateAuditLogEntry(auditEntry).valid) {
+            await logAuditEvent(auditEntry)
+          }
+        } else {
+          if (!date || typeof date !== 'string') {
+            return NextResponse.json({ error: 'add_closure.date is required' }, { status: 400 })
+          }
+          const created = await createSchoolClosure(schoolId, {
+            date,
+            time_slot_id: time_slot_id ?? null,
             reason: reason ?? null,
             notes: notes ?? null,
-            created_count: created,
-            whole_day: true,
-            summary,
-          },
-        }
-        if (validateAuditLogEntry(auditEntry).valid) {
-          await logAuditEvent(auditEntry)
-        }
-      } else {
-        if (!date || typeof date !== 'string') {
-          return NextResponse.json({ error: 'add_closure.date is required' }, { status: 400 })
-        }
-        const created = await createSchoolClosure(schoolId, {
-          date,
-          time_slot_id: time_slot_id ?? null,
-          reason: reason ?? null,
-          notes: notes ?? null,
-        })
-        const wholeDay = created.time_slot_id === null
-        const summary = wholeDay
-          ? `${date} (whole day)${reason ? `: ${reason}` : ''}`
-          : `${date} (time slot)${reason ? `: ${reason}` : ''}`
-        const auditEntry = {
-          schoolId,
-          actorUserId: actor.actorUserId,
-          actorDisplayName: actor.actorDisplayName,
-          action: 'create' as const,
-          category: 'school_calendar' as const,
-          entityType: 'school_closure',
-          entityId: created.id,
-          details: {
-            date: created.date,
-            time_slot_id: created.time_slot_id,
-            reason: created.reason,
-            notes: created.notes,
-            whole_day: wholeDay,
-            summary,
-          },
-        }
-        if (validateAuditLogEntry(auditEntry).valid) {
-          await logAuditEvent(auditEntry)
+          })
+          createdClosureIdsToRollback.push(created.id)
+          const wholeDay = created.time_slot_id === null
+          const summary = wholeDay
+            ? `${date} (whole day)${reason ? `: ${reason}` : ''}`
+            : `${date} (time slot)${reason ? `: ${reason}` : ''}`
+          const auditEntry = {
+            schoolId,
+            actorUserId: actor.actorUserId,
+            actorDisplayName: actor.actorDisplayName,
+            action: 'create' as const,
+            category: 'school_calendar' as const,
+            entityType: 'school_closure',
+            entityId: created.id,
+            details: {
+              date: created.date,
+              time_slot_id: created.time_slot_id,
+              reason: created.reason,
+              notes: created.notes,
+              whole_day: wholeDay,
+              summary,
+            },
+          }
+          if (validateAuditLogEntry(auditEntry).valid) {
+            await logAuditEvent(auditEntry)
+          }
         }
       }
+    } catch (addErr) {
+      for (const id of createdClosureIdsToRollback) {
+        await deleteSchoolClosure(schoolId, id)
+      }
+      throw addErr
     }
 
     const [settings, closures] = await Promise.all([

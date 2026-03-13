@@ -246,23 +246,21 @@ export default function ClosurePanel({
         handleClose()
         onSuccess()
       } else {
-        for (const timeSlotId of timeSlotIds) {
-          const res = await fetch('/api/settings/calendar', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              add_closure: {
-                date: addDate,
-                time_slot_id: timeSlotId,
-                reason: reason.trim() || null,
-                notes: notes.trim() || null,
-              },
-            }),
-          })
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({}))
-            throw new Error(err.error || 'Failed to add closure')
-          }
+        const res = await fetch('/api/settings/calendar', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            add_closures: timeSlotIds.map(time_slot_id => ({
+              date: addDate,
+              time_slot_id,
+              reason: reason.trim() || null,
+              notes: notes.trim() || null,
+            })),
+          }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || 'Failed to add closure')
         }
         toast.success('Closure added.')
         handleClose()
