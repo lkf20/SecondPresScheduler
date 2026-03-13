@@ -13,10 +13,12 @@ export function useUnsavedNavigationGuard({
 }: UseUnsavedNavigationGuardOptions) {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [pendingPath, setPendingPath] = useState<string | null>(null)
+  const [pendingBackAction, setPendingBackAction] = useState<(() => void) | null>(null)
 
   const navigateWithUnsavedGuard = useCallback(
     (path: string) => {
       if (hasUnsavedChanges) {
+        setPendingBackAction(null)
         setPendingPath(path)
         setShowUnsavedDialog(true)
         return
@@ -24,6 +26,19 @@ export function useUnsavedNavigationGuard({
       onNavigate(path)
     },
     [hasUnsavedChanges, onNavigate]
+  )
+
+  const navigateBackWithUnsavedGuard = useCallback(
+    (backAction: () => void) => {
+      if (hasUnsavedChanges) {
+        setPendingPath(null)
+        setPendingBackAction(backAction)
+        setShowUnsavedDialog(true)
+        return
+      }
+      backAction()
+    },
+    [hasUnsavedChanges]
   )
 
   useEffect(() => {
@@ -70,14 +85,18 @@ export function useUnsavedNavigationGuard({
   const handleKeepEditing = useCallback(() => {
     setShowUnsavedDialog(false)
     setPendingPath(null)
+    setPendingBackAction(null)
   }, [])
 
   const handleDiscardAndLeave = useCallback(() => {
     const destination = pendingPath
+    const backAction = pendingBackAction
     setShowUnsavedDialog(false)
     setPendingPath(null)
-    if (destination) onNavigate(destination)
-  }, [onNavigate, pendingPath])
+    setPendingBackAction(null)
+    if (backAction) backAction()
+    else if (destination) onNavigate(destination)
+  }, [onNavigate, pendingPath, pendingBackAction])
 
   return {
     showUnsavedDialog,
@@ -85,6 +104,7 @@ export function useUnsavedNavigationGuard({
     pendingPath,
     setPendingPath,
     navigateWithUnsavedGuard,
+    navigateBackWithUnsavedGuard,
     handleKeepEditing,
     handleDiscardAndLeave,
   }

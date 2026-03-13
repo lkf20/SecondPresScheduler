@@ -216,6 +216,7 @@ export default function StaffFormClient({
     showUnsavedDialog,
     setShowUnsavedDialog,
     navigateWithUnsavedGuard,
+    navigateBackWithUnsavedGuard,
     handleKeepEditing,
     handleDiscardAndLeave,
   } = useUnsavedNavigationGuard({
@@ -422,11 +423,19 @@ export default function StaffFormClient({
       <div className="mb-4">
         <button
           type="button"
-          onClick={() => navigateWithUnsavedGuard(getReturnUrl())}
+          onClick={() =>
+            navigateBackWithUnsavedGuard(() => {
+              if (typeof window !== 'undefined' && window.history.length > 1) {
+                router.back()
+              } else {
+                router.push(getReturnUrl())
+              }
+            })
+          }
           className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Staff
+          Back
         </button>
       </div>
       <div className="mb-6 max-w-2xl">
