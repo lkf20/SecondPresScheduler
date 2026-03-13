@@ -52,29 +52,6 @@ export async function GET(
               (s: any) => !isSlotClosedOnDate(toDateStringISO(s.date), s.time_slot_id, closureList)
             )
           : allShifts
-      const totalShifts = shifts.length
-
-      const { data: assignments, error: assignmentsError } = await supabase
-        .from('sub_assignments')
-        .select('date, time_slot_id')
-        .eq('teacher_id', (timeOffRequest as any).teacher_id)
-        .gte('date', startDate)
-        .lte('date', endDate)
-
-      if (assignmentsError) {
-        console.error('Error fetching sub assignments:', assignmentsError)
-      }
-
-      const assignmentKeys = new Set(
-        (assignments || []).map(
-          assignment => `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`
-        )
-      )
-      const coveredShifts = shifts.reduce((count, shift) => {
-        const key = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
-        return assignmentKeys.has(key) ? count + 1 : count
-      }, 0)
-
       // Get school_id for the teacher
       const teacherId = (timeOffRequest as any).teacher_id
       let schoolId: string
@@ -104,6 +81,9 @@ export async function GET(
         }
       }
 
+      // total_shifts and covered_shifts start at 0; the DB trigger on coverage_request_shifts
+      // will set total_shifts when we insert coverage_request_shifts (so it matches actual
+      // row count, including floater multi-classroom and omitted shifts).
       const { data: newCoverageRequest, error: coverageError } = await supabase
         .from('coverage_requests')
         .insert({
@@ -112,9 +92,9 @@ export async function GET(
           teacher_id: teacherId,
           start_date: startDate,
           end_date: endDate,
-          status: totalShifts > 0 && coveredShifts >= totalShifts ? 'filled' : 'open',
-          total_shifts: totalShifts,
-          covered_shifts: coveredShifts,
+          status: 'open',
+          total_shifts: 0,
+          covered_shifts: 0,
           school_id: schoolId,
         })
         .select('id')
