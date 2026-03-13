@@ -197,40 +197,7 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    // --- Delete closures before adds when both are present (e.g. edit changed which slots) ---
-    if (Array.isArray(body.delete_closure_ids) && body.delete_closure_ids.length > 0) {
-      const toDelete = await getSchoolClosuresByIds(schoolId, body.delete_closure_ids)
-      await Promise.all(
-        body.delete_closure_ids.map((id: string) => deleteSchoolClosure(schoolId, id))
-      )
-      for (const c of toDelete) {
-        const wholeDay = c.time_slot_id === null
-        const summary = wholeDay
-          ? `${c.date} (whole day)${c.reason ? `: ${c.reason}` : ''}`
-          : `${c.date} (time slot)${c.reason ? `: ${c.reason}` : ''}`
-        const auditEntry = {
-          schoolId,
-          actorUserId: actor.actorUserId,
-          actorDisplayName: actor.actorDisplayName,
-          action: 'delete' as const,
-          category: 'school_calendar' as const,
-          entityType: 'school_closure',
-          entityId: c.id,
-          details: {
-            date: c.date,
-            time_slot_id: c.time_slot_id,
-            reason: c.reason,
-            whole_day: wholeDay,
-            summary,
-          },
-        }
-        if (validateAuditLogEntry(auditEntry).valid) {
-          await logAuditEvent(auditEntry)
-        }
-      }
-    }
-
-    // --- Add closures ---
+    // --- Add closures (before deletes so a failed add never leaves original closures lost) ---
     const addClosuresList: Array<{
       date?: string
       start_date?: string
@@ -345,6 +312,39 @@ export async function PATCH(request: NextRequest) {
         await deleteSchoolClosure(schoolId, id)
       }
       throw addErr
+    }
+
+    // --- Delete closures (after adds so we never lose originals if add fails) ---
+    if (Array.isArray(body.delete_closure_ids) && body.delete_closure_ids.length > 0) {
+      const toDelete = await getSchoolClosuresByIds(schoolId, body.delete_closure_ids)
+      await Promise.all(
+        body.delete_closure_ids.map((id: string) => deleteSchoolClosure(schoolId, id))
+      )
+      for (const c of toDelete) {
+        const wholeDay = c.time_slot_id === null
+        const summary = wholeDay
+          ? `${c.date} (whole day)${c.reason ? `: ${c.reason}` : ''}`
+          : `${c.date} (time slot)${c.reason ? `: ${c.reason}` : ''}`
+        const auditEntry = {
+          schoolId,
+          actorUserId: actor.actorUserId,
+          actorDisplayName: actor.actorDisplayName,
+          action: 'delete' as const,
+          category: 'school_calendar' as const,
+          entityType: 'school_closure',
+          entityId: c.id,
+          details: {
+            date: c.date,
+            time_slot_id: c.time_slot_id,
+            reason: c.reason,
+            whole_day: wholeDay,
+            summary,
+          },
+        }
+        if (validateAuditLogEntry(auditEntry).valid) {
+          await logAuditEvent(auditEntry)
+        }
+      }
     }
 
     const [settings, closures] = await Promise.all([

@@ -41,6 +41,10 @@ import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
 import ScheduleSidePanel from '@/components/schedules/ScheduleSidePanel'
 
+/** Cache data-health response to avoid full DB scan on every dashboard mount (TTL 60s). */
+const DATA_HEALTH_CACHE_MS = 60_000
+let dataHealthCache: { data: { orphanedShifts?: unknown[] }; until: number } | null = null
+
 type Summary = {
   absences: number
   uncovered_shifts: number
@@ -369,9 +373,17 @@ export default function DashboardClient({
   const [orphanedShiftsCount, setOrphanedShiftsCount] = useState<number>(0)
 
   useEffect(() => {
+    const now = Date.now()
+    if (dataHealthCache && dataHealthCache.until > now) {
+      if (dataHealthCache.data.orphanedShifts) {
+        setOrphanedShiftsCount(dataHealthCache.data.orphanedShifts.length)
+      }
+      return
+    }
     fetch('/api/dashboard/data-health')
       .then(res => res.json())
       .then(data => {
+        dataHealthCache = { data, until: Date.now() + DATA_HEALTH_CACHE_MS }
         if (data.orphanedShifts) {
           setOrphanedShiftsCount(data.orphanedShifts.length)
         }
