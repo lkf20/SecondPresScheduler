@@ -257,16 +257,20 @@ export async function PATCH(request: NextRequest) {
         const { date, start_date, end_date, time_slot_id, reason, notes } = addOne
         if (start_date != null && end_date != null) {
           if (typeof start_date !== 'string' || typeof end_date !== 'string') {
-            return NextResponse.json(
-              { error: 'add_closure.start_date and end_date must be strings (YYYY-MM-DD)' },
-              { status: 400 }
-            )
+            throw {
+              __validationResponse: NextResponse.json(
+                { error: 'add_closure.start_date and end_date must be strings (YYYY-MM-DD)' },
+                { status: 400 }
+              ),
+            }
           }
           if (start_date > end_date) {
-            return NextResponse.json(
-              { error: 'add_closure.start_date must be on or before end_date' },
-              { status: 400 }
-            )
+            throw {
+              __validationResponse: NextResponse.json(
+                { error: 'add_closure.start_date must be on or before end_date' },
+                { status: 400 }
+              ),
+            }
           }
           const days =
             Math.ceil(
@@ -275,10 +279,12 @@ export async function PATCH(request: NextRequest) {
                 (24 * 60 * 60 * 1000)
             ) + 1
           if (days > 365) {
-            return NextResponse.json(
-              { error: 'Date range cannot exceed 365 days' },
-              { status: 400 }
-            )
+            throw {
+              __validationResponse: NextResponse.json(
+                { error: 'Date range cannot exceed 365 days' },
+                { status: 400 }
+              ),
+            }
           }
           const { created } = await createSchoolClosureRange(
             schoolId,
@@ -311,7 +317,12 @@ export async function PATCH(request: NextRequest) {
           }
         } else {
           if (!date || typeof date !== 'string') {
-            return NextResponse.json({ error: 'add_closure.date is required' }, { status: 400 })
+            throw {
+              __validationResponse: NextResponse.json(
+                { error: 'add_closure.date is required' },
+                { status: 400 }
+              ),
+            }
           }
           const created = await createSchoolClosure(schoolId, {
             date,
@@ -346,7 +357,7 @@ export async function PATCH(request: NextRequest) {
           }
         }
       }
-    } catch (addErr) {
+    } catch (addErr: unknown) {
       for (const id of createdClosureIdsToRollback) {
         await deleteSchoolClosure(schoolId, id)
       }
@@ -360,6 +371,12 @@ export async function PATCH(request: NextRequest) {
           })
         }
       }
+      const validationResponse =
+        addErr &&
+        typeof addErr === 'object' &&
+        '__validationResponse' in addErr &&
+        (addErr as { __validationResponse: NextResponse }).__validationResponse
+      if (validationResponse) return validationResponse as NextResponse
       throw addErr
     }
 
