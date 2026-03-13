@@ -155,7 +155,7 @@ Use the shared `Button` component (`components/ui/button.tsx`) and these variant
 ## School Calendar
 
 - **First and last day of school:** Stored in `schedule_settings.first_day_of_school` and `last_day_of_school`. Managed on the School Calendar settings page (`/settings/calendar`).
-- **School closures:** Stored in `school_closures` (date, optional `time_slot_id`, reason). When `time_slot_id` is null, the whole day is closed; when set, only that time slot is closed on that date.
+- **School closures:** Stored in `school_closures` (date, optional `time_slot_id`, reason, optional notes). When `time_slot_id` is null, the whole day is closed; when set, only that time slot is closed on that date.
 - **Where closures appear:** The **weekly schedule** grid shows "School Closed" for closed cells (date-based view). The **baseline schedule** is permanent (day × slot, not date-based) and does _not_ show school closures; pass `schoolClosures={[]}` there. Printable Today's Schedule (on-screen and PDF) shows "School Closed" for closed cells. The weekly schedule legend includes "School Closed" when closures exist.
 - **Manage Calendar link:** The weekly schedule page has a "Manage Calendar" button (teal variant) that links to `/settings/calendar`.
 - **Helpers:** Use `isCellClosed` (from `lib/utils/school-closures.ts`) for weekly grid cells (needs `weekStartISO`, `dayNumber`, `timeSlotId`). Use `isSlotClosedOnDate` for single-date contexts (daily schedule, PDF). Use `getCellDateISO` (from `lib/utils/date.ts`) to compute the calendar date for a cell given week start and day number.
@@ -193,7 +193,7 @@ Floater weight is 0.5 for now; it may become more sophisticated later—keep log
 
 - **Purpose:** School Calendar lets admins set the first and last day of school and manage closed days (holidays, snow days, etc.). Closed days or time slots appear as “School Closed” across the app.
 - **Settings:** `/settings/calendar` — School Year (first/last day) and Closed Days (add/remove closures). Closures can apply to all time slots (whole day) or specific time slots.
-- **Data:** `schedule_settings.first_day_of_school`, `schedule_settings.last_day_of_school`; `school_closures` table (`date`, `time_slot_id` nullable — null = whole day, non-null = that slot only).
+- **Data:** `schedule_settings.first_day_of_school`, `schedule_settings.last_day_of_school`; `school_closures` table (`date`, `time_slot_id` nullable — null = whole day, non-null = that slot only; `reason`, optional `notes`).
 - **APIs:** `GET/PATCH /api/settings/calendar` (query params `startDate`/`endDate` for closures); weekly-schedule and daily-schedule APIs return `school_closures` for the requested range.
 - **Where closures appear:** Weekly Schedule grid (closed cells show “School Closed”); Printable Today’s Schedule (on-screen and PDF); Manage Calendar link on the weekly schedule page.
 - **Helpers:** `lib/utils/school-closures.ts` — `isCellClosed(weekStartISO, dayNumber, timeSlotId, closures)` for weekly grid; `isSlotClosedOnDate(dateISO, timeSlotId, closures)` for daily schedule/PDF. `lib/utils/date.ts` — `getCellDateISO(weekStartISO, dayNumber)` for mapping week + day to date.
@@ -237,6 +237,8 @@ To run migrations against the **staging** database:
 2. Push migrations: `supabase db push`
 
 Run these commands from the project root (`scheduler-app/`). The link script uses `.env.supabase.staging` for the project ref.
+
+- **Keep schema docs in sync.** Whenever you add or change a migration (new table, dropped table, new column, or other schema change), update [docs/reference/DATABASE_SCHEMA.md](docs/reference/DATABASE_SCHEMA.md) and [supabase/README.md](supabase/README.md) as needed—e.g. add or remove tables in the list, adjust table count, update the verification section, or note deprecated/removed objects.
 
 ## Session and collaboration
 

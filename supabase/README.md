@@ -1,53 +1,52 @@
 # Supabase Database Migrations
 
-This directory contains the database schema migrations for the Scheduler App.
+This directory contains the database schema migrations for the Scheduler App. The current schema is the result of applying all migrations in order (001 through 107). **When adding or changing a migration, update this README and [docs/reference/DATABASE_SCHEMA.md](../docs/reference/DATABASE_SCHEMA.md) as needed** (see AGENTS.md → Database migrations). The initial migration (001) created 17 tables; later migrations add, alter, and remove tables and columns. For a full list of current tables and their roles, see [docs/reference/DATABASE_SCHEMA.md](../docs/reference/DATABASE_SCHEMA.md).
 
 ## Migration Files
 
-1. **001_initial_schema.sql** - Creates all 17 tables with foreign keys, constraints, and triggers
-2. **002_add_indexes.sql** - Adds performance indexes for common queries
-3. **003_add_rls_policies.sql** - Sets up Row Level Security (RLS) policies
-4. **seed.sql** - Initial reference data (time slots and days of week)
+Migrations in `migrations/` are applied in numeric order:
+
+- **001_initial_schema.sql** – Creates the original 17 tables with foreign keys, constraints, and triggers
+- **002** through **107** – Add tables (e.g. schedule_cells, coverage_requests, schools, profiles, audit_log, school_closures), add columns and indexes, add RLS, drop deprecated tables (e.g. class_classroom_mappings, staffing_rules, enrollments, sub_contact_overrides, sub_contact_log), and other schema changes
+- **seed.sql** – Optional initial reference data (e.g. time slots and days of week; some reference data is also seeded in migrations such as 007)
+
+**Do not apply only 001–003** and stop; that leaves you with an outdated schema. Use the Supabase CLI to apply the full migration set (see below).
 
 ## How to Apply Migrations
 
-### Option 1: Using Supabase Dashboard (Recommended for first-time setup)
+### Option 1: Using Supabase CLI (recommended)
 
-1. Go to your Supabase project: https://supabase.com/dashboard/project/dxsyowrtvxplaysemati
-2. Navigate to **SQL Editor**
-3. Copy and paste the contents of each migration file in order:
-   - First: `001_initial_schema.sql`
-   - Second: `002_add_indexes.sql`
-   - Third: `003_add_rls_policies.sql`
-   - Fourth: `seed.sql`
-4. Run each SQL script
-
-### Option 2: Using Supabase CLI
-
-If you have Supabase CLI installed:
+Apply all migrations in one go:
 
 ```bash
-# Link to your project
-supabase link --project-ref dxsyowrtvxplaysemati
-
-# Apply migrations
+# From project root (scheduler-app/)
+./scripts/supabase-link.sh staging   # or link to your project
 supabase db push
 ```
 
+This runs migrations 001 through 107 in order. For staging, the link script uses `.env.supabase.staging` for the project ref.
+
+### Option 2: Using Supabase Dashboard
+
+1. Go to your Supabase project dashboard.
+2. Navigate to **SQL Editor**.
+3. Run each migration file in order: `001_initial_schema.sql`, then `002_add_indexes.sql`, and so on through `107_add_notes_to_school_closures.sql`. Running only the first few migrations will leave the schema incomplete and out of sync with the app.
+
 ### Option 3: Using psql
 
-If you have direct database access:
+If you have direct database access, run each migration file in order:
 
 ```bash
-psql "postgresql://postgres:[PASSWORD]@db.dxsyowrtvxplaysemati.supabase.co:5432/postgres" -f supabase/migrations/001_initial_schema.sql
-psql "postgresql://postgres:[PASSWORD]@db.dxsyowrtvxplaysemati.supabase.co:5432/postgres" -f supabase/migrations/002_add_indexes.sql
-psql "postgresql://postgres:[PASSWORD]@db.dxsyowrtvxplaysemati.supabase.co:5432/postgres" -f supabase/migrations/003_add_rls_policies.sql
-psql "postgresql://postgres:[PASSWORD]@db.dxsyowrtvxplaysemati.supabase.co:5432/postgres" -f supabase/seed.sql
+for f in supabase/migrations/*.sql; do
+  psql "$DATABASE_URL" -f "$f"
+done
 ```
+
+After migrations, you can run `seed.sql` if you need the optional reference data it provides.
 
 ## Verification
 
-After applying migrations, verify the tables were created:
+After applying all migrations, you can verify that the expected tables exist:
 
 ```sql
 SELECT table_name
@@ -56,28 +55,16 @@ WHERE table_schema = 'public'
 ORDER BY table_name;
 ```
 
-You should see all 17 tables:
+You should see the current set of tables (31 as of this writing), including for example:
 
-- classrooms
-- classes
-- time_slots
-- days_of_week
-- staff
-- teacher_schedules
-- sub_availability
-- sub_availability_exceptions
-- sub_class_preferences
-- class_classroom_mappings
-- staffing_rules
-- time_off_requests
-- sub_assignments
-- sub_contact_overrides
-- sub_contact_log
+- audit_log, class_groups, classroom_allowed_classes, classrooms, coverage_request_shifts, coverage_requests, days_of_week, profiles, qualification_definitions, schedule_cell_class_groups, schedule_cells, schedule_settings, school_closures, schools, staff, staff_qualifications, staff_role_type_assignments, staff_role_types, staffing_event_shifts, staffing_events, sub_availability, sub_availability_exception_headers, sub_availability_exceptions, sub_assignments, sub_contact_shift_overrides, sub_class_preferences, substitute_contacts, teacher_schedules, time_off_requests, time_off_shifts, time_slots
+
+For the full, up-to-date list and descriptions, see [docs/reference/DATABASE_SCHEMA.md](../docs/reference/DATABASE_SCHEMA.md). Tables such as `classes`, `class_classroom_mappings`, `staffing_rules`, `sub_contact_overrides`, and `sub_contact_log` no longer exist (removed in later migrations).
 
 ## Notes
 
-- All tables use UUID primary keys
-- Foreign key constraints ensure referential integrity
-- Unique constraints prevent duplicate data
-- Triggers automatically update `updated_at` timestamps
-- RLS policies allow authenticated users to read/write all data (can be restricted later)
+- All tables use UUID primary keys.
+- Foreign key constraints ensure referential integrity.
+- Unique constraints prevent duplicate data where appropriate.
+- Triggers automatically update `updated_at` timestamps on many tables.
+- RLS policies enforce school-scoped access where applicable.
