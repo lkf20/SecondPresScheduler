@@ -141,6 +141,10 @@ interface ScheduleSidePanelProps {
   scheduleDayIdsFromSettings?: string[]
   selectedCellData?: SelectedCellData // Full cell data from the grid
   onSave?: () => void | Promise<void>
+  /** Called when save starts so the grid can disable cell clicks / show overlay. */
+  onSaveStart?: () => void
+  /** Called when save finishes (success or failure) so the grid can re-enable cell clicks. */
+  onSaveEnd?: () => void
   /** Refresh grid data without closing panel (e.g. after applying conflict resolutions). */
   onRefresh?: () => void | Promise<void>
   weekStartISO?: string
@@ -186,9 +190,13 @@ export const mapAssignmentsToTeachers = (
     }))
 }
 
-const debug = false
+/** Set NEXT_PUBLIC_DEBUG_SCHEDULE_PANEL=true in .env.local to enable; production stays quiet. */
 const log = (...args: unknown[]) => {
-  if (debug) {
+  if (
+    typeof process !== 'undefined' &&
+    process.env.NODE_ENV !== 'production' &&
+    process.env.NEXT_PUBLIC_DEBUG_SCHEDULE_PANEL === 'true'
+  ) {
     console.log(...args)
   }
 }
@@ -544,6 +552,8 @@ export default function ScheduleSidePanel({
   scheduleDayIdsFromSettings,
   selectedCellData,
   onSave,
+  onSaveStart,
+  onSaveEnd,
   onRefresh,
   weekStartISO,
   readOnly = false,
@@ -587,6 +597,10 @@ export default function ScheduleSidePanel({
   const [applyScope, setApplyScope] = useState<'single' | 'timeSlot' | 'day'>('single')
   const [applyDayIds, setApplyDayIds] = useState<string[]>([dayId])
   const [applyTimeSlotIds, setApplyTimeSlotIds] = useState<string[]>([timeSlotId])
+  /** When Apply would create a conflict in another cell, block save and show this message */
+  const [applyConflictError, setApplyConflictError] = useState<string | null>(null)
+  /** When save fails from UnsavedChangesDialog (e.g. server 409), show in dialog so user sees it */
+  const [saveErrorInDialog, setSaveErrorInDialog] = useState<string | null>(null)
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const [classGroups, setClassGroups] = useState<ClassGroupWithMeta[]>([])
   const [enrollmentMode, setEnrollmentMode] = useState<'total' | 'by_class_group'>('total')
@@ -596,6 +610,7 @@ export default function ScheduleSidePanel({
   const [conflictResolutions, setConflictResolutions] = useState<Map<string, ConflictResolution>>(
     new Map()
   )
+  const [conflictResolutionApplying, setConflictResolutionApplying] = useState(false)
   /** After applying "mark as floater" resolution, hold teacher ids so a follow-up effect can set is_floater on chips */
   const pendingFloaterIdsAfterResolutionRef = useRef<Set<string>>(new Set())
   const router = useRouter()
@@ -693,6 +708,8 @@ export default function ScheduleSidePanel({
   const teachersLoadedRef = useRef(false)
   const teacherCacheRef = useRef<Map<string, Teacher[]>>(new Map())
   const teacherFetchKeyRef = useRef<string | null>(null)
+  /** Prevents duplicate in-flight fetches when effect runs multiple times before state commits */
+  const teacherFetchInFlightRef = useRef(false)
   const classGroupsRef = useRef<ClassGroupWithMeta[]>([])
   const unsavedDialogReturnToCellRef = useRef(false)
   /** Track class group count so we only default to by_class_group when user adds a second group */
@@ -701,6 +718,10 @@ export default function ScheduleSidePanel({
   const preserveSelectedTeachersAfterConflictRef = useRef(false)
   /** Assignment count when we set the preserve ref; only clear preserve when we see different count (new data from refresh) */
   const assignmentCountWhenPreserveSetRef = useRef<number>(-1)
+  /** Cell key we last initialized from; avoid re-running initializeFromCell when selectedCellData reference changes (would overwrite user edits) */
+  const lastInitializedCellRef = useRef<string | null>(null)
+  /** Last enrollment value set by user (input onChange). Used at save so we persist user's edit even if an effect overwrote state. */
+  const enrollmentEditedRef = useRef<number | null | undefined>(undefined)
   /** When cell data effect preserves after conflict, tell teacher fetch effect to skip overwriting this cycle */
   const skipNextTeacherFetchAfterPreserveRef = useRef(false)
   /** After confirming deactivate, save and close the panel (effect runs once state has updated) */
@@ -1227,12 +1248,18 @@ export default function ScheduleSidePanel({
         hasLoadedInitialDataRef.current = true
       }
       setEnrollment(cellData.enrollment_for_staffing)
-      const hasPerClass =
+      const hasMultipleClassGroups = (cellData.class_groups?.length ?? 0) > 1
+      const hasPerClassEnrollment =
         cellData.class_groups?.some(
           (cg: { enrollment?: number | null }) => cg.enrollment != null
         ) ?? false
-      const hasMultipleClassGroups = (cellData.class_groups?.length ?? 0) > 1
-      setEnrollmentMode(hasPerClass || hasMultipleClassGroups ? 'by_class_group' : 'total')
+      // Use "By class group" only when there are multiple class groups and at least one per-class enrollment is set.
+      // If enrollment is stored by total only (no per-class), default to "By total" even with multiple groups.
+      setEnrollmentMode(
+        hasMultipleClassGroups && hasPerClassEnrollment ? 'by_class_group' : 'total'
+      )
+      // So the "add second group" effect doesn't overwrite to by_class_group when we're just loading a cell that already has multiple groups
+      previousClassGroupCountRef.current = mappedClassGroupIds.length
       setRequiredStaffOverride(cellData.required_staff_override ?? null)
       setPreferredStaffOverride(cellData.preferred_staff_override ?? null)
       setNotes(cellData.notes)
@@ -1280,11 +1307,24 @@ export default function ScheduleSidePanel({
       // Reset the refs when drawer closes
       hasLoadedInitialDataRef.current = false
       initialClassGroupIdsRef.current = null
+      lastInitializedCellRef.current = null
+      enrollmentEditedRef.current = undefined
+      preserveSelectedTeachersAfterConflictRef.current = false
       preserveTeachersRef.current = false
       teachersLoadedRef.current = false
+      teacherFetchInFlightRef.current = false
       pendingFloaterIdsAfterResolutionRef.current = new Set()
       skipNextTeacherFetchAfterPreserveRef.current = false
       assignmentCountWhenPreserveSetRef.current = -1
+      return
+    }
+
+    const cellKey = `${classroomId}|${dayId}|${timeSlotId}`
+    // Only initialize from selectedCellData when we first open this cell. If we've already initialized
+    // for this cell, skip so we don't overwrite user edits (e.g. enrollment 5 → 8) when parent re-renders
+    // and selectedCellData gets a new object reference with the same stale data.
+    if (selectedCellData?.schedule_cell && lastInitializedCellRef.current === cellKey) {
+      setLoading(false)
       return
     }
 
@@ -1299,24 +1339,25 @@ export default function ScheduleSidePanel({
     // If selectedCellData is provided and has a schedule_cell, use it
     // Note: selectedCellData structure has schedule_cell nested
     if (selectedCellData?.schedule_cell) {
+      lastInitializedCellRef.current = cellKey
+      enrollmentEditedRef.current = undefined
       const cellData = selectedCellData.schedule_cell
       // After applying conflict resolution we refresh the grid; new cell data has only the resolved assignment.
       // Preserve current selected teachers (including others not yet saved) by not overwriting from assignments.
+      // Do not clear preserveSelectedTeachersAfterConflictRef here: clearing it allowed the seeding effect to
+      // overwrite selectedTeachers from selectedCellData.assignments (which only has the resolved assignment),
+      // dropping unsaved selections. Clear only on panel close or after successful save.
       if (preserveSelectedTeachersAfterConflictRef.current) {
         initializeFromCell(cellData)
-        // Only clear ref when we see different assignment count = we've received new data from refresh (don't clear on first run with stale data)
-        const assignmentCount = selectedCellData.assignments?.length ?? 0
-        if (assignmentCount !== assignmentCountWhenPreserveSetRef.current) {
-          preserveSelectedTeachersAfterConflictRef.current = false
-          assignmentCountWhenPreserveSetRef.current = -1
-          skipNextTeacherFetchAfterPreserveRef.current = true
-        }
+        skipNextTeacherFetchAfterPreserveRef.current = true
       } else {
         initializeFromCell(cellData, selectedCellData.assignments)
       }
       setLoading(false)
       return
     }
+    lastInitializedCellRef.current = null
+    enrollmentEditedRef.current = undefined
     teachersLoadedRef.current = false
 
     // Otherwise fetch from API
@@ -1555,13 +1596,17 @@ export default function ScheduleSidePanel({
     setClassGroups(selectedClassGroups)
   }, [classGroupIds, allAvailableClassGroups, loading])
 
-  // When user adds a second (or more) class group, default enrollment to "By class group"
+  // When user adds a second (or more) class group, default enrollment to "By class group".
+  // Only update the ref when we switch to by_class_group or when count is 1 (user removed to one group).
+  // Do not update when count is 0 (stale from init) so we don't overwrite the ref set in initializeFromCell.
   useEffect(() => {
     const count = classGroupIds.length
     if (count > 1 && previousClassGroupCountRef.current <= 1) {
       setEnrollmentMode('by_class_group')
+      previousClassGroupCountRef.current = count
+    } else if (count === 1) {
+      previousClassGroupCountRef.current = 1
     }
-    previousClassGroupCountRef.current = count
   }, [classGroupIds.length])
 
   // Fetch teacher assignments when classGroupIds changes or drawer opens
@@ -1635,11 +1680,16 @@ export default function ScheduleSidePanel({
       return
     }
 
+    // Skip if we already have a fetch in flight for this cell (effect can re-run before isLoadingTeachers state commits)
+    if (teacherFetchInFlightRef.current && teacherFetchKeyRef.current === cacheKey) {
+      return
+    }
     if (teacherFetchKeyRef.current === cacheKey && isLoadingTeachers) {
       return
     }
 
     teacherFetchKeyRef.current = cacheKey
+    teacherFetchInFlightRef.current = true
     log('[ScheduleSidePanel] Fetching teachers', {
       classGroupIds,
       preserveFlag: preserveTeachersRef.current,
@@ -1656,8 +1706,13 @@ export default function ScheduleSidePanel({
         return r.json()
       })
       .then((data: TeacherSchedule[]) => {
+        teacherFetchInFlightRef.current = false
         // Clear loading as soon as we have a response (including 0 teachers) so inactive→active doesn't stick on "Loading assigned teachers"
         setIsLoadingTeachers(false)
+
+        // If we just applied conflict resolution and refreshed, an in-flight fetch may complete after.
+        // Do not overwrite selectedTeachers with API data (which may only have the resolved assignment).
+        if (preserveSelectedTeachersAfterConflictRef.current) return
 
         // Filter by classroom, day, time slot, and class group (if classGroupIds is set)
         // If we're preserving teachers (class groups were just changed), show all teachers for this location
@@ -1738,6 +1793,7 @@ export default function ScheduleSidePanel({
         setSelectedFlexTeachers(withPendingFloaters.filter(t => t.is_flexible))
       })
       .catch(err => {
+        teacherFetchInFlightRef.current = false
         console.error('Error fetching teacher assignments:', err)
         // Don't clear teachers on error if we should preserve them
         if (preserveTeachersRef.current && selectedTeachersRef.current.length > 0) {
@@ -1873,7 +1929,7 @@ export default function ScheduleSidePanel({
   }, [conflicts.length])
 
   // Fields should be disabled if parent entities are inactive, or if explicitly inactive with existing data.
-  const fieldsDisabled = isParentEffectivelyInactive || (!isActive && hasData)
+  const fieldsDisabled = isParentEffectivelyInactive || (!isActive && hasData) || saving
 
   // Track unsaved changes
   useEffect(() => {
@@ -2296,12 +2352,21 @@ export default function ScheduleSidePanel({
     }
   }
 
+  /** Update enrollment state and ref so save uses user's value even if an effect overwrote state */
+  const handleEnrollmentChange = useCallback((value: number | null) => {
+    enrollmentEditedRef.current = value
+    setEnrollment(value)
+  }, [])
+
   const handleSave = async () => {
     // Block save only when parent (classroom/time slot) is inactive; allow saving when user set cell to inactive
     if (isParentEffectivelyInactive) return
     // Block save when there are unresolved baseline conflicts (teacher double-booked in another room)
     if (conflicts.length > 0) return
+    setApplyConflictError(null)
+    setSaveErrorInDialog(null)
     setSaving(true)
+    onSaveStart?.()
     try {
       // Class groups required only when slot is active; inactive slots can be saved without class groups
       if (isActive && classGroupIds.length === 0) {
@@ -2310,11 +2375,14 @@ export default function ScheduleSidePanel({
         return
       }
 
+      // Use user-edited enrollment when they changed it (ref); otherwise state (avoids stale state if an effect overwrote)
+      const refValue = enrollmentEditedRef.current
+      const enrollmentToSave = refValue !== undefined ? refValue : enrollment
       // Total for DB: when mode is 'total' use single enrollment and clear per-class; otherwise per-class sum if any set, else single enrollment
       const totalForDb =
         enrollmentMode === 'total'
-          ? enrollment
-          : getTotalEnrollmentForCalculation(classGroups, enrollment)
+          ? enrollmentToSave
+          : getTotalEnrollmentForCalculation(classGroups, enrollmentToSave)
       const enrollmentByClassGroup =
         enrollmentMode === 'total'
           ? ({} as Record<string, number>)
@@ -2324,13 +2392,15 @@ export default function ScheduleSidePanel({
             )
 
       // Prepare cell data (enrollment_by_class_group for per-class display; overrides for staffing)
+      // API expects enrollment_for_staffing to be positive or null, not 0
+      const enrollmentForApi = totalForDb === 0 || totalForDb === null ? null : totalForDb
       const cellData = {
         classroom_id: classroomId,
         day_of_week_id: dayId,
         time_slot_id: timeSlotId,
         is_active: isActive,
         class_group_ids: classGroupIds,
-        enrollment_for_staffing: totalForDb,
+        enrollment_for_staffing: enrollmentForApi,
         enrollment_by_class_group: enrollmentByClassGroup,
         required_staff_override: requiredStaffOverride,
         preferred_staff_override: preferredStaffOverride,
@@ -2387,6 +2457,62 @@ export default function ScheduleSidePanel({
         }
       }
 
+      // Pre-Apply conflict check: when applying to multiple cells, ensure no target cell would conflict
+      const applyCellCount = daysToUpdate.length * timeSlotsToUpdate.length
+      if (applyCellCount > 1 && allAssignedTeachers.some(t => t.teacher_id)) {
+        const applyChecks: Array<{
+          teacher_id: string
+          day_of_week_id: string
+          time_slot_id: string
+          classroom_id: string
+          is_floater: boolean
+        }> = []
+        for (const updateDayId of daysToUpdate) {
+          for (const updateTimeSlotId of timeSlotsToUpdate) {
+            for (const t of allAssignedTeachers) {
+              if (t.teacher_id) {
+                applyChecks.push({
+                  teacher_id: t.teacher_id,
+                  day_of_week_id: updateDayId,
+                  time_slot_id: updateTimeSlotId,
+                  classroom_id: cellData.classroom_id,
+                  is_floater: t.is_floater === true,
+                })
+              }
+            }
+          }
+        }
+        if (applyChecks.length > 0) {
+          const checkRes = await fetch('/api/teacher-schedules/check-conflicts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ checks: applyChecks }),
+          })
+          const checkData = (await checkRes.json().catch(() => ({}))) as {
+            conflicts?: Array<{
+              teacher_name?: string
+              conflicting_classroom_name?: string
+              day_of_week_name?: string
+              time_slot_code?: string
+            }>
+          }
+          const applyConflicts = Array.isArray(checkData?.conflicts) ? checkData.conflicts : []
+          if (applyConflicts.length > 0) {
+            const c = applyConflicts[0]
+            const teacherName = c.teacher_name ?? 'A teacher'
+            const roomName = c.conflicting_classroom_name ?? 'another room'
+            const dayName = c.day_of_week_name ?? 'that day'
+            const slotCode = c.time_slot_code ?? 'that time'
+            setApplyConflictError(
+              `Cannot apply: ${teacherName} is already scheduled in ${roomName} for ${dayName} ${slotCode}. Resolve that conflict first or apply only to this time slot.`
+            )
+            setSaving(false)
+            onSaveEnd?.()
+            return
+          }
+        }
+      }
+
       // Bulk update cells
       const cellResponse = await fetch('/api/schedule-cells/bulk', {
         method: 'PUT',
@@ -2394,8 +2520,19 @@ export default function ScheduleSidePanel({
         body: JSON.stringify({ updates }),
       })
 
+      if (cellResponse.ok) {
+        await cellResponse.json().catch(() => [])
+      }
+
       if (!cellResponse.ok) {
-        throw new Error('Failed to save schedule cells')
+        const errorBody = await cellResponse.json().catch(() => ({}))
+        const details = (errorBody as { details?: Array<{ path?: string; message?: string }> })
+          ?.details
+        const message =
+          details?.length && details[0]?.message
+            ? `Validation: ${details.map(d => d.message).join(', ')}`
+            : (errorBody as { error?: string })?.error || 'Failed to save schedule cells'
+        throw new Error(message)
       }
 
       // Update teacher assignments for each day/time slot combination
@@ -2465,7 +2602,8 @@ export default function ScheduleSidePanel({
                       console.error(`Failed to delete teacher schedule ${schedule.id}`)
                       const errorData = await deleteResponse.json().catch(() => ({}))
                       throw new Error(
-                        `Failed to delete teacher schedule: ${errorData.error || deleteResponse.statusText}`
+                        errorData.error ||
+                          `Failed to delete teacher schedule: ${deleteResponse.statusText}`
                       )
                     }
                     log('[ScheduleSidePanel] Successfully deleted schedule:', schedule.id)
@@ -2560,7 +2698,8 @@ export default function ScheduleSidePanel({
                         )
                         const errorData = await updateResponse.json().catch(() => ({}))
                         throw new Error(
-                          `Failed to update teacher schedule: ${errorData.error || updateResponse.statusText}`
+                          errorData.error ||
+                            `Failed to update teacher schedule: ${updateResponse.statusText}`
                         )
                       }
                       const updatedSchedule = await updateResponse.json().catch(() => null)
@@ -2597,6 +2736,7 @@ export default function ScheduleSidePanel({
 
       teacherCacheRef.current.clear()
       teachersLoadedRef.current = false
+      preserveSelectedTeachersAfterConflictRef.current = false
 
       if (onSave) {
         await Promise.resolve(onSave())
@@ -2621,9 +2761,14 @@ export default function ScheduleSidePanel({
     } catch (error) {
       console.error('Error saving schedule cell:', error)
       const message = error instanceof Error ? error.message : 'Failed to save schedule cell'
-      alert(`Failed to save: ${message}`)
+      if (showUnsavedDialog) {
+        setSaveErrorInDialog(message)
+      } else {
+        alert(`Failed to save: ${message}`)
+      }
     } finally {
       setSaving(false)
+      onSaveEnd?.()
     }
   }
 
@@ -2636,6 +2781,8 @@ export default function ScheduleSidePanel({
 
   const handleDiscard = () => {
     setShowUnsavedDialog(false)
+    setApplyConflictError(null)
+    setSaveErrorInDialog(null)
     setHasUnsavedChanges(false)
     if (unsavedDialogReturnToCellRef.current) {
       unsavedDialogReturnToCellRef.current = false
@@ -2650,6 +2797,7 @@ export default function ScheduleSidePanel({
     dayIds: string[],
     timeSlotIds?: string[]
   ) => {
+    setApplyConflictError(null)
     setApplyScope(scope)
     setApplyDayIds(dayIds)
     if (scope === 'day') {
@@ -2680,7 +2828,15 @@ export default function ScheduleSidePanel({
     const resolutions = resolutionsFromBanner ?? conflictResolutions
     if (resolutions.size === 0) return
 
+    setConflictResolutionApplying(true)
     try {
+      // Set preserve ref immediately so any in-flight teacher fetch that completes during
+      // resolve-conflict API calls will skip overwriting (they would overwrite with 0 or 1).
+      preserveSelectedTeachersAfterConflictRef.current = true
+      assignmentCountWhenPreserveSetRef.current = selectedCellData?.assignments?.length ?? -1
+      const cellCacheKey = `${classroomId}|${dayId}|${timeSlotId}`
+      teacherCacheRef.current.delete(cellCacheKey)
+
       const teachersToRemove: string[] = []
 
       // Resolve each conflict using passed resolutions (state may not have updated yet)
@@ -2744,12 +2900,6 @@ export default function ScheduleSidePanel({
       setConflicts([])
       setConflictResolutions(new Map())
 
-      // Preserve current selected teachers when grid refreshes (new cell data only has the resolved assignment)
-      preserveSelectedTeachersAfterConflictRef.current = true
-      assignmentCountWhenPreserveSetRef.current = selectedCellData?.assignments?.length ?? -1
-      // Clear teacher cache for this cell so a later fetch doesn't overwrite with a stale list (e.g. from before user added teachers)
-      const cellCacheKey = `${classroomId}|${dayId}|${timeSlotId}`
-      teacherCacheRef.current.delete(cellCacheKey)
       // Refresh grid so UI shows updated assignments; use onRefresh so we don't close the panel
       if (onRefresh) await Promise.resolve(onRefresh())
     } catch (error) {
@@ -2757,12 +2907,8 @@ export default function ScheduleSidePanel({
       const message = error instanceof Error ? error.message : 'Failed to resolve conflicts'
       alert(`Failed to resolve conflicts: ${message}`)
     } finally {
+      setConflictResolutionApplying(false)
     }
-  }
-
-  const handleCancelConflictResolution = () => {
-    setConflicts([])
-    setConflictResolutions(new Map())
   }
 
   // Total enrollment for ratio: per-class sum if any class group has enrollment, else single enrollment field
@@ -2936,7 +3082,17 @@ export default function ScheduleSidePanel({
             </SheetHeader>
           </div>
 
-          <div className="px-6">
+          <div className="relative px-6">
+            {/* Hide overlay when unsaved dialog is open so we don't show "Saving…" above the dialog */}
+            {saving && !showUnsavedDialog && (
+              <div
+                className="sticky top-0 z-20 flex min-h-[100dvh] w-full items-center justify-center rounded-lg bg-white/50 backdrop-blur-[2px]"
+                aria-live="polite"
+                aria-busy="true"
+              >
+                <span className="px-4 py-2 text-sm font-medium text-slate-700">Saving…</span>
+              </div>
+            )}
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="text-muted-foreground">Loading...</div>
@@ -4286,6 +4442,7 @@ export default function ScheduleSidePanel({
                       </Label>
                       <ClassSelector
                         selectedClassIds={classGroupIds}
+                        disablePortal
                         onSelectionChange={newClassGroupIds => {
                           // Preserve teachers whenever class groups change (added or removed) if we have existing teachers
                           // This prevents teachers from disappearing when class groups are modified
@@ -4386,7 +4543,7 @@ export default function ScheduleSidePanel({
                             onValueChange={(value: 'total' | 'by_class_group') => {
                               setEnrollmentMode(value)
                               if (value === 'total' && enrollmentForCalculation != null) {
-                                setEnrollment(enrollmentForCalculation)
+                                handleEnrollmentChange(enrollmentForCalculation)
                               }
                             }}
                             className="flex flex-row gap-4 pt-1"
@@ -4422,7 +4579,7 @@ export default function ScheduleSidePanel({
                             <div className="space-y-1 pt-2">
                               <EnrollmentInput
                                 value={enrollment}
-                                onChange={setEnrollment}
+                                onChange={handleEnrollmentChange}
                                 disabled={fieldsDisabled}
                                 hideLabel
                               />
@@ -4473,7 +4630,7 @@ export default function ScheduleSidePanel({
                       ) : (
                         <EnrollmentInput
                           value={enrollment}
-                          onChange={setEnrollment}
+                          onChange={handleEnrollmentChange}
                           disabled={fieldsDisabled}
                           hideLabel
                         />
@@ -4606,32 +4763,34 @@ export default function ScheduleSidePanel({
                             conflicts={conflicts}
                             onResolution={handleConflictResolution}
                             onApply={handleApplyConflictResolutions}
-                            onCancel={handleCancelConflictResolution}
+                            applying={conflictResolutionApplying}
                           />
                         </div>
                       )}
                     </div>
 
-                    {/* Section F: Notes */}
-                    <div
-                      className={`rounded-lg bg-white border border-gray-200 p-6 space-y-2 ${fieldsDisabled ? 'opacity-60' : ''}`}
-                    >
-                      <Label
-                        htmlFor="notes"
-                        className="text-base font-medium text-foreground block mb-6"
+                    {/* Section F: Notes (hidden for inactive cells) */}
+                    {isActive && (
+                      <div
+                        className={`rounded-lg bg-white border border-gray-200 p-6 space-y-2 ${fieldsDisabled ? 'opacity-60' : ''}`}
                       >
-                        Notes
-                      </Label>
-                      <Textarea
-                        id="notes"
-                        value={notes || ''}
-                        onChange={e => setNotes(e.target.value || null)}
-                        placeholder="Add notes for baseline planning..."
-                        disabled={fieldsDisabled}
-                        rows={3}
-                        className="text-base min-h-[80px]"
-                      />
-                    </div>
+                        <Label
+                          htmlFor="notes"
+                          className="text-base font-medium text-foreground block mb-6"
+                        >
+                          Notes
+                        </Label>
+                        <Textarea
+                          id="notes"
+                          value={notes || ''}
+                          onChange={e => setNotes(e.target.value || null)}
+                          placeholder="Add notes for baseline planning..."
+                          disabled={fieldsDisabled}
+                          rows={3}
+                          className="text-base min-h-[80px]"
+                        />
+                      </div>
+                    )}
 
                     {/* Section G: Apply Changes To */}
                     <div className="rounded-lg bg-blue-50/30 border-l-4 border-l-blue-500 border border-gray-200 p-6 mt-16">
@@ -4646,6 +4805,11 @@ export default function ScheduleSidePanel({
                         disabled={slotIsInactive}
                         onApplyScopeChange={handleApplyScopeChange}
                       />
+                      {applyConflictError && (
+                        <p className="mt-3 text-sm text-destructive font-medium" role="alert">
+                          {applyConflictError}
+                        </p>
+                      )}
                     </div>
 
                     {/* Footer Actions */}
@@ -4682,7 +4846,12 @@ export default function ScheduleSidePanel({
                         </Button>
                         <Button
                           onClick={handleSave}
-                          disabled={saving || isParentEffectivelyInactive || conflicts.length > 0}
+                          disabled={
+                            saving ||
+                            isParentEffectivelyInactive ||
+                            conflicts.length > 0 ||
+                            !!applyConflictError
+                          }
                         >
                           {saving
                             ? 'Saving...'
@@ -4706,8 +4875,15 @@ export default function ScheduleSidePanel({
         onDiscard={handleDiscard}
         onCancel={() => {
           setShowUnsavedDialog(false)
+          setApplyConflictError(null)
+          setSaveErrorInDialog(null)
           unsavedDialogReturnToCellRef.current = false
         }}
+        saving={saving}
+        saveError={applyConflictError || saveErrorInDialog}
+        blockSaveReason={
+          conflicts.length > 0 ? 'Resolve scheduling conflicts in the panel before saving.' : null
+        }
       />
 
       {/* Deactivation Confirmation Dialog */}

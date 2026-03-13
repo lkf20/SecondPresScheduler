@@ -45,13 +45,15 @@ const staffRow = {
 }
 const classroomRow = { name: 'Target Room' }
 
-const createSupabaseForResolve = (result: { data: any[] | null; error: Error | null }) => {
+const createSupabaseForResolve = (
+  result: { data: any[] | null; error: Error | null },
+  existingInTarget: { id: string; is_floater: boolean | null } | null = null
+) => {
   const teacherSchedulesBuilder = {
     select: jest.fn(() => teacherSchedulesBuilder),
     eq: jest.fn(() => teacherSchedulesBuilder),
     neq: jest.fn(() => Promise.resolve(result)),
-    // For "existing in target" query in mark_floater (returns no existing row so we create)
-    maybeSingle: jest.fn(() => Promise.resolve({ data: null })),
+    maybeSingle: jest.fn(() => Promise.resolve({ data: existingInTarget })),
   }
 
   const staffBuilder = {
@@ -190,6 +192,59 @@ describe('POST /api/teacher-schedules/resolve-conflict integration', () => {
     expect(createTeacherScheduleAuditLog).toHaveBeenCalledTimes(3)
     expect(json.deleted).toEqual(['conflict-1', 'conflict-2'])
     expect(json.created.id).toBe('new-schedule-1')
+  })
+
+  it('remove_other updates existing target row to permanent when teacher already in target (e.g. floater)', async () => {
+    ;(validateRequest as jest.Mock).mockReturnValue({
+      success: true,
+      data: {
+        ...baseValidationData,
+        resolution: 'remove_other',
+      },
+    })
+    ;(updateTeacherSchedule as jest.Mock).mockResolvedValue({
+      id: 'existing-target',
+      teacher_id: 'teacher-1',
+      classroom_id: 'class-target',
+      is_floater: false,
+    })
+    ;(createClient as jest.Mock).mockResolvedValue(
+      createSupabaseForResolve(
+        {
+          data: [
+            {
+              id: 'conflict-floater',
+              classroom_id: 'class-other',
+              is_floater: true,
+              school_id: 'school-1',
+            },
+          ],
+          error: null,
+        },
+        { id: 'existing-target', is_floater: true }
+      )
+    )
+
+    const response = await POST(
+      new Request('http://localhost/api/teacher-schedules/resolve-conflict', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }) as any
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(deleteTeacherSchedule).toHaveBeenCalledWith('conflict-floater')
+    expect(updateTeacherSchedule).toHaveBeenCalledWith(
+      'existing-target',
+      { is_floater: false },
+      'school-1'
+    )
+    expect(createTeacherSchedule).not.toHaveBeenCalled()
+    expect(json.deleted).toEqual(['conflict-floater'])
+    expect(json.updated).toHaveLength(1)
+    expect(json.updated[0].id).toBe('existing-target')
+    expect(json.updated[0].is_floater).toBe(false)
   })
 
   it('handles mark_floater by updating conflicts to floater and creating floater in target room', async () => {

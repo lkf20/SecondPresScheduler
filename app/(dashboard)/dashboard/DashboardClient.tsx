@@ -366,6 +366,19 @@ export default function DashboardClient({
     shouldUseInitialData ? initialOverview : undefined
   )
 
+  const [orphanedShiftsCount, setOrphanedShiftsCount] = useState<number>(0)
+
+  useEffect(() => {
+    fetch('/api/dashboard/data-health')
+      .then(res => res.json())
+      .then(data => {
+        if (data.orphanedShifts) {
+          setOrphanedShiftsCount(data.orphanedShifts.length)
+        }
+      })
+      .catch(console.error)
+  }, [])
+
   const router = useRouter()
 
   useEffect(() => {
@@ -641,6 +654,19 @@ export default function DashboardClient({
           </Popover>
         </p>
       </section>
+
+      {orphanedShiftsCount > 0 && (
+        <section className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <span className="font-semibold">Action Required:</span> {orphanedShiftsCount} future
+            time-off shift{orphanedShiftsCount !== 1 ? 's' : ''}{' '}
+            {orphanedShiftsCount !== 1 ? 'are' : 'is'} missing a scheduled classroom or fall
+            {orphanedShiftsCount !== 1 ? '' : 's'} on a closed day. Please review the baseline
+            schedule or school calendar to resolve this conflict.
+          </div>
+        </section>
+      )}
 
       <section className="space-y-3 pb-1">
         <div className="grid gap-x-4 gap-y-6 justify-items-start items-stretch grid-cols-[repeat(auto-fill,minmax(250px,250px))]">

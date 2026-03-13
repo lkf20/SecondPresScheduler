@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import * as PopoverPrimitive from '@radix-ui/react-popover'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { X, ChevronDown } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 interface ClassGroup {
   id: string
@@ -98,8 +98,8 @@ export default function ClassGroupMultiSelect({
         Class Groups
       </Label>
 
-      {/* Selected class groups as chips */}
-      <div className="flex flex-wrap items-center gap-2 min-h-[2.5rem]">
+      {/* Selected class groups as chips — items-start + compact height so chips stay short when inline with dropdown */}
+      <div className="flex flex-wrap items-start gap-2 min-h-[2.5rem]">
         {selectedClassGroupsList.map(cg => {
           const isInactive = cg.is_active === false
           return (
@@ -107,7 +107,7 @@ export default function ClassGroupMultiSelect({
               key={cg.id}
               variant={isInactive ? 'outline' : 'secondary'}
               className={cn(
-                'flex items-center gap-1 px-3 py-1 text-sm',
+                'inline-flex h-6 items-center gap-1 px-2.5 py-0.5 text-sm shrink-0 rounded-full',
                 isInactive && 'border-slate-200 bg-slate-50 text-slate-500'
               )}
             >
@@ -126,10 +126,10 @@ export default function ClassGroupMultiSelect({
             </Badge>
           )
         })}
-        {/* Simple dropdown: add a class group */}
+        {/* Simple dropdown: add a class group. Content without Portal so it scrolls inside the side panel. */}
         {!disabled && (
-          <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-            <PopoverTrigger asChild>
+          <PopoverPrimitive.Root open={popoverOpen} onOpenChange={setPopoverOpen}>
+            <PopoverPrimitive.Trigger asChild>
               <Button
                 type="button"
                 variant="outline"
@@ -141,8 +141,16 @@ export default function ClassGroupMultiSelect({
                 <span>{allSelected ? 'All selected' : 'Add class group'}</span>
                 <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-56 p-0" align="start">
+            </PopoverPrimitive.Trigger>
+            <PopoverPrimitive.Content
+              align="start"
+              sideOffset={4}
+              className={cn(
+                'z-[100] w-56 rounded-md border bg-popover p-0 text-popover-foreground shadow-md outline-none',
+                'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+                'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2'
+              )}
+            >
               {addableClassGroups.length > 0 && (
                 <div className="border-b border-border px-2 py-1.5">
                   <button
@@ -154,7 +162,7 @@ export default function ClassGroupMultiSelect({
                   </button>
                 </div>
               )}
-              <ul className="max-h-60 overflow-y-auto py-1">
+              <ul className="max-h-60 overflow-y-auto overscroll-contain py-1">
                 {addableClassGroups.length === 0 ? (
                   <li className="px-3 py-2 text-sm text-muted-foreground">
                     No more class groups to add
@@ -173,8 +181,8 @@ export default function ClassGroupMultiSelect({
                   ))
                 )}
               </ul>
-            </PopoverContent>
-          </Popover>
+            </PopoverPrimitive.Content>
+          </PopoverPrimitive.Root>
         )}
       </div>
 

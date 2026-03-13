@@ -3,6 +3,7 @@
 import React from 'react'
 import { CheckCircle2, AlertTriangle, XCircle, CornerDownRight } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import StaffChip from '@/components/ui/staff-chip'
 import type { WeeklyScheduleData } from '@/lib/api/weekly-schedule'
 import { BREAK_COVERAGE_ENABLED } from '@/lib/feature-flags'
 import { getTotalEnrollmentForCalculation } from './ScheduleSidePanel'
@@ -61,8 +62,8 @@ export default function ScheduleCell({
 }: ScheduleCellProps) {
   const scheduleCell = data?.schedule_cell
   const notesText = scheduleCell?.notes?.trim() ?? ''
-  const showNotesBlock = showNotes && notesText.length > 0
   const isInactive = scheduleCell && !scheduleCell.is_active
+  const showNotesBlock = showNotes && notesText.length > 0 && !isInactive
   const isActive = scheduleCell?.is_active ?? false
 
   // Total enrollment: per-class sum if any set, else cell enrollment_for_staffing
@@ -98,12 +99,17 @@ export default function ScheduleCell({
           ? `All class groups (${enrollment})`
           : 'All class groups'
         : classGroupsSorted.length === 1
-          ? enrollment != null
-            ? `${classGroupsSorted[0].name} (${enrollment})`
-            : classGroupsSorted[0].name
-          : classGroupsSorted
-              .map(cg => (cg.enrollment != null ? `${cg.name} (${cg.enrollment})` : cg.name))
-              .join(', ')
+          ? `${classGroupsSorted[0].name} (${enrollment != null ? enrollment : 0})`
+          : (() => {
+              // When enrollment is stored by total (no per-class values), list names only; total shown at end.
+              const hasPerClassEnrollment = classGroupsSorted.some(cg => cg.enrollment != null)
+              if (hasPerClassEnrollment) {
+                return classGroupsSorted
+                  .map(cg => `${cg.name} (${Math.max(0, Number(cg.enrollment) ?? 0)})`)
+                  .join(', ')
+              }
+              return classGroupsSorted.map(cg => cg.name).join(', ')
+            })()
       : data?.assignments && data.assignments.length > 0
         ? data.assignments.find(a => a.class_name)?.class_name
         : null
@@ -372,28 +378,30 @@ export default function ScheduleCell({
                   const teacherName = absence.teacher_name || 'Unknown'
                   const hasSubForAbsence = substitutes.length > 0 || absence.has_sub === true
 
-                  // Gray styling for absent teachers (matches the key) - make clickable
                   const chip = (
-                    <span
+                    <StaffChip
                       key={`absent-${absence.teacher_id}`}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold w-fit bg-gray-100 text-gray-700 border border-gray-300 cursor-pointer hover:bg-gray-200 transition-colors"
+                      staffId={absence.teacher_id}
+                      name={teacherName}
+                      variant="absent"
+                      navigable={false}
                       title={hasSubForAbsence ? 'Absent' : 'No sub assigned'}
-                    >
-                      <span>{teacherName}</span>
-                      {!hasSubForAbsence && (
-                        <AlertTriangle
-                          className={`h-3 w-3 shrink-0 ${
-                            staffingStatus === 'green'
-                              ? 'text-gray-400'
-                              : staffingStatus === 'amber'
-                                ? 'text-amber-700'
-                                : staffingStatus === 'red'
-                                  ? 'text-red-600'
-                                  : 'text-amber-700'
-                          }`}
-                        />
-                      )}
-                    </span>
+                      suffix={
+                        !hasSubForAbsence ? (
+                          <AlertTriangle
+                            className={`h-3 w-3 shrink-0 ${
+                              staffingStatus === 'green'
+                                ? 'text-gray-400'
+                                : staffingStatus === 'amber'
+                                  ? 'text-amber-700'
+                                  : staffingStatus === 'red'
+                                    ? 'text-red-600'
+                                    : 'text-amber-700'
+                            }`}
+                          />
+                        ) : undefined
+                      }
+                    />
                   )
 
                   // Wrap absent teachers in popover for actions
@@ -422,12 +430,12 @@ export default function ScheduleCell({
                             className="flex items-center gap-1 ml-2 mt-0.5"
                           >
                             <CornerDownRight className="h-3 w-3 text-gray-400 shrink-0" />
-                            <span
-                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold w-fit bg-teal-50 text-teal-600 border border-teal-200"
+                            <StaffChip
+                              staffId={sub.teacher_id}
+                              name={sub.teacher_name || 'Unknown'}
+                              variant="sub"
                               title="Substitute"
-                            >
-                              {sub.teacher_name || 'Unknown'}
-                            </span>
+                            />
                           </div>
                         ))}
                       </div>
@@ -439,69 +447,46 @@ export default function ScheduleCell({
                 } else if (group.assignment) {
                   // Handle regular teachers and floaters (from assignments array)
                   const assignment = group.assignment
-                  let className =
-                    'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold w-fit '
+                  let variant: 'permanent' | 'flex' | 'floater' | 'tempCoverage' | 'breakCoverage' =
+                    'permanent'
                   let title: string | undefined = undefined
 
                   if (assignment.is_floater) {
-                    className +=
-                      'bg-purple-100 text-purple-800 border border-purple-300 border-dashed'
+                    variant = 'floater'
                     title = 'Floater assignment'
                   } else if (assignment.is_flexible) {
                     if (assignment.staffing_event_id) {
-                      // When Break Coverage feature is off, show all temp coverage as standard.
                       if (assignment.event_category === 'break' && BREAK_COVERAGE_ENABLED) {
-                        className +=
-                          'bg-indigo-50 text-indigo-700 border border-indigo-300 border-dashed'
+                        variant = 'breakCoverage'
                         title = 'Break Coverage'
                       } else {
-                        className +=
-                          'bg-[#fdf2f8] text-pink-700 border border-[#f9a8d4] border-dashed'
+                        variant = 'tempCoverage'
                         title = 'Temporary coverage'
                       }
                     } else {
-                      className += 'bg-blue-50 text-blue-800 border border-blue-500 border-dashed'
+                      variant = 'flex'
                       title = 'Flex Teacher'
                     }
                   } else {
-                    className += 'bg-blue-100 text-blue-800 border border-blue-300'
+                    title = undefined
                   }
 
+                  const breakSuffix =
+                    BREAK_COVERAGE_ENABLED &&
+                    assignment.break_start_time &&
+                    assignment.break_end_time
+                      ? `☕ ${assignment.break_start_time.slice(0, 5)} - ${assignment.break_end_time.slice(0, 5)}`
+                      : undefined
+
                   const chip = (
-                    <span
+                    <StaffChip
                       key={assignment.id || assignment.teacher_id}
-                      className={className}
+                      staffId={assignment.teacher_id}
+                      name={assignment.teacher_name || 'Unknown'}
+                      variant={variant}
                       title={title}
-                      style={
-                        assignment.is_flexible
-                          ? assignment.staffing_event_id
-                            ? assignment.event_category === 'break' && BREAK_COVERAGE_ENABLED
-                              ? {
-                                  borderColor: '#a5b4fc',
-                                  backgroundColor: '#eef2ff',
-                                  color: '#4338ca',
-                                }
-                              : {
-                                  borderColor: '#f9a8d4',
-                                  backgroundColor: '#fdf2f8',
-                                  color: '#db2777',
-                                }
-                            : { borderColor: '#3b82f6' }
-                          : !assignment.is_floater
-                            ? { borderColor: '#93c5fd' }
-                            : undefined
-                      }
-                    >
-                      {assignment.teacher_name || 'Unknown'}
-                      {BREAK_COVERAGE_ENABLED &&
-                        assignment.break_start_time &&
-                        assignment.break_end_time && (
-                          <span className="ml-1 inline-flex items-center text-[10px] opacity-80 whitespace-nowrap">
-                            ☕ {assignment.break_start_time.slice(0, 5)} -{' '}
-                            {assignment.break_end_time.slice(0, 5)}
-                          </span>
-                        )}
-                    </span>
+                      suffix={breakSuffix}
+                    />
                   )
 
                   result.push(chip)

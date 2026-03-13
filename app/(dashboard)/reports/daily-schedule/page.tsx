@@ -842,9 +842,10 @@ export default function DailyScheduleReportPage() {
                                 ? getEnrollmentSummary(slotData)
                                 : null
                               const youngestRatioGroup = getYoungestRatioGroup(slotData)
-                              const slotNotes = showNotes
-                                ? slotData?.schedule_cell?.notes?.trim()
-                                : ''
+                              const slotNotes =
+                                showNotes && slotData?.schedule_cell?.is_active
+                                  ? (slotData?.schedule_cell?.notes?.trim() ?? '')
+                                  : ''
                               const ratioSummary = formatRatioSummary({
                                 showRequiredRatios,
                                 showPreferredRatios,

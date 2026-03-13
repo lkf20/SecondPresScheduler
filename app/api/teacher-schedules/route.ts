@@ -3,6 +3,7 @@ import {
   getAllTeacherSchedules,
   createTeacherSchedule,
   getTeacherScheduleById,
+  TeacherScheduleConflictError,
 } from '@/lib/api/schedules'
 import { createErrorResponse } from '@/lib/utils/errors'
 import {
@@ -77,6 +78,9 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json(schedule, { status: 201 })
   } catch (error) {
+    if (error instanceof TeacherScheduleConflictError) {
+      return NextResponse.json({ error: error.userMessage }, { status: 409 })
+    }
     return createErrorResponse(
       error,
       'Failed to create teacher schedule',

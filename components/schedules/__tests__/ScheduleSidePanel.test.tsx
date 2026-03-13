@@ -102,17 +102,95 @@ jest.mock('@/components/ui/date-picker-input', () => () => <input />)
 jest.mock('@/components/time-off/TimeOffForm', () => () => <div>TimeOffForm</div>)
 jest.mock('@/components/schedules/SlotStatusToggle', () => () => <div>SlotStatusToggle</div>)
 jest.mock('@/components/settings/ClassSelector', () => () => <div>ClassSelector</div>)
-jest.mock('@/components/schedules/EnrollmentInput', () => () => <div>EnrollmentInput</div>)
-jest.mock('@/components/schedules/TeacherMultiSelect', () => () => <div>TeacherMultiSelect</div>)
-jest.mock('@/components/schedules/MultiDayApplySelector', () => ({
+jest.mock('@/components/schedules/EnrollmentInput', () => ({
   __esModule: true,
-  default: ({ disabled }: { disabled?: boolean }) => (
-    <div data-testid="multi-day-apply" data-disabled={disabled ? 'true' : 'false'}>
-      MultiDayApplySelector
+  default: ({
+    value,
+    onChange,
+    disabled,
+    hideLabel,
+  }: {
+    value: number | null
+    onChange: (v: number | null) => void
+    disabled?: boolean
+    hideLabel?: boolean
+  }) => (
+    <div>
+      {!hideLabel && <label htmlFor="enrollment-input">Enrollment</label>}
+      <input
+        id="enrollment-input"
+        data-testid="enrollment-input"
+        type="number"
+        min={1}
+        value={value ?? ''}
+        disabled={disabled}
+        onChange={e => {
+          const v = e.target.value
+          if (v === '') onChange(null)
+          else {
+            const n = parseInt(v, 10)
+            if (!Number.isNaN(n) && n > 0) onChange(n)
+          }
+        }}
+      />
     </div>
   ),
 }))
-jest.mock('@/components/schedules/UnsavedChangesDialog', () => () => null)
+jest.mock('@/components/schedules/TeacherMultiSelect', () => () => <div>TeacherMultiSelect</div>)
+jest.mock('@/components/schedules/MultiDayApplySelector', () => ({
+  __esModule: true,
+  default: ({
+    disabled,
+    onApplyScopeChange,
+  }: {
+    disabled?: boolean
+    onApplyScopeChange?: (
+      scope: 'single' | 'timeSlot' | 'day',
+      dayIds: string[],
+      timeSlotIds?: string[]
+    ) => void
+  }) => (
+    <div data-testid="multi-day-apply" data-disabled={disabled ? 'true' : 'false'}>
+      MultiDayApplySelector
+      {onApplyScopeChange && (
+        <button
+          type="button"
+          onClick={() => onApplyScopeChange('timeSlot', ['day-1', 'day-2'])}
+          aria-label="Apply to other days"
+        >
+          Apply to other days
+        </button>
+      )}
+    </div>
+  ),
+}))
+jest.mock('@/components/schedules/UnsavedChangesDialog', () => {
+  return function UnsavedChangesDialogMock(props: {
+    isOpen: boolean
+    blockSaveReason?: string | null
+    saveError?: string | null
+    saving?: boolean
+    onSave?: () => void
+  }) {
+    if (!props.isOpen) return null
+    const saveDisabled = props.saving || !!props.saveError || !!props.blockSaveReason
+    return (
+      <div
+        data-testid="unsaved-dialog"
+        data-block-save-reason={String(props.blockSaveReason ?? '')}
+        data-save-error={String(props.saveError ?? '')}
+      >
+        <button type="button" disabled={saveDisabled} onClick={() => props.onSave?.()}>
+          Save
+        </button>
+        {props.blockSaveReason ? (
+          <span data-testid="block-reason-text">{props.blockSaveReason}</span>
+        ) : null}
+        {props.saveError ? <span data-testid="save-error-text">{props.saveError}</span> : null}
+      </div>
+    )
+  }
+})
 jest.mock('@/components/schedules/ConflictBanner', () => () => <div>ConflictBanner</div>)
 
 const originalFetch = global.fetch
@@ -124,11 +202,21 @@ const setupFetch = (
     weekdays: string[]
     matching_shift_count: number
   },
-  options?: { checkConflictsResponse?: { conflicts: any[] } }
+  options?: {
+    checkConflictsResponse?: { conflicts: any[] }
+    /** When set, capture the request body of PUT /api/schedule-cells/bulk for assertions */
+    onBulkSave?: (body: { updates: Array<{ enrollment_for_staffing?: number | null }> }) => void
+    /** When set, used for check-conflicts; return conflicts for apply (multi-cell) requests when desired */
+    getCheckConflictsResponse?: (body: {
+      checks: Array<{ day_of_week_id: string; time_slot_id: string }>
+    }) => { conflicts: any[] }
+  }
 ) => {
   const checkConflictsResponse = options?.checkConflictsResponse ?? { conflicts: [] }
+  const onBulkSave = options?.onBulkSave
+  const getCheckConflictsResponse = options?.getCheckConflictsResponse
 
-  global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+  global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
 
     if (url.includes('/api/timeslots')) {
@@ -150,9 +238,20 @@ const setupFetch = (
       } as Response
     }
     if (url.includes('/api/teacher-schedules/check-conflicts')) {
+      let response = checkConflictsResponse
+      if (getCheckConflictsResponse && init?.body) {
+        try {
+          const body = JSON.parse(init.body as string) as {
+            checks?: Array<{ day_of_week_id: string; time_slot_id: string }>
+          }
+          if (body.checks) response = getCheckConflictsResponse(body)
+        } catch {
+          // keep default
+        }
+      }
       return {
         ok: true,
-        json: async () => checkConflictsResponse,
+        json: async () => response,
       } as Response
     }
     if (url.includes('/api/teacher-schedules')) {
@@ -223,6 +322,16 @@ const setupFetch = (
           shift_metrics: [],
           day_options: [],
         }),
+      } as Response
+    }
+    if (url.includes('/api/schedule-cells/bulk') && init?.method === 'PUT' && init?.body) {
+      const body = JSON.parse(init.body as string) as {
+        updates: Array<{ enrollment_for_staffing?: number | null }>
+      }
+      onBulkSave?.(body)
+      return {
+        ok: true,
+        json: async () => body.updates ?? [],
       } as Response
     }
     return {
@@ -500,6 +609,292 @@ describe('ScheduleSidePanel interactions', () => {
     )
   })
 
+  it('blocks Apply when a target cell would conflict and shows clear error message', async () => {
+    let bulkPutCalled = false
+    setupFetch(
+      {
+        start_date: '2026-02-09',
+        end_date: '2026-02-09',
+        weekdays: ['Monday'],
+        matching_shift_count: 1,
+      },
+      {
+        getCheckConflictsResponse: (body: {
+          checks: Array<{ day_of_week_id: string; time_slot_id: string }>
+        }) => {
+          const pairs = new Set(body.checks.map(c => `${c.day_of_week_id}:${c.time_slot_id}`))
+          return pairs.size >= 2
+            ? {
+                conflicts: [
+                  {
+                    teacher_id: 'teacher-1',
+                    teacher_name: 'Bella W.',
+                    conflicting_classroom_name: 'Toddler B Room',
+                    day_of_week_name: 'Tuesday',
+                    time_slot_code: 'EM',
+                  },
+                ],
+              }
+            : { conflicts: [] }
+        },
+        onBulkSave: () => {
+          bulkPutCalled = true
+        },
+      }
+    )
+
+    const props = buildProps()
+    render(
+      <ScheduleSidePanel
+        {...props}
+        readOnly={false}
+        selectedDayIds={['day-1', 'day-2']}
+        selectedCellData={{
+          ...props.selectedCellData,
+          schedule_cell: props.selectedCellData?.schedule_cell,
+        }}
+      />
+    )
+
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument(), {
+      timeout: 3000,
+    })
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
+
+    const applyToOtherDaysButton = screen.getByRole('button', { name: 'Apply to other days' })
+    await act(async () => {
+      fireEvent.click(applyToOtherDaysButton)
+    })
+
+    const saveButton = screen.getByRole('button', { name: 'Save' })
+    await act(async () => {
+      fireEvent.click(saveButton)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/Cannot apply:/)).toBeInTheDocument()
+      expect(
+        screen.getByText(/Bella W\. is already scheduled in Toddler B Room for Tuesday EM/)
+      ).toBeInTheDocument()
+    })
+    expect(bulkPutCalled).toBe(false)
+  })
+
+  it('Apply to multiple cells with no conflicts succeeds (bulk and teacher-schedule flow run)', async () => {
+    let bulkPutCalled = false
+    setupFetch(
+      {
+        start_date: '2026-02-09',
+        end_date: '2026-02-09',
+        weekdays: ['Monday'],
+        matching_shift_count: 1,
+      },
+      {
+        getCheckConflictsResponse: () => ({ conflicts: [] }),
+        onBulkSave: () => {
+          bulkPutCalled = true
+        },
+      }
+    )
+
+    const props = buildProps()
+    render(
+      <ScheduleSidePanel
+        {...props}
+        readOnly={false}
+        selectedDayIds={['day-1', 'day-2']}
+        selectedCellData={{
+          ...props.selectedCellData,
+          schedule_cell: props.selectedCellData?.schedule_cell,
+        }}
+      />
+    )
+
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument(), {
+      timeout: 3000,
+    })
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
+
+    const applyToOtherDaysButton = screen.getByRole('button', { name: 'Apply to other days' })
+    await act(async () => {
+      fireEvent.click(applyToOtherDaysButton)
+    })
+
+    const saveButton = screen.getByRole('button', { name: 'Save' })
+    await act(async () => {
+      fireEvent.click(saveButton)
+    })
+
+    await waitFor(() => {
+      expect(bulkPutCalled).toBe(true)
+    })
+  })
+
+  it('Unsaved dialog shows block reason and disables Save when user has direct-assignment conflicts and tries to close', async () => {
+    setupFetch(
+      {
+        start_date: '2026-02-09',
+        end_date: '2026-02-09',
+        weekdays: ['Monday'],
+        matching_shift_count: 1,
+      },
+      {
+        checkConflictsResponse: {
+          conflicts: [
+            {
+              teacher_id: 'teacher-1',
+              teacher_name: 'Bella W.',
+              conflicting_schedule_id: 'ts-other',
+              conflicting_classroom_id: 'class-other',
+              conflicting_classroom_name: 'Toddler B Room',
+              day_of_week_id: 'day-1',
+              day_of_week_name: 'Monday',
+              time_slot_id: 'slot-1',
+              time_slot_code: 'EM',
+              target_classroom_id: 'class-1',
+              conflicting_role_label: 'Permanent teacher',
+            },
+          ],
+        },
+      }
+    )
+
+    const props = buildProps()
+    const selectedCellDataEmptyThenFilled = {
+      ...props.selectedCellData,
+      assignments: [],
+      schedule_cell: props.selectedCellData?.schedule_cell,
+    }
+
+    render(
+      <ScheduleSidePanel
+        {...props}
+        readOnly={false}
+        selectedCellData={selectedCellDataEmptyThenFilled}
+      />
+    )
+
+    await waitFor(() => expect(screen.getByText('ConflictBanner')).toBeInTheDocument(), {
+      timeout: 3000,
+    })
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
+
+    const cancelButton = screen.getByRole('button', { name: 'Cancel' })
+    await act(async () => {
+      fireEvent.click(cancelButton)
+    })
+
+    const dialog = screen.getByTestId('unsaved-dialog')
+    expect(dialog).toBeInTheDocument()
+    expect(dialog).toHaveAttribute(
+      'data-block-save-reason',
+      'Resolve scheduling conflicts in the panel before saving.'
+    )
+    expect(screen.getByTestId('block-reason-text')).toHaveTextContent(
+      'Resolve scheduling conflicts in the panel before saving.'
+    )
+    const saveInDialog = screen.getByTestId('unsaved-dialog').querySelector('button')
+    expect(saveInDialog).toBeDisabled()
+  })
+
+  it('Unsaved dialog shows save error and disables Save when user has Apply conflict and clicks Save from dialog', async () => {
+    let bulkPutCalled = false
+    setupFetch(
+      {
+        start_date: '2026-02-09',
+        end_date: '2026-02-09',
+        weekdays: ['Monday'],
+        matching_shift_count: 1,
+      },
+      {
+        getCheckConflictsResponse: (body: {
+          checks: Array<{ day_of_week_id: string; time_slot_id: string }>
+        }) => {
+          const pairs = new Set(body.checks.map(c => `${c.day_of_week_id}:${c.time_slot_id}`))
+          return pairs.size >= 2
+            ? {
+                conflicts: [
+                  {
+                    teacher_name: 'Anne M.',
+                    conflicting_classroom_name: 'Infant Room',
+                    day_of_week_name: 'Monday',
+                    time_slot_code: 'EM',
+                  },
+                ],
+              }
+            : { conflicts: [] }
+        },
+        onBulkSave: () => {
+          bulkPutCalled = true
+        },
+      }
+    )
+
+    const props = buildProps()
+    render(
+      <ScheduleSidePanel
+        {...props}
+        readOnly={false}
+        selectedDayIds={['day-1', 'day-2']}
+        selectedCellData={{
+          ...props.selectedCellData,
+          schedule_cell: props.selectedCellData?.schedule_cell,
+        }}
+      />
+    )
+
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument(), {
+      timeout: 3000,
+    })
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
+
+    const enrollmentInput = screen.getByTestId('enrollment-input')
+    await act(async () => {
+      fireEvent.change(enrollmentInput, { target: { value: '9' } })
+    })
+
+    const applyToOtherDaysButton = screen.getByRole('button', { name: 'Apply to other days' })
+    await act(async () => {
+      fireEvent.click(applyToOtherDaysButton)
+    })
+
+    const cancelButton = screen.getByRole('button', { name: 'Cancel' })
+    await act(async () => {
+      fireEvent.click(cancelButton)
+    })
+
+    const dialog = screen.getByTestId('unsaved-dialog')
+    expect(dialog).toBeInTheDocument()
+    expect(bulkPutCalled).toBe(false)
+
+    const saveInDialog = dialog.querySelector('button')
+    expect(saveInDialog).not.toBeDisabled()
+    await act(async () => {
+      fireEvent.click(saveInDialog!)
+    })
+
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('save-error-text')).toHaveTextContent(/Cannot apply:/)
+        expect(screen.getByTestId('save-error-text')).toHaveTextContent(
+          /Anne M\. is already scheduled in Infant Room for Monday EM/
+        )
+      },
+      { timeout: 3000 }
+    )
+    const saveButtonAfterError = screen.getByTestId('unsaved-dialog').querySelector('button')
+    expect(saveButtonAfterError).toBeDisabled()
+    expect(bulkPutCalled).toBe(false)
+  })
+
   it('keeps Save enabled when slot is inactive so user can persist deactivation or other changes', async () => {
     setupFetch({
       start_date: '2026-02-09',
@@ -527,6 +922,68 @@ describe('ScheduleSidePanel interactions', () => {
     const saveButton = await screen.findByRole('button', { name: 'Save' })
     expect(saveButton).not.toBeDisabled()
     expect(screen.getByTestId('multi-day-apply')).toHaveAttribute('data-disabled', 'true')
+  })
+
+  it('saves user-entered enrollment for single class group (By total mode, not by_class_group)', async () => {
+    let bulkSaveBody: { updates: Array<{ enrollment_for_staffing?: number | null }> } | null = null
+    setupFetch(
+      {
+        start_date: '2026-02-09',
+        end_date: '2026-02-09',
+        weekdays: ['Monday'],
+        matching_shift_count: 1,
+      },
+      {
+        onBulkSave: body => {
+          bulkSaveBody = body
+        },
+      }
+    )
+
+    const props = buildProps()
+    const selectedCellData = {
+      ...props.selectedCellData,
+      schedule_cell: {
+        ...props.selectedCellData!.schedule_cell,
+        enrollment_for_staffing: 5,
+        class_groups: [
+          {
+            id: 'cg-1',
+            name: 'Infant A',
+            min_age: 1,
+            max_age: 2,
+            required_ratio: 4,
+            preferred_ratio: 3,
+            enrollment: 5,
+          },
+        ],
+      },
+    }
+
+    render(<ScheduleSidePanel {...props} readOnly={false} selectedCellData={selectedCellData} />)
+
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument(), {
+      timeout: 3000,
+    })
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
+
+    const enrollmentInput = screen.getByTestId('enrollment-input')
+    expect(enrollmentInput).toHaveValue(5)
+    await act(async () => {
+      fireEvent.change(enrollmentInput, { target: { value: '8' } })
+    })
+
+    const saveButton = await screen.findByRole('button', { name: 'Save' })
+    await act(async () => {
+      fireEvent.click(saveButton)
+    })
+
+    await waitFor(() => {
+      expect(bulkSaveBody).toBeDefined()
+      expect(bulkSaveBody!.updates[0].enrollment_for_staffing).toBe(8)
+    })
   })
 
   it('shows class group required message only when slot is active', async () => {

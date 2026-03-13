@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { parseLocalDate } from '@/lib/utils/date'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { getNeutralChipClasses, coverageColorValues } from '@/lib/utils/colors'
+import StaffLink from '@/components/ui/staff-link'
 
 export type TimeOffCardVariant = 'sub-finder' | 'dashboard' | 'time-off'
 
@@ -31,6 +32,8 @@ export interface ClassroomBadge {
 export interface TimeOffCardProps {
   id: string
   teacherName: string
+  /** When provided, teacher name is a link to staff profile with hover underline. */
+  teacherId?: string
   startDate: string
   endDate: string | null
   reason: string | null
@@ -76,6 +79,7 @@ const formatFullDateLabel = (value: string) => {
 export default function TimeOffCard({
   id,
   teacherName,
+  teacherId,
   startDate,
   endDate,
   reason,
@@ -150,7 +154,15 @@ export default function TimeOffCard({
           <div className="flex items-start justify-between mb-2">
             <div className="flex-1">
               <div className="flex flex-wrap items-center gap-2 mb-1">
-                <h3 className="font-semibold text-lg text-slate-800">{teacherName}</h3>
+                {teacherId ? (
+                  <StaffLink
+                    staffId={teacherId}
+                    name={teacherName}
+                    className="font-semibold text-lg text-slate-800"
+                  />
+                ) : (
+                  <h3 className="font-semibold text-lg text-slate-800">{teacherName}</h3>
+                )}
                 {reason && (
                   <span
                     className={cn(
@@ -247,7 +259,15 @@ export default function TimeOffCard({
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-3 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="text-lg font-semibold text-slate-900">{teacherName}</div>
+            {teacherId ? (
+              <StaffLink
+                staffId={teacherId}
+                name={teacherName}
+                className="text-lg font-semibold text-slate-900"
+              />
+            ) : (
+              <div className="text-lg font-semibold text-slate-900">{teacherName}</div>
+            )}
             {reason && (
               <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
                 {reason}

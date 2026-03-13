@@ -1,8 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import StaffLink from '@/components/ui/staff-link'
 import { cn } from '@/lib/utils'
 
 type ActivityRow = {
@@ -64,20 +65,50 @@ function formatTimeOffDateRange(details: Record<string, any>): string {
   return ` for ${startStr} - ${endStr}`
 }
 
-function formatDescription(row: ActivityRow) {
+function renderTeacherPart(details: Record<string, any>): React.ReactNode {
+  const teacherId = details.teacher_id
+  const teacherName = details.teacher_name || 'Unknown'
+  if (teacherId && teacherName) {
+    return <StaffLink staffId={teacherId} name={teacherName} />
+  }
+  return teacherName
+}
+
+function formatDescription(row: ActivityRow): React.ReactNode {
   const details = row.details || {}
 
   if (row.category === 'time_off') {
-    const teacherName = details.teacher_name ? ` for ${details.teacher_name}` : ''
+    const teacherPart = details.teacher_name
+      ? details.teacher_id
+        ? [' for ', renderTeacherPart(details)]
+        : ` for ${details.teacher_name}`
+      : null
     const dateRange = formatTimeOffDateRange(details)
-    if (row.action === 'create') return `Created time off request${teacherName}${dateRange}`
-    if (row.action === 'cancel') return `Cancelled time off request${teacherName}`
+    if (row.action === 'create')
+      return (
+        <>
+          Created time off request{teacherPart}
+          {dateRange}
+        </>
+      )
+    if (row.action === 'cancel') return <>Cancelled time off request{teacherPart}</>
     if (row.action === 'status_change') {
       const before = details.before?.status ? `from ${details.before.status} ` : ''
       const after = details.after?.status ? `to ${details.after.status}` : ''
-      return `Updated time off request${teacherName}${dateRange} ${before}${after}`.trim()
+      return (
+        <>
+          Updated time off request{teacherPart}
+          {dateRange} {before}
+          {after}
+        </>
+      )
     }
-    return `Updated time off request${teacherName}${dateRange}`.trim()
+    return (
+      <>
+        Updated time off request{teacherPart}
+        {dateRange}
+      </>
+    )
   }
 
   if (row.category === 'sub_assignment') {
@@ -89,18 +120,29 @@ function formatDescription(row: ActivityRow) {
   }
 
   if (row.category === 'temporary_coverage') {
-    const teacherName = details.teacher_name || 'staff'
+    const teacherPart = renderTeacherPart({
+      ...details,
+      teacher_name: details.teacher_name || 'staff',
+    })
     if (row.action === 'assign') {
       const classroom = details.classroom_name
-      return classroom
-        ? `Assigned ${teacherName} for temporary coverage to ${classroom}`
-        : `Assigned ${teacherName} for temporary coverage`
+      return classroom ? (
+        <>
+          Assigned {teacherPart} for temporary coverage to {classroom}
+        </>
+      ) : (
+        <>Assigned {teacherPart} for temporary coverage</>
+      )
     }
     if (row.action === 'cancel') {
       const count = details.removed_count
-      return count
-        ? `Removed temporary coverage for ${teacherName} (${count} shift${count !== 1 ? 's' : ''})`
-        : `Removed temporary coverage for ${teacherName}`
+      return count ? (
+        <>
+          Removed temporary coverage for {teacherPart} ({count} shift{count !== 1 ? 's' : ''})
+        </>
+      ) : (
+        <>Removed temporary coverage for {teacherPart}</>
+      )
     }
   }
 
@@ -128,19 +170,30 @@ function formatDescription(row: ActivityRow) {
       }
     }
     if (row.entity_type === 'teacher_schedule') {
-      const teacherName = details.teacher_name ?? 'teacher'
+      const teacherPart = renderTeacherPart({
+        ...details,
+        teacher_name: details.teacher_name ?? 'teacher',
+      })
       const slotLabel = [details.classroom_name, details.day_name, details.time_slot_code]
         .filter(Boolean)
         .join(' ')
       if (row.action === 'assign') {
-        return slotLabel
-          ? `Assigned ${teacherName} to ${slotLabel} baseline schedule`
-          : `Assigned ${teacherName} to baseline schedule`
+        return slotLabel ? (
+          <>
+            Assigned {teacherPart} to {slotLabel} baseline schedule
+          </>
+        ) : (
+          <>Assigned {teacherPart} to baseline schedule</>
+        )
       }
       if (row.action === 'unassign') {
-        return slotLabel
-          ? `Removed ${teacherName} from ${slotLabel} baseline schedule`
-          : `Removed ${teacherName} from baseline schedule`
+        return slotLabel ? (
+          <>
+            Removed {teacherPart} from {slotLabel} baseline schedule
+          </>
+        ) : (
+          <>Removed {teacherPart} from baseline schedule</>
+        )
       }
       if (row.action === 'update') return 'Updated teacher assignment in baseline schedule'
       if (details.reason?.startsWith('conflict_resolution'))

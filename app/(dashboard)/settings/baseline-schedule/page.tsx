@@ -15,6 +15,7 @@ import { useWeeklySchedule } from '@/lib/hooks/use-weekly-schedule'
 import { useScheduleSettings } from '@/lib/hooks/use-schedule-settings'
 import { useFilterOptions } from '@/lib/hooks/use-filter-options'
 import { invalidateWeeklySchedule } from '@/lib/utils/invalidation'
+import { weeklyScheduleKey } from '@/lib/utils/query-keys'
 import {
   includeNewIdsWhenPreviouslyAllSelected,
   reconcileSelectedIdsWithAvailable,
@@ -371,18 +372,17 @@ export default function BaselineSchedulePage() {
     }
   }, [availableTimeSlotIds, filters?.selectedTimeSlotIds])
 
-  // Handle refresh - invalidate React Query cache and refetch (used by header refresh button).
+  // Handle refresh - invalidate React Query cache and refetch (used by header refresh button and after baseline cell save).
   // Navigation to weekly when returnToWeekly is true is handled by a separate "Back to Weekly" control, not by refresh.
   const handleRefresh = useCallback(async () => {
     if (schoolId) {
       invalidateWeeklySchedule(queryClient, schoolId)
       queryClient.invalidateQueries({ queryKey: ['scheduleSettings', schoolId] })
       await queryClient.refetchQueries({
-        queryKey: ['weeklySchedule', schoolId],
-        type: 'active',
+        queryKey: weeklyScheduleKey(schoolId, weekStartISO),
       })
     }
-  }, [schoolId, queryClient])
+  }, [schoolId, weekStartISO, queryClient])
 
   // Handle filter changes - ensure displayMode is always permanent-only for baseline schedule
   const handleFiltersChange = useCallback((newFilters: FilterState) => {

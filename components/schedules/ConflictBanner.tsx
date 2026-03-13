@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import StaffLink from '@/components/ui/staff-link'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 
@@ -30,14 +31,15 @@ interface ConflictBannerProps {
   onResolution: (conflictId: string, resolution: ConflictResolution) => void
   /** Called with the current selected resolutions so the handler can use them immediately (state may not have updated yet). */
   onApply: (resolutions: Map<string, ConflictResolution>) => void
-  onCancel: () => void
+  /** When true, Apply is in progress; show loading and disable Apply button. */
+  applying?: boolean
 }
 
 export default function ConflictBanner({
   conflicts,
   onResolution,
   onApply,
-  onCancel,
+  applying = false,
 }: ConflictBannerProps) {
   const [selectedResolutions, setSelectedResolutions] = useState<Map<string, ConflictResolution>>(
     new Map()
@@ -88,9 +90,11 @@ export default function ConflictBanner({
                 className="bg-white border border-amber-200 rounded-md p-3 space-y-3 min-w-0"
               >
                 <p className="text-sm text-gray-700 min-w-0 break-words">
-                  <span className="font-medium text-gray-900">
-                    {conflict.teacher_name || 'Unknown teacher'}
-                  </span>
+                  <StaffLink
+                    staffId={conflict.teacher_id}
+                    name={conflict.teacher_name || 'Unknown teacher'}
+                    className="font-medium text-gray-900"
+                  />
                   {isInconsistentFloater ? (
                     <>
                       <span className="text-gray-600"> is already scheduled as a </span>
@@ -164,11 +168,20 @@ export default function ConflictBanner({
           })}
 
           <div className="flex gap-2 pt-2">
-            <Button type="button" variant="teal" onClick={handleApply} disabled={!allResolved}>
-              Apply selection
-            </Button>
-            <Button type="button" variant="outline" onClick={onCancel}>
-              Cancel
+            <Button
+              type="button"
+              variant="teal"
+              onClick={handleApply}
+              disabled={!allResolved || applying}
+            >
+              {applying ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
+                  <span className="ml-2">Applying…</span>
+                </>
+              ) : (
+                'Apply selection'
+              )}
             </Button>
           </div>
         </div>

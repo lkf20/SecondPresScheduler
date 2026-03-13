@@ -401,6 +401,81 @@ describe('ScheduleCell', () => {
     expect(screen.getByText(/\(5\)/)).toBeInTheDocument() // total shown for multiple groups
   })
 
+  it('shows (0) for class group with no or null enrollment in multi-group cell', () => {
+    render(
+      <ScheduleCell
+        data={{
+          ...baseData,
+          schedule_cell: {
+            ...baseData.schedule_cell,
+            class_groups: [
+              {
+                id: 'cg-1',
+                name: 'Blue',
+                age_unit: 'months',
+                min_age: 24,
+                max_age: 36,
+                required_ratio: 8,
+                preferred_ratio: 6,
+                enrollment: null,
+              },
+              {
+                id: 'cg-2',
+                name: 'Green',
+                age_unit: 'months',
+                min_age: 36,
+                max_age: 48,
+                required_ratio: 8,
+                preferred_ratio: 6,
+                enrollment: 2,
+              },
+            ],
+          },
+        }}
+      />
+    )
+    expect(screen.getByText('Blue (0), Green (2)')).toBeInTheDocument()
+  })
+
+  it('shows class group names only with total at end when enrollment is by total (no per-class)', () => {
+    render(
+      <ScheduleCell
+        data={{
+          ...baseData,
+          schedule_cell: {
+            ...baseData.schedule_cell,
+            enrollment_for_staffing: 5,
+            class_groups: [
+              {
+                id: 'cg-1',
+                name: 'Blue',
+                age_unit: 'months',
+                min_age: 24,
+                max_age: 36,
+                required_ratio: 8,
+                preferred_ratio: 6,
+                enrollment: null,
+              },
+              {
+                id: 'cg-2',
+                name: 'Green',
+                age_unit: 'months',
+                min_age: 36,
+                max_age: 48,
+                required_ratio: 8,
+                preferred_ratio: 6,
+                enrollment: null,
+              },
+            ],
+          },
+        }}
+      />
+    )
+    expect(screen.getByText('Blue, Green')).toBeInTheDocument()
+    const labelDiv = screen.getByText('Blue, Green').closest('.text-muted-foreground')
+    expect(labelDiv?.textContent).toContain('5')
+  })
+
   it('shows single class group with enrollment once (no duplicate total in parentheses)', () => {
     render(
       <ScheduleCell

@@ -126,6 +126,7 @@ export default function AbsenceList({
         <TimeOffCard
           id={absence.id}
           teacherName={absence.teacher_name}
+          teacherId={absence.teacher_id}
           startDate={absence.start_date}
           endDate={absence.end_date}
           reason={absence.reason}

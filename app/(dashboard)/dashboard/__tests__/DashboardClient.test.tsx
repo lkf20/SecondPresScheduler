@@ -99,6 +99,18 @@ function renderDashboard(overview = defaultOverview) {
 describe('DashboardClient - Below Staffing Target', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+
+    global.fetch = jest.fn().mockImplementation(url => {
+      if (url === '/api/dashboard/data-health') {
+        return Promise.resolve({
+          json: () => Promise.resolve({ orphanedShifts: [] }),
+        })
+      }
+      return Promise.resolve({
+        json: () => Promise.resolve({}),
+      })
+    }) as jest.Mock
+
     mockUseDashboard.mockReturnValue({
       data: defaultOverview,
       isLoading: false,

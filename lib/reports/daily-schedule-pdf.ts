@@ -234,7 +234,9 @@ export function buildDailySchedulePdfHtml({
                   ? getEnrollmentSummary(slotData)
                   : null
                 const slotNotes =
-                  options.showNotes === true ? slotData?.schedule_cell?.notes?.trim() : ''
+                  options.showNotes === true && slotData?.schedule_cell?.is_active
+                    ? (slotData?.schedule_cell?.notes?.trim() ?? '')
+                    : ''
                 const youngestRatioGroup = getYoungestRatioGroup(slotData)
                 const absences = slotData?.absences ?? []
                 const absentTeacherIds = new Set(absences.map(absence => absence.teacher_id))

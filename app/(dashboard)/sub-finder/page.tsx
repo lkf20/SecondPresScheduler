@@ -44,6 +44,7 @@ import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 import { saveSubFinderState, loadSubFinderState } from '@/lib/utils/sub-finder-state'
 import { findTopCombinations } from '@/lib/utils/sub-combination'
 import CoverageSummary from '@/components/sub-finder/CoverageSummary'
+import StaffLink from '@/components/ui/staff-link'
 import ShiftStatusCard from '@/components/sub-finder/ShiftStatusCard'
 import { useSubFinderShifts } from '@/components/sub-finder/hooks/useSubFinderShifts'
 import type { SubFinderShift } from '@/lib/sub-finder/types'
@@ -2259,7 +2260,16 @@ export default function SubFinderPage() {
                 <div className="flex items-center justify-between border-b px-4 py-3">
                   <div className="space-y-1">
                     <div className="text-lg font-semibold text-slate-900">
-                      Subs for {selectedAbsence.teacher_name}
+                      Subs for{' '}
+                      {selectedAbsence.teacher_id ? (
+                        <StaffLink
+                          staffId={selectedAbsence.teacher_id}
+                          name={selectedAbsence.teacher_name}
+                          className="font-semibold"
+                        />
+                      ) : (
+                        selectedAbsence.teacher_name
+                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
                       <span>
@@ -2479,7 +2489,15 @@ export default function SubFinderPage() {
                       <h2 className="text-xl font-semibold flex flex-wrap items-center gap-2">
                         <span>Sub Finder</span>
                         <span className="text-muted-foreground">→</span>
-                        <span>{selectedAbsence.teacher_name}</span>
+                        {selectedAbsence.teacher_id ? (
+                          <StaffLink
+                            staffId={selectedAbsence.teacher_id}
+                            name={selectedAbsence.teacher_name}
+                            className="font-semibold"
+                          />
+                        ) : (
+                          <span>{selectedAbsence.teacher_name}</span>
+                        )}
                         <span className="text-muted-foreground">→</span>
                         <span>
                           {formatAbsenceDateRange(
@@ -2863,7 +2881,16 @@ export default function SubFinderPage() {
                       ) : (
                         <div className="flex flex-col gap-1">
                           <div className="text-lg font-semibold text-slate-900">
-                            Subs for {selectedAbsence.teacher_name}
+                            Subs for{' '}
+                            {selectedAbsence.teacher_id ? (
+                              <StaffLink
+                                staffId={selectedAbsence.teacher_id}
+                                name={selectedAbsence.teacher_name}
+                                className="font-semibold"
+                              />
+                            ) : (
+                              selectedAbsence.teacher_name
+                            )}
                           </div>
                           <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
                             <span>

@@ -18,6 +18,8 @@ interface ClassSelectorProps {
   /** When true, fetch and show inactive class groups (e.g. for schedule panel) */
   includeInactive?: boolean
   disabled?: boolean
+  /** When true, render the dropdown without a portal so it can scroll inside a Sheet/Dialog (avoids Radix scroll lock). */
+  disablePortal?: boolean
 }
 
 export default function ClassSelector({
@@ -26,6 +28,7 @@ export default function ClassSelector({
   allowedClassGroupIds,
   includeInactive = false,
   disabled = false,
+  disablePortal = false,
 }: ClassSelectorProps) {
   const [classes, setClasses] = useState<ClassGroup[]>([])
   const [popoverOpen, setPopoverOpen] = useState(false)
@@ -167,7 +170,7 @@ export default function ClassSelector({
                 <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-56 p-0" align="start">
+            <PopoverContent className="w-56 p-0" align="start" disablePortal={disablePortal}>
               {addableClasses.length > 0 && (
                 <div className="border-b border-border px-2 py-1.5">
                   <button
@@ -179,7 +182,7 @@ export default function ClassSelector({
                   </button>
                 </div>
               )}
-              <ul className="max-h-60 overflow-y-auto py-1">
+              <ul className="max-h-60 overflow-y-auto overscroll-contain py-1">
                 {addableClasses.map(cls => (
                   <li key={cls.id}>
                     <button

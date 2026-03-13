@@ -13,7 +13,8 @@ async function fetchWeeklySchedule(weekStartISO: string): Promise<WeeklySchedule
   if (weekStartISO) {
     url.searchParams.set('weekStartISO', weekStartISO)
   }
-  const response = await fetch(url.toString())
+  // Use no-store so refetch after baseline save gets fresh data (not browser HTTP cache)
+  const response = await fetch(url.toString(), { cache: 'no-store' })
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Failed to fetch weekly schedule' }))

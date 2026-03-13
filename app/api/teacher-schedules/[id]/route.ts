@@ -3,6 +3,9 @@ import {
   getTeacherScheduleById,
   updateTeacherSchedule,
   deleteTeacherSchedule,
+  TeacherScheduleConflictError,
+  checkDependentFutureEvents,
+  syncFutureClassroom,
 } from '@/lib/api/schedules'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
@@ -22,6 +25,31 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params
     const body = await request.json()
+
+    // Get existing to check what's changing
+    const existing = await getTeacherScheduleById(id)
+    if (!existing) {
+      return NextResponse.json({ error: 'Teacher schedule not found' }, { status: 404 })
+    }
+
+    // Rule 2: Block structural changes if there are future dependents
+    const isDayOrTimeChange =
+      (body.day_of_week_id && body.day_of_week_id !== existing.day_of_week_id) ||
+      (body.time_slot_id && body.time_slot_id !== existing.time_slot_id)
+
+    const isClassroomChange = body.classroom_id && body.classroom_id !== existing.classroom_id
+
+    if (isDayOrTimeChange) {
+      const { hasDependents, message } = await checkDependentFutureEvents(
+        existing.teacher_id,
+        existing.day_of_week_id,
+        existing.time_slot_id
+      )
+      if (hasDependents) {
+        return NextResponse.json({ error: message }, { status: 409 })
+      }
+    }
+
     const schedule = await updateTeacherSchedule(id, body)
     if (!schedule) {
       return NextResponse.json(
@@ -29,6 +57,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         { status: 404 }
       )
     }
+
+    // Rule 1: Safe Sync future classroom changes
+    if (isClassroomChange && !isDayOrTimeChange) {
+      await syncFutureClassroom(
+        schedule.teacher_id,
+        schedule.day_of_week_id,
+        schedule.time_slot_id,
+        schedule.classroom_id
+      )
+    }
+
     const schoolId = (schedule as { school_id?: string }).school_id ?? (await getUserSchoolId())
     if (schoolId) {
       const withDetails = await getTeacherScheduleById(id)
@@ -57,8 +96,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       })
     }
     return NextResponse.json(schedule)
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error: unknown) {
+    if (error instanceof TeacherScheduleConflictError) {
+      return NextResponse.json({ error: error.userMessage }, { status: 409 })
+    }
+    const message = error instanceof Error ? error.message : 'Failed to update teacher schedule'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
@@ -69,6 +112,19 @@ export async function DELETE(
   try {
     const { id } = await params
     const existing = await getTeacherScheduleById(id)
+
+    if (existing) {
+      // Rule 2: Block deletion if there are future dependents
+      const { hasDependents, message } = await checkDependentFutureEvents(
+        existing.teacher_id,
+        existing.day_of_week_id,
+        existing.time_slot_id
+      )
+      if (hasDependents) {
+        return NextResponse.json({ error: message }, { status: 409 })
+      }
+    }
+
     await deleteTeacherSchedule(id)
     const schoolId =
       (existing as { school_id?: string } | null)?.school_id ?? (await getUserSchoolId())

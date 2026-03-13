@@ -7,15 +7,20 @@ import {
   getAllTeacherSchedules,
   createTeacherSchedule,
   getTeacherScheduleById,
+  TeacherScheduleConflictError,
 } from '@/lib/api/schedules'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { validateQueryParams, validateRequest } from '@/lib/utils/validation'
 
-jest.mock('@/lib/api/schedules', () => ({
-  getAllTeacherSchedules: jest.fn(),
-  createTeacherSchedule: jest.fn(),
-  getTeacherScheduleById: jest.fn(),
-}))
+jest.mock('@/lib/api/schedules', () => {
+  const actual = jest.requireActual<typeof import('@/lib/api/schedules')>('@/lib/api/schedules')
+  return {
+    ...actual,
+    getAllTeacherSchedules: jest.fn(),
+    createTeacherSchedule: jest.fn(),
+    getTeacherScheduleById: jest.fn(),
+  }
+})
 
 jest.mock('@/lib/utils/auth', () => ({
   getUserSchoolId: jest.fn().mockResolvedValue('school-1'),
@@ -154,6 +159,37 @@ describe('teacher schedules collection route integration', () => {
     expect(response.status).toBe(201)
     expect(createTeacherSchedule).toHaveBeenCalledWith(payload)
     expect(json.id).toBe('schedule-new')
+  })
+
+  it('POST returns 409 with message when assignment would create a conflict', async () => {
+    const payload = {
+      teacher_id: 'teacher-1',
+      day_of_week_id: 'day-mon',
+      time_slot_id: 'slot-em',
+      classroom_id: 'class-1',
+      is_floater: false,
+    }
+    ;(validateRequest as jest.Mock).mockReturnValue({
+      success: true,
+      data: payload,
+    })
+    const conflictMessage =
+      'This teacher is already scheduled in Toddler B for Monday AM. Resolve the conflict first or assign as Floater in both classrooms.'
+    ;(createTeacherSchedule as jest.Mock).mockRejectedValue(
+      new TeacherScheduleConflictError(conflictMessage)
+    )
+
+    const response = await POST(
+      new Request('http://localhost/api/teacher-schedules', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }) as any
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(json.error).toBe(conflictMessage)
+    expect(createErrorResponse).not.toHaveBeenCalled()
   })
 
   it('POST routes unexpected failures through createErrorResponse', async () => {

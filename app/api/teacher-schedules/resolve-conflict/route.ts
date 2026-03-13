@@ -110,41 +110,92 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        // Create new schedule
-        const newSchedule = await createTeacherSchedule({
-          teacher_id,
-          day_of_week_id,
-          time_slot_id,
-          classroom_id: target_classroom_id,
-          is_floater: false,
-        })
+        // Teacher may already have a row in target (e.g. added to cell then conflict resolved).
+        // If so, update to is_floater: false; otherwise create.
+        const schoolId =
+          (conflictingSchedules[0] as { school_id?: string }).school_id ?? (await getUserSchoolId())
+        type ExistingRow = { id: string; is_floater: boolean | null } | null
+        let existingInTarget: ExistingRow = null
+        if (schoolId) {
+          const { data } = await supabase
+            .from('teacher_schedules')
+            .select('id, is_floater')
+            .eq('teacher_id', teacher_id)
+            .eq('day_of_week_id', day_of_week_id)
+            .eq('time_slot_id', time_slot_id)
+            .eq('classroom_id', target_classroom_id)
+            .eq('school_id', schoolId)
+            .maybeSingle()
+          existingInTarget = data as ExistingRow
+        }
 
-        // Log the creation
-        await createTeacherScheduleAuditLog(
-          {
-            teacher_schedule_id: newSchedule.id,
-            teacher_id,
-            teacher_name: teacherName ?? undefined,
-            action: 'created',
-            action_details: {
-              after: {
-                classroom_id: target_classroom_id,
-                is_floater: false,
+        if (existingInTarget) {
+          const updated = await updateTeacherSchedule(
+            existingInTarget.id,
+            { is_floater: false },
+            schoolId ?? undefined
+          )
+          if (!updated) throw new Error('Failed to update teacher schedule to permanent')
+          results.updated = [updated]
+          await createTeacherScheduleAuditLog(
+            {
+              teacher_schedule_id: existingInTarget.id,
+              teacher_id,
+              teacher_name: teacherName ?? undefined,
+              action: 'updated',
+              action_details: {
+                before: {
+                  classroom_id: target_classroom_id,
+                  is_floater: existingInTarget.is_floater ?? false,
+                },
+                after: { classroom_id: target_classroom_id, is_floater: false },
+                reason: 'conflict_resolution_remove_other',
               },
+              added_to_classroom_id: target_classroom_id,
+              added_to_classroom_name: targetClassroomName ?? undefined,
+              added_to_day_id: day_of_week_id,
+              added_to_day_name: dayName ?? undefined,
+              added_to_time_slot_id: time_slot_id,
+              added_to_time_slot_code: timeSlotCode ?? undefined,
+              reason: 'conflict_resolution_remove_other',
             },
-            added_to_classroom_id: target_classroom_id,
-            added_to_classroom_name: targetClassroomName ?? undefined,
-            added_to_day_id: day_of_week_id,
-            added_to_day_name: dayName ?? undefined,
-            added_to_time_slot_id: time_slot_id,
-            added_to_time_slot_code: timeSlotCode ?? undefined,
-            reason: 'conflict_resolution_remove_other',
-          },
-          { category: 'baseline_schedule' }
-        )
+            { category: 'baseline_schedule' }
+          )
+        } else {
+          const newSchedule = await createTeacherSchedule({
+            teacher_id,
+            day_of_week_id,
+            time_slot_id,
+            classroom_id: target_classroom_id,
+            is_floater: false,
+          })
 
+          await createTeacherScheduleAuditLog(
+            {
+              teacher_schedule_id: newSchedule.id,
+              teacher_id,
+              teacher_name: teacherName ?? undefined,
+              action: 'created',
+              action_details: {
+                after: {
+                  classroom_id: target_classroom_id,
+                  is_floater: false,
+                },
+              },
+              added_to_classroom_id: target_classroom_id,
+              added_to_classroom_name: targetClassroomName ?? undefined,
+              added_to_day_id: day_of_week_id,
+              added_to_day_name: dayName ?? undefined,
+              added_to_time_slot_id: time_slot_id,
+              added_to_time_slot_code: timeSlotCode ?? undefined,
+              reason: 'conflict_resolution_remove_other',
+            },
+            { category: 'baseline_schedule' }
+          )
+
+          results.created = newSchedule
+        }
         results.deleted = deletedIds
-        results.created = newSchedule
         break
       }
 

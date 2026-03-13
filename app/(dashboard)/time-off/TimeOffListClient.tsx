@@ -18,6 +18,7 @@ type CoverageStatus = 'draft' | 'completed' | 'covered' | 'partially_covered' | 
 
 type TimeOffRow = {
   id: string
+  teacher_id?: string
   teacher_name: string
   start_date: string
   end_date: string | null
@@ -36,6 +37,7 @@ type TimeOffRow = {
 
 type TimeOffApiItem = {
   id: string
+  teacher_id?: string
   teacher_name: string
   start_date: string
   end_date?: string | null
@@ -99,6 +101,7 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
 
       return {
         id: item.id,
+        teacher_id: item.teacher_id,
         teacher_name: item.teacher_name,
         start_date: item.start_date,
         end_date: item.end_date ?? null,
@@ -328,6 +331,7 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
           <TimeOffCard
             id={row.id}
             teacherName={row.teacher_name}
+            teacherId={row.teacher_id}
             startDate={row.start_date}
             endDate={row.end_date}
             reason={row.reason || null}
@@ -358,6 +362,7 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
         key={row.id}
         id={row.id}
         teacherName={row.teacher_name}
+        teacherId={row.teacher_id}
         startDate={row.start_date}
         endDate={row.end_date}
         reason={row.reason || null}
