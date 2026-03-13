@@ -12,6 +12,14 @@ import {
   SheetDescription,
   SheetFooter,
 } from '@/components/ui/sheet'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import {
   ClosureReasonNotesFields,
@@ -28,6 +36,12 @@ export interface ClosureEditGroup {
   notes: string | null
 }
 
+/** Per-date existing closures info, used to warn when adding whole-day over existing slot-specific closures */
+export interface ExistingClosuresForDate {
+  closureIds: string[]
+  slotCodes: string[]
+}
+
 export interface ClosurePanelProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -36,6 +50,24 @@ export interface ClosurePanelProps {
   editGroup: ClosureEditGroup | null
   activeTimeSlots: Array<{ id: string; code: string | null; name: string | null }>
   formatDate: (iso: string) => string
+  /** Map of date (YYYY-MM-DD) to existing closures on that date; used to warn before replacing with whole-day */
+  existingClosuresByDate?: Record<string, ExistingClosuresForDate>
+}
+
+function dateRange(startISO: string, endISO: string): string[] {
+  const start = new Date(startISO + 'T12:00:00')
+  const end = new Date(endISO + 'T12:00:00')
+  if (start > end) return []
+  const out: string[] = []
+  const current = new Date(start)
+  while (current <= end) {
+    const y = current.getFullYear()
+    const m = String(current.getMonth() + 1).padStart(2, '0')
+    const d = String(current.getDate()).padStart(2, '0')
+    out.push(`${y}-${m}-${d}`)
+    current.setDate(current.getDate() + 1)
+  }
+  return out
 }
 
 export default function ClosurePanel({
@@ -46,6 +78,7 @@ export default function ClosurePanel({
   editGroup,
   activeTimeSlots,
   formatDate,
+  existingClosuresByDate = {},
 }: ClosurePanelProps) {
   const isEdit = mode === 'edit' && editGroup
 
@@ -65,6 +98,13 @@ export default function ClosurePanel({
   const [timeSlotIds, setTimeSlotIds] = useState<string[]>([])
 
   const [saving, setSaving] = useState(false)
+  /** When adding whole-day over dates that already have closures, show replace confirmation */
+  const [replaceConfirm, setReplaceConfirm] = useState<{
+    closureIds: string[]
+    datesWithSlots: Array<{ date: string; slotCodes: string[] }>
+  } | null>(null)
+  /** When add fails because a closure already exists (409), show modal so user can't miss it */
+  const [duplicateError, setDuplicateError] = useState<string | null>(null)
 
   // Sync from editGroup when opening in edit mode
   useEffect(() => {
@@ -103,6 +143,8 @@ export default function ClosurePanel({
     if (!open) return
     setAddStartPickerOpen(false)
     setAddEndPickerOpen(false)
+    setReplaceConfirm(null)
+    setDuplicateError(null)
     onOpenChange(false)
   }
 
@@ -158,6 +200,30 @@ export default function ClosurePanel({
       toast.error('Please select at least one time slot.')
       return
     }
+
+    // When adding whole-day (single or range), check if any selected date already has closures
+    const datesToAdd: string[] =
+      addMode === 'range'
+        ? dateRange(addStartDate, addEndDate)
+        : appliesTo === 'all'
+          ? [addDate]
+          : []
+    if (datesToAdd.length > 0) {
+      const datesWithExisting: Array<{ date: string; slotCodes: string[] }> = []
+      const allClosureIds: string[] = []
+      for (const date of datesToAdd) {
+        const existing = existingClosuresByDate[date]
+        if (existing && existing.closureIds.length > 0) {
+          datesWithExisting.push({ date, slotCodes: existing.slotCodes })
+          allClosureIds.push(...existing.closureIds)
+        }
+      }
+      if (datesWithExisting.length > 0) {
+        setReplaceConfirm({ closureIds: allClosureIds, datesWithSlots: datesWithExisting })
+        return
+      }
+    }
+
     setSaving(true)
     try {
       if (addMode === 'range') {
@@ -177,7 +243,12 @@ export default function ClosurePanel({
         })
         if (!res.ok) {
           const err = await res.json().catch(() => ({}))
-          throw new Error(err.error || 'Failed to add closure')
+          const message = err.error || 'Failed to add closure'
+          if (res.status === 409) {
+            setDuplicateError(message)
+            return
+          }
+          throw new Error(message)
         }
         toast.success('Closures added.')
         handleClose()
@@ -199,7 +270,12 @@ export default function ClosurePanel({
         })
         if (!res.ok) {
           const err = await res.json().catch(() => ({}))
-          throw new Error(err.error || 'Failed to add closure')
+          const message = err.error || 'Failed to add closure'
+          if (res.status === 409) {
+            setDuplicateError(message)
+            return
+          }
+          throw new Error(message)
         }
         toast.success('Closure added.')
         handleClose()
@@ -219,7 +295,12 @@ export default function ClosurePanel({
         })
         if (!res.ok) {
           const err = await res.json().catch(() => ({}))
-          throw new Error(err.error || 'Failed to add closure')
+          const message = err.error || 'Failed to add closure'
+          if (res.status === 409) {
+            setDuplicateError(message)
+            return
+          }
+          throw new Error(message)
         }
         toast.success('Closure added.')
         handleClose()
@@ -235,167 +316,293 @@ export default function ClosurePanel({
   const idPrefix = isEdit ? 'edit' : 'add'
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto bg-gray-50 p-0" style={{ maxWidth: '34rem' }}>
-        <SheetHeader className="px-6 pt-6 pb-4">
-          <SheetTitle>{isEdit ? 'Edit Closure' : 'Add Closure'}</SheetTitle>
-          <SheetDescription>
-            {isEdit
-              ? `Update the closure for ${editGroup ? formatDate(editGroup.date) : 'this date'}`
-              : 'Add a day or time slot closure to the school calendar'}
-          </SheetDescription>
-        </SheetHeader>
-        <div className="px-6 pb-6 space-y-6">
-          {isEdit ? (
-            <>
-              <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
-                <Label className="text-base font-medium">Date</Label>
-                <p className="text-sm text-muted-foreground">
-                  {editGroup ? formatDate(editGroup.date) : '—'}
-                </p>
-              </div>
-              <ClosureAppliesToRadios
-                name={`${idPrefix}-applies-to`}
-                appliesTo={appliesTo}
-                onAppliesToChange={setAppliesTo}
-                hasTimeSlots={activeTimeSlots.length > 0}
-              />
-              {appliesTo === 'specific' && (
-                <ClosureTimeSlotCheckboxes
-                  idPrefix={idPrefix}
-                  timeSlots={activeTimeSlots}
-                  selectedIds={timeSlotIds}
-                  onSelectionChange={setTimeSlotIds}
-                />
-              )}
-            </>
-          ) : (
-            <>
-              <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
-                <Label className="text-base font-medium">Add</Label>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="add-mode"
-                      checked={addMode === 'single'}
-                      onChange={() => setAddMode('single')}
-                      className="h-4 w-4 rounded-full accent-teal-600"
-                    />
-                    <span>Single day</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="add-mode"
-                      checked={addMode === 'range'}
-                      onChange={() => setAddMode('range')}
-                      className="h-4 w-4 rounded-full accent-teal-600"
-                    />
-                    <span>Date range</span>
-                  </label>
-                </div>
-              </div>
-
-              {addMode === 'range' ? (
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent
+          className="w-full overflow-y-auto bg-gray-50 p-0"
+          style={{ maxWidth: '34rem' }}
+        >
+          <SheetHeader className="px-6 pt-6 pb-4">
+            <SheetTitle>{isEdit ? 'Edit Closure' : 'Add Closure'}</SheetTitle>
+            <SheetDescription>
+              {isEdit
+                ? `Update the closure for ${editGroup ? formatDate(editGroup.date) : 'this date'}`
+                : 'Add a day or time slot closure to the school calendar'}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="px-6 pb-6 space-y-6">
+            {isEdit ? (
+              <>
                 <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
-                  <div>
-                    <Label htmlFor="add-start-date">Start date</Label>
-                    <DatePickerInput
-                      id="add-start-date"
-                      value={addStartDate}
-                      onChange={v => {
-                        setAddStartDate(v)
-                        setAddStartPickerOpen(false)
-                        setTimeout(() => {
-                          setAddEndPickerOpen(true)
-                          addEndDateRef.current?.click()
-                        }, 300)
-                      }}
-                      placeholder="Select start date"
-                      closeOnSelect
-                      open={addStartPickerOpen}
-                      onOpenChange={setAddStartPickerOpen}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="add-end-date">End date</Label>
-                    <DatePickerInput
-                      ref={addEndDateRef}
-                      id="add-end-date"
-                      value={addEndDate}
-                      onChange={setAddEndDate}
-                      placeholder="Select end date"
-                      closeOnSelect
-                      open={addEndPickerOpen}
-                      onOpenChange={setAddEndPickerOpen}
-                      openToDate={addStartDate || undefined}
-                    />
-                  </div>
-                  {addStartDate && addEndDate && addStartDate <= addEndDate && (
-                    <p className="text-sm text-muted-foreground">
-                      This will add whole-day closures for all{' '}
-                      {Math.ceil(
-                        (new Date(addEndDate + 'T12:00:00').getTime() -
-                          new Date(addStartDate + 'T12:00:00').getTime()) /
-                          (24 * 60 * 60 * 1000)
-                      ) + 1}{' '}
-                      days. All time slots will be closed for each day.
-                    </p>
-                  )}
+                  <Label className="text-base font-medium">Date</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {editGroup ? formatDate(editGroup.date) : '—'}
+                  </p>
                 </div>
-              ) : (
-                <>
+                <ClosureAppliesToRadios
+                  name={`${idPrefix}-applies-to`}
+                  appliesTo={appliesTo}
+                  onAppliesToChange={setAppliesTo}
+                  hasTimeSlots={activeTimeSlots.length > 0}
+                />
+                {appliesTo === 'specific' && (
+                  <ClosureTimeSlotCheckboxes
+                    idPrefix={idPrefix}
+                    timeSlots={activeTimeSlots}
+                    selectedIds={timeSlotIds}
+                    onSelectionChange={setTimeSlotIds}
+                  />
+                )}
+              </>
+            ) : (
+              <>
+                <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
+                  <Label className="text-base font-medium">Add</Label>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="add-mode"
+                        checked={addMode === 'single'}
+                        onChange={() => setAddMode('single')}
+                        className="h-4 w-4 rounded-full accent-teal-600"
+                      />
+                      <span>Single day</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="add-mode"
+                        checked={addMode === 'range'}
+                        onChange={() => setAddMode('range')}
+                        className="h-4 w-4 rounded-full accent-teal-600"
+                      />
+                      <span>Date range</span>
+                    </label>
+                  </div>
+                </div>
+
+                {addMode === 'range' ? (
                   <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
                     <div>
-                      <Label htmlFor="add-date">Date</Label>
+                      <Label htmlFor="add-start-date">Start date</Label>
                       <DatePickerInput
-                        id="add-date"
-                        value={addDate}
-                        onChange={setAddDate}
-                        placeholder="Select date"
+                        id="add-start-date"
+                        value={addStartDate}
+                        onChange={v => {
+                          setAddStartDate(v)
+                          setAddStartPickerOpen(false)
+                          setTimeout(() => {
+                            setAddEndPickerOpen(true)
+                            addEndDateRef.current?.click()
+                          }, 300)
+                        }}
+                        placeholder="Select start date"
                         closeOnSelect
+                        open={addStartPickerOpen}
+                        onOpenChange={setAddStartPickerOpen}
                       />
                     </div>
-                    <ClosureAppliesToRadios
-                      name="applies-to"
-                      appliesTo={appliesTo}
-                      onAppliesToChange={setAppliesTo}
-                      hasTimeSlots={activeTimeSlots.length > 0}
-                      embedded
-                    />
+                    <div>
+                      <Label htmlFor="add-end-date">End date</Label>
+                      <DatePickerInput
+                        ref={addEndDateRef}
+                        id="add-end-date"
+                        value={addEndDate}
+                        onChange={setAddEndDate}
+                        placeholder="Select end date"
+                        closeOnSelect
+                        open={addEndPickerOpen}
+                        onOpenChange={setAddEndPickerOpen}
+                        openToDate={addStartDate || undefined}
+                      />
+                    </div>
+                    {addStartDate && addEndDate && addStartDate <= addEndDate && (
+                      <p className="text-sm text-muted-foreground">
+                        This will add whole-day closures for all{' '}
+                        {Math.ceil(
+                          (new Date(addEndDate + 'T12:00:00').getTime() -
+                            new Date(addStartDate + 'T12:00:00').getTime()) /
+                            (24 * 60 * 60 * 1000)
+                        ) + 1}{' '}
+                        days. All time slots will be closed for each day.
+                      </p>
+                    )}
                   </div>
-                  {appliesTo === 'specific' && (
-                    <ClosureTimeSlotCheckboxes
-                      idPrefix="add"
-                      timeSlots={activeTimeSlots}
-                      selectedIds={timeSlotIds}
-                      onSelectionChange={setTimeSlotIds}
-                    />
-                  )}
-                </>
-              )}
-            </>
-          )}
+                ) : (
+                  <>
+                    <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
+                      <div>
+                        <Label htmlFor="add-date">Date</Label>
+                        <DatePickerInput
+                          id="add-date"
+                          value={addDate}
+                          onChange={setAddDate}
+                          placeholder="Select date"
+                          closeOnSelect
+                        />
+                      </div>
+                      <ClosureAppliesToRadios
+                        name="applies-to"
+                        appliesTo={appliesTo}
+                        onAppliesToChange={setAppliesTo}
+                        hasTimeSlots={activeTimeSlots.length > 0}
+                        embedded
+                      />
+                    </div>
+                    {appliesTo === 'specific' && (
+                      <ClosureTimeSlotCheckboxes
+                        idPrefix="add"
+                        timeSlots={activeTimeSlots}
+                        selectedIds={timeSlotIds}
+                        onSelectionChange={setTimeSlotIds}
+                      />
+                    )}
+                  </>
+                )}
+              </>
+            )}
 
-          <ClosureReasonNotesFields
-            idPrefix={idPrefix}
-            reason={reason}
-            onReasonChange={setReason}
-            notes={notes}
-            onNotesChange={setNotes}
-          />
+            <ClosureReasonNotesFields
+              idPrefix={idPrefix}
+              reason={reason}
+              onReasonChange={setReason}
+              notes={notes}
+              onNotesChange={setNotes}
+            />
 
-          <SheetFooter className="flex gap-2 pt-2">
-            <Button variant="outline" onClick={handleClose} disabled={saving}>
+            <SheetFooter className="flex gap-2 pt-2">
+              <Button variant="outline" onClick={handleClose} disabled={saving}>
+                Cancel
+              </Button>
+              <Button onClick={handleSubmit} disabled={saving}>
+                {saving ? (isEdit ? 'Saving...' : 'Adding...') : isEdit ? 'Save' : 'Add'}
+              </Button>
+            </SheetFooter>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Replace existing closures with whole-day: confirm before replacing */}
+      <Dialog
+        open={replaceConfirm !== null}
+        onOpenChange={open => {
+          if (!open) setReplaceConfirm(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Date(s) already have closures</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-2">
+                {replaceConfirm && (
+                  <>
+                    <p>
+                      The following date(s) already have time-slot closures. Adding a whole-day
+                      closure will close the entire day. Do you want to replace the existing
+                      closures with one whole-day closure for each date?
+                    </p>
+                    <ul className="list-disc list-inside text-left space-y-1">
+                      {replaceConfirm.datesWithSlots.map(({ date, slotCodes }) => (
+                        <li key={date}>
+                          <span className="font-medium">{formatDate(date)}</span>
+                          {slotCodes.length > 0 && (
+                            <span className="text-muted-foreground">
+                              {' '}
+                              — currently {slotCodes.join(', ')}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setReplaceConfirm(null)}
+              disabled={saving}
+            >
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={saving}>
-              {saving ? (isEdit ? 'Saving...' : 'Adding...') : isEdit ? 'Save' : 'Add'}
+            <Button
+              type="button"
+              onClick={async () => {
+                if (!replaceConfirm) return
+                setSaving(true)
+                try {
+                  const reasonVal = reason.trim() || null
+                  const notesVal = notes.trim() || null
+                  const res = await fetch('/api/settings/calendar', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      delete_closure_ids: replaceConfirm.closureIds,
+                      add_closures: replaceConfirm.datesWithSlots.map(({ date }) => ({
+                        date,
+                        time_slot_id: null,
+                        reason: reasonVal,
+                        notes: notesVal,
+                      })),
+                    }),
+                  })
+                  if (!res.ok) {
+                    const err = await res.json().catch(() => ({}))
+                    throw new Error(err.error || 'Failed to update')
+                  }
+                  toast.success(
+                    replaceConfirm.datesWithSlots.length > 1
+                      ? 'Closures replaced with whole-day closures.'
+                      : 'Closure replaced with whole-day closure.'
+                  )
+                  setReplaceConfirm(null)
+                  handleClose()
+                  onSuccess()
+                } catch (err: unknown) {
+                  toast.error(err instanceof Error ? err.message : 'Failed to update')
+                } finally {
+                  setSaving(false)
+                }
+              }}
+              disabled={saving}
+            >
+              {saving ? 'Replacing...' : 'Replace with whole day'}
             </Button>
-          </SheetFooter>
-        </div>
-      </SheetContent>
-    </Sheet>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Duplicate closure (409): modal so user can't miss it */}
+      <Dialog
+        open={duplicateError !== null}
+        onOpenChange={open => {
+          if (!open) setDuplicateError(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Closure already exists</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-2">
+                <p>{duplicateError ?? 'A closure already exists for this date and time slot.'}</p>
+                <p className="text-muted-foreground">
+                  Edit the existing closure from the Closed Days list, or choose a different date or
+                  time slot.
+                </p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" onClick={() => setDuplicateError(null)}>
+              OK
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
