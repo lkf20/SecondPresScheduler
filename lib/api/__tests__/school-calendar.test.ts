@@ -231,7 +231,11 @@ describe('school-calendar', () => {
         'Holiday'
       )
 
-      expect(result).toEqual({ created: 3, skipped: 0 })
+      expect(result).toEqual({
+        created: 3,
+        skipped: 0,
+        createdIds: ['c-1', 'c-2', 'c-3'],
+      })
     })
   })
 

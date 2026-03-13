@@ -254,9 +254,9 @@ export async function createSchoolClosureRange(
   endDateISO: string,
   reason: string | null,
   notes?: string | null
-): Promise<{ created: number; skipped: number }> {
+): Promise<{ created: number; skipped: number; createdIds: string[] }> {
   const dates = [...dateRange(startDateISO, endDateISO)]
-  if (dates.length === 0) return { created: 0, skipped: 0 }
+  if (dates.length === 0) return { created: 0, skipped: 0, createdIds: [] }
   if (dates.length > 365) {
     throw new Error('Date range cannot exceed 365 days')
   }
@@ -268,19 +268,21 @@ export async function createSchoolClosureRange(
 
   let created = 0
   let skipped = 0
+  const createdIds: string[] = []
   for (const date of dates) {
     if (existingWholeDayDates.has(date)) {
       skipped++
       continue
     }
     try {
-      await createSchoolClosure(schoolId, {
+      const closure = await createSchoolClosure(schoolId, {
         date,
         time_slot_id: null,
         reason,
         notes: notes ?? null,
       })
       created++
+      createdIds.push(closure.id)
       existingWholeDayDates.add(date)
     } catch (err) {
       const code = (err as { code?: string })?.code
@@ -292,7 +294,7 @@ export async function createSchoolClosureRange(
       }
     }
   }
-  return { created, skipped }
+  return { created, skipped, createdIds }
 }
 
 export async function updateSchoolClosure(

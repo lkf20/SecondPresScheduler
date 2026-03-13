@@ -15,7 +15,6 @@ import { useWeeklySchedule } from '@/lib/hooks/use-weekly-schedule'
 import { useScheduleSettings } from '@/lib/hooks/use-schedule-settings'
 import { useFilterOptions } from '@/lib/hooks/use-filter-options'
 import { invalidateWeeklySchedule } from '@/lib/utils/invalidation'
-import { weeklyScheduleKey } from '@/lib/utils/query-keys'
 import {
   includeNewIdsWhenPreviouslyAllSelected,
   reconcileSelectedIdsWithAvailable,
@@ -378,11 +377,12 @@ export default function BaselineSchedulePage() {
     if (schoolId) {
       invalidateWeeklySchedule(queryClient, schoolId)
       queryClient.invalidateQueries({ queryKey: ['scheduleSettings', schoolId] })
+      // Refetch all weekly schedule queries for this school so any cached week (baseline or weekly page) gets fresh data
       await queryClient.refetchQueries({
-        queryKey: weeklyScheduleKey(schoolId, weekStartISO),
+        queryKey: ['weeklySchedule', schoolId],
       })
     }
-  }, [schoolId, weekStartISO, queryClient])
+  }, [schoolId, queryClient])
 
   // Handle filter changes - ensure displayMode is always permanent-only for baseline schedule
   const handleFiltersChange = useCallback((newFilters: FilterState) => {

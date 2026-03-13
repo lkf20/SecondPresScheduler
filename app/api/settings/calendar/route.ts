@@ -286,13 +286,14 @@ export async function PATCH(request: NextRequest) {
               ),
             }
           }
-          const { created } = await createSchoolClosureRange(
+          const { created, createdIds } = await createSchoolClosureRange(
             schoolId,
             start_date,
             end_date,
             reason ?? null,
             notes ?? null
           )
+          for (const id of createdIds) createdClosureIdsToRollback.push(id)
           const summary = `${start_date}–${end_date} (${created} day(s))${reason ? `: ${reason}` : ''}`
           const auditEntry = {
             schoolId,

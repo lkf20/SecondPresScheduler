@@ -188,7 +188,11 @@ describe('calendar settings route integration', () => {
     })
 
     it('adds date range closure', async () => {
-      ;(createSchoolClosureRange as jest.Mock).mockResolvedValue({ created: 3, skipped: 0 })
+      ;(createSchoolClosureRange as jest.Mock).mockResolvedValue({
+        created: 3,
+        skipped: 0,
+        createdIds: ['range-1', 'range-2', 'range-3'],
+      })
 
       const response = await PATCH(
         new Request('http://localhost/api/settings/calendar', {
