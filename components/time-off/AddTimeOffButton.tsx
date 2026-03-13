@@ -53,9 +53,10 @@ export default function AddTimeOffButton({
   const [isTimeOffSheetOpen, setIsTimeOffSheetOpen] = useState(!!timeOffRequestId)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [savingDraft, setSavingDraft] = useState(false)
   const [clearDraftOnMount, setClearDraftOnMount] = useState(!timeOffRequestId)
   const [editingRequestId, setEditingRequestId] = useState<string | null>(timeOffRequestId || null)
-  const timeOffFormRef = useRef<{ reset: () => void }>(null)
+  const timeOffFormRef = useRef<{ reset: () => void; saveDraft: () => Promise<boolean> }>(null)
   const skipUnsavedPromptRef = useRef(false)
   const {
     activePanel,
@@ -162,6 +163,20 @@ export default function AddTimeOffButton({
     // Keep sheet open (already open)
   }
 
+  const handleSaveAsDraft = async () => {
+    const ok = await timeOffFormRef.current?.saveDraft?.()
+    setShowUnsavedDialog(false)
+    if (ok) {
+      closeSheetWithoutPrompt()
+    }
+    setSavingDraft(false)
+  }
+
+  const onSaveAsDraftClick = () => {
+    setSavingDraft(true)
+    void handleSaveAsDraft()
+  }
+
   const handleOpenSheet = () => {
     // Only open in add mode if we're not already in edit mode
     if (timeOffRequestId) {
@@ -238,11 +253,14 @@ export default function AddTimeOffButton({
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button variant="outline" onClick={handleKeepEditing}>
+              <Button variant="outline" onClick={handleKeepEditing} disabled={savingDraft}>
                 Keep Editing
               </Button>
-              <Button variant="destructive" onClick={handleDiscard}>
+              <Button variant="destructive" onClick={handleDiscard} disabled={savingDraft}>
                 {editingRequestId ? 'Discard changes' : 'Discard'}
+              </Button>
+              <Button onClick={onSaveAsDraftClick} disabled={savingDraft}>
+                {savingDraft ? 'Saving...' : 'Save as Draft'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -319,11 +337,14 @@ export default function AddTimeOffButton({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={handleKeepEditing}>
+            <Button variant="outline" onClick={handleKeepEditing} disabled={savingDraft}>
               Keep Editing
             </Button>
-            <Button variant="destructive" onClick={handleDiscard}>
+            <Button variant="destructive" onClick={handleDiscard} disabled={savingDraft}>
               {editingRequestId ? 'Discard changes' : 'Discard'}
+            </Button>
+            <Button onClick={onSaveAsDraftClick} disabled={savingDraft}>
+              {savingDraft ? 'Saving...' : 'Save as Draft'}
             </Button>
           </DialogFooter>
         </DialogContent>

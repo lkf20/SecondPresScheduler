@@ -62,7 +62,10 @@ interface TimeOffFormProps {
   hidePageHeader?: boolean
 }
 
-const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
+const TimeOffForm = React.forwardRef<
+  { reset: () => void; saveDraft: () => Promise<boolean> },
+  TimeOffFormProps
+>(
   (
     {
       onSuccess,
@@ -97,6 +100,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     const justCorrectedRef = useRef(false)
     const [isPastDate, setIsPastDate] = useState(false)
     const hasHydratedDraftRef = useRef(false)
+    const saveDraftRef = useRef<() => Promise<boolean>>(null)
     const [isDraftRestored, setIsDraftRestored] = useState(false)
     const [isLoadingRequest, setIsLoadingRequest] = useState(false)
     const [showCancelDialog, setShowCancelDialog] = useState(false)
@@ -367,7 +371,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       return () => clearTimeout(timer)
     }, [isDraftRestored, isInitialStateCaptured, getValues, selectedShifts])
 
-    // Expose reset method via ref
+    // Expose reset and saveDraft via ref (saveDraftRef is set after saveDraft is defined)
     React.useImperativeHandle(ref, () => ({
       reset: () => {
         reset({
@@ -400,6 +404,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
           window.sessionStorage.removeItem(draftKey)
         }
       },
+      saveDraft: async () => (await saveDraftRef.current?.()) ?? false,
     }))
 
     // Track unsaved changes by comparing current state to initial state
@@ -754,15 +759,15 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       }
     }
 
-    const saveDraft = async () => {
+    const saveDraft = async (): Promise<boolean> => {
       const values = getValues()
       if (!values.teacher_id) {
         setFormError('teacher_id', { type: 'manual', message: 'Teacher is required.' })
-        return
+        return false
       }
       if (!values.start_date) {
         setFormError('start_date', { type: 'manual', message: 'Start date is required.' })
-        return
+        return false
       }
 
       try {
@@ -806,7 +811,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
           const errorData = await response.json().catch(() => ({}))
           if (response.status === 409 && errorData?.code === 'TIME_OFF_OVERLAP') {
             setOverlapPayload(errorData)
-            return
+            return false
           }
           throw new Error(errorData.error || 'Failed to save draft')
         }
@@ -818,10 +823,13 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         toast.success('Draft saved')
         router.push('/time-off')
         router.refresh()
+        return true
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Failed to save draft')
+        return false
       }
     }
+    ;(saveDraftRef as React.MutableRefObject<(() => Promise<boolean>) | null>).current = saveDraft
 
     const handleCancelClick = async () => {
       if (!timeOffRequestId) return
