@@ -2,7 +2,7 @@
 
 ## Overview
 
-The database schema consists of 19 tables organized into logical groups:
+The database schema consists of 17 tables organized into logical groups:
 
 ## Tables Created
 
@@ -23,16 +23,18 @@ The database schema consists of 19 tables organized into logical groups:
 7. **sub_availability** - General sub availability by day/timeslot
 8. **sub_availability_exceptions** - One-off availability exceptions by date
 
-### Preference Tables (2)
+### Preference Tables (1)
 
 9. **sub_class_preferences** - Which classes subs can/cannot teach
-10. **classroom_preferences** - Who can teach in each classroom
 
-### Rules & Configuration Tables (3)
+(Former table **classroom_preferences** was removed in migration 071.)
+
+### Rules & Configuration Tables (2)
 
 11. **class_classroom_mappings** - Which classes are in which classrooms (varies by day/timeslot)
 12. **staffing_rules** - Teacher ratios (preferred vs required) per class/day/timeslot
-13. **enrollments** - Class enrollment counts per day/timeslot
+
+(Enrollment is stored per cell in **schedule_cells** and **schedule_cell_class_groups**; the former **enrollments** table was removed in migration 106.)
 
 ### Assignment & Calendar Tables (6)
 
@@ -49,9 +51,22 @@ The database schema consists of 19 tables organized into logical groups:
 - **Foreign Key Constraints** - Ensures referential integrity
 - **Unique Constraints** - Prevents duplicate data where appropriate
 - **Automatic Timestamps** - `created_at` and `updated_at` managed automatically
-- **Triggers** - Auto-update `updated_at` on row updates
+- **Triggers** - Auto-update `updated_at` on row updates; `auto_create_coverage_request_shift_from_time_off_shift` (migration 104) creates a `coverage_request_shift` on INSERT into `time_off_shifts` and **raises** if the teacher has no scheduled classroom for that day/slot (no "Unknown" fallback)
 - **Indexes** - Performance indexes on frequently queried columns
 - **Row Level Security** - RLS policies for data access control
+
+## Tables that reference classrooms (classroom_id)
+
+When writing queries that find or count rows by classroom (e.g. for cleanup or reporting), use only tables that have a `classroom_id` column. As of the current schema:
+
+- **teacher_schedules** (classroom_id)
+- **classroom_allowed_classes** (classroom_id)
+- **sub_assignments** (classroom_id)
+- **schedule_cells** (classroom_id)
+- **coverage_request_shifts** (classroom_id)
+- **staffing_event_shifts** (classroom_id)
+
+**classroom_preferences**, **class_classroom_mappings**, **teacher_schedule_audit_log**, and **enrollments** have been removed (migrations 071, 070, 068, 106).
 
 ## Relationships
 
