@@ -103,10 +103,12 @@ describe('DashboardClient - Below Staffing Target', () => {
     global.fetch = jest.fn().mockImplementation(url => {
       if (url === '/api/dashboard/data-health') {
         return Promise.resolve({
+          ok: true,
           json: () => Promise.resolve({ orphanedShifts: [] }),
         })
       }
       return Promise.resolve({
+        ok: true,
         json: () => Promise.resolve({}),
       })
     }) as jest.Mock

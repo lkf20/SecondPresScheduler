@@ -93,6 +93,11 @@ export default function ClosurePanel({
     setTimeSlotIds([])
   }, [open, mode])
 
+  // Range mode creates whole-day closures; keep appliesTo in sync so form state matches behavior
+  useEffect(() => {
+    if (addMode === 'range') setAppliesTo('all')
+  }, [addMode])
+
   const handleClose = () => {
     if (!open) return
     setAddStartPickerOpen(false)
