@@ -4,6 +4,10 @@ This document defines the authoritative ownership, status transitions, and deriv
 for the core scheduling entities. It is a living reference for both database invariants and API
 write paths.
 
+## Editing database rows
+
+- **Prefer in-place updates.** When implementing edit/update flows, prefer updating the existing row (e.g. SQL `UPDATE` / update by id) rather than deleting and inserting a new row. In-place updates preserve the row id, so audit log entries and foreign-key references elsewhere in the database are not broken. Use delete + create only when the change cannot be expressed as an update (e.g. changing the logical identity of the entity or merging/splitting).
+
 ## Coverage Requests
 
 ### coverage_requests
@@ -57,7 +61,7 @@ write paths.
 - **Lifecycle:** no status; rows are created/deleted per request update.
 - **Derived vs stored:**
   - **Stored:** `date`, `time_slot_id`, `is_partial`, `start_time`, `end_time`
-- **School closures:** Shifts are not created for (date, time_slot) when that slot is closed (see `school_closures`). Time off POST/PUT filter requested shifts using `getSchoolClosuresForDateRange` and `isSlotClosedOnDate` so no time_off_shifts or coverage_request_shifts are created for closed days.
+- **School closures:** Shifts are not created for (date, time_slot) when that slot is closed (see `school_closures`: date, time_slot_id, reason, optional notes). Time off POST/PUT filter requested shifts using `getSchoolClosuresForDateRange` and `isSlotClosedOnDate` so no time_off_shifts or coverage_request_shifts are created for closed days.
 
 ### Dashboard and time off
 

@@ -64,6 +64,7 @@ When the user asks for a code review (e.g. "Review the Sub recommendations code"
 - **Security** — School scope respected; no PII in logs or client; server-side validation where needed.
 - **Accessibility** — Semantic markup, focus states, and labels where relevant.
 - **AGENTS compliance** — Color system, reusable components, file size, and other rules in this document are followed.
+- **Data updates** — When editing a database row, prefer in-place update over delete + create so audit records and foreign-key links are preserved (see “Editing database rows” below).
 
 Report what was reviewed, what passed, what was fixed, and what (if anything) needs user decision.
 
@@ -94,6 +95,10 @@ When adding a new UI element (e.g. a chip, badge, or label):
 
 - New or changed audit logging must satisfy [docs/contracts/AUDIT_LOG_CONTRACT.md](docs/contracts/AUDIT_LOG_CONTRACT.md) and pass the validator in `lib/audit/validateAuditLog.ts`.
 - See [docs/contracts/AUDIT_LOG_CALL_SITES_NOT_COMPLIANT.md](docs/contracts/AUDIT_LOG_CALL_SITES_NOT_COMPLIANT.md) for in-progress call sites.
+
+## Editing database rows
+
+- **Prefer in-place updates over delete + create.** When implementing edit/update flows, strongly prefer updating the existing row (e.g. SQL `UPDATE` / Supabase update / PATCH that updates by id) rather than deleting the row and inserting a new one. In-place updates preserve the row id, so audit log entries (e.g. `entityId`) and any foreign-key references elsewhere in the database continue to point to the same entity and are not broken. Use delete + create only when the change cannot be expressed as an update (e.g. changing the logical identity of the row or merging/splitting entities).
 
 ## Security, privacy, and data
 
