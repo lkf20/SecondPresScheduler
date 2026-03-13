@@ -146,18 +146,20 @@ export async function GET(
           console.error('Error fetching teacher schedules:', scheduleError)
         }
 
-        const scheduleMap = new Map<
+        // One entry per (day, slot, classroom) so floaters get multiple coverage_request_shifts
+        const scheduleEntriesBySlot = new Map<
           string,
-          { classroom_id: string | null; class_group_id: string | null }
+          Array<{ classroom_id: string | null; class_group_id: string | null }>
         >()
         ;(scheduleRows || []).forEach((row: any) => {
           const key = `${row.day_of_week_id}|${row.time_slot_id}`
-          if (!scheduleMap.has(key)) {
-            scheduleMap.set(key, {
-              classroom_id: row.classroom_id || null,
-              class_group_id: row.class_group_id || null,
-            })
+          if (!scheduleEntriesBySlot.has(key)) {
+            scheduleEntriesBySlot.set(key, [])
           }
+          scheduleEntriesBySlot.get(key)!.push({
+            classroom_id: row.classroom_id || null,
+            class_group_id: row.class_group_id || null,
+          })
         })
 
         // Get school_id from the coverage request
@@ -191,21 +193,23 @@ export async function GET(
 
         for (const shift of shifts) {
           const key = `${shift.day_of_week_id}|${shift.time_slot_id}`
-          const scheduleEntry = scheduleMap.get(key)
-          const classroomId = scheduleEntry?.classroom_id ?? null
-          if (classroomId) {
-            coverageShiftRows.push({
-              coverage_request_id: coverageRequestId,
-              date: shift.date,
-              day_of_week_id: shift.day_of_week_id as string,
-              time_slot_id: shift.time_slot_id as string,
-              classroom_id: classroomId,
-              class_group_id: scheduleEntry?.class_group_id || null,
-              is_partial: shift.is_partial ?? false,
-              start_time: shift.start_time || null,
-              end_time: shift.end_time || null,
-              school_id: requestSchoolId,
-            })
+          const entries = scheduleEntriesBySlot.get(key) || []
+          const withClassroom = entries.filter(e => e.classroom_id != null)
+          if (withClassroom.length > 0) {
+            for (const scheduleEntry of withClassroom) {
+              coverageShiftRows.push({
+                coverage_request_id: coverageRequestId,
+                date: shift.date,
+                day_of_week_id: shift.day_of_week_id as string,
+                time_slot_id: shift.time_slot_id as string,
+                classroom_id: scheduleEntry.classroom_id!,
+                class_group_id: scheduleEntry.class_group_id || null,
+                is_partial: shift.is_partial ?? false,
+                start_time: shift.start_time || null,
+                end_time: shift.end_time || null,
+                school_id: requestSchoolId,
+              })
+            }
           } else {
             omittedForRequest.push({
               date: toDateStringISO(shift.date),

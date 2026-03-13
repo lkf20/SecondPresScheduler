@@ -61,7 +61,7 @@ write paths.
 - **Lifecycle:** no status; rows are created/deleted per request update.
 - **Derived vs stored:**
   - **Stored:** `date`, `time_slot_id`, `is_partial`, `start_time`, `end_time`
-- **School closures:** Shifts are not created for (date, time_slot) when that slot is closed (see `school_closures`: date, time_slot_id, reason, optional notes). Time off POST/PUT filter requested shifts using `getSchoolClosuresForDateRange` and `isSlotClosedOnDate` so no time_off_shifts or coverage_request_shifts are created for closed days.
+- **School closures:** Shifts are not created for (date, time_slot) when that slot is closed (see `school_closures`: date, time_slot_id, reason, optional notes). Time off POST/PUT filter requested shifts using `getSchoolClosuresForDateRange` and `isSlotClosedOnDate` so no time_off_shifts or coverage_request_shifts are created for closed days. In UIs where users pick shifts (Time Off form, Assign Sub panel), closed shifts may be shown for context but must be marked "School closed" and must not be selectable or assignable; sub assignment and temporary coverage (flex) APIs reject assignment to closed shifts (e.g. assign-shifts returns 409).
 
 ### Dashboard and time off
 

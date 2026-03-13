@@ -64,6 +64,8 @@ interface Shift {
   classroom_name?: string | null
   time_slot_code?: string
   day_name?: string
+  /** True when this shift falls on a school-closed day/slot; show for context but not assignable */
+  school_closure?: boolean
 }
 
 interface Qualification {
@@ -431,9 +433,9 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
     setSelectedShiftIds(new Set())
   }, [shiftIdsKey])
 
-  // Calculate summary stats
+  // Calculate summary stats (exclude school-closure shifts from assignable counts)
   const summaryStats = useMemo(() => {
-    const selectedShifts = shifts.filter(s => selectedShiftIds.has(s.id))
+    const selectedShifts = shifts.filter(s => selectedShiftIds.has(s.id) && !s.school_closure)
     const noTimeOffCount = selectedShifts.filter(s => !s.has_time_off).length
     const conflictCount = selectedShifts.filter(
       s =>
@@ -448,15 +450,40 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
     }
   }, [shifts, selectedShiftIds])
 
-  // Handle shift toggle
+  // Group shifts by (date, time_slot_id) for display (floater = multiple classrooms per slot)
+  const shiftGroups = useMemo(() => {
+    const bySlot = new Map<string, Shift[]>()
+    for (const shift of shifts) {
+      const key = `${shift.date}|${shift.time_slot_id}`
+      if (!bySlot.has(key)) bySlot.set(key, [])
+      bySlot.get(key)!.push(shift)
+    }
+    return Array.from(bySlot.entries()).map(([slotKey, groupShifts]) => ({
+      slotKey,
+      shifts: groupShifts.sort((a, b) =>
+        (a.classroom_name ?? '').localeCompare(b.classroom_name ?? '')
+      ),
+    }))
+  }, [shifts])
+
+  // Handle shift toggle (single id)
   const handleShiftToggle = (shiftId: string) => {
     setSelectedShiftIds(prev => {
       const next = new Set(prev)
-      if (next.has(shiftId)) {
-        next.delete(shiftId)
-      } else {
-        next.add(shiftId)
-      }
+      if (next.has(shiftId)) next.delete(shiftId)
+      else next.add(shiftId)
+      return next
+    })
+  }
+
+  // Handle toggle for a group (e.g. floater slot): select all or deselect all
+  const handleShiftGroupToggle = (groupShifts: Shift[]) => {
+    const ids = groupShifts.map(s => s.id)
+    const allSelected = ids.every(id => selectedShiftIds.has(id))
+    setSelectedShiftIds(prev => {
+      const next = new Set(prev)
+      if (allSelected) ids.forEach(id => next.delete(id))
+      else ids.forEach(id => next.add(id))
       return next
     })
   }
@@ -470,7 +497,14 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
 
     setSubmitting(true)
     try {
-      const selectedShifts = shifts.filter(s => selectedShiftIds.has(s.id))
+      const selectedShifts = shifts.filter(s => selectedShiftIds.has(s.id) && !s.school_closure)
+      if (selectedShifts.length === 0) {
+        toast.error(
+          'No assignable shifts selected. Shifts on school-closed days cannot be assigned.'
+        )
+        setSubmitting(false)
+        return
+      }
       const shiftsWithoutTimeOff = selectedShifts.filter(s => !s.has_time_off)
 
       if (shiftsWithoutTimeOff.length > 0 && !timeOffReason?.trim()) {
@@ -482,6 +516,19 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
       let createdTimeOffRequestId: string | null = null
 
       if (shiftsWithoutTimeOff.length > 0 && teacherId) {
+        // One time_off_shift per (date, slot); floater has multiple shifts per slot but API expects unique (date, day_of_week_id, time_slot_id)
+        const uniqueSlots = Array.from(
+          new Map(
+            shiftsWithoutTimeOff.map(s => [
+              `${s.date}|${s.day_of_week_id}|${s.time_slot_id}`,
+              {
+                date: s.date,
+                day_of_week_id: s.day_of_week_id,
+                time_slot_id: s.time_slot_id,
+              },
+            ])
+          ).values()
+        )
         const timeOffResponse = await fetch('/api/time-off', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -492,11 +539,7 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
             shift_selection_mode: 'select_shifts',
             reason: timeOffReason,
             notes: timeOffNotes || null,
-            shifts: shiftsWithoutTimeOff.map(s => ({
-              date: s.date,
-              day_of_week_id: s.day_of_week_id,
-              time_slot_id: s.time_slot_id,
-            })),
+            shifts: uniqueSlots,
           }),
         })
 
@@ -853,128 +896,216 @@ export default function AssignSubPanel({ isOpen, onClose }: AssignSubPanelProps)
                   Shifts <span className="text-destructive">*</span>
                 </Label>
                 <div className="space-y-2 border rounded-lg p-4 bg-white">
-                  {shifts.map(shift => {
-                    const isSelected = selectedShiftIds.has(shift.id)
-                    const isConflictShift =
-                      shift.status === 'conflict_teaching' || shift.status === 'conflict_sub'
+                  {shiftGroups.map(({ slotKey, shifts: groupShifts }) => {
+                    const isFloaterSlot = groupShifts.length > 1
+                    const first = groupShifts[0]
+                    const allSelected = groupShifts.every(s => selectedShiftIds.has(s.id))
+                    const anyDisabled = groupShifts.some(
+                      s =>
+                        s.status === 'conflict_teaching' ||
+                        s.status === 'conflict_sub' ||
+                        s.school_closure
+                    )
+                    const isAssignable = !anyDisabled
+                    const hasSchoolClosure = groupShifts.some(s => s.school_closure)
+                    const hasSoftWarning = groupShifts.some(s => s.status === 'unavailable')
+                    const checkboxId = `shift-${slotKey}`
+                    const floaterClassrooms = isFloaterSlot
+                      ? groupShifts
+                          .map(s => s.classroom_name || 'Unknown classroom')
+                          .filter(Boolean)
+                      : []
+                    const labelText = isFloaterSlot
+                      ? `${formatDate(first.date)} • ${first.time_slot_code ?? ''} • ${floaterClassrooms.join(', ')}`
+                      : formatShiftLabel(first)
+                    const floaterNote =
+                      isFloaterSlot && floaterClassrooms.length > 0
+                        ? floaterClassrooms.join(' and ')
+                        : ''
                     return (
                       <div
-                        key={shift.id}
-                        className="flex items-start gap-3 py-2 border-b last:border-b-0"
+                        key={slotKey}
+                        className={cn(
+                          '-mx-4 flex items-start gap-3 border-b last:border-b-0 px-4 py-2',
+                          !isAssignable && '-mt-3 bg-slate-50 pt-5 pb-2 first:mt-0'
+                        )}
                       >
                         <Checkbox
-                          id={`shift-${shift.id}`}
-                          checked={isSelected}
-                          onCheckedChange={() => handleShiftToggle(shift.id)}
-                          disabled={isConflictShift}
+                          id={checkboxId}
+                          checked={allSelected}
+                          onCheckedChange={() =>
+                            isFloaterSlot
+                              ? handleShiftGroupToggle(groupShifts)
+                              : handleShiftToggle(first.id)
+                          }
+                          disabled={anyDisabled}
                           className="mt-1"
                         />
                         <div className="flex-1 space-y-1">
                           <label
-                            htmlFor={`shift-${shift.id}`}
+                            htmlFor={checkboxId}
                             className="text-sm font-medium cursor-pointer"
                           >
-                            {formatShiftLabel(shift)}
+                            {labelText}
                           </label>
-                          {/* Status badges */}
-                          <div className="flex flex-wrap gap-2">
-                            {!shift.has_time_off && (
-                              <span
-                                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
-                                style={
-                                  {
-                                    backgroundColor: 'rgb(248, 250, 252)', // slate-50
-                                    borderWidth: '1px',
-                                    borderStyle: 'solid',
-                                    borderColor: 'rgb(226, 232, 240)', // slate-200
-                                    color: 'rgb(71, 85, 105)', // slate-600
-                                  } as React.CSSProperties
-                                }
-                              >
-                                <Info className="h-3 w-3" />
-                                No absence recorded yet — a time off request will be created when
-                                you assign
-                              </span>
-                            )}
-                            {shift.status === 'unavailable' && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs cursor-help"
-                                      style={
-                                        {
-                                          backgroundColor: 'rgb(255, 251, 235)', // amber-50
-                                          borderWidth: '1px',
-                                          borderStyle: 'solid',
-                                          borderColor: 'rgb(252, 211, 77)', // amber-300
-                                          color: 'rgb(146, 64, 14)', // amber-800
-                                        } as React.CSSProperties
-                                      }
-                                    >
-                                      <AlertTriangle className="h-3 w-3 mr-1" />
-                                      Marked unavailable
-                                    </Badge>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p className="text-sm">
-                                      Sub is marked as unavailable for this day and time in Settings
-                                      → Staff
-                                    </p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                            {shift.status === 'conflict_teaching' && (
-                              <Badge
-                                variant="outline"
-                                className="text-xs"
-                                style={
-                                  {
-                                    backgroundColor: 'rgb(254, 242, 242)', // red-50
-                                    borderWidth: '1px',
-                                    borderStyle: 'solid',
-                                    borderColor: 'rgb(252, 165, 165)', // red-300
-                                    color: 'rgb(153, 27, 27)', // red-800
-                                  } as React.CSSProperties
-                                }
-                              >
-                                <AlertTriangle className="h-3 w-3 mr-1" />
-                                Conflict: Assigned to {shift.classroom_name || 'classroom'}
-                              </Badge>
-                            )}
-                            {shift.status === 'conflict_sub' && (
-                              <Badge
-                                variant="outline"
-                                className="text-xs"
-                                style={
-                                  {
-                                    backgroundColor: 'rgb(254, 242, 242)', // red-50
-                                    borderWidth: '1px',
-                                    borderStyle: 'solid',
-                                    borderColor: 'rgb(252, 165, 165)', // red-300
-                                    color: 'rgb(153, 27, 27)', // red-800
-                                  } as React.CSSProperties
-                                }
-                              >
-                                <AlertTriangle className="h-3 w-3 mr-1" />
-                                Conflict: {shift.conflict_message || 'Assigned to sub'}
-                              </Badge>
-                            )}
-                          </div>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <p className="text-xs text-muted-foreground cursor-help">
-                                  You can still assign this shift if needed.
-                                </p>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p className="text-sm">Manual override available</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                          {/* Role/context: Floater chip + note */}
+                          {isFloaterSlot && (
+                            <div className="flex flex-wrap items-center gap-2">
+                              {isFloaterSlot && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs border-dashed"
+                                  style={
+                                    {
+                                      backgroundColor: 'rgb(243, 232, 255)', // purple-100
+                                      borderWidth: '1px',
+                                      borderStyle: 'dashed',
+                                      borderColor: 'rgb(216, 180, 254)', // purple-300
+                                      color: 'rgb(107, 33, 168)', // purple-800
+                                    } as React.CSSProperties
+                                  }
+                                >
+                                  Floater
+                                </Badge>
+                              )}
+                              {isFloaterSlot && floaterNote && (
+                                <span className="text-xs text-muted-foreground">
+                                  Teacher works in {floaterNote} during this shift. Sub will be
+                                  assigned to both.
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {/* Blocking status: only when not assignable (school closed or conflict) */}
+                          {!isAssignable && (
+                            <div className="flex flex-wrap gap-2">
+                              {hasSchoolClosure && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs"
+                                  style={
+                                    {
+                                      backgroundColor: 'rgb(241, 245, 249)', // slate-100
+                                      borderWidth: '1px',
+                                      borderStyle: 'solid',
+                                      borderColor: 'rgb(203, 213, 225)', // slate-300
+                                      color: 'rgb(71, 85, 105)', // slate-600
+                                    } as React.CSSProperties
+                                  }
+                                >
+                                  School closed
+                                </Badge>
+                              )}
+                              {groupShifts.some(s => s.status === 'conflict_teaching') && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs"
+                                  style={
+                                    {
+                                      backgroundColor: 'rgb(254, 242, 242)', // red-50
+                                      borderWidth: '1px',
+                                      borderStyle: 'solid',
+                                      borderColor: 'rgb(252, 165, 165)', // red-300
+                                      color: 'rgb(153, 27, 27)', // red-800
+                                    } as React.CSSProperties
+                                  }
+                                >
+                                  <AlertTriangle className="h-3 w-3 mr-1" />
+                                  Conflict: Assigned to{' '}
+                                  {groupShifts.find(s => s.status === 'conflict_teaching')
+                                    ?.classroom_name || 'classroom'}
+                                </Badge>
+                              )}
+                              {groupShifts.some(s => s.status === 'conflict_sub') && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs"
+                                  style={
+                                    {
+                                      backgroundColor: 'rgb(254, 242, 242)', // red-50
+                                      borderWidth: '1px',
+                                      borderStyle: 'solid',
+                                      borderColor: 'rgb(252, 165, 165)', // red-300
+                                      color: 'rgb(153, 27, 27)', // red-800
+                                    } as React.CSSProperties
+                                  }
+                                >
+                                  <AlertTriangle className="h-3 w-3 mr-1" />
+                                  Conflict:{' '}
+                                  {groupShifts.find(s => s.status === 'conflict_sub')
+                                    ?.conflict_message || 'Assigned to sub'}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                          {/* Informational: only when assignable */}
+                          {isAssignable && (
+                            <div className="flex flex-wrap gap-2">
+                              {groupShifts.some(s => !s.has_time_off) && (
+                                <span
+                                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                                  style={
+                                    {
+                                      backgroundColor: 'rgb(248, 250, 252)', // slate-50
+                                      borderWidth: '1px',
+                                      borderStyle: 'solid',
+                                      borderColor: 'rgb(226, 232, 240)', // slate-200
+                                      color: 'rgb(71, 85, 105)', // slate-600
+                                    } as React.CSSProperties
+                                  }
+                                >
+                                  <Info className="h-3 w-3" />
+                                  No absence recorded yet — a time off request will be created when
+                                  you assign
+                                </span>
+                              )}
+                              {groupShifts.some(s => s.status === 'unavailable') && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs cursor-help"
+                                        style={
+                                          {
+                                            backgroundColor: 'rgb(255, 251, 235)', // amber-50
+                                            borderWidth: '1px',
+                                            borderStyle: 'solid',
+                                            borderColor: 'rgb(252, 211, 77)', // amber-300
+                                            color: 'rgb(146, 64, 14)', // amber-800
+                                          } as React.CSSProperties
+                                        }
+                                      >
+                                        <AlertTriangle className="h-3 w-3 mr-1" />
+                                        Marked unavailable
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p className="text-sm">
+                                        Sub is marked as unavailable for this day and time in
+                                        Settings → Staff
+                                      </p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                            </div>
+                          )}
+                          {/* Override hint: only when assignable and there is a soft warning */}
+                          {isAssignable && hasSoftWarning && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <p className="text-xs text-muted-foreground cursor-help">
+                                    You can still assign this shift if needed.
+                                  </p>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="text-sm">Manual override available</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                         </div>
                       </div>
                     )

@@ -547,4 +547,61 @@ describe('AssignSubPanel', () => {
     await user.click(checkboxes[0])
     expect(checkboxes[0]).toBeChecked()
   })
+
+  it('shows School closed badge and disables checkbox for shifts on closed days', async () => {
+    const defaultFetch = global.fetch as jest.Mock
+    global.fetch = jest.fn((url: string | URL | globalThis.Request, options?: RequestInit) => {
+      const urlStr = url.toString()
+      if (urlStr.includes('/api/assign-sub/shifts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              shifts: [
+                {
+                  id: '2026-03-10|dow-2|slot-1',
+                  date: '2026-03-10',
+                  day_of_week_id: 'dow-2',
+                  time_slot_id: 'slot-1',
+                  time_slot_code: 'AM',
+                  classroom_id: 'class-1',
+                  has_time_off: false,
+                  time_off_request_id: null,
+                  school_closure: true,
+                },
+                {
+                  id: '2026-03-10|dow-2|slot-2',
+                  date: '2026-03-10',
+                  day_of_week_id: 'dow-2',
+                  time_slot_id: 'slot-2',
+                  time_slot_code: 'PM',
+                  classroom_id: 'class-1',
+                  has_time_off: false,
+                  time_off_request_id: null,
+                  school_closure: false,
+                },
+              ],
+            }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/check-conflicts')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) }) as Promise<Response>
+      }
+      return defaultFetch(url, options)
+    }) as any
+
+    const user = userEvent.setup()
+    render(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    await fillForm(user)
+
+    await waitFor(() => {
+      expect(screen.getByText(/School closed/i)).toBeInTheDocument()
+    })
+    expect(screen.getByText(/Tue Mar 10 • AM/i)).toBeInTheDocument()
+    expect(screen.getByText(/Tue Mar 10 • PM/i)).toBeInTheDocument()
+
+    const checkboxes = screen.getAllByRole('checkbox')
+    expect(checkboxes[0]).toBeDisabled()
+    expect(checkboxes[1]).not.toBeDisabled()
+  })
 })

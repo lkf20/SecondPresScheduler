@@ -271,10 +271,11 @@ export async function getTeacherShiftsForAssignSub(
   const result: AssignSubShiftRow[] = []
   for (const [date, shiftList] of shiftsByDate.entries()) {
     for (const shift of shiftList) {
-      const key = `${date}|${shift.day_of_week_id}|${shift.time_slot_id}`
-      const timeOffInfo = timeOffShiftsMap.get(key)
+      const slotKey = `${date}|${shift.day_of_week_id}|${shift.time_slot_id}`
+      const timeOffInfo = timeOffShiftsMap.get(slotKey)
+      const id = `${slotKey}|${shift.classroom_id ?? ''}`
       result.push({
-        id: key,
+        id,
         date,
         day_of_week_id: shift.day_of_week_id,
         time_slot_id: shift.time_slot_id,
