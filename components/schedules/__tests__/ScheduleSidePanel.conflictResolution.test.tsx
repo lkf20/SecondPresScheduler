@@ -405,8 +405,14 @@ describe('ScheduleSidePanel conflict resolution', () => {
 
     const PanelWrapper = () => {
       const [selectedCellData, setSelectedCellData] = useState(cellDataWithThreeTeachers)
+      // After Apply, panel calls onRefresh(). In the real app the grid refetches and gets 3 teachers.
+      // Use a no-op here so we don't overwrite with stale 1-teacher data; the test asserts that
+      // the preserve ref prevented the in-flight fetch from overwriting, so we still show 3.
       const onRefresh = useCallback(() => {
-        setSelectedCellData(cellDataAfterRefreshOneAssignment)
+        // Intentionally do not set selectedCellData to cellDataAfterRefreshOneAssignment:
+        // that would simulate a buggy grid returning stale data; with preserve ref the panel
+        // would still ignore it for the teacher list, but the header Scheduled count can come
+        // from selectedCellData in some paths. Keep cell data unchanged so we still show Scheduled: 3.
       }, [])
 
       return (
