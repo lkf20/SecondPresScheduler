@@ -1,14 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import DatePickerInput from '@/components/ui/date-picker-input'
-import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import {
   Dialog,
   DialogContent,
@@ -17,16 +16,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import type { Database } from '@/types/database'
+import ClosurePanel, { type ClosureEditGroup } from './closure-panel'
 
 type TimeSlot = Database['public']['Tables']['time_slots']['Row']
 
@@ -35,6 +27,7 @@ interface SchoolClosure {
   date: string
   time_slot_id: string | null
   reason: string | null
+  notes?: string | null
 }
 
 interface CalendarData {
@@ -57,30 +50,16 @@ export default function SchoolCalendarPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [addPanelOpen, setAddPanelOpen] = useState(false)
-  const [addMode, setAddMode] = useState<'single' | 'range'>('single')
-  const [addDate, setAddDate] = useState('')
-  const [addStartDate, setAddStartDate] = useState('')
-  const [addEndDate, setAddEndDate] = useState('')
-  const [addReason, setAddReason] = useState('')
-  const [addAppliesTo, setAddAppliesTo] = useState<'all' | 'specific'>('all')
-  const [addTimeSlotIds, setAddTimeSlotIds] = useState<string[]>([])
-  const [addStartPickerOpen, setAddStartPickerOpen] = useState(false)
-  const [addEndPickerOpen, setAddEndPickerOpen] = useState(false)
-  const addEndDateRef = useRef<HTMLButtonElement>(null)
-  const [addSaving, setAddSaving] = useState(false)
+  const [closurePanel, setClosurePanel] = useState<{
+    open: boolean
+    mode: 'add' | 'edit'
+    editGroup: ClosureEditGroup | null
+  }>({ open: false, mode: 'add', editGroup: null })
   const [savedSchoolYear, setSavedSchoolYear] = useState<{
     first_day_of_school: string | null
     last_day_of_school: string | null
   } | null>(null)
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
-  const [editPanelOpen, setEditPanelOpen] = useState(false)
-  const [editDate, setEditDate] = useState('')
-  const [editClosureIds, setEditClosureIds] = useState<string[]>([])
-  const [editTimeSlotIds, setEditTimeSlotIds] = useState<string[]>([])
-  const [editReason, setEditReason] = useState('')
-  const [editAppliesTo, setEditAppliesTo] = useState<'all' | 'specific'>('all')
-  const [editSaving, setEditSaving] = useState(false)
   const [deleteDialogGroup, setDeleteDialogGroup] = useState<{
     date: string
     reason: string | null
@@ -89,6 +68,8 @@ export default function SchoolCalendarPage() {
     closureIds: string[]
   } | null>(null)
   const [deleteDeleting, setDeleteDeleting] = useState(false)
+  const [closureScope, setClosureScope] = useState<'school_year' | 'all'>('school_year')
+  const [includePastDates, setIncludePastDates] = useState(true)
 
   const hasUnsavedSchoolYearChanges =
     data &&
@@ -100,11 +81,13 @@ export default function SchoolCalendarPage() {
     try {
       setError(null)
       setLoading(true)
-      const today = new Date().toISOString().slice(0, 10)
+      const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
       const oneYearLater = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
         .toISOString()
         .slice(0, 10)
-      const res = await fetch(`/api/settings/calendar?startDate=${today}&endDate=${oneYearLater}`)
+      const res = await fetch(
+        `/api/settings/calendar?startDate=${oneYearAgo}&endDate=${oneYearLater}`
+      )
       if (!res.ok) throw new Error('Failed to load calendar settings')
       const json = await res.json()
       const loaded = {
@@ -176,144 +159,62 @@ export default function SchoolCalendarPage() {
     }
   }
 
-  const handleAddClosure = async () => {
-    if (addMode === 'range') {
-      if (!addStartDate || !addEndDate) {
-        toast.error('Please select both start and end dates.')
-        return
-      }
-      if (addStartDate > addEndDate) {
-        toast.error('Start date must be on or before end date.')
-        return
-      }
-    } else {
-      if (!addDate) {
-        toast.error('Please select a date.')
-        return
-      }
-    }
-    setAddSaving(true)
-    try {
-      if (addMode === 'range') {
-        const res = await fetch('/api/settings/calendar', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            add_closure: {
-              start_date: addStartDate,
-              end_date: addEndDate,
-              reason: addReason.trim() || null,
-            },
-          }),
-        })
-        if (!res.ok) {
-          const err = await res.json()
-          throw new Error(err.error || 'Failed to add closure')
-        }
-        toast.success('Closures added.')
-        setAddPanelOpen(false)
-        setAddStartDate('')
-        setAddEndDate('')
-        setAddReason('')
-        await fetchData()
-      } else if (addAppliesTo === 'all') {
-        const res = await fetch('/api/settings/calendar', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            add_closure: {
-              date: addDate,
-              time_slot_id: null,
-              reason: addReason.trim() || null,
-            },
-          }),
-        })
-        if (!res.ok) {
-          const err = await res.json()
-          throw new Error(err.error || 'Failed to add closure')
-        }
-        toast.success('Closure added.')
-        setAddPanelOpen(false)
-        setAddDate('')
-        setAddReason('')
-        setAddAppliesTo('all')
-        setAddTimeSlotIds([])
-        await fetchData()
-      } else {
-        if (addTimeSlotIds.length === 0) {
-          toast.error('Please select at least one time slot.')
-          setAddSaving(false)
-          return
-        }
-        for (const timeSlotId of addTimeSlotIds) {
-          const res = await fetch('/api/settings/calendar', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              add_closure: {
-                date: addDate,
-                time_slot_id: timeSlotId,
-                reason: addReason.trim() || null,
-              },
-            }),
-          })
-          if (!res.ok) {
-            const err = await res.json()
-            throw new Error(err.error || 'Failed to add closure')
-          }
-        }
-        toast.success('Closure added.')
-        setAddPanelOpen(false)
-        setAddDate('')
-        setAddReason('')
-        setAddAppliesTo('all')
-        setAddTimeSlotIds([])
-        await fetchData()
-      }
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add closure')
-    } finally {
-      setAddSaving(false)
-    }
-  }
-
   const sortedTimeSlots = [...timeSlots].sort(
     (a, b) => (a.display_order ?? 999) - (b.display_order ?? 999)
   )
   const activeTimeSlots = sortedTimeSlots.filter(ts => ts.is_active !== false)
 
+  const todayISO = new Date().toISOString().slice(0, 10)
+  const filteredClosures = (() => {
+    const list = data?.school_closures ?? []
+    if (!list.length) return []
+    const firstDay = data?.first_day_of_school ?? null
+    const lastDay = data?.last_day_of_school ?? null
+    let scopeFiltered = list
+    if (closureScope === 'school_year' && firstDay && lastDay) {
+      scopeFiltered = list.filter(c => c.date >= firstDay && c.date <= lastDay)
+    }
+    if (!includePastDates) {
+      scopeFiltered = scopeFiltered.filter(c => c.date >= todayISO)
+    }
+    return scopeFiltered
+  })()
+
   const groupedClosures = (() => {
-    if (!data?.school_closures?.length) return []
+    if (!filteredClosures.length) return []
     const byDate = new Map<string, SchoolClosure[]>()
-    for (const c of data.school_closures) {
+    for (const c of filteredClosures) {
       const list = byDate.get(c.date) ?? []
       list.push(c)
       byDate.set(c.date, list)
     }
-    return Array.from(byDate.entries()).map(([date, closures]) => {
-      const hasAllSlots = closures.some(c => !c.time_slot_id) || closures.length === 0
-      const slotCodes = hasAllSlots
-        ? []
-        : [
-            ...new Set(
-              closures
-                .map(c => {
-                  const ts = c.time_slot_id
-                    ? timeSlots.find(t => t.id === c.time_slot_id)
-                    : undefined
-                  return ts?.code ?? (c.time_slot_id ? '?' : null)
-                })
-                .filter((c): c is string => c != null)
-            ),
-          ].sort()
-      return {
-        date,
-        closures,
-        hasAllSlots,
-        slotCodes,
-        reason: closures[0]?.reason ?? null,
-      }
-    })
+    return Array.from(byDate.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, closures]) => {
+        const hasAllSlots = closures.some(c => !c.time_slot_id) || closures.length === 0
+        const slotCodes = hasAllSlots
+          ? []
+          : [
+              ...new Set(
+                closures
+                  .map(c => {
+                    const ts = c.time_slot_id
+                      ? timeSlots.find(t => t.id === c.time_slot_id)
+                      : undefined
+                    return ts?.code ?? (c.time_slot_id ? '?' : null)
+                  })
+                  .filter((c): c is string => c != null)
+              ),
+            ].sort()
+        return {
+          date,
+          closures,
+          hasAllSlots,
+          slotCodes,
+          reason: closures[0]?.reason ?? null,
+          notes: closures[0]?.notes ?? null,
+        }
+      })
   })()
 
   const handleDeleteClosures = async (ids: string[]) => {
@@ -337,52 +238,16 @@ export default function SchoolCalendarPage() {
   }
 
   const handleOpenEdit = (group: (typeof groupedClosures)[number]) => {
-    const hasAll = group.closures.some(c => !c.time_slot_id)
-    const slotIds = hasAll
-      ? []
-      : group.closures.map(c => c.time_slot_id).filter((id): id is string => id != null)
-    setEditDate(group.date)
-    setEditClosureIds(group.closures.map(c => c.id))
-    setEditAppliesTo(hasAll ? 'all' : 'specific')
-    setEditTimeSlotIds(slotIds)
-    setEditReason(group.reason ?? '')
-    setEditPanelOpen(true)
-  }
-
-  const handleSaveEdit = async () => {
-    if (!editDate) return
-    if (editAppliesTo === 'specific' && editTimeSlotIds.length === 0) {
-      toast.error('Please select at least one time slot.')
-      return
-    }
-    setEditSaving(true)
-    try {
-      const reason = editReason.trim() || null
-      const addClosures =
-        editAppliesTo === 'all'
-          ? [{ date: editDate, time_slot_id: null, reason }]
-          : editTimeSlotIds.map(time_slot_id => ({
-              date: editDate,
-              time_slot_id,
-              reason,
-            }))
-      const res = await fetch('/api/settings/calendar', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          delete_closure_ids: editClosureIds,
-          add_closures: addClosures,
-        }),
-      })
-      if (!res.ok) throw new Error('Failed to update')
-      toast.success('Closure updated.')
-      setEditPanelOpen(false)
-      await fetchData()
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update')
-    } finally {
-      setEditSaving(false)
-    }
+    setClosurePanel({
+      open: true,
+      mode: 'edit',
+      editGroup: {
+        date: group.date,
+        closures: group.closures.map(c => ({ id: c.id, time_slot_id: c.time_slot_id })),
+        reason: group.reason,
+        notes: group.notes ?? null,
+      },
+    })
   }
 
   if (loading) {
@@ -423,7 +288,7 @@ export default function SchoolCalendarPage() {
       {error && <ErrorMessage message={error} className="mb-6" />}
 
       {/* School Year */}
-      <div className="mb-8 max-w-3xl rounded-lg border bg-white p-6">
+      <div className="mb-8 max-w-5xl rounded-lg border bg-white p-6">
         <div className="mb-4">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-semibold">School Year</h2>
@@ -489,11 +354,11 @@ export default function SchoolCalendarPage() {
         )}
       </div>
 
-      {/* Closures */}
-      <div className="max-w-3xl rounded-lg border bg-white p-6">
+      {/* Closed Days */}
+      <div className="max-w-5xl rounded-lg border bg-white p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold">Closed Days</h2>
-          <Button onClick={() => setAddPanelOpen(true)}>
+          <Button onClick={() => setClosurePanel({ open: true, mode: 'add', editGroup: null })}>
             <Plus className="h-4 w-4 mr-2" />
             Add Closure
           </Button>
@@ -502,24 +367,83 @@ export default function SchoolCalendarPage() {
           Days or time slots when school is closed. These will appear as &quot;School Closed&quot;
           on the weekly schedule.
         </p>
+
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <span className="text-sm font-medium text-slate-700">Show:</span>
+          <div
+            className="inline-flex items-center rounded-full border p-1"
+            style={{
+              borderColor: '#e2e8f0',
+              backgroundColor: '#ffffff',
+            }}
+            role="group"
+            aria-label="Show scope"
+          >
+            <button
+              type="button"
+              onClick={() => setClosureScope('school_year')}
+              className={
+                closureScope === 'school_year'
+                  ? 'rounded-full py-1.5 px-4 text-sm font-medium bg-[#172554] text-white transition-[color,background-color] duration-150'
+                  : 'rounded-full py-1.5 px-4 text-sm font-medium bg-transparent text-[#475569] hover:bg-slate-100/80 transition-[color,background-color] duration-150'
+              }
+            >
+              This school year
+            </button>
+            <button
+              type="button"
+              onClick={() => setClosureScope('all')}
+              className={
+                closureScope === 'all'
+                  ? 'rounded-full py-1.5 px-4 text-sm font-medium bg-[#172554] text-white transition-[color,background-color] duration-150'
+                  : 'rounded-full py-1.5 px-4 text-sm font-medium bg-transparent text-[#475569] hover:bg-slate-100/80 transition-[color,background-color] duration-150'
+              }
+            >
+              All
+            </button>
+          </div>
+          {closureScope === 'school_year' &&
+            (!data?.first_day_of_school || !data?.last_day_of_school) && (
+              <span className="text-sm text-amber-700">
+                Set school year above to filter by school year.
+              </span>
+            )}
+          <div className="flex items-center gap-2 ml-2 sm:ml-0">
+            <Checkbox
+              id="include-past-dates"
+              checked={includePastDates}
+              onCheckedChange={checked => setIncludePastDates(checked === true)}
+            />
+            <Label htmlFor="include-past-dates" className="text-sm font-normal cursor-pointer">
+              Include past dates
+            </Label>
+          </div>
+        </div>
+
         {!data?.school_closures?.length ? (
           <p className="text-muted-foreground">No closures scheduled.</p>
+        ) : !groupedClosures.length ? (
+          <p className="text-muted-foreground">
+            No closures match the current filters. Try &quot;All&quot; or turn on &quot;Include past
+            dates&quot;.
+          </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left py-2 font-medium">Date</th>
-                  <th className="text-left py-2 font-medium">Applies to</th>
-                  <th className="text-left py-2 font-medium">Reason</th>
-                  <th className="text-left py-2 font-medium w-20" />
+                  <th className="text-left py-2 px-3 font-medium w-36">Date</th>
+                  <th className="text-left py-2 px-3 font-medium">Applies to</th>
+                  <th className="text-left py-2 px-3 font-medium w-28">Reason</th>
+                  <th className="text-left py-2 px-3 font-medium w-48 max-w-[14rem]">Notes</th>
+                  <th className="text-left py-2 pl-3 pr-2 font-medium w-20" />
                 </tr>
               </thead>
               <tbody>
                 {groupedClosures.map(group => (
                   <tr key={group.date} className="border-b last:border-0">
-                    <td className="py-2">{formatDate(group.date)}</td>
-                    <td className="py-2">
+                    <td className="py-2 px-3 align-top">{formatDate(group.date)}</td>
+                    <td className="py-2 px-3 align-top">
                       <div className="flex flex-wrap gap-1.5">
                         {group.hasAllSlots ? (
                           <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-600">
@@ -537,8 +461,13 @@ export default function SchoolCalendarPage() {
                         )}
                       </div>
                     </td>
-                    <td className="py-2 text-muted-foreground">{group.reason || '—'}</td>
-                    <td className="py-2">
+                    <td className="py-2 px-3 align-top text-muted-foreground">
+                      {group.reason || '—'}
+                    </td>
+                    <td className="py-2 px-3 align-top text-muted-foreground w-48 max-w-[14rem]">
+                      {group.notes ? <span className="break-words block">{group.notes}</span> : '—'}
+                    </td>
+                    <td className="py-2 pl-3 pr-2 align-top">
                       <div className="flex items-center gap-1">
                         <Button
                           variant="ghost"
@@ -576,312 +505,21 @@ export default function SchoolCalendarPage() {
         )}
       </div>
 
-      {/* Add Closure Panel */}
-      <Sheet
-        open={addPanelOpen}
-        onOpenChange={open => {
-          setAddPanelOpen(open)
-          if (!open) {
-            setAddStartPickerOpen(false)
-            setAddEndPickerOpen(false)
-            setAddMode('single')
-            setAddDate('')
-            setAddStartDate('')
-            setAddEndDate('')
-            setAddReason('')
-            setAddAppliesTo('all')
-            setAddTimeSlotIds([])
-          }
-        }}
-      >
-        <SheetContent
-          className="w-full overflow-y-auto bg-gray-50 p-0"
-          style={{ maxWidth: '34rem' }}
-        >
-          <SheetHeader className="px-6 pt-6 pb-4">
-            <SheetTitle>Add Closure</SheetTitle>
-            <SheetDescription>
-              Add a day or time slot closure to the school calendar
-            </SheetDescription>
-          </SheetHeader>
-          <div className="px-6 pb-6 space-y-6">
-            <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
-              <Label className="text-base font-medium">Add</Label>
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="add-mode"
-                    checked={addMode === 'single'}
-                    onChange={() => setAddMode('single')}
-                    className="h-4 w-4 rounded-full accent-teal-600"
-                  />
-                  <span>Single day</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="add-mode"
-                    checked={addMode === 'range'}
-                    onChange={() => setAddMode('range')}
-                    className="h-4 w-4 rounded-full accent-teal-600"
-                  />
-                  <span>Date range</span>
-                </label>
-              </div>
-            </div>
-
-            {addMode === 'range' ? (
-              <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
-                <div>
-                  <Label htmlFor="add-start-date">Start date</Label>
-                  <DatePickerInput
-                    id="add-start-date"
-                    value={addStartDate}
-                    onChange={v => {
-                      setAddStartDate(v)
-                      setAddStartPickerOpen(false)
-                      setTimeout(() => {
-                        setAddEndPickerOpen(true)
-                        addEndDateRef.current?.click()
-                      }, 300)
-                    }}
-                    placeholder="Select start date"
-                    closeOnSelect
-                    open={addStartPickerOpen}
-                    onOpenChange={setAddStartPickerOpen}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="add-end-date">End date</Label>
-                  <DatePickerInput
-                    ref={addEndDateRef}
-                    id="add-end-date"
-                    value={addEndDate}
-                    onChange={setAddEndDate}
-                    placeholder="Select end date"
-                    closeOnSelect
-                    open={addEndPickerOpen}
-                    onOpenChange={setAddEndPickerOpen}
-                    openToDate={addStartDate || undefined}
-                  />
-                </div>
-                {addStartDate && addEndDate && addStartDate <= addEndDate && (
-                  <p className="text-sm text-muted-foreground">
-                    This will add whole-day closures for all{' '}
-                    {Math.ceil(
-                      (new Date(addEndDate + 'T12:00:00').getTime() -
-                        new Date(addStartDate + 'T12:00:00').getTime()) /
-                        (24 * 60 * 60 * 1000)
-                    ) + 1}{' '}
-                    days. All time slots will be closed for each day.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <>
-                <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
-                  <div>
-                    <Label htmlFor="add-date">Date</Label>
-                    <DatePickerInput
-                      id="add-date"
-                      value={addDate}
-                      onChange={setAddDate}
-                      placeholder="Select date"
-                      closeOnSelect
-                    />
-                  </div>
-                  <div>
-                    <Label className="mb-2 block">Applies to</Label>
-                    <div className="space-y-2">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="applies-to"
-                          checked={addAppliesTo === 'all'}
-                          onChange={() => setAddAppliesTo('all')}
-                          className="h-4 w-4 rounded-full accent-teal-600"
-                        />
-                        <span>All time slots (whole day closed)</span>
-                      </label>
-                      <label
-                        className={`flex items-center gap-2 ${activeTimeSlots.length === 0 ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-                      >
-                        <input
-                          type="radio"
-                          name="applies-to"
-                          checked={addAppliesTo === 'specific'}
-                          onChange={() => activeTimeSlots.length > 0 && setAddAppliesTo('specific')}
-                          disabled={activeTimeSlots.length === 0}
-                          className="h-4 w-4 rounded-full accent-teal-600"
-                        />
-                        <span>Specific time slots</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-                {addAppliesTo === 'specific' && (
-                  <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
-                    <Label className="text-base font-medium">Select time slots to close</Label>
-                    {activeTimeSlots.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No time slots configured.</p>
-                    ) : (
-                      <div className="flex flex-col gap-2">
-                        {activeTimeSlots.map(ts => (
-                          <label
-                            key={ts.id}
-                            className="flex items-center space-x-2 cursor-pointer rounded px-1 py-0.5 -mx-1 -my-0.5 hover:bg-slate-50"
-                          >
-                            <Checkbox
-                              id={`closure-slot-${ts.id}`}
-                              checked={addTimeSlotIds.includes(ts.id)}
-                              onCheckedChange={checked =>
-                                setAddTimeSlotIds(prev =>
-                                  checked === true
-                                    ? [...prev, ts.id]
-                                    : prev.filter(x => x !== ts.id)
-                                )
-                              }
-                              className="data-[state=checked]:bg-teal-600 data-[state=checked]:border-teal-600 shrink-0"
-                            />
-                            <span className="text-sm font-normal">
-                              {ts.code && ts.name ? `${ts.code} (${ts.name})` : ts.name || ts.code}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-
-            <div className="rounded-lg bg-white border border-gray-200 p-6">
-              <Label htmlFor="add-reason">Reason</Label>
-              <Input
-                id="add-reason"
-                value={addReason}
-                onChange={e => setAddReason(e.target.value)}
-                placeholder="e.g. Holiday, Snow Day"
-                className="mt-2"
-              />
-            </div>
-
-            <SheetFooter className="flex gap-2 pt-2">
-              <Button variant="outline" onClick={() => setAddPanelOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleAddClosure} disabled={addSaving}>
-                {addSaving ? 'Adding...' : 'Add'}
-              </Button>
-            </SheetFooter>
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      {/* Edit Closure Panel */}
-      <Sheet open={editPanelOpen} onOpenChange={setEditPanelOpen}>
-        <SheetContent
-          className="w-full overflow-y-auto bg-gray-50 p-0"
-          style={{ maxWidth: '34rem' }}
-        >
-          <SheetHeader className="px-6 pt-6 pb-4">
-            <SheetTitle>Edit Closure</SheetTitle>
-            <SheetDescription>
-              Update the closure for {editDate ? formatDate(editDate) : 'this date'}
-            </SheetDescription>
-          </SheetHeader>
-          <div className="px-6 pb-6 space-y-6">
-            <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
-              <Label className="text-base font-medium">Date</Label>
-              <p className="text-sm text-muted-foreground">
-                {editDate ? formatDate(editDate) : '—'}
-              </p>
-            </div>
-
-            <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
-              <Label className="mb-2 block">Applies to</Label>
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="edit-applies-to"
-                    checked={editAppliesTo === 'all'}
-                    onChange={() => setEditAppliesTo('all')}
-                    className="h-4 w-4 rounded-full accent-teal-600"
-                  />
-                  <span>All time slots (whole day closed)</span>
-                </label>
-                <label
-                  className={`flex items-center gap-2 ${activeTimeSlots.length === 0 ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-                >
-                  <input
-                    type="radio"
-                    name="edit-applies-to"
-                    checked={editAppliesTo === 'specific'}
-                    onChange={() => activeTimeSlots.length > 0 && setEditAppliesTo('specific')}
-                    disabled={activeTimeSlots.length === 0}
-                    className="h-4 w-4 rounded-full accent-teal-600"
-                  />
-                  <span>Specific time slots</span>
-                </label>
-              </div>
-            </div>
-
-            {editAppliesTo === 'specific' && (
-              <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-3">
-                <Label className="text-base font-medium">Select time slots to close</Label>
-                {activeTimeSlots.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No time slots configured.</p>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {activeTimeSlots.map(ts => (
-                      <label
-                        key={ts.id}
-                        className="flex items-center space-x-2 cursor-pointer rounded px-1 py-0.5 -mx-1 -my-0.5 hover:bg-slate-50"
-                      >
-                        <Checkbox
-                          id={`edit-closure-slot-${ts.id}`}
-                          checked={editTimeSlotIds.includes(ts.id)}
-                          onCheckedChange={checked =>
-                            setEditTimeSlotIds(prev =>
-                              checked === true ? [...prev, ts.id] : prev.filter(x => x !== ts.id)
-                            )
-                          }
-                          className="data-[state=checked]:bg-teal-600 data-[state=checked]:border-teal-600 shrink-0"
-                        />
-                        <span className="text-sm font-normal">
-                          {ts.code && ts.name ? `${ts.code} (${ts.name})` : ts.name || ts.code}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="rounded-lg bg-white border border-gray-200 p-6">
-              <Label htmlFor="edit-reason">Reason</Label>
-              <Input
-                id="edit-reason"
-                value={editReason}
-                onChange={e => setEditReason(e.target.value)}
-                placeholder="e.g. Holiday, Snow Day"
-                className="mt-2"
-              />
-            </div>
-
-            <SheetFooter className="flex gap-2 pt-2">
-              <Button variant="outline" onClick={() => setEditPanelOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleSaveEdit} disabled={editSaving}>
-                {editSaving ? 'Saving...' : 'Save'}
-              </Button>
-            </SheetFooter>
-          </div>
-        </SheetContent>
-      </Sheet>
+      <ClosurePanel
+        open={closurePanel.open}
+        onOpenChange={open =>
+          setClosurePanel(prev => ({
+            ...prev,
+            open,
+            editGroup: open ? prev.editGroup : null,
+          }))
+        }
+        onSuccess={fetchData}
+        mode={closurePanel.mode}
+        editGroup={closurePanel.editGroup}
+        activeTimeSlots={activeTimeSlots}
+        formatDate={formatDate}
+      />
 
       {/* Delete Closure Confirmation Dialog */}
       <Dialog
