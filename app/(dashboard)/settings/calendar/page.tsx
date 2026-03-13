@@ -193,20 +193,12 @@ export default function SchoolCalendarPage() {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, closures]) => {
         const hasAllSlots = closures.some(c => !c.time_slot_id) || closures.length === 0
+        const closureSlotIds = new Set(
+          closures.map(c => c.time_slot_id).filter((id): id is string => id != null)
+        )
         const slotCodes = hasAllSlots
           ? []
-          : [
-              ...new Set(
-                closures
-                  .map(c => {
-                    const ts = c.time_slot_id
-                      ? timeSlots.find(t => t.id === c.time_slot_id)
-                      : undefined
-                    return ts?.code ?? (c.time_slot_id ? '?' : null)
-                  })
-                  .filter((c): c is string => c != null)
-              ),
-            ].sort()
+          : sortedTimeSlots.filter(ts => closureSlotIds.has(ts.id)).map(ts => ts.code ?? '?')
         return {
           date,
           closures,
@@ -216,6 +208,35 @@ export default function SchoolCalendarPage() {
           notes: closures[0]?.notes ?? null,
         }
       })
+  })()
+
+  /** All closures by date (from full list), for add-panel "replace existing?" check regardless of view filters */
+  const existingClosuresByDate = (() => {
+    const list = data?.school_closures ?? []
+    if (!list.length) return {} as Record<string, { closureIds: string[]; slotCodes: string[] }>
+    const byDate = new Map<string, SchoolClosure[]>()
+    for (const c of list) {
+      const arr = byDate.get(c.date) ?? []
+      arr.push(c)
+      byDate.set(c.date, arr)
+    }
+    return Object.fromEntries(
+      Array.from(byDate.entries()).map(([date, closures]) => {
+        const closureSlotIds = new Set(
+          closures.map(c => c.time_slot_id).filter((id): id is string => id != null)
+        )
+        const slotCodes = sortedTimeSlots
+          .filter(ts => closureSlotIds.has(ts.id))
+          .map(ts => ts.code ?? '?')
+        return [
+          date,
+          {
+            closureIds: closures.map(c => c.id),
+            slotCodes,
+          },
+        ]
+      })
+    )
   })()
 
   const handleDeleteClosures = async (ids: string[]) => {
@@ -524,6 +545,7 @@ export default function SchoolCalendarPage() {
         editGroup={closurePanel.editGroup}
         activeTimeSlots={activeTimeSlots}
         formatDate={formatDate}
+        existingClosuresByDate={existingClosuresByDate}
       />
 
       {/* Delete Closure Confirmation Dialog */}
