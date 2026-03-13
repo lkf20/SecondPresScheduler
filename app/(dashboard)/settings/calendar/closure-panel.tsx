@@ -18,6 +18,7 @@ import {
   ClosureAppliesToRadios,
   ClosureTimeSlotCheckboxes,
 } from './closure-form-fields'
+import { buildEditClosurePayload } from '@/lib/settings/build-edit-closure-payload'
 
 /** Group of closures on one date (from calendar page groupedClosures). Used to open panel in edit mode. */
 export interface ClosureEditGroup {
@@ -115,58 +116,7 @@ export default function ClosurePanel({
       try {
         const reasonVal = reason.trim() || null
         const notesVal = notes.trim() || null
-
-        const existingIsAll =
-          editGroup.closures.length === 1 && editGroup.closures[0].time_slot_id === null
-        const existingSlotIds = editGroup.closures
-          .map(c => c.time_slot_id)
-          .filter((id): id is string => id != null)
-          .sort()
-        const newIsAll = appliesTo === 'all'
-        const newSlotIds = newIsAll ? [] : [...timeSlotIds].sort()
-        const sameShape =
-          (existingIsAll && newIsAll) ||
-          (!existingIsAll &&
-            !newIsAll &&
-            existingSlotIds.length === newSlotIds.length &&
-            existingSlotIds.every((id, i) => id === newSlotIds[i]))
-
-        const body: {
-          update_closures?: Array<{ id: string; reason: string | null; notes: string | null }>
-          delete_closure_ids?: string[]
-          add_closures?: Array<{
-            date: string
-            time_slot_id: string | null
-            reason: string | null
-            notes: string | null
-          }>
-        } = sameShape
-          ? {
-              update_closures: editGroup.closures.map(c => ({
-                id: c.id,
-                reason: reasonVal,
-                notes: notesVal,
-              })),
-            }
-          : {
-              delete_closure_ids: editGroup.closures.map(c => c.id),
-              add_closures:
-                appliesTo === 'all'
-                  ? [
-                      {
-                        date: editGroup.date,
-                        time_slot_id: null,
-                        reason: reasonVal,
-                        notes: notesVal,
-                      },
-                    ]
-                  : timeSlotIds.map(time_slot_id => ({
-                      date: editGroup.date,
-                      time_slot_id,
-                      reason: reasonVal,
-                      notes: notesVal,
-                    })),
-            }
+        const body = buildEditClosurePayload(editGroup, appliesTo, timeSlotIds, reasonVal, notesVal)
 
         const res = await fetch('/api/settings/calendar', {
           method: 'PATCH',
@@ -215,12 +165,14 @@ export default function ClosurePanel({
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            add_closure: {
-              start_date: addStartDate,
-              end_date: addEndDate,
-              reason: reason.trim() || null,
-              notes: notes.trim() || null,
-            },
+            add_closures: [
+              {
+                start_date: addStartDate,
+                end_date: addEndDate,
+                reason: reason.trim() || null,
+                notes: notes.trim() || null,
+              },
+            ],
           }),
         })
         if (!res.ok) {
@@ -235,12 +187,14 @@ export default function ClosurePanel({
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            add_closure: {
-              date: addDate,
-              time_slot_id: null,
-              reason: reason.trim() || null,
-              notes: notes.trim() || null,
-            },
+            add_closures: [
+              {
+                date: addDate,
+                time_slot_id: null,
+                reason: reason.trim() || null,
+                notes: notes.trim() || null,
+              },
+            ],
           }),
         })
         if (!res.ok) {

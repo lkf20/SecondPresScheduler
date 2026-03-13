@@ -214,7 +214,11 @@ export async function createSchoolClosure(
 
   if (error) {
     if (error.code === '23505') {
-      throw new Error('A closure already exists for this date and time slot.')
+      const e = new Error('A closure already exists for this date and time slot.') as Error & {
+        code?: string
+      }
+      e.code = 'DUPLICATE_CLOSURE'
+      throw e
     }
     throw error
   }
@@ -286,7 +290,7 @@ export async function createSchoolClosureRange(
       existingWholeDayDates.add(date)
     } catch (err) {
       const code = (err as { code?: string })?.code
-      if (code === '23505') {
+      if (code === '23505' || code === 'DUPLICATE_CLOSURE') {
         skipped++
         existingWholeDayDates.add(date)
       } else {
@@ -335,4 +339,72 @@ export async function deleteSchoolClosure(schoolId: string, closureId: string): 
     .eq('school_id', schoolId)
 
   if (error) throw error
+}
+
+/** Payload for single-day add in apply_school_closure_changes */
+export interface ApplyClosureSingleItem {
+  date: string
+  time_slot_id?: string | null
+  reason?: string | null
+  notes?: string | null
+}
+
+/** Payload for range add in apply_school_closure_changes */
+export interface ApplyClosureRangeItem {
+  start_date: string
+  end_date: string
+  reason?: string | null
+  notes?: string | null
+}
+
+/**
+ * Atomically delete and add closures in one DB transaction (RPC).
+ * Use when both deletes and adds are present to avoid partial state on failure.
+ * Returns the created closure rows for audit logging.
+ */
+export async function applySchoolClosureChanges(
+  schoolId: string,
+  deleteIds: string[],
+  addSingle: ApplyClosureSingleItem[],
+  addRanges: ApplyClosureRangeItem[]
+): Promise<SchoolClosure[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('apply_school_closure_changes', {
+    p_school_id: schoolId,
+    p_delete_ids: deleteIds,
+    p_add_single: addSingle,
+    p_add_ranges: addRanges,
+  })
+
+  if (error) {
+    if (error.code === '23505') {
+      const e = new Error(
+        error.message ?? 'A closure already exists for this date and time slot.'
+      ) as Error & { code?: string }
+      e.code = 'DUPLICATE_CLOSURE'
+      throw e
+    }
+    throw error
+  }
+
+  const rows = Array.isArray(data) ? data : []
+  return rows.map(
+    (row: {
+      id: string
+      school_id: string
+      date: string
+      time_slot_id: string | null
+      reason: string | null
+      notes: string | null
+      created_at: string
+    }) => ({
+      id: row.id,
+      school_id: row.school_id,
+      date: row.date,
+      time_slot_id: row.time_slot_id,
+      reason: row.reason,
+      notes: row.notes ?? null,
+      created_at: row.created_at,
+    })
+  )
 }

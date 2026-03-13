@@ -10,8 +10,10 @@ import {
   createSchoolClosureRange,
   updateSchoolClosure,
   deleteSchoolClosure,
+  applySchoolClosureChanges,
 } from '@/lib/api/school-calendar'
 import { getUserSchoolId } from '@/lib/utils/auth'
+import { logAuditEvent } from '@/lib/audit/logAuditEvent'
 
 jest.mock('@/lib/api/school-calendar', () => ({
   getCalendarSettings: jest.fn(),
@@ -22,6 +24,7 @@ jest.mock('@/lib/api/school-calendar', () => ({
   createSchoolClosureRange: jest.fn(),
   updateSchoolClosure: jest.fn(),
   deleteSchoolClosure: jest.fn(),
+  applySchoolClosureChanges: jest.fn(),
 }))
 
 jest.mock('@/lib/utils/auth', () => ({
@@ -256,7 +259,9 @@ describe('calendar settings route integration', () => {
 
     it('returns 409 when add_closure would duplicate (school_id, date, time_slot_id)', async () => {
       const duplicateMessage = 'A closure already exists for this date and time slot.'
-      ;(createSchoolClosure as jest.Mock).mockRejectedValue(new Error(duplicateMessage))
+      const err = new Error(duplicateMessage) as Error & { code?: string }
+      err.code = 'DUPLICATE_CLOSURE'
+      ;(createSchoolClosure as jest.Mock).mockRejectedValue(err)
       ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
 
       const response = await PATCH(
@@ -317,26 +322,30 @@ describe('calendar settings route integration', () => {
     })
 
     it('edits closure by deleting then adding when shape changes (e.g. slots changed)', async () => {
-      ;(getSchoolClosuresByIds as jest.Mock)
-        .mockResolvedValueOnce([
-          {
-            id: 'c-1',
-            date: '2024-12-25',
-            time_slot_id: null,
-            reason: 'Holiday',
-            notes: null,
-          },
-        ])
-        .mockResolvedValue([])
-      ;(deleteSchoolClosure as jest.Mock).mockResolvedValue(undefined)
-      ;(createSchoolClosure as jest.Mock).mockResolvedValue({
-        id: 'c-new',
-        date: '2024-12-25',
-        time_slot_id: 'slot-1',
-        reason: 'Winter break',
-        notes: null,
-      })
-      ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
+      const toDelete = [
+        {
+          id: 'c-1',
+          date: '2024-12-25',
+          time_slot_id: null,
+          reason: 'Holiday',
+          notes: null,
+          school_id: 'school-1',
+          created_at: '2024-01-01T00:00:00Z',
+        },
+      ]
+      const created = [
+        {
+          id: 'c-new',
+          school_id: 'school-1',
+          date: '2024-12-25',
+          time_slot_id: 'slot-1',
+          reason: 'Winter break',
+          notes: null,
+          created_at: '2024-01-01T00:00:00Z',
+        },
+      ]
+      ;(getSchoolClosuresByIds as jest.Mock).mockResolvedValue(toDelete)
+      ;(applySchoolClosureChanges as jest.Mock).mockResolvedValue(created)
 
       const response = await PATCH(
         new Request('http://localhost/api/settings/calendar', {
@@ -357,13 +366,19 @@ describe('calendar settings route integration', () => {
       )
 
       expect(response.status).toBe(200)
-      expect(deleteSchoolClosure).toHaveBeenCalledWith('school-1', 'c-1')
-      expect(createSchoolClosure).toHaveBeenCalledWith('school-1', {
-        date: '2024-12-25',
-        time_slot_id: 'slot-1',
-        reason: 'Winter break',
-        notes: null,
-      })
+      expect(applySchoolClosureChanges).toHaveBeenCalledWith(
+        'school-1',
+        ['c-1'],
+        [
+          {
+            date: '2024-12-25',
+            time_slot_id: 'slot-1',
+            reason: 'Winter break',
+            notes: null,
+          },
+        ],
+        []
+      )
     })
 
     it('rolls back created closures when a later add_closures item fails (e.g. duplicate)', async () => {
@@ -376,7 +391,9 @@ describe('calendar settings route integration', () => {
           reason: 'Test',
           notes: null,
         })
-        .mockRejectedValueOnce(Object.assign(new Error('already exists'), { code: '23505' }))
+        .mockRejectedValueOnce(
+          Object.assign(new Error('already exists'), { code: 'DUPLICATE_CLOSURE' })
+        )
       ;(deleteSchoolClosure as jest.Mock).mockResolvedValue(undefined)
 
       const response = await PATCH(
@@ -396,6 +413,39 @@ describe('calendar settings route integration', () => {
       expect(createSchoolClosure).toHaveBeenCalledTimes(2)
       expect(deleteSchoolClosure).toHaveBeenCalledTimes(1)
       expect(deleteSchoolClosure).toHaveBeenCalledWith('school-1', 'c-first')
+    })
+
+    it('does not emit delete audit entries when delete+add fails (RPC path); no phantom deletes', async () => {
+      const toDelete = [
+        {
+          id: 'c-1',
+          date: '2024-12-25',
+          time_slot_id: null,
+          reason: 'Holiday',
+          notes: null,
+          school_id: 'school-1',
+          created_at: '2024-01-01T00:00:00Z',
+        },
+      ]
+      ;(getSchoolClosuresByIds as jest.Mock).mockResolvedValue(toDelete)
+      ;(applySchoolClosureChanges as jest.Mock).mockRejectedValue(new Error('add failed'))
+
+      const response = await PATCH(
+        new Request('http://localhost/api/settings/calendar', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            delete_closure_ids: ['c-1'],
+            add_closures: [{ date: '2024-12-26', time_slot_id: null, reason: 'New', notes: null }],
+          }),
+        })
+      )
+
+      expect(response.status).toBe(500)
+      const deleteAuditCalls = (logAuditEvent as jest.Mock).mock.calls.filter(
+        (call: [unknown]) => (call[0] as { action?: string })?.action === 'delete'
+      )
+      expect(deleteAuditCalls).toHaveLength(0)
     })
   })
 })
