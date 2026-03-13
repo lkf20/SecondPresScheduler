@@ -116,6 +116,49 @@ export async function deleteTimeOffShifts(requestId: string) {
   if (error) throw error
 }
 
+export type ValidateShiftsClassroomResult =
+  | { valid: true }
+  | {
+      valid: false
+      missingShifts: Array<{ day_of_week_id: string; time_slot_id: string }>
+    }
+
+/**
+ * Validates that the teacher has a baseline schedule row with a non-null classroom_id
+ * for each (day_of_week_id, time_slot_id) in the given shifts, in the same school.
+ * Used to reject time off creation when we would otherwise create coverage shifts
+ * with "Unknown (needs review)" classroom.
+ */
+export async function validateShiftsHaveClassroom(
+  teacherId: string,
+  schoolId: string,
+  shifts: Array<{ day_of_week_id: string; time_slot_id: string }>
+): Promise<ValidateShiftsClassroomResult> {
+  if (shifts.length === 0) return { valid: true }
+
+  const supabase = await createClient()
+  const { data: scheduleRows, error } = await supabase
+    .from('teacher_schedules')
+    .select('day_of_week_id, time_slot_id')
+    .eq('teacher_id', teacherId)
+    .eq('school_id', schoolId)
+    .not('classroom_id', 'is', null)
+
+  if (error) throw error
+
+  const validKeys = new Set(
+    (scheduleRows || []).map(
+      (row: { day_of_week_id: string; time_slot_id: string }) =>
+        `${row.day_of_week_id}|${row.time_slot_id}`
+    )
+  )
+
+  const missingShifts = shifts.filter(s => !validKeys.has(`${s.day_of_week_id}|${s.time_slot_id}`))
+
+  if (missingShifts.length === 0) return { valid: true }
+  return { valid: false, missingShifts }
+}
+
 export async function getTeacherScheduledShifts(
   teacherId: string,
   startDate: string,

@@ -10,6 +10,7 @@ import {
   createTimeOffShifts,
   getTeacherScheduledShifts,
   getTeacherTimeOffShifts,
+  validateShiftsHaveClassroom,
 } from '@/lib/api/time-off-shifts'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { formatDateISOInTimeZone } from '@/lib/utils/date'
@@ -295,6 +296,30 @@ export async function POST(request: NextRequest) {
           .filter(
             shift => !isSlotClosedOnDate(normalizeDate(shift.date), shift.time_slot_id, closureList)
           )
+      }
+    }
+
+    // Require every shift to have a teacher_schedule row with classroom (same school).
+    // Prevents creating time off for unscheduled slots and avoids "Unknown (needs review)" classroom.
+    if (shiftsToCreate.length > 0 && requestData.teacher_id) {
+      const validation = await validateShiftsHaveClassroom(
+        requestData.teacher_id,
+        schoolId,
+        shiftsToCreate.map(s => ({
+          day_of_week_id: s.day_of_week_id,
+          time_slot_id: s.time_slot_id,
+        }))
+      )
+      if (!validation.valid) {
+        return NextResponse.json(
+          {
+            error:
+              'This teacher has no scheduled classroom for one or more of the selected shifts. Add them to the baseline schedule (Settings → Baseline Schedule) for those days and time slots, or remove those shifts.',
+            code: 'SHIFTS_MISSING_CLASSROOM',
+            missingShifts: validation.missingShifts,
+          },
+          { status: 400 }
+        )
       }
     }
 

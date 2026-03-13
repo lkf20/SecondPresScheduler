@@ -35,6 +35,8 @@ export async function GET(
     let coverageRequestId = (timeOffRequest as any).coverage_request_id
     const startDate = (timeOffRequest as any).start_date
     const endDate = (timeOffRequest as any).end_date || startDate
+    let omittedShiftCount = 0
+    let omittedShifts: Array<{ date: string; day_of_week_id: string; time_slot_id: string }> = []
 
     if (!coverageRequestId) {
       const allShifts = await getTimeOffShifts(absence_id)
@@ -138,6 +140,7 @@ export async function GET(
           .from('teacher_schedules')
           .select('day_of_week_id, time_slot_id, classroom_id, class_group_id')
           .eq('teacher_id', (timeOffRequest as any).teacher_id)
+          .eq('school_id', schoolId)
 
         if (scheduleError) {
           console.error('Error fetching teacher schedules:', scheduleError)
@@ -157,28 +160,6 @@ export async function GET(
           }
         })
 
-        let fallbackClassroomId: string | null = null
-        const { data: unknownClassroom } = await supabase
-          .from('classrooms')
-          .select('id')
-          .eq('name', 'Unknown (needs review)')
-          .maybeSingle()
-        fallbackClassroomId = unknownClassroom?.id || null
-
-        if (!fallbackClassroomId) {
-          const { data: anyClassroom } = await supabase
-            .from('classrooms')
-            .select('id')
-            .order('name', { ascending: true })
-            .limit(1)
-            .maybeSingle()
-          fallbackClassroomId = anyClassroom?.id || null
-        }
-
-        if (!fallbackClassroomId) {
-          return createErrorResponse('No classroom available for coverage shifts', 500)
-        }
-
         // Get school_id from the coverage request
         const { data: coverageRequestData } = await supabase
           .from('coverage_requests')
@@ -188,29 +169,63 @@ export async function GET(
 
         const requestSchoolId = coverageRequestData?.school_id || schoolId
 
-        const coverageShiftRows = shifts.map((shift: any) => {
+        // Only create coverage_request_shifts for shifts where the teacher has a scheduled classroom.
+        // Do not use "Unknown (needs review)" fallback.
+        const coverageShiftRows: Array<{
+          coverage_request_id: string
+          date: string
+          day_of_week_id: string
+          time_slot_id: string
+          classroom_id: string
+          class_group_id: string | null
+          is_partial: boolean
+          start_time: string | null
+          end_time: string | null
+          school_id: string
+        }> = []
+        const omittedForRequest: Array<{
+          date: string
+          day_of_week_id: string
+          time_slot_id: string
+        }> = []
+
+        for (const shift of shifts) {
           const key = `${shift.day_of_week_id}|${shift.time_slot_id}`
           const scheduleEntry = scheduleMap.get(key)
-          return {
-            coverage_request_id: coverageRequestId,
-            date: shift.date,
-            day_of_week_id: shift.day_of_week_id,
-            time_slot_id: shift.time_slot_id,
-            classroom_id: scheduleEntry?.classroom_id || fallbackClassroomId,
-            class_group_id: scheduleEntry?.class_group_id || null,
-            is_partial: shift.is_partial ?? false,
-            start_time: shift.start_time || null,
-            end_time: shift.end_time || null,
-            school_id: requestSchoolId,
+          const classroomId = scheduleEntry?.classroom_id ?? null
+          if (classroomId) {
+            coverageShiftRows.push({
+              coverage_request_id: coverageRequestId,
+              date: shift.date,
+              day_of_week_id: shift.day_of_week_id as string,
+              time_slot_id: shift.time_slot_id as string,
+              classroom_id: classroomId,
+              class_group_id: scheduleEntry?.class_group_id || null,
+              is_partial: shift.is_partial ?? false,
+              start_time: shift.start_time || null,
+              end_time: shift.end_time || null,
+              school_id: requestSchoolId,
+            })
+          } else {
+            omittedForRequest.push({
+              date: toDateStringISO(shift.date),
+              day_of_week_id: shift.day_of_week_id as string,
+              time_slot_id: shift.time_slot_id as string,
+            })
           }
-        })
+        }
 
-        const { error: shiftInsertError } = await supabase
-          .from('coverage_request_shifts')
-          .insert(coverageShiftRows)
+        omittedShiftCount = omittedForRequest.length
+        omittedShifts = omittedForRequest
 
-        if (shiftInsertError) {
-          console.error('Error creating coverage request shifts:', shiftInsertError)
+        if (coverageShiftRows.length > 0) {
+          const { error: shiftInsertError } = await supabase
+            .from('coverage_request_shifts')
+            .insert(coverageShiftRows)
+
+          if (shiftInsertError) {
+            console.error('Error creating coverage request shifts:', shiftInsertError)
+          }
         }
       }
     }
@@ -277,6 +292,8 @@ export async function GET(
       shift_map: combinedMap,
       needs_classroom_review: needsReviewShiftCount > 0,
       needs_review_shift_count: needsReviewShiftCount,
+      omitted_shift_count: omittedShiftCount,
+      omitted_shifts: omittedShifts,
     })
   } catch (error) {
     console.error('Error fetching coverage request:', error)
