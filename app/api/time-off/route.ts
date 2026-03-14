@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams
-    const filters: any = {}
+    const filters: any = { school_id: schoolId }
     if (searchParams.get('teacher_id')) filters.teacher_id = searchParams.get('teacher_id')
     if (searchParams.get('start_date')) filters.start_date = searchParams.get('start_date')
     if (searchParams.get('end_date')) filters.end_date = searchParams.get('end_date')
@@ -85,6 +85,17 @@ export async function POST(request: NextRequest) {
     const effectiveEndDate = requestData.end_date || requestData.start_date
     const scheduleSettings = await getScheduleSettings(schoolId)
     const timeZone = scheduleSettings?.time_zone || 'UTC'
+
+    // Teacher is required for all time off requests (draft and active).
+    if (!requestData.teacher_id || String(requestData.teacher_id).trim() === '') {
+      return NextResponse.json(
+        {
+          error: 'Teacher is required.',
+          code: 'TEACHER_REQUIRED',
+        },
+        { status: 400 }
+      )
+    }
 
     const normalizeDate = (dateStr: string) => {
       if (!dateStr) return ''
@@ -325,6 +336,18 @@ export async function POST(request: NextRequest) {
             shift => !isSlotClosedOnDate(normalizeDate(shift.date), shift.time_slot_id, closureList)
           )
       }
+    }
+
+    // Reason is required when creating an active (non-draft) time off request.
+    const effectiveReason = requestData.reason
+    if (status !== 'draft' && (effectiveReason == null || String(effectiveReason).trim() === '')) {
+      return NextResponse.json(
+        {
+          error: 'Reason is required when saving this time off request.',
+          code: 'REASON_REQUIRED',
+        },
+        { status: 400 }
+      )
     }
 
     // Defensive: never create shifts outside the request date range (guards against

@@ -149,6 +149,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'cancelled',
       start_date: '2026-02-20',
       end_date: '2026-02-20',
@@ -190,6 +191,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-20',
@@ -203,6 +205,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(updateTimeOffRequest as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-20',
@@ -264,6 +267,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-20',
@@ -317,6 +321,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-20',
@@ -330,6 +335,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(updateTimeOffRequest as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-20',
@@ -433,6 +439,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-20',
@@ -446,6 +453,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(updateTimeOffRequest as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-21',
@@ -597,6 +605,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'draft',
       start_date: '2026-02-20',
       end_date: '2026-02-20',
@@ -609,6 +618,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(updateTimeOffRequest as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'draft',
       start_date: '2026-02-20',
       end_date: '2026-02-20',
@@ -654,6 +664,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'draft',
       start_date: '2026-02-20',
       end_date: '2026-02-20',
@@ -789,6 +800,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'timeoff-2',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-20',
@@ -801,6 +813,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(updateTimeOffRequest as jest.Mock).mockResolvedValue({
       id: 'timeoff-2',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-20',
@@ -876,6 +889,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-21',
@@ -888,6 +902,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(updateTimeOffRequest as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-21',
@@ -967,6 +982,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-21',
@@ -979,6 +995,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(updateTimeOffRequest as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-21',
@@ -1088,6 +1105,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-20',
@@ -1154,6 +1172,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-21',
@@ -1213,6 +1232,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-20',
@@ -1225,6 +1245,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(updateTimeOffRequest as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-20',
@@ -1286,6 +1307,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-20',
@@ -1298,6 +1320,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(updateTimeOffRequest as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-20',
@@ -1349,6 +1372,7 @@ describe('PUT /api/time-off/[id] integration', () => {
       .mockResolvedValueOnce({
         id: 'timeoff-1',
         school_id: 'school-1',
+        reason: 'Sick',
         status: 'active',
         start_date: '2026-02-20',
         end_date: '2026-02-20',
@@ -1358,6 +1382,7 @@ describe('PUT /api/time-off/[id] integration', () => {
       .mockResolvedValueOnce({
         id: 'timeoff-1',
         school_id: 'school-1',
+        reason: 'Sick',
         status: 'active',
         start_date: '2026-02-20',
         end_date: '2026-02-20',
@@ -1370,6 +1395,7 @@ describe('PUT /api/time-off/[id] integration', () => {
     ;(updateTimeOffRequest as jest.Mock).mockResolvedValue({
       id: 'timeoff-1',
       school_id: 'school-1',
+      reason: 'Sick',
       status: 'active',
       start_date: '2026-02-20',
       end_date: '2026-02-20',

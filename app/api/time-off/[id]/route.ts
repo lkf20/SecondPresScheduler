@@ -119,6 +119,35 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const status = nextStatus
     const effectiveEndDate = requestData.end_date || requestData.start_date
 
+    // Optimistic locking: if client sends updated_at, it must match the current row.
+    if (
+      requestData.updated_at != null &&
+      existingRequest.updated_at != null &&
+      String(requestData.updated_at) !== String(existingRequest.updated_at)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'This request was modified in another tab or window. Please refresh and try again.',
+          code: 'REQUEST_MODIFIED',
+        },
+        { status: 409 }
+      )
+    }
+
+    // When activating (non-draft), reason is required.
+    const effectiveReason =
+      requestData.reason !== undefined ? requestData.reason : existingRequest.reason
+    if (status !== 'draft' && (effectiveReason == null || String(effectiveReason).trim() === '')) {
+      return NextResponse.json(
+        {
+          error: 'Reason is required when saving this time off request.',
+          code: 'REASON_REQUIRED',
+        },
+        { status: 400 }
+      )
+    }
+
     // When mode is select_shifts, require an explicit shifts array (can be empty) so we never
     // leave stale shifts when switching from all_scheduled to select_shifts with a malformed payload.
     if (requestData.shift_selection_mode === 'select_shifts' && !Array.isArray(shifts)) {
@@ -802,6 +831,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           await updateTimeOffRequest(id, { status: existingRequest.status })
         } catch (e) {
           console.error('[TimeOff Update] Failed to revert status after zero-shifts check:', e)
+          return NextResponse.json(
+            {
+              error:
+                'We could not save your changes. The request may be in an inconsistent state. Please refresh and try again, or save as draft.',
+              code: 'REVERT_FAILED',
+            },
+            { status: 500 }
+          )
         }
         return NextResponse.json(
           {

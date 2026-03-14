@@ -176,6 +176,7 @@ describe('GET /api/time-off integration', () => {
 
     expect(response.status).toBe(200)
     expect(getTimeOffRequests).toHaveBeenCalledWith({
+      school_id: 'school-1',
       teacher_id: 'teacher-1',
       start_date: '2026-02-10',
       end_date: '2026-02-12',
@@ -209,6 +210,7 @@ describe('GET /api/time-off integration', () => {
       teacher_id: 'teacher-1',
       start_date: '2026-02-09',
       end_date: '2026-02-10',
+      reason: 'Sick',
       shift_selection_mode: 'select_shifts',
       shifts: [
         {
@@ -245,6 +247,7 @@ describe('GET /api/time-off integration', () => {
       teacher_id: 'teacher-1',
       start_date: '2026-02-10',
       end_date: '2026-02-10',
+      reason: 'Sick',
       shift_selection_mode: 'select_shifts',
       shifts: [{ date: '2026-02-10', day_of_week_id: 'day-1', time_slot_id: 'slot-1' }],
     })
@@ -277,6 +280,7 @@ describe('GET /api/time-off integration', () => {
       teacher_id: 'teacher-1',
       start_date: '2026-02-10',
       end_date: '2026-02-10',
+      reason: 'Sick',
       shift_selection_mode: 'select_shifts',
       shifts: [
         {
@@ -331,6 +335,7 @@ describe('GET /api/time-off integration', () => {
       teacher_id: 'teacher-1',
       start_date: '2026-02-10',
       end_date: '2026-02-10',
+      reason: 'Sick',
       shift_selection_mode: 'all_scheduled',
     })
 
@@ -413,6 +418,7 @@ describe('GET /api/time-off integration', () => {
       teacher_id: 'teacher-1',
       start_date: '2026-02-10',
       end_date: '2026-02-10',
+      reason: 'Sick',
       shift_selection_mode: 'select_shifts',
       shifts: [
         {
@@ -462,6 +468,8 @@ describe('GET /api/time-off integration', () => {
       teacher_id: 'teacher-1',
       start_date: '2026-02-10',
       end_date: '2026-02-10',
+      status: 'active',
+      reason: 'Sick',
       shift_selection_mode: 'select_shifts',
       shifts: [
         { date: '2026-02-10', day_of_week_id: 'day-1', time_slot_id: 'slot-1' },
@@ -524,6 +532,7 @@ describe('GET /api/time-off integration', () => {
       start_date: '2026-02-10',
       end_date: '2026-02-10',
       status: 'active',
+      reason: 'Sick',
       shift_selection_mode: 'select_shifts',
       shifts: [],
     })

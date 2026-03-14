@@ -109,6 +109,7 @@ const TimeOffForm = React.forwardRef<
     const [currentRequestStatus, setCurrentRequestStatus] = useState<
       'draft' | 'active' | 'cancelled' | null
     >(null)
+    const [requestUpdatedAt, setRequestUpdatedAt] = useState<string | null>(null)
     const [assignmentData, setAssignmentData] = useState<{
       hasAssignments: boolean
       assignmentCount: number
@@ -246,6 +247,7 @@ const TimeOffForm = React.forwardRef<
         })
         .then(requestData => {
           setCurrentRequestStatus(requestData.status || null)
+          setRequestUpdatedAt(requestData.updated_at ?? null)
           const willMergeShifts = Boolean(initialSelectedShifts && initialSelectedShifts.length > 0)
           // When extending from Sub Finder, expand date range to include initial dates
           const existingStart = requestData.start_date || ''
@@ -671,6 +673,8 @@ const TimeOffForm = React.forwardRef<
           reason: string | null
           notes: string | null
           shift_selection_mode: 'all_scheduled' | 'select_shifts'
+          status?: 'draft' | 'active'
+          updated_at?: string | null
           shifts?: Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
         } = {
           teacher_id: data.teacher_id,
@@ -681,12 +685,20 @@ const TimeOffForm = React.forwardRef<
           shift_selection_mode: data.shift_selection_mode,
         }
 
-        if (data.shift_selection_mode === 'select_shifts' && selectedShifts.length > 0) {
-          // Only send shifts within the selected date range (e.g. after user shortens end date)
+        // When editing a draft, submit sets status to active so the request is activated.
+        if (timeOffRequestId && currentRequestStatus === 'draft') {
+          payload.status = 'active'
+        }
+        if (timeOffRequestId && requestUpdatedAt != null) {
+          payload.updated_at = requestUpdatedAt
+        }
+
+        if (data.shift_selection_mode === 'select_shifts') {
+          // Always send shifts array for select_shifts (required by API); empty if none selected.
           const start = data.start_date || ''
           const end = effectiveEndDate || start
           payload.shifts = selectedShifts.filter(s => s.date >= start && s.date <= end)
-          if (payload.shifts.length === 0) {
+          if (payload.shifts.length === 0 && selectedShifts.length > 0) {
             setFormError('shift_selection_mode', {
               type: 'manual',
               message:
@@ -718,11 +730,32 @@ const TimeOffForm = React.forwardRef<
             )
             return
           }
+          if (response.status === 409 && errorData?.code === 'REQUEST_MODIFIED') {
+            setError(
+              'This request was modified in another tab or window. Please refresh the page and try again.'
+            )
+            return
+          }
+          if (response.status === 500 && errorData?.code === 'REVERT_FAILED') {
+            setError(
+              errorData.error ||
+                'We could not save your changes. Please refresh and try again, or save as draft.'
+            )
+            return
+          }
+          if (response.status === 400 && errorData?.code === 'REASON_REQUIRED') {
+            setFormError('reason', { type: 'manual', message: 'Reason is required when saving.' })
+            setError(errorData.error || 'Reason is required when saving this time off request.')
+            return
+          }
           const action = timeOffRequestId ? 'update' : 'create'
           throw new Error(errorData.error || `Failed to ${action} time off request`)
         }
 
         const responseData = await response.json()
+        if (responseData?.updated_at != null) {
+          setRequestUpdatedAt(responseData.updated_at)
+        }
 
         if (typeof window !== 'undefined') {
           window.sessionStorage.removeItem(draftKey)
@@ -790,6 +823,7 @@ const TimeOffForm = React.forwardRef<
           notes: string | null
           shift_selection_mode: 'all_scheduled' | 'select_shifts'
           status: 'draft'
+          updated_at?: string | null
           shifts?: Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
         } = {
           teacher_id: values.teacher_id,
@@ -801,7 +835,11 @@ const TimeOffForm = React.forwardRef<
           status: 'draft',
         }
 
-        if (values.shift_selection_mode === 'select_shifts' && selectedShifts.length > 0) {
+        if (timeOffRequestId && requestUpdatedAt != null) {
+          payload.updated_at = requestUpdatedAt
+        }
+
+        if (values.shift_selection_mode === 'select_shifts') {
           const start = values.start_date || ''
           const end = effectiveEndDate || start
           payload.shifts = selectedShifts.filter(s => s.date >= start && s.date <= end)
@@ -829,10 +867,26 @@ const TimeOffForm = React.forwardRef<
             )
             return false
           }
+          if (response.status === 409 && errorData?.code === 'REQUEST_MODIFIED') {
+            setError(
+              'This request was modified in another tab or window. Please refresh the page and try again.'
+            )
+            return false
+          }
+          if (response.status === 500 && errorData?.code === 'REVERT_FAILED') {
+            setError(
+              errorData.error ||
+                'We could not save your changes. Please refresh and try again, or save as draft.'
+            )
+            return false
+          }
           throw new Error(errorData.error || 'Failed to save draft')
         }
 
-        await response.json()
+        const responseData = await response.json()
+        if (responseData?.updated_at != null) {
+          setRequestUpdatedAt(responseData.updated_at)
+        }
         if (typeof window !== 'undefined') {
           window.sessionStorage.removeItem(draftKey)
         }
