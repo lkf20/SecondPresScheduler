@@ -1,4 +1,4 @@
-import { parseLocalDate } from '@/lib/utils/date'
+import { sortShiftDetailsByDisplayOrder } from '@/lib/utils/shift-display-order'
 
 export type ShiftChipStatus = 'assigned' | 'available' | 'unavailable'
 
@@ -9,6 +9,8 @@ export type ShiftChip = {
   reason?: string
   classroom_name?: string | null
   class_name?: string | null
+  day_display_order?: number | null
+  time_slot_display_order?: number | null
 }
 
 type ShiftInput = {
@@ -17,6 +19,8 @@ type ShiftInput = {
   reason?: string
   classroom_name?: string | null
   class_name?: string | null
+  day_display_order?: number | null
+  time_slot_display_order?: number | null
 }
 
 export const buildShiftChips = ({
@@ -47,6 +51,8 @@ export const buildShiftChips = ({
       status: 'assigned',
       classroom_name: shift.classroom_name || null,
       class_name: shift.class_name || null,
+      day_display_order: shift.day_display_order ?? null,
+      time_slot_display_order: shift.time_slot_display_order ?? null,
     })
   })
 
@@ -60,6 +66,8 @@ export const buildShiftChips = ({
         status: 'available',
         classroom_name: shift.classroom_name || null,
         class_name: shift.class_name || null,
+        day_display_order: shift.day_display_order ?? null,
+        time_slot_display_order: shift.time_slot_display_order ?? null,
       })
     }
   })
@@ -75,14 +83,11 @@ export const buildShiftChips = ({
         reason: shift.reason,
         classroom_name: shift.classroom_name || null,
         class_name: shift.class_name || null,
+        day_display_order: shift.day_display_order ?? null,
+        time_slot_display_order: shift.time_slot_display_order ?? null,
       })
     }
   })
 
-  return Array.from(allShiftsMap.values()).sort((a, b) => {
-    const dateA = parseLocalDate(a.date).getTime()
-    const dateB = parseLocalDate(b.date).getTime()
-    if (dateA !== dateB) return dateA - dateB
-    return a.time_slot_code.localeCompare(b.time_slot_code)
-  })
+  return sortShiftDetailsByDisplayOrder(Array.from(allShiftsMap.values()))
 }

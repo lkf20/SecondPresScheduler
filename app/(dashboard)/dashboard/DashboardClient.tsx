@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   CalendarDays,
   Calendar,
-  PieChart,
   CheckCircle2,
   Users,
   AlertCircle,
@@ -40,6 +39,7 @@ import { useProfile } from '@/lib/hooks/use-profile'
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
 import ScheduleSidePanel from '@/components/schedules/ScheduleSidePanel'
+import { getDataHealthCache, setDataHealthCache } from '@/lib/dashboard/data-health-cache'
 
 type Summary = {
   absences: number
@@ -61,6 +61,7 @@ type CoverageRequestItem = {
   classroom_label: string
   total_shifts: number
   assigned_shifts: number
+  covered_shifts: number
   uncovered_shifts: number
   partial_shifts: number
   remaining_shifts: number
@@ -298,7 +299,7 @@ export default function DashboardClient({
   const isGreetingReady = isClient && greetingTime !== null && !isLoadingProfile
   const [belowRequiredCollapsed, setBelowRequiredCollapsed] = useState(false)
   const [belowPreferredCollapsed, setBelowPreferredCollapsed] = useState(false)
-  const [coverageFilter, setCoverageFilter] = useState<'needs' | 'covered' | 'all'>('needs')
+  const [coverageFilter, setCoverageFilter] = useState<'needs' | 'covered' | 'all'>('all')
   const [coverageSectionCollapsed, setCoverageSectionCollapsed] = useState(false)
   const [scheduledSubsSectionCollapsed, setScheduledSubsSectionCollapsed] = useState(false)
   const [staffingTargetSectionCollapsed, setStaffingTargetSectionCollapsed] = useState(false)
@@ -366,6 +367,41 @@ export default function DashboardClient({
     shouldUseInitialData ? initialOverview : undefined
   )
 
+  const [orphanedShiftsCount, setOrphanedShiftsCount] = useState<number>(0)
+  const [dataHealthFetchKey, setDataHealthFetchKey] = useState(0)
+
+  // Refetch when tab becomes visible so we pick up cross-tab invalidation (e.g. calendar cleared in another tab)
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') setDataHealthFetchKey(k => k + 1)
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [])
+
+  useEffect(() => {
+    const cached = getDataHealthCache()
+    if (cached) {
+      if (cached.data.orphanedShifts) {
+        setOrphanedShiftsCount(cached.data.orphanedShifts.length)
+      }
+      return
+    }
+    fetch('/api/dashboard/data-health')
+      .then(res => {
+        if (!res.ok) return res.json().then(() => null)
+        return res.json()
+      })
+      .then(data => {
+        if (data == null) return
+        setDataHealthCache(data)
+        if (data.orphanedShifts) {
+          setOrphanedShiftsCount(data.orphanedShifts.length)
+        }
+      })
+      .catch(console.error)
+  }, [dataHealthFetchKey])
+
   const router = useRouter()
 
   useEffect(() => {
@@ -414,10 +450,10 @@ export default function DashboardClient({
 
   const summaryItems = useMemo(() => {
     const uncoveredColors = getCoverageColors('uncovered')
-    const partialColors = getCoverageColors('partial')
     const infoColors = { text: 'text-blue-600', bg: 'bg-blue-100', icon: 'text-blue-600' }
     const tealColors = { text: 'text-teal-700', bg: 'bg-teal-100', icon: 'text-teal-600' }
 
+    // Partially Covered Shifts card hidden until partial shift assignment is built out (see TODO_TRACKER).
     return [
       {
         key: 'uncovered' as const,
@@ -427,15 +463,6 @@ export default function DashboardClient({
         cardStyle: `${neutralColors.border} bg-white ${neutralColors.textMedium}`,
         icon: AlertTriangle,
         iconStyle: `${uncoveredColors.bg} ${uncoveredColors.icon}`,
-      },
-      {
-        key: 'partial' as const,
-        label: 'Partially Covered Shifts',
-        count: overview.summary.partially_covered_shifts,
-        tone: partialColors.text,
-        cardStyle: `${neutralColors.border} bg-white ${neutralColors.textMedium}`,
-        icon: PieChart,
-        iconStyle: `${partialColors.bg} ${partialColors.icon}`,
       },
       {
         key: 'absences' as const,
@@ -642,6 +669,19 @@ export default function DashboardClient({
         </p>
       </section>
 
+      {orphanedShiftsCount > 0 && (
+        <section className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <span className="font-semibold">Action Required:</span> {orphanedShiftsCount} future
+            time-off shift{orphanedShiftsCount !== 1 ? 's' : ''}{' '}
+            {orphanedShiftsCount !== 1 ? 'are' : 'is'} missing a scheduled classroom or fall
+            {orphanedShiftsCount !== 1 ? '' : 's'} on a closed day. Please review the baseline
+            schedule or school calendar to resolve this conflict.
+          </div>
+        </section>
+      )}
+
       <section className="space-y-3 pb-1">
         <div className="grid gap-x-4 gap-y-6 justify-items-start items-stretch grid-cols-[repeat(auto-fill,minmax(250px,250px))]">
           {summaryItems.map(item => (
@@ -654,16 +694,7 @@ export default function DashboardClient({
                 )}
               >
                 <CardContent className="p-4 flex flex-col flex-1">
-                  <div
-                    className="text-base font-normal"
-                    style={
-                      item.key === 'partial'
-                        ? { backgroundClip: 'unset', WebkitBackgroundClip: 'unset' }
-                        : undefined
-                    }
-                  >
-                    {item.label}
-                  </div>
+                  <div className="text-base font-normal">{item.label}</div>
                   <div className="mt-3 h-px w-full bg-black/10" />
                   {'count' in item ? (
                     <div className="mt-3 flex items-center justify-between">
@@ -672,13 +703,11 @@ export default function DashboardClient({
                         style={
                           item.key === 'uncovered'
                             ? ({ color: coverageColorValues.uncovered.icon } as React.CSSProperties)
-                            : item.key === 'partial'
-                              ? ({ color: coverageColorValues.partial.text } as React.CSSProperties)
-                              : item.key === 'scheduled'
-                                ? ({ color: '#0D9488' } as React.CSSProperties) // teal-600
-                                : item.key === 'absences'
-                                  ? ({ color: 'rgba(55, 65, 81, 1)' } as React.CSSProperties) // gray-700
-                                  : undefined
+                            : item.key === 'scheduled'
+                              ? ({ color: '#0D9488' } as React.CSSProperties) // teal-600
+                              : item.key === 'absences'
+                                ? ({ color: 'rgba(55, 65, 81, 1)' } as React.CSSProperties) // gray-700
+                                : undefined
                         }
                       >
                         {item.count}
@@ -692,30 +721,25 @@ export default function DashboardClient({
                                   backgroundColor: coverageColorValues.uncovered.bg,
                                   color: coverageColorValues.uncovered.icon,
                                 } as React.CSSProperties)
-                              : item.key === 'partial'
+                              : item.key === 'scheduled'
                                 ? ({
-                                    backgroundColor: coverageColorValues.partial.bg,
-                                    color: coverageColorValues.partial.icon,
+                                    backgroundColor: 'rgba(236, 253, 245, 1)', // emerald-50
+                                    color: '#0D9488', // teal-600
+                                    borderWidth: '0px',
+                                    borderStyle: 'none',
+                                    borderColor: 'rgba(0, 0, 0, 0)',
+                                    borderImage: 'none',
                                   } as React.CSSProperties)
-                                : item.key === 'scheduled'
+                                : item.key === 'absences'
                                   ? ({
-                                      backgroundColor: 'rgba(236, 253, 245, 1)', // emerald-50
-                                      color: '#0D9488', // teal-600
+                                      backgroundColor: 'rgba(243, 244, 246, 1)', // gray-100
+                                      color: 'rgba(55, 65, 81, 1)', // gray-700
                                       borderWidth: '0px',
                                       borderStyle: 'none',
                                       borderColor: 'rgba(0, 0, 0, 0)',
                                       borderImage: 'none',
                                     } as React.CSSProperties)
-                                  : item.key === 'absences'
-                                    ? ({
-                                        backgroundColor: 'rgba(243, 244, 246, 1)', // gray-100
-                                        color: 'rgba(55, 65, 81, 1)', // gray-700
-                                        borderWidth: '0px',
-                                        borderStyle: 'none',
-                                        borderColor: 'rgba(0, 0, 0, 0)',
-                                        borderImage: 'none',
-                                      } as React.CSSProperties)
-                                    : undefined
+                                  : undefined
                           }
                         >
                           <item.icon className="h-5 w-5" />
@@ -873,6 +897,21 @@ export default function DashboardClient({
                   type="button"
                   onClick={e => {
                     e?.stopPropagation?.()
+                    setCoverageFilter('all')
+                  }}
+                  className={cn(
+                    'rounded-full border px-3 py-1 text-xs font-medium transition',
+                    coverageFilter === 'all'
+                      ? 'border-button-fill bg-button-fill text-button-fill-foreground'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                  )}
+                >
+                  All ({coverageCounts.all})
+                </button>
+                <button
+                  type="button"
+                  onClick={e => {
+                    e?.stopPropagation?.()
                     setCoverageFilter('needs')
                   }}
                   className={cn(
@@ -899,21 +938,6 @@ export default function DashboardClient({
                 >
                   Covered ({coverageCounts.covered})
                 </button>
-                <button
-                  type="button"
-                  onClick={e => {
-                    e?.stopPropagation?.()
-                    setCoverageFilter('all')
-                  }}
-                  className={cn(
-                    'rounded-full border px-3 py-1 text-xs font-medium transition',
-                    coverageFilter === 'all'
-                      ? 'border-button-fill bg-button-fill text-button-fill-foreground'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                  )}
-                >
-                  All ({coverageCounts.all})
-                </button>
               </div>
             </div>
             <div className="xl:hidden">
@@ -939,30 +963,10 @@ export default function DashboardClient({
             ) : (
               <div className="space-y-3">
                 {filteredCoverageRequests.map(request => {
-                  // Calculate coverage counts from API data
-                  // assigned_shifts includes both full and partial coverage
-                  // partial_shifts = shifts with only partial coverage
-                  // covered = assigned_shifts - partial_shifts (fully covered shifts)
-                  let covered = 0
-                  let uncovered = request.uncovered_shifts
-                  let partial = request.partial_shifts || 0
-
-                  if (request.status === 'covered') {
-                    covered = request.total_shifts
-                    uncovered = 0
-                    partial = 0
-                  } else if (request.status === 'needs_coverage') {
-                    covered = 0
-                    uncovered = request.uncovered_shifts
-                    partial = 0
-                  } else if (request.status === 'partially_covered') {
-                    // assigned_shifts includes both full and partial
-                    // partial_shifts = shifts with only partial coverage
-                    // covered = assigned_shifts - partial_shifts
-                    partial = request.partial_shifts || 0
-                    covered = request.assigned_shifts - partial
-                    uncovered = request.uncovered_shifts
-                  }
+                  // Use API coverage counts directly (covered_shifts, uncovered_shifts, partial_shifts)
+                  const covered = request.covered_shifts ?? 0
+                  const uncovered = request.uncovered_shifts ?? 0
+                  const partial = request.partial_shifts ?? 0
 
                   // For time_off requests, use source_request_id (time_off_request.id) for sub-finder
                   // For other request types, use the coverage_request.id

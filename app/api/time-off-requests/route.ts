@@ -8,6 +8,7 @@ import { getUserSchoolId } from '@/lib/utils/auth'
 import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 import { toDateStringISO } from '@/lib/utils/date'
+import type { DisplayNameFormat } from '@/lib/utils/staff-display-name'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,8 +60,25 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createClient()
 
-    // Fetch time off requests
-    const timeOffRequests = await getTimeOffRequests({ statuses: statuses as any[] })
+    let displayNameFormat: DisplayNameFormat = 'first_last_initial'
+    try {
+      const { data: settingsData } = await supabase
+        .from('schedule_settings')
+        .select('default_display_name_format')
+        .eq('school_id', schoolId)
+        .maybeSingle()
+      if (settingsData?.default_display_name_format) {
+        displayNameFormat = settingsData.default_display_name_format as DisplayNameFormat
+      }
+    } catch {
+      // use default
+    }
+
+    // Fetch time off requests (scoped to user's school)
+    const timeOffRequests = await getTimeOffRequests({
+      school_id: schoolId,
+      statuses: statuses as any[],
+    })
 
     // Apply date range filter
     const getOverlap = (
@@ -168,11 +186,63 @@ export async function GET(request: NextRequest) {
           shifts = []
         }
 
-        // Get assignments if needed (exclude assignments on closed days)
+        // Get assignments if needed: prefer coverage_request_shift_id–linked (per-request), fallback to teacher+date
         let assignments: any[] = []
         if (includeAssignments) {
           const requestStartDate = request.start_date
           const requestEndDate = request.end_date || request.start_date
+          const shiftKeys = new Set(
+            shifts.map((s: any) => `${toDateStringISO(s.date)}|${s.time_slot_id}`)
+          )
+          const coverageByKey = new Map<
+            string,
+            {
+              date: string
+              time_slot_id: string
+              is_partial?: boolean
+              assignment_type?: string
+              sub?: any
+            }
+          >()
+
+          const coverageRequestId = (request as { coverage_request_id?: string | null })
+            .coverage_request_id
+          if (coverageRequestId) {
+            const { data: crShifts } = await supabase
+              .from('coverage_request_shifts')
+              .select('id, date, time_slot_id')
+              .eq('coverage_request_id', coverageRequestId)
+              .eq('status', 'active')
+            const crShiftIds = (crShifts || []).map((s: any) => s.id)
+            const crShiftKeyById = new Map(
+              (crShifts || []).map((s: any) => [
+                s.id,
+                `${toDateStringISO(s.date)}|${s.time_slot_id}`,
+              ])
+            )
+            if (crShiftIds.length > 0) {
+              const { data: linkedAssignments } = await supabase
+                .from('sub_assignments')
+                .select(
+                  'id, coverage_request_shift_id, date, time_slot_id, is_partial, assignment_type, sub:staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name)'
+                )
+                .eq('status', 'active')
+                .in('coverage_request_shift_id', crShiftIds)
+              ;(linkedAssignments || []).forEach((a: any) => {
+                const key =
+                  crShiftKeyById.get(a.coverage_request_shift_id) ??
+                  `${toDateStringISO(a.date)}|${a.time_slot_id}`
+                if (shiftKeys.has(key))
+                  coverageByKey.set(key, {
+                    date: a.date,
+                    time_slot_id: a.time_slot_id,
+                    is_partial: a.is_partial,
+                    assignment_type: a.assignment_type ?? null,
+                    sub: a.sub,
+                  })
+              })
+            }
+          }
 
           const { data: subAssignments } = await supabase
             .from('sub_assignments')
@@ -183,14 +253,23 @@ export async function GET(request: NextRequest) {
             .gte('date', requestStartDate)
             .lte('date', requestEndDate)
 
-          const rawAssignments = subAssignments || []
-          assignments =
+          const rawFallback = subAssignments || []
+          const fallbackFiltered =
             closureList.length > 0
-              ? rawAssignments.filter(
+              ? rawFallback.filter(
                   (a: any) =>
                     !isSlotClosedOnDate(toDateStringISO(a.date), a.time_slot_id, closureList)
                 )
-              : rawAssignments
+              : rawFallback
+          const fallbackByKey = new Map(
+            fallbackFiltered.map((a: any) => [`${toDateStringISO(a.date)}|${a.time_slot_id}`, a])
+          )
+
+          for (const shift of shifts) {
+            const key = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
+            const assignment = coverageByKey.get(key) ?? fallbackByKey.get(key)
+            if (assignment) assignments.push(assignment)
+          }
         }
 
         // Build classroom list
@@ -262,6 +341,7 @@ export async function GET(request: NextRequest) {
           {
             includeDetailedShifts,
             formatDay,
+            displayNameFormat,
             getClassroomForShift: includeDetailedShifts
               ? (teacherId, dayOfWeekId, timeSlotId) => {
                   const scheduleKey = `${teacherId}|${dayOfWeekId}|${timeSlotId}`

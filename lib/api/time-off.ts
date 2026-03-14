@@ -18,8 +18,9 @@ type TimeOffShift = Database['public']['Tables']['time_off_shifts']['Row']
 type TimeOffRequestWithTeacher = TimeOffRequest & { teacher: Teacher }
 type TimeOffRequestWithDetails = TimeOffRequestWithTeacher & { shifts: TimeOffShift[] }
 
-// See docs/data-lifecycle.md: time_off_requests lifecycle
+// See docs/domain/data-lifecycle.md: time_off_requests lifecycle
 export async function getTimeOffRequests(filters?: {
+  school_id?: string
   teacher_id?: string
   start_date?: string
   end_date?: string
@@ -31,6 +32,9 @@ export async function getTimeOffRequests(filters?: {
     .select('*, teacher:staff!time_off_requests_teacher_id_fkey(*)')
     .order('start_date', { ascending: false })
 
+  if (filters?.school_id) {
+    query = query.eq('school_id', filters.school_id)
+  }
   if (filters?.statuses && filters.statuses.length > 0) {
     query = query.in('status', filters.statuses)
   } else {
@@ -373,7 +377,11 @@ export async function cancelTimeOffRequest(
       throw new Error('school_id is required to create extra coverage request')
     }
 
-    // Create new coverage request for extra coverage
+    // Create new coverage request for extra coverage.
+    // Constraint: covered_shifts <= total_shifts. Cap covered_shifts in case of data inconsistency
+    // (e.g. multiple assignments pointing to the same shift, or stale assignment refs).
+    const totalShifts = shiftsToKeep.length
+    const coveredShifts = Math.min(assignmentsToKeep.length, totalShifts)
     const { data: newCoverageRequest, error: newCrError } = await supabase
       .from('coverage_requests')
       .insert({
@@ -383,8 +391,8 @@ export async function cancelTimeOffRequest(
         start_date: startDate,
         end_date: endDate,
         status: 'open', // Will be updated to 'filled' if all shifts are covered
-        total_shifts: shiftsToKeep.length,
-        covered_shifts: assignmentsToKeep.length,
+        total_shifts: totalShifts,
+        covered_shifts: coveredShifts,
         school_id: schoolId,
       })
       .select()
@@ -447,7 +455,10 @@ export async function cancelTimeOffRequest(
     }
 
     // Update new coverage request status if all shifts are covered
-    if (newCoverageRequest.total_shifts === assignmentsToKeep.length) {
+    if (
+      newCoverageRequest.total_shifts > 0 &&
+      newCoverageRequest.covered_shifts === newCoverageRequest.total_shifts
+    ) {
       if (
         newCoverageRequest.status &&
         !canTransitionCoverageRequestStatus(

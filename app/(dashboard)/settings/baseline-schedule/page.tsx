@@ -371,17 +371,17 @@ export default function BaselineSchedulePage() {
     }
   }, [availableTimeSlotIds, filters?.selectedTimeSlotIds])
 
-  // Handle refresh - invalidate React Query cache and refetch (used by header refresh button).
+  // Handle refresh - invalidate React Query cache and refetch (used by header refresh button and after baseline cell save).
   // Navigation to weekly when returnToWeekly is true is handled by a separate "Back to Weekly" control, not by refresh.
   const handleRefresh = useCallback(async () => {
-    if (schoolId) {
-      invalidateWeeklySchedule(queryClient, schoolId)
-      queryClient.invalidateQueries({ queryKey: ['scheduleSettings', schoolId] })
-      await queryClient.refetchQueries({
-        queryKey: ['weeklySchedule', schoolId],
-        type: 'active',
-      })
-    }
+    if (!schoolId) return
+    invalidateWeeklySchedule(queryClient, schoolId)
+    queryClient.invalidateQueries({ queryKey: ['scheduleSettings', schoolId] })
+    // Refetch only active (mounted) weekly schedule queries to avoid refetching every cached week
+    await queryClient.refetchQueries({
+      queryKey: ['weeklySchedule', schoolId],
+      type: 'active',
+    })
   }, [schoolId, queryClient])
 
   // Handle filter changes - ensure displayMode is always permanent-only for baseline schedule

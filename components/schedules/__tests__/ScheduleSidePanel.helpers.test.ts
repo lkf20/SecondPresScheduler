@@ -472,6 +472,61 @@ describe('ScheduleSidePanel helpers', () => {
     expect(buildFindSubLink({ absences: [], assignments: [] })).toBe('/sub-finder')
   })
 
+  it('builds sub finder link with cellDateISO for manual mode (primary teacher, no absence)', () => {
+    const link = buildFindSubLink({
+      absences: [],
+      assignments: [
+        {
+          id: 'a-1',
+          teacher_id: 'teacher-1',
+          teacher_name: 'Teacher A.',
+          classroom_id: 'class-1',
+          classroom_name: 'Infant Room',
+        },
+      ],
+      cellDateISO: '2026-03-15',
+    })
+    expect(link.startsWith('/sub-finder?')).toBe(true)
+    const params = new URLSearchParams(link.split('?')[1] ?? '')
+    expect(params.get('mode')).toBe('manual')
+    expect(params.get('teacher_id')).toBe('teacher-1')
+    expect(params.get('start_date')).toBe('2026-03-15')
+    expect(params.get('end_date')).toBe('2026-03-15')
+  })
+
+  it('builds sub finder link without manual params when cellDateISO is empty', () => {
+    expect(
+      buildFindSubLink({
+        absences: [],
+        assignments: [
+          {
+            id: 'a-1',
+            teacher_id: 'teacher-1',
+            teacher_name: 'Teacher A.',
+            classroom_id: 'class-1',
+            classroom_name: 'Infant Room',
+          },
+        ],
+        cellDateISO: '',
+      })
+    ).toBe('/sub-finder?teacher_id=teacher-1')
+    expect(
+      buildFindSubLink({
+        absences: [],
+        assignments: [
+          {
+            id: 'a-1',
+            teacher_id: 'teacher-1',
+            teacher_name: 'Teacher A.',
+            classroom_id: 'class-1',
+            classroom_name: 'Infant Room',
+          },
+        ],
+        cellDateISO: null,
+      })
+    ).toBe('/sub-finder?teacher_id=teacher-1')
+  })
+
   it('formats panel time range safely with missing values', () => {
     expect(formatTimeRange('08:00', '12:00')).toBe('08:00–12:00')
     expect(formatTimeRange('08:00', null)).toBe('')

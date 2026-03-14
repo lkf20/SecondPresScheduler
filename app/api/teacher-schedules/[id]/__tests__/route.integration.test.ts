@@ -5,13 +5,29 @@ import {
   getTeacherScheduleById,
   updateTeacherSchedule,
   deleteTeacherSchedule,
+  checkDependentFutureEvents,
+  syncFutureClassroom,
 } from '@/lib/api/schedules'
 
-jest.mock('@/lib/api/schedules', () => ({
-  getTeacherScheduleById: jest.fn(),
-  updateTeacherSchedule: jest.fn(),
-  deleteTeacherSchedule: jest.fn(),
-}))
+jest.mock('@/lib/api/schedules', () => {
+  class MockTeacherScheduleConflictError extends Error {
+    userMessage: string
+    constructor(userMessage: string) {
+      super(userMessage)
+      this.name = 'TeacherScheduleConflictError'
+      this.userMessage = userMessage
+    }
+  }
+
+  return {
+    getTeacherScheduleById: jest.fn(),
+    updateTeacherSchedule: jest.fn(),
+    deleteTeacherSchedule: jest.fn(),
+    checkDependentFutureEvents: jest.fn().mockResolvedValue({ hasDependents: false }),
+    syncFutureClassroom: jest.fn().mockResolvedValue(undefined),
+    TeacherScheduleConflictError: MockTeacherScheduleConflictError,
+  }
+})
 
 jest.mock('@/lib/utils/auth', () => ({
   getUserSchoolId: jest.fn().mockResolvedValue('school-1'),
@@ -171,5 +187,111 @@ describe('teacher schedules id route integration', () => {
 
     expect(response.status).toBe(500)
     expect(json.error).toBe('delete failed')
+  })
+
+  it('PUT syncs future classroom if only classroom changes', async () => {
+    ;(getTeacherScheduleById as jest.Mock).mockResolvedValue({
+      id: 'schedule-1',
+      teacher_id: 'teacher-1',
+      classroom_id: 'room-1',
+      day_of_week_id: 'monday',
+      time_slot_id: 'am',
+    })
+    ;(updateTeacherSchedule as jest.Mock).mockResolvedValue({
+      id: 'schedule-1',
+      teacher_id: 'teacher-1',
+      classroom_id: 'room-2',
+      day_of_week_id: 'monday',
+      time_slot_id: 'am',
+    })
+
+    const response = await PUT(
+      new Request('http://localhost/api/teacher-schedules/schedule-1', {
+        method: 'PUT',
+        body: JSON.stringify({ classroom_id: 'room-2' }),
+      }),
+      { params: Promise.resolve({ id: 'schedule-1' }) }
+    )
+
+    expect(response.status).toBe(200)
+    expect(syncFutureClassroom).toHaveBeenCalledWith('teacher-1', 'monday', 'am', 'room-2')
+    expect(checkDependentFutureEvents).not.toHaveBeenCalled()
+  })
+
+  it('PUT blocks change if day or time slot changes and dependents exist', async () => {
+    ;(getTeacherScheduleById as jest.Mock).mockResolvedValue({
+      id: 'schedule-1',
+      teacher_id: 'teacher-1',
+      classroom_id: 'room-1',
+      day_of_week_id: 'monday',
+      time_slot_id: 'am',
+    })
+    ;(checkDependentFutureEvents as jest.Mock).mockResolvedValue({
+      hasDependents: true,
+      message: 'Blocked',
+    })
+
+    const response = await PUT(
+      new Request('http://localhost/api/teacher-schedules/schedule-1', {
+        method: 'PUT',
+        body: JSON.stringify({ day_of_week_id: 'tuesday' }),
+      }),
+      { params: Promise.resolve({ id: 'schedule-1' }) }
+    )
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'Blocked' })
+    expect(updateTeacherSchedule).not.toHaveBeenCalled()
+  })
+
+  it('PUT blocks change if teacher_id changes and dependents exist', async () => {
+    ;(getTeacherScheduleById as jest.Mock).mockResolvedValue({
+      id: 'schedule-1',
+      teacher_id: 'teacher-1',
+      classroom_id: 'room-1',
+      day_of_week_id: 'monday',
+      time_slot_id: 'am',
+    })
+    ;(checkDependentFutureEvents as jest.Mock).mockResolvedValue({
+      hasDependents: true,
+      message: 'Cannot reassign; current teacher has future events for this slot.',
+    })
+
+    const response = await PUT(
+      new Request('http://localhost/api/teacher-schedules/schedule-1', {
+        method: 'PUT',
+        body: JSON.stringify({ teacher_id: 'teacher-2' }),
+      }),
+      { params: Promise.resolve({ id: 'schedule-1' }) }
+    )
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({
+      error: 'Cannot reassign; current teacher has future events for this slot.',
+    })
+    expect(updateTeacherSchedule).not.toHaveBeenCalled()
+  })
+
+  it('DELETE blocks if dependents exist', async () => {
+    ;(getTeacherScheduleById as jest.Mock).mockResolvedValue({
+      id: 'schedule-1',
+      teacher_id: 'teacher-1',
+      classroom_id: 'room-1',
+      day_of_week_id: 'monday',
+      time_slot_id: 'am',
+    })
+    ;(checkDependentFutureEvents as jest.Mock).mockResolvedValue({
+      hasDependents: true,
+      message: 'Cannot delete schedule',
+    })
+
+    const response = await DELETE(
+      new Request('http://localhost/api/teacher-schedules/schedule-1', { method: 'DELETE' }),
+      { params: Promise.resolve({ id: 'schedule-1' }) }
+    )
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'Cannot delete schedule' })
+    expect(deleteTeacherSchedule).not.toHaveBeenCalled()
   })
 })

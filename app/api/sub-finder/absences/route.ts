@@ -31,8 +31,11 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createClient()
 
-    // Fetch time off requests directly
-    const timeOffRequests = await getTimeOffRequests({ statuses: ['active'] })
+    // Fetch time off requests (scoped to user's school)
+    const timeOffRequests = await getTimeOffRequests({
+      school_id: schoolId,
+      statuses: ['active'],
+    })
 
     // Fetch school closures for the full date range so we exclude closed-day shifts from counts and display
     const dateRangeStart =
@@ -358,6 +361,8 @@ export async function GET(request: NextRequest) {
         sub_id: detail.sub_id || null,
         assignment_id: detail.assignment_id || null,
         is_partial: detail.is_partial || false,
+        day_display_order: detail.day_display_order ?? null,
+        time_slot_display_order: detail.time_slot_display_order ?? null,
       }))
 
       const coverage_status = getCoverageStatus({
@@ -397,55 +402,62 @@ export async function GET(request: NextRequest) {
     })
 
     const today = new Date()
+    today.setHours(0, 0, 0, 0)
     const todayString = today.toISOString().slice(0, 10)
+    const ninetyDaysAgo = new Date(today)
+    ninetyDaysAgo.setDate(today.getDate() - 90)
+    const ninetyDaysAgoString = ninetyDaysAgo.toISOString().slice(0, 10)
 
-    // Filter absences based on includePartiallyCovered flag
-    // If false, only show absences with uncovered shifts (exclude fully covered)
-    // If true, show absences with uncovered OR partially covered shifts (exclude fully covered)
-    // Always show absences with no shifts (newly created)
-    const filteredAbsences = absencesWithCoverage.filter(absence => {
-      const startDate = absence.start_date
+    const isUpcoming = (absence: any) => {
       const endDate = absence.end_date || absence.start_date
-      if (startDate < todayString && endDate < todayString) {
-        return false
-      }
-      // Always show if there are no shifts (newly created time off)
-      if (absence.shifts.total === 0) {
-        return true
-      }
+      return endDate >= todayString
+    }
+    const isPastWithinWindow = (absence: any) => {
+      const endDate = absence.end_date || absence.start_date
+      return endDate < todayString && endDate >= ninetyDaysAgoString
+    }
 
-      // If includePartiallyCovered is false, only show uncovered by default,
-      // but optionally include fully covered absences.
+    const shouldIncludeUpcoming = (absence: any) => {
+      if (absence.shifts.total === 0) return true
       if (!includePartiallyCovered) {
-        const included =
+        return (
           absence.shifts.uncovered > 0 || (includeFullyCovered && absence.shifts.fully_covered > 0)
-        return included
+        )
       }
-
-      // If includePartiallyCovered is true, show uncovered or partially covered.
-      // Optionally include fully covered absences for left-rail visibility.
-      const included =
+      return (
         absence.shifts.uncovered > 0 ||
         absence.shifts.partially_covered > 0 ||
         (includeFullyCovered && absence.shifts.fully_covered > 0)
-      return included
-    })
-
-    const sortKey = (absence: any) => {
-      const startDate = absence.start_date
-      return startDate < todayString ? todayString : startDate
+      )
     }
 
-    // Sort by closest to present (earliest upcoming/ongoing first)
-    filteredAbsences.sort((a, b) => {
-      const dateA = sortKey(a)
-      const dateB = sortKey(b)
-      if (dateA === dateB) {
-        return a.start_date.localeCompare(b.start_date)
+    const upcoming: any[] = []
+    const past: any[] = []
+    for (const absence of absencesWithCoverage) {
+      if (isUpcoming(absence)) {
+        if (shouldIncludeUpcoming(absence)) {
+          upcoming.push({ ...absence, is_past: false })
+        }
+      } else if (isPastWithinWindow(absence)) {
+        past.push({ ...absence, is_past: true })
       }
-      return dateA.localeCompare(dateB)
-    })
+    }
 
+    const sortUpcoming = (a: any, b: any) => {
+      const startA = a.start_date
+      const startB = b.start_date
+      if (startA !== startB) return startA.localeCompare(startB)
+      return (a.end_date || a.start_date).localeCompare(b.end_date || b.start_date)
+    }
+    const sortPast = (a: any, b: any) => {
+      const endA = a.end_date || a.start_date
+      const endB = b.end_date || b.start_date
+      return endB.localeCompare(endA)
+    }
+    upcoming.sort(sortUpcoming)
+    past.sort(sortPast)
+
+    const filteredAbsences = [...upcoming, ...past]
     return NextResponse.json(filteredAbsences)
   } catch (error: any) {
     console.error('Error fetching absences:', error)

@@ -4,7 +4,7 @@ This document defines how to work on this codebase so that changes are safe, tes
 
 ## Purpose and context
 
-For the app’s purpose, intended users, and key flows, see [docs/APP_PURPOSE_AND_CONTEXT.md](docs/APP_PURPOSE_AND_CONTEXT.md). Consult it when making product or UX decisions so changes align with intent. Add or update context there when the product evolves.
+For the app’s purpose, intended users, and key flows, see [docs/domain/app-purpose-and-context.md](docs/domain/app-purpose-and-context.md). Consult it when making product or UX decisions so changes align with intent. Add or update context there when the product evolves.
 
 ## Authority
 
@@ -64,12 +64,17 @@ When the user asks for a code review (e.g. "Review the Sub recommendations code"
 - **Security** — School scope respected; no PII in logs or client; server-side validation where needed.
 - **Accessibility** — Semantic markup, focus states, and labels where relevant.
 - **AGENTS compliance** — Color system, reusable components, file size, and other rules in this document are followed.
+- **Data updates** — When editing a database row, prefer in-place update over delete + create so audit records and foreign-key links are preserved (see “Editing database rows” below).
 
 Report what was reviewed, what passed, what was fixed, and what (if anything) needs user decision.
 
 ## Code quality and structure
 
 - **Default to excluding inactive content.** Unless otherwise noted or “include inactive” is explicitly mentioned (e.g. a “Show inactive” toggle or `includeInactive=true`), default to excluding and hiding inactive entities in the app—e.g. classrooms, class groups, time slots. Lists, dropdowns, filters, and selectors should show only active items unless the feature clearly supports including inactive ones.
+- **Order by database sort order.** When displaying classrooms, class groups, or time slots in lists, dropdowns, tables, or keys/legends, use the sort order stored in the database (e.g. `display_order` for time slots; equivalent fields for classrooms and class groups) unless a feature explicitly requires a different order (e.g. alphabetical). Do not sort these entities alphabetically by name/code unless that is the stated requirement.
+- **Cancel Time Off / Sub Assignments cleanly.** See `docs/domain/data-lifecycle.md` for status transition rules (e.g. active -> cancelled). Do not hard-delete rows that represent requests or assignments unless it is a draft.
+- **Time off reason is optional.** The reason field on time off requests (draft or active) is optional. Do not require or validate reason as mandatory when creating or activating time off; see `docs/domain/data-lifecycle.md` (Time Off → time_off_requests).
+- **Teacher Schedule Updates.** When updating baseline `teacher_schedules`, the API enforces rules to protect dependent future events. Structural changes (deleting a slot, or changing its teacher, day, or time) are blocked (409 Conflict) if the current teacher has future events for that slot. Classroom-only changes automatically sync to future events. Past events are strictly immutable. "Today" for past vs future is server-local; see `docs/domain/data-lifecycle.md` for details.
 - **Avoid duplication.** Reuse existing logic and components instead of copying code. Before creating a new component, search the codebase for an existing one that already does the job or can be extended.
 - **Match the app’s UI.** Use the same patterns, tokens, and components as the rest of the app so new work looks and behaves consistently.
 
@@ -87,11 +92,16 @@ When adding a new UI element (e.g. a chip, badge, or label):
 - **Keep files small.** Prefer files under 200–300 lines. Split large files into smaller modules or components; extract shared logic into helpers or hooks.
 - **Keep the codebase clean and organized.** Put new code in the right place (e.g. shared components in `components/`, API logic in `app/api/` or `lib/`). Avoid one-off or dead code.
 - **Organize CSS and design assets.** Use shared styles, design tokens, or a consistent system (e.g. Tailwind, CSS modules) so styles are reusable and easy to maintain.
+- **Documentation organization.** All project .md files live under `docs/<type>/` (or in repo root only if they are README, AGENTS, ROADMAP, or TODO_TRACKER), with consistent kebab-case names and an up-to-date docs/README index.
 
 ## Audit logs
 
 - New or changed audit logging must satisfy [docs/contracts/AUDIT_LOG_CONTRACT.md](docs/contracts/AUDIT_LOG_CONTRACT.md) and pass the validator in `lib/audit/validateAuditLog.ts`.
 - See [docs/contracts/AUDIT_LOG_CALL_SITES_NOT_COMPLIANT.md](docs/contracts/AUDIT_LOG_CALL_SITES_NOT_COMPLIANT.md) for in-progress call sites.
+
+## Editing database rows
+
+- **Prefer in-place updates over delete + create.** When implementing edit/update flows, strongly prefer updating the existing row (e.g. SQL `UPDATE` / Supabase update / PATCH that updates by id) rather than deleting the row and inserting a new one. In-place updates preserve the row id, so audit log entries (e.g. `entityId`) and any foreign-key references elsewhere in the database continue to point to the same entity and are not broken. Use delete + create only when the change cannot be expressed as an update (e.g. changing the logical identity of the row or merging/splitting entities).
 
 ## Security, privacy, and data
 
@@ -124,9 +134,9 @@ When adding a new UI element (e.g. a chip, badge, or label):
 
 - **Use the centralized color system.** All status, coverage, and staffing colors live in `lib/utils/colors.ts`. Import from there instead of hardcoding Tailwind color classes.
 - **Use shared components for staffing badges.** Below Required, Below Preferred, Above Target, and On Target badges must use `StaffingStatusBadge` (`components/ui/staffing-status-badge.tsx`). Do not replicate badge styling in Dashboard, Weekly Schedule panel, or elsewhere.
-- **Semantic palette** (see [docs/COLOR_CONSISTENCY_REVIEW.md](docs/COLOR_CONSISTENCY_REVIEW.md)): Red = critical (below required, errors), Orange = uncovered shifts, Amber = warning (below preferred, validation), Yellow = soft (partial coverage, draft).
-- **Contact status (pending, contacted, declined):** Use `contactStatusColorValues` in `lib/utils/colors.ts`. Pending = sky blue throughout the app; use the same filled-circle-behind-icon pattern as in Contact Sub panel. See [docs/COLOR_CONSISTENCY_REVIEW.md](docs/COLOR_CONSISTENCY_REVIEW.md) (Contact status colors).
-- **Before adding new colors:** Check if an existing constant fits (`staffingColorValues`, `coverageColorValues`, `semanticColors`, `contactStatusColorValues`). If adding a new semantic tier, add it to `lib/utils/colors.ts` and document in `docs/COLOR_CONSISTENCY_REVIEW.md`.
+- **Semantic palette** (see [docs/design/color-consistency-review.md](docs/design/color-consistency-review.md)): Red = critical (below required, errors), Orange = uncovered shifts, Amber = warning (below preferred, validation), Yellow = soft (partial coverage, draft).
+- **Contact status (pending, contacted, declined):** Use `contactStatusColorValues` in `lib/utils/colors.ts`. Pending = sky blue throughout the app; use the same filled-circle-behind-icon pattern as in Contact Sub panel. See [docs/design/color-consistency-review.md](docs/design/color-consistency-review.md) (Contact status colors).
+- **Before adding new colors:** Check if an existing constant fits (`staffingColorValues`, `coverageColorValues`, `semanticColors`, `contactStatusColorValues`). If adding a new semantic tier, add it to `lib/utils/colors.ts` and document in `docs/design/color-consistency-review.md`.
 - **Avoid ad-hoc color classes** for status/warning/error states—use the shared constants or components so the app stays visually consistent.
 - **Secondary outline buttons (turquoise):** For secondary actions like Find Sub, Update Sub, and similar “go to sub-finder” or teal-accent actions, use `variant="teal"` on the Button component. This gives turquoise border and text with teal fill on hover. Do not use `variant="outline"` with custom teal classes—use the built-in `teal` variant for consistency.
 
@@ -153,12 +163,13 @@ Use the shared `Button` component (`components/ui/button.tsx`) and these variant
 ## School Calendar
 
 - **First and last day of school:** Stored in `schedule_settings.first_day_of_school` and `last_day_of_school`. Managed on the School Calendar settings page (`/settings/calendar`).
-- **School closures:** Stored in `school_closures` (date, optional `time_slot_id`, reason). When `time_slot_id` is null, the whole day is closed; when set, only that time slot is closed on that date.
+- **School closures:** Stored in `school_closures` (date, optional `time_slot_id`, reason, optional notes). When `time_slot_id` is null, the whole day is closed; when set, only that time slot is closed on that date.
 - **Where closures appear:** The **weekly schedule** grid shows "School Closed" for closed cells (date-based view). The **baseline schedule** is permanent (day × slot, not date-based) and does _not_ show school closures; pass `schoolClosures={[]}` there. Printable Today's Schedule (on-screen and PDF) shows "School Closed" for closed cells. The weekly schedule legend includes "School Closed" when closures exist.
 - **Manage Calendar link:** The weekly schedule page has a "Manage Calendar" button (teal variant) that links to `/settings/calendar`.
 - **Helpers:** Use `isCellClosed` (from `lib/utils/school-closures.ts`) for weekly grid cells (needs `weekStartISO`, `dayNumber`, `timeSlotId`). Use `isSlotClosedOnDate` for single-date contexts (daily schedule, PDF). Use `getCellDateISO` (from `lib/utils/date.ts`) to compute the calendar date for a cell given week start and day number.
 - **Legends:** If you change how closed cells are shown (e.g. styling or wording), update the "School Closed" legend in the weekly schedule grid.
 - **School closures and business logic:** Time off, sub assignment, flex (temporary coverage), and dashboard must respect closures: do not create time off shifts or coverage for closed days; do not allow assigning a sub to a shift on a closed day; do not create flex/staffing_event_shifts for closed days; do not count closed days in dashboard “below required/preferred” staffing targets or in slot-run “below target” runs. Fetch closures via `getSchoolClosuresForDateRange` (from `lib/api/school-calendar.ts`) for the relevant date range and filter using `isSlotClosedOnDate` (from `lib/utils/school-closures.ts`). When **reading** data for display or aggregation (dashboard coverage, time-off-requests list, sub-finder absences, coverage-request shift maps, assigned-shifts), exclude time off shifts and sub assignments that fall on closed days so that “created first, then day marked closed” (e.g. snow day) is handled: those shifts/assignments are not shown as needing coverage and are not counted in totals.
+- **Closed shifts in assignment UIs:** Shifts on school-closed days or time slots may be **shown for context** (e.g. Assign Sub panel, Time Off shift picker) but must be **marked as "School closed"** and **not assignable**: checkboxes disabled, excluded from time off creation and sub/temp assignment. APIs that return shifts for these UIs (e.g. `GET /api/teachers/[id]/scheduled-shifts`, `POST /api/assign-sub/shifts`) must include a `school_closure: true` flag per shift when the (date, time_slot_id) is closed. The assign-shifts API returns 409 if the client attempts to assign a sub to a closed shift.
 - **Testing school closures:** In API integration tests for time off, assign-shifts, and flex, mock `getSchoolClosuresForDateRange` (e.g. `jest.mock('@/lib/api/school-calendar', () => ({ getSchoolClosuresForDateRange: jest.fn().mockResolvedValue([]) }))`) so tests that do not assert closure behavior do not hit the DB. For closure behavior: add or update tests that mock `getSchoolClosuresForDateRange` to return closures for specific dates/slots and assert that shifts on those dates are excluded from creation (time off, flex) or that assignment is rejected with 409 (assign-shifts), and that `getSchoolClosuresForDateRange` is called with the expected school and date range.
 
 ## Today's Schedule report color mode contract
@@ -191,7 +202,7 @@ Floater weight is 0.5 for now; it may become more sophisticated later—keep log
 
 - **Purpose:** School Calendar lets admins set the first and last day of school and manage closed days (holidays, snow days, etc.). Closed days or time slots appear as “School Closed” across the app.
 - **Settings:** `/settings/calendar` — School Year (first/last day) and Closed Days (add/remove closures). Closures can apply to all time slots (whole day) or specific time slots.
-- **Data:** `schedule_settings.first_day_of_school`, `schedule_settings.last_day_of_school`; `school_closures` table (`date`, `time_slot_id` nullable — null = whole day, non-null = that slot only).
+- **Data:** `schedule_settings.first_day_of_school`, `schedule_settings.last_day_of_school`; `school_closures` table (`date`, `time_slot_id` nullable — null = whole day, non-null = that slot only; `reason`, optional `notes`).
 - **APIs:** `GET/PATCH /api/settings/calendar` (query params `startDate`/`endDate` for closures); weekly-schedule and daily-schedule APIs return `school_closures` for the requested range.
 - **Where closures appear:** Weekly Schedule grid (closed cells show “School Closed”); Printable Today’s Schedule (on-screen and PDF); Manage Calendar link on the weekly schedule page.
 - **Helpers:** `lib/utils/school-closures.ts` — `isCellClosed(weekStartISO, dayNumber, timeSlotId, closures)` for weekly grid; `isSlotClosedOnDate(dateISO, timeSlotId, closures)` for daily schedule/PDF. `lib/utils/date.ts` — `getCellDateISO(weekStartISO, dayNumber)` for mapping week + day to date.
@@ -221,11 +232,17 @@ Floater weight is 0.5 for now; it may become more sophisticated later—keep log
 - **Preview mode:** When the user selects "Preview only" (vs "Record + Assign") in the Pick dates flow, the Sub Finder runs in **preview mode**: they can see recommended subs but must not be able to contact or assign. In preview mode, **do not show Contact & Assign (or Update) buttons** on sub cards anywhere—neither on the main recommended-subs area nor in the right "All subs" panel. Also **do not show Find Sub** (or Change sub) on **detail shift cards** (the cards shown when "Show shifts detail" is expanded); those are rendered by `ShiftStatusCard`.
 - **Implementation:** Sub cards (`SubFinderCard`) accept a `previewMode` prop; when true, the card hides all Contact & Assign and Update buttons. Detail shift cards (`ShiftStatusCard`) accept a `previewMode` prop; when true, the card hides the Find Sub button (uncovered shifts) and the Change sub button (covered shifts). The main page passes `isPreviewMode` into `RecommendedCombination`, `RecommendedSubsList`, and every `ShiftStatusCard` as `previewMode`. When adding new sub-card or shift-card surfaces, ensure preview mode is passed so that in preview mode no contact/assign/find-sub actions are shown.
 
+## Sub Finder: Past absences (last 90 days)
+
+- **Past absences in Sub Finder:** The absences API returns both upcoming and past absences (past = end date before today but within the last 90 days). Each item has **`is_past: true | false`**. The absence list shows a collapsed section **"Past (last 90 days) (N)"** (default collapsed; auto-expands when the selected absence is in past). Empty state when there are no upcoming absences: **"No upcoming absences found"** with copy that past absences are listed below when applicable.
+- **Find Subs for past:** When the user selects a past absence, recommendations include past shifts (`includePastShifts` is set automatically) so directors can run Find Subs and use Find Sub / Change sub for those shifts.
+
 ## Assign Sub Hot Button Flow
 
 - **Consolidated flow:** The Assign Sub right panel (opened from the header) is an intentional, highly consolidated flow for directors to quickly log an absence and assign a known sub without leaving their current page context. It performs inline Time Off creation (if needed) and Sub Contact creation in a single action.
 - **Conflict handling:** When selecting shifts, sub "unavailable" (regular availability) and "unqualified" status are soft warnings that still allow the director to override and assign the shift. However, "conflict_teaching" and "conflict_sub" (double bookings) are hard blocks that disable selection.
 - **Time Off and Notes:** If the selected shifts do not have an existing time off request, the panel must show an inline form to capture the Time Off Reason and Notes. It should also include a "Notes for Sub" field to capture contact notes, matching the standard Contact & Assign behavior.
+- **Change sub for already-assigned shifts (including past):** For shifts that already have an assigned sub, the panel shows "Currently: [sub name]" and a **Change sub** button. Change sub opens a dialog to pick a new sub; on confirm, the flow unassigns the current sub (via unassign-shifts API) then assigns the new sub (via assign-shifts API) for those coverage_request_shift_ids. This applies to both upcoming and past time-off shifts. The assign-sub shifts API returns `coverage_request_shift_id`, `assignment_id`, `assigned_sub_id`, and `assigned_sub_name` per shift to support this.
 
 ## Database migrations
 
@@ -235,6 +252,9 @@ To run migrations against the **staging** database:
 2. Push migrations: `supabase db push`
 
 Run these commands from the project root (`scheduler-app/`). The link script uses `.env.supabase.staging` for the project ref.
+
+- **Follow the migration workflow.** When creating or modifying migrations, follow [docs/guides/database-migration-workflow.md](docs/guides/database-migration-workflow.md) (draft vs approved folders, naming, safety rules).
+- **Keep schema docs in sync.** Whenever you add or change a migration (new table, dropped table, new column, or other schema change), update [docs/reference/DATABASE_SCHEMA.md](docs/reference/DATABASE_SCHEMA.md) and [supabase/README.md](supabase/README.md) as needed—e.g. add or remove tables in the list, adjust table count, update the verification section, or note deprecated/removed objects.
 
 ## Session and collaboration
 

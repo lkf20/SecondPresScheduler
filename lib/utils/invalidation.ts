@@ -137,6 +137,20 @@ export function invalidateCoverageRequestShifts(
 }
 
 /**
+ * Invalidate React Query caches when classroom order changes (Settings → Classrooms drag reorder).
+ * Ensures Baseline Schedule, Weekly Schedule, Today's Schedule, and filter dropdowns show the new order.
+ */
+export function invalidateClassroomOrderChange(queryClient: QueryClient, schoolId: string) {
+  return Promise.all([
+    invalidateWeeklySchedule(queryClient, schoolId),
+    invalidateDailySchedule(queryClient, schoolId),
+    queryClient.invalidateQueries({ queryKey: ['filterOptions', schoolId] }),
+    queryClient.invalidateQueries({ queryKey: ['filterOptions'] }),
+    queryClient.invalidateQueries({ queryKey: ['scheduleSettings', schoolId] }),
+  ])
+}
+
+/**
  * Invalidate all scheduling surfaces commonly affected by settings/staff updates.
  */
 export function invalidateSchedulingSurfaces(

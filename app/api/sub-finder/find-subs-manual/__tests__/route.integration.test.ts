@@ -35,6 +35,10 @@ jest.mock('@/lib/api/time-off', () => ({
   getTimeOffRequests: jest.fn(async () => []),
 }))
 
+jest.mock('@/lib/utils/auth', () => ({
+  getUserSchoolId: jest.fn(async () => 'school-1'),
+}))
+
 jest.mock('@/lib/utils/sub-combination', () => ({
   findTopCombinations: jest.fn(() => []),
 }))

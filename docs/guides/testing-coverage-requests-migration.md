@@ -108,19 +108,13 @@ WHERE id = 'YOUR_COVERAGE_REQUEST_ID';
 - `total_shifts` counter updates correctly
 - Status recomputes based on new totals
 
-### Step 6: Test Unknown Classroom Assignment
+### Step 6: Shifts without scheduled classroom (GET coverage-request API)
 
-**Action:**
+**Behavior (current):** When GET `/api/sub-finder/coverage-request/[absence_id]` creates coverage_request_shifts, it **omits** any shift for which the teacher has no `teacher_schedules` row (same school) with a non-null `classroom_id`. It does **not** assign those shifts to "Unknown (needs review)". The response includes `omitted_shift_count` and `omitted_shifts` so the client can show that some shifts could not be added.
 
-1. Create a time off request for a teacher who has no scheduled shifts
-2. Or create a shift that doesn't match any teacher_schedule
+**Legacy:** Shifts that were previously assigned to "Unknown (needs review)" (e.g. by DB triggers or older API behavior) can still exist. You can query them for review:
 
-**Verify:**
-
-- Shift is assigned to "Unknown (needs review)" classroom
-- Can query these shifts for manual review
-
-**SQL Check:**
+**SQL Check (existing Unknown shifts only):**
 
 ```sql
 SELECT
@@ -187,10 +181,22 @@ Once the Contact Sub panel is implemented, test:
 - No queries needed to compute status
 - Counters update immediately on INSERT/UPDATE/DELETE
 
-### ✅ Unknown Classroom Should Be Used Sparingly
+### ✅ Unknown classroom and omitted shifts
 
-- Most shifts should have a real classroom from `teacher_schedules`
-- Unknown shifts should be flagged for review
+- **GET coverage-request API:** Does not assign shifts to "Unknown (needs review)". Shifts without a scheduled classroom (same school) are **omitted**; the response includes `omitted_shift_count` and `omitted_shifts`.
+- **Time off creation (API):** Rejects new time off when any shift has no scheduled classroom (see Time off classroom requirement in [docs/domain/data-lifecycle.md](../domain/data-lifecycle.md)).
+- **Trigger (DB):** The trigger `auto_create_coverage_request_shift_from_time_off_shift` (migration 104) does **not** use "Unknown (needs review)". If classroom cannot be resolved from `teacher_schedules` (same school), the trigger **raises an exception** and the `time_off_shift` insert is rolled back. So direct inserts into `time_off_shifts` that bypass the API will also fail when the teacher has no scheduled classroom for that (day, slot).
+- **Legacy:** Existing coverage_request_shifts with "Unknown (needs review)" may still exist (e.g. from older data). Those shifts should be flagged for review in the UI.
+
+### Verifying the trigger (no Unknown fallback)
+
+To verify that the trigger raises when classroom is missing (e.g. after applying migration 104):
+
+1. Create a time off request (via API or SQL) that has a linked coverage_request_id.
+2. Attempt to insert a row into `time_off_shifts` for a (day_of_week_id, time_slot_id) where the teacher has **no** `teacher_schedules` row with a non-null `classroom_id` in that school.
+3. The INSERT should fail with an error like: `Cannot create coverage shift: teacher has no scheduled classroom for this day/slot in this school...`
+
+In normal use the API prevents such inserts (validation runs first), so the trigger acts as a backstop.
 
 ## Troubleshooting
 

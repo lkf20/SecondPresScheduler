@@ -104,6 +104,6 @@ Define “done right” for the **Weekly Schedule** so an AI (or human) can revi
 
 ## References
 
-- [APP_PURPOSE_AND_CONTEXT.md](../../docs/APP_PURPOSE_AND_CONTEXT.md) — Core Product Principles, Weekly Operational Review, UI Philosophy
+- [app-purpose-and-context.md](../../docs/domain/app-purpose-and-context.md) — Core Product Principles, Weekly Operational Review, UI Philosophy
 - [SCHEDULE_SEMANTICS_CONTRACT.md](../../docs/contracts/SCHEDULE_SEMANTICS_CONTRACT.md) — invariants for baseline + overlays and editing
 - Existing: [03-baseline-weekly-schedule-correctness.md](./03-baseline-weekly-schedule-correctness.md) (load + structure)

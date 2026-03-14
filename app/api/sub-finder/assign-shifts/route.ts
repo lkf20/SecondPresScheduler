@@ -18,7 +18,7 @@ const logAssignShiftsError = (...args: unknown[]) => {
   }
 }
 
-// See docs/data-lifecycle.md: sub_assignments lifecycle
+// See docs/domain/data-lifecycle.md: sub_assignments lifecycle
 /**
  * POST /api/sub-finder/assign-shifts
  * Assign a sub to selected shifts by creating sub_assignments
@@ -30,7 +30,12 @@ export async function POST(request: NextRequest) {
       coverage_request_id,
       sub_id,
       selected_shift_ids, // Array of coverage_request_shift_ids
+      is_floater_shift_ids = [], // Optional: coverage_request_shift_ids to create as floater
     } = body
+
+    const floaterShiftIds = Array.isArray(is_floater_shift_ids)
+      ? new Set(is_floater_shift_ids.filter((v: unknown): v is string => typeof v === 'string'))
+      : new Set<string>()
 
     if (
       !coverage_request_id ||

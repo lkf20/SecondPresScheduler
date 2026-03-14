@@ -42,7 +42,7 @@ describe('AbsenceList', () => {
       />
     )
 
-    expect(screen.getByText(/no absences found/i)).toBeInTheDocument()
+    expect(screen.getByText(/no upcoming absences found/i)).toBeInTheDocument()
   })
 
   it('renders absences and triggers selection + find subs actions', async () => {
@@ -93,5 +93,68 @@ describe('AbsenceList', () => {
 
     await user.click(screen.getByRole('button', { name: /find subs for absence-1/i }))
     expect(onFindSubs).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows Past (last 90 days) section when absences have is_past true', async () => {
+    const user = userEvent.setup()
+    const pastAbsence = {
+      id: 'past-1',
+      teacher_id: 'teacher-1',
+      teacher_name: 'Past T.',
+      start_date: '2025-12-01',
+      end_date: '2025-12-01',
+      reason: null,
+      is_past: true,
+      shifts: {
+        total: 1,
+        uncovered: 0,
+        partially_covered: 0,
+        fully_covered: 1,
+        shift_details: [],
+      },
+    }
+    render(
+      <AbsenceList
+        absences={[pastAbsence]}
+        selectedAbsence={null}
+        onSelectAbsence={jest.fn()}
+        onFindSubs={jest.fn()}
+        loading={false}
+      />
+    )
+    expect(screen.getByText(/past \(last 90 days\) \(1\)/i)).toBeInTheDocument()
+    await user.click(screen.getByText(/past \(last 90 days\) \(1\)/i))
+    expect(screen.getByRole('button', { name: 'Past T.' })).toBeInTheDocument()
+  })
+
+  it('shows No upcoming absences found when only past absences exist', () => {
+    const pastAbsence = {
+      id: 'past-1',
+      teacher_id: 'teacher-1',
+      teacher_name: 'Past T.',
+      start_date: '2025-12-01',
+      end_date: '2025-12-01',
+      reason: null,
+      is_past: true,
+      shifts: {
+        total: 1,
+        uncovered: 0,
+        partially_covered: 0,
+        fully_covered: 1,
+        shift_details: [],
+      },
+    }
+    render(
+      <AbsenceList
+        absences={[pastAbsence]}
+        selectedAbsence={null}
+        onSelectAbsence={jest.fn()}
+        onFindSubs={jest.fn()}
+        loading={false}
+      />
+    )
+    expect(screen.getByText(/no upcoming absences found/i)).toBeInTheDocument()
+    expect(screen.getByText(/past absences are listed below/i)).toBeInTheDocument()
+    expect(screen.getByText(/past \(last 90 days\) \(1\)/i)).toBeInTheDocument()
   })
 })

@@ -5,6 +5,12 @@ import { getStaffDisplayName, type DisplayNameFormat } from './staff-display-nam
 /**
  * Shared utility for transforming time off request data into a consistent format
  * for use across Dashboard, Sub Finder, and Time Off pages.
+ *
+ * Source of truth for coverage counts: covered (fully covered shifts), partial
+ * (partially covered), uncovered. Time Off list and Sub Finder absences use
+ * this transform. Dashboard overview computes equivalent counts server-side.
+ * TimeOffCard displays up to three badges (Uncovered, Covered, Partial), each
+ * only when its count > 0.
  */
 
 export type TimeOffCardData = {
@@ -41,6 +47,9 @@ export type TimeOffCardData = {
     sub_id?: string | null
     assignment_id?: string | null
     is_partial?: boolean
+    /** For display order: date → day → time_slot (AGENTS.md) */
+    day_display_order?: number | null
+    time_slot_display_order?: number | null
   }>
 }
 
@@ -64,8 +73,8 @@ export interface ShiftInput {
   date: string
   day_of_week_id: string | null
   time_slot_id: string
-  day_of_week?: { name: string | null } | null
-  time_slot?: { code: string | null } | null
+  day_of_week?: { name: string | null; display_order?: number | null } | null
+  time_slot?: { code: string | null; display_order?: number | null } | null
 }
 
 export interface AssignmentInput {
@@ -245,6 +254,8 @@ export function transformTimeOffCardData(
         sub_id: assignment?.subId || undefined,
         assignment_id: assignment?.assignmentId || undefined,
         is_partial: assignment?.hasPartial && !assignment?.hasFull,
+        day_display_order: shift.day_of_week?.display_order ?? undefined,
+        time_slot_display_order: shift.time_slot?.display_order ?? undefined,
       })
     } else {
       // Simple format
@@ -255,13 +266,28 @@ export function transformTimeOffCardData(
     }
   })
 
-  // Determine status
+  // Invariant: counts must sum to total shifts (catch logic bugs in dev/test)
+  if (
+    typeof process !== 'undefined' &&
+    process.env?.NODE_ENV !== 'production' &&
+    covered + partial + uncovered !== shifts.length
+  ) {
+    throw new Error(
+      `TimeOffCardData invariant: covered(${covered}) + partial(${partial}) + uncovered(${uncovered}) !== shifts.length(${shifts.length})`
+    )
+  }
+
+  // Determine status. Zero-shift requests (e.g. draft with no shifts) must not be
+  // classified as 'covered' so they appear in "needs coverage" filters and don't
+  // inflate covered counts.
   const status: TimeOffCardData['status'] =
-    uncovered === 0 && partial === 0
-      ? 'covered'
-      : covered === 0
-        ? 'needs_coverage'
-        : 'partially_covered'
+    shifts.length === 0
+      ? 'needs_coverage'
+      : uncovered === 0 && partial === 0
+        ? 'covered'
+        : covered === 0
+          ? 'needs_coverage'
+          : 'partially_covered'
 
   // Get teacher name
   const teacherName =

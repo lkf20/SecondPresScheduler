@@ -76,7 +76,7 @@ This document outlines best practices for developing and maintaining the Prescho
 ### UI and color consistency
 
 - **Use `StaffingStatusBadge`** (`components/ui/staffing-status-badge.tsx`) for Below Required, Below Preferred, Above Target, and On Target badges—do not recreate badge styling.
-- **Use the centralized color system** in `lib/utils/colors.ts` for status, coverage, and staffing colors. See [docs/COLOR_CONSISTENCY_REVIEW.md](../COLOR_CONSISTENCY_REVIEW.md) and [docs/UI_COLOR_STANDARDIZATION.md](../UI_COLOR_STANDARDIZATION.md).
+- **Use the centralized color system** in `lib/utils/colors.ts` for status, coverage, and staffing colors. See [docs/design/color-consistency-review.md](../design/color-consistency-review.md) and [docs/design/ui-color-standardization.md](../design/ui-color-standardization.md).
 - **Do not hardcode** Tailwind color classes for semantic states (warning, error, below required, etc.)—import from the color constants or use shared components instead.
 
 ### Comments

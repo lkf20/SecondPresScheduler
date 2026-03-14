@@ -6,6 +6,7 @@ import { parseLocalDate } from '@/lib/utils/date'
 import { cn } from '@/lib/utils'
 import { coverageColorValues, shiftStatusColorValues } from '@/lib/utils/colors'
 import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
+import { sortShiftDetailsByDisplayOrder } from '@/lib/utils/shift-display-order'
 
 interface Shift {
   date: string
@@ -15,6 +16,8 @@ interface Shift {
   classroom_name?: string | null
   class_name?: string | null
   classroom_color?: string | null
+  day_display_order?: number | null
+  time_slot_display_order?: number | null
 }
 
 /** Shift status for sub-finder (can cover / cannot cover / assigned) */
@@ -267,16 +270,10 @@ export default function ShiftChips({
     }
   })
 
-  // Convert to array and sort by date, then time slot
+  // Convert to array and sort by date, then day display_order, then time_slot display_order (AGENTS.md)
   const allShifts = shifts
     ? shifts
-    : Array.from(allShiftsMap.values()).sort((a, b) => {
-        const dateA = parseLocalDate(a.date).getTime()
-        const dateB = parseLocalDate(b.date).getTime()
-        if (dateA !== dateB) return dateA - dateB
-        // If same date, sort by time slot code (AM before PM, etc.)
-        return a.time_slot_code.localeCompare(b.time_slot_code)
-      })
+    : sortShiftDetailsByDisplayOrder(Array.from(allShiftsMap.values()))
 
   // Create a Set of recommended shift keys for quick lookup (normalize dates so combination + absence formats match)
   const recommendedShiftKeys = new Set(

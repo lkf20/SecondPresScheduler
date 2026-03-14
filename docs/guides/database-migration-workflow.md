@@ -242,4 +242,4 @@ It keeps schema evolution predictable and safe.
 
 In system/project instructions, include:
 
-> Follow `docs/database_migration_workflow.md` when generating migrations.
+> Follow `docs/guides/database-migration-workflow.md` when generating migrations.

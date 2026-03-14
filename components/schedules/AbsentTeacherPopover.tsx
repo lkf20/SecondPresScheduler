@@ -45,6 +45,11 @@ export default function AbsentTeacherPopover({
     }
   }
 
+  const handleViewStaffProfile = () => {
+    setOpen(false)
+    router.push(`/staff/${teacherId}`)
+  }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
@@ -72,6 +77,13 @@ export default function AbsentTeacherPopover({
               disabled={!timeOffRequestId}
             >
               Edit time off
+            </Button>
+            <Button
+              onClick={handleViewStaffProfile}
+              className="w-full justify-start"
+              variant="outline"
+            >
+              View staff profile
             </Button>
           </div>
         </div>

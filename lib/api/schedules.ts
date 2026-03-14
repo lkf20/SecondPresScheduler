@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
 import { getUserSchoolId } from '@/lib/utils/auth'
+import { getTodayISO } from '@/lib/utils/date'
 
 type TeacherSchedule = Database['public']['Tables']['teacher_schedules']['Row']
 type DayOfWeek = Database['public']['Tables']['days_of_week']['Row']
@@ -118,6 +119,61 @@ export async function getTeacherSchedules(
   return (data || []).map(row => normalizeTeacherSchedule(row)) as TeacherScheduleWithDetails[]
 }
 
+/** Thrown when assigning a teacher would create a double-booking (same day/slot, different classroom, not both floaters). */
+export class TeacherScheduleConflictError extends Error {
+  constructor(public readonly userMessage: string) {
+    super(userMessage)
+    this.name = 'TeacherScheduleConflictError'
+  }
+}
+
+/**
+ * Ensures the given assignment does not conflict with existing teacher_schedules.
+ * Rule: same teacher + same day + same time_slot in a different classroom is a conflict,
+ * unless both the new and existing assignment are floaters.
+ * @param excludeScheduleId When updating, pass the schedule id being updated so it is excluded.
+ */
+export async function assertNoTeacherScheduleConflict(
+  assignment: {
+    teacher_id: string
+    day_of_week_id: string
+    time_slot_id: string
+    classroom_id: string
+    is_floater?: boolean
+  },
+  excludeScheduleId?: string
+): Promise<void> {
+  const supabase = await createClient()
+  let query = supabase
+    .from('teacher_schedules')
+    .select(
+      'id, classroom_id, is_floater, classroom:classrooms(name), day_of_week:days_of_week(name), time_slot:time_slots(code)'
+    )
+    .eq('teacher_id', assignment.teacher_id)
+    .eq('day_of_week_id', assignment.day_of_week_id)
+    .eq('time_slot_id', assignment.time_slot_id)
+    .neq('classroom_id', assignment.classroom_id)
+  if (excludeScheduleId) {
+    query = query.neq('id', excludeScheduleId)
+  }
+  const { data: existing, error } = await query
+  if (error) throw error
+  const newIsFloater = assignment.is_floater === true
+  for (const row of existing ?? []) {
+    const rowFloater = (row as { is_floater?: boolean }).is_floater === true
+    if (rowFloater && newIsFloater) continue
+    const classroom = (row as { classroom?: { name?: string } }).classroom
+    const dayOfWeek = (row as { day_of_week?: { name?: string } }).day_of_week
+    const timeSlot = (row as { time_slot?: { code?: string } }).time_slot
+    const roomName = classroom?.name ?? 'another room'
+    const dayName = dayOfWeek?.name ?? 'this day'
+    const slotCode = timeSlot?.code ?? 'this time'
+    throw new TeacherScheduleConflictError(
+      `This teacher is already scheduled in ${roomName} for ${dayName} ${slotCode}. Resolve the conflict first or assign as Floater in both classrooms.`
+    )
+  }
+}
+
 export async function createTeacherSchedule(schedule: {
   teacher_id: string
   day_of_week_id: string
@@ -146,6 +202,14 @@ export async function createTeacherSchedule(schedule: {
     school_id: schoolId,
     is_floater: schedule.is_floater ?? false,
   }
+
+  await assertNoTeacherScheduleConflict({
+    teacher_id: insertData.teacher_id,
+    day_of_week_id: insertData.day_of_week_id,
+    time_slot_id: insertData.time_slot_id,
+    classroom_id: insertData.classroom_id,
+    is_floater: insertData.is_floater,
+  })
 
   const { data, error } = await supabase
     .from('teacher_schedules')
@@ -224,6 +288,28 @@ export async function updateTeacherSchedule(
       effectiveSchoolId,
       'Cannot update teacher schedule'
     )
+  }
+
+  const conflictRelevantKeys = [
+    'teacher_id',
+    'day_of_week_id',
+    'time_slot_id',
+    'classroom_id',
+    'is_floater',
+  ] as const
+  const hasConflictRelevantUpdate = conflictRelevantKeys.some(key => key in updates)
+  if (hasConflictRelevantUpdate) {
+    const existing = await getTeacherScheduleById(id, effectiveSchoolId)
+    if (existing) {
+      const merged = {
+        teacher_id: (updates.teacher_id ?? existing.teacher_id) as string,
+        day_of_week_id: (updates.day_of_week_id ?? existing.day_of_week_id) as string,
+        time_slot_id: (updates.time_slot_id ?? existing.time_slot_id) as string,
+        classroom_id: (updates.classroom_id ?? existing.classroom_id) as string,
+        is_floater: updates.is_floater ?? existing.is_floater ?? false,
+      }
+      await assertNoTeacherScheduleConflict(merged, id)
+    }
   }
 
   const updateData: Record<string, unknown> = {
@@ -353,4 +439,125 @@ export async function getScheduleByDayAndSlot(
 
   if (error) throw error
   return data ? (normalizeTeacherSchedule(data) as TeacherScheduleWithDetails) : null
+}
+
+/**
+ * Checks if there are any non-cancelled future events (time off, coverage requests, sub assignments)
+ * that depend on the given baseline schedule slot.
+ * Used to block structural changes (day/time changes or deletions) that would orphan these events.
+ */
+export async function checkDependentFutureEvents(
+  teacherId: string,
+  dayOfWeekId: string,
+  timeSlotId: string,
+  schoolId?: string
+): Promise<{ hasDependents: boolean; message?: string }> {
+  const supabase = await createClient()
+  const effectiveSchoolId = schoolId || (await getUserSchoolId())
+  if (!effectiveSchoolId) {
+    throw new Error('school_id is required to check dependent events')
+  }
+
+  const today = getTodayISO()
+
+  // 1. Check for future time_off_requests that overlap with this day/slot.
+  // time_off_shifts link the request to specific days/slots.
+  const { data: timeOffShifts, error: toError } = await supabase
+    .from('time_off_shifts')
+    .select('id, time_off_requests!inner(status, teacher_id)')
+    .eq('time_off_requests.teacher_id', teacherId)
+    .eq('day_of_week_id', dayOfWeekId)
+    .eq('time_slot_id', timeSlotId)
+    .gte('date', today)
+    .neq('time_off_requests.status', 'cancelled')
+
+  if (toError) throw toError
+
+  if (timeOffShifts && timeOffShifts.length > 0) {
+    return {
+      hasDependents: true,
+      message: `Cannot modify schedule. The teacher has ${timeOffShifts.length} future time-off shift(s) for this slot. Please cancel or adjust them first.`,
+    }
+  }
+
+  // 2. Check for future coverage_request_shifts (which also implies sub_assignments).
+  // These could be from time off or from extra coverage/flex.
+  const { data: coverageShifts, error: covError } = await supabase
+    .from('coverage_request_shifts')
+    .select('id, coverage_requests!inner(teacher_id)')
+    .eq('coverage_requests.teacher_id', teacherId)
+    .eq('day_of_week_id', dayOfWeekId)
+    .eq('time_slot_id', timeSlotId)
+    .eq('school_id', effectiveSchoolId)
+    .gte('date', today)
+    .neq('status', 'cancelled')
+
+  if (covError) throw covError
+
+  if (coverageShifts && coverageShifts.length > 0) {
+    return {
+      hasDependents: true,
+      message: `Cannot modify schedule. The teacher has ${coverageShifts.length} future coverage request(s) or sub assignment(s) for this slot. Please cancel or adjust them first.`,
+    }
+  }
+
+  return { hasDependents: false }
+}
+
+/**
+ * Automatically syncs a new classroom_id to all future coverage_request_shifts and sub_assignments
+ * for a specific teacher, day, and time slot.
+ * Used when a baseline schedule is updated *only* with a new classroom_id.
+ */
+export async function syncFutureClassroom(
+  teacherId: string,
+  dayOfWeekId: string,
+  timeSlotId: string,
+  newClassroomId: string,
+  schoolId?: string
+): Promise<void> {
+  const supabase = await createClient()
+  const effectiveSchoolId = schoolId || (await getUserSchoolId())
+  if (!effectiveSchoolId) {
+    throw new Error('school_id is required to sync future classrooms')
+  }
+
+  const today = getTodayISO()
+
+  // First, find the IDs of all relevant future coverage_request_shifts.
+  const { data: shiftsToUpdate, error: findError } = await supabase
+    .from('coverage_request_shifts')
+    .select('id, coverage_requests!inner(teacher_id)')
+    .eq('coverage_requests.teacher_id', teacherId)
+    .eq('day_of_week_id', dayOfWeekId)
+    .eq('time_slot_id', timeSlotId)
+    .eq('school_id', effectiveSchoolId)
+    .gte('date', today)
+
+  if (findError) throw findError
+
+  if (!shiftsToUpdate || shiftsToUpdate.length === 0) {
+    return // Nothing to update
+  }
+
+  const shiftIds = shiftsToUpdate.map(s => s.id)
+
+  // Update the classroom on coverage_request_shifts
+  const { error: updateShiftsError } = await supabase
+    .from('coverage_request_shifts')
+    .update({ classroom_id: newClassroomId })
+    .in('id', shiftIds)
+
+  if (updateShiftsError) throw updateShiftsError
+
+  // Update the classroom on linked sub_assignments (if sub_assignments has classroom_id)
+  // Wait, let's verify if sub_assignments has classroom_id...
+  // Looking at docs/reference/DATABASE_SCHEMA.md:
+  // "sub_assignments - Has classroom_id and date; tied to a coverage_request_shift"
+  const { error: updateSubsError } = await supabase
+    .from('sub_assignments')
+    .update({ classroom_id: newClassroomId })
+    .in('coverage_request_shift_id', shiftIds)
+
+  if (updateSubsError) throw updateSubsError
 }

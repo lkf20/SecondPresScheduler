@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import Link from 'next/link'
 import { usePathname, useSearchParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -41,14 +43,23 @@ import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
-import { saveSubFinderState, loadSubFinderState } from '@/lib/utils/sub-finder-state'
+import { useSchool } from '@/lib/contexts/SchoolContext'
+import {
+  saveSubFinderState,
+  loadSubFinderState,
+  clearSubFinderState,
+} from '@/lib/utils/sub-finder-state'
+import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
+import { invalidateSubAssignment, invalidateTimeOffRequest } from '@/lib/utils/invalidation'
 import { findTopCombinations } from '@/lib/utils/sub-combination'
 import CoverageSummary from '@/components/sub-finder/CoverageSummary'
+import StaffLink from '@/components/ui/staff-link'
 import ShiftStatusCard from '@/components/sub-finder/ShiftStatusCard'
 import { useSubFinderShifts } from '@/components/sub-finder/hooks/useSubFinderShifts'
 import type { SubFinderShift } from '@/lib/sub-finder/types'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
+import { CreateTimeOffRequestCard } from '@/components/time-off/CreateTimeOffRequestCard'
 
 export default function SubFinderPage() {
   const ENABLE_SHIFT_FOCUS_MODE = true
@@ -56,6 +67,8 @@ export default function SubFinderPage() {
   const SHOW_MIDDLE_COLUMN_DEBUG_BORDERS = false
   const SHOW_RIGHT_PANEL_DEBUG_BORDERS = false
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const schoolId = useSchool()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const requestedAbsenceId = searchParams.get('absence_id')
@@ -116,7 +129,15 @@ export default function SubFinderPage() {
   const savedSubRef = useRef<SubCandidate | null>(null)
   const savedAbsenceRef = useRef<Absence | null>(null)
   const selectedAbsenceIdRef = useRef<string | null>(null) // Track selected absence ID to prevent loss during restoration
+  const leftPanelHasLoadedOnceRef = useRef(false) // When true, next absences reload clears main and closes right panel
+  const previousAbsencesSignatureRef = useRef<string | null>(null) // Sorted absence IDs; clear only when this changes (not on refetch with same data)
+  const manualParamsAppliedRef = useRef(false) // When true, we applied manual URL params this session; skip load-saved-state so dates aren't overwritten
   const classroomReviewWarnedAbsenceIdsRef = useRef<Set<string>>(new Set())
+
+  // Set ref synchronously when manual URL params are present so load-saved-state and other effects skip before they run
+  if (requestedMode === 'manual' && requestedTeacherId && requestedStartDate) {
+    manualParamsAppliedRef.current = true
+  }
   // Cache contact data: key = `${subId}-${absenceId}`
   type ContactDataCacheEntry = {
     id: string
@@ -203,6 +224,7 @@ export default function SubFinderPage() {
   const openEditTimeOffPanel = useCallback((requestId: string) => {
     setEditingTimeOffRequestId(requestId)
   }, [])
+
   const [manualSelectedShifts, setManualSelectedShifts] = useState<
     Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
   >([])
@@ -217,6 +239,7 @@ export default function SubFinderPage() {
   const [manualConflictSummary, setManualConflictSummary] = useState({
     conflictCount: 0,
     totalScheduled: 0,
+    totalAssignable: 0,
   })
   const [manualConflictShifts, setManualConflictShifts] = useState<SelectedShift[]>([])
   const [manualConflictingRequests, setManualConflictingRequests] = useState<
@@ -240,12 +263,19 @@ export default function SubFinderPage() {
     useState(false)
   /** Show success banner after adding/extending time off from this panel; cleared when teacher or dates change. */
   const [manualTimeOffSuccessBanner, setManualTimeOffSuccessBanner] = useState(false)
+  /** When true, time off was created but coverage check failed; show "refresh or click Find Subs" instead of "Finding recommended subs" (vuln 5). */
+  const [manualTimeOffCoverageUnconfirmed, setManualTimeOffCoverageUnconfirmed] = useState(false)
   /** After time off success, auto-run Find Subs once the left panel has refreshed. */
   const [shouldAutoRunFindSubsAfterRefresh, setShouldAutoRunFindSubsAfterRefresh] = useState(false)
   /** Set false when requesting auto-run; set true when table sends conflict summary/shifts. Ensures we don't run with stale data. */
   const hasReceivedConflictDataForAutoRunRef = useRef(false)
+  /** Inline create time off (manual mode, no time off): reason and notes for shared CreateTimeOffRequestCard. */
+  const [manualCreateTimeOffReason, setManualCreateTimeOffReason] = useState<string>('Sick Day')
+  const [manualCreateTimeOffNotes, setManualCreateTimeOffNotes] = useState<string>('')
+  const [manualCreateTimeOffSubmitting, setManualCreateTimeOffSubmitting] = useState(false)
+  const manualCreateTimeOffSubmittingRef = useRef(false)
   const onConflictSummaryChangeForTable = useCallback(
-    (summary: { conflictCount: number; totalScheduled: number }) => {
+    (summary: { conflictCount: number; totalScheduled: number; totalAssignable: number }) => {
       hasReceivedConflictDataForAutoRunRef.current = true
       setManualConflictSummary(summary)
     },
@@ -255,6 +285,123 @@ export default function SubFinderPage() {
     hasReceivedConflictDataForAutoRunRef.current = true
     setManualConflictShifts(shifts)
   }, [])
+
+  /** Create time off request inline from manual mode (no time off case). Refreshes left panel and triggers auto-run Find Subs on success. */
+  const handleCreateTimeOffFromManual = useCallback(async () => {
+    if (manualCreateTimeOffSubmittingRef.current) return
+    if (!manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0) {
+      toast.error('Please select a teacher, date range, and at least one shift.')
+      return
+    }
+    manualCreateTimeOffSubmittingRef.current = true
+    setManualCreateTimeOffSubmitting(true)
+    setManualTimeOffCoverageUnconfirmed(false)
+    try {
+      const uniqueSlots = Array.from(
+        new Map(
+          manualSelectedShifts.map(s => [
+            `${s.date}|${s.time_slot_id}`,
+            {
+              date: s.date,
+              day_of_week_id: s.day_of_week_id,
+              time_slot_id: s.time_slot_id,
+            },
+          ])
+        ).values()
+      )
+      const endDate = manualEndDate || manualStartDate
+      const res = await fetch('/api/time-off', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teacher_id: manualTeacherId,
+          start_date: manualStartDate,
+          end_date: endDate,
+          shift_selection_mode: 'select_shifts',
+          reason: manualCreateTimeOffReason?.trim() || null,
+          notes: manualCreateTimeOffNotes.trim() || null,
+          shifts: uniqueSlots,
+        }),
+      })
+      if (!res.ok) {
+        let message = 'Failed to create time off request.'
+        try {
+          const data = await res.json()
+          message = data.error || data.message || message
+        } catch {
+          message = `Failed to create time off request (${res.status} ${res.statusText})`
+        }
+        toast.error(message)
+        return
+      }
+      const timeOffData = await res.json()
+      const createdTimeOffId = timeOffData?.id ?? null
+
+      // Confirm coverage exists before auto-running Find Subs; retry on transient failure (vuln 5).
+      let coverageConfirmed = false
+      if (createdTimeOffId) {
+        const coverageUrl = `/api/sub-finder/coverage-request/${encodeURIComponent(createdTimeOffId)}`
+        const delays = [0, 500, 1000]
+        for (let attempt = 0; attempt < delays.length && !coverageConfirmed; attempt++) {
+          if (delays[attempt] > 0) await new Promise(r => setTimeout(r, delays[attempt]))
+          try {
+            const covRes = await fetch(coverageUrl)
+            if (covRes.ok) {
+              const covData = await covRes.json()
+              if (covData?.coverage_request_id) {
+                coverageConfirmed = true
+                break
+              }
+            }
+          } catch {
+            // Retry on next iteration
+          }
+        }
+      }
+
+      toast.success('Time off request created.')
+      clearDataHealthCache()
+      await invalidateTimeOffRequest(
+        queryClient,
+        schoolId,
+        timeOffData?.coverage_request_id ?? undefined
+      )
+      hasReceivedConflictDataForAutoRunRef.current = false
+      setManualConflictCheckReady(false)
+      setManualLeftPanelRefreshKey(k => k + 1)
+      setManualTimeOffSuccessBanner(true)
+      if (coverageConfirmed) {
+        setManualTimeOffCoverageUnconfirmed(false)
+        setLastManualRunHadAllShiftsWithTimeOff(true)
+        setShouldAutoRunFindSubsAfterRefresh(true)
+      } else {
+        setManualTimeOffCoverageUnconfirmed(true)
+        toast.warning(
+          'There was a delay confirming coverage. Refresh the page or click Find Subs to continue.'
+        )
+      }
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : 'Could not create time off request.'
+      const isNetworkError =
+        typeof raw === 'string' && (raw === 'Failed to fetch' || /network|fetch/i.test(raw))
+      toast.error(
+        isNetworkError
+          ? 'Could not create time off request. Check your connection and try again.'
+          : raw || 'Could not create time off request. Please try again.'
+      )
+    } finally {
+      manualCreateTimeOffSubmittingRef.current = false
+      setManualCreateTimeOffSubmitting(false)
+    }
+  }, [
+    manualTeacherId,
+    manualStartDate,
+    manualEndDate,
+    manualSelectedShifts,
+    manualCreateTimeOffReason,
+    manualCreateTimeOffNotes,
+  ])
+
   const isPreviewMode =
     (selectedAbsence?.id?.startsWith('manual-') && !lastManualRunHadAllShiftsWithTimeOff) ?? false
   const subSearchRef = useRef<HTMLDivElement | null>(null)
@@ -290,9 +437,10 @@ export default function SubFinderPage() {
     if (manualExtendSelectedRequestId) setManualExtendShowSelectWarning(false)
   }, [manualExtendSelectedRequestId])
 
-  /** Clear time-off success banner when user changes teacher or dates. */
+  /** Clear time-off success banner and coverage-unconfirmed state when user changes teacher or dates. */
   useEffect(() => {
     setManualTimeOffSuccessBanner(false)
+    setManualTimeOffCoverageUnconfirmed(false)
   }, [manualTeacherId, pickDateChoice, manualStartDate, manualEndDate])
 
   useEffect(() => {
@@ -366,18 +514,19 @@ export default function SubFinderPage() {
     [runManualFinder]
   )
 
-  /** Auto-run Find Subs once left panel has refreshed after time off success (edit/extend in-place).
+  /** Auto-run Find Subs once left panel has refreshed after time off success (create or extend in-place).
    * Only run after the table has sent conflict data (onConflictSummaryChange/onConflictShiftsChange) so we don't
-   * use stale manualConflictSummary/manualConflictShifts if onConflictCheckReady fires first. */
+   * use stale manualConflictSummary/manualConflictShifts if onConflictCheckReady fires first.
+   * Always run in normal mode (not preview) since we just created/extended time off. */
   useEffect(() => {
     if (!manualConflictCheckReady || !shouldAutoRunFindSubsAfterRefresh) return
     if (!hasReceivedConflictDataForAutoRunRef.current) return
     setShouldAutoRunFindSubsAfterRefresh(false)
+    setLastManualRunHadAllShiftsWithTimeOff(true)
     const allShiftsHaveTimeOff =
       manualConflictSummary.conflictCount > 0 &&
       manualConflictSummary.conflictCount === manualConflictSummary.totalScheduled
     if (allShiftsHaveTimeOff && manualConflictShifts.length > 0) {
-      setLastManualRunHadAllShiftsWithTimeOff(true)
       runManualFinderAndCollapse(false, manualConflictShifts)
     } else {
       runManualFinderAndCollapse(false, undefined)
@@ -1016,6 +1165,8 @@ export default function SubFinderPage() {
             .catch(() => ({ error: 'Failed to remove sub assignment.' }))
           throw new Error(errorBody.error || 'Failed to remove sub assignment.')
         }
+        clearDataHealthCache()
+        await invalidateSubAssignment(queryClient, schoolId)
         const result = await response.json().catch(() => ({ removed_count: 0 }))
 
         const removedSubName = removeDialogShift.sub_name || 'the sub'
@@ -1275,11 +1426,14 @@ export default function SubFinderPage() {
   }, [selectedTeacherIds, filteredAbsences, selectedAbsence, setSelectedAbsence])
 
   // Apply manual-mode URL params from Find Sub popover (mode=manual&teacher_id&start_date&end_date).
-  // Run whenever these params are present so that using the Find Sub hot button while already on
-  // Sub Finder (e.g. changing to a different date range) updates the page and recommended subs.
-  useEffect(() => {
+  // useLayoutEffect so this runs before other useEffects (e.g. load-saved-state) and isn't overwritten.
+  // Clear sessionStorage so no effect can restore over our state; defer URL replace to avoid revert.
+  useLayoutEffect(() => {
     if (requestedMode !== 'manual' || !requestedTeacherId || !requestedStartDate) return
+    manualParamsAppliedRef.current = true
     hasRestoredStateRef.current = true
+    // Clear saved state so load-saved-state and restore-absence effects have nothing to restore
+    clearSubFinderState()
     setMode('manual')
     setManualTeacherId(requestedTeacherId)
     setManualStartDate(requestedStartDate)
@@ -1288,6 +1442,15 @@ export default function SubFinderPage() {
     setSelectedAbsence(null)
     setManualTimeOffChoice('unset')
     setLastManualRunHadAllShiftsWithTimeOff(false)
+    // Clear previous Find Sub results and close right panel; invalidate cache so stale data doesn't re-apply
+    applySubResults([])
+    setRecommendedCombinations([])
+    queryClient.invalidateQueries({ queryKey: ['subRecommendations', schoolId] })
+    setIsContactPanelOpen(false)
+    setSelectedSub(null)
+    setSelectedShift(null)
+    setRemoveDialogShift(null)
+    setChangeDialogShift(null)
     const today = getTodayISO()
     const tomorrow = getTomorrowISO()
     if (requestedStartDate === today) {
@@ -1295,12 +1458,17 @@ export default function SubFinderPage() {
     } else if (requestedStartDate === tomorrow) {
       setPickDateChoice('tomorrow')
     } else {
+      // Any other date (e.g. yesterday, custom range) — show custom picker (vuln 2)
       setPickDateChoice('custom')
     }
     const teacher = teachers.find(t => t.id === requestedTeacherId)
     if (teacher) {
       setManualTeacherSearch(getDisplayName(teacher))
+    } else if (teachers.length === 0) {
+      // Teachers not loaded yet; sync effect will set name when they load (vuln 1)
+      setManualTeacherSearch('')
     }
+    // Defer URL replace so state is committed and no effect can overwrite; 150ms to be past any effect/query
     const newSearchParams = new URLSearchParams(searchParams.toString())
     newSearchParams.delete('mode')
     newSearchParams.delete('teacher_id')
@@ -1310,7 +1478,10 @@ export default function SubFinderPage() {
     const newUrl = newSearchParams.toString()
       ? `/sub-finder?${newSearchParams.toString()}`
       : '/sub-finder'
-    router.replace(newUrl)
+    const timeoutId = setTimeout(() => {
+      router.replace(newUrl)
+    }, 150)
+    return () => clearTimeout(timeoutId)
   }, [
     requestedMode,
     requestedTeacherId,
@@ -1320,6 +1491,10 @@ export default function SubFinderPage() {
     router,
     teachers,
     getDisplayName,
+    applySubResults,
+    setRecommendedCombinations,
+    queryClient,
+    schoolId,
   ])
 
   // When manual teacher was prefilled from URL, set display name once teachers load
@@ -1359,6 +1534,8 @@ export default function SubFinderPage() {
   // Load saved state on mount (only if no URL params override)
   useEffect(() => {
     if (hasRestoredStateRef.current) return
+    // Skip restoration if we applied manual URL params this session (keeps dates from URL)
+    if (manualParamsAppliedRef.current) return
     // Only restore if we don't have URL params that override
     if (requestedAbsenceId || requestedTeacherId || requestedMode === 'manual') {
       hasRestoredStateRef.current = true // Mark as complete even if we skip restoration
@@ -1434,6 +1611,8 @@ export default function SubFinderPage() {
   useEffect(() => {
     if (requestedAbsenceId || mode !== 'existing') return // URL param takes precedence, or skip if manual mode
     if (absences.length === 0) return // Wait for absences to load
+    // Do not overwrite when we landed with manual URL params (teacher + dates from Weekly Schedule)
+    if (manualParamsAppliedRef.current) return
     // Do not overwrite a freshly-set manual absence (from Find Subs in Pick dates flow)
     if (selectedAbsence?.id?.startsWith('manual-')) return
 
@@ -1519,6 +1698,31 @@ export default function SubFinderPage() {
       }
     }
   }, [selectedAbsence])
+
+  // Whenever the left panel (absences list) is reloaded with structurally new data, clear the main area and close the right panel.
+  // Only clear when the set of absence IDs has changed (add/remove), not when absences is just a new array reference from a refetch.
+  useEffect(() => {
+    if (absences.length === 0) return
+    const signature = [...absences]
+      .map(a => a.id)
+      .sort()
+      .join(',')
+    if (!leftPanelHasLoadedOnceRef.current) {
+      leftPanelHasLoadedOnceRef.current = true
+      previousAbsencesSignatureRef.current = signature
+      return
+    }
+    if (previousAbsencesSignatureRef.current === signature) {
+      return // Same data (e.g. refetch after assign/time off); do not clear user's selection or panel
+    }
+    previousAbsencesSignatureRef.current = signature
+    setSelectedAbsence(null)
+    setIsContactPanelOpen(false)
+    setSelectedSub(null)
+    setSelectedShift(null)
+    setRemoveDialogShift(null)
+    setChangeDialogShift(null)
+  }, [absences, setSelectedAbsence])
 
   useEffect(() => {
     if (!selectedAbsence || mode !== 'existing') return
@@ -1879,26 +2083,79 @@ export default function SubFinderPage() {
                         manualConflictSummary.conflictCount ===
                           manualConflictSummary.totalScheduled &&
                         manualConflictSummary.totalScheduled > 0
+                      ) &&
+                      !(
+                        manualConflictSummary.totalScheduled > 0 &&
+                        manualConflictSummary.totalAssignable === 0
                       ) && (
                         <p className="text-xs text-amber-600 mt-2">Select at least one shift.</p>
                       )}
-                    {/* No time off: alert and Create button (only after conflict check is ready to avoid flash) */}
+                    {manualConflictCheckReady &&
+                      manualConflictSummary.totalScheduled > 0 &&
+                      manualConflictSummary.totalAssignable === 0 && (
+                        <div
+                          className="mt-2 rounded-lg border px-3 py-2.5 text-sm"
+                          style={{
+                            backgroundColor: '#fef3c7',
+                            color: '#92400e',
+                            borderColor: '#fcd34d',
+                          }}
+                          role="status"
+                        >
+                          <p className="font-medium">
+                            All shifts in this range fall on closed days.
+                          </p>
+                          <p className="mt-1">
+                            <Link
+                              href="/settings/calendar"
+                              className="underline font-medium focus:outline-none focus:ring-2 focus:ring-amber-500 rounded"
+                            >
+                              Manage Calendar
+                            </Link>
+                            {' to change closures.'}
+                          </p>
+                        </div>
+                      )}
+                    {/* No time off: inline create card (shared with Assign Sub) and two stacked actions */}
                     {manualConflictCheckReady &&
                       manualConflictSummary.conflictCount === 0 &&
                       manualConflictSummary.totalScheduled > 0 &&
                       manualSelectedShifts.length > 0 && (
-                        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-3">
-                          <p className="text-sm text-amber-900">
-                            No time off request for these dates yet. Create one to contact and
-                            assign subs.
-                          </p>
-                          <div className="mt-2 flex justify-end">
+                        <div className="mt-2 space-y-3">
+                          <CreateTimeOffRequestCard
+                            idPrefix="sub-finder-manual-time-off"
+                            noTimeOffCount={manualSelectedShifts.length}
+                            totalSelected={manualSelectedShifts.length}
+                            reason={manualCreateTimeOffReason}
+                            onReasonChange={setManualCreateTimeOffReason}
+                            notes={manualCreateTimeOffNotes}
+                            onNotesChange={setManualCreateTimeOffNotes}
+                            className="rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-3"
+                          />
+                          <div className="flex flex-col gap-2">
                             <Button
                               size="sm"
-                              className="shrink-0 bg-white text-teal-600 border border-slate-200 hover:bg-slate-50 hover:text-teal-700"
-                              onClick={openTimeOffPanel}
+                              variant="default"
+                              className="w-full"
+                              disabled={manualCreateTimeOffSubmitting}
+                              onClick={handleCreateTimeOffFromManual}
                             >
-                              Create time off request
+                              {manualCreateTimeOffSubmitting
+                                ? 'Creating…'
+                                : 'Create Time Off & Find Sub'}
+                            </Button>
+                            <p className="text-xs text-muted-foreground text-center">or</p>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full"
+                              disabled={manualCreateTimeOffSubmitting}
+                              onClick={() => {
+                                setLastManualRunHadAllShiftsWithTimeOff(false)
+                                runManualFinderAndCollapse(false, undefined)
+                              }}
+                            >
+                              Find Subs in Preview Mode
                             </Button>
                           </div>
                         </div>
@@ -1993,13 +2250,17 @@ export default function SubFinderPage() {
                         <div
                           className="mt-2 rounded-lg border px-4 py-2.5 text-sm"
                           style={{
-                            backgroundColor: '#dcfce7',
-                            color: '#166534',
-                            borderColor: '#86efac',
+                            backgroundColor: manualTimeOffCoverageUnconfirmed
+                              ? '#fef3c7'
+                              : '#dcfce7',
+                            color: manualTimeOffCoverageUnconfirmed ? '#92400e' : '#166534',
+                            borderColor: manualTimeOffCoverageUnconfirmed ? '#fcd34d' : '#86efac',
                           }}
                           role="status"
                         >
-                          Time off successfully added for these shifts. Finding recommended subs…
+                          {manualTimeOffCoverageUnconfirmed
+                            ? 'Time off created. Refresh the page or click Find Subs to see recommended subs.'
+                            : 'Time off successfully added for these shifts. Finding recommended subs…'}
                         </div>
                       ) : (
                         <p className="text-xs text-muted-foreground mt-2">
@@ -2012,7 +2273,13 @@ export default function SubFinderPage() {
               {manualTeacherId &&
                 (pickDateChoice === 'today' ||
                   pickDateChoice === 'tomorrow' ||
-                  (pickDateChoice === 'custom' && manualStartDate)) && (
+                  (pickDateChoice === 'custom' && manualStartDate)) &&
+                !(
+                  manualConflictCheckReady &&
+                  manualConflictSummary.conflictCount === 0 &&
+                  manualConflictSummary.totalScheduled > 0 &&
+                  manualSelectedShifts.length > 0
+                ) && (
                   <Button
                     size="sm"
                     variant="default"
@@ -2259,7 +2526,16 @@ export default function SubFinderPage() {
                 <div className="flex items-center justify-between border-b px-4 py-3">
                   <div className="space-y-1">
                     <div className="text-lg font-semibold text-slate-900">
-                      Subs for {selectedAbsence.teacher_name}
+                      Subs for{' '}
+                      {selectedAbsence.teacher_id ? (
+                        <StaffLink
+                          staffId={selectedAbsence.teacher_id}
+                          name={selectedAbsence.teacher_name}
+                          className="font-semibold"
+                        />
+                      ) : (
+                        selectedAbsence.teacher_name
+                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
                       <span>
@@ -2479,7 +2755,15 @@ export default function SubFinderPage() {
                       <h2 className="text-xl font-semibold flex flex-wrap items-center gap-2">
                         <span>Sub Finder</span>
                         <span className="text-muted-foreground">→</span>
-                        <span>{selectedAbsence.teacher_name}</span>
+                        {selectedAbsence.teacher_id ? (
+                          <StaffLink
+                            staffId={selectedAbsence.teacher_id}
+                            name={selectedAbsence.teacher_name}
+                            className="font-semibold"
+                          />
+                        ) : (
+                          <span>{selectedAbsence.teacher_name}</span>
+                        )}
                         <span className="text-muted-foreground">→</span>
                         <span>
                           {formatAbsenceDateRange(
@@ -2863,7 +3147,16 @@ export default function SubFinderPage() {
                       ) : (
                         <div className="flex flex-col gap-1">
                           <div className="text-lg font-semibold text-slate-900">
-                            Subs for {selectedAbsence.teacher_name}
+                            Subs for{' '}
+                            {selectedAbsence.teacher_id ? (
+                              <StaffLink
+                                staffId={selectedAbsence.teacher_id}
+                                name={selectedAbsence.teacher_name}
+                                className="font-semibold"
+                              />
+                            ) : (
+                              selectedAbsence.teacher_name
+                            )}
                           </div>
                           <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
                             <span>

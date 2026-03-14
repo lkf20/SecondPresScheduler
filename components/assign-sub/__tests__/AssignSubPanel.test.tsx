@@ -1,8 +1,19 @@
 import React from 'react'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import AssignSubPanel from '@/components/assign-sub/AssignSubPanel'
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
+
+function renderWithQueryClient(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  })
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+}
 
 const mockRefresh = jest.fn()
 const mockPush = jest.fn()
@@ -21,6 +32,10 @@ jest.mock('sonner', () => ({
     success: (...args: unknown[]) => mockToastSuccess(...args),
     error: (...args: unknown[]) => mockToastError(...args),
   },
+}))
+
+jest.mock('@/lib/contexts/SchoolContext', () => ({
+  useSchool: () => 'school-1',
 }))
 
 jest.mock('@/lib/hooks/use-display-name-format', () => ({
@@ -259,7 +274,7 @@ describe('AssignSubPanel', () => {
 
   it('Single date with no time off: shifts populate (no "No scheduled shifts found")', async () => {
     const user = userEvent.setup()
-    render(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
 
     await fillForm(user)
 
@@ -275,7 +290,7 @@ describe('AssignSubPanel', () => {
 
   it('Shifts without time off show time-off-will-be-created message, never extra coverage', async () => {
     const user = userEvent.setup()
-    render(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
 
     await fillForm(user)
 
@@ -294,7 +309,7 @@ describe('AssignSubPanel', () => {
   it('Scenario 1 & 2: User selects dates with no time off. Shifts populate. User can create time off but cannot create extra coverage.', async () => {
     const user = userEvent.setup()
     const onClose = jest.fn()
-    render(<AssignSubPanel isOpen={true} onClose={onClose} />)
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={onClose} />)
 
     await fillForm(user)
 
@@ -309,10 +324,10 @@ describe('AssignSubPanel', () => {
     const checkboxes = screen.getAllByRole('checkbox')
     await user.click(checkboxes[0]) // This is crs-1
 
-    // Should see time-off reason and notes, confirming they can create it
+    // Should see time-off reason and notes, confirming they can create it (wait for state update)
     expect(await screen.findByText(/Create Time Off Request/i)).toBeInTheDocument()
     expect(
-      screen.getByText(/1 of 1 selected shifts does not have a time off request/i)
+      await screen.findByText(/1 of 1 selected shifts does not have a time off request/i)
     ).toBeInTheDocument()
 
     // The button explicitly forces Time Off creation, preventing "extra coverage"
@@ -346,7 +361,7 @@ describe('AssignSubPanel', () => {
 
   it('Scenario 3: User selects a shift where the sub is already assigned elsewhere. User should NOT be able to assign that shift.', async () => {
     const user = userEvent.setup()
-    render(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
 
     await fillForm(user)
 
@@ -367,7 +382,7 @@ describe('AssignSubPanel', () => {
 
   it('Scenario 4: User selects shift where the sub is marked as Unavailable. User should be able to assign but there should be a warning.', async () => {
     const user = userEvent.setup()
-    render(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
 
     await fillForm(user)
 
@@ -389,9 +404,11 @@ describe('AssignSubPanel', () => {
     await user.click(checkboxes[0])
     expect(checkboxes[0]).toBeChecked()
 
-    // Warning should be present in the summary section
+    // Warning should be present in the summary section (wait for state update)
     expect(
-      screen.getByText(/1 selected shift overrides the sub's availability or existing assignment/i)
+      await screen.findByText(
+        /1 selected shift overrides the sub's availability or existing assignment/i
+      )
     ).toBeInTheDocument()
   })
 
@@ -419,7 +436,7 @@ describe('AssignSubPanel', () => {
       return defaultFetch(url, options)
     }) as typeof fetch
     const user = userEvent.setup()
-    render(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
     await fillForm(user)
     await waitFor(() => {
       expect(screen.getByText(/Can change diapers/i)).toBeInTheDocument()
@@ -444,7 +461,7 @@ describe('AssignSubPanel', () => {
       return defaultFetch(url, options)
     }) as typeof fetch
     const user = userEvent.setup()
-    render(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
     await fillForm(user)
     await waitFor(() => {
       expect(screen.getByText(/CPR certified/i)).toBeInTheDocument()
@@ -525,7 +542,7 @@ describe('AssignSubPanel', () => {
     })
 
     const user = userEvent.setup()
-    render(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
 
     await fillForm(user)
 
@@ -546,5 +563,62 @@ describe('AssignSubPanel', () => {
     // User can select it and assign despite being unqualified
     await user.click(checkboxes[0])
     expect(checkboxes[0]).toBeChecked()
+  })
+
+  it('shows School closed badge and disables checkbox for shifts on closed days', async () => {
+    const defaultFetch = global.fetch as jest.Mock
+    global.fetch = jest.fn((url: string | URL | globalThis.Request, options?: RequestInit) => {
+      const urlStr = url.toString()
+      if (urlStr.includes('/api/assign-sub/shifts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              shifts: [
+                {
+                  id: '2026-03-10|dow-2|slot-1',
+                  date: '2026-03-10',
+                  day_of_week_id: 'dow-2',
+                  time_slot_id: 'slot-1',
+                  time_slot_code: 'AM',
+                  classroom_id: 'class-1',
+                  has_time_off: false,
+                  time_off_request_id: null,
+                  school_closure: true,
+                },
+                {
+                  id: '2026-03-10|dow-2|slot-2',
+                  date: '2026-03-10',
+                  day_of_week_id: 'dow-2',
+                  time_slot_id: 'slot-2',
+                  time_slot_code: 'PM',
+                  classroom_id: 'class-1',
+                  has_time_off: false,
+                  time_off_request_id: null,
+                  school_closure: false,
+                },
+              ],
+            }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/check-conflicts')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) }) as Promise<Response>
+      }
+      return defaultFetch(url, options)
+    }) as any
+
+    const user = userEvent.setup()
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    await fillForm(user)
+
+    await waitFor(() => {
+      expect(screen.getByText(/School closed/i)).toBeInTheDocument()
+    })
+    expect(screen.getByText(/Tue Mar 10 • AM/i)).toBeInTheDocument()
+    expect(screen.getByText(/Tue Mar 10 • PM/i)).toBeInTheDocument()
+
+    const checkboxes = screen.getAllByRole('checkbox')
+    expect(checkboxes[0]).toBeDisabled()
+    expect(checkboxes[1]).not.toBeDisabled()
   })
 })

@@ -1,5 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import SortableClassroomsTable from '@/components/settings/SortableClassroomsTable'
+
+const queryClient = new QueryClient()
+function wrapper({ children }: { children: React.ReactNode }) {
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+}
 
 let dragEvent: { active: { id: string }; over: { id: string } | null } | null = null
 let mockIsDragging = false
@@ -73,6 +79,10 @@ jest.mock('@dnd-kit/utilities', () => ({
   },
 }))
 
+jest.mock('@/lib/contexts/SchoolContext', () => ({
+  useSchool: () => 'school-1',
+}))
+
 jest.mock('@/components/ui/switch', () => ({
   Switch: ({
     id,
@@ -136,7 +146,7 @@ describe('SortableClassroomsTable', () => {
   })
 
   it('filters by search, toggles inactive rows, and shows fallback content', async () => {
-    render(<SortableClassroomsTable classrooms={classrooms} />)
+    render(<SortableClassroomsTable classrooms={classrooms} />, { wrapper })
 
     expect(screen.getByText('Infant Room')).toBeInTheDocument()
     expect(screen.queryByText('Toddler Room')).not.toBeInTheDocument()
@@ -155,7 +165,7 @@ describe('SortableClassroomsTable', () => {
 
   it('persists classroom order changes after drag end', async () => {
     dragEvent = { active: { id: 'class-1' }, over: { id: 'class-2' } }
-    render(<SortableClassroomsTable classrooms={classrooms} />)
+    render(<SortableClassroomsTable classrooms={classrooms} />, { wrapper })
 
     fireEvent.click(screen.getByRole('button', { name: /trigger drag end/i }))
 
@@ -179,7 +189,7 @@ describe('SortableClassroomsTable', () => {
       throw new Error('save failed')
     }) as jest.Mock
 
-    render(<SortableClassroomsTable classrooms={classrooms} />)
+    render(<SortableClassroomsTable classrooms={classrooms} />, { wrapper })
     fireEvent.click(screen.getByRole('button', { name: /trigger drag end/i }))
 
     await waitFor(() => {
@@ -191,7 +201,7 @@ describe('SortableClassroomsTable', () => {
 
   it('does nothing when drag ends without an over target', async () => {
     dragEvent = { active: { id: 'class-1' }, over: null }
-    render(<SortableClassroomsTable classrooms={classrooms} />)
+    render(<SortableClassroomsTable classrooms={classrooms} />, { wrapper })
 
     fireEvent.click(screen.getByRole('button', { name: /trigger drag end/i }))
 
@@ -224,7 +234,7 @@ describe('SortableClassroomsTable', () => {
       },
     ]
 
-    render(<SortableClassroomsTable classrooms={ordered} />)
+    render(<SortableClassroomsTable classrooms={ordered} />, { wrapper })
     fireEvent.click(screen.getByRole('button', { name: /trigger drag end/i }))
 
     await waitFor(() => {
@@ -234,7 +244,7 @@ describe('SortableClassroomsTable', () => {
 
   it('applies dragging row styles when a classroom is dragging', () => {
     mockIsDragging = true
-    render(<SortableClassroomsTable classrooms={classrooms} />)
+    render(<SortableClassroomsTable classrooms={classrooms} />, { wrapper })
 
     const row = screen.getByText('Infant Room').closest('tr')
     expect(row).toHaveClass('bg-muted')

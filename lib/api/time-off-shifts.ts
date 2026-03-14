@@ -15,6 +15,8 @@ export type TimeOffShiftWithDetails = TimeOffShift & {
 type TeacherScheduleEntry = {
   day_of_week_id: string
   time_slot_id: string
+  classroom_id: string | null
+  classroom_name: string | null
   days_of_week: { name: string | null; day_number: number | null } | null
   time_slots: { code: string | null; name: string | null } | null
 }
@@ -22,6 +24,8 @@ type TeacherScheduleEntry = {
 type TeacherScheduleRow = {
   day_of_week_id: string | null
   time_slot_id: string | null
+  classroom_id?: string | null
+  classroom?: { name?: string | null } | Array<{ name?: string | null }> | null
   days_of_week:
     | { name?: string | null; day_number?: number | null }
     | Array<{ name?: string | null; day_number?: number | null }>
@@ -54,6 +58,25 @@ type TimeOffShiftWithRequest = {
   time_off_requests: TimeOffRequestSummary | null
 }
 
+/** Sort key: use database display_order so shifts match settings order (AGENTS.md). */
+function sortShiftsByDisplayOrder<
+  T extends {
+    date: string
+    time_slot?: { display_order?: number | null } | null
+    day_of_week?: { display_order?: number | null } | null
+  },
+>(shifts: T[]): T[] {
+  return [...shifts].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1
+    const dayOrderA = a.day_of_week?.display_order ?? 999
+    const dayOrderB = b.day_of_week?.display_order ?? 999
+    if (dayOrderA !== dayOrderB) return dayOrderA - dayOrderB
+    const slotOrderA = a.time_slot?.display_order ?? 999
+    const slotOrderB = b.time_slot?.display_order ?? 999
+    return slotOrderA - slotOrderB
+  })
+}
+
 export async function getTimeOffShifts(requestId: string): Promise<TimeOffShiftWithDetails[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -61,10 +84,10 @@ export async function getTimeOffShifts(requestId: string): Promise<TimeOffShiftW
     .select('*, time_slot:time_slots(*), day_of_week:days_of_week(*)')
     .eq('time_off_request_id', requestId)
     .order('date', { ascending: true })
-    .order('time_slot_id', { ascending: true })
 
   if (error) throw error
-  return (data || []) as TimeOffShiftWithDetails[]
+  const rows = (data || []) as TimeOffShiftWithDetails[]
+  return sortShiftsByDisplayOrder(rows)
 }
 
 export async function createTimeOffShifts(
@@ -116,6 +139,49 @@ export async function deleteTimeOffShifts(requestId: string) {
   if (error) throw error
 }
 
+export type ValidateShiftsClassroomResult =
+  | { valid: true }
+  | {
+      valid: false
+      missingShifts: Array<{ day_of_week_id: string; time_slot_id: string }>
+    }
+
+/**
+ * Validates that the teacher has a baseline schedule row with a non-null classroom_id
+ * for each (day_of_week_id, time_slot_id) in the given shifts, in the same school.
+ * Used to reject time off creation when we would otherwise create coverage shifts
+ * with "Unknown (needs review)" classroom.
+ */
+export async function validateShiftsHaveClassroom(
+  teacherId: string,
+  schoolId: string,
+  shifts: Array<{ day_of_week_id: string; time_slot_id: string }>
+): Promise<ValidateShiftsClassroomResult> {
+  if (shifts.length === 0) return { valid: true }
+
+  const supabase = await createClient()
+  const { data: scheduleRows, error } = await supabase
+    .from('teacher_schedules')
+    .select('day_of_week_id, time_slot_id')
+    .eq('teacher_id', teacherId)
+    .eq('school_id', schoolId)
+    .not('classroom_id', 'is', null)
+
+  if (error) throw error
+
+  const validKeys = new Set(
+    (scheduleRows || []).map(
+      (row: { day_of_week_id: string; time_slot_id: string }) =>
+        `${row.day_of_week_id}|${row.time_slot_id}`
+    )
+  )
+
+  const missingShifts = shifts.filter(s => !validKeys.has(`${s.day_of_week_id}|${s.time_slot_id}`))
+
+  if (missingShifts.length === 0) return { valid: true }
+  return { valid: false, missingShifts }
+}
+
 export async function getTeacherScheduledShifts(
   teacherId: string,
   startDate: string,
@@ -132,6 +198,8 @@ export async function getTeacherScheduledShifts(
       `
       day_of_week_id, 
       time_slot_id, 
+      classroom_id,
+      classroom:classrooms(name),
       days_of_week(name, day_number), 
       time_slots(code, name)
     `
@@ -212,9 +280,17 @@ export async function getTeacherScheduledShifts(
         }
       }
 
+      let classroomName: string | null = null
+      if (entry.classroom) {
+        const c = Array.isArray(entry.classroom) ? entry.classroom[0] : entry.classroom
+        classroomName = (c?.name as string) ?? null
+      }
+
       return {
         day_of_week_id: entry.day_of_week_id,
         time_slot_id: entry.time_slot_id,
+        classroom_id: entry.classroom_id ?? null,
+        classroom_name: classroomName,
         days_of_week: daysOfWeek,
         time_slots: timeSlots,
       }
@@ -242,6 +318,8 @@ export async function getTeacherScheduledShifts(
     time_slot_id: string
     time_slot_code: string
     time_slot_name: string | null
+    classroom_id: string | null
+    classroom_name: string | null
   }> = []
 
   const expandedDates = expandDateRangeWithTimeZone(startDate, endDate, timeZone)
@@ -259,6 +337,8 @@ export async function getTeacherScheduledShifts(
           time_slot_id: shift.time_slot_id,
           time_slot_code: shift.time_slots?.code || '',
           time_slot_name: shift.time_slots?.name || null,
+          classroom_id: shift.classroom_id ?? null,
+          classroom_name: shift.classroom_name ?? null,
         })
       })
     }

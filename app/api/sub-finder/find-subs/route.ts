@@ -375,8 +375,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 5. Get all time off requests in the date range for conflict checking
+    // 5. Get all time off requests in the date range for conflict checking (scoped to school)
     const conflictingTimeOffRequests = await getTimeOffRequests({
+      school_id: schoolId,
       start_date: startDate,
       end_date: endDate,
     })

@@ -2,6 +2,9 @@
 
 import { useState, useEffect, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
+import { useQueryClient } from '@tanstack/react-query'
+import { useSchool } from '@/lib/contexts/SchoolContext'
+import { invalidateClassroomOrderChange } from '@/lib/utils/invalidation'
 import {
   DndContext,
   closestCenter,
@@ -142,6 +145,8 @@ function SortableRow({ classroom }: { classroom: Classroom }) {
 export default function SortableClassroomsTable({
   classrooms: initialClassrooms,
 }: SortableClassroomsTableProps) {
+  const queryClient = useQueryClient()
+  const schoolId = useSchool()
   const router = useRouter()
   const [classrooms, setClassrooms] = useState(initialClassrooms)
   const [search, setSearch] = useState('')
@@ -212,6 +217,9 @@ export default function SortableClassroomsTable({
               }
             })
           )
+          if (schoolId) {
+            await invalidateClassroomOrderChange(queryClient, schoolId)
+          }
         }
       } catch (error) {
         console.error('Failed to save order:', error)

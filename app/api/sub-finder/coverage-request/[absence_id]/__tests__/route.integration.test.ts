@@ -94,7 +94,7 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
     const json = await response.json()
 
     expect(response.status).toBe(200)
-    expect(json).toEqual({
+    expect(json).toMatchObject({
       coverage_request_id: 'coverage-1',
       shift_map: {
         '2099-02-10|EM|classroom-1': 'crs-1',
@@ -102,6 +102,8 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
       },
       needs_classroom_review: false,
       needs_review_shift_count: 0,
+      omitted_shift_count: 0,
+      omitted_shifts: [],
     })
   })
 
@@ -146,6 +148,8 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
     expect(response.status).toBe(200)
     expect(json.needs_classroom_review).toBe(true)
     expect(json.needs_review_shift_count).toBe(1)
+    expect(json.omitted_shift_count).toBe(0)
+    expect(json.omitted_shifts).toEqual([])
   })
 
   it('creates coverage request when missing and returns generated shift map', async () => {
@@ -191,28 +195,28 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
       eq: jest.fn().mockResolvedValue({ error: null }),
     }
 
-    const teacherSchedulesQuery = {
+    const teacherSchedulesQuery: {
+      select: ReturnType<typeof jest.fn>
+      eq: ReturnType<typeof jest.fn>
+    } = {
       select: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockResolvedValue({
-        data: [
-          {
-            day_of_week_id: 'day-1',
-            time_slot_id: 'slot-1',
-            classroom_id: 'classroom-1',
-            class_group_id: null,
-          },
-        ],
-        error: null,
-      }),
+      eq: jest.fn(),
     }
-
-    const classroomsUnknownQuery = {
-      select: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockReturnThis(),
-      maybeSingle: jest.fn().mockResolvedValue({ data: { id: 'classroom-fallback' }, error: null }),
-      order: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis(),
-    }
+    teacherSchedulesQuery.eq.mockImplementation((key: string) =>
+      key === 'school_id'
+        ? Promise.resolve({
+            data: [
+              {
+                day_of_week_id: 'day-1',
+                time_slot_id: 'slot-1',
+                classroom_id: 'classroom-1',
+                class_group_id: null,
+              },
+            ],
+            error: null,
+          })
+        : teacherSchedulesQuery
+    )
 
     const coverageRequestShiftsInsertQuery = {
       insert: jest.fn().mockResolvedValue({ error: null }),
@@ -237,7 +241,6 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
         if (table === 'coverage_requests') return coverageRequestsInsertQuery
         if (table === 'time_off_requests') return timeOffRequestsQuery
         if (table === 'teacher_schedules') return teacherSchedulesQuery
-        if (table === 'classrooms') return classroomsUnknownQuery
         if (table === 'coverage_request_shifts') return coverageRequestShiftsInsertQuery
         throw new Error(`Unexpected table: ${table}`)
       }),
@@ -258,6 +261,8 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
     })
     expect(json.needs_classroom_review).toBe(false)
     expect(json.needs_review_shift_count).toBe(0)
+    expect(json.omitted_shift_count).toBe(0)
+    expect(json.omitted_shifts).toEqual([])
   })
 
   it('returns 500 when creating a new coverage request fails', async () => {
@@ -311,7 +316,7 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
     expect(json.error).toMatch(/failed to create coverage request/i)
   })
 
-  it('returns 500 when no classroom is available for generated coverage shifts', async () => {
+  it('omits shifts when teacher has no scheduled classroom and returns omitted count', async () => {
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
       id: 'absence-1',
@@ -357,27 +362,32 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
       eq: jest.fn().mockResolvedValue({ error: null }),
     }
 
-    const teacherSchedulesQuery = {
+    const teacherSchedulesNoClassroomQuery: {
+      select: ReturnType<typeof jest.fn>
+      eq: ReturnType<typeof jest.fn>
+    } = {
       select: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockResolvedValue({
-        data: [
-          {
-            day_of_week_id: 'day-1',
-            time_slot_id: 'slot-1',
-            classroom_id: null,
-            class_group_id: null,
-          },
-        ],
-        error: null,
-      }),
+      eq: jest.fn(),
     }
+    teacherSchedulesNoClassroomQuery.eq.mockImplementation((key: string) =>
+      key === 'school_id'
+        ? Promise.resolve({
+            data: [
+              {
+                day_of_week_id: 'day-1',
+                time_slot_id: 'slot-1',
+                classroom_id: null,
+                class_group_id: null,
+              },
+            ],
+            error: null,
+          })
+        : teacherSchedulesNoClassroomQuery
+    )
 
-    const classroomsQuery = {
+    const coverageRequestShiftsSelectQuery = {
       select: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockReturnThis(),
-      maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
-      order: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({ data: [], error: null }),
     }
 
     ;(createClient as jest.Mock).mockResolvedValue({
@@ -386,8 +396,8 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
         if (table === 'profiles') return profilesQuery
         if (table === 'coverage_requests') return coverageRequestsQuery
         if (table === 'time_off_requests') return timeOffRequestsQuery
-        if (table === 'teacher_schedules') return teacherSchedulesQuery
-        if (table === 'classrooms') return classroomsQuery
+        if (table === 'teacher_schedules') return teacherSchedulesNoClassroomQuery
+        if (table === 'coverage_request_shifts') return coverageRequestShiftsSelectQuery
         throw new Error(`Unexpected table: ${table}`)
       }),
     })
@@ -400,7 +410,176 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
     })
     const json = await response.json()
 
-    expect(response.status).toBe(500)
-    expect(json.error).toMatch(/no classroom available/i)
+    expect(response.status).toBe(200)
+    expect(json.coverage_request_id).toBe('coverage-new')
+    expect(json.omitted_shift_count).toBe(1)
+    expect(json.omitted_shifts).toEqual([
+      { date: '2099-02-10', day_of_week_id: 'day-1', time_slot_id: 'slot-1' },
+    ])
+  })
+
+  it('omits only shifts without classroom when some have classroom', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
+      id: 'absence-1',
+      teacher_id: 'teacher-1',
+      start_date: '2099-02-10',
+      end_date: '2099-02-10',
+      coverage_request_id: null,
+    })
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValue([
+      { id: 'shift-1', date: '2099-02-10', day_of_week_id: 'day-1', time_slot_id: 'slot-1' },
+      { id: 'shift-2', date: '2099-02-10', day_of_week_id: 'day-1', time_slot_id: 'slot-2' },
+    ])
+
+    const subAssignmentsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({ data: [], error: null }),
+    }
+    const profilesQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({ data: { school_id: 'school-1' }, error: null }),
+    }
+    const coverageRequestsQuery = {
+      insert: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      single: jest
+        .fn()
+        .mockResolvedValueOnce({ data: { id: 'coverage-new' }, error: null })
+        .mockResolvedValueOnce({ data: { school_id: 'school-1' }, error: null }),
+      eq: jest.fn().mockReturnThis(),
+    }
+    const timeOffRequestsQuery = {
+      update: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({ error: null }),
+    }
+    const teacherSchedulesPartialQuery: {
+      select: ReturnType<typeof jest.fn>
+      eq: ReturnType<typeof jest.fn>
+    } = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn(),
+    }
+    teacherSchedulesPartialQuery.eq.mockImplementation((key: string) =>
+      key === 'school_id'
+        ? Promise.resolve({
+            data: [
+              {
+                day_of_week_id: 'day-1',
+                time_slot_id: 'slot-1',
+                classroom_id: 'classroom-1',
+                class_group_id: null,
+              },
+            ],
+            error: null,
+          })
+        : teacherSchedulesPartialQuery
+    )
+    const coverageRequestShiftsInsertQuery = {
+      insert: jest.fn().mockResolvedValue({ error: null }),
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'crs-1',
+            date: '2099-02-10',
+            classroom_id: 'classroom-1',
+            time_slot: { code: 'EM' },
+          },
+        ],
+        error: null,
+      }),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'sub_assignments') return subAssignmentsQuery
+        if (table === 'profiles') return profilesQuery
+        if (table === 'coverage_requests') return coverageRequestsQuery
+        if (table === 'time_off_requests') return timeOffRequestsQuery
+        if (table === 'teacher_schedules') return teacherSchedulesPartialQuery
+        if (table === 'coverage_request_shifts') return coverageRequestShiftsInsertQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = {
+      nextUrl: new URL('http://localhost:3000/api/sub-finder/coverage-request/absence-1'),
+    }
+    const response = await GET(request as any, {
+      params: Promise.resolve({ absence_id: 'absence-1' }),
+    })
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.coverage_request_id).toBe('coverage-new')
+    expect(json.omitted_shift_count).toBe(1)
+    expect(json.omitted_shifts).toHaveLength(1)
+    expect(json.omitted_shifts[0]).toMatchObject({
+      day_of_week_id: 'day-1',
+      time_slot_id: 'slot-2',
+    })
+    expect(json.shift_map).toMatchObject({
+      '2099-02-10|EM|classroom-1': 'crs-1',
+    })
+  })
+
+  it('returns correct omitted_shift_count and omitted_shifts when coverage request already exists and had shifts omitted', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
+      id: 'absence-1',
+      teacher_id: 'teacher-1',
+      start_date: '2099-02-10',
+      end_date: '2099-02-10',
+      coverage_request_id: 'coverage-1',
+    })
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValue([
+      { id: 'tos-1', date: '2099-02-10', day_of_week_id: 'day-1', time_slot_id: 'slot-1' },
+      { id: 'tos-2', date: '2099-02-10', day_of_week_id: 'day-1', time_slot_id: 'slot-2' },
+    ])
+
+    const coverageRequestShiftsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'crs-1',
+            date: '2099-02-10',
+            time_slot_id: 'slot-1',
+            classroom_id: 'classroom-1',
+            time_slot: { code: 'EM' },
+          },
+        ],
+        error: null,
+      }),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'coverage_request_shifts') return coverageRequestShiftsQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = {
+      nextUrl: new URL('http://localhost:3000/api/sub-finder/coverage-request/absence-1'),
+    }
+    const response = await GET(request as any, {
+      params: Promise.resolve({ absence_id: 'absence-1' }),
+    })
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.coverage_request_id).toBe('coverage-1')
+    expect(json.omitted_shift_count).toBe(1)
+    expect(json.omitted_shifts).toHaveLength(1)
+    expect(json.omitted_shifts[0]).toMatchObject({
+      date: '2099-02-10',
+      day_of_week_id: 'day-1',
+      time_slot_id: 'slot-2',
+    })
   })
 })

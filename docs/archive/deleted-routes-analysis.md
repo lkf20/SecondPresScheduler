@@ -55,7 +55,7 @@ The following routes were deleted in the commit that renamed the Supabase enviro
 **References:**
 
 - `lib/hooks/use-time-off-requests.ts` - Line 47 (GET request)
-- `UNIFIED_API_TESTING.md` - Documentation references this endpoint
+- [docs/guides/unified-time-off-api-testing.md](../guides/unified-time-off-api-testing.md) - Documentation references this endpoint
 - `TODO_TRACKER.md` - Mentions this endpoint
 
 **Impact:**

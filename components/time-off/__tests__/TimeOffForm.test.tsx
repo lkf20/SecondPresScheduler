@@ -49,7 +49,11 @@ jest.mock('@/components/time-off/ShiftSelectionTable', () => {
     onShiftsChange?: (
       shifts: Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
     ) => void
-    onConflictSummaryChange?: (summary: { conflictCount: number; totalScheduled: number }) => void
+    onConflictSummaryChange?: (summary: {
+      conflictCount: number
+      totalScheduled: number
+      totalAssignable: number
+    }) => void
     onConflictRequestsChange?: (
       requests: Array<{
         id: string
@@ -72,7 +76,9 @@ jest.mock('@/components/time-off/ShiftSelectionTable', () => {
       </button>
       <button
         type="button"
-        onClick={() => onConflictSummaryChange?.({ conflictCount: 1, totalScheduled: 1 })}
+        onClick={() =>
+          onConflictSummaryChange?.({ conflictCount: 1, totalScheduled: 1, totalAssignable: 1 })
+        }
       >
         Mock Conflict Summary
       </button>

@@ -20,6 +20,8 @@ interface ScheduledShift {
   time_slot_id: string
   time_slot_code: string
   time_slot_name: string | null
+  /** True when this shift falls on a school-closed day/slot; show for context but not assignable */
+  school_closure?: boolean
 }
 
 export interface SelectedShift {
@@ -47,7 +49,11 @@ interface ShiftSelectionTableProps {
   endDate: string | null // End date can be null/optional
   selectedShifts: SelectedShift[]
   onShiftsChange: (shifts: SelectedShift[]) => void
-  onConflictSummaryChange?: (summary: { conflictCount: number; totalScheduled: number }) => void
+  onConflictSummaryChange?: (summary: {
+    conflictCount: number
+    totalScheduled: number
+    totalAssignable: number
+  }) => void
   onConflictRequestsChange?: (
     requests: Array<{
       id: string
@@ -272,10 +278,13 @@ export default function ShiftSelectionTable({
     normalizeDate,
   ])
 
-  // Auto-select all scheduled shifts for read-only or "select all" modes (including recorded).
+  // Auto-select all scheduled shifts for read-only or "select all" modes (excluding school-closed).
   useEffect(() => {
     if ((disabled || autoSelectScheduled) && scheduledShifts.length > 0) {
-      const allShifts = scheduledShifts.map((shift: ScheduledShift) => ({
+      const assignableShifts = scheduledShifts.filter(
+        (shift: ScheduledShift) => !shift.school_closure
+      )
+      const allShifts = assignableShifts.map((shift: ScheduledShift) => ({
         date: normalizeDate(shift.date),
         day_of_week_id: shift.day_of_week_id,
         time_slot_id: shift.time_slot_id,
@@ -290,6 +299,10 @@ export default function ShiftSelectionTable({
     conflictShiftKeys.has(buildShiftKey(shift.date, shift.time_slot_id))
   ).length
 
+  const totalAssignable = scheduledShifts.filter(
+    (shift: ScheduledShift) => !shift.school_closure
+  ).length
+
   const conflictCheckReady = !loading && (!validateConflicts || !existingTimeOffLoading)
 
   useEffect(() => {
@@ -298,9 +311,13 @@ export default function ShiftSelectionTable({
 
   useEffect(() => {
     if (onConflictSummaryChange) {
-      onConflictSummaryChange({ conflictCount, totalScheduled: scheduledShifts.length })
+      onConflictSummaryChange({
+        conflictCount,
+        totalScheduled: scheduledShifts.length,
+        totalAssignable,
+      })
     }
-  }, [conflictCount, scheduledShifts.length, onConflictSummaryChange])
+  }, [conflictCount, scheduledShifts.length, totalAssignable, onConflictSummaryChange])
 
   useEffect(() => {
     if (onConflictRequestsChange) {
@@ -404,6 +421,8 @@ export default function ShiftSelectionTable({
 
   const handleShiftToggle = (date: string, dayOfWeekId: string, timeSlotId: string) => {
     if (disabled) return
+    const shift = scheduledShifts.find(s => s.date === date && s.time_slot_id === timeSlotId)
+    if (shift?.school_closure) return
 
     const isSelected = isShiftSelected(date, timeSlotId)
     let newShifts: SelectedShift[]
@@ -552,6 +571,7 @@ export default function ShiftSelectionTable({
                     const isSelected = isShiftSelected(dayGroup.date, slot.id)
                     const shift = dayGroup.shifts.find(s => s.time_slot_id === slot.id)
                     const dayOfWeekId = shift?.day_of_week_id || ''
+                    const isSchoolClosed = !!shift?.school_closure
 
                     return (
                       <TableCell
@@ -562,7 +582,7 @@ export default function ShiftSelectionTable({
                           <div
                             className={cn(
                               'relative h-full w-full min-h-[36px]',
-                              isRecorded && 'min-h-[40px]'
+                              (isRecorded || isSchoolClosed) && 'min-h-[40px]'
                             )}
                           >
                             <Checkbox
@@ -570,22 +590,25 @@ export default function ShiftSelectionTable({
                               onCheckedChange={() =>
                                 handleShiftToggle(dayGroup.date, dayOfWeekId, slot.id)
                               }
-                              disabled={disabled}
+                              disabled={disabled || isSchoolClosed}
                               tabIndex={-1}
                               className={cn(
                                 'absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
                                 isRecorded &&
+                                  !isSchoolClosed &&
                                   'border-yellow-600 data-[state=checked]:bg-yellow-600 data-[state=checked]:text-white'
                               )}
                             />
                             <span
-                              title="Already recorded"
+                              title={isSchoolClosed ? 'School closed' : 'Already recorded'}
                               className={cn(
-                                'absolute left-1/2 top-[calc(50%+10px)] -translate-x-1/2 text-[10px] text-yellow-600 italic leading-tight text-center whitespace-nowrap',
-                                !isRecorded && 'opacity-0'
+                                'absolute left-1/2 top-[calc(50%+10px)] -translate-x-1/2 text-[10px] italic leading-tight text-center whitespace-nowrap',
+                                isSchoolClosed && 'text-slate-500',
+                                isRecorded && !isSchoolClosed && 'text-yellow-600',
+                                !isRecorded && !isSchoolClosed && 'opacity-0'
                               )}
                             >
-                              Recorded
+                              {isSchoolClosed ? 'School closed' : 'Recorded'}
                             </span>
                           </div>
                         ) : (

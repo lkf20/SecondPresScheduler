@@ -7,6 +7,7 @@ import {
   invalidateDashboard,
   invalidateSubFinderAbsences,
 } from '@/lib/utils/invalidation'
+import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
 import { toast } from 'sonner'
 
 type CreateTimeOffRequestData = {
@@ -59,7 +60,7 @@ export function useCreateTimeOffRequest() {
       return response.json()
     },
     onSuccess: async (data, variables) => {
-      // Invalidate relevant queries
+      clearDataHealthCache()
       await Promise.all([
         invalidateTimeOffRequest(queryClient, schoolId, data?.coverage_request_id),
         invalidateDashboard(queryClient, schoolId),
@@ -97,7 +98,7 @@ export function useUpdateTimeOffRequest() {
       return response.json()
     },
     onSuccess: async data => {
-      // Invalidate relevant queries
+      clearDataHealthCache()
       await Promise.all([
         invalidateTimeOffRequest(queryClient, schoolId, data?.coverage_request_id),
         invalidateDashboard(queryClient, schoolId),
@@ -142,7 +143,7 @@ export function useCancelTimeOffRequest() {
       return response.json()
     },
     onSuccess: async data => {
-      // Invalidate relevant queries
+      clearDataHealthCache()
       await Promise.all([
         invalidateTimeOffRequest(queryClient, schoolId, data?.coverage_request_id),
         invalidateDashboard(queryClient, schoolId),

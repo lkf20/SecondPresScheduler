@@ -22,7 +22,7 @@ Use these terms consistently in the app and in documentation.
 | **Preferred vs Required (ratios)**            | Required = minimum staffing needed; Preferred = target staffing. Prefer to meet preferred when possible.                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **Per-class enrollment / Staffing overrides** | Baseline cells can store enrollment per class group (e.g. Toddler A: 3, Toddler B: 2); when set, ratio uses that total. Cells can override required/preferred staff (e.g. nap, combined groups) instead of ratio-based calculation.                                                                                                                                                                                                                                                                                            |
 | **Subs**                                      | Have the `is_sub = true` flag. Temporary coverage for an absence. Can also be Baseline Permanent or Baseline Flex staff or neither.                                                                                                                                                                                                                                                                                                                                                                                            |
-| **Temporary Coverage**                        | Moving a person from one room to another without a fake absence. Handled via staffing events. A teacher doing temporary coverage can still get sick and need a sub. Two coverage types: **Extra Coverage** (general) and **Break Coverage** (e.g. lunch). Break coverage can optionally record which teacher is taking the break and break start/end time; “Unspecified” is used when coverage is for the period (e.g. various teachers’ breaks). Shown in grid and daily print with a distinct label and optional time range. |
+| **Temporary Coverage**                        | Moving a person from one room to another without a fake absence. Handled via staffing events. A teacher doing temporary coverage can still get sick and need a sub. Two coverage types: **Extra Coverage** (general) and **Break Coverage** (e.g. lunch). Break coverage can optionally record which teacher is taking the break and break start/end time; "Unspecified" is used when coverage is for the period (e.g. various teachers' breaks). Shown in grid and daily print with a distinct label and optional time range. |
 | **Time off**                                  | An absence request that creates coverage gaps, filled via Sub Finder or temporary coverage.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ---
@@ -94,7 +94,7 @@ It solves:
 
 5. **A single source of truth** rather than multiple printed documents.
 
-6. **A track record of what has been changed and by whom** so that changes are visible and fixable. The technical contract for audit logging is [AUDIT_LOG_CONTRACT.md](contracts/AUDIT_LOG_CONTRACT.md).
+6. **A track record of what has been changed and by whom** so that changes are visible and fixable. The technical contract for audit logging is [AUDIT_LOG_CONTRACT.md](../contracts/AUDIT_LOG_CONTRACT.md).
 
 7. **Source for printing schedules and availability** that can be posted across the school.
 
@@ -210,7 +210,7 @@ Admin reviews what changed and by whom.
 - Preserve trust.
 - Facilitate undoing a mistake.
 
-The audit log is implemented to satisfy [AUDIT_LOG_CONTRACT.md](contracts/AUDIT_LOG_CONTRACT.md).
+The audit log is implemented to satisfy [AUDIT_LOG_CONTRACT.md](../contracts/AUDIT_LOG_CONTRACT.md).
 
 ---
 

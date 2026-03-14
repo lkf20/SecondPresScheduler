@@ -80,7 +80,7 @@ This document tracks the standardization of UI colors across the application. We
 - **Adequate**: Green (on target)
 - **Above Target**: Teal
 
-See [docs/COLOR_CONSISTENCY_REVIEW.md](COLOR_CONSISTENCY_REVIEW.md) for the full palette and guidelines.
+See [color-consistency-review.md](color-consistency-review.md) for the full palette and guidelines.
 
 ## Usage Guidelines
 
@@ -122,7 +122,7 @@ const className = getStatusColorClasses('partially_covered')
 
 ```typescript
 const buttonClasses = getButtonColors('teal').base
-// Returns: 'border-teal-700 text-teal-700 hover:bg-teal-700 hover:text-white hover:border-teal-700'
+// Returns: 'border-teal-700 text-teal-700 hover:bg-teal-700 hover:text-white'
 ```
 
 ### Using Neutral Colors

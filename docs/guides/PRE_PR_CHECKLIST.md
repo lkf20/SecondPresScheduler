@@ -14,6 +14,8 @@ From the project root (`scheduler-app/`), run in order:
 
 Fix any failures before opening the PR.
 
+- [ ] **Remove debug code:** No unnecessary `console.log`, `console.warn`, or temporary debugging code left behind (see AGENTS.md).
+
 ## 2. Update from main
 
 - [ ] `git fetch origin main`

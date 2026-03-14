@@ -72,6 +72,36 @@ describe('POST /api/sub-finder/shift-overrides integration', () => {
     expect(json.shift_overrides).toHaveLength(2)
   })
 
+  it('returns is_floater_shift_ids when multiple shifts share same date and slot (floater)', async () => {
+    mockEq.mockResolvedValueOnce({
+      data: [
+        { id: 'shift-a', date: '2026-02-10', time_slot_id: 'slot-1', time_slots: { code: 'EM' } },
+        { id: 'shift-b', date: '2026-02-10', time_slot_id: 'slot-1', time_slots: { code: 'EM' } },
+      ],
+      error: null,
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/shift-overrides',
+      'POST',
+      {
+        coverage_request_id: 'coverage-1',
+        selected_shift_keys: ['2026-02-10|EM'],
+        override_shift_keys: [],
+        available_shift_keys: ['2026-02-10|EM'],
+        unavailable_shift_keys: [],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.selected_shift_ids).toEqual(expect.arrayContaining(['shift-a', 'shift-b']))
+    expect(json.is_floater_shift_ids).toEqual(expect.arrayContaining(['shift-a', 'shift-b']))
+    expect(json.is_floater_shift_ids).toHaveLength(2)
+  })
+
   it('returns 500 when shift lookup fails', async () => {
     mockEq.mockResolvedValueOnce({
       data: null,

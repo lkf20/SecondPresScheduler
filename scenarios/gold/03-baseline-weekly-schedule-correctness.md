@@ -19,5 +19,5 @@ The weekly schedule view must reflect the **baseline** (Baseline Permanent + Bas
 
 ## References
 
-- [APP_PURPOSE_AND_CONTEXT.md](../../docs/APP_PURPOSE_AND_CONTEXT.md) — Core Product Principles (baseline foundational), Key User Flows (Weekly Operational Review, Baseline Staffing Setup)
+- [app-purpose-and-context.md](../../docs/domain/app-purpose-and-context.md) — Core Product Principles (baseline foundational), Key User Flows (Weekly Operational Review, Baseline Staffing Setup)
 - Existing smoke: `tests/e2e/weekly-schedule-panel.smoke.spec.js`

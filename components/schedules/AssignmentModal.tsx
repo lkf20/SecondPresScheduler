@@ -16,7 +16,6 @@ import { Database } from '@/types/database'
 
 type ClassGroupRow = Database['public']['Tables']['class_groups']['Row']
 type ClassroomRow = Database['public']['Tables']['classrooms']['Row']
-type EnrollmentRow = Database['public']['Tables']['enrollments']['Row']
 
 interface AssignmentModalProps {
   dayName: string
@@ -44,27 +43,23 @@ export default function AssignmentModal({
 }: AssignmentModalProps) {
   const [classes, setClasses] = useState<ClassGroupRow[]>([])
   const [classrooms, setClassrooms] = useState<ClassroomRow[]>([])
-  const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([])
   const [classGroups, setClassGroups] = useState<Map<string, ClassGroup>>(new Map())
   const [loading, setLoading] = useState(true)
 
-  // Fetch all classes, classrooms, and enrollments
+  // Fetch classes and classrooms
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [classesRes, classroomsRes, enrollmentsRes] = await Promise.all([
+        const [classesRes, classroomsRes] = await Promise.all([
           fetch('/api/class-groups'),
           fetch('/api/classrooms'),
-          fetch('/api/enrollments'),
         ])
 
         const classesData = await classesRes.json()
         const classroomsData = await classroomsRes.json()
-        const enrollmentsData = await enrollmentsRes.json().catch(() => [])
 
         setClasses(classesData as ClassGroupRow[])
         setClassrooms(classroomsData as ClassroomRow[])
-        setEnrollments(enrollmentsData as EnrollmentRow[])
       } catch (error) {
         console.error('Error fetching data:', error)
       } finally {
@@ -136,7 +131,7 @@ export default function AssignmentModal({
     })
 
     setClassGroups(groups)
-  }, [data, classes, classrooms, enrollments, loading])
+  }, [data, classes, classrooms, loading])
 
   return (
     <Dialog open={true} onOpenChange={onClose}>

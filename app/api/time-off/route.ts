@@ -10,6 +10,7 @@ import {
   createTimeOffShifts,
   getTeacherScheduledShifts,
   getTeacherTimeOffShifts,
+  validateShiftsHaveClassroom,
 } from '@/lib/api/time-off-shifts'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { formatDateISOInTimeZone } from '@/lib/utils/date'
@@ -19,6 +20,7 @@ import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 import { createClient } from '@/lib/supabase/server'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
+import { getStaffById } from '@/lib/api/staff'
 
 // Helper function to format date as "Mon Jan 20"
 function formatExcludedDate(dateStr: string, timeZone: string): string {
@@ -50,7 +52,7 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams
-    const filters: any = {}
+    const filters: any = { school_id: schoolId }
     if (searchParams.get('teacher_id')) filters.teacher_id = searchParams.get('teacher_id')
     if (searchParams.get('start_date')) filters.start_date = searchParams.get('start_date')
     if (searchParams.get('end_date')) filters.end_date = searchParams.get('end_date')
@@ -62,7 +64,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// See docs/data-lifecycle.md: time_off_requests lifecycle
+// See docs/domain/data-lifecycle.md: time_off_requests lifecycle
 export async function POST(request: NextRequest) {
   try {
     // Require schoolId from session
@@ -84,11 +86,49 @@ export async function POST(request: NextRequest) {
     const scheduleSettings = await getScheduleSettings(schoolId)
     const timeZone = scheduleSettings?.time_zone || 'UTC'
 
+    // Teacher is required for all time off requests (draft and active).
+    if (!requestData.teacher_id || String(requestData.teacher_id).trim() === '') {
+      return NextResponse.json(
+        {
+          error: 'Teacher is required.',
+          code: 'TEACHER_REQUIRED',
+        },
+        { status: 400 }
+      )
+    }
+
     const normalizeDate = (dateStr: string) => {
       if (!dateStr) return ''
       if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
       const parsed = new Date(dateStr)
       return parsed.toISOString().split('T')[0]
+    }
+
+    // Validate that the teacher exists and is active (same as PUT for consistency).
+    if (requestData.teacher_id) {
+      try {
+        const teacher = await getStaffById(requestData.teacher_id)
+        if (!teacher) {
+          return NextResponse.json(
+            { error: 'Selected teacher not found.', code: 'TEACHER_NOT_FOUND' },
+            { status: 400 }
+          )
+        }
+        if ((teacher as { active?: boolean }).active === false) {
+          return NextResponse.json(
+            {
+              error: 'Selected teacher is inactive. Activate the teacher first or choose another.',
+              code: 'TEACHER_INACTIVE',
+            },
+            { status: 400 }
+          )
+        }
+      } catch {
+        return NextResponse.json(
+          { error: 'Selected teacher not found.', code: 'TEACHER_NOT_FOUND' },
+          { status: 400 }
+        )
+      }
     }
 
     let requestedShifts: Array<{ date: string; time_slot_id: string }> = []
@@ -295,6 +335,51 @@ export async function POST(request: NextRequest) {
           .filter(
             shift => !isSlotClosedOnDate(normalizeDate(shift.date), shift.time_slot_id, closureList)
           )
+      }
+    }
+
+    // Defensive: never create shifts outside the request date range (guards against
+    // timezone/parse edge cases or bugs in upstream shift building).
+    if (requestData.start_date && effectiveEndDate) {
+      shiftsToCreate = shiftsToCreate.filter(s => {
+        const d = normalizeDate(s.date || '')
+        return d >= requestData.start_date && d <= effectiveEndDate
+      })
+    }
+
+    // Draft may have no shifts; non-draft (active) time off must have at least one shift.
+    if (status !== 'draft' && shiftsToCreate.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            'Select at least one shift to save this time off request. Save as draft if you want to add shifts later.',
+          code: 'TIME_OFF_REQUIRES_SHIFTS',
+        },
+        { status: 400 }
+      )
+    }
+
+    // Require every shift to have a teacher_schedule row with classroom (same school).
+    // Prevents creating time off for unscheduled slots and avoids "Unknown (needs review)" classroom.
+    if (shiftsToCreate.length > 0 && requestData.teacher_id) {
+      const validation = await validateShiftsHaveClassroom(
+        requestData.teacher_id,
+        schoolId,
+        shiftsToCreate.map(s => ({
+          day_of_week_id: s.day_of_week_id,
+          time_slot_id: s.time_slot_id,
+        }))
+      )
+      if (!validation.valid) {
+        return NextResponse.json(
+          {
+            error:
+              'This teacher has no scheduled classroom for one or more of the selected shifts. Add them to the baseline schedule (Settings → Baseline Schedule) for those days and time slots, or remove those shifts.',
+            code: 'SHIFTS_MISSING_CLASSROOM',
+            missingShifts: validation.missingShifts,
+          },
+          { status: 400 }
+        )
       }
     }
 

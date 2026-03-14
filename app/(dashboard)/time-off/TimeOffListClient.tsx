@@ -13,11 +13,13 @@ import TimeOffCard, { type ClassroomBadge } from '@/components/shared/TimeOffCar
 import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
 import { useTimeOffRequests } from '@/lib/hooks/use-time-off-requests'
 import { parseLocalDate } from '@/lib/utils/date'
+import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
 
 type CoverageStatus = 'draft' | 'completed' | 'covered' | 'partially_covered' | 'needs_coverage'
 
 type TimeOffRow = {
   id: string
+  teacher_id?: string
   teacher_name: string
   start_date: string
   end_date: string | null
@@ -36,12 +38,12 @@ type TimeOffRow = {
 
 type TimeOffApiItem = {
   id: string
+  teacher_id?: string
   teacher_name: string
   start_date: string
   end_date?: string | null
-  status?: string
+  /** Request lifecycle from API */
   request_status?: 'draft' | 'active' | 'cancelled'
-  coverage_status?: CoverageStatus
   total?: number
   covered?: number
   partial?: number
@@ -90,15 +92,20 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
       const total = item.total || 0
       const shifts_display = `${total} shift${total !== 1 ? 's' : ''}`
 
-      // Map coverage status - API uses 'covered' | 'partially_covered' | 'needs_coverage'
-      // Component expects 'draft' | 'completed' | 'covered' | 'partially_covered' | 'needs_coverage'
-      const coverage_status: CoverageStatus = item.coverage_status ?? 'needs_coverage'
-
-      // The API should include status, but we need to check for draft/completed
-      // For now, assume the API handles this, but we can add logic here if needed
+      // Derive coverage status from counts so we don't rely on API field naming (status vs request_status)
+      const covered = item.covered ?? 0
+      const uncovered = item.uncovered ?? 0
+      const partial = item.partial ?? 0
+      const coverage_status: CoverageStatus =
+        uncovered === 0 && partial === 0
+          ? 'covered'
+          : covered === 0
+            ? 'needs_coverage'
+            : 'partially_covered'
 
       return {
         id: item.id,
+        teacher_id: item.teacher_id,
         teacher_name: item.teacher_name,
         start_date: item.start_date,
         end_date: item.end_date ?? null,
@@ -279,40 +286,17 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
         const errorData = await response.json().catch(() => ({ error: 'Failed to delete draft.' }))
         throw new Error(errorData.error || 'Failed to delete draft.')
       }
-      // React Query will automatically refetch when mutations invalidate the cache
-      // But we can also manually trigger a refetch if needed
+      clearDataHealthCache()
       router.refresh()
     } catch (error) {
       console.error('Failed to delete draft:', error)
     }
   }
   const renderRowCard = (row: TimeOffRow) => {
-    // Use provided coverage counts if available, otherwise calculate from status
-    let covered = row.coverage_covered || 0
-    let uncovered = row.coverage_uncovered ?? row.coverage_total - row.coverage_covered
-    let partial = row.coverage_partial || 0
-
-    // If we have exact counts, use them; otherwise infer from status
-    if (row.coverage_status === 'covered') {
-      covered = row.coverage_total
-      uncovered = 0
-      partial = 0
-    } else if (row.coverage_status === 'needs_coverage') {
-      covered = 0
-      uncovered = row.coverage_total
-      partial = 0
-    } else if (row.coverage_status === 'partially_covered') {
-      // If we have partial count, use it; otherwise estimate
-      if (row.coverage_partial !== undefined) {
-        partial = row.coverage_partial
-        uncovered =
-          row.coverage_uncovered ?? row.coverage_total - row.coverage_covered - row.coverage_partial
-      } else {
-        // Estimate: covered is known, rest is split between uncovered and partial
-        uncovered = row.coverage_total - row.coverage_covered
-        partial = 0
-      }
-    }
+    // Use API coverage counts only (from transformTimeOffCardData); no status-based overwriting
+    const covered = row.coverage_covered ?? 0
+    const uncovered = row.coverage_uncovered ?? 0
+    const partial = row.coverage_partial ?? 0
 
     // Extract total shifts from shifts_display (e.g., "12 shifts" -> 12)
     const totalShiftsMatch = row.shifts_display.match(/(\d+)/)
@@ -328,6 +312,7 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
           <TimeOffCard
             id={row.id}
             teacherName={row.teacher_name}
+            teacherId={row.teacher_id}
             startDate={row.start_date}
             endDate={row.end_date}
             reason={row.reason || null}
@@ -358,6 +343,7 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
         key={row.id}
         id={row.id}
         teacherName={row.teacher_name}
+        teacherId={row.teacher_id}
         startDate={row.start_date}
         endDate={row.end_date}
         reason={row.reason || null}

@@ -17,6 +17,8 @@ export interface Absence {
   start_date: string
   end_date: string | null
   reason: string | null
+  /** True when end_date is in the past (within last 90 days). */
+  is_past?: boolean
   classrooms?: Array<{
     id: string
     name: string
@@ -183,6 +185,7 @@ export function useSubFinderData({
       start_date: apiAbsence.start_date,
       end_date: apiAbsence.end_date,
       reason: apiAbsence.reason,
+      is_past: apiAbsence.is_past ?? false,
       classrooms: apiAbsence.classrooms,
       shifts: {
         total: apiAbsence.shifts?.total || 0,
@@ -208,6 +211,30 @@ export function useSubFinderData({
           assignment_id: detail.assignment_id || null,
           is_partial: detail.status === 'partial' || detail.status === 'partially_covered',
           assignment_status: normalizeAssignmentStatus(detail.assignment_status),
+          day_display_order: detail.day_display_order ?? null,
+          time_slot_display_order: detail.time_slot_display_order ?? null,
+        })),
+        shift_details_sorted: (apiAbsence.shifts?.shift_details_sorted || []).map(detail => ({
+          id: detail.id || '',
+          date: detail.date,
+          day_name: detail.day_name,
+          time_slot_code: detail.time_slot_code,
+          class_name: detail.class_name || null,
+          classroom_name: detail.classroom_name || null,
+          classroom_color: detail.classroom_color || null,
+          status:
+            detail.status === 'partial' || detail.status === 'partially_covered'
+              ? 'partially_covered'
+              : detail.status === 'covered' || detail.status === 'fully_covered'
+                ? 'fully_covered'
+                : 'uncovered',
+          sub_name: detail.sub_name || detail.assigned_sub?.name || null,
+          sub_id: detail.sub_id || null,
+          assignment_id: detail.assignment_id || null,
+          is_partial: detail.status === 'partial' || detail.status === 'partially_covered',
+          assignment_status: normalizeAssignmentStatus(detail.assignment_status),
+          day_display_order: detail.day_display_order ?? null,
+          time_slot_display_order: detail.time_slot_display_order ?? null,
         })),
       },
     }),
@@ -232,8 +259,13 @@ export function useSubFinderData({
     () => ({
       ...(subRecommendationParams || {}),
       includeFlexibleStaff,
+      // When selected absence is past, include past shifts so recommendations load for historical record updates
+      includePastShifts:
+        (subRecommendationParams?.includePastShifts as boolean | undefined) ||
+        selectedAbsence?.is_past ||
+        false,
     }),
-    [includeFlexibleStaff, subRecommendationParams]
+    [includeFlexibleStaff, subRecommendationParams, selectedAbsence?.is_past]
   )
 
   const {

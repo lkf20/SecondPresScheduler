@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { parseLocalDate } from '@/lib/utils/date'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import { getNeutralChipClasses, coverageColorValues } from '@/lib/utils/colors'
+import StaffLink from '@/components/ui/staff-link'
 
 export type TimeOffCardVariant = 'sub-finder' | 'dashboard' | 'time-off'
 
@@ -31,6 +32,8 @@ export interface ClassroomBadge {
 export interface TimeOffCardProps {
   id: string
   teacherName: string
+  /** When provided, teacher name is a link to staff profile with hover underline. */
+  teacherId?: string
   startDate: string
   endDate: string | null
   reason: string | null
@@ -76,6 +79,7 @@ const formatFullDateLabel = (value: string) => {
 export default function TimeOffCard({
   id,
   teacherName,
+  teacherId,
   startDate,
   endDate,
   reason,
@@ -99,6 +103,8 @@ export default function TimeOffCard({
   const [isExpanded, setIsExpanded] = useState(false)
   const hasShiftsDropdown =
     variant !== 'sub-finder' && totalShifts !== undefined && shiftDetails.length > 0
+  // Only show coverage badges for active (non-draft) requests; drafts have no meaningful coverage yet
+  const showCoverageBadges = !isDraft
 
   const startDateLabel = formatFullDateLabel(startDate)
   const endDateLabel = endDate && endDate !== startDate ? formatFullDateLabel(endDate) : null
@@ -150,7 +156,15 @@ export default function TimeOffCard({
           <div className="flex items-start justify-between mb-2">
             <div className="flex-1">
               <div className="flex flex-wrap items-center gap-2 mb-1">
-                <h3 className="font-semibold text-lg text-slate-800">{teacherName}</h3>
+                {teacherId ? (
+                  <StaffLink
+                    staffId={teacherId}
+                    name={teacherName}
+                    className="font-semibold text-lg text-slate-800"
+                  />
+                ) : (
+                  <h3 className="font-semibold text-lg text-slate-800">{teacherName}</h3>
+                )}
                 {reason && (
                   <span
                     className={cn(
@@ -181,26 +195,32 @@ export default function TimeOffCard({
                 )}
               </div>
             </div>
-            {uncovered > 0 && partial === 0 && (
+            {showCoverageBadges && uncovered > 0 && partial === 0 && (
               <AlertTriangle
                 className="h-4 w-4 flex-shrink-0"
                 style={{ color: 'rgb(249, 115, 22)' }}
               />
             )}
-            {partial > 0 && <PieChart className="h-5 w-5 text-yellow-600 flex-shrink-0" />}
-            {uncovered === 0 && partial === 0 && covered > 0 && (
+            {showCoverageBadges && partial > 0 && (
+              <PieChart className="h-5 w-5 text-yellow-600 flex-shrink-0" />
+            )}
+            {showCoverageBadges && uncovered === 0 && partial === 0 && covered > 0 && (
               <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
             )}
           </div>
 
           <div className="mt-3 border-t border-slate-200 pt-3">
             <div className="flex items-stretch justify-between gap-3">
-              <div className="flex flex-col items-start gap-2">
-                {uncovered > 0 && <CoverageBadge type="uncovered" count={uncovered} />}
-                <div className="flex flex-wrap items-center justify-start gap-2">
-                  {covered > 0 && <CoverageBadge type="covered" count={covered} />}
-                  {partial > 0 && <CoverageBadge type="partial" count={partial} />}
-                </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {showCoverageBadges && uncovered > 0 && (
+                  <CoverageBadge type="uncovered" count={uncovered} />
+                )}
+                {showCoverageBadges && covered > 0 && (
+                  <CoverageBadge type="covered" count={covered} />
+                )}
+                {showCoverageBadges && partial > 0 && (
+                  <CoverageBadge type="partial" count={partial} />
+                )}
               </div>
               <div className="flex items-end">
                 <Button
@@ -247,7 +267,15 @@ export default function TimeOffCard({
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-3 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="text-lg font-semibold text-slate-900">{teacherName}</div>
+            {teacherId ? (
+              <StaffLink
+                staffId={teacherId}
+                name={teacherName}
+                className="text-lg font-semibold text-slate-900"
+              />
+            ) : (
+              <div className="text-lg font-semibold text-slate-900">{teacherName}</div>
+            )}
             {reason && (
               <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
                 {reason}
@@ -323,9 +351,11 @@ export default function TimeOffCard({
         </div>
         <div className="flex flex-col items-end self-stretch">
           <div className="flex items-center gap-2 mb-auto">
-            {covered > 0 && <CoverageBadge type="covered" count={covered} />}
-            {partial > 0 && <CoverageBadge type="partial" count={partial} />}
-            {uncovered > 0 && <CoverageBadge type="uncovered" count={uncovered} />}
+            {showCoverageBadges && uncovered > 0 && (
+              <CoverageBadge type="uncovered" count={uncovered} />
+            )}
+            {showCoverageBadges && covered > 0 && <CoverageBadge type="covered" count={covered} />}
+            {showCoverageBadges && partial > 0 && <CoverageBadge type="partial" count={partial} />}
           </div>
           <div className="flex items-center justify-end gap-3 mt-auto">
             {onEdit ? (

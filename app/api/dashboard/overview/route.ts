@@ -183,12 +183,14 @@ export async function GET(request: NextRequest) {
           day_of_week:days_of_week(
             id,
             name,
-            day_number
+            day_number,
+            display_order
           ),
           time_slot:time_slots(
             id,
             code,
-            name
+            name,
+            display_order
           )
         `
         )
@@ -448,9 +450,19 @@ export async function GET(request: NextRequest) {
         const notes = timeOffRequest?.notes || null
 
         // Get shifts for this request, excluding shifts on school closed days (e.g. snow day added after request was created)
-        const requestShifts = coverageRequestShifts
+        // Sort by date, then day display_order, then time_slot display_order (match settings order per AGENTS.md)
+        const requestShiftsRaw = coverageRequestShifts
           .filter((s: any) => s.coverage_request_id === request.id)
           .filter((s: any) => !isSlotClosedOnDate(s.date, s.time_slot_id, closureListForCoverage))
+        const requestShifts = [...requestShiftsRaw].sort((a: any, b: any) => {
+          if (a.date !== b.date) return a.date < b.date ? -1 : 1
+          const dayOrderA = a.day_of_week?.display_order ?? 999
+          const dayOrderB = b.day_of_week?.display_order ?? 999
+          if (dayOrderA !== dayOrderB) return dayOrderA - dayOrderB
+          const slotOrderA = a.time_slot?.display_order ?? 999
+          const slotOrderB = b.time_slot?.display_order ?? 999
+          return slotOrderA - slotOrderB
+        })
 
         // Get sub assignments for these shifts using coverage_request_shift_id
         const shiftIds = new Set(requestShifts.map((s: any) => s.id))
@@ -600,6 +612,7 @@ export async function GET(request: NextRequest) {
           })
         })
 
+        const coveredShifts = assignedShifts - partialShifts
         return {
           id: request.id,
           source_request_id: request.source_request_id || null,
@@ -614,6 +627,7 @@ export async function GET(request: NextRequest) {
             classrooms.length > 0 ? classrooms.map(c => c.name).join(', ') : 'Multiple',
           total_shifts: totalShifts,
           assigned_shifts: assignedShifts,
+          covered_shifts: coveredShifts,
           uncovered_shifts: uncoveredShifts,
           partial_shifts: partialShifts,
           remaining_shifts: remainingShifts,

@@ -6,6 +6,7 @@ export interface SchoolClosure {
   date: string
   time_slot_id: string | null
   reason: string | null
+  notes: string | null
   created_at: string
 }
 
@@ -106,7 +107,7 @@ export async function getSchoolClosuresForDateRange(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('school_closures')
-    .select('id, school_id, date, time_slot_id, reason, created_at')
+    .select('id, school_id, date, time_slot_id, reason, notes, created_at')
     .eq('school_id', schoolId)
     .gte('date', startDateISO)
     .lte('date', endDateISO)
@@ -126,6 +127,7 @@ export async function getSchoolClosuresForDateRange(
     date: row.date,
     time_slot_id: row.time_slot_id,
     reason: row.reason,
+    notes: row.notes ?? null,
     created_at: row.created_at,
   }))
 }
@@ -134,7 +136,7 @@ export async function getSchoolClosures(schoolId: string): Promise<SchoolClosure
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('school_closures')
-    .select('id, school_id, date, time_slot_id, reason, created_at')
+    .select('id, school_id, date, time_slot_id, reason, notes, created_at')
     .eq('school_id', schoolId)
     .order('date', { ascending: true })
     .order('time_slot_id', { ascending: true, nullsFirst: true })
@@ -152,6 +154,7 @@ export async function getSchoolClosures(schoolId: string): Promise<SchoolClosure
     date: row.date,
     time_slot_id: row.time_slot_id,
     reason: row.reason,
+    notes: row.notes ?? null,
     created_at: row.created_at,
   }))
 }
@@ -165,7 +168,7 @@ export async function getSchoolClosuresByIds(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('school_closures')
-    .select('id, school_id, date, time_slot_id, reason, created_at')
+    .select('id, school_id, date, time_slot_id, reason, notes, created_at')
     .eq('school_id', schoolId)
     .in('id', closureIds)
 
@@ -182,13 +185,19 @@ export async function getSchoolClosuresByIds(
     date: row.date,
     time_slot_id: row.time_slot_id,
     reason: row.reason,
+    notes: row.notes ?? null,
     created_at: row.created_at,
   }))
 }
 
 export async function createSchoolClosure(
   schoolId: string,
-  closure: { date: string; time_slot_id?: string | null; reason?: string | null }
+  closure: {
+    date: string
+    time_slot_id?: string | null
+    reason?: string | null
+    notes?: string | null
+  }
 ): Promise<SchoolClosure> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -198,17 +207,28 @@ export async function createSchoolClosure(
       date: closure.date,
       time_slot_id: closure.time_slot_id ?? null,
       reason: closure.reason ?? null,
+      notes: closure.notes ?? null,
     })
-    .select('id, school_id, date, time_slot_id, reason, created_at')
+    .select('id, school_id, date, time_slot_id, reason, notes, created_at')
     .single()
 
-  if (error) throw error
+  if (error) {
+    if (error.code === '23505') {
+      const e = new Error('A closure already exists for this date and time slot.') as Error & {
+        code?: string
+      }
+      e.code = 'DUPLICATE_CLOSURE'
+      throw e
+    }
+    throw error
+  }
   return {
     id: data.id,
     school_id: data.school_id,
     date: data.date,
     time_slot_id: data.time_slot_id,
     reason: data.reason,
+    notes: data.notes ?? null,
     created_at: data.created_at,
   }
 }
@@ -236,10 +256,11 @@ export async function createSchoolClosureRange(
   schoolId: string,
   startDateISO: string,
   endDateISO: string,
-  reason: string | null
-): Promise<{ created: number; skipped: number }> {
+  reason: string | null,
+  notes?: string | null
+): Promise<{ created: number; skipped: number; createdIds: string[] }> {
   const dates = [...dateRange(startDateISO, endDateISO)]
-  if (dates.length === 0) return { created: 0, skipped: 0 }
+  if (dates.length === 0) return { created: 0, skipped: 0, createdIds: [] }
   if (dates.length > 365) {
     throw new Error('Date range cannot exceed 365 days')
   }
@@ -251,22 +272,25 @@ export async function createSchoolClosureRange(
 
   let created = 0
   let skipped = 0
+  const createdIds: string[] = []
   for (const date of dates) {
     if (existingWholeDayDates.has(date)) {
       skipped++
       continue
     }
     try {
-      await createSchoolClosure(schoolId, {
+      const closure = await createSchoolClosure(schoolId, {
         date,
         time_slot_id: null,
         reason,
+        notes: notes ?? null,
       })
       created++
+      createdIds.push(closure.id)
       existingWholeDayDates.add(date)
     } catch (err) {
       const code = (err as { code?: string })?.code
-      if (code === '23505') {
+      if (code === '23505' || code === 'DUPLICATE_CLOSURE') {
         skipped++
         existingWholeDayDates.add(date)
       } else {
@@ -274,30 +298,55 @@ export async function createSchoolClosureRange(
       }
     }
   }
-  return { created, skipped }
+  return { created, skipped, createdIds }
 }
 
 export async function updateSchoolClosure(
   schoolId: string,
   closureId: string,
-  updates: { reason?: string | null }
+  updates: {
+    date?: string | null
+    time_slot_id?: string | null
+    reason?: string | null
+    notes?: string | null
+  }
 ): Promise<SchoolClosure> {
   const supabase = await createClient()
+  const updatePayload: {
+    date?: string
+    time_slot_id?: string | null
+    reason?: string | null
+    notes?: string | null
+  } = {}
+  if (updates.date !== undefined) updatePayload.date = updates.date ?? undefined
+  if (updates.time_slot_id !== undefined) updatePayload.time_slot_id = updates.time_slot_id ?? null
+  if (updates.reason !== undefined) updatePayload.reason = updates.reason ?? null
+  if (updates.notes !== undefined) updatePayload.notes = updates.notes ?? null
   const { data, error } = await supabase
     .from('school_closures')
-    .update({ reason: updates.reason ?? null })
+    .update(updatePayload)
     .eq('id', closureId)
     .eq('school_id', schoolId)
-    .select('id, school_id, date, time_slot_id, reason, created_at')
+    .select('id, school_id, date, time_slot_id, reason, notes, created_at')
     .single()
 
-  if (error) throw error
+  if (error) {
+    if (error.code === '23505') {
+      const e = new Error(
+        error.message ?? 'A closure already exists for this date and time slot.'
+      ) as Error & { code?: string }
+      e.code = 'DUPLICATE_CLOSURE'
+      throw e
+    }
+    throw error
+  }
   return {
     id: data.id,
     school_id: data.school_id,
     date: data.date,
     time_slot_id: data.time_slot_id,
     reason: data.reason,
+    notes: data.notes ?? null,
     created_at: data.created_at,
   }
 }
@@ -311,4 +360,72 @@ export async function deleteSchoolClosure(schoolId: string, closureId: string): 
     .eq('school_id', schoolId)
 
   if (error) throw error
+}
+
+/** Payload for single-day add in apply_school_closure_changes */
+export interface ApplyClosureSingleItem {
+  date: string
+  time_slot_id?: string | null
+  reason?: string | null
+  notes?: string | null
+}
+
+/** Payload for range add in apply_school_closure_changes */
+export interface ApplyClosureRangeItem {
+  start_date: string
+  end_date: string
+  reason?: string | null
+  notes?: string | null
+}
+
+/**
+ * Atomically delete and add closures in one DB transaction (RPC).
+ * Use when both deletes and adds are present to avoid partial state on failure.
+ * Returns the created closure rows for audit logging.
+ */
+export async function applySchoolClosureChanges(
+  schoolId: string,
+  deleteIds: string[],
+  addSingle: ApplyClosureSingleItem[],
+  addRanges: ApplyClosureRangeItem[]
+): Promise<SchoolClosure[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('apply_school_closure_changes', {
+    p_school_id: schoolId,
+    p_delete_ids: deleteIds,
+    p_add_single: addSingle,
+    p_add_ranges: addRanges,
+  })
+
+  if (error) {
+    if (error.code === '23505') {
+      const e = new Error(
+        error.message ?? 'A closure already exists for this date and time slot.'
+      ) as Error & { code?: string }
+      e.code = 'DUPLICATE_CLOSURE'
+      throw e
+    }
+    throw error
+  }
+
+  const rows = Array.isArray(data) ? data : []
+  return rows.map(
+    (row: {
+      id: string
+      school_id: string
+      date: string
+      time_slot_id: string | null
+      reason: string | null
+      notes: string | null
+      created_at: string
+    }) => ({
+      id: row.id,
+      school_id: row.school_id,
+      date: row.date,
+      time_slot_id: row.time_slot_id,
+      reason: row.reason,
+      notes: row.notes ?? null,
+      created_at: row.created_at,
+    })
+  )
 }

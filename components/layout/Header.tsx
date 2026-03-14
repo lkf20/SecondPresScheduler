@@ -62,7 +62,7 @@ export default function Header({ userEmail }: HeaderProps) {
   const [timeOffInitialEndDate, setTimeOffInitialEndDate] = useState<string | undefined>()
   const searchParams = useSearchParams()
   const pathname = usePathname()
-  const timeOffFormRef = useRef<{ reset: () => void }>(null)
+  const timeOffFormRef = useRef<{ reset: () => void; saveDraft: () => Promise<boolean> }>(null)
   const {
     activePanel,
     savePreviousPanel,

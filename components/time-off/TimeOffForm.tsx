@@ -27,6 +27,7 @@ import {
   invalidateSubFinderAbsences,
   invalidateWeeklySchedule,
 } from '@/lib/utils/invalidation'
+import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
 import {
   Dialog,
   DialogContent,
@@ -62,7 +63,10 @@ interface TimeOffFormProps {
   hidePageHeader?: boolean
 }
 
-const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
+const TimeOffForm = React.forwardRef<
+  { reset: () => void; saveDraft: () => Promise<boolean> },
+  TimeOffFormProps
+>(
   (
     {
       onSuccess,
@@ -89,7 +93,11 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     const [selectedShifts, setSelectedShifts] = useState<
       Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
     >([])
-    const [conflictSummary, setConflictSummary] = useState({ conflictCount: 0, totalScheduled: 0 })
+    const [conflictSummary, setConflictSummary] = useState({
+      conflictCount: 0,
+      totalScheduled: 0,
+      totalAssignable: 0,
+    })
     const [conflictingRequests, setConflictingRequests] = useState<
       Array<{ id: string; start_date: string; end_date: string | null; reason: string | null }>
     >([])
@@ -97,6 +105,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     const justCorrectedRef = useRef(false)
     const [isPastDate, setIsPastDate] = useState(false)
     const hasHydratedDraftRef = useRef(false)
+    const saveDraftRef = useRef<() => Promise<boolean>>(null)
     const [isDraftRestored, setIsDraftRestored] = useState(false)
     const [isLoadingRequest, setIsLoadingRequest] = useState(false)
     const [showCancelDialog, setShowCancelDialog] = useState(false)
@@ -104,6 +113,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
     const [currentRequestStatus, setCurrentRequestStatus] = useState<
       'draft' | 'active' | 'cancelled' | null
     >(null)
+    const [requestUpdatedAt, setRequestUpdatedAt] = useState<string | null>(null)
     const [assignmentData, setAssignmentData] = useState<{
       hasAssignments: boolean
       assignmentCount: number
@@ -241,6 +251,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         })
         .then(requestData => {
           setCurrentRequestStatus(requestData.status || null)
+          setRequestUpdatedAt(requestData.updated_at ?? null)
           const willMergeShifts = Boolean(initialSelectedShifts && initialSelectedShifts.length > 0)
           // When extending from Sub Finder, expand date range to include initial dates
           const existingStart = requestData.start_date || ''
@@ -367,7 +378,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       return () => clearTimeout(timer)
     }, [isDraftRestored, isInitialStateCaptured, getValues, selectedShifts])
 
-    // Expose reset method via ref
+    // Expose reset and saveDraft via ref (saveDraftRef is set after saveDraft is defined)
     React.useImperativeHandle(ref, () => ({
       reset: () => {
         reset({
@@ -380,7 +391,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
         })
         setSelectedShifts([])
         setError(null)
-        setConflictSummary({ conflictCount: 0, totalScheduled: 0 })
+        setConflictSummary({ conflictCount: 0, totalScheduled: 0, totalAssignable: 0 })
         setConflictingRequests([])
         setEndDateCorrected(false)
         setIsPastDate(false)
@@ -400,6 +411,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
           window.sessionStorage.removeItem(draftKey)
         }
       },
+      saveDraft: async () => (await saveDraftRef.current?.()) ?? false,
     }))
 
     // Track unsaved changes by comparing current state to initial state
@@ -665,6 +677,8 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
           reason: string | null
           notes: string | null
           shift_selection_mode: 'all_scheduled' | 'select_shifts'
+          status?: 'draft' | 'active'
+          updated_at?: string | null
           shifts?: Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
         } = {
           teacher_id: data.teacher_id,
@@ -675,12 +689,20 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
           shift_selection_mode: data.shift_selection_mode,
         }
 
-        if (data.shift_selection_mode === 'select_shifts' && selectedShifts.length > 0) {
-          // Only send shifts within the selected date range (e.g. after user shortens end date)
+        // When editing a draft, submit sets status to active so the request is activated.
+        if (timeOffRequestId && currentRequestStatus === 'draft') {
+          payload.status = 'active'
+        }
+        if (timeOffRequestId && requestUpdatedAt != null) {
+          payload.updated_at = requestUpdatedAt
+        }
+
+        if (data.shift_selection_mode === 'select_shifts') {
+          // Always send shifts array for select_shifts (required by API); empty if none selected.
           const start = data.start_date || ''
           const end = effectiveEndDate || start
           payload.shifts = selectedShifts.filter(s => s.date >= start && s.date <= end)
-          if (payload.shifts.length === 0) {
+          if (payload.shifts.length === 0 && selectedShifts.length > 0) {
             setFormError('shift_selection_mode', {
               type: 'manual',
               message:
@@ -705,16 +727,40 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
             setOverlapPayload(errorData)
             return
           }
+          if (response.status === 409 && errorData?.code === 'SHIFTS_HAVE_ASSIGNMENTS') {
+            setError(
+              errorData.error ||
+                'One or more shifts have a sub assigned. Remove the sub assignment for each shift first, then try again.'
+            )
+            return
+          }
+          if (response.status === 409 && errorData?.code === 'REQUEST_MODIFIED') {
+            setError(
+              'This request was modified in another tab or window. Please refresh the page and try again.'
+            )
+            return
+          }
+          if (response.status === 500 && errorData?.code === 'REVERT_FAILED') {
+            setError(
+              errorData.error ||
+                'We could not save your changes. Please refresh and try again, or save as draft.'
+            )
+            return
+          }
           const action = timeOffRequestId ? 'update' : 'create'
           throw new Error(errorData.error || `Failed to ${action} time off request`)
         }
 
         const responseData = await response.json()
+        if (responseData?.updated_at != null) {
+          setRequestUpdatedAt(responseData.updated_at)
+        }
 
         if (typeof window !== 'undefined') {
           window.sessionStorage.removeItem(draftKey)
         }
 
+        clearDataHealthCache()
         // Invalidate React Query caches to refresh all affected pages
         if (schoolId) {
           await Promise.all([
@@ -754,15 +800,15 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
       }
     }
 
-    const saveDraft = async () => {
+    const saveDraft = async (): Promise<boolean> => {
       const values = getValues()
       if (!values.teacher_id) {
         setFormError('teacher_id', { type: 'manual', message: 'Teacher is required.' })
-        return
+        return false
       }
       if (!values.start_date) {
         setFormError('start_date', { type: 'manual', message: 'Start date is required.' })
-        return
+        return false
       }
 
       try {
@@ -776,6 +822,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
           notes: string | null
           shift_selection_mode: 'all_scheduled' | 'select_shifts'
           status: 'draft'
+          updated_at?: string | null
           shifts?: Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
         } = {
           teacher_id: values.teacher_id,
@@ -787,7 +834,11 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
           status: 'draft',
         }
 
-        if (values.shift_selection_mode === 'select_shifts' && selectedShifts.length > 0) {
+        if (timeOffRequestId && requestUpdatedAt != null) {
+          payload.updated_at = requestUpdatedAt
+        }
+
+        if (values.shift_selection_mode === 'select_shifts') {
           const start = values.start_date || ''
           const end = effectiveEndDate || start
           payload.shifts = selectedShifts.filter(s => s.date >= start && s.date <= end)
@@ -806,22 +857,48 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
           const errorData = await response.json().catch(() => ({}))
           if (response.status === 409 && errorData?.code === 'TIME_OFF_OVERLAP') {
             setOverlapPayload(errorData)
-            return
+            return false
+          }
+          if (response.status === 409 && errorData?.code === 'SHIFTS_HAVE_ASSIGNMENTS') {
+            setError(
+              errorData.error ||
+                'One or more shifts have a sub assigned. Remove the sub assignment for each shift first, then try again.'
+            )
+            return false
+          }
+          if (response.status === 409 && errorData?.code === 'REQUEST_MODIFIED') {
+            setError(
+              'This request was modified in another tab or window. Please refresh the page and try again.'
+            )
+            return false
+          }
+          if (response.status === 500 && errorData?.code === 'REVERT_FAILED') {
+            setError(
+              errorData.error ||
+                'We could not save your changes. Please refresh and try again, or save as draft.'
+            )
+            return false
           }
           throw new Error(errorData.error || 'Failed to save draft')
         }
 
-        await response.json()
+        const responseData = await response.json()
+        if (responseData?.updated_at != null) {
+          setRequestUpdatedAt(responseData.updated_at)
+        }
         if (typeof window !== 'undefined') {
           window.sessionStorage.removeItem(draftKey)
         }
         toast.success('Draft saved')
         router.push('/time-off')
         router.refresh()
+        return true
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Failed to save draft')
+        return false
       }
     }
+    ;(saveDraftRef as React.MutableRefObject<(() => Promise<boolean>) | null>).current = saveDraft
 
     const handleCancelClick = async () => {
       if (!timeOffRequestId) return
@@ -886,6 +963,7 @@ const TimeOffForm = React.forwardRef<{ reset: () => void }, TimeOffFormProps>(
           throw new Error(errorData.error || 'Failed to cancel time off request')
         }
 
+        clearDataHealthCache()
         // Clear any draft data
         if (typeof window !== 'undefined') {
           window.sessionStorage.removeItem(draftKey)

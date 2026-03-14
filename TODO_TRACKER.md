@@ -61,6 +61,7 @@ Features to implement soon (within the next few weeks).
 - [ ] Standardize filter styles to match Time Off chips across the app (Staff, Sub Finder, etc.)
 - [ ] Enable Skills category in Staff Qualifications once skill tracking UI is ready
 - [ ] Re-enable "Infant qualified" certification when ready
+- [ ] How to handle school closed for one particular class group (e.g. noon dismissal for kindergarten only): define model and UI (current closures are whole-day or per–time-slot; need class-group–scoped closure or equivalent)
 
 ---
 
@@ -74,6 +75,7 @@ Features for later consideration (beyond the next few weeks).
 - [ ] Preserve application state when navigating between sections - maintain user context (e.g., selected absence, sub finder filters, selected shifts) when switching to dashboard or other sections and returning, so users don't lose their work in progress
 - [ ] Add AI chat assistant for coverage planning; keep coverage/assignment logic in reusable server functions and make "find sub"/"assign shifts" deterministic and explainable so the AI can justify choices
 - [ ] Mobile UX overhaul: create a global mobile-friendly navigation pattern and adjust Sub Finder layout/flows to use it
+- [ ] **Partial shift assignment for subs** – Build end-to-end support for assigning a sub to cover only part of a shift (e.g. 9am–10am of a 9am–12pm shift). Schema and dashboard logic already support partial coverage; extend assign-shifts API (partial_assignments with partial_start_time/partial_end_time), add UI in Sub Finder Contact & Assign and optionally Assign Sub panel, validate against time slot bounds and overlapping assignments. Re-enable the Partially Covered Shifts dashboard card once implemented.
 - [ ] Sub Finder: detect partial-shift availability and classify subs into the "Partially Available" section
 - [ ] Create reusable FilterChip component and standardize filter styles across the app
 

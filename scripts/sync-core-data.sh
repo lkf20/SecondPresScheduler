@@ -28,12 +28,10 @@ TABLES=(
   staff_role_types
   staff
   qualification_definitions
-  classroom_preferences
   staff_qualifications
 
-  # ratios / enrollments / baseline schedule
+  # ratios / baseline schedule (enrollment is per cell: schedule_cells, schedule_cell_class_groups)
   staffing_rules
-  enrollments
   teacher_schedules
   schedule_cells
   schedule_cell_class_groups

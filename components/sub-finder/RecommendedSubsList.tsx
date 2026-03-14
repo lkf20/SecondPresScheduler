@@ -11,6 +11,7 @@ import type { SubFinderShift } from '@/lib/sub-finder/types'
 import { filterVisibleShifts, getShiftKey } from '@/lib/sub-finder/shift-helpers'
 import { formatAbsenceDateRange } from '@/lib/utils/date-format'
 import { cn } from '@/lib/utils'
+import StaffLink from '@/components/ui/staff-link'
 
 type RecommendedSub = SubCandidate
 
@@ -54,6 +55,7 @@ interface RecommendedSubsListProps {
   loading: boolean
   absence: {
     id: string
+    teacher_id?: string
     teacher_name: string
     start_date: string
     end_date: string | null
@@ -769,7 +771,16 @@ export default function RecommendedSubsList({
           <div className="mb-4">
             <h2 className="text-xl font-semibold mb-1 flex items-center gap-3">
               <span>
-                {showAllSubs ? 'All Subs' : 'Recommended Subs'} for {absence.teacher_name}
+                {showAllSubs ? 'All Subs' : 'Recommended Subs'} for{' '}
+                {absence.teacher_id ? (
+                  <StaffLink
+                    staffId={absence.teacher_id}
+                    name={absence.teacher_name}
+                    className="font-semibold"
+                  />
+                ) : (
+                  absence.teacher_name
+                )}
               </span>
               <span className="h-5 w-px bg-border" aria-hidden="true" />
               <span className="text-muted-foreground font-normal">{formatDateRange()}</span>
