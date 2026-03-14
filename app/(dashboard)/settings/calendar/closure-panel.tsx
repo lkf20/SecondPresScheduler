@@ -141,6 +141,16 @@ export default function ClosurePanel({
     if (addMode === 'range') setAppliesTo('all')
   }, [addMode])
 
+  // When Sheet is closed (overlay, Escape, or Cancel), clear dialogs so they don't stay visible
+  useEffect(() => {
+    if (!open) {
+      setReplaceConfirm(null)
+      setDuplicateError(null)
+      setAddStartPickerOpen(false)
+      setAddEndPickerOpen(false)
+    }
+  }, [open])
+
   const handleClose = () => {
     if (!open) return
     setAddStartPickerOpen(false)
