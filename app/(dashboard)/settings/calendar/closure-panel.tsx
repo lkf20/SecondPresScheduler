@@ -113,10 +113,10 @@ export default function ClosurePanel({
   const [duplicateError, setDuplicateError] = useState<string | null>(null)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
 
-  // Sync from editGroup when opening in edit mode
+  // Sync from editGroup when opening in edit mode (same whole-day check as hasUnsavedChanges and payload builder)
   useEffect(() => {
     if (!open || !isEdit || !editGroup) return
-    const hasAll = editGroup.closures.some(c => !c.time_slot_id)
+    const hasAll = isWholeDayClosureGroup(editGroup.closures)
     const slotIds = hasAll
       ? []
       : editGroup.closures.map(c => c.time_slot_id).filter((id): id is string => id != null)
