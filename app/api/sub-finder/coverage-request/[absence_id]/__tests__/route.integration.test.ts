@@ -526,4 +526,60 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
       '2099-02-10|EM|classroom-1': 'crs-1',
     })
   })
+
+  it('returns correct omitted_shift_count and omitted_shifts when coverage request already exists and had shifts omitted', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
+      id: 'absence-1',
+      teacher_id: 'teacher-1',
+      start_date: '2099-02-10',
+      end_date: '2099-02-10',
+      coverage_request_id: 'coverage-1',
+    })
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValue([
+      { id: 'tos-1', date: '2099-02-10', day_of_week_id: 'day-1', time_slot_id: 'slot-1' },
+      { id: 'tos-2', date: '2099-02-10', day_of_week_id: 'day-1', time_slot_id: 'slot-2' },
+    ])
+
+    const coverageRequestShiftsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'crs-1',
+            date: '2099-02-10',
+            time_slot_id: 'slot-1',
+            classroom_id: 'classroom-1',
+            time_slot: { code: 'EM' },
+          },
+        ],
+        error: null,
+      }),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'coverage_request_shifts') return coverageRequestShiftsQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = {
+      nextUrl: new URL('http://localhost:3000/api/sub-finder/coverage-request/absence-1'),
+    }
+    const response = await GET(request as any, {
+      params: Promise.resolve({ absence_id: 'absence-1' }),
+    })
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.coverage_request_id).toBe('coverage-1')
+    expect(json.omitted_shift_count).toBe(1)
+    expect(json.omitted_shifts).toHaveLength(1)
+    expect(json.omitted_shifts[0]).toMatchObject({
+      date: '2099-02-10',
+      day_of_week_id: 'day-1',
+      time_slot_id: 'slot-2',
+    })
+  })
 })

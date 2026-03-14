@@ -32,7 +32,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { sub_id, coverage_request_id, shift_ids, teacher_id, shifts: shiftsInput } = body
+    const {
+      sub_id,
+      coverage_request_id,
+      shift_ids,
+      teacher_id,
+      shifts: shiftsInput,
+      assign_as_floater,
+    } = body
 
     const useShiftsArray =
       Array.isArray(shiftsInput) &&
@@ -76,6 +83,13 @@ export async function POST(request: NextRequest) {
           (s: { date: string; time_slot_id: string }) =>
             `${toDateStringISO(s.date)}|${s.time_slot_id}`
         )
+      )
+      const scheduleConflictClassroomByKey = new Map<string, string>()
+      subScheduledShifts.forEach(
+        (s: { date: string; time_slot_id: string; classroom_name?: string | null }) => {
+          const key = `${toDateStringISO(s.date)}|${s.time_slot_id}`
+          if (s.classroom_name) scheduleConflictClassroomByKey.set(key, s.classroom_name)
+        }
       )
 
       const timeOffRequests = await getTimeOffRequests({
@@ -154,7 +168,10 @@ export async function POST(request: NextRequest) {
           message = 'Marked unavailable'
         } else if (hasScheduleConflict) {
           status = 'conflict_teaching'
-          message = `Conflict: Assigned to ${shift.classroom_id ? 'classroom' : 'teach'}`
+          const teachingRoom = scheduleConflictClassroomByKey.get(dateBasedKey)
+          message = teachingRoom
+            ? `Conflict: Assigned to ${teachingRoom}`
+            : `Conflict: Assigned to ${shift.classroom_id ? 'classroom' : 'teach'}`
         } else if (assignmentConflict) {
           status = 'conflict_sub'
           const classroomPart = assignmentConflict.classroom_name
@@ -170,6 +187,9 @@ export async function POST(request: NextRequest) {
           shift_key: dateBasedKey,
           status,
           message,
+          ...(status === 'conflict_teaching' && scheduleConflictClassroomByKey.has(dateBasedKey)
+            ? { conflict_classroom_name: scheduleConflictClassroomByKey.get(dateBasedKey)! }
+            : {}),
         }
       })
 
@@ -177,6 +197,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Original path: coverage_request_id + shift_ids
+    const assignAsFloater = body.assign_as_floater === true
     if (!sub_id || !coverage_request_id || !shift_ids || !Array.isArray(shift_ids)) {
       return createErrorResponse(
         'Missing required fields: sub_id, coverage_request_id, shift_ids',
@@ -244,10 +265,15 @@ export async function POST(request: NextRequest) {
     // Get sub's regular teaching schedule
     const subScheduledShifts = await getTeacherScheduledShifts(sub_id, startDate, endDate)
     const scheduleConflicts = new Set<string>()
-    subScheduledShifts.forEach(scheduledShift => {
-      const key = `${toDateStringISO(scheduledShift.date)}|${scheduledShift.time_slot_id}`
-      scheduleConflicts.add(key)
-    })
+    const scheduleConflictClassroomByKey = new Map<string, string>()
+    subScheduledShifts.forEach(
+      (scheduledShift: { date: string; time_slot_id: string; classroom_name?: string | null }) => {
+        const key = `${toDateStringISO(scheduledShift.date)}|${scheduledShift.time_slot_id}`
+        scheduleConflicts.add(key)
+        if (scheduledShift.classroom_name)
+          scheduleConflictClassroomByKey.set(key, scheduledShift.classroom_name)
+      }
+    )
 
     // Get sub's time off requests (scoped to school)
     const timeOffRequests = await getTimeOffRequests({
@@ -338,7 +364,10 @@ export async function POST(request: NextRequest) {
         message = 'Marked unavailable'
       } else if (hasScheduleConflict) {
         status = 'conflict_teaching'
-        message = `Conflict: Assigned to ${shift.classroom_id ? 'classroom' : 'teach'}`
+        const teachingRoom = scheduleConflictClassroomByKey.get(conflictKey)
+        message = teachingRoom
+          ? `Conflict: Assigned to ${teachingRoom}`
+          : `Conflict: Assigned to ${shift.classroom_id ? 'classroom' : 'teach'}`
       } else if (assignmentConflict) {
         status = 'conflict_sub'
         const classroomPart = assignmentConflict.classroom_name
@@ -350,10 +379,18 @@ export async function POST(request: NextRequest) {
         message = 'Has time off'
       }
 
+      if (assignAsFloater && (status === 'conflict_teaching' || status === 'conflict_sub')) {
+        status = 'available'
+        message = ''
+      }
+
       return {
         shift_id: shift.id,
         status,
         message,
+        ...(status === 'conflict_teaching' && scheduleConflictClassroomByKey.has(conflictKey)
+          ? { conflict_classroom_name: scheduleConflictClassroomByKey.get(conflictKey)! }
+          : {}),
       }
     })
 

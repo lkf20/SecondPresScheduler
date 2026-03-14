@@ -15,6 +15,8 @@ export type TimeOffShiftWithDetails = TimeOffShift & {
 type TeacherScheduleEntry = {
   day_of_week_id: string
   time_slot_id: string
+  classroom_id: string | null
+  classroom_name: string | null
   days_of_week: { name: string | null; day_number: number | null } | null
   time_slots: { code: string | null; name: string | null } | null
 }
@@ -22,6 +24,8 @@ type TeacherScheduleEntry = {
 type TeacherScheduleRow = {
   day_of_week_id: string | null
   time_slot_id: string | null
+  classroom_id?: string | null
+  classroom?: { name?: string | null } | Array<{ name?: string | null }> | null
   days_of_week:
     | { name?: string | null; day_number?: number | null }
     | Array<{ name?: string | null; day_number?: number | null }>
@@ -175,6 +179,8 @@ export async function getTeacherScheduledShifts(
       `
       day_of_week_id, 
       time_slot_id, 
+      classroom_id,
+      classroom:classrooms(name),
       days_of_week(name, day_number), 
       time_slots(code, name)
     `
@@ -255,9 +261,17 @@ export async function getTeacherScheduledShifts(
         }
       }
 
+      let classroomName: string | null = null
+      if (entry.classroom) {
+        const c = Array.isArray(entry.classroom) ? entry.classroom[0] : entry.classroom
+        classroomName = (c?.name as string) ?? null
+      }
+
       return {
         day_of_week_id: entry.day_of_week_id,
         time_slot_id: entry.time_slot_id,
+        classroom_id: entry.classroom_id ?? null,
+        classroom_name: classroomName,
         days_of_week: daysOfWeek,
         time_slots: timeSlots,
       }
@@ -285,6 +299,8 @@ export async function getTeacherScheduledShifts(
     time_slot_id: string
     time_slot_code: string
     time_slot_name: string | null
+    classroom_id: string | null
+    classroom_name: string | null
   }> = []
 
   const expandedDates = expandDateRangeWithTimeZone(startDate, endDate, timeZone)
@@ -302,6 +318,8 @@ export async function getTeacherScheduledShifts(
           time_slot_id: shift.time_slot_id,
           time_slot_code: shift.time_slots?.code || '',
           time_slot_name: shift.time_slots?.name || null,
+          classroom_id: shift.classroom_id ?? null,
+          classroom_name: shift.classroom_name ?? null,
         })
       })
     }

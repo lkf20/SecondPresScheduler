@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { SchoolClosure } from '@/lib/api/school-calendar'
 import { getStaffDisplayName as formatDisplayName } from '@/lib/utils/staff-display-name'
 import type { DisplayNameFormat } from '@/lib/utils/staff-display-name'
+import { getCellDateISO, toDateStringISO } from '@/lib/utils/date'
 import { Database } from '@/types/database'
 
 type ClassGroupRow = Database['public']['Tables']['class_groups']['Row']
@@ -96,6 +97,7 @@ type WeeklySubAssignment = {
   classroom_id: string
   sub_id: string
   teacher_id: string
+  is_floater?: boolean
   sub_name: string
   sub_first_name?: string | null
   sub_last_name?: string | null
@@ -661,6 +663,16 @@ export async function getScheduleSnapshotData({
     }
   }
 
+  // Staff who have an is_floater sub_assignment for (date, time_slot) in another room.
+  // Used for conflict_teaching: when a teacher has baseline in room A and floater sub in room B,
+  // their baseline assignment in room A should also count as floater (0.5) for that date/slot.
+  const floaterSubSlots = new Set<string>()
+  for (const sa of subAssignments) {
+    if (sa.is_floater) {
+      floaterSubSlots.add(`${sa.sub_id}|${toDateStringISO(sa.date)}|${sa.time_slot_id}`)
+    }
+  }
+
   // Build the schedule data structure grouped by classroom
   const weeklyDataByClassroom: WeeklyScheduleDataByClassroom[] = []
 
@@ -749,6 +761,12 @@ export async function getScheduleSnapshotData({
           // Get teachers assigned to this slot
           // Teachers are now assigned to classrooms, not specific class groups.
           // All teachers assigned to this classroom/day/time are included.
+          // Conflict_teaching override: if this teacher has an is_floater sub_assignment
+          // for this date/slot in another room, treat their baseline as floater too.
+          const cellDate =
+            hasDateRange && startDateISO && day.day_number != null
+              ? getCellDateISO(startDateISO, day.day_number)
+              : null
           const teachers = assignmentsForSlot.map(assignment => {
             const teacherInfo = assignment.teacher
               ? {
@@ -757,6 +775,13 @@ export async function getScheduleSnapshotData({
                   display_name: assignment.teacher.display_name ?? null,
                 }
               : null
+
+            const hasFloaterSubElsewhere =
+              cellDate &&
+              floaterSubSlots.has(
+                `${assignment.teacher_id}|${toDateStringISO(cellDate)}|${timeSlot.id}`
+              )
+            const effectiveIsFloater = hasFloaterSubElsewhere || assignment.is_floater || false
 
             return {
               id: assignment.id,
@@ -774,7 +799,7 @@ export async function getScheduleSnapshotData({
               ),
               classroom_id: assignment.classroom_id,
               classroom_name: assignment.classroom?.name || 'Unknown',
-              is_floater: assignment.is_floater || false,
+              is_floater: effectiveIsFloater,
             }
           })
 

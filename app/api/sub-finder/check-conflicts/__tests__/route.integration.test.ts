@@ -384,6 +384,116 @@ describe('POST /api/sub-finder/check-conflicts integration', () => {
     )
   })
 
+  it('returns available for conflict_teaching and conflict_sub when assign_as_floater is true', async () => {
+    const coverageRequestsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({
+        data: { teacher_id: 'teacher-1', start_date: '2099-02-10', end_date: '2099-02-10' },
+        error: null,
+      }),
+    }
+
+    const coverageRequestShiftsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      in: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'shift-teaching',
+            date: '2099-02-10',
+            day_of_week_id: 'day-1',
+            time_slot_id: 'slot-1',
+            classroom_id: 'classroom-1',
+          },
+          {
+            id: 'shift-sub',
+            date: '2099-02-10',
+            day_of_week_id: 'day-1',
+            time_slot_id: 'slot-2',
+            classroom_id: 'classroom-2',
+          },
+        ],
+        error: null,
+      }),
+    }
+
+    const subAssignmentsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({
+        data: [
+          {
+            date: '2099-02-10',
+            time_slot_id: 'slot-2',
+            teacher_id: 'teacher-2',
+            classroom_id: 'classroom-2',
+            staff: { first_name: 'Other', last_name: 'Sub' },
+          },
+        ],
+        error: null,
+      }),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'coverage_requests') return coverageRequestsQuery
+        if (table === 'coverage_request_shifts') return coverageRequestShiftsQuery
+        if (table === 'sub_assignments') return subAssignmentsQuery
+        if (table === 'classrooms') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            single: jest.fn().mockResolvedValue({
+              data: { name: 'Room A' },
+              error: null,
+            }),
+          }
+        }
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+    ;(getSubAvailability as jest.Mock).mockResolvedValue([
+      { day_of_week_id: 'day-1', time_slot_id: 'slot-1', available: true },
+      { day_of_week_id: 'day-1', time_slot_id: 'slot-2', available: true },
+    ])
+    ;(getSubAvailabilityExceptions as jest.Mock).mockResolvedValue([])
+    ;(getTeacherScheduledShifts as jest.Mock).mockResolvedValue([
+      { date: '2099-02-10', time_slot_id: 'slot-1', classroom_name: 'Infant' },
+    ])
+    ;(getTimeOffRequests as jest.Mock).mockResolvedValue([])
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValue([])
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/check-conflicts',
+      'POST',
+      {
+        sub_id: 'sub-1',
+        coverage_request_id: 'coverage-1',
+        shift_ids: ['shift-teaching', 'shift-sub'],
+        assign_as_floater: true,
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          shift_id: 'shift-teaching',
+          status: 'available',
+        }),
+        expect.objectContaining({
+          shift_id: 'shift-sub',
+          status: 'available',
+        }),
+      ])
+    )
+  })
+
   it('continues when fetching a time-off request shifts throws', async () => {
     const coverageRequestsQuery = {
       select: jest.fn().mockReturnThis(),

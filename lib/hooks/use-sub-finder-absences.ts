@@ -43,6 +43,8 @@ export type SubFinderAbsence = {
     name: string
     color: string | null
   }>
+  /** True when end_date is in the past (within last 90 days). Used for Sub Finder left panel Past section. */
+  is_past?: boolean
 }
 
 async function fetchSubFinderAbsences(

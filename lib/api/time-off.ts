@@ -18,7 +18,7 @@ type TimeOffShift = Database['public']['Tables']['time_off_shifts']['Row']
 type TimeOffRequestWithTeacher = TimeOffRequest & { teacher: Teacher }
 type TimeOffRequestWithDetails = TimeOffRequestWithTeacher & { shifts: TimeOffShift[] }
 
-// See docs/data-lifecycle.md: time_off_requests lifecycle
+// See docs/domain/data-lifecycle.md: time_off_requests lifecycle
 export async function getTimeOffRequests(filters?: {
   school_id?: string
   teacher_id?: string

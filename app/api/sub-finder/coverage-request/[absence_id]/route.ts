@@ -212,6 +212,46 @@ export async function GET(
           }
         }
       }
+    } else {
+      // Coverage request already exists: compute omitted shifts (time_off_shifts with no coverage_request_shift, e.g. missing classroom)
+      const allShifts = (await getTimeOffShifts(absence_id)) || []
+      const userSchoolIdForOmitted = await getUserSchoolId()
+      const schoolClosuresForOmitted =
+        userSchoolIdForOmitted && startDate && endDate
+          ? await getSchoolClosuresForDateRange(userSchoolIdForOmitted, startDate, endDate)
+          : []
+      const closureListForOmitted = schoolClosuresForOmitted.map(c => ({
+        date: c.date,
+        time_slot_id: c.time_slot_id,
+      }))
+      const shiftsNonClosed =
+        closureListForOmitted.length > 0
+          ? allShifts.filter(
+              (s: any) =>
+                !isSlotClosedOnDate(toDateStringISO(s.date), s.time_slot_id, closureListForOmitted)
+            )
+          : allShifts
+
+      const { data: crShiftsForOmitted } = await supabase
+        .from('coverage_request_shifts')
+        .select('date, time_slot_id')
+        .eq('coverage_request_id', coverageRequestId)
+
+      const crShiftKeys = new Set(
+        (crShiftsForOmitted || []).map(
+          (r: { date: string; time_slot_id: string }) =>
+            `${toDateStringISO(r.date)}|${r.time_slot_id}`
+        )
+      )
+      const omittedForExisting = shiftsNonClosed.filter(
+        (s: any) => !crShiftKeys.has(`${toDateStringISO(s.date)}|${s.time_slot_id}`)
+      )
+      omittedShiftCount = omittedForExisting.length
+      omittedShifts = omittedForExisting.map((s: any) => ({
+        date: toDateStringISO(s.date),
+        day_of_week_id: s.day_of_week_id as string,
+        time_slot_id: s.time_slot_id as string,
+      }))
     }
 
     // Get coverage_request_shifts (filter out shifts on school closed days for response)

@@ -35,19 +35,31 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
     const { data: shifts, error } = await supabase
       .from('coverage_request_shifts')
-      .select('id, date, time_slots:time_slot_id(code)')
+      .select('id, date, time_slot_id, time_slots:time_slot_id(code)')
       .eq('coverage_request_id', coverageRequestId)
 
     if (error) {
       return createErrorResponse(error, 'Failed to fetch coverage request shifts', 500)
     }
 
-    const shiftIdMap = new Map<string, string>()
+    // Key -> shift ids (array for floater: multiple shifts per date|slot)
+    const shiftIdMap = new Map<string, string[]>()
     ;(shifts || []).forEach((shift: any) => {
       const timeSlot = Array.isArray(shift.time_slots) ? shift.time_slots[0] : shift.time_slots
       const timeSlotCode = timeSlot?.code || ''
       if (!shift.date || !timeSlotCode) return
-      shiftIdMap.set(`${shift.date}|${timeSlotCode}`, shift.id)
+      const key = `${shift.date}|${timeSlotCode}`
+      if (!shiftIdMap.has(key)) shiftIdMap.set(key, [])
+      shiftIdMap.get(key)!.push(shift.id)
+    })
+
+    // Group shift ids by (date, time_slot_id) to find floater slots (multiple rooms per slot)
+    const slotKeyToShiftIds = new Map<string, string[]>()
+    ;(shifts || []).forEach((shift: any) => {
+      if (!shift.date || !shift.time_slot_id) return
+      const key = `${shift.date}|${shift.time_slot_id}`
+      if (!slotKeyToShiftIds.has(key)) slotKeyToShiftIds.set(key, [])
+      slotKeyToShiftIds.get(key)!.push(shift.id)
     })
 
     const shiftOverrides: Array<{
@@ -58,37 +70,51 @@ export async function POST(request: NextRequest) {
     const selectedShiftIds: string[] = []
 
     availableShiftKeys.forEach(key => {
-      const shiftId = shiftIdMap.get(key)
-      if (!shiftId) return
+      const shiftIds = shiftIdMap.get(key)
+      if (!shiftIds || shiftIds.length === 0) return
       const selected = selectedShiftKeys.has(key)
-      shiftOverrides.push({
-        coverage_request_shift_id: shiftId,
-        selected,
-        override_availability: false,
+      shiftIds.forEach(shiftId => {
+        shiftOverrides.push({
+          coverage_request_shift_id: shiftId,
+          selected,
+          override_availability: false,
+        })
+        if (selected) {
+          selectedShiftIds.push(shiftId)
+        }
       })
-      if (selected) {
-        selectedShiftIds.push(shiftId)
-      }
     })
 
     unavailableShiftKeys.forEach(key => {
-      const shiftId = shiftIdMap.get(key)
-      if (!shiftId) return
+      const shiftIds = shiftIdMap.get(key)
+      if (!shiftIds || shiftIds.length === 0) return
       const override = overrideShiftKeys.has(key)
       const selected = selectedShiftKeys.has(key) && override
-      shiftOverrides.push({
-        coverage_request_shift_id: shiftId,
-        selected,
-        override_availability: override,
+      shiftIds.forEach(shiftId => {
+        shiftOverrides.push({
+          coverage_request_shift_id: shiftId,
+          selected,
+          override_availability: override,
+        })
+        if (selected) {
+          selectedShiftIds.push(shiftId)
+        }
       })
-      if (selected) {
-        selectedShiftIds.push(shiftId)
+    })
+
+    // Floater slots: (date, time_slot_id) with multiple shifts. All selected ids in such slots are floater.
+    const selectedSet = new Set(selectedShiftIds)
+    const isFloaterShiftIds: string[] = []
+    slotKeyToShiftIds.forEach(ids => {
+      if (ids.length > 1) {
+        ids.filter(id => selectedSet.has(id)).forEach(id => isFloaterShiftIds.push(id))
       }
     })
 
     return NextResponse.json({
       shift_overrides: shiftOverrides,
       selected_shift_ids: selectedShiftIds,
+      is_floater_shift_ids: isFloaterShiftIds,
     })
   } catch (error) {
     return createErrorResponse(

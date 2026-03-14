@@ -92,7 +92,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-// See docs/data-lifecycle.md: time_off_requests lifecycle
+// See docs/domain/data-lifecycle.md: time_off_requests lifecycle
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params

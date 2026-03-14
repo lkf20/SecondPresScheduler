@@ -15,6 +15,8 @@ type AssignShiftsData = {
   coverage_request_id: string
   selected_shift_ids: string[]
   notes?: string
+  /** Coverage_request_shift_ids to create as floater (0.5 each). Used for floater slots and conflict override. */
+  is_floater_shift_ids?: string[]
 }
 
 type UnassignShiftData = {

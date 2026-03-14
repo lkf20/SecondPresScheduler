@@ -3,11 +3,16 @@
 import { POST } from '@/app/api/assign-sub/shifts/route'
 import { createJsonRequest } from '@/tests/helpers/api'
 import { getUserSchoolId } from '@/lib/utils/auth'
+import { createClient } from '@/lib/supabase/server'
 import { getTeacherShiftsForAssignSub } from '@/lib/api/coverage-requests'
 import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 
 jest.mock('@/lib/utils/auth', () => ({
   getUserSchoolId: jest.fn(),
+}))
+
+jest.mock('@/lib/supabase/server', () => ({
+  createClient: jest.fn(),
 }))
 
 jest.mock('@/lib/api/coverage-requests', () => ({
@@ -18,9 +23,36 @@ jest.mock('@/lib/api/school-calendar', () => ({
   getSchoolClosuresForDateRange: jest.fn().mockResolvedValue([]),
 }))
 
+function mockSupabaseEmpty() {
+  const timeOffChain = {
+    select: jest.fn().mockReturnThis(),
+    in: jest.fn().mockResolvedValue({ data: [] }),
+  }
+  const coverageShiftsChain = {
+    select: jest.fn().mockReturnThis(),
+    in: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockResolvedValue({ data: [] }),
+  }
+  const subAssignmentsChain = {
+    select: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockReturnThis(),
+    gte: jest.fn().mockReturnThis(),
+    lte: jest.fn().mockResolvedValue({ data: [] }),
+  }
+  ;(createClient as jest.Mock).mockResolvedValue({
+    from: jest.fn((table: string) => {
+      if (table === 'time_off_requests') return timeOffChain
+      if (table === 'coverage_request_shifts') return coverageShiftsChain
+      if (table === 'sub_assignments') return subAssignmentsChain
+      throw new Error(`Unexpected table: ${table}`)
+    }),
+  })
+}
+
 describe('POST /api/assign-sub/shifts', () => {
   beforeEach(() => {
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    mockSupabaseEmpty()
     ;(getTeacherShiftsForAssignSub as jest.Mock).mockResolvedValue([
       {
         id: '2026-03-10|dow-2|slot-1',
@@ -106,5 +138,83 @@ describe('POST /api/assign-sub/shifts', () => {
     const json = await response.json()
     expect(response.status).toBe(200)
     expect(json.shifts.every((s: any) => s.school_closure === false)).toBe(true)
+  })
+
+  it('returns coverage_request_shift_id and assignment fields for assigned time-off shifts', async () => {
+    ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
+    ;(getTeacherShiftsForAssignSub as jest.Mock).mockResolvedValue([
+      {
+        id: '2026-03-10|dow-2|slot-1',
+        date: '2026-03-10',
+        day_of_week_id: 'dow-2',
+        time_slot_id: 'slot-1',
+        time_slot_code: 'AM',
+        classroom_id: 'class-1',
+        has_time_off: true,
+        time_off_request_id: 'tor-1',
+      },
+    ])
+    const timeOffChain = {
+      select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockResolvedValue({
+        data: [{ id: 'tor-1', coverage_request_id: 'cr-1' }],
+      }),
+    }
+    const coverageShiftsChain = {
+      select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'crs-1',
+            coverage_request_id: 'cr-1',
+            date: '2026-03-10',
+            time_slot_id: 'slot-1',
+            classroom_id: 'class-1',
+            time_slots: { code: 'AM' },
+          },
+        ],
+      }),
+    }
+    const subAssignmentsChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'assign-1',
+            sub_id: 'sub-1',
+            date: '2026-03-10',
+            time_slot_id: 'slot-1',
+            staff: { first_name: 'Jane', last_name: 'Doe', display_name: null },
+          },
+        ],
+      }),
+    }
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'time_off_requests') return timeOffChain
+        if (table === 'coverage_request_shifts') return coverageShiftsChain
+        if (table === 'sub_assignments') return subAssignmentsChain
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/assign-sub/shifts', 'POST', {
+      teacher_id: 'teacher-1',
+      start_date: '2026-03-10',
+      end_date: '2026-03-10',
+    })
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.shifts).toHaveLength(1)
+    const shift = json.shifts[0]
+    expect(shift.coverage_request_shift_id).toBe('crs-1')
+    expect(shift.assignment_id).toBe('assign-1')
+    expect(shift.assigned_sub_id).toBe('sub-1')
+    expect(shift.assigned_sub_name).toBe('Jane D.')
   })
 })
