@@ -14,17 +14,18 @@ export async function GET() {
     const supabase = await createClient()
     const today = getTodayISO()
 
-    // Find all future coverage_request_shifts that are not cancelled
+    // Find all future coverage_request_shifts that are not cancelled (shift row and parent coverage_request)
     const { data: shiftsRaw, error: shiftsError } = await supabase
       .from('coverage_request_shifts')
       .select('id, date, day_of_week_id, time_slot_id, coverage_requests!inner(teacher_id, status)')
       .eq('school_id', schoolId)
       .gte('date', today)
       .neq('status', 'cancelled')
+      .neq('coverage_requests.status', 'cancelled')
 
     if (shiftsError) throw shiftsError
 
-    // Exclude shifts whose parent coverage_request is cancelled (defensive)
+    // Defensive: exclude any shift whose parent coverage_request is cancelled (e.g. if filter syntax varies)
     const shifts = (shiftsRaw ?? []).filter(s => {
       const cr = s.coverage_requests as unknown as { status?: string }
       return cr?.status !== 'cancelled'

@@ -391,7 +391,7 @@ export async function PATCH(request: NextRequest) {
         }
         if (validateAuditLogEntry(auditEntry).valid) await logAuditEvent(auditEntry)
       }
-    } else {
+    } else if (hasAdds) {
       // Adds only: run add loop with rollback on failure. Log audit only after full success.
       const createdClosureIdsToRollback: string[] = []
       const auditEntriesToLog: Parameters<typeof logAuditEvent>[0][] = []
