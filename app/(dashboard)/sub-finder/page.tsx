@@ -273,6 +273,7 @@ export default function SubFinderPage() {
   const [manualCreateTimeOffReason, setManualCreateTimeOffReason] = useState<string>('Sick Day')
   const [manualCreateTimeOffNotes, setManualCreateTimeOffNotes] = useState<string>('')
   const [manualCreateTimeOffSubmitting, setManualCreateTimeOffSubmitting] = useState(false)
+  const manualCreateTimeOffSubmittingRef = useRef(false)
   const onConflictSummaryChangeForTable = useCallback(
     (summary: { conflictCount: number; totalScheduled: number; totalAssignable: number }) => {
       hasReceivedConflictDataForAutoRunRef.current = true
@@ -287,16 +288,12 @@ export default function SubFinderPage() {
 
   /** Create time off request inline from manual mode (no time off case). Refreshes left panel and triggers auto-run Find Subs on success. */
   const handleCreateTimeOffFromManual = useCallback(async () => {
-    if (manualCreateTimeOffSubmitting) return
-    if (
-      !manualTeacherId ||
-      !manualStartDate ||
-      manualSelectedShifts.length === 0 ||
-      !manualCreateTimeOffReason?.trim()
-    ) {
-      toast.error('Please select a reason for the time off request.')
+    if (manualCreateTimeOffSubmittingRef.current) return
+    if (!manualTeacherId || !manualStartDate || manualSelectedShifts.length === 0) {
+      toast.error('Please select a teacher, date range, and at least one shift.')
       return
     }
+    manualCreateTimeOffSubmittingRef.current = true
     setManualCreateTimeOffSubmitting(true)
     setManualTimeOffCoverageUnconfirmed(false)
     try {
@@ -321,7 +318,7 @@ export default function SubFinderPage() {
           start_date: manualStartDate,
           end_date: endDate,
           shift_selection_mode: 'select_shifts',
-          reason: manualCreateTimeOffReason.trim(),
+          reason: manualCreateTimeOffReason?.trim() || null,
           notes: manualCreateTimeOffNotes.trim() || null,
           shifts: uniqueSlots,
         }),
@@ -377,7 +374,17 @@ export default function SubFinderPage() {
           'There was a delay confirming coverage. Refresh the page or click Find Subs to continue.'
         )
       }
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : 'Could not create time off request.'
+      const isNetworkError =
+        typeof raw === 'string' && (raw === 'Failed to fetch' || /network|fetch/i.test(raw))
+      toast.error(
+        isNetworkError
+          ? 'Could not create time off request. Check your connection and try again.'
+          : raw || 'Could not create time off request. Please try again.'
+      )
     } finally {
+      manualCreateTimeOffSubmittingRef.current = false
       setManualCreateTimeOffSubmitting(false)
     }
   }, [

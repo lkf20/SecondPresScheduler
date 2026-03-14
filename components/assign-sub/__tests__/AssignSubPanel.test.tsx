@@ -1,8 +1,19 @@
 import React from 'react'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import AssignSubPanel from '@/components/assign-sub/AssignSubPanel'
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
+
+function renderWithQueryClient(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  })
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+}
 
 const mockRefresh = jest.fn()
 const mockPush = jest.fn()
@@ -21,6 +32,10 @@ jest.mock('sonner', () => ({
     success: (...args: unknown[]) => mockToastSuccess(...args),
     error: (...args: unknown[]) => mockToastError(...args),
   },
+}))
+
+jest.mock('@/lib/contexts/SchoolContext', () => ({
+  useSchool: () => 'school-1',
 }))
 
 jest.mock('@/lib/hooks/use-display-name-format', () => ({
@@ -259,7 +274,7 @@ describe('AssignSubPanel', () => {
 
   it('Single date with no time off: shifts populate (no "No scheduled shifts found")', async () => {
     const user = userEvent.setup()
-    render(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
 
     await fillForm(user)
 
@@ -275,7 +290,7 @@ describe('AssignSubPanel', () => {
 
   it('Shifts without time off show time-off-will-be-created message, never extra coverage', async () => {
     const user = userEvent.setup()
-    render(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
 
     await fillForm(user)
 
@@ -294,7 +309,7 @@ describe('AssignSubPanel', () => {
   it('Scenario 1 & 2: User selects dates with no time off. Shifts populate. User can create time off but cannot create extra coverage.', async () => {
     const user = userEvent.setup()
     const onClose = jest.fn()
-    render(<AssignSubPanel isOpen={true} onClose={onClose} />)
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={onClose} />)
 
     await fillForm(user)
 
@@ -346,7 +361,7 @@ describe('AssignSubPanel', () => {
 
   it('Scenario 3: User selects a shift where the sub is already assigned elsewhere. User should NOT be able to assign that shift.', async () => {
     const user = userEvent.setup()
-    render(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
 
     await fillForm(user)
 
@@ -367,7 +382,7 @@ describe('AssignSubPanel', () => {
 
   it('Scenario 4: User selects shift where the sub is marked as Unavailable. User should be able to assign but there should be a warning.', async () => {
     const user = userEvent.setup()
-    render(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
 
     await fillForm(user)
 
@@ -419,7 +434,7 @@ describe('AssignSubPanel', () => {
       return defaultFetch(url, options)
     }) as typeof fetch
     const user = userEvent.setup()
-    render(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
     await fillForm(user)
     await waitFor(() => {
       expect(screen.getByText(/Can change diapers/i)).toBeInTheDocument()
@@ -444,7 +459,7 @@ describe('AssignSubPanel', () => {
       return defaultFetch(url, options)
     }) as typeof fetch
     const user = userEvent.setup()
-    render(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
     await fillForm(user)
     await waitFor(() => {
       expect(screen.getByText(/CPR certified/i)).toBeInTheDocument()
@@ -525,7 +540,7 @@ describe('AssignSubPanel', () => {
     })
 
     const user = userEvent.setup()
-    render(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
 
     await fillForm(user)
 
@@ -591,7 +606,7 @@ describe('AssignSubPanel', () => {
     }) as any
 
     const user = userEvent.setup()
-    render(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
     await fillForm(user)
 
     await waitFor(() => {
