@@ -300,7 +300,7 @@ export default function DashboardClient({
   const isGreetingReady = isClient && greetingTime !== null && !isLoadingProfile
   const [belowRequiredCollapsed, setBelowRequiredCollapsed] = useState(false)
   const [belowPreferredCollapsed, setBelowPreferredCollapsed] = useState(false)
-  const [coverageFilter, setCoverageFilter] = useState<'needs' | 'covered' | 'all'>('needs')
+  const [coverageFilter, setCoverageFilter] = useState<'needs' | 'covered' | 'all'>('all')
   const [coverageSectionCollapsed, setCoverageSectionCollapsed] = useState(false)
   const [scheduledSubsSectionCollapsed, setScheduledSubsSectionCollapsed] = useState(false)
   const [staffingTargetSectionCollapsed, setStaffingTargetSectionCollapsed] = useState(false)
@@ -923,6 +923,21 @@ export default function DashboardClient({
                   type="button"
                   onClick={e => {
                     e?.stopPropagation?.()
+                    setCoverageFilter('all')
+                  }}
+                  className={cn(
+                    'rounded-full border px-3 py-1 text-xs font-medium transition',
+                    coverageFilter === 'all'
+                      ? 'border-button-fill bg-button-fill text-button-fill-foreground'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                  )}
+                >
+                  All ({coverageCounts.all})
+                </button>
+                <button
+                  type="button"
+                  onClick={e => {
+                    e?.stopPropagation?.()
                     setCoverageFilter('needs')
                   }}
                   className={cn(
@@ -948,21 +963,6 @@ export default function DashboardClient({
                   )}
                 >
                   Covered ({coverageCounts.covered})
-                </button>
-                <button
-                  type="button"
-                  onClick={e => {
-                    e?.stopPropagation?.()
-                    setCoverageFilter('all')
-                  }}
-                  className={cn(
-                    'rounded-full border px-3 py-1 text-xs font-medium transition',
-                    coverageFilter === 'all'
-                      ? 'border-button-fill bg-button-fill text-button-fill-foreground'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                  )}
-                >
-                  All ({coverageCounts.all})
                 </button>
               </div>
             </div>
