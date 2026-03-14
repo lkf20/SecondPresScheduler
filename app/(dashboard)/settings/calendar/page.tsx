@@ -561,12 +561,17 @@ export default function SchoolCalendarPage() {
             editGroup: open ? prev.editGroup : null,
           }))
         }
-        onSuccess={() => {
-          clearDataHealthCache()
-          Promise.all([
-            invalidateDashboard(queryClient, schoolId),
-            invalidateWeeklySchedule(queryClient, schoolId),
-          ]).then(() => fetchData())
+        onSuccess={async () => {
+          try {
+            clearDataHealthCache()
+            await Promise.all([
+              invalidateDashboard(queryClient, schoolId),
+              invalidateWeeklySchedule(queryClient, schoolId),
+            ])
+            await fetchData()
+          } catch (e) {
+            toast.error('Calendar was updated but refresh failed. Please refresh the page.')
+          }
         }}
         mode={closurePanel.mode}
         editGroup={closurePanel.editGroup}

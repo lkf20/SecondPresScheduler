@@ -50,7 +50,7 @@ import {
   clearSubFinderState,
 } from '@/lib/utils/sub-finder-state'
 import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
-import { invalidateSubAssignment } from '@/lib/utils/invalidation'
+import { invalidateSubAssignment, invalidateTimeOffRequest } from '@/lib/utils/invalidation'
 import { findTopCombinations } from '@/lib/utils/sub-combination'
 import CoverageSummary from '@/components/sub-finder/CoverageSummary'
 import StaffLink from '@/components/ui/staff-link'
@@ -360,6 +360,12 @@ export default function SubFinderPage() {
       }
 
       toast.success('Time off request created.')
+      clearDataHealthCache()
+      await invalidateTimeOffRequest(
+        queryClient,
+        schoolId,
+        timeOffData?.coverage_request_id ?? undefined
+      )
       hasReceivedConflictDataForAutoRunRef.current = false
       setManualConflictCheckReady(false)
       setManualLeftPanelRefreshKey(k => k + 1)

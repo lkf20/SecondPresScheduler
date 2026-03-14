@@ -324,10 +324,10 @@ describe('AssignSubPanel', () => {
     const checkboxes = screen.getAllByRole('checkbox')
     await user.click(checkboxes[0]) // This is crs-1
 
-    // Should see time-off reason and notes, confirming they can create it
+    // Should see time-off reason and notes, confirming they can create it (wait for state update)
     expect(await screen.findByText(/Create Time Off Request/i)).toBeInTheDocument()
     expect(
-      screen.getByText(/1 of 1 selected shifts does not have a time off request/i)
+      await screen.findByText(/1 of 1 selected shifts does not have a time off request/i)
     ).toBeInTheDocument()
 
     // The button explicitly forces Time Off creation, preventing "extra coverage"
@@ -404,9 +404,11 @@ describe('AssignSubPanel', () => {
     await user.click(checkboxes[0])
     expect(checkboxes[0]).toBeChecked()
 
-    // Warning should be present in the summary section
+    // Warning should be present in the summary section (wait for state update)
     expect(
-      screen.getByText(/1 selected shift overrides the sub's availability or existing assignment/i)
+      await screen.findByText(
+        /1 selected shift overrides the sub's availability or existing assignment/i
+      )
     ).toBeInTheDocument()
   })
 
