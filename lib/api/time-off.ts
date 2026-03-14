@@ -373,7 +373,11 @@ export async function cancelTimeOffRequest(
       throw new Error('school_id is required to create extra coverage request')
     }
 
-    // Create new coverage request for extra coverage
+    // Create new coverage request for extra coverage.
+    // Constraint: covered_shifts <= total_shifts. Cap covered_shifts in case of data inconsistency
+    // (e.g. multiple assignments pointing to the same shift, or stale assignment refs).
+    const totalShifts = shiftsToKeep.length
+    const coveredShifts = Math.min(assignmentsToKeep.length, totalShifts)
     const { data: newCoverageRequest, error: newCrError } = await supabase
       .from('coverage_requests')
       .insert({
@@ -383,8 +387,8 @@ export async function cancelTimeOffRequest(
         start_date: startDate,
         end_date: endDate,
         status: 'open', // Will be updated to 'filled' if all shifts are covered
-        total_shifts: shiftsToKeep.length,
-        covered_shifts: assignmentsToKeep.length,
+        total_shifts: totalShifts,
+        covered_shifts: coveredShifts,
         school_id: schoolId,
       })
       .select()
@@ -447,7 +451,10 @@ export async function cancelTimeOffRequest(
     }
 
     // Update new coverage request status if all shifts are covered
-    if (newCoverageRequest.total_shifts === assignmentsToKeep.length) {
+    if (
+      newCoverageRequest.total_shifts > 0 &&
+      newCoverageRequest.covered_shifts === newCoverageRequest.total_shifts
+    ) {
       if (
         newCoverageRequest.status &&
         !canTransitionCoverageRequestStatus(
