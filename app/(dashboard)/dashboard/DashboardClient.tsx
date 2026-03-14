@@ -368,6 +368,16 @@ export default function DashboardClient({
   )
 
   const [orphanedShiftsCount, setOrphanedShiftsCount] = useState<number>(0)
+  const [dataHealthFetchKey, setDataHealthFetchKey] = useState(0)
+
+  // Refetch when tab becomes visible so we pick up cross-tab invalidation (e.g. calendar cleared in another tab)
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') setDataHealthFetchKey(k => k + 1)
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [])
 
   useEffect(() => {
     const cached = getDataHealthCache()
@@ -390,7 +400,7 @@ export default function DashboardClient({
         }
       })
       .catch(console.error)
-  }, [])
+  }, [dataHealthFetchKey])
 
   const router = useRouter()
 

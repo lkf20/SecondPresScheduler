@@ -190,6 +190,40 @@ describe('calendar settings route integration', () => {
       })
     })
 
+    it('adds single-day closure via add_closures (client path)', async () => {
+      ;(createSchoolClosure as jest.Mock).mockResolvedValue({
+        id: 'c-new',
+        date: '2024-12-25',
+        time_slot_id: null,
+        reason: 'Holiday',
+      })
+
+      const response = await PATCH(
+        new Request('http://localhost/api/settings/calendar', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            add_closures: [
+              {
+                date: '2024-12-25',
+                time_slot_id: null,
+                reason: 'Holiday',
+                notes: null,
+              },
+            ],
+          }),
+        })
+      )
+
+      expect(response.status).toBe(200)
+      expect(createSchoolClosure).toHaveBeenCalledWith('school-1', {
+        date: '2024-12-25',
+        time_slot_id: null,
+        reason: 'Holiday',
+        notes: null,
+      })
+    })
+
     it('adds date range closure', async () => {
       ;(createSchoolClosureRange as jest.Mock).mockResolvedValue({
         created: 3,
@@ -207,6 +241,40 @@ describe('calendar settings route integration', () => {
               end_date: '2024-12-26',
               reason: 'Holiday break',
             },
+          }),
+        })
+      )
+
+      expect(response.status).toBe(200)
+      expect(createSchoolClosureRange).toHaveBeenCalledWith(
+        'school-1',
+        '2024-12-24',
+        '2024-12-26',
+        'Holiday break',
+        null
+      )
+    })
+
+    it('adds date range closure via add_closures (client path)', async () => {
+      ;(createSchoolClosureRange as jest.Mock).mockResolvedValue({
+        created: 3,
+        skipped: 0,
+        createdIds: ['range-1', 'range-2', 'range-3'],
+      })
+
+      const response = await PATCH(
+        new Request('http://localhost/api/settings/calendar', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            add_closures: [
+              {
+                start_date: '2024-12-24',
+                end_date: '2024-12-26',
+                reason: 'Holiday break',
+                notes: null,
+              },
+            ],
           }),
         })
       )
