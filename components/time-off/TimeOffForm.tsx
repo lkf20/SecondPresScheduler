@@ -743,11 +743,6 @@ const TimeOffForm = React.forwardRef<
             )
             return
           }
-          if (response.status === 400 && errorData?.code === 'REASON_REQUIRED') {
-            setFormError('reason', { type: 'manual', message: 'Reason is required when saving.' })
-            setError(errorData.error || 'Reason is required when saving this time off request.')
-            return
-          }
           const action = timeOffRequestId ? 'update' : 'create'
           throw new Error(errorData.error || `Failed to ${action} time off request`)
         }

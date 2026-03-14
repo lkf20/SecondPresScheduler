@@ -338,18 +338,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Reason is required when creating an active (non-draft) time off request.
-    const effectiveReason = requestData.reason
-    if (status !== 'draft' && (effectiveReason == null || String(effectiveReason).trim() === '')) {
-      return NextResponse.json(
-        {
-          error: 'Reason is required when saving this time off request.',
-          code: 'REASON_REQUIRED',
-        },
-        { status: 400 }
-      )
-    }
-
     // Defensive: never create shifts outside the request date range (guards against
     // timezone/parse edge cases or bugs in upstream shift building).
     if (requestData.start_date && effectiveEndDate) {

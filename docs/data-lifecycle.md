@@ -50,8 +50,9 @@ write paths.
 - **Owner / Source of Truth:** Time-off form + time-off API routes.
 - **Allowed writers:** `app/api/time-off/*`, `lib/api/time-off.ts`
 - **Lifecycle:** `draft -> active -> cancelled` (see status transitions below).
+- **Reason:** Optional for both draft and active requests. When provided, must be one of: Vacation, Sick Day, Training, Other (DB constraint and form enum).
 - **Derived vs stored:**
-  - **Stored:** `status`, `start_date`, `end_date`, `teacher_id`, `shift_selection_mode`
+  - **Stored:** `status`, `start_date`, `end_date`, `teacher_id`, `shift_selection_mode`, `reason` (optional)
   - **Derived:** computed shift list for `all_scheduled`
 
 ### time_off_shifts

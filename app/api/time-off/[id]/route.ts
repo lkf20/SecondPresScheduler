@@ -135,19 +135,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       )
     }
 
-    // When activating (non-draft), reason is required.
-    const effectiveReason =
-      requestData.reason !== undefined ? requestData.reason : existingRequest.reason
-    if (status !== 'draft' && (effectiveReason == null || String(effectiveReason).trim() === '')) {
-      return NextResponse.json(
-        {
-          error: 'Reason is required when saving this time off request.',
-          code: 'REASON_REQUIRED',
-        },
-        { status: 400 }
-      )
-    }
-
     // When mode is select_shifts, require an explicit shifts array (can be empty) so we never
     // leave stale shifts when switching from all_scheduled to select_shifts with a malformed payload.
     if (requestData.shift_selection_mode === 'select_shifts' && !Array.isArray(shifts)) {
