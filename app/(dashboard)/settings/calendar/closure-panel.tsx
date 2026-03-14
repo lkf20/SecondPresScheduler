@@ -27,6 +27,7 @@ import {
   ClosureTimeSlotCheckboxes,
 } from './closure-form-fields'
 import { buildEditClosurePayload } from '@/lib/settings/build-edit-closure-payload'
+import UnsavedChangesDialog from '@/components/schedules/UnsavedChangesDialog'
 
 /** Group of closures on one date (from calendar page groupedClosures). Used to open panel in edit mode. */
 export interface ClosureEditGroup {
@@ -107,6 +108,7 @@ export default function ClosurePanel({
   } | null>(null)
   /** When add fails because a closure already exists (409), show modal so user can't miss it */
   const [duplicateError, setDuplicateError] = useState<string | null>(null)
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
 
   // Sync from editGroup when opening in edit mode
   useEffect(() => {
@@ -148,16 +150,61 @@ export default function ClosurePanel({
       setDuplicateError(null)
       setAddStartPickerOpen(false)
       setAddEndPickerOpen(false)
+      setShowUnsavedDialog(false)
     }
   }, [open])
 
-  const handleClose = () => {
-    if (!open) return
+  const hasUnsavedChanges = (() => {
+    if (isEdit && editGroup) {
+      const hasAll = editGroup.closures.some(c => !c.time_slot_id)
+      const initialSlotIds = hasAll
+        ? []
+        : [
+            ...editGroup.closures.map(c => c.time_slot_id).filter((id): id is string => id != null),
+          ].sort()
+      const currentSlotIds = [...timeSlotIds].sort()
+      return (
+        (reason ?? '') !== (editGroup.reason ?? '') ||
+        (notes ?? '') !== (editGroup.notes ?? '') ||
+        appliesTo !== (hasAll ? 'all' : 'specific') ||
+        currentSlotIds.length !== initialSlotIds.length ||
+        currentSlotIds.some((id, i) => id !== initialSlotIds[i])
+      )
+    }
+    // Add mode: dirty if any field is set
+    return (
+      (addMode === 'range' && (addStartDate !== '' || addEndDate !== '')) ||
+      (addMode === 'single' && addDate !== '') ||
+      (reason ?? '').trim() !== '' ||
+      (notes ?? '').trim() !== '' ||
+      (appliesTo === 'specific' && timeSlotIds.length > 0)
+    )
+  })()
+
+  const doClose = () => {
     setAddStartPickerOpen(false)
     setAddEndPickerOpen(false)
     setReplaceConfirm(null)
     setDuplicateError(null)
     onOpenChange(false)
+  }
+
+  const handleClose = () => {
+    if (!open) return
+    if (hasUnsavedChanges) {
+      setShowUnsavedDialog(true)
+      return
+    }
+    doClose()
+  }
+
+  const handleSheetOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && hasUnsavedChanges) {
+      setShowUnsavedDialog(true)
+      return
+    }
+    if (!nextOpen) doClose()
+    else onOpenChange(true)
   }
 
   const handleSubmit = async () => {
@@ -182,7 +229,7 @@ export default function ClosurePanel({
           throw new Error(err.error || 'Failed to update')
         }
         toast.success('Closure updated.')
-        handleClose()
+        doClose()
         onSuccess()
       } catch (err: unknown) {
         toast.error(err instanceof Error ? err.message : 'Failed to update')
@@ -267,7 +314,7 @@ export default function ClosurePanel({
           throw new Error(message)
         }
         toast.success('Closures added.')
-        handleClose()
+        doClose()
         onSuccess()
       } else if (appliesTo === 'all') {
         const res = await fetch('/api/settings/calendar', {
@@ -294,7 +341,7 @@ export default function ClosurePanel({
           throw new Error(message)
         }
         toast.success('Closure added.')
-        handleClose()
+        doClose()
         onSuccess()
       } else {
         const res = await fetch('/api/settings/calendar', {
@@ -319,7 +366,7 @@ export default function ClosurePanel({
           throw new Error(message)
         }
         toast.success('Closure added.')
-        handleClose()
+        doClose()
         onSuccess()
       }
     } catch (err: unknown) {
@@ -333,7 +380,7 @@ export default function ClosurePanel({
 
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
+      <Sheet open={open} onOpenChange={handleSheetOpenChange}>
         <SheetContent
           className="w-full overflow-y-auto bg-gray-50 p-0"
           style={{ maxWidth: '34rem' }}
@@ -576,7 +623,7 @@ export default function ClosurePanel({
                       : 'Closure replaced with whole-day closure.'
                   )
                   setReplaceConfirm(null)
-                  handleClose()
+                  doClose()
                   onSuccess()
                 } catch (err: unknown) {
                   toast.error(err instanceof Error ? err.message : 'Failed to update')
@@ -619,6 +666,20 @@ export default function ClosurePanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog
+        isOpen={showUnsavedDialog}
+        onSave={() => {
+          setShowUnsavedDialog(false)
+          handleSubmit()
+        }}
+        onDiscard={() => {
+          setShowUnsavedDialog(false)
+          doClose()
+        }}
+        onCancel={() => setShowUnsavedDialog(false)}
+        saving={saving}
+      />
     </>
   )
 }
