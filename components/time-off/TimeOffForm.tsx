@@ -27,6 +27,7 @@ import {
   invalidateSubFinderAbsences,
   invalidateWeeklySchedule,
 } from '@/lib/utils/invalidation'
+import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
 import {
   Dialog,
   DialogContent,
@@ -710,6 +711,13 @@ const TimeOffForm = React.forwardRef<
             setOverlapPayload(errorData)
             return
           }
+          if (response.status === 409 && errorData?.code === 'SHIFTS_HAVE_ASSIGNMENTS') {
+            setError(
+              errorData.error ||
+                'One or more shifts have a sub assigned. Remove the sub assignment for each shift first, then try again.'
+            )
+            return
+          }
           const action = timeOffRequestId ? 'update' : 'create'
           throw new Error(errorData.error || `Failed to ${action} time off request`)
         }
@@ -720,6 +728,7 @@ const TimeOffForm = React.forwardRef<
           window.sessionStorage.removeItem(draftKey)
         }
 
+        clearDataHealthCache()
         // Invalidate React Query caches to refresh all affected pages
         if (schoolId) {
           await Promise.all([
@@ -813,6 +822,13 @@ const TimeOffForm = React.forwardRef<
             setOverlapPayload(errorData)
             return false
           }
+          if (response.status === 409 && errorData?.code === 'SHIFTS_HAVE_ASSIGNMENTS') {
+            setError(
+              errorData.error ||
+                'One or more shifts have a sub assigned. Remove the sub assignment for each shift first, then try again.'
+            )
+            return false
+          }
           throw new Error(errorData.error || 'Failed to save draft')
         }
 
@@ -894,6 +910,7 @@ const TimeOffForm = React.forwardRef<
           throw new Error(errorData.error || 'Failed to cancel time off request')
         }
 
+        clearDataHealthCache()
         // Clear any draft data
         if (typeof window !== 'undefined') {
           window.sessionStorage.removeItem(draftKey)

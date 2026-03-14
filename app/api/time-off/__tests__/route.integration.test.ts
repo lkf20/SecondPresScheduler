@@ -20,6 +20,11 @@ import { revalidatePath } from 'next/cache'
 import { getAuditActorContext, logAuditEvent } from '@/lib/audit/logAuditEvent'
 import { createClient } from '@/lib/supabase/server'
 import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
+import { getStaffById } from '@/lib/api/staff'
+
+jest.mock('@/lib/api/staff', () => ({
+  getStaffById: jest.fn(),
+}))
 
 jest.mock('@/lib/utils/auth', () => ({
   getUserSchoolId: jest.fn(),
@@ -70,6 +75,7 @@ jest.mock('@/lib/supabase/server', () => ({
 describe('GET /api/time-off integration', () => {
   beforeEach(() => {
     jest.spyOn(console, 'error').mockImplementation(() => {})
+    ;(getStaffById as jest.Mock).mockResolvedValue({ id: 'teacher-1', active: true })
     ;(getAuditActorContext as jest.Mock).mockResolvedValue({
       actorUserId: 'user-1',
       actorDisplayName: 'Test User',
@@ -114,6 +120,44 @@ describe('GET /api/time-off integration', () => {
 
     expect(response.status).toBe(403)
     expect(json.error).toMatch(/missing school_id|profile/i)
+  })
+
+  it('POST returns 400 when teacher is not found', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getStaffById as jest.Mock).mockResolvedValue(null)
+
+    const request = createJsonRequest('http://localhost:3000/api/time-off', 'POST', {
+      teacher_id: 'teacher-missing',
+      start_date: '2026-02-20',
+      end_date: '2026-02-20',
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(json.code).toBe('TEACHER_NOT_FOUND')
+    expect(json.error).toMatch(/teacher not found/i)
+    expect(createTimeOffRequest).not.toHaveBeenCalled()
+  })
+
+  it('POST returns 400 when teacher is inactive', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getStaffById as jest.Mock).mockResolvedValue({ id: 'teacher-1', active: false })
+
+    const request = createJsonRequest('http://localhost:3000/api/time-off', 'POST', {
+      teacher_id: 'teacher-1',
+      start_date: '2026-02-20',
+      end_date: '2026-02-20',
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(json.code).toBe('TEACHER_INACTIVE')
+    expect(json.error).toMatch(/inactive|activate/i)
+    expect(createTimeOffRequest).not.toHaveBeenCalled()
   })
 
   it('GET returns filtered requests when school context exists', async () => {
@@ -404,8 +448,8 @@ describe('GET /api/time-off integration', () => {
     expect(json.warning).toMatch(/will not be recorded: Tue,?\s+Feb 10/i)
   })
 
-  it('POST excludes shifts on school closed days and creates only open-day shifts', async () => {
-    ;(createTimeOffShifts as jest.Mock).mockClear()
+  it('POST excludes shifts on school closed days and returns 400 when all shifts closed (active requires at least one shift)', async () => {
+    ;(createTimeOffRequest as jest.Mock).mockClear()
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
     ;(findOverlappingTimeOffRequest as jest.Mock).mockResolvedValue(null)
@@ -413,12 +457,6 @@ describe('GET /api/time-off integration', () => {
     ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([
       { date: '2026-02-10', time_slot_id: null },
     ])
-    ;(createTimeOffRequest as jest.Mock).mockResolvedValue({
-      id: 'request-closed',
-      teacher_id: 'teacher-1',
-      start_date: '2026-02-10',
-      end_date: '2026-02-10',
-    })
 
     const request = createJsonRequest('http://localhost:3000/api/time-off', 'POST', {
       teacher_id: 'teacher-1',
@@ -434,16 +472,17 @@ describe('GET /api/time-off integration', () => {
     const response = await POST(request as any)
     const json = await response.json()
 
-    expect(response.status).toBe(201)
+    expect(response.status).toBe(400)
+    expect(json.code).toBe('TIME_OFF_REQUIRES_SHIFTS')
     expect(getSchoolClosuresForDateRange).toHaveBeenCalledWith(
       'school-1',
       '2026-02-10',
       '2026-02-10'
     )
-    expect(createTimeOffShifts).not.toHaveBeenCalled()
+    expect(createTimeOffRequest).not.toHaveBeenCalled()
   })
 
-  it('POST creates request without shifts when no shifts are selected', async () => {
+  it('POST creates draft without shifts when no shifts are selected', async () => {
     ;(createTimeOffShifts as jest.Mock).mockClear()
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
@@ -452,13 +491,14 @@ describe('GET /api/time-off integration', () => {
       teacher_id: 'teacher-1',
       start_date: '2026-02-10',
       end_date: '2026-02-10',
-      status: 'active',
+      status: 'draft',
     })
 
     const request = createJsonRequest('http://localhost:3000/api/time-off', 'POST', {
       teacher_id: 'teacher-1',
       start_date: '2026-02-10',
       end_date: '2026-02-10',
+      status: 'draft',
       shift_selection_mode: 'select_shifts',
       shifts: [],
     })
@@ -473,6 +513,30 @@ describe('GET /api/time-off integration', () => {
     expect(json.excludedShiftCount).toBe(0)
   })
 
+  it('POST returns 400 when saving as active with no shifts', async () => {
+    ;(createTimeOffRequest as jest.Mock).mockClear()
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
+    ;(findOverlappingTimeOffRequest as jest.Mock).mockResolvedValue(null)
+
+    const request = createJsonRequest('http://localhost:3000/api/time-off', 'POST', {
+      teacher_id: 'teacher-1',
+      start_date: '2026-02-10',
+      end_date: '2026-02-10',
+      status: 'active',
+      shift_selection_mode: 'select_shifts',
+      shifts: [],
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(json.code).toBe('TIME_OFF_REQUIRES_SHIFTS')
+    expect(json.error).toMatch(/at least one shift|draft/i)
+    expect(createTimeOffRequest).not.toHaveBeenCalled()
+  })
+
   it('POST returns fallback unknown error when thrown error has no message', async () => {
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
@@ -482,7 +546,9 @@ describe('GET /api/time-off integration', () => {
       teacher_id: 'teacher-1',
       start_date: '2026-02-10',
       end_date: '2026-02-10',
+      status: 'draft',
       shift_selection_mode: 'select_shifts',
+      shifts: [],
     })
 
     const response = await POST(request as any)

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
-import { getTodayISO } from '@/lib/utils/date'
+import { getTodayISO, toDateStringISO } from '@/lib/utils/date'
 import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 
 export async function GET() {
@@ -15,29 +15,25 @@ export async function GET() {
     const today = getTodayISO()
 
     // Find all future coverage_request_shifts that are not cancelled
-    const { data: shifts, error: shiftsError } = await supabase
+    const { data: shiftsRaw, error: shiftsError } = await supabase
       .from('coverage_request_shifts')
-      .select('id, date, day_of_week_id, time_slot_id, coverage_requests!inner(teacher_id)')
+      .select('id, date, day_of_week_id, time_slot_id, coverage_requests!inner(teacher_id, status)')
       .eq('school_id', schoolId)
       .gte('date', today)
       .neq('status', 'cancelled')
 
     if (shiftsError) throw shiftsError
 
-    if (!shifts || shifts.length === 0) {
+    // Exclude shifts whose parent coverage_request is cancelled (defensive)
+    const shifts = (shiftsRaw ?? []).filter(s => {
+      const cr = s.coverage_requests as unknown as { status?: string }
+      return cr?.status !== 'cancelled'
+    })
+
+    if (shifts.length === 0) {
       return NextResponse.json({ orphanedShifts: [] })
     }
 
-    // Find closures to check if any shifts fall on closed days
-    const { data: closures, error: closuresError } = await supabase
-      .from('school_closures')
-      .select('date, time_slot_id')
-      .eq('school_id', schoolId)
-      .gte('date', today)
-
-    if (closuresError) throw closuresError
-
-    // Find baseline schedules for these teachers to check if they still match
     const teacherIds = [
       ...new Set(
         shifts.map(s => {
@@ -46,35 +42,50 @@ export async function GET() {
         })
       ),
     ]
-    const { data: baselineSchedules, error: baselineError } = await supabase
-      .from('teacher_schedules')
-      .select('teacher_id, day_of_week_id, time_slot_id')
-      .eq('school_id', schoolId)
-      .in('teacher_id', teacherIds)
 
-    if (baselineError) throw baselineError
+    // Fetch closures and baseline in parallel (both independent of each other)
+    const [closuresResult, baselineResult] = await Promise.all([
+      supabase
+        .from('school_closures')
+        .select('date, time_slot_id')
+        .eq('school_id', schoolId)
+        .gte('date', today),
+      teacherIds.length > 0
+        ? supabase
+            .from('teacher_schedules')
+            .select('teacher_id, day_of_week_id, time_slot_id')
+            .eq('school_id', schoolId)
+            .in('teacher_id', teacherIds)
+        : Promise.resolve({ data: [], error: null }),
+    ])
 
-    const orphanedShifts = []
+    if (closuresResult.error) throw closuresResult.error
+    if (baselineResult.error) throw baselineResult.error
 
-    const closureList = closures ?? []
+    const closureList = closuresResult.data ?? []
+    const baselineSchedules = baselineResult.data ?? []
+
+    // O(1) baseline lookup: key = teacher_id|day_of_week_id|time_slot_id
+    const baselineKey = (t: string, d: string | null, s: string) => `${t}|${d ?? ''}|${s}`
+    const baselineSet = new Set(
+      baselineSchedules.map(b => baselineKey(b.teacher_id, b.day_of_week_id, b.time_slot_id))
+    )
+
+    const orphanedShifts: Array<{ shift_id: string; date: string; reason: string }> = []
 
     for (const shift of shifts) {
-      // 1. Check if it falls on a closed day
-      const isClosed = isSlotClosedOnDate(shift.date, shift.time_slot_id, closureList)
+      const dateNorm = toDateStringISO(shift.date)
+      const isClosed = isSlotClosedOnDate(dateNorm, shift.time_slot_id, closureList)
 
-      // 2. Check if the baseline schedule still exists
       const req = shift.coverage_requests as unknown as { teacher_id: string }
-      const hasBaseline = baselineSchedules?.some(
-        b =>
-          b.teacher_id === req.teacher_id &&
-          b.day_of_week_id === shift.day_of_week_id &&
-          b.time_slot_id === shift.time_slot_id
+      const hasBaseline = baselineSet.has(
+        baselineKey(req.teacher_id, shift.day_of_week_id, shift.time_slot_id)
       )
 
       if (isClosed || !hasBaseline) {
         orphanedShifts.push({
           shift_id: shift.id,
-          date: shift.date,
+          date: dateNorm || shift.date,
           reason: isClosed ? 'school_closed' : 'missing_baseline',
         })
       }

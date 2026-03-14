@@ -7,6 +7,7 @@ import {
   invalidateDashboard,
   invalidateWeeklySchedule,
 } from '@/lib/utils/invalidation'
+import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
 import { toast } from 'sonner'
 
 type AssignShiftsData = {
@@ -123,7 +124,7 @@ export function useUnassignSubShift() {
       return { previousDashboard, previousWeeklySchedule }
     },
     onSuccess: async () => {
-      // Invalidate relevant queries
+      clearDataHealthCache()
       await Promise.all([
         invalidateDashboard(queryClient, schoolId),
         invalidateWeeklySchedule(queryClient, schoolId),

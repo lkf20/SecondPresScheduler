@@ -42,6 +42,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { usePanelManager } from '@/lib/contexts/PanelManagerContext'
 import { saveSubFinderState, loadSubFinderState } from '@/lib/utils/sub-finder-state'
+import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
 import { findTopCombinations } from '@/lib/utils/sub-combination'
 import CoverageSummary from '@/components/sub-finder/CoverageSummary'
 import StaffLink from '@/components/ui/staff-link'
@@ -1017,6 +1018,7 @@ export default function SubFinderPage() {
             .catch(() => ({ error: 'Failed to remove sub assignment.' }))
           throw new Error(errorBody.error || 'Failed to remove sub assignment.')
         }
+        clearDataHealthCache()
         const result = await response.json().catch(() => ({ removed_count: 0 }))
 
         const removedSubName = removeDialogShift.sub_name || 'the sub'

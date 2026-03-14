@@ -43,6 +43,7 @@ import { cn } from '@/lib/utils'
 import { formatUSPhone } from '@/lib/utils/phone'
 import { toast } from 'sonner'
 import { useAssignSubShifts } from '@/lib/hooks/use-sub-assignment-mutations'
+import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
 
 type ResponseStatus = 'none' | 'pending' | 'confirmed' | 'declined_all' | 'declined'
 type ContactStatus =
@@ -351,6 +352,7 @@ export default function ContactSubPanel({
         throw new Error(errorBody.error || 'Failed to remove sub.')
       }
 
+      clearDataHealthCache()
       if (scope === 'single' && removeDialogShift) {
         setAssignedShifts(prev =>
           prev.filter(

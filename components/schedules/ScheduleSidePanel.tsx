@@ -77,6 +77,7 @@ import {
   isSlotEffectivelyInactive,
 } from '@/lib/utils/schedule-slot-activity'
 import { BREAK_COVERAGE_ENABLED } from '@/lib/feature-flags'
+import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
 import { toast } from 'sonner'
 
 interface Teacher {
@@ -2068,6 +2069,7 @@ export default function ScheduleSidePanel({
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || 'Failed to add temporary coverage.')
       }
+      clearDataHealthCache()
       try {
         await onSave?.()
       } catch (refreshError) {
@@ -2157,6 +2159,7 @@ export default function ScheduleSidePanel({
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || 'Failed to add temporary coverage.')
       }
+      clearDataHealthCache()
       try {
         await onSave?.()
       } catch (refreshError) {
@@ -2199,6 +2202,7 @@ export default function ScheduleSidePanel({
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || 'Failed to remove temporary coverage.')
       }
+      clearDataHealthCache()
       try {
         await onSave?.()
       } catch (refreshError) {
@@ -2325,6 +2329,7 @@ export default function ScheduleSidePanel({
         throw new Error(errorData.error || 'Failed to remove temporary coverage.')
       }
 
+      clearDataHealthCache()
       try {
         await onSave?.()
       } catch (refreshError) {
@@ -2728,6 +2733,7 @@ export default function ScheduleSidePanel({
       await Promise.all([...deletePromises, ...createPromises])
       log('[ScheduleSidePanel] All teacher schedule operations completed')
 
+      clearDataHealthCache()
       setHasUnsavedChanges(false)
 
       // Wait a moment for database to commit, then refresh and close
