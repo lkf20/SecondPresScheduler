@@ -173,8 +173,153 @@ export async function PATCH(request: NextRequest) {
     // --- Add / delete closures ---
     const hasDeletes = normalized.deleteClosureIds.length > 0
     const hasAdds = normalized.addClosures.length > 0
+    const hasShapeUpdates = normalized.updateClosureShapes.length > 0
 
-    if (hasDeletes && hasAdds) {
+    if (hasShapeUpdates) {
+      // In-place path: delete surplus, update shapes, add extras. Preserves row ids for audit.
+      for (const id of normalized.deleteClosureIds) {
+        const toDelete = await getSchoolClosuresByIds(schoolId, [id]).then(a => a[0])
+        if (!toDelete) {
+          return NextResponse.json({ error: `Closure not found: ${id}` }, { status: 404 })
+        }
+        await deleteSchoolClosure(schoolId, id)
+        const wholeDay = toDelete.time_slot_id === null
+        const summary = wholeDay
+          ? `${toDelete.date} (whole day)${toDelete.reason ? `: ${toDelete.reason}` : ''}`
+          : `${toDelete.date} (time slot)${toDelete.reason ? `: ${toDelete.reason}` : ''}`
+        const auditEntry = {
+          schoolId,
+          actorUserId: actor.actorUserId,
+          actorDisplayName: actor.actorDisplayName,
+          action: 'delete' as const,
+          category: 'school_calendar' as const,
+          entityType: 'school_closure',
+          entityId: toDelete.id,
+          details: {
+            date: toDelete.date,
+            time_slot_id: toDelete.time_slot_id,
+            reason: toDelete.reason,
+            whole_day: wholeDay,
+            summary,
+          },
+        }
+        if (validateAuditLogEntry(auditEntry).valid) await logAuditEvent(auditEntry)
+      }
+      for (const item of normalized.updateClosureShapes) {
+        const before = await getSchoolClosuresByIds(schoolId, [item.id]).then(a => a[0])
+        if (!before) {
+          return NextResponse.json({ error: `Closure not found: ${item.id}` }, { status: 404 })
+        }
+        const updated = await updateSchoolClosure(schoolId, item.id, {
+          time_slot_id: item.time_slot_id,
+          reason: item.reason,
+          notes: item.notes,
+        })
+        const wholeDay = updated.time_slot_id === null
+        const summary = wholeDay
+          ? `${updated.date} (whole day)${updated.reason ? `: ${updated.reason}` : ''}`
+          : `${updated.date} (time slot)${updated.reason ? `: ${updated.reason}` : ''}`
+        const auditEntry = {
+          schoolId,
+          actorUserId: actor.actorUserId,
+          actorDisplayName: actor.actorDisplayName,
+          action: 'update' as const,
+          category: 'school_calendar' as const,
+          entityType: 'school_closure',
+          entityId: updated.id,
+          details: {
+            before: {
+              time_slot_id: before.time_slot_id,
+              reason: before.reason,
+              notes: before.notes,
+            },
+            after: {
+              time_slot_id: updated.time_slot_id,
+              reason: updated.reason,
+              notes: updated.notes,
+            },
+            date: updated.date,
+            whole_day: wholeDay,
+            summary,
+          },
+        }
+        if (validateAuditLogEntry(auditEntry).valid) await logAuditEvent(auditEntry)
+      }
+      const createdClosureIdsToRollback: string[] = []
+      const auditEntriesToLog: Parameters<typeof logAuditEvent>[0][] = []
+      try {
+        for (const addOne of normalized.addClosures) {
+          if (isAddClosureRange(addOne)) {
+            const { start_date, end_date, reason, notes } = addOne
+            const { created, createdIds } = await createSchoolClosureRange(
+              schoolId,
+              start_date,
+              end_date,
+              reason ?? null,
+              notes ?? null
+            )
+            for (const id of createdIds) createdClosureIdsToRollback.push(id)
+            const summary = `${start_date}–${end_date} (${created} day(s))${reason ? `: ${reason}` : ''}`
+            auditEntriesToLog.push({
+              schoolId,
+              actorUserId: actor.actorUserId,
+              actorDisplayName: actor.actorDisplayName,
+              action: 'create' as const,
+              category: 'school_calendar' as const,
+              entityType: 'school_closure',
+              entityId: null,
+              details: {
+                start_date,
+                end_date,
+                reason: reason ?? null,
+                notes: notes ?? null,
+                created_count: created,
+                whole_day: true,
+                summary,
+              },
+            })
+          } else {
+            const { date, time_slot_id, reason, notes } = addOne
+            const created = await createSchoolClosure(schoolId, {
+              date,
+              time_slot_id: time_slot_id ?? null,
+              reason: reason ?? null,
+              notes: notes ?? null,
+            })
+            createdClosureIdsToRollback.push(created.id)
+            const wholeDay = created.time_slot_id === null
+            const summary = wholeDay
+              ? `${date} (whole day)${reason ? `: ${reason}` : ''}`
+              : `${date} (time slot)${reason ? `: ${reason}` : ''}`
+            auditEntriesToLog.push({
+              schoolId,
+              actorUserId: actor.actorUserId,
+              actorDisplayName: actor.actorDisplayName,
+              action: 'create' as const,
+              category: 'school_calendar' as const,
+              entityType: 'school_closure',
+              entityId: created.id,
+              details: {
+                date: created.date,
+                time_slot_id: created.time_slot_id,
+                reason: created.reason,
+                notes: created.notes,
+                whole_day: wholeDay,
+                summary,
+              },
+            })
+          }
+        }
+        for (const auditEntry of auditEntriesToLog) {
+          if (validateAuditLogEntry(auditEntry).valid) await logAuditEvent(auditEntry)
+        }
+      } catch (addErr: unknown) {
+        for (const id of createdClosureIdsToRollback) {
+          await deleteSchoolClosure(schoolId, id)
+        }
+        throw addErr
+      }
+    } else if (hasDeletes && hasAdds) {
       // Atomic path: single RPC runs delete + add in one transaction (no manual rollback).
       const toDelete = await getSchoolClosuresByIds(schoolId, normalized.deleteClosureIds)
       const addSingle = normalized.addClosures
@@ -326,8 +471,8 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    // --- Delete-only (no adds) ---
-    if (hasDeletes && !hasAdds) {
+    // --- Delete-only (no adds, no shape-update path) ---
+    if (hasDeletes && !hasAdds && !hasShapeUpdates) {
       const toDelete = await getSchoolClosuresByIds(schoolId, normalized.deleteClosureIds)
       await Promise.all(
         normalized.deleteClosureIds.map((id: string) => deleteSchoolClosure(schoolId, id))

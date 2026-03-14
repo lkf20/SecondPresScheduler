@@ -304,10 +304,22 @@ export async function createSchoolClosureRange(
 export async function updateSchoolClosure(
   schoolId: string,
   closureId: string,
-  updates: { reason?: string | null; notes?: string | null }
+  updates: {
+    date?: string | null
+    time_slot_id?: string | null
+    reason?: string | null
+    notes?: string | null
+  }
 ): Promise<SchoolClosure> {
   const supabase = await createClient()
-  const updatePayload: { reason?: string | null; notes?: string | null } = {}
+  const updatePayload: {
+    date?: string
+    time_slot_id?: string | null
+    reason?: string | null
+    notes?: string | null
+  } = {}
+  if (updates.date !== undefined) updatePayload.date = updates.date ?? undefined
+  if (updates.time_slot_id !== undefined) updatePayload.time_slot_id = updates.time_slot_id ?? null
   if (updates.reason !== undefined) updatePayload.reason = updates.reason ?? null
   if (updates.notes !== undefined) updatePayload.notes = updates.notes ?? null
   const { data, error } = await supabase
@@ -318,7 +330,16 @@ export async function updateSchoolClosure(
     .select('id, school_id, date, time_slot_id, reason, notes, created_at')
     .single()
 
-  if (error) throw error
+  if (error) {
+    if (error.code === '23505') {
+      const e = new Error(
+        error.message ?? 'A closure already exists for this date and time slot.'
+      ) as Error & { code?: string }
+      e.code = 'DUPLICATE_CLOSURE'
+      throw e
+    }
+    throw error
+  }
   return {
     id: data.id,
     school_id: data.school_id,

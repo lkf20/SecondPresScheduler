@@ -21,7 +21,7 @@ describe('buildEditClosurePayload', () => {
     expect(body.add_closures).toBeUndefined()
   })
 
-  it('uses delete_closure_ids + add_closures when shape changes (whole day -> specific slots)', () => {
+  it('uses update_closure_shapes + add_closures when shape changes (whole day -> specific slots)', () => {
     const body = buildEditClosurePayload(
       baseGroup,
       'specific',
@@ -30,15 +30,18 @@ describe('buildEditClosurePayload', () => {
       null
     )
     expect(body.update_closures).toBeUndefined()
-    expect(body.delete_closure_ids).toEqual(['c-1'])
-    expect(body.add_closures).toHaveLength(2)
+    expect(body.update_closure_shapes).toHaveLength(1)
+    expect(body.update_closure_shapes).toEqual([
+      { id: 'c-1', time_slot_id: 'slot-1', reason: 'Winter break', notes: null },
+    ])
+    expect(body.delete_closure_ids).toBeUndefined()
+    expect(body.add_closures).toHaveLength(1)
     expect(body.add_closures).toEqual([
-      { date: '2024-12-25', time_slot_id: 'slot-1', reason: 'Winter break', notes: null },
       { date: '2024-12-25', time_slot_id: 'slot-2', reason: 'Winter break', notes: null },
     ])
   })
 
-  it('uses delete_closure_ids + add_closures when shape changes (specific slots -> whole day)', () => {
+  it('uses update_closure_shapes + delete_closure_ids when shape changes (specific slots -> whole day)', () => {
     const group: EditClosureGroup = {
       date: '2024-12-25',
       closures: [
@@ -50,14 +53,12 @@ describe('buildEditClosurePayload', () => {
     }
     const body = buildEditClosurePayload(group, 'all', [], 'Whole day', null)
     expect(body.update_closures).toBeUndefined()
-    expect(body.delete_closure_ids).toEqual(['c-1', 'c-2'])
-    expect(body.add_closures).toHaveLength(1)
-    expect(body.add_closures![0]).toEqual({
-      date: '2024-12-25',
-      time_slot_id: null,
-      reason: 'Whole day',
-      notes: null,
-    })
+    expect(body.update_closure_shapes).toHaveLength(1)
+    expect(body.update_closure_shapes).toEqual([
+      { id: 'c-1', time_slot_id: null, reason: 'Whole day', notes: null },
+    ])
+    expect(body.delete_closure_ids).toEqual(['c-2'])
+    expect(body.add_closures).toBeUndefined()
   })
 
   it('uses update_closures when same slots (specific -> same specific)', () => {
@@ -77,7 +78,7 @@ describe('buildEditClosurePayload', () => {
     expect(body.add_closures).toBeUndefined()
   })
 
-  it('uses delete_closure_ids + add_closures when slots change (different set)', () => {
+  it('uses update_closure_shapes only when slots change (different set, same count)', () => {
     const group: EditClosureGroup = {
       date: '2024-12-25',
       closures: [
@@ -89,11 +90,12 @@ describe('buildEditClosurePayload', () => {
     }
     const body = buildEditClosurePayload(group, 'specific', ['slot-2', 'slot-3'], 'Updated', null)
     expect(body.update_closures).toBeUndefined()
-    expect(body.delete_closure_ids).toEqual(['c-1', 'c-2'])
-    expect(body.add_closures).toHaveLength(2)
-    expect(body.add_closures).toEqual([
-      { date: '2024-12-25', time_slot_id: 'slot-2', reason: 'Updated', notes: null },
-      { date: '2024-12-25', time_slot_id: 'slot-3', reason: 'Updated', notes: null },
+    expect(body.update_closure_shapes).toHaveLength(2)
+    expect(body.update_closure_shapes).toEqual([
+      { id: 'c-1', time_slot_id: 'slot-2', reason: 'Updated', notes: null },
+      { id: 'c-2', time_slot_id: 'slot-3', reason: 'Updated', notes: null },
     ])
+    expect(body.delete_closure_ids).toBeUndefined()
+    expect(body.add_closures).toBeUndefined()
   })
 })

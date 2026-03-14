@@ -422,6 +422,79 @@ describe('calendar settings route integration', () => {
       expect(createSchoolClosure).not.toHaveBeenCalled()
     })
 
+    it('edits closure shape in place via update_closure_shapes (preserves row ids for audit)', async () => {
+      ;(getSchoolClosuresByIds as jest.Mock)
+        .mockResolvedValueOnce([
+          {
+            id: 'c-1',
+            date: '2024-12-25',
+            time_slot_id: 'slot-1',
+            reason: 'Partial',
+            notes: null,
+            school_id: 'school-1',
+            created_at: '2024-01-01T00:00:00Z',
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: 'c-2',
+            date: '2024-12-25',
+            time_slot_id: 'slot-2',
+            reason: 'Partial',
+            notes: null,
+            school_id: 'school-1',
+            created_at: '2024-01-01T00:00:00Z',
+          },
+        ])
+      ;(updateSchoolClosure as jest.Mock)
+        .mockResolvedValueOnce({
+          id: 'c-1',
+          date: '2024-12-25',
+          time_slot_id: 'slot-2',
+          reason: 'Updated',
+          notes: null,
+          school_id: 'school-1',
+          created_at: '2024-01-01T00:00:00Z',
+        })
+        .mockResolvedValueOnce({
+          id: 'c-2',
+          date: '2024-12-25',
+          time_slot_id: 'slot-3',
+          reason: 'Updated',
+          notes: null,
+          school_id: 'school-1',
+          created_at: '2024-01-01T00:00:00Z',
+        })
+      ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
+
+      const response = await PATCH(
+        new Request('http://localhost/api/settings/calendar', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            update_closure_shapes: [
+              { id: 'c-1', time_slot_id: 'slot-2', reason: 'Updated', notes: null },
+              { id: 'c-2', time_slot_id: 'slot-3', reason: 'Updated', notes: null },
+            ],
+          }),
+        })
+      )
+
+      expect(response.status).toBe(200)
+      expect(applySchoolClosureChanges).not.toHaveBeenCalled()
+      expect(updateSchoolClosure).toHaveBeenCalledTimes(2)
+      expect(updateSchoolClosure).toHaveBeenNthCalledWith(1, 'school-1', 'c-1', {
+        time_slot_id: 'slot-2',
+        reason: 'Updated',
+        notes: null,
+      })
+      expect(updateSchoolClosure).toHaveBeenNthCalledWith(2, 'school-1', 'c-2', {
+        time_slot_id: 'slot-3',
+        reason: 'Updated',
+        notes: null,
+      })
+    })
+
     it('edits closure by deleting then adding when shape changes (e.g. slots changed)', async () => {
       const toDelete = [
         {

@@ -92,4 +92,27 @@ describe('validateCalendarPatchBody', () => {
     })
     expect(result.normalized.updateClosures[1]).toMatchObject({ id: 'c-2', reason: 'R2' })
   })
+
+  it('normalizes update_closure_shapes for in-place shape updates', () => {
+    const result = validateCalendarPatchBody({
+      update_closure_shapes: [
+        { id: 'c-1', time_slot_id: 'slot-2', reason: 'Updated', notes: null },
+        { id: 'c-2', time_slot_id: null, reason: 'Whole day', notes: null },
+      ],
+    })
+    expect(result.valid).toBe(true)
+    if (!result.valid) return
+    expect(result.normalized.updateClosureShapes).toHaveLength(2)
+    expect(result.normalized.updateClosureShapes[0]).toEqual({
+      id: 'c-1',
+      time_slot_id: 'slot-2',
+      reason: 'Updated',
+      notes: null,
+    })
+    expect(result.normalized.updateClosureShapes[1]).toMatchObject({
+      id: 'c-2',
+      time_slot_id: null,
+      reason: 'Whole day',
+    })
+  })
 })

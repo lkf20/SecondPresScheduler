@@ -30,8 +30,17 @@ export interface UpdateClosureItem {
   notes?: string | null
 }
 
+/** In-place shape update (time_slot_id) to preserve row id for audit. */
+export interface UpdateClosureShapeItem {
+  id: string
+  time_slot_id?: string | null
+  reason?: string | null
+  notes?: string | null
+}
+
 export interface NormalizedCalendarPatch {
   updateClosures: UpdateClosureItem[]
+  updateClosureShapes: UpdateClosureShapeItem[]
   addClosures: AddClosureItem[]
   deleteClosureIds: string[]
 }
@@ -65,8 +74,43 @@ export function validateCalendarPatchBody(body: unknown):
   }
 
   const updateClosures: UpdateClosureItem[] = []
+  const updateClosureShapes: UpdateClosureShapeItem[] = []
   const addClosures: AddClosureItem[] = []
   let deleteClosureIds: string[] = []
+
+  // --- update_closure_shapes (in-place shape change; preserves row ids) ---
+  if (Array.isArray(b.update_closure_shapes)) {
+    for (let i = 0; i < b.update_closure_shapes.length; i++) {
+      const u = b.update_closure_shapes[i]
+      if (u == null || typeof u !== 'object') {
+        return {
+          valid: false,
+          response: NextResponse.json(
+            { error: `update_closure_shapes[${i}] must be an object with id` },
+            { status: 400 }
+          ),
+        }
+      }
+      const row = u as Record<string, unknown>
+      const id = row.id
+      if (!id || typeof id !== 'string') {
+        return {
+          valid: false,
+          response: NextResponse.json(
+            { error: 'update_closure_shapes[].id is required' },
+            { status: 400 }
+          ),
+        }
+      }
+      updateClosureShapes.push({
+        id,
+        time_slot_id:
+          row.time_slot_id !== undefined ? (row.time_slot_id as string | null) : undefined,
+        reason: row.reason !== undefined ? (row.reason as string | null) : undefined,
+        notes: row.notes !== undefined ? (row.notes as string | null) : undefined,
+      })
+    }
+  }
 
   // --- update_closure (singular) ---
   if (b.update_closure != null && typeof b.update_closure === 'object') {
@@ -154,6 +198,7 @@ export function validateCalendarPatchBody(body: unknown):
     valid: true,
     normalized: {
       updateClosures,
+      updateClosureShapes,
       addClosures,
       deleteClosureIds,
     },
