@@ -41,9 +41,9 @@ type TimeOffApiItem = {
   teacher_name: string
   start_date: string
   end_date?: string | null
-  status?: string
+  /** Coverage status from API: 'covered' | 'partially_covered' | 'needs_coverage' */
+  status?: CoverageStatus
   request_status?: 'draft' | 'active' | 'cancelled'
-  coverage_status?: CoverageStatus
   total?: number
   covered?: number
   partial?: number
@@ -92,12 +92,8 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
       const total = item.total || 0
       const shifts_display = `${total} shift${total !== 1 ? 's' : ''}`
 
-      // Map coverage status - API uses 'covered' | 'partially_covered' | 'needs_coverage'
-      // Component expects 'draft' | 'completed' | 'covered' | 'partially_covered' | 'needs_coverage'
-      const coverage_status: CoverageStatus = item.coverage_status ?? 'needs_coverage'
-
-      // The API should include status, but we need to check for draft/completed
-      // For now, assume the API handles this, but we can add logic here if needed
+      // Map coverage status - API returns it as "status" (covered | partially_covered | needs_coverage)
+      const coverage_status: CoverageStatus = (item.status as CoverageStatus) ?? 'needs_coverage'
 
       return {
         id: item.id,
