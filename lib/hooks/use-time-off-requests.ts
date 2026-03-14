@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 import { timeOffRequestsKey, type TimeOffRequestsQueryParams } from '@/lib/utils/query-keys'
 
+/** Matches API response from /api/time-off-requests (transformTimeOffCardData) */
 type TimeOffCardData = {
   id: string
   teacher_id: string
@@ -12,7 +13,10 @@ type TimeOffCardData = {
   end_date: string | null
   reason: string | null
   notes: string | null
-  status: 'draft' | 'active' | 'cancelled'
+  /** Coverage status: covered | partially_covered | needs_coverage */
+  status: 'covered' | 'partially_covered' | 'needs_coverage'
+  /** Request lifecycle: draft | active | cancelled */
+  request_status: 'draft' | 'active' | 'cancelled'
   total: number
   covered: number
   partial: number
