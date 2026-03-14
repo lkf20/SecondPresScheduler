@@ -180,13 +180,13 @@ describe('transformTimeOffCardData', () => {
   })
 
   describe('empty inputs', () => {
-    it('zero shifts -> zero counts, status covered', () => {
+    it('zero shifts -> zero counts, status needs_coverage (not covered)', () => {
       const result = transformTimeOffCardData(minimalRequest, noShifts, noAssignments, noClassrooms)
       expect(result.covered).toBe(0)
       expect(result.partial).toBe(0)
       expect(result.uncovered).toBe(0)
       expect(result.total).toBe(0)
-      expect(result.status).toBe('covered')
+      expect(result.status).toBe('needs_coverage')
     })
 
     it('shifts with no matching assignments -> all uncovered', () => {

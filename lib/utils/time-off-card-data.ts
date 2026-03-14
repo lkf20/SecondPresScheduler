@@ -272,13 +272,17 @@ export function transformTimeOffCardData(
     )
   }
 
-  // Determine status
+  // Determine status. Zero-shift requests (e.g. draft with no shifts) must not be
+  // classified as 'covered' so they appear in "needs coverage" filters and don't
+  // inflate covered counts.
   const status: TimeOffCardData['status'] =
-    uncovered === 0 && partial === 0
-      ? 'covered'
-      : covered === 0
-        ? 'needs_coverage'
-        : 'partially_covered'
+    shifts.length === 0
+      ? 'needs_coverage'
+      : uncovered === 0 && partial === 0
+        ? 'covered'
+        : covered === 0
+          ? 'needs_coverage'
+          : 'partially_covered'
 
   // Get teacher name
   const teacherName =
