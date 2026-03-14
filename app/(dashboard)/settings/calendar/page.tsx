@@ -452,21 +452,28 @@ export default function SchoolCalendarPage() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
+            <table className="w-full text-sm border-collapse table-fixed" style={{ minWidth: 768 }}>
+              <colgroup>
+                <col style={{ width: 140 }} />
+                <col style={{ width: 190 }} />
+                <col style={{ width: 140 }} />
+                <col style={{ width: 210 }} />
+                <col style={{ width: 88 }} />
+              </colgroup>
               <thead>
                 <tr className="border-b">
-                  <th className="text-left py-2 px-3 font-medium w-36">Date</th>
+                  <th className="text-left py-2 px-3 font-medium">Date</th>
                   <th className="text-left py-2 px-3 font-medium">Applies to</th>
-                  <th className="text-left py-2 px-3 font-medium w-28">Reason</th>
-                  <th className="text-left py-2 px-3 font-medium w-48 max-w-[14rem]">Notes</th>
-                  <th className="text-left py-2 pl-3 pr-2 font-medium w-20" />
+                  <th className="text-left py-2 px-3 font-medium">Reason</th>
+                  <th className="text-left py-2 px-3 font-medium">Notes</th>
+                  <th className="text-left py-2 pl-3 pr-2 font-medium" />
                 </tr>
               </thead>
               <tbody>
                 {groupedClosures.map(group => (
                   <tr key={group.date} className="border-b last:border-0">
-                    <td className="py-2 px-3 align-top">{formatDate(group.date)}</td>
-                    <td className="py-2 px-3 align-top">
+                    <td className="py-2 px-3 align-middle">{formatDate(group.date)}</td>
+                    <td className="py-2 px-3 align-middle overflow-hidden">
                       <div className="flex flex-wrap gap-1.5">
                         {group.hasAllSlots ? (
                           <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-600">
@@ -484,13 +491,21 @@ export default function SchoolCalendarPage() {
                         )}
                       </div>
                     </td>
-                    <td className="py-2 px-3 align-top text-muted-foreground">
-                      {group.reason || '—'}
+                    <td className="py-2 px-3 align-middle text-muted-foreground overflow-hidden">
+                      <span className="block truncate" title={group.reason ?? undefined}>
+                        {group.reason || '—'}
+                      </span>
                     </td>
-                    <td className="py-2 px-3 align-top text-muted-foreground w-48 max-w-[14rem]">
-                      {group.notes ? <span className="break-words block">{group.notes}</span> : '—'}
+                    <td className="py-2 px-3 align-middle text-muted-foreground overflow-hidden">
+                      {group.notes ? (
+                        <span className="break-words block line-clamp-2" title={group.notes}>
+                          {group.notes}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
                     </td>
-                    <td className="py-2 pl-3 pr-2 align-top">
+                    <td className="py-2 pl-3 pr-2 align-middle">
                       <div className="flex items-center gap-1">
                         <Button
                           variant="ghost"
