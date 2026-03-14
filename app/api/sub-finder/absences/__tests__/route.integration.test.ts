@@ -162,7 +162,10 @@ describe('GET /api/sub-finder/absences integration', () => {
     const json = await response.json()
 
     expect(response.status).toBe(200)
-    expect(getTimeOffRequests).toHaveBeenCalledWith({ statuses: ['active'] })
+    expect(getTimeOffRequests).toHaveBeenCalledWith({
+      school_id: 'school-1',
+      statuses: ['active'],
+    })
     expect(json).toHaveLength(1)
     expect(json[0]).toMatchObject({
       id: 'req-1',

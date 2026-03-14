@@ -20,6 +20,7 @@ type TimeOffRequestWithDetails = TimeOffRequestWithTeacher & { shifts: TimeOffSh
 
 // See docs/data-lifecycle.md: time_off_requests lifecycle
 export async function getTimeOffRequests(filters?: {
+  school_id?: string
   teacher_id?: string
   start_date?: string
   end_date?: string
@@ -31,6 +32,9 @@ export async function getTimeOffRequests(filters?: {
     .select('*, teacher:staff!time_off_requests_teacher_id_fkey(*)')
     .order('start_date', { ascending: false })
 
+  if (filters?.school_id) {
+    query = query.eq('school_id', filters.school_id)
+  }
   if (filters?.statuses && filters.statuses.length > 0) {
     query = query.in('status', filters.statuses)
   } else {

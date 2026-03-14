@@ -207,12 +207,10 @@ export default function TimeOffCard({
 
           <div className="mt-3 border-t border-slate-200 pt-3">
             <div className="flex items-stretch justify-between gap-3">
-              <div className="flex flex-col items-start gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {uncovered > 0 && <CoverageBadge type="uncovered" count={uncovered} />}
-                <div className="flex flex-wrap items-center justify-start gap-2">
-                  {covered > 0 && <CoverageBadge type="covered" count={covered} />}
-                  {partial > 0 && <CoverageBadge type="partial" count={partial} />}
-                </div>
+                {covered > 0 && <CoverageBadge type="covered" count={covered} />}
+                {partial > 0 && <CoverageBadge type="partial" count={partial} />}
               </div>
               <div className="flex items-end">
                 <Button
@@ -343,9 +341,9 @@ export default function TimeOffCard({
         </div>
         <div className="flex flex-col items-end self-stretch">
           <div className="flex items-center gap-2 mb-auto">
+            {uncovered > 0 && <CoverageBadge type="uncovered" count={uncovered} />}
             {covered > 0 && <CoverageBadge type="covered" count={covered} />}
             {partial > 0 && <CoverageBadge type="partial" count={partial} />}
-            {uncovered > 0 && <CoverageBadge type="uncovered" count={uncovered} />}
           </div>
           <div className="flex items-center justify-end gap-3 mt-auto">
             {onEdit ? (

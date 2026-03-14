@@ -231,6 +231,7 @@ export async function POST(request: NextRequest) {
         const timeOffConflicts = new Set<string>()
         try {
           const timeOffRequests = await getTimeOffRequests({
+            school_id: schoolId,
             teacher_id: staff.id,
             start_date,
             end_date,

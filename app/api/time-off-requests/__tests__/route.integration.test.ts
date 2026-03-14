@@ -43,6 +43,18 @@ describe('GET /api/time-off-requests integration', () => {
     jest.restoreAllMocks()
   })
 
+  it('calls getTimeOffRequests with school_id when user has school context', async () => {
+    ;(getTimeOffRequests as jest.Mock).mockResolvedValueOnce([])
+    const request = {
+      nextUrl: new URL('http://localhost:3000/api/time-off-requests'),
+    }
+    const response = await GET(request as any)
+    expect(response.status).toBe(200)
+    expect(getTimeOffRequests).toHaveBeenCalledWith(
+      expect.objectContaining({ school_id: 'school-1' })
+    )
+  })
+
   it('returns 403 when user has no school context', async () => {
     ;(getUserSchoolId as jest.Mock).mockResolvedValueOnce(null)
 
@@ -128,7 +140,10 @@ describe('GET /api/time-off-requests integration', () => {
     const json = await response.json()
 
     expect(response.status).toBe(200)
-    expect(getTimeOffRequests).toHaveBeenCalledWith({ statuses: ['active', 'draft'] })
+    expect(getTimeOffRequests).toHaveBeenCalledWith({
+      school_id: 'school-1',
+      statuses: ['active', 'draft'],
+    })
     expect(json.data).toHaveLength(1)
     expect(json.data[0].id).toBe('req-1')
     expect(getTimeOffShifts).toHaveBeenCalled()

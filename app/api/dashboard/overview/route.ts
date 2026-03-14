@@ -600,6 +600,7 @@ export async function GET(request: NextRequest) {
           })
         })
 
+        const coveredShifts = assignedShifts - partialShifts
         return {
           id: request.id,
           source_request_id: request.source_request_id || null,
@@ -614,6 +615,7 @@ export async function GET(request: NextRequest) {
             classrooms.length > 0 ? classrooms.map(c => c.name).join(', ') : 'Multiple',
           total_shifts: totalShifts,
           assigned_shifts: assignedShifts,
+          covered_shifts: coveredShifts,
           uncovered_shifts: uncoveredShifts,
           partial_shifts: partialShifts,
           remaining_shifts: remainingShifts,

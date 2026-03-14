@@ -62,6 +62,7 @@ type CoverageRequestItem = {
   classroom_label: string
   total_shifts: number
   assigned_shifts: number
+  covered_shifts: number
   uncovered_shifts: number
   partial_shifts: number
   remaining_shifts: number
@@ -988,30 +989,10 @@ export default function DashboardClient({
             ) : (
               <div className="space-y-3">
                 {filteredCoverageRequests.map(request => {
-                  // Calculate coverage counts from API data
-                  // assigned_shifts includes both full and partial coverage
-                  // partial_shifts = shifts with only partial coverage
-                  // covered = assigned_shifts - partial_shifts (fully covered shifts)
-                  let covered = 0
-                  let uncovered = request.uncovered_shifts
-                  let partial = request.partial_shifts || 0
-
-                  if (request.status === 'covered') {
-                    covered = request.total_shifts
-                    uncovered = 0
-                    partial = 0
-                  } else if (request.status === 'needs_coverage') {
-                    covered = 0
-                    uncovered = request.uncovered_shifts
-                    partial = 0
-                  } else if (request.status === 'partially_covered') {
-                    // assigned_shifts includes both full and partial
-                    // partial_shifts = shifts with only partial coverage
-                    // covered = assigned_shifts - partial_shifts
-                    partial = request.partial_shifts || 0
-                    covered = request.assigned_shifts - partial
-                    uncovered = request.uncovered_shifts
-                  }
+                  // Use API coverage counts directly (covered_shifts, uncovered_shifts, partial_shifts)
+                  const covered = request.covered_shifts ?? 0
+                  const uncovered = request.uncovered_shifts ?? 0
+                  const partial = request.partial_shifts ?? 0
 
                   // For time_off requests, use source_request_id (time_off_request.id) for sub-finder
                   // For other request types, use the coverage_request.id

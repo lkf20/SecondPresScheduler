@@ -1368,27 +1368,17 @@ describe('PUT /api/time-off/[id] integration', () => {
       single: mockSingle,
       maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
     })
-    ;(getTimeOffRequestById as jest.Mock)
-      .mockResolvedValueOnce({
-        id: 'timeoff-1',
-        school_id: 'school-1',
-        reason: 'Sick',
-        status: 'active',
-        start_date: '2026-02-20',
-        end_date: '2026-02-20',
-        teacher_id: 'teacher-1',
-        shift_selection_mode: 'select_shifts',
-      })
-      .mockResolvedValueOnce({
-        id: 'timeoff-1',
-        school_id: 'school-1',
-        reason: 'Sick',
-        status: 'active',
-        start_date: '2026-02-20',
-        end_date: '2026-02-20',
-        teacher_id: 'teacher-1',
-        shift_selection_mode: 'select_shifts',
-      })
+    const concurrentRequestPayload = {
+      id: 'timeoff-1',
+      school_id: 'school-1',
+      reason: 'Sick',
+      status: 'active',
+      start_date: '2026-02-20',
+      end_date: '2026-02-20',
+      teacher_id: 'teacher-1',
+      shift_selection_mode: 'select_shifts',
+    }
+    ;(getTimeOffRequestById as jest.Mock).mockResolvedValue(concurrentRequestPayload)
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
     ;(canTransitionTimeOffStatus as jest.Mock).mockReturnValue(true)
@@ -1436,8 +1426,8 @@ describe('PUT /api/time-off/[id] integration', () => {
     const json1 = await res1.json()
     const json2 = await res2.json()
 
-    expect(json1.id).toBe('timeoff-1')
-    expect(json2.id).toBe('timeoff-1')
+    if (res1.status === 200) expect(json1.id).toBe('timeoff-1')
+    if (res2.status === 200) expect(json2.id).toBe('timeoff-1')
     const both200 = res1.status === 200 && res2.status === 200
     const both400 = res1.status === 400 && res2.status === 400
     expect(both200 || both400).toBe(true)

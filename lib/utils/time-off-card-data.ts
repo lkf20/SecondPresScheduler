@@ -5,6 +5,12 @@ import { getStaffDisplayName, type DisplayNameFormat } from './staff-display-nam
 /**
  * Shared utility for transforming time off request data into a consistent format
  * for use across Dashboard, Sub Finder, and Time Off pages.
+ *
+ * Source of truth for coverage counts: covered (fully covered shifts), partial
+ * (partially covered), uncovered. Time Off list and Sub Finder absences use
+ * this transform. Dashboard overview computes equivalent counts server-side.
+ * TimeOffCard displays up to three badges (Uncovered, Covered, Partial), each
+ * only when its count > 0.
  */
 
 export type TimeOffCardData = {
@@ -254,6 +260,17 @@ export function transformTimeOffCardData(
       })
     }
   })
+
+  // Invariant: counts must sum to total shifts (catch logic bugs in dev/test)
+  if (
+    typeof process !== 'undefined' &&
+    process.env?.NODE_ENV !== 'production' &&
+    covered + partial + uncovered !== shifts.length
+  ) {
+    throw new Error(
+      `TimeOffCardData invariant: covered(${covered}) + partial(${partial}) + uncovered(${uncovered}) !== shifts.length(${shifts.length})`
+    )
+  }
 
   // Determine status
   const status: TimeOffCardData['status'] =

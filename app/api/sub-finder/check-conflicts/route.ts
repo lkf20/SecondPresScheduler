@@ -6,6 +6,7 @@ import { getTimeOffRequests } from '@/lib/api/time-off'
 import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { toDateStringISO } from '@/lib/utils/date'
+import { getUserSchoolId } from '@/lib/utils/auth'
 
 /** Shift input when not using coverage_request_id (e.g. Assign Sub panel) */
 interface ShiftInput {
@@ -22,6 +23,14 @@ interface ShiftInput {
  */
 export async function POST(request: NextRequest) {
   try {
+    const schoolId = await getUserSchoolId()
+    if (!schoolId) {
+      return NextResponse.json(
+        { error: 'User profile not found or missing school_id.' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const { sub_id, coverage_request_id, shift_ids, teacher_id, shifts: shiftsInput } = body
 
@@ -70,6 +79,7 @@ export async function POST(request: NextRequest) {
       )
 
       const timeOffRequests = await getTimeOffRequests({
+        school_id: schoolId,
         teacher_id: sub_id,
         start_date: startDate,
         end_date: endDate,
@@ -239,8 +249,9 @@ export async function POST(request: NextRequest) {
       scheduleConflicts.add(key)
     })
 
-    // Get sub's time off requests
+    // Get sub's time off requests (scoped to school)
     const timeOffRequests = await getTimeOffRequests({
+      school_id: schoolId,
       teacher_id: sub_id,
       start_date: startDate,
       end_date: endDate,

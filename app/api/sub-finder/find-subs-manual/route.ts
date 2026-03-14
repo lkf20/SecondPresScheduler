@@ -6,6 +6,7 @@ import { getTeacherScheduledShifts, getTimeOffShifts } from '@/lib/api/time-off-
 import { getTimeOffRequests } from '@/lib/api/time-off'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { toDateStringISO } from '@/lib/utils/date'
+import { getUserSchoolId } from '@/lib/utils/auth'
 import { findTopCombinations } from '@/lib/utils/sub-combination'
 import { buildShiftChips } from '@/lib/server/coverage/shift-chips'
 
@@ -29,6 +30,14 @@ interface ShiftDetail {
 
 export async function POST(request: NextRequest) {
   try {
+    const schoolId = await getUserSchoolId()
+    if (!schoolId) {
+      return NextResponse.json(
+        { error: 'User profile not found or missing school_id.' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const { teacher_id, start_date, end_date, shifts } = body as {
       teacher_id?: string
@@ -172,6 +181,7 @@ export async function POST(request: NextRequest) {
     const activeSubs = allSubs.filter(sub => sub.active !== false)
 
     const conflictingTimeOffRequests = await getTimeOffRequests({
+      school_id: schoolId,
       start_date,
       end_date,
     })

@@ -31,8 +31,11 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createClient()
 
-    // Fetch time off requests directly
-    const timeOffRequests = await getTimeOffRequests({ statuses: ['active'] })
+    // Fetch time off requests (scoped to user's school)
+    const timeOffRequests = await getTimeOffRequests({
+      school_id: schoolId,
+      statuses: ['active'],
+    })
 
     // Fetch school closures for the full date range so we exclude closed-day shifts from counts and display
     const dateRangeStart =

@@ -25,6 +25,10 @@ jest.mock('@/lib/api/time-off', () => ({
   getTimeOffRequests: jest.fn(),
 }))
 
+jest.mock('@/lib/utils/auth', () => ({
+  getUserSchoolId: jest.fn(async () => 'school-1'),
+}))
+
 describe('POST /api/sub-finder/check-conflicts integration', () => {
   afterEach(() => {
     jest.restoreAllMocks()

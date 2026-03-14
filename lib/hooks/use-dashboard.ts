@@ -24,6 +24,7 @@ type DashboardOverview = {
     classroom_label: string
     total_shifts: number
     assigned_shifts: number
+    covered_shifts: number
     uncovered_shifts: number
     partial_shifts: number
     remaining_shifts: number
