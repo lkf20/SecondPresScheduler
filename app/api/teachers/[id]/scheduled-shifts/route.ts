@@ -31,11 +31,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             time_slot_id: c.time_slot_id,
           }))
         : []
-    const closures = closureList
 
     const shifts = rawShifts.map(shift => ({
       ...shift,
-      school_closure: isSlotClosedOnDate(shift.date, shift.time_slot_id, closures),
+      school_closure: isSlotClosedOnDate(shift.date, shift.time_slot_id, closureList),
     }))
 
     return NextResponse.json(shifts)

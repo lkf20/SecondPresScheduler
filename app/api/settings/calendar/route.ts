@@ -247,8 +247,9 @@ export async function PATCH(request: NextRequest) {
         if (validateAuditLogEntry(auditEntry).valid) await logAuditEvent(auditEntry)
       }
     } else {
-      // Adds only: run add loop with rollback on failure.
+      // Adds only: run add loop with rollback on failure. Log audit only after full success.
       const createdClosureIdsToRollback: string[] = []
+      const auditEntriesToLog: Parameters<typeof logAuditEvent>[0][] = []
       try {
         for (const addOne of normalized.addClosures) {
           if (isAddClosureRange(addOne)) {
@@ -268,7 +269,7 @@ export async function PATCH(request: NextRequest) {
               actorDisplayName: actor.actorDisplayName,
               action: 'create' as const,
               category: 'school_calendar' as const,
-              entityType: 'school_closure',
+              entityType: 'school_closure' as const,
               entityId: null,
               details: {
                 start_date,
@@ -280,7 +281,7 @@ export async function PATCH(request: NextRequest) {
                 summary,
               },
             }
-            if (validateAuditLogEntry(auditEntry).valid) await logAuditEvent(auditEntry)
+            if (validateAuditLogEntry(auditEntry).valid) auditEntriesToLog.push(auditEntry)
           } else {
             const { date, time_slot_id, reason, notes } = addOne
             const created = await createSchoolClosure(schoolId, {
@@ -300,7 +301,7 @@ export async function PATCH(request: NextRequest) {
               actorDisplayName: actor.actorDisplayName,
               action: 'create' as const,
               category: 'school_calendar' as const,
-              entityType: 'school_closure',
+              entityType: 'school_closure' as const,
               entityId: created.id,
               details: {
                 date: created.date,
@@ -311,8 +312,11 @@ export async function PATCH(request: NextRequest) {
                 summary,
               },
             }
-            if (validateAuditLogEntry(auditEntry).valid) await logAuditEvent(auditEntry)
+            if (validateAuditLogEntry(auditEntry).valid) auditEntriesToLog.push(auditEntry)
           }
+        }
+        for (const auditEntry of auditEntriesToLog) {
+          await logAuditEvent(auditEntry)
         }
       } catch (addErr: unknown) {
         for (const id of createdClosureIdsToRollback) {
