@@ -41,6 +41,7 @@ import {
 import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
 import { cn } from '@/lib/utils'
 import { formatUSPhone } from '@/lib/utils/phone'
+import { sortShiftDetailsByDisplayOrder } from '@/lib/utils/shift-display-order'
 import { toast } from 'sonner'
 import { useAssignSubShifts } from '@/lib/hooks/use-sub-assignment-mutations'
 import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
@@ -1188,19 +1189,7 @@ export default function ContactSubPanel({
       : null
   const requestShiftDetails = (() => {
     const details = absence.shifts?.shift_details || []
-    return [...details].sort((a, b) => {
-      const dateA = parseLocalDate(a.date).getTime()
-      const dateB = parseLocalDate(b.date).getTime()
-      if (dateA !== dateB) return dateA - dateB
-      const orderA = timeSlotOrderByCode[a.time_slot_code]
-      const orderB = timeSlotOrderByCode[b.time_slot_code]
-      if (orderA !== undefined && orderB !== undefined && orderA !== orderB) {
-        return orderA - orderB
-      }
-      if (orderA !== undefined && orderB === undefined) return -1
-      if (orderA === undefined && orderB !== undefined) return 1
-      return a.time_slot_code.localeCompare(b.time_slot_code)
-    })
+    return sortShiftDetailsByDisplayOrder([...details])
   })()
   // When sub has declined all, do not show them as covering any shift in the request summary.
   const requestShiftDetailsForDisplay =
@@ -1304,19 +1293,7 @@ export default function ContactSubPanel({
       }
     })
 
-    return Array.from(shiftMap.values()).sort((a, b) => {
-      const dateA = parseLocalDate(a.date).getTime()
-      const dateB = parseLocalDate(b.date).getTime()
-      if (dateA !== dateB) return dateA - dateB
-      const orderA = timeSlotOrderByCode[a.time_slot_code]
-      const orderB = timeSlotOrderByCode[b.time_slot_code]
-      if (orderA !== undefined && orderB !== undefined && orderA !== orderB) {
-        return orderA - orderB
-      }
-      if (orderA !== undefined && orderB === undefined) return -1
-      if (orderA === undefined && orderB !== undefined) return 1
-      return a.time_slot_code.localeCompare(b.time_slot_code)
-    })
+    return sortShiftDetailsByDisplayOrder(Array.from(shiftMap.values()))
   })()
   const requestCoverageSummaryLine = (() => {
     return `${requestUncoveredCount} of ${requestTotalShifts} upcoming shifts need coverage`

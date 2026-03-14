@@ -9,6 +9,7 @@ import { toDateStringISO } from '@/lib/utils/date'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { findTopCombinations } from '@/lib/utils/sub-combination'
 import { buildShiftChips } from '@/lib/server/coverage/shift-chips'
+import { sortShiftDetailsByDisplayOrder } from '@/lib/utils/shift-display-order'
 
 interface ManualShiftInput {
   date: string
@@ -67,18 +68,22 @@ export async function POST(request: NextRequest) {
     const uniqueSlotIds = Array.from(new Set(shifts.map(shift => shift.time_slot_id)))
 
     const [{ data: days }, { data: slots }] = await Promise.all([
-      supabase.from('days_of_week').select('id, name').in('id', uniqueDayIds),
-      supabase.from('time_slots').select('id, code').in('id', uniqueSlotIds),
+      supabase.from('days_of_week').select('id, name, display_order').in('id', uniqueDayIds),
+      supabase.from('time_slots').select('id, code, display_order').in('id', uniqueSlotIds),
     ])
 
     const dayNameMap = new Map<string, string>()
+    const dayDisplayOrderMap = new Map<string, number>()
     ;(days || []).forEach((day: any) => {
       dayNameMap.set(day.id, day.name || '')
+      dayDisplayOrderMap.set(day.id, day.display_order ?? 999)
     })
 
     const slotCodeMap = new Map<string, string>()
+    const slotDisplayOrderMap = new Map<string, number>()
     ;(slots || []).forEach((slot: any) => {
       slotCodeMap.set(slot.id, slot.code || '')
+      slotDisplayOrderMap.set(slot.id, slot.display_order ?? 999)
     })
 
     const { data: teacherSchedules, error: scheduleError } = await supabase
@@ -169,13 +174,19 @@ export async function POST(request: NextRequest) {
         status,
         sub_name: assignment?.sub_name || null,
         is_partial: assignment?.is_partial || false,
+        day_display_order: dayDisplayOrderMap.get(shift.day_of_week_id) ?? null,
+        time_slot_display_order: slotDisplayOrderMap.get(shift.time_slot_id) ?? null,
       }
     })
 
-    const uncovered = shiftDetails.filter(s => s.status === 'uncovered').length
-    const partially_covered = shiftDetails.filter(s => s.status === 'partially_covered').length
-    const fully_covered = shiftDetails.filter(s => s.status === 'fully_covered').length
-    const total = shiftDetails.length
+    const sortedShiftDetails = sortShiftDetailsByDisplayOrder(shiftDetails)
+
+    const uncovered = sortedShiftDetails.filter(s => s.status === 'uncovered').length
+    const partially_covered = sortedShiftDetails.filter(
+      s => s.status === 'partially_covered'
+    ).length
+    const fully_covered = sortedShiftDetails.filter(s => s.status === 'fully_covered').length
+    const total = sortedShiftDetails.length
 
     const allSubs = await getSubs()
     const activeSubs = allSubs.filter(sub => sub.active !== false)
@@ -376,7 +387,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       subs: enrichedMatches,
-      shift_details: shiftDetails,
+      shift_details: sortedShiftDetails,
       totals: { total, uncovered, partially_covered, fully_covered },
       recommended_combination: recommendedCombination,
       recommended_combinations: recommendedCombinations,

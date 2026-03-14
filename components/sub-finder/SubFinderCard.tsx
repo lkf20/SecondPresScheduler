@@ -20,6 +20,7 @@ import SubCardHeader from '@/components/sub-finder/SubCardHeader'
 import { formatUSPhone, getPhoneDigits } from '@/lib/utils/phone'
 import { cn } from '@/lib/utils'
 import type { SubFinderShift } from '@/lib/sub-finder/types'
+import { sortShiftDetailsByDisplayOrder } from '@/lib/utils/shift-display-order'
 
 type Shift = {
   date: string
@@ -29,6 +30,8 @@ type Shift = {
   classroom_name?: string | null
   classroom_color?: string | null
   reason?: string
+  day_display_order?: number | null
+  time_slot_display_order?: number | null
 }
 
 type ConflictCounts = {
@@ -180,12 +183,7 @@ export default function SubFinderCard({
   const hasRecommendedSubset = recommendedShiftCount !== undefined && recommendedShiftCount > 0
   const canCoverKeys = new Set(canCover.map(s => `${s.date}|${s.time_slot_code}`))
   const orderedShiftsForStrip =
-    allShifts && allShifts.length > 0
-      ? [...allShifts].sort((a, b) => {
-          if (a.date !== b.date) return a.date.localeCompare(b.date)
-          return a.time_slot_code.localeCompare(b.time_slot_code)
-        })
-      : []
+    allShifts && allShifts.length > 0 ? sortShiftDetailsByDisplayOrder([...allShifts]) : []
   const declinedCardStyle = isDeclined
     ? ({
         backgroundColor: 'rgb(241, 245, 249)', // slate-100

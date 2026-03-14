@@ -93,7 +93,11 @@ const TimeOffForm = React.forwardRef<
     const [selectedShifts, setSelectedShifts] = useState<
       Array<{ date: string; day_of_week_id: string; time_slot_id: string }>
     >([])
-    const [conflictSummary, setConflictSummary] = useState({ conflictCount: 0, totalScheduled: 0 })
+    const [conflictSummary, setConflictSummary] = useState({
+      conflictCount: 0,
+      totalScheduled: 0,
+      totalAssignable: 0,
+    })
     const [conflictingRequests, setConflictingRequests] = useState<
       Array<{ id: string; start_date: string; end_date: string | null; reason: string | null }>
     >([])
@@ -387,7 +391,7 @@ const TimeOffForm = React.forwardRef<
         })
         setSelectedShifts([])
         setError(null)
-        setConflictSummary({ conflictCount: 0, totalScheduled: 0 })
+        setConflictSummary({ conflictCount: 0, totalScheduled: 0, totalAssignable: 0 })
         setConflictingRequests([])
         setEndDateCorrected(false)
         setIsPastDate(false)

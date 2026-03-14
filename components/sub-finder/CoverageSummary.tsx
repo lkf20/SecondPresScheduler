@@ -2,11 +2,11 @@
 
 import React from 'react'
 import { formatShiftLabel } from '@/components/sub-finder/ShiftChips'
-import { parseLocalDate } from '@/lib/utils/date'
 import CoverageBadge from '@/components/shared/CoverageBadge'
 import { coverageColorValues, neutralColors, getHeaderClasses } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { sortShiftDetailsByDisplayOrder } from '@/lib/utils/shift-display-order'
 
 interface ShiftDetail {
   id: string
@@ -16,6 +16,8 @@ interface ShiftDetail {
   status: 'uncovered' | 'partially_covered' | 'fully_covered'
   sub_name?: string | null
   is_partial?: boolean
+  day_display_order?: number | null
+  time_slot_display_order?: number | null
 }
 
 interface CoverageSummaryProps {
@@ -46,15 +48,10 @@ export default function CoverageSummary({
     return null
   }
 
-  // Sort shifts by date, then time slot
+  // Sort shifts by date, then day display_order, then time_slot display_order (AGENTS.md)
   const sortedShifts = shifts.shift_details_sorted?.length
     ? shifts.shift_details_sorted
-    : [...shift_details].sort((a, b) => {
-        const dateA = parseLocalDate(a.date).getTime()
-        const dateB = parseLocalDate(b.date).getTime()
-        if (dateA !== dateB) return dateA - dateB
-        return a.time_slot_code.localeCompare(b.time_slot_code)
-      })
+    : sortShiftDetailsByDisplayOrder([...shift_details])
 
   const getBadgeStyles = (shift: ShiftDetail) => {
     switch (shift.status) {

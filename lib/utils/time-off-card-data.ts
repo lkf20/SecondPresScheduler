@@ -47,6 +47,9 @@ export type TimeOffCardData = {
     sub_id?: string | null
     assignment_id?: string | null
     is_partial?: boolean
+    /** For display order: date → day → time_slot (AGENTS.md) */
+    day_display_order?: number | null
+    time_slot_display_order?: number | null
   }>
 }
 
@@ -70,8 +73,8 @@ export interface ShiftInput {
   date: string
   day_of_week_id: string | null
   time_slot_id: string
-  day_of_week?: { name: string | null } | null
-  time_slot?: { code: string | null } | null
+  day_of_week?: { name: string | null; display_order?: number | null } | null
+  time_slot?: { code: string | null; display_order?: number | null } | null
 }
 
 export interface AssignmentInput {
@@ -251,6 +254,8 @@ export function transformTimeOffCardData(
         sub_id: assignment?.subId || undefined,
         assignment_id: assignment?.assignmentId || undefined,
         is_partial: assignment?.hasPartial && !assignment?.hasFull,
+        day_display_order: shift.day_of_week?.display_order ?? undefined,
+        time_slot_display_order: shift.time_slot?.display_order ?? undefined,
       })
     } else {
       // Simple format

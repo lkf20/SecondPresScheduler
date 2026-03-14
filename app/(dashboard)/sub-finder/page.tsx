@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import Link from 'next/link'
 import { usePathname, useSearchParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -237,6 +238,7 @@ export default function SubFinderPage() {
   const [manualConflictSummary, setManualConflictSummary] = useState({
     conflictCount: 0,
     totalScheduled: 0,
+    totalAssignable: 0,
   })
   const [manualConflictShifts, setManualConflictShifts] = useState<SelectedShift[]>([])
   const [manualConflictingRequests, setManualConflictingRequests] = useState<
@@ -260,6 +262,8 @@ export default function SubFinderPage() {
     useState(false)
   /** Show success banner after adding/extending time off from this panel; cleared when teacher or dates change. */
   const [manualTimeOffSuccessBanner, setManualTimeOffSuccessBanner] = useState(false)
+  /** When true, time off was created but coverage check failed; show "refresh or click Find Subs" instead of "Finding recommended subs" (vuln 5). */
+  const [manualTimeOffCoverageUnconfirmed, setManualTimeOffCoverageUnconfirmed] = useState(false)
   /** After time off success, auto-run Find Subs once the left panel has refreshed. */
   const [shouldAutoRunFindSubsAfterRefresh, setShouldAutoRunFindSubsAfterRefresh] = useState(false)
   /** Set false when requesting auto-run; set true when table sends conflict summary/shifts. Ensures we don't run with stale data. */
@@ -269,7 +273,7 @@ export default function SubFinderPage() {
   const [manualCreateTimeOffNotes, setManualCreateTimeOffNotes] = useState<string>('')
   const [manualCreateTimeOffSubmitting, setManualCreateTimeOffSubmitting] = useState(false)
   const onConflictSummaryChangeForTable = useCallback(
-    (summary: { conflictCount: number; totalScheduled: number }) => {
+    (summary: { conflictCount: number; totalScheduled: number; totalAssignable: number }) => {
       hasReceivedConflictDataForAutoRunRef.current = true
       setManualConflictSummary(summary)
     },
@@ -282,6 +286,7 @@ export default function SubFinderPage() {
 
   /** Create time off request inline from manual mode (no time off case). Refreshes left panel and triggers auto-run Find Subs on success. */
   const handleCreateTimeOffFromManual = useCallback(async () => {
+    if (manualCreateTimeOffSubmitting) return
     if (
       !manualTeacherId ||
       !manualStartDate ||
@@ -292,12 +297,17 @@ export default function SubFinderPage() {
       return
     }
     setManualCreateTimeOffSubmitting(true)
+    setManualTimeOffCoverageUnconfirmed(false)
     try {
       const uniqueSlots = Array.from(
         new Map(
           manualSelectedShifts.map(s => [
             `${s.date}|${s.time_slot_id}`,
-            { date: s.date, time_slot_id: s.time_slot_id },
+            {
+              date: s.date,
+              day_of_week_id: s.day_of_week_id,
+              time_slot_id: s.time_slot_id,
+            },
           ])
         ).values()
       )
@@ -326,12 +336,46 @@ export default function SubFinderPage() {
         toast.error(message)
         return
       }
+      const timeOffData = await res.json()
+      const createdTimeOffId = timeOffData?.id ?? null
+
+      // Confirm coverage exists before auto-running Find Subs; retry on transient failure (vuln 5).
+      let coverageConfirmed = false
+      if (createdTimeOffId) {
+        const coverageUrl = `/api/sub-finder/coverage-request/${encodeURIComponent(createdTimeOffId)}`
+        const delays = [0, 500, 1000]
+        for (let attempt = 0; attempt < delays.length && !coverageConfirmed; attempt++) {
+          if (delays[attempt] > 0) await new Promise(r => setTimeout(r, delays[attempt]))
+          try {
+            const covRes = await fetch(coverageUrl)
+            if (covRes.ok) {
+              const covData = await covRes.json()
+              if (covData?.coverage_request_id) {
+                coverageConfirmed = true
+                break
+              }
+            }
+          } catch {
+            // Retry on next iteration
+          }
+        }
+      }
+
       toast.success('Time off request created.')
       hasReceivedConflictDataForAutoRunRef.current = false
       setManualConflictCheckReady(false)
       setManualLeftPanelRefreshKey(k => k + 1)
       setManualTimeOffSuccessBanner(true)
-      setShouldAutoRunFindSubsAfterRefresh(true)
+      if (coverageConfirmed) {
+        setManualTimeOffCoverageUnconfirmed(false)
+        setLastManualRunHadAllShiftsWithTimeOff(true)
+        setShouldAutoRunFindSubsAfterRefresh(true)
+      } else {
+        setManualTimeOffCoverageUnconfirmed(true)
+        toast.warning(
+          'There was a delay confirming coverage. Refresh the page or click Find Subs to continue.'
+        )
+      }
     } finally {
       setManualCreateTimeOffSubmitting(false)
     }
@@ -379,9 +423,10 @@ export default function SubFinderPage() {
     if (manualExtendSelectedRequestId) setManualExtendShowSelectWarning(false)
   }, [manualExtendSelectedRequestId])
 
-  /** Clear time-off success banner when user changes teacher or dates. */
+  /** Clear time-off success banner and coverage-unconfirmed state when user changes teacher or dates. */
   useEffect(() => {
     setManualTimeOffSuccessBanner(false)
+    setManualTimeOffCoverageUnconfirmed(false)
   }, [manualTeacherId, pickDateChoice, manualStartDate, manualEndDate])
 
   useEffect(() => {
@@ -455,18 +500,19 @@ export default function SubFinderPage() {
     [runManualFinder]
   )
 
-  /** Auto-run Find Subs once left panel has refreshed after time off success (edit/extend in-place).
+  /** Auto-run Find Subs once left panel has refreshed after time off success (create or extend in-place).
    * Only run after the table has sent conflict data (onConflictSummaryChange/onConflictShiftsChange) so we don't
-   * use stale manualConflictSummary/manualConflictShifts if onConflictCheckReady fires first. */
+   * use stale manualConflictSummary/manualConflictShifts if onConflictCheckReady fires first.
+   * Always run in normal mode (not preview) since we just created/extended time off. */
   useEffect(() => {
     if (!manualConflictCheckReady || !shouldAutoRunFindSubsAfterRefresh) return
     if (!hasReceivedConflictDataForAutoRunRef.current) return
     setShouldAutoRunFindSubsAfterRefresh(false)
+    setLastManualRunHadAllShiftsWithTimeOff(true)
     const allShiftsHaveTimeOff =
       manualConflictSummary.conflictCount > 0 &&
       manualConflictSummary.conflictCount === manualConflictSummary.totalScheduled
     if (allShiftsHaveTimeOff && manualConflictShifts.length > 0) {
-      setLastManualRunHadAllShiftsWithTimeOff(true)
       runManualFinderAndCollapse(false, manualConflictShifts)
     } else {
       runManualFinderAndCollapse(false, undefined)
@@ -1398,11 +1444,15 @@ export default function SubFinderPage() {
     } else if (requestedStartDate === tomorrow) {
       setPickDateChoice('tomorrow')
     } else {
+      // Any other date (e.g. yesterday, custom range) — show custom picker (vuln 2)
       setPickDateChoice('custom')
     }
     const teacher = teachers.find(t => t.id === requestedTeacherId)
     if (teacher) {
       setManualTeacherSearch(getDisplayName(teacher))
+    } else if (teachers.length === 0) {
+      // Teachers not loaded yet; sync effect will set name when they load (vuln 1)
+      setManualTeacherSearch('')
     }
     // Defer URL replace so state is committed and no effect can overwrite; 150ms to be past any effect/query
     const newSearchParams = new URLSearchParams(searchParams.toString())
@@ -2009,8 +2059,38 @@ export default function SubFinderPage() {
                         manualConflictSummary.conflictCount ===
                           manualConflictSummary.totalScheduled &&
                         manualConflictSummary.totalScheduled > 0
+                      ) &&
+                      !(
+                        manualConflictSummary.totalScheduled > 0 &&
+                        manualConflictSummary.totalAssignable === 0
                       ) && (
                         <p className="text-xs text-amber-600 mt-2">Select at least one shift.</p>
+                      )}
+                    {manualConflictCheckReady &&
+                      manualConflictSummary.totalScheduled > 0 &&
+                      manualConflictSummary.totalAssignable === 0 && (
+                        <div
+                          className="mt-2 rounded-lg border px-3 py-2.5 text-sm"
+                          style={{
+                            backgroundColor: '#fef3c7',
+                            color: '#92400e',
+                            borderColor: '#fcd34d',
+                          }}
+                          role="status"
+                        >
+                          <p className="font-medium">
+                            All shifts in this range fall on closed days.
+                          </p>
+                          <p className="mt-1">
+                            <Link
+                              href="/settings/calendar"
+                              className="underline font-medium focus:outline-none focus:ring-2 focus:ring-amber-500 rounded"
+                            >
+                              Manage Calendar
+                            </Link>
+                            {' to change closures.'}
+                          </p>
+                        </div>
                       )}
                     {/* No time off: inline create card (shared with Assign Sub) and two stacked actions */}
                     {manualConflictCheckReady &&
@@ -2146,13 +2226,17 @@ export default function SubFinderPage() {
                         <div
                           className="mt-2 rounded-lg border px-4 py-2.5 text-sm"
                           style={{
-                            backgroundColor: '#dcfce7',
-                            color: '#166534',
-                            borderColor: '#86efac',
+                            backgroundColor: manualTimeOffCoverageUnconfirmed
+                              ? '#fef3c7'
+                              : '#dcfce7',
+                            color: manualTimeOffCoverageUnconfirmed ? '#92400e' : '#166534',
+                            borderColor: manualTimeOffCoverageUnconfirmed ? '#fcd34d' : '#86efac',
                           }}
                           role="status"
                         >
-                          Time off successfully added for these shifts. Finding recommended subs…
+                          {manualTimeOffCoverageUnconfirmed
+                            ? 'Time off created. Refresh the page or click Find Subs to see recommended subs.'
+                            : 'Time off successfully added for these shifts. Finding recommended subs…'}
                         </div>
                       ) : (
                         <p className="text-xs text-muted-foreground mt-2">

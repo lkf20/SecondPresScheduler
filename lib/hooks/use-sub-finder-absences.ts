@@ -36,6 +36,25 @@ export type SubFinderAbsence = {
       assigned_sub?: {
         name: string
       }
+      day_display_order?: number | null
+      time_slot_display_order?: number | null
+    }>
+    shift_details_sorted?: Array<{
+      class_name?: string | null
+      date: string
+      day_name: string
+      time_slot_code: string
+      classroom_name: string
+      classroom_color: string | null
+      id?: string
+      status: 'covered' | 'partial' | 'fully_covered' | 'partially_covered' | 'uncovered'
+      sub_name?: string | null
+      sub_id?: string | null
+      assignment_id?: string | null
+      assignment_status?: 'pending' | 'confirmed' | 'declined' | 'no_response' | 'none' | null
+      assigned_sub?: { name: string }
+      day_display_order?: number | null
+      time_slot_display_order?: number | null
     }>
   }
   classrooms: Array<{

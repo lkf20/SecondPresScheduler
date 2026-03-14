@@ -16,6 +16,9 @@ export interface SubFinderShift {
   is_partial?: boolean
   assignment_status?: SubFinderAssignmentStatus | null
   contact_status?: SubFinderAssignmentStatus | null
+  /** For display order: date → day → time_slot (AGENTS.md) */
+  day_display_order?: number | null
+  time_slot_display_order?: number | null
 }
 
 export interface SubFinderShiftSummary {

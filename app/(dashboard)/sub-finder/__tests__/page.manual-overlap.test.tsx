@@ -10,6 +10,14 @@ jest.mock('next/navigation', () => ({
   usePathname: () => '/sub-finder',
 }))
 
+const mockInvalidateQueries = jest.fn()
+jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
+  useQueryClient: () => ({
+    invalidateQueries: mockInvalidateQueries,
+  }),
+}))
+
 jest.mock('@/components/layout/Header', () => ({
   Header: () => <div data-testid="header" />,
 }))
@@ -58,7 +66,7 @@ jest.mock('@/components/time-off/ShiftSelectionTable', () => {
         <button
           data-testid="simulate-no-overlap"
           onClick={() => {
-            onConflictSummaryChange?.({ conflictCount: 0, totalScheduled: 2 })
+            onConflictSummaryChange?.({ conflictCount: 0, totalScheduled: 2, totalAssignable: 2 })
             onConflictRequestsChange?.([])
             onShiftsChange?.([
               { date: '2026-03-09', day_of_week_id: 'mon', time_slot_id: 'slot-1' },
@@ -72,7 +80,7 @@ jest.mock('@/components/time-off/ShiftSelectionTable', () => {
         <button
           data-testid="simulate-100-overlap"
           onClick={() => {
-            onConflictSummaryChange?.({ conflictCount: 2, totalScheduled: 2 })
+            onConflictSummaryChange?.({ conflictCount: 2, totalScheduled: 2, totalAssignable: 2 })
             onConflictRequestsChange?.([
               { id: 'req-1', start_date: '2026-03-09', end_date: '2026-03-10', reason: 'Vacation' },
             ])
@@ -89,7 +97,7 @@ jest.mock('@/components/time-off/ShiftSelectionTable', () => {
         <button
           data-testid="simulate-partial-overlap"
           onClick={() => {
-            onConflictSummaryChange?.({ conflictCount: 1, totalScheduled: 2 })
+            onConflictSummaryChange?.({ conflictCount: 1, totalScheduled: 2, totalAssignable: 2 })
             onConflictRequestsChange?.([
               { id: 'req-1', start_date: '2026-03-09', end_date: '2026-03-09', reason: 'Vacation' },
             ])
@@ -104,7 +112,7 @@ jest.mock('@/components/time-off/ShiftSelectionTable', () => {
         <button
           data-testid="simulate-multiple-partial-overlap"
           onClick={() => {
-            onConflictSummaryChange?.({ conflictCount: 2, totalScheduled: 3 })
+            onConflictSummaryChange?.({ conflictCount: 2, totalScheduled: 3, totalAssignable: 3 })
             onConflictRequestsChange?.([
               { id: 'req-1', start_date: '2026-03-09', end_date: '2026-03-09', reason: 'Sick Day' },
               {
@@ -154,6 +162,10 @@ jest.mock('@/components/sub-finder/hooks/useSubFinderData', () => ({
   }),
 }))
 
+jest.mock('@/lib/contexts/SchoolContext', () => ({
+  useSchool: () => 'school-1',
+}))
+
 jest.mock('@/lib/contexts/PanelManagerContext', () => ({
   usePanelManager: () => ({
     activePanel: null,
@@ -185,6 +197,18 @@ jest.mock('@/components/time-off/AddTimeOffButton', () => {
 jest.mock('@/lib/utils/sub-finder-state', () => ({
   loadSubFinderState: () => null,
   saveSubFinderState: jest.fn(),
+  clearSubFinderState: jest.fn(),
+}))
+
+const mockToastSuccess = jest.fn()
+const mockToastError = jest.fn()
+const mockToastWarning = jest.fn()
+jest.mock('sonner', () => ({
+  toast: {
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+    error: (...args: unknown[]) => mockToastError(...args),
+    warning: (...args: unknown[]) => mockToastWarning(...args),
+  },
 }))
 
 // Fixed dates so Today/Tomorrow overlap tests are deterministic
@@ -195,10 +219,16 @@ jest.mock('@/lib/utils/date', () => ({
 }))
 
 describe('SubFinderPage - Manual Overlap', () => {
+  const originalFetch = global.fetch
+
   beforeEach(() => {
     mockHandleFindManualSubs.mockClear()
     mockPush.mockClear()
     mockReplace.mockClear()
+    mockToastSuccess.mockClear()
+    mockToastError.mockClear()
+    mockToastWarning.mockClear()
+    global.fetch = originalFetch
   })
 
   it('enables Find Subs button for 100% overlap and calls find manual subs with conflict shifts', async () => {
@@ -365,7 +395,7 @@ describe('SubFinderPage - Manual Overlap', () => {
     })
   })
 
-  it('no time off: shows Create time off request box and button in left panel', async () => {
+  it('no time off: shows inline Create Time Off & Find Sub and Find Subs in Preview Mode', async () => {
     render(<SubFinderPage />)
 
     const input = screen.getAllByPlaceholderText('Search or select a teacher...')[0]
@@ -383,12 +413,152 @@ describe('SubFinderPage - Manual Overlap', () => {
 
     fireEvent.click(screen.getAllByTestId('simulate-no-overlap')[0])
 
-    expect(screen.getAllByText(/No time off request for these dates yet/).length).toBeGreaterThan(0)
-    const createBtns = screen.getAllByRole('button', { name: 'Create time off request' })
-    expect(createBtns.length).toBeGreaterThan(0)
+    // Inline create card and actions (no separate "Create time off request" that navigates with open_time_off=1)
+    expect(screen.getAllByText(/do not have a time off request/).length).toBeGreaterThan(0)
+    expect(
+      screen.getAllByRole('button', { name: 'Create Time Off & Find Sub' }).length
+    ).toBeGreaterThan(0)
+    expect(
+      screen.getAllByRole('button', { name: 'Find Subs in Preview Mode' }).length
+    ).toBeGreaterThan(0)
+    expect(mockReplace).not.toHaveBeenCalledWith(expect.stringContaining('open_time_off=1'))
+  })
 
-    fireEvent.click(createBtns[0])
-    expect(mockReplace).toHaveBeenCalledWith(expect.stringContaining('open_time_off=1'))
+  const defaultFetchResponse = {
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve([]),
+  } as Response
+
+  it('Create Time Off & Find Sub: on success shows banner and auto-runs Find Subs after table refresh', async () => {
+    const createdTimeOffId = 'req-created-1'
+    const coverageRequestId = 'cr-1'
+    global.fetch = jest.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : (input as URL).href
+      const method =
+        init?.method ??
+        (typeof input === 'object' && 'method' in input ? (input as Request).method : 'GET')
+      if (url.includes('/api/time-off') && method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ id: createdTimeOffId }),
+        } as Response)
+      }
+      if (
+        url.includes(`/api/sub-finder/coverage-request/${encodeURIComponent(createdTimeOffId)}`)
+      ) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ coverage_request_id: coverageRequestId }),
+        } as Response)
+      }
+      return Promise.resolve(defaultFetchResponse)
+    }) as typeof fetch
+
+    render(<SubFinderPage />)
+
+    const input = screen.getAllByPlaceholderText('Search or select a teacher...')[0]
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'John' } })
+    const teacherOptions = await screen.findAllByText('John Doe')
+    fireEvent.click(teacherOptions[0])
+
+    await screen.findAllByText('Pick dates')
+
+    fireEvent.click(screen.getAllByText('Custom date range')[0])
+    fireEvent.change(screen.getAllByTestId('mock-datepicker-Select start date')[0], {
+      target: { value: '2026-03-09' },
+    })
+
+    fireEvent.click(screen.getAllByTestId('simulate-no-overlap')[0])
+
+    const createBtn = screen.getAllByRole('button', { name: 'Create Time Off & Find Sub' })[0]
+    fireEvent.click(createBtn)
+
+    await waitFor(() => {
+      expect(mockToastSuccess).toHaveBeenCalledWith('Time off request created.')
+    })
+
+    // Table remounts after create; simulate 100% overlap so auto-run effect runs
+    const simulate100 = screen.getAllByTestId('simulate-100-overlap')[0]
+    fireEvent.click(simulate100)
+
+    await waitFor(() => {
+      expect(mockHandleFindManualSubs).toHaveBeenCalledWith({
+        teacherId: 't-1',
+        startDate: '2026-03-09',
+        endDate: '2026-03-09',
+        shifts: [
+          { date: '2026-03-09', day_of_week_id: 'mon', time_slot_id: 'slot-1' },
+          { date: '2026-03-10', day_of_week_id: 'tue', time_slot_id: 'slot-1' },
+        ],
+      })
+    })
+    // Success path: confirmed coverage, so green banner with "Time off successfully added... Finding recommended subs" is shown when 100% overlap is simulated
+    const successBanners = screen.getAllByText(
+      content =>
+        content.includes('Time off successfully added') &&
+        content.includes('Finding recommended subs')
+    )
+    expect(successBanners.length).toBeGreaterThan(0)
+  })
+
+  it('Create Time Off & Find Sub: when coverage GET fails after retries, shows unconfirmed banner and warning toast', async () => {
+    const createdTimeOffId = 'req-created-2'
+    global.fetch = jest.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : (input as URL).href
+      const method =
+        init?.method ??
+        (typeof input === 'object' && 'method' in input ? (input as Request).method : 'GET')
+      if (url.includes('/api/time-off') && method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ id: createdTimeOffId }),
+        } as Response)
+      }
+      if (url.includes('/api/sub-finder/coverage-request/')) {
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          json: () => Promise.resolve({}),
+        } as Response)
+      }
+      return Promise.resolve(defaultFetchResponse)
+    }) as typeof fetch
+
+    render(<SubFinderPage />)
+
+    const input = screen.getAllByPlaceholderText('Search or select a teacher...')[0]
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'John' } })
+    const teacherOptions = await screen.findAllByText('John Doe')
+    fireEvent.click(teacherOptions[0])
+
+    await screen.findAllByText('Pick dates')
+
+    fireEvent.click(screen.getAllByText('Custom date range')[0])
+    fireEvent.change(screen.getAllByTestId('mock-datepicker-Select start date')[0], {
+      target: { value: '2026-03-09' },
+    })
+
+    fireEvent.click(screen.getAllByTestId('simulate-no-overlap')[0])
+
+    const createBtn = screen.getAllByRole('button', { name: 'Create Time Off & Find Sub' })[0]
+    fireEvent.click(createBtn)
+
+    // Handler retries coverage GET at 0, 500, 1000 ms so wait for toasts after retries
+    await waitFor(
+      () => {
+        expect(mockToastSuccess).toHaveBeenCalledWith('Time off request created.')
+        expect(mockToastWarning).toHaveBeenCalledWith(
+          'There was a delay confirming coverage. Refresh the page or click Find Subs to continue.'
+        )
+      },
+      { timeout: 2500 }
+    )
   })
 
   it('partial overlap: shows Extend and Create new options in left panel', async () => {

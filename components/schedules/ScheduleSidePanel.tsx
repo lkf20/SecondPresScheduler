@@ -512,9 +512,12 @@ export const sortClassGroupsBySettingsOrder = <
 export const buildFindSubLink = ({
   absences,
   assignments,
+  cellDateISO,
 }: {
   absences?: SelectedCellData['absences']
   assignments?: WeeklyScheduleData['assignments']
+  /** When provided with a primary teacher and no absence, link opens Sub Finder in manual mode with this date (vuln 3). */
+  cellDateISO?: string | null
 }) => {
   const absenceForCell =
     absences?.find(
@@ -534,6 +537,15 @@ export const buildFindSubLink = ({
     return `/sub-finder?absence_id=${absenceForCell.time_off_request_id}`
   }
   if (primaryTeacher?.teacher_id) {
+    const dateISO = cellDateISO?.trim() || null
+    if (dateISO) {
+      const params = new URLSearchParams()
+      params.set('mode', 'manual')
+      params.set('teacher_id', primaryTeacher.teacher_id)
+      params.set('start_date', dateISO)
+      params.set('end_date', dateISO)
+      return `/sub-finder?${params.toString()}`
+    }
     return `/sub-finder?teacher_id=${primaryTeacher.teacher_id}`
   }
   return '/sub-finder'
@@ -2967,6 +2979,7 @@ export default function ScheduleSidePanel({
   const findSubLink = buildFindSubLink({
     absences: selectedCellData?.absences,
     assignments: selectedCellData?.assignments,
+    cellDateISO: cellDateISO ?? (panelMode === 'flex' ? flexStartDate : null),
   })
 
   // Debug logging

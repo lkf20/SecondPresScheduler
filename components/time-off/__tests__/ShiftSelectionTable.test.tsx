@@ -254,7 +254,11 @@ describe('ShiftSelectionTable', () => {
 
     expect(screen.getAllByTitle('Already recorded').length).toBeGreaterThan(0)
     expect(screen.getAllByText(/recorded/i).length).toBeGreaterThan(0)
-    expect(onConflictSummaryChange).toHaveBeenCalledWith({ conflictCount: 1, totalScheduled: 2 })
+    expect(onConflictSummaryChange).toHaveBeenCalledWith({
+      conflictCount: 1,
+      totalScheduled: 2,
+      totalAssignable: 2,
+    })
     expect(onConflictRequestsChange).toHaveBeenCalledWith([
       {
         id: 'req-1',

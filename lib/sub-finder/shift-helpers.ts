@@ -1,17 +1,14 @@
 import { parseLocalDate } from '@/lib/utils/date'
+import { sortShiftDetailsByDisplayOrder } from '@/lib/utils/shift-display-order'
 import type { SubFinderShift, SubFinderShiftSummary } from '@/lib/sub-finder/types'
 
 export function getShiftKey(shift: Pick<SubFinderShift, 'date' | 'time_slot_code'>): string {
   return `${shift.date}|${shift.time_slot_code}`
 }
 
+/** Sorts by date → day_display_order → time_slot_display_order (AGENTS.md). */
 export function sortShiftDetails(shifts: SubFinderShift[]): SubFinderShift[] {
-  return [...shifts].sort((a, b) => {
-    const dateA = parseLocalDate(a.date).getTime()
-    const dateB = parseLocalDate(b.date).getTime()
-    if (dateA !== dateB) return dateA - dateB
-    return a.time_slot_code.localeCompare(b.time_slot_code)
-  })
+  return sortShiftDetailsByDisplayOrder(shifts)
 }
 
 export function filterVisibleShifts<T extends { date: string }>(

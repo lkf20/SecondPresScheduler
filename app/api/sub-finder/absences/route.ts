@@ -361,6 +361,8 @@ export async function GET(request: NextRequest) {
         sub_id: detail.sub_id || null,
         assignment_id: detail.assignment_id || null,
         is_partial: detail.is_partial || false,
+        day_display_order: detail.day_display_order ?? null,
+        time_slot_display_order: detail.time_slot_display_order ?? null,
       }))
 
       const coverage_status = getCoverageStatus({

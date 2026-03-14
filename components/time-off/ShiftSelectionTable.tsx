@@ -49,7 +49,11 @@ interface ShiftSelectionTableProps {
   endDate: string | null // End date can be null/optional
   selectedShifts: SelectedShift[]
   onShiftsChange: (shifts: SelectedShift[]) => void
-  onConflictSummaryChange?: (summary: { conflictCount: number; totalScheduled: number }) => void
+  onConflictSummaryChange?: (summary: {
+    conflictCount: number
+    totalScheduled: number
+    totalAssignable: number
+  }) => void
   onConflictRequestsChange?: (
     requests: Array<{
       id: string
@@ -295,6 +299,10 @@ export default function ShiftSelectionTable({
     conflictShiftKeys.has(buildShiftKey(shift.date, shift.time_slot_id))
   ).length
 
+  const totalAssignable = scheduledShifts.filter(
+    (shift: ScheduledShift) => !shift.school_closure
+  ).length
+
   const conflictCheckReady = !loading && (!validateConflicts || !existingTimeOffLoading)
 
   useEffect(() => {
@@ -303,9 +311,13 @@ export default function ShiftSelectionTable({
 
   useEffect(() => {
     if (onConflictSummaryChange) {
-      onConflictSummaryChange({ conflictCount, totalScheduled: scheduledShifts.length })
+      onConflictSummaryChange({
+        conflictCount,
+        totalScheduled: scheduledShifts.length,
+        totalAssignable,
+      })
     }
-  }, [conflictCount, scheduledShifts.length, onConflictSummaryChange])
+  }, [conflictCount, scheduledShifts.length, totalAssignable, onConflictSummaryChange])
 
   useEffect(() => {
     if (onConflictRequestsChange) {

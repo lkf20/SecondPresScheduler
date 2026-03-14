@@ -58,6 +58,25 @@ type TimeOffShiftWithRequest = {
   time_off_requests: TimeOffRequestSummary | null
 }
 
+/** Sort key: use database display_order so shifts match settings order (AGENTS.md). */
+function sortShiftsByDisplayOrder<
+  T extends {
+    date: string
+    time_slot?: { display_order?: number | null } | null
+    day_of_week?: { display_order?: number | null } | null
+  },
+>(shifts: T[]): T[] {
+  return [...shifts].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1
+    const dayOrderA = a.day_of_week?.display_order ?? 999
+    const dayOrderB = b.day_of_week?.display_order ?? 999
+    if (dayOrderA !== dayOrderB) return dayOrderA - dayOrderB
+    const slotOrderA = a.time_slot?.display_order ?? 999
+    const slotOrderB = b.time_slot?.display_order ?? 999
+    return slotOrderA - slotOrderB
+  })
+}
+
 export async function getTimeOffShifts(requestId: string): Promise<TimeOffShiftWithDetails[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -65,10 +84,10 @@ export async function getTimeOffShifts(requestId: string): Promise<TimeOffShiftW
     .select('*, time_slot:time_slots(*), day_of_week:days_of_week(*)')
     .eq('time_off_request_id', requestId)
     .order('date', { ascending: true })
-    .order('time_slot_id', { ascending: true })
 
   if (error) throw error
-  return (data || []) as TimeOffShiftWithDetails[]
+  const rows = (data || []) as TimeOffShiftWithDetails[]
+  return sortShiftsByDisplayOrder(rows)
 }
 
 export async function createTimeOffShifts(
