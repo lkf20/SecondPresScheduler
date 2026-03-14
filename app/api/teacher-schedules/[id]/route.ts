@@ -33,12 +33,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Rule 2: Block structural changes if there are future dependents
-    const isTeacherChange = body.teacher_id && body.teacher_id !== existing.teacher_id
+    // Use !== undefined so explicitly sending null/falsy still triggers guards and sync
+    const isTeacherChange = body.teacher_id !== undefined && body.teacher_id !== existing.teacher_id
     const isDayOrTimeChange =
-      (body.day_of_week_id && body.day_of_week_id !== existing.day_of_week_id) ||
-      (body.time_slot_id && body.time_slot_id !== existing.time_slot_id)
+      (body.day_of_week_id !== undefined && body.day_of_week_id !== existing.day_of_week_id) ||
+      (body.time_slot_id !== undefined && body.time_slot_id !== existing.time_slot_id)
 
-    const isClassroomChange = body.classroom_id && body.classroom_id !== existing.classroom_id
+    const isClassroomChange =
+      body.classroom_id !== undefined && body.classroom_id !== existing.classroom_id
 
     if (isTeacherChange || isDayOrTimeChange) {
       const { hasDependents, message } = await checkDependentFutureEvents(
