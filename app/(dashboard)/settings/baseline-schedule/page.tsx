@@ -377,9 +377,10 @@ export default function BaselineSchedulePage() {
     if (schoolId) {
       invalidateWeeklySchedule(queryClient, schoolId)
       queryClient.invalidateQueries({ queryKey: ['scheduleSettings', schoolId] })
-      // Refetch all weekly schedule queries for this school so any cached week (baseline or weekly page) gets fresh data
+      // Refetch only active (mounted) weekly schedule queries to avoid refetching every cached week
       await queryClient.refetchQueries({
         queryKey: ['weeklySchedule', schoolId],
+        type: 'active',
       })
     }
   }, [schoolId, queryClient])

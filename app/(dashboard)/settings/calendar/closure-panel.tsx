@@ -102,6 +102,8 @@ export default function ClosurePanel({
   const [replaceConfirm, setReplaceConfirm] = useState<{
     closureIds: string[]
     datesWithSlots: Array<{ date: string; slotCodes: string[] }>
+    /** Full date range to add (so we add whole-day for every date, not just those with existing closures) */
+    allDatesInRange: string[]
   } | null>(null)
   /** When add fails because a closure already exists (409), show modal so user can't miss it */
   const [duplicateError, setDuplicateError] = useState<string | null>(null)
@@ -219,7 +221,11 @@ export default function ClosurePanel({
         }
       }
       if (datesWithExisting.length > 0) {
-        setReplaceConfirm({ closureIds: allClosureIds, datesWithSlots: datesWithExisting })
+        setReplaceConfirm({
+          closureIds: allClosureIds,
+          datesWithSlots: datesWithExisting,
+          allDatesInRange: datesToAdd,
+        })
         return
       }
     }
@@ -542,7 +548,7 @@ export default function ClosurePanel({
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                       delete_closure_ids: replaceConfirm.closureIds,
-                      add_closures: replaceConfirm.datesWithSlots.map(({ date }) => ({
+                      add_closures: replaceConfirm.allDatesInRange.map(date => ({
                         date,
                         time_slot_id: null,
                         reason: reasonVal,
@@ -555,7 +561,7 @@ export default function ClosurePanel({
                     throw new Error(err.error || 'Failed to update')
                   }
                   toast.success(
-                    replaceConfirm.datesWithSlots.length > 1
+                    replaceConfirm.allDatesInRange.length > 1
                       ? 'Closures replaced with whole-day closures.'
                       : 'Closure replaced with whole-day closure.'
                   )
