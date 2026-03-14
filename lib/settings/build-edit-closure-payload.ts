@@ -5,6 +5,11 @@ export interface EditClosureGroup {
   notes: string | null
 }
 
+/** Canonical check: whole-day closure group is exactly one closure with time_slot_id === null */
+export function isWholeDayClosureGroup(closures: Array<{ time_slot_id: string | null }>): boolean {
+  return closures.length === 1 && closures[0].time_slot_id === null
+}
+
 /**
  * Build PATCH body for editing a closure (reason/notes and optionally shape).
  * Same shape -> update_closures; shape change -> delete_closure_ids + add_closures.
@@ -25,8 +30,7 @@ export function buildEditClosurePayload(
     notes: string | null
   }>
 } {
-  const existingIsAll =
-    editGroup.closures.length === 1 && editGroup.closures[0].time_slot_id === null
+  const existingIsAll = isWholeDayClosureGroup(editGroup.closures)
   const existingSlotIds = editGroup.closures
     .map(c => c.time_slot_id)
     .filter((id): id is string => id != null)

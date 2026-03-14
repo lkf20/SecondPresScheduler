@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getTodayISO } from '@/lib/utils/date'
+import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 
 export async function GET() {
   try {
@@ -55,11 +56,11 @@ export async function GET() {
 
     const orphanedShifts = []
 
+    const closureList = closures ?? []
+
     for (const shift of shifts) {
       // 1. Check if it falls on a closed day
-      const isClosed = closures?.some(
-        c => c.date === shift.date && (!c.time_slot_id || c.time_slot_id === shift.time_slot_id)
-      )
+      const isClosed = isSlotClosedOnDate(shift.date, shift.time_slot_id, closureList)
 
       // 2. Check if the baseline schedule still exists
       const req = shift.coverage_requests as unknown as { teacher_id: string }

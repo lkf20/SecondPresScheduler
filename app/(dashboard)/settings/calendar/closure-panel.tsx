@@ -26,7 +26,10 @@ import {
   ClosureAppliesToRadios,
   ClosureTimeSlotCheckboxes,
 } from './closure-form-fields'
-import { buildEditClosurePayload } from '@/lib/settings/build-edit-closure-payload'
+import {
+  buildEditClosurePayload,
+  isWholeDayClosureGroup,
+} from '@/lib/settings/build-edit-closure-payload'
 import UnsavedChangesDialog from '@/components/schedules/UnsavedChangesDialog'
 
 /** Group of closures on one date (from calendar page groupedClosures). Used to open panel in edit mode. */
@@ -156,7 +159,7 @@ export default function ClosurePanel({
 
   const hasUnsavedChanges = (() => {
     if (isEdit && editGroup) {
-      const hasAll = editGroup.closures.some(c => !c.time_slot_id)
+      const hasAll = isWholeDayClosureGroup(editGroup.closures)
       const initialSlotIds = hasAll
         ? []
         : [
@@ -669,9 +672,9 @@ export default function ClosurePanel({
 
       <UnsavedChangesDialog
         isOpen={showUnsavedDialog}
-        onSave={() => {
+        onSave={async () => {
+          await handleSubmit()
           setShowUnsavedDialog(false)
-          handleSubmit()
         }}
         onDiscard={() => {
           setShowUnsavedDialog(false)
