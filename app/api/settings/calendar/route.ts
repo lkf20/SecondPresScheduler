@@ -359,13 +359,12 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
+    // Use same ±1 year range as calendar page GET so PATCH response is consistent and avoids UI flicker
+    const rangeStart = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const rangeEnd = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
     const [settings, closures] = await Promise.all([
       getCalendarSettings(schoolId),
-      getSchoolClosuresForDateRange(
-        schoolId,
-        new Date().toISOString().slice(0, 10),
-        new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-      ),
+      getSchoolClosuresForDateRange(schoolId, rangeStart, rangeEnd),
     ])
 
     return NextResponse.json({

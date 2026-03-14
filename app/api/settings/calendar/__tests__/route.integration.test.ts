@@ -139,6 +139,39 @@ describe('calendar settings route integration', () => {
       expect(json.last_day_of_school).toBe('2025-05-30')
     })
 
+    it('returns closures for ±1 year range (matches calendar page GET, avoids flicker)', async () => {
+      ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([
+        { id: 'c-1', date: '2024-06-15', time_slot_id: null, reason: 'Past' },
+      ])
+      const response = await PATCH(
+        new Request('http://localhost/api/settings/calendar', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            first_day_of_school: '2024-08-15',
+            last_day_of_school: '2025-05-30',
+          }),
+        })
+      )
+      const json = await response.json()
+      expect(response.status).toBe(200)
+      expect(getSchoolClosuresForDateRange).toHaveBeenCalledWith(
+        'school-1',
+        expect.any(String),
+        expect.any(String)
+      )
+      const [, start, end] = (getSchoolClosuresForDateRange as jest.Mock).mock.calls[0] as [
+        string,
+        string,
+        string,
+      ]
+      const startTime = new Date(start).getTime()
+      const endTime = new Date(end).getTime()
+      const daysDiff = (endTime - startTime) / (24 * 60 * 60 * 1000)
+      expect(daysDiff).toBeGreaterThanOrEqual(720) // ~2 years
+      expect(json.school_closures).toHaveLength(1)
+    })
+
     it('deletes closures by ids', async () => {
       ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
       ;(getSchoolClosuresByIds as jest.Mock).mockResolvedValue([
