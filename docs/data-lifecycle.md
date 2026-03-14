@@ -97,10 +97,12 @@ These are enforced in API routes using `lib/lifecycle/status-transitions.ts`.
 
 When a teacher's baseline schedule is updated or removed, the API enforces strict rules to maintain data integrity for dependent future events (`time_off_requests`, `coverage_request_shifts`, and `sub_assignments`).
 
-1. **Safe Sync (Classroom changes only):** If a baseline update only changes the `classroom_id` (day and time slot remain the same), the system automatically syncs the new classroom to all dependent `coverage_request_shifts` and `sub_assignments` where `date >= today`.
-2. **Block & Resolve (Structural changes):** If a baseline schedule is deleted, or its `day_of_week_id` or `time_slot_id` is changed, the API returns a 409 Conflict if any dependent future events (`date >= today`) exist for that slot. The user must manually cancel or resolve these future events first.
+1. **Safe Sync (Classroom changes only):** If a baseline update only changes the `classroom_id` (teacher, day and time slot remain the same), the system automatically syncs the new classroom to all dependent `coverage_request_shifts` and `sub_assignments` where `date >= today`.
+2. **Block & Resolve (Structural changes):** If a baseline schedule is deleted, or its `teacher_id`, `day_of_week_id`, or `time_slot_id` is changed, the API returns a 409 Conflict if the _current_ teacher has any dependent future events (`date >= today`) for that slot. The user must manually cancel or resolve those future events before making the change. (Changing `teacher_id` would orphan the current teacher’s future time off/coverage/subs for that slot.)
 3. **Frozen History:** Past events (`date < today`) are historically immutable. No baseline schedule updates will ever cascade or alter `classroom_id` on shifts that have already occurred.
 4. **Data Health Safety Net:** The app monitors for "Orphaned Shifts" (future shifts that somehow lost their baseline schedule or fall on a newly scheduled closed day) and flags them for manual review rather than relying on dangerous automated cascading deletes.
+
+**Definition of "today":** Past vs present/future uses the shift `date` compared to "today." Currently "today" is the server’s local date (`getTodayISO()` in `lib/utils/date.ts`). School timezone may be introduced later for stricter school-date semantics; any such change should use a single shared "school today" in dependency checks, sync logic, and data-health.
 
 ## Notes
 

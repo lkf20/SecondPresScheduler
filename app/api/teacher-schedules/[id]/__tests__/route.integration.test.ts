@@ -244,6 +244,34 @@ describe('teacher schedules id route integration', () => {
     expect(updateTeacherSchedule).not.toHaveBeenCalled()
   })
 
+  it('PUT blocks change if teacher_id changes and dependents exist', async () => {
+    ;(getTeacherScheduleById as jest.Mock).mockResolvedValue({
+      id: 'schedule-1',
+      teacher_id: 'teacher-1',
+      classroom_id: 'room-1',
+      day_of_week_id: 'monday',
+      time_slot_id: 'am',
+    })
+    ;(checkDependentFutureEvents as jest.Mock).mockResolvedValue({
+      hasDependents: true,
+      message: 'Cannot reassign; current teacher has future events for this slot.',
+    })
+
+    const response = await PUT(
+      new Request('http://localhost/api/teacher-schedules/schedule-1', {
+        method: 'PUT',
+        body: JSON.stringify({ teacher_id: 'teacher-2' }),
+      }),
+      { params: Promise.resolve({ id: 'schedule-1' }) }
+    )
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({
+      error: 'Cannot reassign; current teacher has future events for this slot.',
+    })
+    expect(updateTeacherSchedule).not.toHaveBeenCalled()
+  })
+
   it('DELETE blocks if dependents exist', async () => {
     ;(getTeacherScheduleById as jest.Mock).mockResolvedValue({
       id: 'schedule-1',

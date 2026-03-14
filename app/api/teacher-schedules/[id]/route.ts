@@ -33,13 +33,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Rule 2: Block structural changes if there are future dependents
+    const isTeacherChange = body.teacher_id && body.teacher_id !== existing.teacher_id
     const isDayOrTimeChange =
       (body.day_of_week_id && body.day_of_week_id !== existing.day_of_week_id) ||
       (body.time_slot_id && body.time_slot_id !== existing.time_slot_id)
 
     const isClassroomChange = body.classroom_id && body.classroom_id !== existing.classroom_id
 
-    if (isDayOrTimeChange) {
+    if (isTeacherChange || isDayOrTimeChange) {
       const { hasDependents, message } = await checkDependentFutureEvents(
         existing.teacher_id,
         existing.day_of_week_id,
@@ -59,7 +60,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Rule 1: Safe Sync future classroom changes
-    if (isClassroomChange && !isDayOrTimeChange) {
+    if (isClassroomChange && !isTeacherChange && !isDayOrTimeChange) {
       await syncFutureClassroom(
         schedule.teacher_id,
         schedule.day_of_week_id,
