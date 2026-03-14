@@ -3,12 +3,14 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   AlertTriangle,
+  CalendarPlus,
   CheckCircle,
   ChevronDown,
   ChevronUp,
   CornerDownRight,
   Pencil,
   Plus,
+  UserSearch,
   XCircle,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -776,6 +778,21 @@ export default function ScheduleSidePanel({
     setTimeOffTeacherName(teacherName ?? null)
     setPanelMode('timeOff')
   }
+
+  /** Navigate to Sub Finder with this teacher and cell date range pre-selected (single day). */
+  const openFindSub = useCallback(
+    (teacherId: string) => {
+      const dateISO = cellDateISO ?? flexStartDate
+      if (!dateISO) return
+      const params = new URLSearchParams()
+      params.set('mode', 'manual')
+      params.set('teacher_id', teacherId)
+      params.set('start_date', dateISO)
+      params.set('end_date', dateISO)
+      router.push(`/sub-finder?${params.toString()}`)
+    },
+    [cellDateISO, flexStartDate, router]
+  )
 
   useEffect(() => {
     if (!isOpen) return
@@ -4088,27 +4105,47 @@ export default function ScheduleSidePanel({
                                   Permanent
                                 </span>
                               </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                className="h-8 gap-1.5 rounded-md border-0 bg-white px-3 font-medium text-teal-700 shadow-none hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
-                                style={{
-                                  appearance: 'none',
-                                  WebkitAppearance: 'none',
-                                  border: '0',
-                                  boxShadow: 'none',
-                                }}
-                                onClick={() =>
-                                  openTimeOffPanel(
-                                    assignment.teacher_id,
-                                    assignment.teacher_name || 'Unknown'
-                                  )
-                                }
-                                disabled={slotIsInactive}
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                                Add Time Off
-                              </Button>
+                              <div className="flex items-center gap-2">
+                                {(cellDateISO ?? flexStartDate) && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="h-8 gap-1.5 rounded-md border-0 bg-white px-3 font-medium text-teal-700 shadow-none hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
+                                    style={{
+                                      appearance: 'none',
+                                      WebkitAppearance: 'none',
+                                      border: '0',
+                                      boxShadow: 'none',
+                                    }}
+                                    onClick={() => openFindSub(assignment.teacher_id)}
+                                    disabled={slotIsInactive}
+                                  >
+                                    <UserSearch className="h-3.5 w-3.5" />
+                                    Find Sub
+                                  </Button>
+                                )}
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  className="h-8 gap-1.5 rounded-md border-0 bg-white px-3 font-medium text-teal-700 shadow-none hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
+                                  style={{
+                                    appearance: 'none',
+                                    WebkitAppearance: 'none',
+                                    border: '0',
+                                    boxShadow: 'none',
+                                  }}
+                                  onClick={() =>
+                                    openTimeOffPanel(
+                                      assignment.teacher_id,
+                                      assignment.teacher_name || 'Unknown'
+                                    )
+                                  }
+                                  disabled={slotIsInactive}
+                                >
+                                  <CalendarPlus className="h-3.5 w-3.5" />
+                                  Add Time Off
+                                </Button>
+                              </div>
                             </div>
                           ))}
                         {sortedBaselineFlexAssignments.length > 0 &&
@@ -4126,21 +4163,35 @@ export default function ScheduleSidePanel({
                                   Flex
                                 </span>
                               </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                className="h-8 gap-1.5 rounded-md bg-white px-3 font-medium text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
-                                onClick={() =>
-                                  openTimeOffPanel(
-                                    assignment.teacher_id,
-                                    assignment.teacher_name || 'Unknown'
-                                  )
-                                }
-                                disabled={slotIsInactive}
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                                Add Time Off
-                              </Button>
+                              <div className="flex items-center gap-2">
+                                {(cellDateISO ?? flexStartDate) && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="h-8 gap-1.5 rounded-md bg-white px-3 font-medium text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
+                                    onClick={() => openFindSub(assignment.teacher_id)}
+                                    disabled={slotIsInactive}
+                                  >
+                                    <UserSearch className="h-3.5 w-3.5" />
+                                    Find Sub
+                                  </Button>
+                                )}
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  className="h-8 gap-1.5 rounded-md bg-white px-3 font-medium text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
+                                  onClick={() =>
+                                    openTimeOffPanel(
+                                      assignment.teacher_id,
+                                      assignment.teacher_name || 'Unknown'
+                                    )
+                                  }
+                                  disabled={slotIsInactive}
+                                >
+                                  <CalendarPlus className="h-3.5 w-3.5" />
+                                  Add Time Off
+                                </Button>
+                              </div>
                             </div>
                           ))}
                         {sortedTemporaryCoverageAssignments.length > 0 &&
@@ -4205,6 +4256,18 @@ export default function ScheduleSidePanel({
                                   <Pencil className="h-3.5 w-3.5" />
                                   Edit
                                 </Button>
+                                {(cellDateISO ?? flexStartDate) && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="h-8 gap-1.5 rounded-md bg-white px-3 font-medium text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
+                                    onClick={() => openFindSub(assignment.teacher_id)}
+                                    disabled={slotIsInactive}
+                                  >
+                                    <UserSearch className="h-3.5 w-3.5" />
+                                    Find Sub
+                                  </Button>
+                                )}
                                 <Button
                                   type="button"
                                   variant="ghost"
@@ -4217,7 +4280,7 @@ export default function ScheduleSidePanel({
                                   }
                                   disabled={slotIsInactive}
                                 >
-                                  <Plus className="h-3.5 w-3.5" />
+                                  <CalendarPlus className="h-3.5 w-3.5" />
                                   Add Time Off
                                 </Button>
                               </div>
@@ -4237,21 +4300,35 @@ export default function ScheduleSidePanel({
                                   Floater
                                 </span>
                               </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                className="h-8 gap-1.5 rounded-md bg-white px-3 font-medium text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
-                                onClick={() =>
-                                  openTimeOffPanel(
-                                    assignment.teacher_id,
-                                    assignment.teacher_name || 'Unknown'
-                                  )
-                                }
-                                disabled={slotIsInactive}
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                                Add Time Off
-                              </Button>
+                              <div className="flex items-center gap-2">
+                                {(cellDateISO ?? flexStartDate) && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="h-8 gap-1.5 rounded-md bg-white px-3 font-medium text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
+                                    onClick={() => openFindSub(assignment.teacher_id)}
+                                    disabled={slotIsInactive}
+                                  >
+                                    <UserSearch className="h-3.5 w-3.5" />
+                                    Find Sub
+                                  </Button>
+                                )}
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  className="h-8 gap-1.5 rounded-md bg-white px-3 font-medium text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
+                                  onClick={() =>
+                                    openTimeOffPanel(
+                                      assignment.teacher_id,
+                                      assignment.teacher_name || 'Unknown'
+                                    )
+                                  }
+                                  disabled={slotIsInactive}
+                                >
+                                  <CalendarPlus className="h-3.5 w-3.5" />
+                                  Add Time Off
+                                </Button>
+                              </div>
                             </div>
                           ))}
                         {sortedAbsences.length === 0 &&

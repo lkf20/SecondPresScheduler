@@ -11,6 +11,10 @@ The system must prevent double-booking a sub for the same shift(s). When the use
 - **API:** `POST /api/sub-finder/assign-shifts` must return **409** when the selected sub already has an active assignment for any of the selected (date, time_slot) pairs. Response body must include an actionable error message (e.g. “Double booking prevented: this sub already has an active assignment for one or more selected shifts.”).
 - **UI:** When the assign request returns 409, the UI must surface the error (toast, inline message, or alert) so the user is not left with a silent failure.
 
+## Floater override
+
+- When the director explicitly confirms “Assign as floater,” the sub may be assigned to up to 2 rooms at the same (date, time_slot). The API accepts `is_floater_shift_ids`; when provided, collision checks allow up to 2 active assignments per (sub, date, time_slot) when all such assignments are floater (0.5 coverage each). This enables subs covering multiple rooms as floaters.
+
 ## Out of scope
 
 - Baseline teacher-schedule double-booking (DB unique constraint + ConflictBanner) is covered separately.
@@ -19,4 +23,4 @@ The system must prevent double-booking a sub for the same shift(s). When the use
 ## References
 
 - API: `app/api/sub-finder/assign-shifts/route.ts` (sub collision check, 409 response)
-- [APP_PURPOSE_AND_CONTEXT.md](../../docs/APP_PURPOSE_AND_CONTEXT.md) — Absence → Coverage flow: “No double booking”
+- [app-purpose-and-context.md](../../docs/domain/app-purpose-and-context.md) — Absence → Coverage flow: “No double booking”

@@ -771,6 +771,7 @@ export default function ContactSubPanel({
         override_availability: boolean
       }>
       selected_shift_ids: string[]
+      is_floater_shift_ids?: string[]
     }
   }
 
@@ -980,6 +981,9 @@ export default function ContactSubPanel({
         coverage_request_id: coverageRequestId,
         sub_id: sub.id,
         selected_shift_ids: selectedShiftIds,
+        ...(resolvedOverrides.is_floater_shift_ids?.length
+          ? { is_floater_shift_ids: resolvedOverrides.is_floater_shift_ids }
+          : {}),
       }
 
       // Use the mutation hook which handles cache invalidation automatically

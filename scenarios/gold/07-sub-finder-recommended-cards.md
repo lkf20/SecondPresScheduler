@@ -47,7 +47,7 @@ When the director opens Sub Finder and selects an absence, the recommended sub c
 ## References
 
 - [AGENTS.md](../../AGENTS.md) — Legends rule, color consistency
-- [APP_PURPOSE_AND_CONTEXT.md](../../docs/APP_PURPOSE_AND_CONTEXT.md) — Absence → Coverage flow, "Clear contact status"
+- [app-purpose-and-context.md](../../docs/domain/app-purpose-and-context.md) — Absence → Coverage flow, "Clear contact status"
 - `components/sub-finder/ShiftChips.tsx` — Chip layout and legend
 - `components/sub-finder/SubFinderCard.tsx`, `SubCardHeader.tsx` — Card layout and contact display
 - `lib/utils/sub-combination.ts` — SubAssignment includes email for recommended combinations

@@ -897,6 +897,7 @@ export type Database = {
           date: string
           day_of_week_id: string
           id: string
+          is_floater: boolean
           is_partial: boolean | null
           notes: string | null
           partial_end_time: string | null
@@ -917,6 +918,7 @@ export type Database = {
           date: string
           day_of_week_id: string
           id?: string
+          is_floater?: boolean
           is_partial?: boolean | null
           notes?: string | null
           partial_end_time?: string | null
@@ -937,6 +939,7 @@ export type Database = {
           date?: string
           day_of_week_id?: string
           id?: string
+          is_floater?: boolean
           is_partial?: boolean | null
           notes?: string | null
           partial_end_time?: string | null

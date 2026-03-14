@@ -17,6 +17,8 @@ export interface Absence {
   start_date: string
   end_date: string | null
   reason: string | null
+  /** True when end_date is in the past (within last 90 days). */
+  is_past?: boolean
   classrooms?: Array<{
     id: string
     name: string
@@ -183,6 +185,7 @@ export function useSubFinderData({
       start_date: apiAbsence.start_date,
       end_date: apiAbsence.end_date,
       reason: apiAbsence.reason,
+      is_past: apiAbsence.is_past ?? false,
       classrooms: apiAbsence.classrooms,
       shifts: {
         total: apiAbsence.shifts?.total || 0,
@@ -232,8 +235,13 @@ export function useSubFinderData({
     () => ({
       ...(subRecommendationParams || {}),
       includeFlexibleStaff,
+      // When selected absence is past, include past shifts so recommendations load for historical record updates
+      includePastShifts:
+        (subRecommendationParams?.includePastShifts as boolean | undefined) ||
+        selectedAbsence?.is_past ||
+        false,
     }),
-    [includeFlexibleStaff, subRecommendationParams]
+    [includeFlexibleStaff, subRecommendationParams, selectedAbsence?.is_past]
   )
 
   const {

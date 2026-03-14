@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   CalendarDays,
   Calendar,
-  PieChart,
   CheckCircle2,
   Users,
   AlertCircle,
@@ -451,10 +450,10 @@ export default function DashboardClient({
 
   const summaryItems = useMemo(() => {
     const uncoveredColors = getCoverageColors('uncovered')
-    const partialColors = getCoverageColors('partial')
     const infoColors = { text: 'text-blue-600', bg: 'bg-blue-100', icon: 'text-blue-600' }
     const tealColors = { text: 'text-teal-700', bg: 'bg-teal-100', icon: 'text-teal-600' }
 
+    // Partially Covered Shifts card hidden until partial shift assignment is built out (see TODO_TRACKER).
     return [
       {
         key: 'uncovered' as const,
@@ -464,15 +463,6 @@ export default function DashboardClient({
         cardStyle: `${neutralColors.border} bg-white ${neutralColors.textMedium}`,
         icon: AlertTriangle,
         iconStyle: `${uncoveredColors.bg} ${uncoveredColors.icon}`,
-      },
-      {
-        key: 'partial' as const,
-        label: 'Partially Covered Shifts',
-        count: overview.summary.partially_covered_shifts,
-        tone: partialColors.text,
-        cardStyle: `${neutralColors.border} bg-white ${neutralColors.textMedium}`,
-        icon: PieChart,
-        iconStyle: `${partialColors.bg} ${partialColors.icon}`,
       },
       {
         key: 'absences' as const,
@@ -704,16 +694,7 @@ export default function DashboardClient({
                 )}
               >
                 <CardContent className="p-4 flex flex-col flex-1">
-                  <div
-                    className="text-base font-normal"
-                    style={
-                      item.key === 'partial'
-                        ? { backgroundClip: 'unset', WebkitBackgroundClip: 'unset' }
-                        : undefined
-                    }
-                  >
-                    {item.label}
-                  </div>
+                  <div className="text-base font-normal">{item.label}</div>
                   <div className="mt-3 h-px w-full bg-black/10" />
                   {'count' in item ? (
                     <div className="mt-3 flex items-center justify-between">
@@ -722,13 +703,11 @@ export default function DashboardClient({
                         style={
                           item.key === 'uncovered'
                             ? ({ color: coverageColorValues.uncovered.icon } as React.CSSProperties)
-                            : item.key === 'partial'
-                              ? ({ color: coverageColorValues.partial.text } as React.CSSProperties)
-                              : item.key === 'scheduled'
-                                ? ({ color: '#0D9488' } as React.CSSProperties) // teal-600
-                                : item.key === 'absences'
-                                  ? ({ color: 'rgba(55, 65, 81, 1)' } as React.CSSProperties) // gray-700
-                                  : undefined
+                            : item.key === 'scheduled'
+                              ? ({ color: '#0D9488' } as React.CSSProperties) // teal-600
+                              : item.key === 'absences'
+                                ? ({ color: 'rgba(55, 65, 81, 1)' } as React.CSSProperties) // gray-700
+                                : undefined
                         }
                       >
                         {item.count}
@@ -742,30 +721,25 @@ export default function DashboardClient({
                                   backgroundColor: coverageColorValues.uncovered.bg,
                                   color: coverageColorValues.uncovered.icon,
                                 } as React.CSSProperties)
-                              : item.key === 'partial'
+                              : item.key === 'scheduled'
                                 ? ({
-                                    backgroundColor: coverageColorValues.partial.bg,
-                                    color: coverageColorValues.partial.icon,
+                                    backgroundColor: 'rgba(236, 253, 245, 1)', // emerald-50
+                                    color: '#0D9488', // teal-600
+                                    borderWidth: '0px',
+                                    borderStyle: 'none',
+                                    borderColor: 'rgba(0, 0, 0, 0)',
+                                    borderImage: 'none',
                                   } as React.CSSProperties)
-                                : item.key === 'scheduled'
+                                : item.key === 'absences'
                                   ? ({
-                                      backgroundColor: 'rgba(236, 253, 245, 1)', // emerald-50
-                                      color: '#0D9488', // teal-600
+                                      backgroundColor: 'rgba(243, 244, 246, 1)', // gray-100
+                                      color: 'rgba(55, 65, 81, 1)', // gray-700
                                       borderWidth: '0px',
                                       borderStyle: 'none',
                                       borderColor: 'rgba(0, 0, 0, 0)',
                                       borderImage: 'none',
                                     } as React.CSSProperties)
-                                  : item.key === 'absences'
-                                    ? ({
-                                        backgroundColor: 'rgba(243, 244, 246, 1)', // gray-100
-                                        color: 'rgba(55, 65, 81, 1)', // gray-700
-                                        borderWidth: '0px',
-                                        borderStyle: 'none',
-                                        borderColor: 'rgba(0, 0, 0, 0)',
-                                        borderImage: 'none',
-                                      } as React.CSSProperties)
-                                    : undefined
+                                  : undefined
                           }
                         >
                           <item.icon className="h-5 w-5" />

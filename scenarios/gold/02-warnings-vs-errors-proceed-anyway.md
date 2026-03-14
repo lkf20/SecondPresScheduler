@@ -10,7 +10,7 @@ When the system shows a **warning** (e.g. “A staff member with this name alrea
 
 - **Warnings:** May show a “Proceed anyway” (or equivalent) control. Submit remains disabled until the user explicitly opts in (e.g. checks the box). After opt-in, submit is allowed.
 - **Errors:** No “Proceed anyway.” Submit is disabled until the error condition is fixed.
-- **Message specificity:** Warnings and errors must be specific and actionable (per [APP_PURPOSE_AND_CONTEXT.md](../../docs/APP_PURPOSE_AND_CONTEXT.md) — Error Messaging).
+- **Message specificity:** Warnings and errors must be specific and actionable (per [app-purpose-and-context.md](../../docs/domain/app-purpose-and-context.md) — Error Messaging).
 
 ## Scope
 
@@ -21,4 +21,4 @@ When the system shows a **warning** (e.g. “A staff member with this name alrea
 
 - `components/staff/StaffForm.tsx` — duplicate warning, `proceedWithDuplicate`, submit disabled
 - `components/teachers/TeacherForm.tsx` — duplicate warning, `proceedWithDuplicate`, submit disabled
-- [APP_PURPOSE_AND_CONTEXT.md](../../docs/APP_PURPOSE_AND_CONTEXT.md) — Tone and Expectations, Error Messaging
+- [app-purpose-and-context.md](../../docs/domain/app-purpose-and-context.md) — Tone and Expectations, Error Messaging

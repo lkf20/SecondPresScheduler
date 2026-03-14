@@ -27,12 +27,12 @@ A teacher must not have multiple overlapping time off requests (draft or active)
 
 ### 4. Instructions and tests
 
-- [ ] Overlap rule and 409 behavior are documented (e.g. in `docs/data-lifecycle.md` or a contract).
+- [ ] Overlap rule and 409 behavior are documented (e.g. in `docs/domain/data-lifecycle.md` or a contract).
 - [ ] Tests cover: overlap detection returns 409 for POST/PUT when shifts overlap another draft/active request; client shows overlap modal on 409 and "Edit existing request" navigates correctly.
 
 ## References
 
-- [data-lifecycle.md](../../docs/data-lifecycle.md) — Time off overlap rule
+- [data-lifecycle.md](../../docs/domain/data-lifecycle.md) — Time off overlap rule
 - [lib/api/time-off.ts](../../lib/api/time-off.ts) — `findOverlappingTimeOffRequest`
 - [app/api/time-off/route.ts](../../app/api/time-off/route.ts) — POST overlap check
 - [app/api/time-off/[id]/route.ts](../../app/api/time-off/[id]/route.ts) — PUT overlap check

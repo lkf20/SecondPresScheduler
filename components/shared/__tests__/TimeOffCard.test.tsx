@@ -56,6 +56,23 @@ describe('TimeOffCard', () => {
       expect(screen.queryByText(/Covered:/)).not.toBeInTheDocument()
       expect(screen.queryByText(/Partial:/)).not.toBeInTheDocument()
     })
+
+    it('hides coverage badges for drafts even when counts > 0', () => {
+      render(
+        <TimeOffCard
+          {...defaultProps}
+          isDraft
+          uncovered={1}
+          covered={2}
+          partial={1}
+          totalShifts={4}
+        />
+      )
+      expect(screen.queryByText(/Uncovered:/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Covered:/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Partial:/)).not.toBeInTheDocument()
+      expect(screen.getByText('Draft')).toBeInTheDocument()
+    })
   })
 
   describe('variants', () => {
@@ -82,6 +99,22 @@ describe('TimeOffCard', () => {
     it('renders draft stamp when isDraft', () => {
       render(<TimeOffCard {...defaultProps} isDraft />)
       expect(screen.getByText('Draft')).toBeInTheDocument()
+    })
+
+    it('sub-finder variant hides coverage badges when isDraft', () => {
+      render(
+        <TimeOffCard
+          {...defaultProps}
+          variant="sub-finder"
+          isDraft
+          uncovered={1}
+          covered={0}
+          partial={0}
+        />
+      )
+      expect(screen.queryByText(/Uncovered:/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Covered:/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Partial:/)).not.toBeInTheDocument()
     })
   })
 })

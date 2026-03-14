@@ -103,6 +103,8 @@ export default function TimeOffCard({
   const [isExpanded, setIsExpanded] = useState(false)
   const hasShiftsDropdown =
     variant !== 'sub-finder' && totalShifts !== undefined && shiftDetails.length > 0
+  // Only show coverage badges for active (non-draft) requests; drafts have no meaningful coverage yet
+  const showCoverageBadges = !isDraft
 
   const startDateLabel = formatFullDateLabel(startDate)
   const endDateLabel = endDate && endDate !== startDate ? formatFullDateLabel(endDate) : null
@@ -193,14 +195,16 @@ export default function TimeOffCard({
                 )}
               </div>
             </div>
-            {uncovered > 0 && partial === 0 && (
+            {showCoverageBadges && uncovered > 0 && partial === 0 && (
               <AlertTriangle
                 className="h-4 w-4 flex-shrink-0"
                 style={{ color: 'rgb(249, 115, 22)' }}
               />
             )}
-            {partial > 0 && <PieChart className="h-5 w-5 text-yellow-600 flex-shrink-0" />}
-            {uncovered === 0 && partial === 0 && covered > 0 && (
+            {showCoverageBadges && partial > 0 && (
+              <PieChart className="h-5 w-5 text-yellow-600 flex-shrink-0" />
+            )}
+            {showCoverageBadges && uncovered === 0 && partial === 0 && covered > 0 && (
               <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
             )}
           </div>
@@ -208,9 +212,15 @@ export default function TimeOffCard({
           <div className="mt-3 border-t border-slate-200 pt-3">
             <div className="flex items-stretch justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
-                {uncovered > 0 && <CoverageBadge type="uncovered" count={uncovered} />}
-                {covered > 0 && <CoverageBadge type="covered" count={covered} />}
-                {partial > 0 && <CoverageBadge type="partial" count={partial} />}
+                {showCoverageBadges && uncovered > 0 && (
+                  <CoverageBadge type="uncovered" count={uncovered} />
+                )}
+                {showCoverageBadges && covered > 0 && (
+                  <CoverageBadge type="covered" count={covered} />
+                )}
+                {showCoverageBadges && partial > 0 && (
+                  <CoverageBadge type="partial" count={partial} />
+                )}
               </div>
               <div className="flex items-end">
                 <Button
@@ -341,9 +351,11 @@ export default function TimeOffCard({
         </div>
         <div className="flex flex-col items-end self-stretch">
           <div className="flex items-center gap-2 mb-auto">
-            {uncovered > 0 && <CoverageBadge type="uncovered" count={uncovered} />}
-            {covered > 0 && <CoverageBadge type="covered" count={covered} />}
-            {partial > 0 && <CoverageBadge type="partial" count={partial} />}
+            {showCoverageBadges && uncovered > 0 && (
+              <CoverageBadge type="uncovered" count={uncovered} />
+            )}
+            {showCoverageBadges && covered > 0 && <CoverageBadge type="covered" count={covered} />}
+            {showCoverageBadges && partial > 0 && <CoverageBadge type="partial" count={partial} />}
           </div>
           <div className="flex items-center justify-end gap-3 mt-auto">
             {onEdit ? (

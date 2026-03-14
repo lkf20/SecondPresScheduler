@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react'
 import ErrorMessage from '@/components/shared/ErrorMessage'
@@ -18,7 +19,9 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import type { Database } from '@/types/database'
+import { useSchool } from '@/lib/contexts/SchoolContext'
 import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
+import { invalidateDashboard, invalidateWeeklySchedule } from '@/lib/utils/invalidation'
 import ClosurePanel, { type ClosureEditGroup } from './closure-panel'
 
 type TimeSlot = Database['public']['Tables']['time_slots']['Row']
@@ -46,6 +49,8 @@ const formatDate = (iso: string) =>
   }).format(new Date(iso + 'T12:00:00'))
 
 export default function SchoolCalendarPage() {
+  const queryClient = useQueryClient()
+  const schoolId = useSchool()
   const [data, setData] = useState<CalendarData | null>(null)
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const [loading, setLoading] = useState(true)
@@ -252,6 +257,10 @@ export default function SchoolCalendarPage() {
       toast.success(ids.length > 1 ? 'Closures removed.' : 'Closure removed.')
       setDeleteDialogGroup(null)
       clearDataHealthCache()
+      await Promise.all([
+        invalidateDashboard(queryClient, schoolId),
+        invalidateWeeklySchedule(queryClient, schoolId),
+      ])
       await fetchData()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete')
@@ -554,7 +563,10 @@ export default function SchoolCalendarPage() {
         }
         onSuccess={() => {
           clearDataHealthCache()
-          fetchData()
+          Promise.all([
+            invalidateDashboard(queryClient, schoolId),
+            invalidateWeeklySchedule(queryClient, schoolId),
+          ]).then(() => fetchData())
         }}
         mode={closurePanel.mode}
         editGroup={closurePanel.editGroup}

@@ -19,8 +19,8 @@ export type StaffingStatusBadgeProps = {
  * Shared staffing status badge. Use this anywhere we show Below Required,
  * Below Preferred, Above Target, or On Target badges to ensure consistency.
  *
- * @see docs/COLOR_CONSISTENCY_REVIEW.md
- * @see docs/UI_COLOR_STANDARDIZATION.md
+ * @see docs/design/color-consistency-review.md
+ * @see docs/design/ui-color-standardization.md
  */
 export function StaffingStatusBadge({
   status,

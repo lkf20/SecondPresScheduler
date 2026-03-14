@@ -81,6 +81,6 @@ Define “done right” for the **Baseline Schedule** (configuration and assignm
 
 ## References
 
-- [APP_PURPOSE_AND_CONTEXT.md](../../docs/APP_PURPOSE_AND_CONTEXT.md) — Core Product Principles, Baseline Staffing Setup, Key User Flows
+- [app-purpose-and-context.md](../../docs/domain/app-purpose-and-context.md) — Core Product Principles, Baseline Staffing Setup, Key User Flows
 - [SCHEDULE_SEMANTICS_CONTRACT.md](../../docs/contracts/SCHEDULE_SEMANTICS_CONTRACT.md) — invariants for baseline and editing
 - Existing smoke: baseline handoff and save refresh in `tests/e2e/weekly-schedule-panel.smoke.spec.js`

@@ -4,7 +4,7 @@ This document defines how to work on this codebase so that changes are safe, tes
 
 ## Purpose and context
 
-For the app’s purpose, intended users, and key flows, see [docs/APP_PURPOSE_AND_CONTEXT.md](docs/APP_PURPOSE_AND_CONTEXT.md). Consult it when making product or UX decisions so changes align with intent. Add or update context there when the product evolves.
+For the app’s purpose, intended users, and key flows, see [docs/domain/app-purpose-and-context.md](docs/domain/app-purpose-and-context.md). Consult it when making product or UX decisions so changes align with intent. Add or update context there when the product evolves.
 
 ## Authority
 
@@ -72,9 +72,9 @@ Report what was reviewed, what passed, what was fixed, and what (if anything) ne
 
 - **Default to excluding inactive content.** Unless otherwise noted or “include inactive” is explicitly mentioned (e.g. a “Show inactive” toggle or `includeInactive=true`), default to excluding and hiding inactive entities in the app—e.g. classrooms, class groups, time slots. Lists, dropdowns, filters, and selectors should show only active items unless the feature clearly supports including inactive ones.
 - **Order by database sort order.** When displaying classrooms, class groups, or time slots in lists, dropdowns, tables, or keys/legends, use the sort order stored in the database (e.g. `display_order` for time slots; equivalent fields for classrooms and class groups) unless a feature explicitly requires a different order (e.g. alphabetical). Do not sort these entities alphabetically by name/code unless that is the stated requirement.
-- **Cancel Time Off / Sub Assignments cleanly.** See `docs/data-lifecycle.md` for status transition rules (e.g. active -> cancelled). Do not hard-delete rows that represent requests or assignments unless it is a draft.
-- **Time off reason is optional.** The reason field on time off requests (draft or active) is optional. Do not require or validate reason as mandatory when creating or activating time off; see `docs/data-lifecycle.md` (Time Off → time_off_requests).
-- **Teacher Schedule Updates.** When updating baseline `teacher_schedules`, the API enforces rules to protect dependent future events. Structural changes (deleting a slot, or changing its teacher, day, or time) are blocked (409 Conflict) if the current teacher has future events for that slot. Classroom-only changes automatically sync to future events. Past events are strictly immutable. "Today" for past vs future is server-local; see `docs/data-lifecycle.md` for details.
+- **Cancel Time Off / Sub Assignments cleanly.** See `docs/domain/data-lifecycle.md` for status transition rules (e.g. active -> cancelled). Do not hard-delete rows that represent requests or assignments unless it is a draft.
+- **Time off reason is optional.** The reason field on time off requests (draft or active) is optional. Do not require or validate reason as mandatory when creating or activating time off; see `docs/domain/data-lifecycle.md` (Time Off → time_off_requests).
+- **Teacher Schedule Updates.** When updating baseline `teacher_schedules`, the API enforces rules to protect dependent future events. Structural changes (deleting a slot, or changing its teacher, day, or time) are blocked (409 Conflict) if the current teacher has future events for that slot. Classroom-only changes automatically sync to future events. Past events are strictly immutable. "Today" for past vs future is server-local; see `docs/domain/data-lifecycle.md` for details.
 - **Avoid duplication.** Reuse existing logic and components instead of copying code. Before creating a new component, search the codebase for an existing one that already does the job or can be extended.
 - **Match the app’s UI.** Use the same patterns, tokens, and components as the rest of the app so new work looks and behaves consistently.
 
@@ -92,6 +92,7 @@ When adding a new UI element (e.g. a chip, badge, or label):
 - **Keep files small.** Prefer files under 200–300 lines. Split large files into smaller modules or components; extract shared logic into helpers or hooks.
 - **Keep the codebase clean and organized.** Put new code in the right place (e.g. shared components in `components/`, API logic in `app/api/` or `lib/`). Avoid one-off or dead code.
 - **Organize CSS and design assets.** Use shared styles, design tokens, or a consistent system (e.g. Tailwind, CSS modules) so styles are reusable and easy to maintain.
+- **Documentation organization.** All project .md files live under `docs/<type>/` (or in repo root only if they are README, AGENTS, ROADMAP, or TODO_TRACKER), with consistent kebab-case names and an up-to-date docs/README index.
 
 ## Audit logs
 
@@ -133,9 +134,9 @@ When adding a new UI element (e.g. a chip, badge, or label):
 
 - **Use the centralized color system.** All status, coverage, and staffing colors live in `lib/utils/colors.ts`. Import from there instead of hardcoding Tailwind color classes.
 - **Use shared components for staffing badges.** Below Required, Below Preferred, Above Target, and On Target badges must use `StaffingStatusBadge` (`components/ui/staffing-status-badge.tsx`). Do not replicate badge styling in Dashboard, Weekly Schedule panel, or elsewhere.
-- **Semantic palette** (see [docs/COLOR_CONSISTENCY_REVIEW.md](docs/COLOR_CONSISTENCY_REVIEW.md)): Red = critical (below required, errors), Orange = uncovered shifts, Amber = warning (below preferred, validation), Yellow = soft (partial coverage, draft).
-- **Contact status (pending, contacted, declined):** Use `contactStatusColorValues` in `lib/utils/colors.ts`. Pending = sky blue throughout the app; use the same filled-circle-behind-icon pattern as in Contact Sub panel. See [docs/COLOR_CONSISTENCY_REVIEW.md](docs/COLOR_CONSISTENCY_REVIEW.md) (Contact status colors).
-- **Before adding new colors:** Check if an existing constant fits (`staffingColorValues`, `coverageColorValues`, `semanticColors`, `contactStatusColorValues`). If adding a new semantic tier, add it to `lib/utils/colors.ts` and document in `docs/COLOR_CONSISTENCY_REVIEW.md`.
+- **Semantic palette** (see [docs/design/color-consistency-review.md](docs/design/color-consistency-review.md)): Red = critical (below required, errors), Orange = uncovered shifts, Amber = warning (below preferred, validation), Yellow = soft (partial coverage, draft).
+- **Contact status (pending, contacted, declined):** Use `contactStatusColorValues` in `lib/utils/colors.ts`. Pending = sky blue throughout the app; use the same filled-circle-behind-icon pattern as in Contact Sub panel. See [docs/design/color-consistency-review.md](docs/design/color-consistency-review.md) (Contact status colors).
+- **Before adding new colors:** Check if an existing constant fits (`staffingColorValues`, `coverageColorValues`, `semanticColors`, `contactStatusColorValues`). If adding a new semantic tier, add it to `lib/utils/colors.ts` and document in `docs/design/color-consistency-review.md`.
 - **Avoid ad-hoc color classes** for status/warning/error states—use the shared constants or components so the app stays visually consistent.
 - **Secondary outline buttons (turquoise):** For secondary actions like Find Sub, Update Sub, and similar “go to sub-finder” or teal-accent actions, use `variant="teal"` on the Button component. This gives turquoise border and text with teal fill on hover. Do not use `variant="outline"` with custom teal classes—use the built-in `teal` variant for consistency.
 
@@ -231,11 +232,17 @@ Floater weight is 0.5 for now; it may become more sophisticated later—keep log
 - **Preview mode:** When the user selects "Preview only" (vs "Record + Assign") in the Pick dates flow, the Sub Finder runs in **preview mode**: they can see recommended subs but must not be able to contact or assign. In preview mode, **do not show Contact & Assign (or Update) buttons** on sub cards anywhere—neither on the main recommended-subs area nor in the right "All subs" panel. Also **do not show Find Sub** (or Change sub) on **detail shift cards** (the cards shown when "Show shifts detail" is expanded); those are rendered by `ShiftStatusCard`.
 - **Implementation:** Sub cards (`SubFinderCard`) accept a `previewMode` prop; when true, the card hides all Contact & Assign and Update buttons. Detail shift cards (`ShiftStatusCard`) accept a `previewMode` prop; when true, the card hides the Find Sub button (uncovered shifts) and the Change sub button (covered shifts). The main page passes `isPreviewMode` into `RecommendedCombination`, `RecommendedSubsList`, and every `ShiftStatusCard` as `previewMode`. When adding new sub-card or shift-card surfaces, ensure preview mode is passed so that in preview mode no contact/assign/find-sub actions are shown.
 
+## Sub Finder: Past absences (last 90 days)
+
+- **Past absences in Sub Finder:** The absences API returns both upcoming and past absences (past = end date before today but within the last 90 days). Each item has **`is_past: true | false`**. The absence list shows a collapsed section **"Past (last 90 days) (N)"** (default collapsed; auto-expands when the selected absence is in past). Empty state when there are no upcoming absences: **"No upcoming absences found"** with copy that past absences are listed below when applicable.
+- **Find Subs for past:** When the user selects a past absence, recommendations include past shifts (`includePastShifts` is set automatically) so directors can run Find Subs and use Find Sub / Change sub for those shifts.
+
 ## Assign Sub Hot Button Flow
 
 - **Consolidated flow:** The Assign Sub right panel (opened from the header) is an intentional, highly consolidated flow for directors to quickly log an absence and assign a known sub without leaving their current page context. It performs inline Time Off creation (if needed) and Sub Contact creation in a single action.
 - **Conflict handling:** When selecting shifts, sub "unavailable" (regular availability) and "unqualified" status are soft warnings that still allow the director to override and assign the shift. However, "conflict_teaching" and "conflict_sub" (double bookings) are hard blocks that disable selection.
 - **Time Off and Notes:** If the selected shifts do not have an existing time off request, the panel must show an inline form to capture the Time Off Reason and Notes. It should also include a "Notes for Sub" field to capture contact notes, matching the standard Contact & Assign behavior.
+- **Change sub for already-assigned shifts (including past):** For shifts that already have an assigned sub, the panel shows "Currently: [sub name]" and a **Change sub** button. Change sub opens a dialog to pick a new sub; on confirm, the flow unassigns the current sub (via unassign-shifts API) then assigns the new sub (via assign-shifts API) for those coverage_request_shift_ids. This applies to both upcoming and past time-off shifts. The assign-sub shifts API returns `coverage_request_shift_id`, `assignment_id`, `assigned_sub_id`, and `assigned_sub_name` per shift to support this.
 
 ## Database migrations
 
@@ -246,6 +253,7 @@ To run migrations against the **staging** database:
 
 Run these commands from the project root (`scheduler-app/`). The link script uses `.env.supabase.staging` for the project ref.
 
+- **Follow the migration workflow.** When creating or modifying migrations, follow [docs/guides/database-migration-workflow.md](docs/guides/database-migration-workflow.md) (draft vs approved folders, naming, safety rules).
 - **Keep schema docs in sync.** Whenever you add or change a migration (new table, dropped table, new column, or other schema change), update [docs/reference/DATABASE_SCHEMA.md](docs/reference/DATABASE_SCHEMA.md) and [supabase/README.md](supabase/README.md) as needed—e.g. add or remove tables in the list, adjust table count, update the verification section, or note deprecated/removed objects.
 
 ## Session and collaboration

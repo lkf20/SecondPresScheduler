@@ -13,6 +13,7 @@ interface Absence {
   start_date: string
   end_date: string | null
   reason: string | null
+  is_past?: boolean
   notes?: string | null
   classrooms?: Array<{ id: string; name: string; color: string | null }>
   coverage_status?: 'uncovered' | 'partially_covered' | 'covered'
@@ -55,13 +56,16 @@ export default function AbsenceList({
 }: AbsenceListProps) {
   const [showNeedsCoverage, setShowNeedsCoverage] = useState(true)
   const [showFullyCovered, setShowFullyCovered] = useState(false)
+  const [showPast, setShowPast] = useState(false)
   const selectedCardRef = useRef<HTMLDivElement | null>(null)
 
-  const { openAbsences, fullyCoveredAbsences } = useMemo(() => {
+  const { openAbsences, fullyCoveredAbsences, pastAbsences } = useMemo(() => {
+    const upcoming = absences.filter(a => !a.is_past)
+    const past: Absence[] = absences.filter(a => a.is_past === true)
     const open: Absence[] = []
     const fullyCovered: Absence[] = []
 
-    absences.forEach(absence => {
+    upcoming.forEach(absence => {
       const isFullyCovered =
         absence.shifts.total > 0 &&
         absence.shifts.uncovered === 0 &&
@@ -74,7 +78,11 @@ export default function AbsenceList({
       }
     })
 
-    return { openAbsences: open, fullyCoveredAbsences: fullyCovered }
+    return {
+      openAbsences: open,
+      fullyCoveredAbsences: fullyCovered,
+      pastAbsences: past,
+    }
   }, [absences])
 
   useEffect(() => {
@@ -92,6 +100,12 @@ export default function AbsenceList({
     }
   }, [fullyCoveredAbsences, selectedAbsence])
 
+  useEffect(() => {
+    if (selectedAbsence && pastAbsences.some(absence => absence.id === selectedAbsence.id)) {
+      setShowPast(true)
+    }
+  }, [pastAbsences, selectedAbsence])
+
   // Scroll selected absence into view (e.g. after selecting from Find Sub hot button).
   // Re-run when section visibility changes so we scroll after a collapsed section expands.
   useEffect(() => {
@@ -101,7 +115,7 @@ export default function AbsenceList({
       el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     }, 150)
     return () => window.clearTimeout(timer)
-  }, [selectedAbsence?.id, showNeedsCoverage, showFullyCovered])
+  }, [selectedAbsence?.id, showNeedsCoverage, showFullyCovered, showPast])
 
   const renderAbsenceCard = (absence: Absence) => {
     const { uncovered, partially_covered, fully_covered } = absence.shifts
@@ -164,13 +178,16 @@ export default function AbsenceList({
     )
   }
 
-  if (absences.length === 0) {
+  const hasUpcoming = openAbsences.length > 0 || fullyCoveredAbsences.length > 0
+  const showUpcomingEmptyState = !hasUpcoming && !loading
+
+  if (absences.length === 0 && !loading) {
     return (
       <div className="p-4 text-center text-muted-foreground">
         <div className="rounded-full bg-slate-100 w-16 h-16 flex items-center justify-center mx-auto mb-3">
           <AlertCircle className="h-8 w-8 text-slate-400" />
         </div>
-        <p className="mb-2 font-medium">No absences found</p>
+        <p className="mb-2 font-medium">No upcoming absences found</p>
         <p className="text-sm">
           All absences are fully covered or no time-off requests exist. Select a date above to
           record a new absence or to preview a list of available subs.
@@ -181,6 +198,18 @@ export default function AbsenceList({
 
   return (
     <div className="p-4 space-y-3">
+      {showUpcomingEmptyState && (
+        <div className="p-4 text-center text-muted-foreground">
+          <div className="rounded-full bg-slate-100 w-16 h-16 flex items-center justify-center mx-auto mb-3">
+            <AlertCircle className="h-8 w-8 text-slate-400" />
+          </div>
+          <p className="mb-2 font-medium">No upcoming absences found</p>
+          <p className="text-sm">
+            Select a date above to record a new absence or to preview subs. Past absences are listed
+            below.
+          </p>
+        </div>
+      )}
       {openAbsences.length > 0 && (
         <div className="pt-1">
           <button
@@ -214,6 +243,22 @@ export default function AbsenceList({
           {showFullyCovered && (
             <div className="space-y-3 mt-3">{fullyCoveredAbsences.map(renderAbsenceCard)}</div>
           )}
+        </div>
+      )}
+
+      {pastAbsences.length > 0 && (
+        <div className="pt-2">
+          <button
+            type="button"
+            className="w-full flex items-center justify-between px-1 py-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+            onClick={() => setShowPast(prev => !prev)}
+          >
+            <span>Past (last 90 days) ({pastAbsences.length})</span>
+            <ChevronDown
+              className={`h-4 w-4 text-slate-500 transition-transform ${showPast ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {showPast && <div className="space-y-3 mt-3">{pastAbsences.map(renderAbsenceCard)}</div>}
         </div>
       )}
     </div>
