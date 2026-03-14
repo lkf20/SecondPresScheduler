@@ -109,7 +109,7 @@ When a teacher's baseline schedule is updated or removed, the API enforces stric
 
 - If a status transition is rejected, the API should return 400 with a clear error.
 - Any new write path should add a one-line reference:
-  - `// See docs/data-lifecycle.md: <table> lifecycle`
+  - `// See docs/domain/data-lifecycle.md: <table> lifecycle`
 - Rows are never hard-deleted for lifecycle reasons; cancellations are modeled via status except for pure projection tables (time_off_shifts).
 - Cancelling a time_off_request does not automatically cancel existing sub_assignments; the user must explicitly cancel or convert them to extra coverage.
 - Invariant: source_request_id is required for request_type = time_off and extra_coverage.

@@ -49,5 +49,5 @@
 
 ## References
 
-- [APP_PURPOSE_AND_CONTEXT.md](../APP_PURPOSE_AND_CONTEXT.md) — Core Product Principles (baseline foundational, status reflects reality, avoid silent data changes)
+- [app-purpose-and-context.md](../domain/app-purpose-and-context.md) — Core Product Principles (baseline foundational, status reflects reality, avoid silent data changes)
 - Scenarios: [04-weekly-schedule-review.md](../../scenarios/gold/04-weekly-schedule-review.md), [05-baseline-schedule-review.md](../../scenarios/gold/05-baseline-schedule-review.md)
