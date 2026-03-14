@@ -53,7 +53,7 @@ export async function GET() {
       teacherIds.length > 0
         ? supabase
             .from('teacher_schedules')
-            .select('teacher_id, day_of_week_id, time_slot_id')
+            .select('teacher_id, day_of_week_id, time_slot_id, classroom_id')
             .eq('school_id', schoolId)
             .in('teacher_id', teacherIds)
         : Promise.resolve({ data: [], error: null }),
@@ -66,9 +66,13 @@ export async function GET() {
     const baselineSchedules = baselineResult.data ?? []
 
     // O(1) baseline lookup: key = teacher_id|day_of_week_id|time_slot_id
+    // Only count as "has baseline" when the row has a non-null classroom_id (matches
+    // coverage-request creation, which omits shifts where teacher_schedules.classroom_id is null).
     const baselineKey = (t: string, d: string | null, s: string) => `${t}|${d ?? ''}|${s}`
     const baselineSet = new Set(
-      baselineSchedules.map(b => baselineKey(b.teacher_id, b.day_of_week_id, b.time_slot_id))
+      baselineSchedules
+        .filter((b: { classroom_id?: string | null }) => b.classroom_id != null)
+        .map(b => baselineKey(b.teacher_id, b.day_of_week_id, b.time_slot_id))
     )
 
     const orphanedShifts: Array<{ shift_id: string; date: string; reason: string }> = []
