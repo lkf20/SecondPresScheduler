@@ -130,6 +130,7 @@ export default function SubFinderPage() {
   const savedAbsenceRef = useRef<Absence | null>(null)
   const selectedAbsenceIdRef = useRef<string | null>(null) // Track selected absence ID to prevent loss during restoration
   const leftPanelHasLoadedOnceRef = useRef(false) // When true, next absences reload clears main and closes right panel
+  const previousAbsencesSignatureRef = useRef<string | null>(null) // Sorted absence IDs; clear only when this changes (not on refetch with same data)
   const manualParamsAppliedRef = useRef(false) // When true, we applied manual URL params this session; skip load-saved-state so dates aren't overwritten
   const classroomReviewWarnedAbsenceIdsRef = useRef<Set<string>>(new Set())
 
@@ -1685,13 +1686,23 @@ export default function SubFinderPage() {
     }
   }, [selectedAbsence])
 
-  // Whenever the left panel (absences list) is reloaded with new information, clear the main area and close the right panel
+  // Whenever the left panel (absences list) is reloaded with structurally new data, clear the main area and close the right panel.
+  // Only clear when the set of absence IDs has changed (add/remove), not when absences is just a new array reference from a refetch.
   useEffect(() => {
     if (absences.length === 0) return
+    const signature = [...absences]
+      .map(a => a.id)
+      .sort()
+      .join(',')
     if (!leftPanelHasLoadedOnceRef.current) {
       leftPanelHasLoadedOnceRef.current = true
+      previousAbsencesSignatureRef.current = signature
       return
     }
+    if (previousAbsencesSignatureRef.current === signature) {
+      return // Same data (e.g. refetch after assign/time off); do not clear user's selection or panel
+    }
+    previousAbsencesSignatureRef.current = signature
     setSelectedAbsence(null)
     setIsContactPanelOpen(false)
     setSelectedSub(null)

@@ -1,5 +1,6 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import SubFinderPage from '../page'
 
 const mockPush = jest.fn()
@@ -10,13 +11,15 @@ jest.mock('next/navigation', () => ({
   usePathname: () => '/sub-finder',
 }))
 
-const mockInvalidateQueries = jest.fn()
-jest.mock('@tanstack/react-query', () => ({
-  ...jest.requireActual('@tanstack/react-query'),
-  useQueryClient: () => ({
-    invalidateQueries: mockInvalidateQueries,
-  }),
-}))
+function renderWithQueryClient(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  })
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+}
 
 jest.mock('@/components/layout/Header', () => ({
   Header: () => <div data-testid="header" />,
@@ -232,7 +235,7 @@ describe('SubFinderPage - Manual Overlap', () => {
   })
 
   it('enables Find Subs button for 100% overlap and calls find manual subs with conflict shifts', async () => {
-    render(<SubFinderPage />)
+    renderWithQueryClient(<SubFinderPage />)
 
     // Select teacher
     const input = screen.getAllByPlaceholderText('Search or select a teacher...')[0]
@@ -270,7 +273,7 @@ describe('SubFinderPage - Manual Overlap', () => {
   })
 
   it('enables Find Subs for partial overlap and calls find manual subs with non-overlapping shifts', async () => {
-    render(<SubFinderPage />)
+    renderWithQueryClient(<SubFinderPage />)
 
     // Select teacher
     const input = screen.getAllByPlaceholderText('Search or select a teacher...')[0]
@@ -305,7 +308,7 @@ describe('SubFinderPage - Manual Overlap', () => {
   })
 
   it('enables Find Subs when Today is selected and shifts are 100% covered', async () => {
-    render(<SubFinderPage />)
+    renderWithQueryClient(<SubFinderPage />)
 
     const input = screen.getAllByPlaceholderText('Search or select a teacher...')[0]
     fireEvent.focus(input)
@@ -334,7 +337,7 @@ describe('SubFinderPage - Manual Overlap', () => {
   })
 
   it('enables Find Subs when Tomorrow is selected and shifts are 100% covered', async () => {
-    render(<SubFinderPage />)
+    renderWithQueryClient(<SubFinderPage />)
 
     const input = screen.getAllByPlaceholderText('Search or select a teacher...')[0]
     fireEvent.focus(input)
@@ -363,7 +366,7 @@ describe('SubFinderPage - Manual Overlap', () => {
   })
 
   it('100% overlap: Find Subs is enabled and calls find manual subs with conflict shifts (no preview mode)', async () => {
-    render(<SubFinderPage />)
+    renderWithQueryClient(<SubFinderPage />)
 
     const input = screen.getAllByPlaceholderText('Search or select a teacher...')[0]
     fireEvent.focus(input)
@@ -396,7 +399,7 @@ describe('SubFinderPage - Manual Overlap', () => {
   })
 
   it('no time off: shows inline Create Time Off & Find Sub and Find Subs in Preview Mode', async () => {
-    render(<SubFinderPage />)
+    renderWithQueryClient(<SubFinderPage />)
 
     const input = screen.getAllByPlaceholderText('Search or select a teacher...')[0]
     fireEvent.focus(input)
@@ -457,7 +460,7 @@ describe('SubFinderPage - Manual Overlap', () => {
       return Promise.resolve(defaultFetchResponse)
     }) as typeof fetch
 
-    render(<SubFinderPage />)
+    renderWithQueryClient(<SubFinderPage />)
 
     const input = screen.getAllByPlaceholderText('Search or select a teacher...')[0]
     fireEvent.focus(input)
@@ -529,7 +532,7 @@ describe('SubFinderPage - Manual Overlap', () => {
       return Promise.resolve(defaultFetchResponse)
     }) as typeof fetch
 
-    render(<SubFinderPage />)
+    renderWithQueryClient(<SubFinderPage />)
 
     const input = screen.getAllByPlaceholderText('Search or select a teacher...')[0]
     fireEvent.focus(input)
@@ -562,7 +565,7 @@ describe('SubFinderPage - Manual Overlap', () => {
   })
 
   it('partial overlap: shows Extend and Create new options in left panel', async () => {
-    render(<SubFinderPage />)
+    renderWithQueryClient(<SubFinderPage />)
 
     const input = screen.getAllByPlaceholderText('Search or select a teacher...')[0]
     fireEvent.focus(input)
@@ -591,7 +594,7 @@ describe('SubFinderPage - Manual Overlap', () => {
   })
 
   it('partial overlap with multiple existing requests: shows radios, inline warning if Extend without selection', async () => {
-    render(<SubFinderPage />)
+    renderWithQueryClient(<SubFinderPage />)
 
     const input = screen.getAllByPlaceholderText('Search or select a teacher...')[0]
     fireEvent.focus(input)
@@ -634,7 +637,7 @@ describe('SubFinderPage - Manual Overlap', () => {
   })
 
   it('100% overlap: shows helper text about using Find Subs', async () => {
-    render(<SubFinderPage />)
+    renderWithQueryClient(<SubFinderPage />)
 
     const input = screen.getAllByPlaceholderText('Search or select a teacher...')[0]
     fireEvent.focus(input)

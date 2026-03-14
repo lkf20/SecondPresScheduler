@@ -13,6 +13,7 @@
 
 import React from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import SubFinderPage from '../page'
 
 const mockReplace = jest.fn()
@@ -47,12 +48,15 @@ jest.mock('next/navigation', () => ({
   useSearchParams: () => getSearchParams(),
 }))
 
-const mockInvalidateQueries = jest.fn()
-const stableQueryClient = { invalidateQueries: mockInvalidateQueries }
-jest.mock('@tanstack/react-query', () => ({
-  ...jest.requireActual('@tanstack/react-query'),
-  useQueryClient: () => stableQueryClient,
-}))
+function renderWithQueryClient(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  })
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+}
 
 jest.mock('@/lib/contexts/SchoolContext', () => ({
   useSchool: () => 'school-1',
@@ -149,7 +153,7 @@ describe('Sub Finder page – manual URL params from Find Sub', () => {
   })
 
   it('applies manual URL params and replaces URL so page updates for new date range', async () => {
-    render(<SubFinderPage />)
+    renderWithQueryClient(<SubFinderPage />)
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledTimes(1)
@@ -163,7 +167,7 @@ describe('Sub Finder page – manual URL params from Find Sub', () => {
   })
 
   it('with custom date in URL, sets pickDateChoice to custom and shows start date in picker', async () => {
-    render(<SubFinderPage />)
+    renderWithQueryClient(<SubFinderPage />)
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalled()
@@ -179,7 +183,7 @@ describe('Sub Finder page – manual URL params from Find Sub', () => {
     urlParamsState.current =
       'mode=manual&teacher_id=unknown-teacher-id&start_date=2026-03-26&end_date=2026-03-26'
 
-    render(<SubFinderPage />)
+    renderWithQueryClient(<SubFinderPage />)
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledTimes(1)
