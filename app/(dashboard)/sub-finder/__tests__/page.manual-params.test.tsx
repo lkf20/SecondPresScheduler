@@ -73,7 +73,11 @@ jest.mock('@/components/time-off/ShiftSelectionTable', () => ({
 }))
 
 jest.mock('@/components/ui/date-picker-input', () => {
-  return function MockDatePickerInput({ value, onChange, placeholder }: any) {
+  const React = require('react')
+  return React.forwardRef(function MockDatePickerInput(
+    { value, onChange, placeholder }: any,
+    _ref: any
+  ) {
     return (
       <input
         data-testid={placeholder ? `mock-datepicker-${placeholder}` : 'mock-datepicker'}
@@ -82,7 +86,7 @@ jest.mock('@/components/ui/date-picker-input', () => {
         placeholder={placeholder}
       />
     )
-  }
+  })
 })
 
 const mockTeachers = [{ id: 'teacher-1', first_name: 'Anne', last_name: 'M.', display_name: null }]

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, startTransition } from 'react'
 import {
   AlertTriangle,
   CalendarPlus,
@@ -1935,10 +1935,12 @@ export default function ScheduleSidePanel({
           added_as_floater:
             allAssignedTeachers.find(t => t.teacher_id === c.teacher_id)?.is_floater === true,
         }))
-        setConflicts(enriched)
+        startTransition(() => {
+          if (!cancelled) setConflicts(enriched)
+        })
       })
       .catch(() => {
-        if (!cancelled) setConflicts([])
+        if (!cancelled) startTransition(() => setConflicts([]))
       })
     return () => {
       cancelled = true

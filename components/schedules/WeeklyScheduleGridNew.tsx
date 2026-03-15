@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react'
+import React, { useCallback, useState, useMemo, useEffect, useRef, startTransition } from 'react'
 import { CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
 import ScheduleGridCellCard from './ScheduleGridCellCard'
 import ScheduleSidePanel from './ScheduleSidePanel'
@@ -569,7 +569,9 @@ export default function WeeklyScheduleGridNew({
   useEffect(() => {
     fetch('/api/class-groups')
       .then(r => r.json())
-      .then((rows: Array<{ id: string }>) => setAllClassGroupIds(rows.map(r => r.id)))
+      .then((rows: Array<{ id: string }>) =>
+        startTransition(() => setAllClassGroupIds(rows.map(r => r.id)))
+      )
       .catch(() => {})
   }, [])
 

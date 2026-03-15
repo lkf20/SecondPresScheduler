@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import SubFinderPage from '../page'
 
@@ -41,9 +41,13 @@ jest.mock('@/components/sub-finder/AbsenceList', () => ({
   default: () => <div data-testid="absence-list" />,
 }))
 
-// Mock DatePickerInput
+// Mock DatePickerInput (forwardRef so ref from SubFinderPage doesn't warn)
 jest.mock('@/components/ui/date-picker-input', () => {
-  return function MockDatePickerInput({ value, onChange, placeholder }: any) {
+  const React = require('react')
+  return React.forwardRef(function MockDatePickerInput(
+    { value, onChange, placeholder }: any,
+    _ref: any
+  ) {
     return (
       <input
         data-testid={`mock-datepicker-${placeholder}`}
@@ -52,7 +56,7 @@ jest.mock('@/components/ui/date-picker-input', () => {
         placeholder={placeholder}
       />
     )
-  }
+  })
 })
 
 jest.mock('@/components/time-off/ShiftSelectionTable', () => {
@@ -298,7 +302,10 @@ describe('SubFinderPage - Manual Overlap', () => {
     expect(findSubsBtn).toBeEnabled()
 
     // Clicking calls find manual subs with manualSelectedShifts (non-overlapping shifts)
-    fireEvent.click(findSubsBtn)
+    await act(async () => {
+      fireEvent.click(findSubsBtn)
+      await waitFor(() => expect(mockHandleFindManualSubs).toHaveBeenCalled())
+    })
     expect(mockHandleFindManualSubs).toHaveBeenCalledWith({
       teacherId: 't-1',
       startDate: '2026-03-09',
@@ -324,7 +331,10 @@ describe('SubFinderPage - Manual Overlap', () => {
     const findSubsBtn = screen.getAllByRole('button', { name: 'Find Subs' })[0]
     expect(findSubsBtn).toBeEnabled()
 
-    fireEvent.click(findSubsBtn)
+    await act(async () => {
+      fireEvent.click(findSubsBtn)
+      await waitFor(() => expect(mockHandleFindManualSubs).toHaveBeenCalled())
+    })
     expect(mockHandleFindManualSubs).toHaveBeenCalledWith({
       teacherId: 't-1',
       startDate: '2026-03-09',
@@ -353,7 +363,10 @@ describe('SubFinderPage - Manual Overlap', () => {
     const findSubsBtn = screen.getAllByRole('button', { name: 'Find Subs' })[0]
     expect(findSubsBtn).toBeEnabled()
 
-    fireEvent.click(findSubsBtn)
+    await act(async () => {
+      fireEvent.click(findSubsBtn)
+      await waitFor(() => expect(mockHandleFindManualSubs).toHaveBeenCalled())
+    })
     expect(mockHandleFindManualSubs).toHaveBeenCalledWith({
       teacherId: 't-1',
       startDate: '2026-03-10',
@@ -386,7 +399,10 @@ describe('SubFinderPage - Manual Overlap', () => {
     const findSubsBtn = screen.getAllByRole('button', { name: 'Find Subs' })[0]
     expect(findSubsBtn).toBeEnabled()
 
-    fireEvent.click(findSubsBtn)
+    await act(async () => {
+      fireEvent.click(findSubsBtn)
+      await waitFor(() => expect(mockHandleFindManualSubs).toHaveBeenCalled())
+    })
     expect(mockHandleFindManualSubs).toHaveBeenCalledWith({
       teacherId: 't-1',
       startDate: '2026-03-09',
@@ -478,26 +494,27 @@ describe('SubFinderPage - Manual Overlap', () => {
     fireEvent.click(screen.getAllByTestId('simulate-no-overlap')[0])
 
     const createBtn = screen.getAllByRole('button', { name: 'Create Time Off & Find Sub' })[0]
-    fireEvent.click(createBtn)
-
-    await waitFor(() => {
-      expect(mockToastSuccess).toHaveBeenCalledWith('Time off request created.')
+    await act(async () => {
+      fireEvent.click(createBtn)
+      await waitFor(() => {
+        expect(mockToastSuccess).toHaveBeenCalledWith('Time off request created.')
+      })
     })
 
     // Table remounts after create; simulate 100% overlap so auto-run effect runs
     const simulate100 = screen.getAllByTestId('simulate-100-overlap')[0]
-    fireEvent.click(simulate100)
-
-    await waitFor(() => {
-      expect(mockHandleFindManualSubs).toHaveBeenCalledWith({
-        teacherId: 't-1',
-        startDate: '2026-03-09',
-        endDate: '2026-03-09',
-        shifts: [
-          { date: '2026-03-09', day_of_week_id: 'mon', time_slot_id: 'slot-1' },
-          { date: '2026-03-10', day_of_week_id: 'tue', time_slot_id: 'slot-1' },
-        ],
-      })
+    await act(async () => {
+      fireEvent.click(simulate100)
+      await waitFor(() => expect(mockHandleFindManualSubs).toHaveBeenCalled())
+    })
+    expect(mockHandleFindManualSubs).toHaveBeenCalledWith({
+      teacherId: 't-1',
+      startDate: '2026-03-09',
+      endDate: '2026-03-09',
+      shifts: [
+        { date: '2026-03-09', day_of_week_id: 'mon', time_slot_id: 'slot-1' },
+        { date: '2026-03-10', day_of_week_id: 'tue', time_slot_id: 'slot-1' },
+      ],
     })
     // Success path: confirmed coverage, so green banner with "Time off successfully added... Finding recommended subs" is shown when 100% overlap is simulated
     const successBanners = screen.getAllByText(
