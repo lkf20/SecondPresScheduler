@@ -400,6 +400,8 @@ export default function SubFinderPage() {
     manualSelectedShifts,
     manualCreateTimeOffReason,
     manualCreateTimeOffNotes,
+    queryClient,
+    schoolId,
   ])
 
   const isPreviewMode =
