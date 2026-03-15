@@ -501,12 +501,11 @@ describe('SubFinderPage - Manual Overlap', () => {
       })
     })
 
-    // Table remounts after create; simulate 100% overlap so auto-run effect runs
+    // Table remounts after create; simulate 100% overlap so auto-run effect runs.
+    // Effect runs after state updates from the click; wait for it to call the handler.
     const simulate100 = screen.getAllByTestId('simulate-100-overlap')[0]
-    await act(async () => {
-      fireEvent.click(simulate100)
-      await waitFor(() => expect(mockHandleFindManualSubs).toHaveBeenCalled())
-    })
+    fireEvent.click(simulate100)
+    await waitFor(() => expect(mockHandleFindManualSubs).toHaveBeenCalled(), { timeout: 3000 })
     expect(mockHandleFindManualSubs).toHaveBeenCalledWith({
       teacherId: 't-1',
       startDate: '2026-03-09',

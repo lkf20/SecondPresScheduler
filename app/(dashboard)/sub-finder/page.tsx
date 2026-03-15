@@ -1703,8 +1703,11 @@ export default function SubFinderPage() {
 
   // Whenever the left panel (absences list) is reloaded with structurally new data, clear the main area and close the right panel.
   // Only clear when the set of absence IDs has changed (add/remove), not when absences is just a new array reference from a refetch.
+  // Do not clear when user is in manual mode (pseudo-absence): e.g. after creating time off, absences refetch and the signature
+  // changes; clearing would drop the manual context and leave no auto-run recovery on the unconfirmed path.
   useEffect(() => {
     if (absences.length === 0) return
+    if (selectedAbsence?.id?.startsWith('manual-')) return
     const signature = [...absences]
       .map(a => a.id)
       .sort()
@@ -1724,7 +1727,7 @@ export default function SubFinderPage() {
     setSelectedShift(null)
     setRemoveDialogShift(null)
     setChangeDialogShift(null)
-  }, [absences, setSelectedAbsence])
+  }, [absences, selectedAbsence?.id, setSelectedAbsence])
 
   useEffect(() => {
     if (!selectedAbsence || mode !== 'existing') return
