@@ -2,6 +2,7 @@ import {
   buildSubAssignmentKey,
   dedupeFlexAssignmentsForSlot,
   dedupeSubAssignmentsForSlot,
+  fetchSubAssignmentsForRange,
   getStaffDisplayName,
   getStaffNameParts,
   getTeachersAssignedToClassroom,
@@ -159,5 +160,51 @@ describe('weekly schedule helpers', () => {
     })
 
     expect(Array.from(teachers).sort()).toEqual(['teacher-1', 'teacher-3', 'teacher-4'])
+  })
+
+  it('falls back when non_sub_override column is missing and still returns sub assignments', async () => {
+    const firstResult = {
+      data: null,
+      error: { code: '42703', message: 'column sub_assignments.non_sub_override does not exist' },
+    }
+    const secondResult = {
+      data: [{ id: 'sa-1', teacher_id: 'teacher-1', sub_id: 'sub-1' }],
+      error: null,
+    }
+
+    const selectMock = jest
+      .fn()
+      .mockImplementationOnce(() => {
+        const chain: any = {
+          eq: jest.fn().mockReturnThis(),
+          gte: jest.fn().mockReturnThis(),
+          lte: jest.fn().mockResolvedValue(firstResult),
+        }
+        return chain
+      })
+      .mockImplementationOnce(() => {
+        const chain: any = {
+          eq: jest.fn().mockReturnThis(),
+          gte: jest.fn().mockReturnThis(),
+          lte: jest.fn().mockResolvedValue(secondResult),
+        }
+        return chain
+      })
+
+    const fromMock = jest.fn().mockReturnValue({ select: selectMock })
+    const supabase = { from: fromMock } as any
+
+    const result = await fetchSubAssignmentsForRange({
+      supabase,
+      schoolId: 'school-1',
+      startDateISO: '2026-03-16',
+      endDateISO: '2026-03-22',
+    })
+
+    expect(fromMock).toHaveBeenCalledTimes(2)
+    expect(selectMock).toHaveBeenCalledTimes(2)
+    expect(String(selectMock.mock.calls[0][0])).toContain('non_sub_override')
+    expect(String(selectMock.mock.calls[1][0])).not.toContain('non_sub_override')
+    expect(result).toEqual(secondResult)
   })
 })

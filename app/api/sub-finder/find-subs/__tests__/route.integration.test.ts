@@ -106,7 +106,7 @@ describe('POST /api/sub-finder/find-subs integration', () => {
     expect(json.error).toMatch(/do not have access|access to this time off/i)
   })
 
-  it('returns empty array when no shifts remain to cover', async () => {
+  it('returns empty result object when no shifts remain to cover', async () => {
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(createClient as jest.Mock).mockResolvedValue({ from: jest.fn() })
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
@@ -125,7 +125,11 @@ describe('POST /api/sub-finder/find-subs integration', () => {
     const json = await response.json()
 
     expect(response.status).toBe(200)
-    expect(json).toEqual([])
+    expect(json).toEqual({
+      subs: [],
+      recommended_combination: null,
+      recommended_combinations: [],
+    })
   })
 
   it('filters out past shifts by default when include_past_shifts is false', async () => {
@@ -157,7 +161,11 @@ describe('POST /api/sub-finder/find-subs integration', () => {
     const json = await response.json()
 
     expect(response.status).toBe(200)
-    expect(json).toEqual([])
+    expect(json).toEqual({
+      subs: [],
+      recommended_combination: null,
+      recommended_combinations: [],
+    })
   })
 
   it('returns 500 when staff lookup fails', async () => {

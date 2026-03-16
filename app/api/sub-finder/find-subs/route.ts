@@ -153,7 +153,11 @@ export async function POST(request: NextRequest) {
         })
 
     if (shiftsToUse.length === 0) {
-      return NextResponse.json([])
+      return NextResponse.json({
+        subs: [],
+        recommended_combination: null,
+        recommended_combinations: [],
+      })
     }
 
     // Exclude shifts on school-closed days (AGENTS.md: sub finder must respect closures)

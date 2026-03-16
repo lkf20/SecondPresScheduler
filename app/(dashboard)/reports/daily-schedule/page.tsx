@@ -2,12 +2,13 @@
 
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ChevronLeft, ChevronRight, CornerDownRight, Settings2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CornerDownRight, Info, Settings2 } from 'lucide-react'
 import { toast } from 'sonner'
 import DatePickerInput from '@/components/ui/date-picker-input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import ReportRichTextEditors from '@/components/reports/ReportRichTextEditors'
 import { useDailySchedule } from '@/lib/hooks/use-daily-schedule'
 import {
@@ -1047,6 +1048,23 @@ export default function DailyScheduleReportPage() {
                                               teacherNameFormat
                                             )}
                                           </span>
+                                          {sub.non_sub_override === true && (
+                                            <TooltipProvider>
+                                              <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                  <span
+                                                    className="inline-flex"
+                                                    aria-label="Non-sub staff override"
+                                                  >
+                                                    <Info className="h-3 w-3 text-amber-700" />
+                                                  </span>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                  <p className="text-sm">Non-sub staff override</p>
+                                                </TooltipContent>
+                                              </Tooltip>
+                                            </TooltipProvider>
+                                          )}
                                         </span>
                                       ),
                                     })

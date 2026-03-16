@@ -249,10 +249,13 @@ const cellDataAfterRefreshOneAssignment = {
 
 type SetupFetchOptions = {
   checkConflictsResponse?: { conflicts: unknown[] }
+  deferTeacherFetchUntilResolveStarts?: boolean
 }
 
 const setupFetch = (options?: SetupFetchOptions) => {
   const checkConflictsResponse = options?.checkConflictsResponse ?? { conflicts: [] }
+  const deferTeacherFetchUntilResolveStarts = options?.deferTeacherFetchUntilResolveStarts ?? false
+  let resolveConflictStarted = false
 
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
@@ -285,6 +288,7 @@ const setupFetch = (options?: SetupFetchOptions) => {
     // Teacher fetch completes at 100ms; resolve at 200ms. Preserve ref must be set at START of Apply
     // so the fetch .then() at 100ms sees it and skips overwriting.
     if (url.includes('/api/teacher-schedules/resolve-conflict')) {
+      resolveConflictStarted = true
       return {
         ok: true,
         json: () => new Promise(resolve => setTimeout(() => resolve({}), 200)),
@@ -297,6 +301,41 @@ const setupFetch = (options?: SetupFetchOptions) => {
       !url.includes('resolve-conflict') &&
       !url.includes('check-conflicts')
     ) {
+      if (deferTeacherFetchUntilResolveStarts && !resolveConflictStarted) {
+        return {
+          ok: true,
+          json: () =>
+            new Promise(resolve => {
+              const waitForResolveStart = () => {
+                if (resolveConflictStarted) {
+                  setTimeout(
+                    () =>
+                      resolve([
+                        {
+                          id: 'ts-1',
+                          classroom_id: 'class-1',
+                          day_of_week_id: 'day-1',
+                          time_slot_id: 'slot-1',
+                          teacher_id: 'teacher-1',
+                          is_floater: true,
+                          teacher: {
+                            first_name: 'Bella',
+                            last_name: 'Wilson',
+                            display_name: null,
+                            staff_role_type_assignments: [],
+                          },
+                        },
+                      ]),
+                    100
+                  )
+                  return
+                }
+                setTimeout(waitForResolveStart, 10)
+              }
+              waitForResolveStart()
+            }),
+        } as Response
+      }
       return {
         ok: true,
         json: () =>
@@ -366,6 +405,7 @@ describe('ScheduleSidePanel conflict resolution', () => {
 
   it('preserves all three selected teachers when resolving two conflicts as floaters and Apply (preserve ref set at start so in-flight fetch during resolve-conflict skips overwrite)', async () => {
     setupFetch({
+      deferTeacherFetchUntilResolveStarts: true,
       checkConflictsResponse: {
         conflicts: [
           {

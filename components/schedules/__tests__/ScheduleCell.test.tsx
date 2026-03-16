@@ -189,6 +189,7 @@ describe('ScheduleCell', () => {
 
     expect(screen.getByText('Absent A.')).toBeInTheDocument()
     expect(screen.getByText('Sub A.')).toBeInTheDocument()
+    expect(screen.queryByTitle('No sub assigned')).not.toBeInTheDocument()
     expect(screen.queryByText('Teacher A.')).not.toBeInTheDocument()
   })
 
@@ -589,5 +590,42 @@ describe('ScheduleCell', () => {
     )
 
     expect(screen.getByText(/below required staffing by 1.0/i)).toBeInTheDocument()
+  })
+
+  it('prefers effective weekly notes over baseline notes when showNotes is enabled', () => {
+    render(
+      <ScheduleCell
+        showNotes
+        data={{
+          ...baseData,
+          schedule_cell: {
+            ...baseData.schedule_cell,
+            notes: 'Baseline note',
+            effective_notes: 'Weekly custom note',
+          },
+        }}
+      />
+    )
+
+    expect(screen.getByText('Weekly custom note')).toBeInTheDocument()
+    expect(screen.queryByText('Baseline note')).not.toBeInTheDocument()
+  })
+
+  it('does not show baseline note when effective weekly note is explicitly hidden', () => {
+    render(
+      <ScheduleCell
+        showNotes
+        data={{
+          ...baseData,
+          schedule_cell: {
+            ...baseData.schedule_cell,
+            notes: 'Baseline note',
+            effective_notes: null,
+          },
+        }}
+      />
+    )
+
+    expect(screen.queryByText('Baseline note')).not.toBeInTheDocument()
   })
 })

@@ -109,15 +109,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { data: assignments } = await supabase
+    const selectWithOverride =
+      'id, sub_id, date, day_of_week_id, time_slot_id, classroom_id, coverage_request_shift_id, non_sub_override, staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name), time_slots(code)'
+    const selectWithoutOverride =
+      'id, sub_id, date, day_of_week_id, time_slot_id, classroom_id, coverage_request_shift_id, staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name), time_slots(code)'
+
+    let { data: assignments, error: assignmentsError } = await supabase
       .from('sub_assignments')
-      .select(
-        'id, sub_id, date, day_of_week_id, time_slot_id, classroom_id, coverage_request_shift_id, staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name), time_slots(code)'
-      )
+      .select(selectWithOverride)
       .eq('teacher_id', teacher_id)
       .eq('status', 'active')
       .gte('date', startDateNorm)
       .lte('date', endDateNorm || startDateNorm)
+
+    if (
+      assignmentsError &&
+      (assignmentsError.code === '42703' || /non_sub_override/i.test(assignmentsError.message))
+    ) {
+      const fallback = await supabase
+        .from('sub_assignments')
+        .select(selectWithoutOverride)
+        .eq('teacher_id', teacher_id)
+        .eq('status', 'active')
+        .gte('date', startDateNorm)
+        .lte('date', endDateNorm || startDateNorm)
+      assignments = fallback.data as any
+      assignmentsError = fallback.error as any
+    }
+
+    if (assignmentsError) {
+      throw assignmentsError
+    }
 
     const assignmentCrShiftByShiftId = new Map<string, string>()
     if (rawShifts.length === 0 && (assignments?.length ?? 0) > 0) {
@@ -140,7 +162,10 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const assignmentByKey = new Map<string, { id: string; sub_id: string; sub_name: string }>()
+    const assignmentByKey = new Map<
+      string,
+      { id: string; sub_id: string; sub_name: string; non_sub_override: boolean }
+    >()
     for (const a of assignments || []) {
       const key = `${toDateStringISO(a.date)}|${a.time_slot_id}`
       const sub = (
@@ -153,7 +178,12 @@ export async function POST(request: NextRequest) {
             display_name: sub.display_name ?? null,
           })
         : 'Unknown'
-      assignmentByKey.set(key, { id: a.id, sub_id: a.sub_id, sub_name })
+      assignmentByKey.set(key, {
+        id: a.id,
+        sub_id: a.sub_id,
+        sub_name,
+        non_sub_override: a.non_sub_override === true,
+      })
     }
 
     const shifts = rawShifts.map(shift => {
@@ -180,6 +210,7 @@ export async function POST(request: NextRequest) {
         assignment_id: assignment?.id,
         assigned_sub_id: assignment?.sub_id,
         assigned_sub_name: assignment?.sub_name,
+        assigned_non_sub_override: assignment?.non_sub_override ?? false,
       }
     })
 

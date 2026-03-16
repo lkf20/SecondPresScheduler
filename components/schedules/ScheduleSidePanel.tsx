@@ -123,7 +123,15 @@ type SelectedCellData = WeeklyScheduleData & {
         id: string
         is_active: boolean
         enrollment_for_staffing: number | null
+        /** Baseline note from schedule_cells.notes */
         notes: string | null
+        /** Effective weekly display note for this date/cell */
+        effective_notes?: string | null
+        weekly_note_override?: {
+          override_mode: 'custom' | 'hidden'
+          note: string | null
+        } | null
+        is_note_hidden_for_date?: boolean
         required_staff_override?: number | null
         preferred_staff_override?: number | null
       })
@@ -472,13 +480,25 @@ export const sortAbsencesByTeacherName = (
 ) => [...absences].sort(compareByTeacherName)
 
 export const sortAssignmentsForPanel = (assignments: WeeklyScheduleData['assignments'] = []) => {
-  const permanentAssignments = assignments
+  return sortAssignmentsForPanelWithAbsencePriority(assignments, [])
+}
+
+export const sortAssignmentsForPanelWithAbsencePriority = (
+  assignments: WeeklyScheduleData['assignments'] = [],
+  absentTeacherIds: string[] = []
+) => {
+  const absentTeacherIdSet = new Set(absentTeacherIds.filter(Boolean))
+  const assignmentsForDisplay = assignments.filter(
+    assignment => !assignment.teacher_id || !absentTeacherIdSet.has(assignment.teacher_id)
+  )
+
+  const permanentAssignments = assignmentsForDisplay
     .filter(
       assignment => !assignment.is_substitute && !assignment.is_flexible && !assignment.is_floater
     )
     .sort(compareByTeacherName)
 
-  const flexibleAssignments = assignments.filter(
+  const flexibleAssignments = assignmentsForDisplay.filter(
     assignment => !assignment.is_substitute && assignment.is_flexible && !assignment.is_floater
   )
   const baselineFlexAssignments = flexibleAssignments
@@ -488,7 +508,7 @@ export const sortAssignmentsForPanel = (assignments: WeeklyScheduleData['assignm
     .filter(a => !!a.staffing_event_id)
     .sort(compareByTeacherName)
 
-  const floaterAssignments = assignments
+  const floaterAssignments = assignmentsForDisplay
     .filter(assignment => !assignment.is_substitute && assignment.is_floater)
     .sort(compareByTeacherName)
 
@@ -593,6 +613,12 @@ export default function ScheduleSidePanel({
         is_active: boolean
         enrollment_for_staffing: number | null
         notes: string | null
+        effective_notes?: string | null
+        weekly_note_override?: {
+          override_mode: 'custom' | 'hidden'
+          note: string | null
+        } | null
+        is_note_hidden_for_date?: boolean
       })
     | null
   >(null)
@@ -602,6 +628,11 @@ export default function ScheduleSidePanel({
   const [requiredStaffOverride, setRequiredStaffOverride] = useState<number | null>(null)
   const [preferredStaffOverride, setPreferredStaffOverride] = useState<number | null>(null)
   const [notes, setNotes] = useState<string | null>(null)
+  const [weeklyNoteMode, setWeeklyNoteMode] = useState<'baseline' | 'custom' | 'hidden'>('baseline')
+  const [weeklyCustomNote, setWeeklyCustomNote] = useState('')
+  const [weeklyNoteSaving, setWeeklyNoteSaving] = useState(false)
+  const [weeklyNoteError, setWeeklyNoteError] = useState<string | null>(null)
+  const weeklyCustomNoteRef = useRef<HTMLTextAreaElement | null>(null)
   const [selectedTeachers, setSelectedTeachers] = useState<Teacher[]>([])
   const [selectedFlexTeachers, setSelectedFlexTeachers] = useState<Teacher[]>([])
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(false)
@@ -1276,6 +1307,12 @@ export default function ScheduleSidePanel({
         is_active: boolean
         enrollment_for_staffing: number | null
         notes: string | null
+        effective_notes?: string | null
+        weekly_note_override?: {
+          override_mode: 'custom' | 'hidden'
+          note: string | null
+        } | null
+        is_note_hidden_for_date?: boolean
         required_staff_override?: number | null
         preferred_staff_override?: number | null
       },
@@ -1466,6 +1503,27 @@ export default function ScheduleSidePanel({
       })
       .catch(console.error)
   }, [isOpen, classroomId, dayId, timeSlotId, selectedCellData, initializeFromCell])
+
+  // Initialize weekly note override UI state from selected weekly cell snapshot.
+  useEffect(() => {
+    if (!isOpen || !readOnly || panelMode !== 'cell') return
+    const override = selectedCellData?.schedule_cell?.weekly_note_override ?? null
+    if (!override) {
+      setWeeklyNoteMode('baseline')
+      setWeeklyCustomNote('')
+      setWeeklyNoteError(null)
+      return
+    }
+
+    if (override.override_mode === 'hidden') {
+      setWeeklyNoteMode('hidden')
+      setWeeklyCustomNote('')
+    } else {
+      setWeeklyNoteMode('custom')
+      setWeeklyCustomNote(override.note ?? '')
+    }
+    setWeeklyNoteError(null)
+  }, [isOpen, readOnly, panelMode, selectedCellData?.schedule_cell?.weekly_note_override])
 
   // Load allowed class groups for this classroom only when panel opens or classroom changes.
   // Separate effect so we do not reset when selectedCellData or initializeFromCell change (which would make the dropdown show all class groups).
@@ -1992,6 +2050,12 @@ export default function ScheduleSidePanel({
       setHasUnsavedChanges(false)
       return
     }
+    // In read-only weekly cell mode, changes are saved through dedicated actions (e.g. weekly notes),
+    // so baseline unsaved-change tracking should not block panel close.
+    if (readOnly && panelMode === 'cell') {
+      setHasUnsavedChanges(false)
+      return
+    }
 
     const cellClassGroupIds = cell?.class_groups?.map(cg => cg.id) || []
     const classGroupEnrollmentMatch =
@@ -2035,6 +2099,8 @@ export default function ScheduleSidePanel({
     requiredStaffOverride,
     preferredStaffOverride,
     allAssignedTeachers,
+    readOnly,
+    panelMode,
   ])
 
   const handleClose = () => {
@@ -2042,6 +2108,145 @@ export default function ScheduleSidePanel({
       setShowUnsavedDialog(true)
     } else {
       onClose()
+    }
+  }
+
+  const baselineNoteForSelectedCell = cell?.notes?.trim() ?? ''
+  const baselineEffectiveNote = baselineNoteForSelectedCell || null
+  const weeklyEffectiveNote =
+    panelMode !== 'cell' || !readOnly
+      ? baselineEffectiveNote
+      : weeklyNoteMode === 'hidden'
+        ? null
+        : weeklyNoteMode === 'baseline'
+          ? baselineEffectiveNote
+          : weeklyCustomNote.trim() || null
+  const showDisplayedWeeklyNote =
+    weeklyNoteMode === 'hidden' || weeklyEffectiveNote !== baselineEffectiveNote
+
+  const focusWeeklyCustomNote = () => {
+    window.setTimeout(() => {
+      weeklyCustomNoteRef.current?.focus()
+      weeklyCustomNoteRef.current?.setSelectionRange(
+        weeklyCustomNoteRef.current.value.length,
+        weeklyCustomNoteRef.current.value.length
+      )
+    }, 0)
+  }
+
+  const handleWeeklyNoteModeChange = (value: 'baseline' | 'custom' | 'hidden') => {
+    setWeeklyNoteMode(value)
+    setWeeklyNoteError(null)
+    if (value !== 'custom') return
+    if (!weeklyCustomNote.trim() && baselineNoteForSelectedCell) {
+      setWeeklyCustomNote(baselineNoteForSelectedCell)
+    }
+    focusWeeklyCustomNote()
+  }
+
+  const handleSaveWeeklyNote = async () => {
+    if (!cellDateISO) {
+      setWeeklyNoteError('Select a calendar date before saving weekly notes.')
+      return
+    }
+
+    if (weeklyNoteMode === 'baseline') {
+      setWeeklyNoteSaving(true)
+      setWeeklyNoteError(null)
+      try {
+        const response = await fetch('/api/weekly-schedule/cell-note', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: cellDateISO,
+            day_of_week_id: dayId,
+            classroom_id: classroomId,
+            time_slot_id: timeSlotId,
+            use_baseline_note: true,
+          }),
+        })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          throw new Error((payload as { error?: string }).error || 'Failed to save weekly note.')
+        }
+        setCell(prev =>
+          prev
+            ? {
+                ...prev,
+                effective_notes:
+                  (payload as { effective_note?: string | null }).effective_note ?? null,
+                weekly_note_override: null,
+                is_note_hidden_for_date: false,
+              }
+            : prev
+        )
+        toast.success('Weekly note now uses baseline note.')
+        await Promise.resolve(onRefresh?.())
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Failed to save weekly note settings.'
+        setWeeklyNoteError(message)
+      } finally {
+        setWeeklyNoteSaving(false)
+      }
+      return
+    }
+
+    if (weeklyNoteMode === 'custom' && !weeklyCustomNote.trim()) {
+      setWeeklyNoteError('Enter a custom note.')
+      focusWeeklyCustomNote()
+      return
+    }
+
+    setWeeklyNoteSaving(true)
+    setWeeklyNoteError(null)
+    try {
+      const response = await fetch('/api/weekly-schedule/cell-note', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: cellDateISO,
+          day_of_week_id: dayId,
+          classroom_id: classroomId,
+          time_slot_id: timeSlotId,
+          use_baseline_note: false,
+          override_mode: weeklyNoteMode === 'hidden' ? 'hidden' : 'custom',
+          note: weeklyNoteMode === 'hidden' ? null : weeklyCustomNote.trim(),
+        }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error((payload as { error?: string }).error || 'Failed to save weekly note.')
+      }
+
+      const nextOverride =
+        (
+          payload as {
+            weekly_note_override?: {
+              override_mode: 'custom' | 'hidden'
+              note: string | null
+            } | null
+          }
+        ).weekly_note_override ?? null
+      setCell(prev =>
+        prev
+          ? {
+              ...prev,
+              effective_notes:
+                (payload as { effective_note?: string | null }).effective_note ?? null,
+              weekly_note_override: nextOverride,
+              is_note_hidden_for_date:
+                (payload as { is_note_hidden_for_date?: boolean }).is_note_hidden_for_date ?? false,
+            }
+          : prev
+      )
+      toast.success('Weekly note saved.')
+      await Promise.resolve(onRefresh?.())
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save weekly note.'
+      setWeeklyNoteError(message)
+    } finally {
+      setWeeklyNoteSaving(false)
     }
   }
 
@@ -2418,6 +2623,10 @@ export default function ScheduleSidePanel({
   }, [])
 
   const handleSave = async () => {
+    // Boundary hardening: weekly read-only cell mode cannot persist baseline edits.
+    if (readOnly && panelMode !== 'editCell') {
+      return
+    }
     // Block save only when parent (classroom/time slot) is inactive; allow saving when user set cell to inactive
     if (isParentEffectivelyInactive) return
     // Block save when there are unresolved baseline conflicts (teacher double-booked in another room)
@@ -2429,8 +2638,14 @@ export default function ScheduleSidePanel({
     try {
       // Class groups required only when slot is active; inactive slots can be saved without class groups
       if (isActive && classGroupIds.length === 0) {
-        alert('At least one class group is required when slot is active')
+        const message = 'At least one class group is required when slot is active.'
+        if (showUnsavedDialog) {
+          setSaveErrorInDialog(message)
+        } else {
+          toast.error(message)
+        }
         setSaving(false)
+        onSaveEnd?.()
         return
       }
 
@@ -2824,7 +3039,7 @@ export default function ScheduleSidePanel({
       if (showUnsavedDialog) {
         setSaveErrorInDialog(message)
       } else {
-        alert(`Failed to save: ${message}`)
+        toast.error(`Failed to save: ${message}`)
       }
     } finally {
       setSaving(false)
@@ -2965,7 +3180,7 @@ export default function ScheduleSidePanel({
     } catch (error) {
       console.error('Error resolving conflicts:', error)
       const message = error instanceof Error ? error.message : 'Failed to resolve conflicts'
-      alert(`Failed to resolve conflicts: ${message}`)
+      toast.error(`Failed to resolve conflicts: ${message}`)
     } finally {
       setConflictResolutionApplying(false)
     }
@@ -2995,12 +3210,22 @@ export default function ScheduleSidePanel({
   )
 
   const sortedAbsences = sortAbsencesByTeacherName(selectedCellData?.absences ?? [])
+  const absentTeacherIds = sortedAbsences
+    .map(absence => absence.teacher_id)
+    .filter((teacherId): teacherId is string => Boolean(teacherId))
+  const absentTeacherIdSet = new Set(absentTeacherIds)
+  const assignmentsForDisplay = (selectedCellData?.assignments ?? []).filter(
+    assignment => !assignment.teacher_id || !absentTeacherIdSet.has(assignment.teacher_id)
+  )
   const {
     permanentAssignments: sortedPermanentAssignments,
     baselineFlexAssignments: sortedBaselineFlexAssignments,
     temporaryCoverageAssignments: sortedTemporaryCoverageAssignments,
     floaterAssignments: sortedFloaterAssignments,
-  } = sortAssignmentsForPanel(selectedCellData?.assignments ?? [])
+  } = sortAssignmentsForPanelWithAbsencePriority(
+    selectedCellData?.assignments ?? [],
+    absentTeacherIds
+  )
   const findSubLink = buildFindSubLink({
     absences: selectedCellData?.absences,
     assignments: selectedCellData?.assignments,
@@ -4055,12 +4280,11 @@ export default function ScheduleSidePanel({
                               is_partial: boolean
                               time_off_request_id?: string | null
                             }) => {
-                              const subsForAbsence =
-                                selectedCellData?.assignments?.filter(
-                                  assignment =>
-                                    assignment.is_substitute &&
-                                    assignment.absent_teacher_id === absence.teacher_id
-                                ) ?? []
+                              const subsForAbsence = assignmentsForDisplay.filter(
+                                assignment =>
+                                  assignment.is_substitute &&
+                                  assignment.absent_teacher_id === absence.teacher_id
+                              )
                               return (
                                 <div key={absence.teacher_id} className="space-y-2">
                                   <div className="flex items-center justify-between rounded-md border border-gray-300 bg-gray-100 px-3 py-2">
@@ -4075,9 +4299,8 @@ export default function ScheduleSidePanel({
                                     <div className="flex items-center gap-2">
                                       <Button
                                         type="button"
-                                        variant="teal"
-                                        size="sm"
-                                        className="h-8 px-2.5 text-sm"
+                                        variant="ghost"
+                                        className="h-8 gap-1.5 rounded-md border-0 bg-white px-3 font-medium text-teal-700 shadow-none hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
                                         onClick={() => router.push('/time-off')}
                                         disabled={slotIsInactive}
                                       >
@@ -4086,9 +4309,8 @@ export default function ScheduleSidePanel({
                                       {!absence.has_sub && (
                                         <Button
                                           type="button"
-                                          variant="teal"
-                                          size="sm"
-                                          className="h-8 px-2.5"
+                                          variant="ghost"
+                                          className="h-8 gap-1.5 rounded-md border-0 bg-white px-3 font-medium text-teal-700 shadow-none hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
                                           onClick={() => router.push(findSubLink)}
                                           disabled={slotIsInactive}
                                         >
@@ -4114,42 +4336,31 @@ export default function ScheduleSidePanel({
                                         </div>
                                         <div className="flex items-center gap-2">
                                           {absence.time_off_request_id && (
-                                            <TooltipProvider>
-                                              <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                  <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-                                                    onClick={() => {
-                                                      setRemoveDialogSub({
-                                                        id: sub.id,
-                                                        teacher_id: sub.teacher_id ?? '',
-                                                        teacher_name: sub.teacher_name ?? 'Sub',
-                                                      })
-                                                      setRemoveDialogAbsence({
-                                                        teacher_id: absence.teacher_id,
-                                                        teacher_name: absence.teacher_name,
-                                                        time_off_request_id:
-                                                          absence.time_off_request_id,
-                                                      })
-                                                    }}
-                                                    aria-label="Remove sub"
-                                                    disabled={slotIsInactive}
-                                                  >
-                                                    <XCircle className="h-4 w-4" />
-                                                  </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>Remove sub</TooltipContent>
-                                              </Tooltip>
-                                            </TooltipProvider>
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              className="h-8 gap-1.5 rounded-md border-0 bg-white px-3 font-medium text-rose-600 shadow-none hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-0"
+                                              onClick={() => {
+                                                setRemoveDialogSub({
+                                                  id: sub.id,
+                                                  teacher_id: sub.teacher_id ?? '',
+                                                  teacher_name: sub.teacher_name ?? 'Sub',
+                                                })
+                                                setRemoveDialogAbsence({
+                                                  teacher_id: absence.teacher_id,
+                                                  teacher_name: absence.teacher_name,
+                                                  time_off_request_id: absence.time_off_request_id,
+                                                })
+                                              }}
+                                              disabled={slotIsInactive}
+                                            >
+                                              Remove Sub
+                                            </Button>
                                           )}
                                           <Button
                                             type="button"
-                                            variant="teal"
-                                            size="sm"
-                                            className="h-8 px-2.5"
+                                            variant="ghost"
+                                            className="h-8 gap-1.5 rounded-md border-0 bg-white px-3 font-medium text-teal-700 shadow-none hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
                                             onClick={() => router.push(findSubLink)}
                                             disabled={slotIsInactive}
                                           >
@@ -4507,6 +4718,94 @@ export default function ScheduleSidePanel({
                         <Pencil className="mr-1.5 h-3.5 w-3.5" />
                         Edit class groups, enrollment & ratios
                       </Button>
+                    </div>
+
+                    <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
+                      <h3 className="text-sm font-semibold text-slate-900">Notes</h3>
+
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-slate-700">Baseline note</Label>
+                        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 min-h-[44px]">
+                          {baselineNoteForSelectedCell || (
+                            <span className="text-slate-500">No baseline note</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label className="text-sm font-medium text-slate-700">
+                          This date&apos;s note
+                        </Label>
+                        <RadioGroup
+                          value={weeklyNoteMode}
+                          onValueChange={value =>
+                            handleWeeklyNoteModeChange(value as 'baseline' | 'custom' | 'hidden')
+                          }
+                          className="space-y-2"
+                          disabled={slotIsInactive || weeklyNoteSaving}
+                        >
+                          <label className="flex items-center gap-2 text-sm">
+                            <RadioGroupItem value="baseline" id="weekly-note-mode-baseline" />
+                            Use baseline note
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <RadioGroupItem value="custom" id="weekly-note-mode-custom" />
+                            Custom note
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <RadioGroupItem value="hidden" id="weekly-note-mode-hidden" />
+                            Hide for this date
+                          </label>
+                        </RadioGroup>
+                        <p className="text-xs text-slate-500">
+                          Applies only to this date. Baseline note is unchanged.
+                        </p>
+                      </div>
+                      {weeklyNoteMode === 'custom' && (
+                        <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+                          <Textarea
+                            id="weekly-custom-note"
+                            ref={weeklyCustomNoteRef}
+                            value={weeklyCustomNote}
+                            onChange={event => {
+                              setWeeklyCustomNote(event.target.value)
+                              setWeeklyNoteError(null)
+                            }}
+                            placeholder="Add a note for this date..."
+                            rows={3}
+                            className="text-base min-h-[80px]"
+                            disabled={slotIsInactive || weeklyNoteSaving}
+                          />
+                        </div>
+                      )}
+
+                      {showDisplayedWeeklyNote && (
+                        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                          <p className="text-xs text-slate-500 mb-1">
+                            Displayed in this weekly cell
+                          </p>
+                          <p className="text-sm text-slate-700">
+                            {weeklyEffectiveNote || 'No note'}
+                          </p>
+                        </div>
+                      )}
+
+                      {weeklyNoteError && (
+                        <p className="text-sm text-red-600" role="alert">
+                          {weeklyNoteError}
+                        </p>
+                      )}
+
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          variant="teal"
+                          onClick={() => void handleSaveWeeklyNote()}
+                          disabled={!cellDateISO || slotIsInactive || weeklyNoteSaving}
+                        >
+                          {weeklyNoteSaving ? 'Saving note...' : 'Save note for this date'}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 )}

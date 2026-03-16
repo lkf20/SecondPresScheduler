@@ -116,7 +116,10 @@ function formatDescription(row: ActivityRow): React.ReactNode {
       return details.summary
     }
     const count = Array.isArray(details.assignment_ids) ? details.assignment_ids.length : null
-    return count ? `Assigned sub coverage (${count} shifts)` : 'Assigned sub coverage'
+    const suffix = details.non_sub_override === true ? ' (non-sub override)' : ''
+    return count
+      ? `Assigned sub coverage (${count} shifts)${suffix}`
+      : `Assigned sub coverage${suffix}`
   }
 
   if (row.category === 'temporary_coverage') {

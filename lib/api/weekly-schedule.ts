@@ -7,6 +7,7 @@ import { Database } from '@/types/database'
 
 type ClassGroupRow = Database['public']['Tables']['class_groups']['Row']
 type ScheduleCellRow = Database['public']['Tables']['schedule_cells']['Row']
+type WeeklyScheduleCellNoteRow = Database['public']['Tables']['weekly_schedule_cell_notes']['Row']
 type StaffRow = Database['public']['Tables']['staff']['Row']
 type StaffLite = {
   id: string
@@ -35,6 +36,7 @@ type SubAssignmentRowFromQuery = {
   sub_id: string
   teacher_id: string
   is_floater?: boolean
+  non_sub_override?: boolean
   sub?: StaffLite | StaffLite[] | null
   teacher?: StaffLite | StaffLite[] | null
 }
@@ -82,12 +84,81 @@ export const getStaffNameParts = (
   }
 }
 
+const isMissingNonSubOverrideColumnError = (error: { code?: string; message?: string } | null) => {
+  if (!error) return false
+  if (error.code === '42703') return true
+  return /non_sub_override/i.test(error.message || '')
+}
+
+export async function fetchSubAssignmentsForRange({
+  supabase,
+  schoolId,
+  startDateISO,
+  endDateISO,
+}: {
+  supabase: Awaited<ReturnType<typeof createClient>>
+  schoolId: string
+  startDateISO: string
+  endDateISO: string
+}) {
+  const selectWithOverride = `
+          id,
+          date,
+          day_of_week_id,
+          time_slot_id,
+          classroom_id,
+          sub_id,
+          teacher_id,
+          is_floater,
+          non_sub_override,
+          sub:staff!sub_assignments_sub_id_fkey(id, first_name, last_name, display_name),
+          teacher:staff!sub_assignments_teacher_id_fkey(id, first_name, last_name, display_name)
+        `
+  const selectWithoutOverride = `
+          id,
+          date,
+          day_of_week_id,
+          time_slot_id,
+          classroom_id,
+          sub_id,
+          teacher_id,
+          is_floater,
+          sub:staff!sub_assignments_sub_id_fkey(id, first_name, last_name, display_name),
+          teacher:staff!sub_assignments_teacher_id_fkey(id, first_name, last_name, display_name)
+        `
+
+  let result: { data: any; error: any } = (await supabase
+    .from('sub_assignments')
+    .select(selectWithOverride)
+    .eq('status', 'active')
+    .eq('school_id', schoolId)
+    .gte('date', startDateISO)
+    .lte('date', endDateISO)) as any
+
+  if (isMissingNonSubOverrideColumnError(result.error as any)) {
+    result = await supabase
+      .from('sub_assignments')
+      .select(selectWithoutOverride)
+      .eq('status', 'active')
+      .eq('school_id', schoolId)
+      .gte('date', startDateISO)
+      .lte('date', endDateISO)
+  }
+
+  return result
+}
+
 type ScheduleCellRaw = ScheduleCellRow & {
   schedule_cell_class_groups?: Array<{
     enrollment: number | null
     class_group: ClassGroupRow | null
   }>
   class_groups?: Array<ClassGroupRow & { enrollment?: number | null }>
+}
+
+type WeeklyScheduleNoteOverride = {
+  override_mode: 'custom' | 'hidden'
+  note: string | null
 }
 
 type WeeklySubAssignment = {
@@ -99,6 +170,7 @@ type WeeklySubAssignment = {
   sub_id: string
   teacher_id: string
   is_floater?: boolean
+  non_sub_override?: boolean
   sub_name: string
   sub_first_name?: string | null
   sub_last_name?: string | null
@@ -203,6 +275,7 @@ export interface WeeklyScheduleData {
     classroom_name: string
     is_floater?: boolean
     is_substitute?: boolean // True if this assignment comes from sub_assignments (week-specific)
+    non_sub_override?: boolean
     absent_teacher_id?: string // If this is a substitute, the ID of the teacher being replaced
     notes?: string | null // Temporary coverage notes (staffing_events.notes)
     enrollment?: number
@@ -250,7 +323,13 @@ export interface WeeklyScheduleDataByClassroom {
         id: string
         is_active: boolean
         enrollment_for_staffing: number | null
+        /** Baseline note from schedule_cells.notes */
         notes: string | null
+        /** Effective note shown in weekly grid for this date/cell (baseline, custom, or hidden=null). */
+        effective_notes?: string | null
+        /** Date-specific override row (if present). */
+        weekly_note_override?: WeeklyScheduleNoteOverride | null
+        is_note_hidden_for_date?: boolean
         required_staff_override?: number | null
         preferred_staff_override?: number | null
         class_groups?: Array<{
@@ -607,29 +686,64 @@ export async function getScheduleSnapshotData({
   // Fetch substitute assignments for the selected date range (if provided)
   let subAssignments: WeeklySubAssignment[] = []
 
+  // Fetch weekly date-specific note overrides for the selected date range.
+  let weeklyNoteOverrides = new Map<string, WeeklyScheduleNoteOverride>()
   if (hasDateRange && startDateISO && endDateISO) {
     try {
-      // Fetch sub_assignments for the date range
-      const { data: subAssignmentsData, error: subAssignmentsError } = await supabase
-        .from('sub_assignments')
-        .select(
-          `
-          id,
-          date,
-          day_of_week_id,
-          time_slot_id,
-          classroom_id,
-          sub_id,
-          teacher_id,
-          is_floater,
-          sub:staff!sub_assignments_sub_id_fkey(id, first_name, last_name, display_name),
-          teacher:staff!sub_assignments_teacher_id_fkey(id, first_name, last_name, display_name)
-        `
-        )
-        .eq('status', 'active')
+      const { data: weeklyNotesData, error: weeklyNotesError } = await supabase
+        .from('weekly_schedule_cell_notes')
+        .select('date, classroom_id, time_slot_id, override_mode, note')
         .eq('school_id', schoolId)
         .gte('date', startDateISO)
         .lte('date', endDateISO)
+
+      if (weeklyNotesError) {
+        if (
+          weeklyNotesError.code === '42P01' ||
+          weeklyNotesError.message?.includes('does not exist')
+        ) {
+          weeklyNoteOverrides = new Map()
+        } else {
+          console.warn('Error fetching weekly schedule cell notes:', weeklyNotesError.message)
+        }
+      } else if (weeklyNotesData) {
+        weeklyNoteOverrides = new Map(
+          (
+            weeklyNotesData as Array<
+              Pick<
+                WeeklyScheduleCellNoteRow,
+                'date' | 'classroom_id' | 'time_slot_id' | 'override_mode' | 'note'
+              >
+            >
+          ).map(row => [
+            `${toDateStringISO(row.date)}|${row.classroom_id}|${row.time_slot_id}`,
+            {
+              override_mode:
+                row.override_mode === 'hidden' || row.override_mode === 'custom'
+                  ? row.override_mode
+                  : 'custom',
+              note: row.note,
+            } satisfies WeeklyScheduleNoteOverride,
+          ])
+        )
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      console.warn('Error fetching weekly schedule cell notes:', errorMessage)
+    }
+  }
+
+  if (hasDateRange && startDateISO && endDateISO) {
+    try {
+      // Fetch sub_assignments for the date range with backward-compatible fallback
+      // for DBs that have not yet applied migration 116.
+      const { data: subAssignmentsData, error: subAssignmentsError } =
+        await fetchSubAssignmentsForRange({
+          supabase,
+          schoolId,
+          startDateISO,
+          endDateISO,
+        })
 
       if (subAssignmentsError) {
         console.warn('Error fetching sub_assignments:', subAssignmentsError.message)
@@ -647,6 +761,7 @@ export async function getScheduleSnapshotData({
             sub_id: sa.sub_id,
             teacher_id: sa.teacher_id,
             is_floater: sa.is_floater ?? false,
+            non_sub_override: sa.non_sub_override === true,
             sub_name: getStaffDisplayName(sa.sub, displayNameFormat),
             sub_first_name: subParts.first_name,
             sub_last_name: subParts.last_name,
@@ -712,6 +827,9 @@ export async function getScheduleSnapshotData({
           is_active: boolean
           enrollment_for_staffing: number | null
           notes: string | null
+          effective_notes?: string | null
+          weekly_note_override?: WeeklyScheduleNoteOverride | null
+          is_note_hidden_for_date?: boolean
           class_groups?: Array<{
             id: string
             name: string
@@ -765,6 +883,20 @@ export async function getScheduleSnapshotData({
         // Build assignments when schedule_cell exists and has class groups and/or we have teacher assignments.
         // Include inactive slots so the UI can display assigned teachers (with gray styling).
         const classGroups = scheduleCell?.class_groups || []
+        const slotDateISO =
+          hasDateRange && startDateISO && day.day_number != null
+            ? getCellDateISO(startDateISO, day.day_number)
+            : null
+        const weeklyNoteOverride =
+          slotDateISO != null
+            ? (weeklyNoteOverrides.get(`${slotDateISO}|${classroom.id}|${timeSlot.id}`) ?? null)
+            : null
+        const effectiveNote =
+          weeklyNoteOverride?.override_mode === 'hidden'
+            ? null
+            : weeklyNoteOverride?.override_mode === 'custom'
+              ? (weeklyNoteOverride.note ?? null)
+              : (scheduleCell?.notes ?? null)
 
         if (scheduleCell && (classGroups.length > 0 || assignmentsForSlot.length > 0)) {
           const classGroupIds = classGroups.map(cg => cg.id)
@@ -774,10 +906,7 @@ export async function getScheduleSnapshotData({
           // All teachers assigned to this classroom/day/time are included.
           // Conflict_teaching override: if this teacher has an is_floater sub_assignment
           // for this date/slot in another room, treat their baseline as floater too.
-          const cellDate =
-            hasDateRange && startDateISO && day.day_number != null
-              ? getCellDateISO(startDateISO, day.day_number)
-              : null
+          const cellDate = slotDateISO
           const teachers = assignmentsForSlot.map(assignment => {
             const teacherInfo = assignment.teacher
               ? {
@@ -916,6 +1045,7 @@ export async function getScheduleSnapshotData({
                 classroom_name: classroom.name,
                 is_floater: sub.is_floater ?? false,
                 is_substitute: true,
+                non_sub_override: sub.non_sub_override === true,
                 absent_teacher_id: sub.teacher_id,
                 enrollment: enrollment ?? 0,
                 required_teachers: undefined,
@@ -1073,6 +1203,9 @@ export async function getScheduleSnapshotData({
                 is_active: scheduleCell.is_active,
                 enrollment_for_staffing: scheduleCell.enrollment_for_staffing,
                 notes: scheduleCell.notes,
+                effective_notes: effectiveNote,
+                weekly_note_override: weeklyNoteOverride,
+                is_note_hidden_for_date: weeklyNoteOverride?.override_mode === 'hidden',
                 required_staff_override: scheduleCell.required_staff_override ?? null,
                 preferred_staff_override: scheduleCell.preferred_staff_override ?? null,
                 class_groups: classGroups || [],

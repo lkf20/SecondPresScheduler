@@ -6,9 +6,17 @@ import { normalizeUSPhoneForStorage } from '@/lib/utils/phone'
 
 type Staff = Database['public']['Tables']['staff']['Row']
 
-export async function getSubs() {
+export async function getSubs(options?: { includeNonSub?: boolean; onlyActive?: boolean }) {
   const supabase = await createClient()
-  const { data, error } = await supabase.from('staff').select('*').eq('is_sub', true)
+  let query = supabase.from('staff').select('*')
+  if (!options?.includeNonSub) {
+    query = query.eq('is_sub', true)
+  }
+  if (options?.onlyActive) {
+    query = query.eq('active', true)
+  }
+
+  const { data, error } = await query
 
   if (error) throw error
 
