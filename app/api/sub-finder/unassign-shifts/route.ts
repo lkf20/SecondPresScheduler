@@ -216,7 +216,7 @@ export async function POST(request: NextRequest) {
       action: 'unassign',
       category: 'sub_assignment',
       entityType: 'time_off_request',
-      entityId: absenceId,
+      entityId: timeOffRequestId,
       details: {
         changed_fields: ['sub_assignments'],
         scope,
@@ -226,7 +226,8 @@ export async function POST(request: NextRequest) {
         teacher_name: teacherName ?? undefined,
         assignment_ids: assignmentIdsToCancel,
         removed_count: assignmentIdsToCancel.length,
-        time_off_request_id: absenceId,
+        time_off_request_id: timeOffRequestId,
+        ...(absenceId !== timeOffRequestId && { coverage_request_id: absenceId }),
         target_shift_key: targetShiftKey,
       },
     })
