@@ -1,9 +1,9 @@
 'use client'
 
 import { useMemo, useState, useEffect, useRef } from 'react'
-import Link from 'next/link'
 import {
   AlertTriangle,
+  ArrowRightLeft,
   CalendarDays,
   Calendar,
   CheckCircle2,
@@ -13,6 +13,7 @@ import {
   ChevronUp,
   Settings,
   RefreshCw,
+  XCircle,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -22,7 +23,7 @@ import { Label } from '@/components/ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { getWeekStartISOFromDate } from '@/lib/utils/date'
+import { getWeekStartISOFromDate, toDateStringISO } from '@/lib/utils/date'
 import { getClassroomPillStyle } from '@/lib/utils/classroom-style'
 import {
   getCoverageColors,
@@ -34,8 +35,12 @@ import {
 import { StaffingStatusBadge } from '@/components/ui/staffing-status-badge'
 import TimeOffCard from '@/components/shared/TimeOffCard'
 import { Loader2 } from 'lucide-react'
+import { useSchool } from '@/lib/contexts/SchoolContext'
 import { useDashboard } from '@/lib/hooks/use-dashboard'
 import { useProfile } from '@/lib/hooks/use-profile'
+import { useUnassignSub } from '@/lib/hooks/use-unassign-sub'
+import { useAssignSubPanel } from '@/lib/contexts/AssignSubPanelContext'
+import { RemoveSubDialog } from '@/components/remove-sub/RemoveSubDialog'
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
 import ScheduleSidePanel from '@/components/schedules/ScheduleSidePanel'
@@ -80,6 +85,7 @@ export type ScheduledSubItem = {
   sub_name: string
   sub_id?: string
   teacher_name: string
+  teacher_id?: string | null
   coverage_request_id?: string | null
 }
 
@@ -305,6 +311,9 @@ export default function DashboardClient({
   const [staffingTargetSectionCollapsed, setStaffingTargetSectionCollapsed] = useState(false)
   const [editingRequestId, setEditingRequestId] = useState<string | null>(null)
   const [assignCoverageSlot, setAssignCoverageSlot] = useState<StaffingTargetGroup | null>(null)
+  const [removeDialogAssignment, setRemoveDialogAssignment] = useState<ScheduledSubItem | null>(
+    null
+  )
 
   const handleEdit = (id: string) => {
     setEditingRequestId(id)
@@ -369,6 +378,16 @@ export default function DashboardClient({
 
   const [orphanedShiftsCount, setOrphanedShiftsCount] = useState<number>(0)
   const [dataHealthFetchKey, setDataHealthFetchKey] = useState(0)
+
+  const schoolId = useSchool()
+  const { requestOpenAssignSub } = useAssignSubPanel()
+  const { unassign, isPending: isUnassignPending } = useUnassignSub({
+    schoolId,
+    onSuccess: () => {
+      refetch()
+      setRemoveDialogAssignment(null)
+    },
+  })
 
   // Refetch when tab becomes visible so we pick up cross-tab invalidation (e.g. calendar cleared in another tab)
   useEffect(() => {
@@ -1081,18 +1100,58 @@ export default function DashboardClient({
                         </span>
                       </div>
                     </div>
-                    <div className="flex w-full justify-end self-end sm:w-auto">
-                      <Button asChild size="sm" variant="teal">
-                        <Link
-                          href={
-                            assignment.coverage_request_id
-                              ? `/sub-finder?absence_id=${assignment.coverage_request_id}&sub_id=${assignment.sub_id || ''}`
-                              : '/sub-finder'
-                          }
-                        >
-                          Update Sub
-                        </Link>
-                      </Button>
+                    <div className="flex w-full items-center justify-end gap-1 self-end sm:w-auto">
+                      <TooltipProvider>
+                        {assignment.coverage_request_id && assignment.sub_id ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={() => setRemoveDialogAssignment(assignment)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
+                                style={{ color: '#9f1239', backgroundColor: '#fff7f8' }}
+                                aria-label="Remove sub"
+                              >
+                                <XCircle className="h-4 w-4" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent>Remove sub</TooltipContent>
+                          </Tooltip>
+                        ) : null}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (assignment.teacher_id) {
+                                  const dateNorm =
+                                    toDateStringISO(assignment.date) ||
+                                    String(assignment.date ?? '')
+                                  if (dateNorm) {
+                                    requestOpenAssignSub({
+                                      teacherId: assignment.teacher_id,
+                                      startDate: dateNorm,
+                                      endDate: dateNorm,
+                                    })
+                                  }
+                                } else {
+                                  router.push(
+                                    assignment.coverage_request_id
+                                      ? `/sub-finder?absence_id=${assignment.coverage_request_id}&sub_id=${assignment.sub_id || ''}`
+                                      : '/sub-finder'
+                                  )
+                                }
+                              }}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200"
+                              style={{ backgroundColor: '#f5fbfa' }}
+                              aria-label="Update sub"
+                            >
+                              <ArrowRightLeft className="h-4 w-4" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>Update sub</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                   </div>
                 ))}
@@ -1353,6 +1412,43 @@ export default function DashboardClient({
           onClose={handleEditClose}
         />
       )}
+
+      {/* Remove Sub Dialog */}
+      <RemoveSubDialog
+        open={Boolean(removeDialogAssignment)}
+        onOpenChange={open => !open && setRemoveDialogAssignment(null)}
+        context={
+          removeDialogAssignment &&
+          removeDialogAssignment.coverage_request_id &&
+          removeDialogAssignment.sub_id
+            ? {
+                absenceId: removeDialogAssignment.coverage_request_id,
+                subId: removeDialogAssignment.sub_id,
+                subName: removeDialogAssignment.sub_name,
+                teacherName: removeDialogAssignment.teacher_name,
+                assignmentId: removeDialogAssignment.id,
+                hasMultiple:
+                  overview.scheduled_subs.filter(
+                    s =>
+                      s.sub_id === removeDialogAssignment.sub_id &&
+                      s.coverage_request_id === removeDialogAssignment.coverage_request_id
+                  ).length > 1,
+              }
+            : null
+        }
+        onConfirm={async scope => {
+          if (!removeDialogAssignment?.coverage_request_id || !removeDialogAssignment?.sub_id)
+            return
+          await unassign(scope, {
+            absenceId: removeDialogAssignment.coverage_request_id,
+            subId: removeDialogAssignment.sub_id,
+            subName: removeDialogAssignment.sub_name,
+            teacherName: removeDialogAssignment.teacher_name,
+            assignmentId: removeDialogAssignment.id,
+          })
+        }}
+        isPending={isUnassignPending}
+      />
     </div>
   )
 }

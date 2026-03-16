@@ -1,7 +1,10 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { AssignSubPanelProvider } from '@/lib/contexts/AssignSubPanelContext'
 import DashboardClient from '../DashboardClient'
 
+const queryClient = new QueryClient()
 const mockRefetch = jest.fn()
 const mockUseDashboard = jest.fn()
 const mockUseProfile = jest.fn()
@@ -21,6 +24,10 @@ jest.mock('@/lib/hooks/use-profile', () => ({
 
 jest.mock('@/lib/hooks/use-display-name-format', () => ({
   useDisplayNameFormat: () => mockUseDisplayNameFormat(),
+}))
+
+jest.mock('@/lib/contexts/SchoolContext', () => ({
+  useSchool: () => 'school-1',
 }))
 
 jest.mock('@/components/schedules/ScheduleSidePanel', () => {
@@ -93,7 +100,13 @@ const defaultOverview = {
 }
 
 function renderDashboard(overview = defaultOverview) {
-  return render(<DashboardClient overview={overview} startDate="2026-02-27" endDate="2026-03-12" />)
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <AssignSubPanelProvider>
+        <DashboardClient overview={overview} startDate="2026-02-27" endDate="2026-03-12" />
+      </AssignSubPanelProvider>
+    </QueryClientProvider>
+  )
 }
 
 describe('DashboardClient - Below Staffing Target', () => {
@@ -397,5 +410,86 @@ describe('DashboardClient - Below Staffing Target', () => {
     expect(panel).toHaveAttribute('data-initial-flex-required', '2')
     expect(panel).toHaveAttribute('data-initial-flex-preferred', '3')
     expect(panel).toHaveAttribute('data-initial-flex-scheduled', '1')
+  })
+})
+
+describe('DashboardClient - Scheduled Subs', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    global.fetch = jest
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ orphanedShifts: [] }) })
+      ) as jest.Mock
+    mockUseProfile.mockReturnValue({ data: { first_name: 'Test' }, isLoading: false })
+    mockUseDisplayNameFormat.mockReturnValue({ format: 'first_last_initial', isLoaded: true })
+  })
+
+  it('shows Remove and Update Sub for scheduled subs with coverage_request_id and sub_id', async () => {
+    const overviewWithScheduledSub = {
+      ...defaultOverview,
+      summary: { ...defaultOverview.summary, scheduled_subs: 1 },
+      scheduled_subs: [
+        {
+          id: 'assign-1',
+          date: '2026-03-10',
+          day_name: 'Tuesday',
+          time_slot_code: 'AM',
+          classroom_name: 'Infant Room',
+          classroom_color: '#dbeafe',
+          notes: null,
+          sub_name: 'Jane D.',
+          sub_id: 'sub-1',
+          teacher_name: 'Amy P.',
+          coverage_request_id: 'cr-1',
+        },
+      ],
+    }
+    mockUseDashboard.mockReturnValue({
+      data: overviewWithScheduledSub,
+      isLoading: false,
+      isFetching: false,
+      refetch: mockRefetch,
+    })
+
+    renderDashboard(overviewWithScheduledSub)
+
+    expect(screen.getByText('Jane D.')).toBeInTheDocument()
+    expect(screen.getByText(/covering amy p\./i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /remove sub/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /update sub/i })).toBeInTheDocument()
+  })
+
+  it('does not show Remove when scheduled sub lacks coverage_request_id or sub_id', () => {
+    const overviewWithoutIds = {
+      ...defaultOverview,
+      summary: { ...defaultOverview.summary, scheduled_subs: 1 },
+      scheduled_subs: [
+        {
+          id: 'assign-1',
+          date: '2026-03-10',
+          day_name: 'Tuesday',
+          time_slot_code: 'AM',
+          classroom_name: 'Infant Room',
+          classroom_color: null,
+          notes: null,
+          sub_name: 'Jane D.',
+          sub_id: undefined,
+          teacher_name: 'Amy P.',
+          coverage_request_id: null,
+        },
+      ],
+    }
+    mockUseDashboard.mockReturnValue({
+      data: overviewWithoutIds,
+      isLoading: false,
+      isFetching: false,
+      refetch: mockRefetch,
+    })
+
+    renderDashboard(overviewWithoutIds)
+
+    expect(screen.getByText('Jane D.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /remove sub/i })).not.toBeInTheDocument()
   })
 })
