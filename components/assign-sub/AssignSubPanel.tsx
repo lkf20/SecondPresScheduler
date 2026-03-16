@@ -684,7 +684,7 @@ export default function AssignSubPanel({
 
         const coverageRequestShiftIds: string[] = []
         const isFloaterShiftIds = new Set<string>()
-        const resolutionsForRequest: Record<string, 'floater' | 'move'> = {}
+        const resolutionsForRequest: Record<string, 'floater' | 'move' | 'replace'> = {}
         for (const s of shiftsInGroup) {
           const keyWithClass = `${s.date}|${s.time_slot_code ?? ''}|${s.classroom_id ?? ''}`
           const keySimple = `${s.date}|${s.time_slot_code ?? ''}`
@@ -698,6 +698,8 @@ export default function AssignSubPanel({
             const isFloaterResolution = resolution === 'floater'
             if (resolution) {
               resolutionsForRequest[id] = resolution
+            } else if (replaceResolutions[slotKey]) {
+              resolutionsForRequest[id] = 'replace'
             }
             if (isFloaterSlot || isFloaterResolution) {
               isFloaterShiftIds.add(id)

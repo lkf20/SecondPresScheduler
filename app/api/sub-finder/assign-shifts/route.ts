@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       sub_id,
       selected_shift_ids, // Array of coverage_request_shift_ids
       is_floater_shift_ids = [], // Optional: coverage_request_shift_ids to create as floater (legacy)
-      resolutions = {}, // Optional: { [coverage_request_shift_id]: 'floater' | 'move' } for conflict resolution
+      resolutions = {}, // Optional: { [coverage_request_shift_id]: 'floater' | 'move' | 'replace' } for conflict/replace resolution
     } = body
 
     const resolutionsMap =
