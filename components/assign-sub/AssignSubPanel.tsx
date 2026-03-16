@@ -736,6 +736,9 @@ export default function AssignSubPanel({
             coverage_request_id: coverageRequestId,
             sub_id: subId,
             selected_shift_ids: coverageRequestShiftIds,
+            ...(isFloaterShiftIds.size > 0
+              ? { is_floater_shift_ids: Array.from(isFloaterShiftIds) }
+              : {}),
             resolutions:
               Object.keys(resolutionsForRequest).length > 0 ? resolutionsForRequest : undefined,
           }),

@@ -190,6 +190,7 @@ describe('StaffFormClient', () => {
       return { ok: true, json: async () => ({}) } as Response
     }) as jest.Mock
 
+    // Staff has PERMANENT role + is_sub so the substitute checkbox is enabled (not disabled as "Substitute only")
     render(
       <StaffFormClient
         staff={
@@ -200,8 +201,8 @@ describe('StaffFormClient', () => {
             active: true,
             is_sub: true,
             school_id: 'school-1',
-            role_type_ids: [],
-            role_type_codes: [],
+            role_type_ids: ['role-perm'],
+            role_type_codes: ['PERMANENT'],
           } as any
         }
       />

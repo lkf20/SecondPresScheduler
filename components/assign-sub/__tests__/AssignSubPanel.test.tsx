@@ -309,6 +309,29 @@ describe('AssignSubPanel', () => {
   it('Scenario 1 & 2: User selects dates with no time off. Shifts populate. User can create time off but cannot create extra coverage.', async () => {
     const user = userEvent.setup()
     const onClose = jest.fn()
+    // Override check-conflicts: AM shift must be 'available' so the assign flow proceeds without
+    // the "Assign unavailable sub?" dialog (which would block the success toast).
+    const baseFetch = global.fetch as jest.Mock
+    global.fetch = jest.fn(
+      async (url: string | URL | globalThis.Request, options?: RequestInit) => {
+        const urlStr = url.toString()
+        if (urlStr.includes('/api/sub-finder/check-conflicts')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve([
+                { shift_key: '2026-03-10|slot-1', status: 'available' },
+                {
+                  shift_key: '2026-03-10|slot-2',
+                  status: 'conflict_sub',
+                  message: 'Conflict: Assigned to sub for Sally A. in Preschool',
+                },
+              ]),
+          }) as Promise<Response>
+        }
+        return baseFetch(url, options)
+      }
+    ) as jest.Mock
     renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={onClose} />)
 
     await fillForm(user)
@@ -342,8 +365,14 @@ describe('AssignSubPanel', () => {
     const subNotesInput = screen.getByLabelText(/^Notes$/i)
     await user.type(subNotesInput, 'Anne agreed to cover')
 
-    // Click Assign button
+    // Click Assign button (AM shift is unavailable per check-conflicts mock, so dialog appears)
     await user.click(assignBtn)
+
+    // Confirm override when assigning unavailable sub
+    const assignAnywayBtn = await screen.findByRole('button', {
+      name: /yes, assign anyway/i,
+    })
+    await user.click(assignAnywayBtn)
 
     await waitFor(() => {
       expect(mockToastSuccess).toHaveBeenCalledWith(
