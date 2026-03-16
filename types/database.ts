@@ -957,6 +957,7 @@ export type Database = {
           id: string
           is_floater: boolean
           is_partial: boolean | null
+          non_sub_override: boolean
           notes: string | null
           partial_end_time: string | null
           partial_start_time: string | null
@@ -978,6 +979,7 @@ export type Database = {
           id?: string
           is_floater?: boolean
           is_partial?: boolean | null
+          non_sub_override?: boolean
           notes?: string | null
           partial_end_time?: string | null
           partial_start_time?: string | null
@@ -999,6 +1001,7 @@ export type Database = {
           id?: string
           is_floater?: boolean
           is_partial?: boolean | null
+          non_sub_override?: boolean
           notes?: string | null
           partial_end_time?: string | null
           partial_start_time?: string | null

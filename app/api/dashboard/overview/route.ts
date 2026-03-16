@@ -563,8 +563,11 @@ export async function GET(request: NextRequest) {
         const shiftDetails: Array<{
           label: string
           status: 'covered' | 'partial' | 'uncovered'
+          teacher_id: string
           date: string
+          time_slot_id: string | null
           time_slot_code: string
+          classroom_id: string | null
           day_name?: string
           classroom_name?: string | null
           classroom_color?: string | null
@@ -605,8 +608,11 @@ export async function GET(request: NextRequest) {
           shiftDetails.push({
             label,
             status,
+            teacher_id: request.teacher_id,
             date: shift.date,
+            time_slot_id: shift.time_slot_id ?? null,
             time_slot_code: timeCode,
+            classroom_id: shift.classroom_id ?? null,
             day_name: dayName,
             classroom_name: classroom?.name ?? null,
             classroom_color: classroom?.color ?? null,
@@ -619,6 +625,7 @@ export async function GET(request: NextRequest) {
           id: request.id,
           source_request_id: request.source_request_id || null,
           request_type: request.request_type,
+          teacher_id: request.teacher_id,
           teacher_name: teacherName,
           start_date: request.start_date,
           end_date: request.end_date,

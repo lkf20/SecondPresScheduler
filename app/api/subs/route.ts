@@ -4,9 +4,11 @@ import { getUserSchoolId } from '@/lib/utils/auth'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const subs = await getSubs()
+    const includeNonSub = request.nextUrl.searchParams.get('include_non_sub') === 'true'
+    const onlyActive = request.nextUrl.searchParams.get('active_only') === 'true'
+    const subs = await getSubs({ includeNonSub, onlyActive })
     return NextResponse.json(subs)
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })

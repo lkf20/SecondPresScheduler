@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
     const {
       coverage_request_id,
       sub_id,
+      allow_non_sub_override = false,
       selected_shift_ids, // Array of coverage_request_shift_ids
       is_floater_shift_ids = [], // Optional: coverage_request_shift_ids to create as floater (legacy)
       resolutions = {}, // Optional: { [coverage_request_shift_id]: 'floater' | 'move' | 'replace' } for conflict/replace resolution
@@ -156,7 +157,7 @@ export async function POST(request: NextRequest) {
 
     const { data: subRecord, error: subError } = await supabase
       .from('staff')
-      .select('id, school_id, first_name, last_name, display_name')
+      .select('id, school_id, first_name, last_name, display_name, active, is_sub')
       .eq('id', sub_id)
       .single()
 
@@ -167,6 +168,16 @@ export async function POST(request: NextRequest) {
       return createErrorResponse(
         'School mismatch: this sub cannot be assigned to this coverage request.',
         403
+      )
+    }
+    if (subRecord.active === false) {
+      return createErrorResponse('This staff member is inactive and cannot be assigned.', 400)
+    }
+    const isNonSubOverride = subRecord.is_sub === false
+    if (isNonSubOverride && allow_non_sub_override !== true) {
+      return createErrorResponse(
+        'Non-sub override must be explicitly enabled before assigning this staff member.',
+        400
       )
     }
 
@@ -420,6 +431,7 @@ export async function POST(request: NextRequest) {
         notes: null,
         status: 'active', // Default status
         assignment_kind: 'absence_coverage', // Default assignment kind
+        non_sub_override: isNonSubOverride,
         school_id: requestSchoolId,
       }
     })
@@ -558,7 +570,7 @@ export async function POST(request: NextRequest) {
           : `${formatMonthDay(sortedDates[0])} – ${formatMonthDay(sortedDates[sortedDates.length - 1])}`
     const summary =
       subName && teacherName
-        ? `Assigned ${subName} to cover ${shiftCount} shift${shiftCount !== 1 ? 's' : ''} for ${teacherName}${dateLabel ? ` on ${dateLabel}` : ''}`
+        ? `Assigned ${subName} to cover ${shiftCount} shift${shiftCount !== 1 ? 's' : ''} for ${teacherName}${dateLabel ? ` on ${dateLabel}` : ''}${isNonSubOverride ? ' (non-sub override)' : ''}`
         : undefined
 
     await logAuditEvent({
@@ -573,6 +585,8 @@ export async function POST(request: NextRequest) {
         changed_fields: ['sub_assignments'],
         sub_id,
         sub_name: subName ?? undefined,
+        assignee_is_sub: subRecord.is_sub === true,
+        non_sub_override: isNonSubOverride,
         teacher_id: teacherId,
         teacher_name: teacherName ?? undefined,
         assignment_ids: (createdAssignments || []).map((assignment: any) => assignment.id),
@@ -585,6 +599,7 @@ export async function POST(request: NextRequest) {
       success: true,
       assignments_created: createdAssignments?.length || 0,
       assignments: createdAssignments,
+      non_sub_override: isNonSubOverride,
       assigned_shifts: assignedShiftDetails,
       assigned_count: assignedShiftDetails.length,
     })

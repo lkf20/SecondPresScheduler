@@ -60,6 +60,8 @@ interface Sub {
   first_name?: string | null
   last_name?: string | null
   display_name?: string | null
+  is_sub?: boolean | null
+  active?: boolean | null
   can_change_diapers?: boolean | null
   can_lift_children?: boolean | null
   can_assist_with_toileting?: boolean | null
@@ -88,6 +90,7 @@ interface Shift {
   assignment_id?: string
   assigned_sub_id?: string
   assigned_sub_name?: string
+  assigned_non_sub_override?: boolean
 }
 
 interface Qualification {
@@ -135,6 +138,7 @@ export default function AssignSubPanel({
   const [submitting, setSubmitting] = useState(false)
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [subs, setSubs] = useState<Sub[]>([])
+  const [includeNonSubOverride, setIncludeNonSubOverride] = useState(false)
   const [subQualifications, setSubQualifications] = useState<Qualification[]>([])
   const [teacherClasses, setTeacherClasses] = useState<string[]>([])
   const [timeOffReason, setTimeOffReason] = useState<string>('Sick Day')
@@ -204,11 +208,17 @@ export default function AssignSubPanel({
   useEffect(() => {
     const fetchSubs = async () => {
       try {
-        const response = await fetch('/api/subs')
+        const params = new URLSearchParams()
+        if (includeNonSubOverride) {
+          params.set('include_non_sub', 'true')
+          params.set('active_only', 'true')
+        }
+        const query = params.toString()
+        const response = await fetch(query ? `/api/subs?${query}` : '/api/subs')
         if (!response.ok) throw new Error('Failed to fetch subs')
         const data = await response.json()
         const sorted = (data as Sub[])
-          .filter(s => (s as Sub & { active?: boolean }).active !== false)
+          .filter(s => s.active !== false)
           .sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)))
         setSubs(sorted)
       } catch (error) {
@@ -217,7 +227,16 @@ export default function AssignSubPanel({
       }
     }
     fetchSubs()
-  }, [getDisplayName])
+  }, [getDisplayName, includeNonSubOverride])
+
+  useEffect(() => {
+    if (includeNonSubOverride) return
+    const selected = subs.find(s => s.id === subId)
+    if (selected && selected.is_sub === false) {
+      setSubId(null)
+      toast.info('Cleared non-sub selection because override is turned off.')
+    }
+  }, [includeNonSubOverride, subId, subs])
 
   const fetchShifts = useCallback(async () => {
     const tid = teacherId || initialTeacherIdProp
@@ -365,6 +384,9 @@ export default function AssignSubPanel({
     }
   }, [teacherId, startDate, endDate])
 
+  const selectedSub = useMemo(() => subs.find(s => s.id === subId), [subs, subId])
+  const selectedSubIsNonSub = Boolean(selectedSub && selectedSub.is_sub === false)
+
   // Check conflicts when sub and shifts are available (no coverage request; use shifts array)
   useEffect(() => {
     if (!subId || !teacherId || shifts.length === 0) return
@@ -377,6 +399,7 @@ export default function AssignSubPanel({
           body: JSON.stringify({
             sub_id: subId,
             teacher_id: teacherId,
+            ignore_availability: selectedSubIsNonSub,
             shifts: shifts.map(s => ({
               date: s.date,
               time_slot_id: s.time_slot_id,
@@ -421,7 +444,7 @@ export default function AssignSubPanel({
     }
 
     checkConflicts()
-  }, [subId, teacherId, shiftIdsKey])
+  }, [subId, teacherId, shiftIdsKey, selectedSubIsNonSub])
 
   // Format date for display
   const formatDate = (dateString: string) => {
@@ -452,7 +475,8 @@ export default function AssignSubPanel({
   const subOptions: SearchableSelectOption[] = useMemo(() => {
     return subs.map(sub => ({
       id: sub.id,
-      label: getDisplayName(sub),
+      label:
+        sub.is_sub === false ? `${getDisplayName(sub)} (Non-sub override)` : getDisplayName(sub),
     }))
   }, [subs, getDisplayName])
 
@@ -709,7 +733,7 @@ export default function AssignSubPanel({
 
         if (coverageRequestShiftIds.length === 0) continue
 
-        if (subId && coverageRequestId) {
+        if (subId && coverageRequestId && !selectedSubIsNonSub) {
           const contactResponse = await fetch(
             `/api/sub-finder/substitute-contacts?coverage_request_id=${coverageRequestId}&sub_id=${subId}`
           )
@@ -736,6 +760,7 @@ export default function AssignSubPanel({
             coverage_request_id: coverageRequestId,
             sub_id: subId,
             selected_shift_ids: coverageRequestShiftIds,
+            allow_non_sub_override: selectedSubIsNonSub,
             ...(isFloaterShiftIds.size > 0
               ? { is_floater_shift_ids: Array.from(isFloaterShiftIds) }
               : {}),
@@ -765,7 +790,7 @@ export default function AssignSubPanel({
       toast.success(
         `Assigned ${subName} to ${assignedShiftCount} shift${assignedShiftCount !== 1 ? 's' : ''} for ${teacherName}${
           skippedShiftCount > 0 ? ` (${skippedShiftCount} already assigned and skipped).` : ''
-        }${
+        }${selectedSubIsNonSub ? ' (non-sub override).' : ''}${
           shiftsWithoutTimeOff.length > 0
             ? `. Time off request created for ${shiftsWithoutTimeOff.length} shift${shiftsWithoutTimeOff.length !== 1 ? 's' : ''}.`
             : ''
@@ -856,6 +881,7 @@ export default function AssignSubPanel({
           coverage_request_id: coverageRequestId,
           sub_id: changeSubNewSubId,
           selected_shift_ids: coverageRequestShiftIds,
+          allow_non_sub_override: subs.find(s => s.id === changeSubNewSubId)?.is_sub === false,
         }),
       })
       if (!assignRes.ok) {
@@ -925,6 +951,7 @@ export default function AssignSubPanel({
     if (!isOpen) {
       setTeacherId(null)
       setSubId(null)
+      setIncludeNonSubOverride(false)
       setStartDate('')
       setEndDate('')
       setSelectedShiftIds(new Set())
@@ -949,8 +976,6 @@ export default function AssignSubPanel({
       appliedInitialRef.current = true
     }
   }, [isOpen, initialTeacherIdProp, initialStartDateProp, initialEndDateProp])
-
-  const selectedSub = subs.find(s => s.id === subId)
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
@@ -1001,15 +1026,50 @@ export default function AssignSubPanel({
 
               <div className="space-y-2">
                 <Label htmlFor="sub-select">
-                  Sub to assign <span className="text-destructive">*</span>
+                  Staff to assign <span className="text-destructive">*</span>
                 </Label>
+                <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                  <Checkbox
+                    id="include-non-sub-override"
+                    checked={includeNonSubOverride}
+                    onCheckedChange={checked => setIncludeNonSubOverride(checked === true)}
+                  />
+                  <Label
+                    htmlFor="include-non-sub-override"
+                    className="text-sm font-normal text-slate-700"
+                  >
+                    Include non-sub staff (director override)
+                  </Label>
+                </div>
                 <SearchableSelect
                   options={subOptions}
                   value={subId}
                   onValueChange={setSubId}
-                  placeholder="Search or select a substitute..."
+                  placeholder={
+                    includeNonSubOverride
+                      ? 'Search or select staff to cover this shift...'
+                      : 'Search or select a substitute...'
+                  }
                   className="w-full"
                 />
+                {selectedSubIsNonSub && selectedSub && (
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className="font-normal"
+                      style={{
+                        backgroundColor: 'rgb(255, 251, 235)', // amber-50
+                        borderColor: 'rgb(252, 211, 77)', // amber-300
+                        color: 'rgb(146, 64, 14)', // amber-800
+                      }}
+                    >
+                      Non-sub staff override
+                    </Badge>
+                    <p className="text-xs text-slate-600">
+                      This assignment will be recorded as a director override.
+                    </p>
+                  </div>
+                )}
                 {/* Capabilities: badges with green check or red X */}
                 {selectedSub && (
                   <div className="flex flex-wrap gap-2 mt-2">
@@ -1465,6 +1525,18 @@ export default function AssignSubPanel({
                                   Currently:{' '}
                                   {groupShifts.find(s => s.assigned_sub_name)?.assigned_sub_name ??
                                     'Assigned'}
+                                  {groupShifts.some(s => s.assigned_non_sub_override) && (
+                                    <span
+                                      className="ml-1 rounded-full px-1.5 py-0.5 text-[10px]"
+                                      style={{
+                                        backgroundColor: 'rgb(255, 251, 235)', // amber-50
+                                        color: 'rgb(146, 64, 14)', // amber-800
+                                        border: '1px solid rgb(252, 211, 77)', // amber-300
+                                      }}
+                                    >
+                                      Non-sub override
+                                    </span>
+                                  )}
                                 </span>
                                 <Button
                                   type="button"
@@ -1585,25 +1657,34 @@ export default function AssignSubPanel({
                       <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
                       <p className="text-sm text-amber-800">
                         {summaryStats.conflictCount} selected shift
-                        {summaryStats.conflictCount !== 1 ? 's' : ''} override
-                        {summaryStats.conflictCount === 1 ? 's' : ''} the sub&apos;s availability or
-                        existing assignment.
+                        {summaryStats.conflictCount !== 1 ? 's' : ''} override{' '}
+                        {summaryStats.conflictCount === 1 ? 's' : ''}
+                        {selectedSubIsNonSub ? " this staff member's" : " the sub's"} availability
+                        or existing assignment.
                       </p>
                     </div>
                   </div>
                 )}
 
-                <div className="space-y-2 rounded-lg border border-gray-200 bg-white p-4">
-                  <Label htmlFor="sub-notes">Notes</Label>
-                  <Textarea
-                    id="sub-notes"
-                    value={subNotes}
-                    onChange={e => setSubNotes(e.target.value)}
-                    placeholder="Add any notes about contacting this sub..."
-                    className="resize-none"
-                    rows={2}
-                  />
-                </div>
+                {!selectedSubIsNonSub ? (
+                  <div className="space-y-2 rounded-lg border border-gray-200 bg-white p-4">
+                    <Label htmlFor="sub-notes">Notes</Label>
+                    <Textarea
+                      id="sub-notes"
+                      value={subNotes}
+                      onChange={e => setSubNotes(e.target.value)}
+                      placeholder="Add any notes about contacting this sub..."
+                      className="resize-none"
+                      rows={2}
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-teal-200 bg-teal-50 p-4">
+                    <p className="text-sm text-teal-800">
+                      Contact tracking notes are skipped for non-sub staff overrides.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1618,7 +1699,7 @@ export default function AssignSubPanel({
                         !teacherId && 'a teacher',
                         !startDate && 'a start date',
                         selectedShiftIds.size === 0 && 'at least one shift',
-                        !subId && 'a sub to assign',
+                        !subId && 'a staff member to assign',
                       ].filter(Boolean) as string[]
                       if (items.length === 0) return ''
                       if (items.length === 1) return items[0]
@@ -1673,8 +1754,8 @@ export default function AssignSubPanel({
             <DialogTitle>Change sub</DialogTitle>
             <DialogDescription>
               {changeSubShifts?.length === 1
-                ? `Replace ${changeSubShifts.find(s => s.assigned_sub_name)?.assigned_sub_name ?? 'current sub'} with ${changeSubNewSubId ? getDisplayName(subs.find(s => s.id === changeSubNewSubId)) : ''} for ${formatShiftLabel(changeSubShifts[0])}?`
-                : `Replace ${changeSubShifts?.find(s => s.assigned_sub_name)?.assigned_sub_name ?? 'current sub'} with ${changeSubNewSubId ? getDisplayName(subs.find(s => s.id === changeSubNewSubId)) : ''} for ${changeSubShifts?.length ?? 0} shifts?`}
+                ? `Replace ${changeSubShifts.find(s => s.assigned_sub_name)?.assigned_sub_name ?? 'current sub'} with ${changeSubNewSubId ? getDisplayName(subs.find(s => s.id === changeSubNewSubId)) : ''}${changeSubNewSubId && subs.find(s => s.id === changeSubNewSubId)?.is_sub === false ? ' (non-sub override)' : ''} for ${formatShiftLabel(changeSubShifts[0])}?`
+                : `Replace ${changeSubShifts?.find(s => s.assigned_sub_name)?.assigned_sub_name ?? 'current sub'} with ${changeSubNewSubId ? getDisplayName(subs.find(s => s.id === changeSubNewSubId)) : ''}${changeSubNewSubId && subs.find(s => s.id === changeSubNewSubId)?.is_sub === false ? ' (non-sub override)' : ''} for ${changeSubShifts?.length ?? 0} shifts?`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1750,11 +1831,14 @@ export default function AssignSubPanel({
       <Dialog open={showUnavailableConfirm} onOpenChange={setShowUnavailableConfirm}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Assign unavailable sub?</DialogTitle>
+            <DialogTitle>
+              {selectedSubIsNonSub ? 'Assign unavailable staff?' : 'Assign unavailable sub?'}
+            </DialogTitle>
             <DialogDescription>
               You are assigning{' '}
-              {subId ? getDisplayName(subs.find(s => s.id === subId)) : 'this sub'} to a shift they
-              have marked as unavailable in Settings. Are you sure you want to proceed?
+              {subId ? getDisplayName(subs.find(s => s.id === subId)) : 'this sub'}
+              {selectedSubIsNonSub ? ' (non-sub override)' : ''} to a shift they have marked as
+              unavailable in Settings. Are you sure you want to proceed?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

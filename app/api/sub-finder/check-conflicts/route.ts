@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
       teacher_id,
       shifts: shiftsInput,
       assign_as_floater,
+      ignore_availability = false,
     } = body
 
     const useShiftsArray =
@@ -163,7 +164,7 @@ export async function POST(request: NextRequest) {
         let status: 'available' | 'unavailable' | 'conflict_teaching' | 'conflict_sub' = 'available'
         let message = ''
 
-        if (!isAvailable) {
+        if (!ignore_availability && !isAvailable) {
           status = 'unavailable'
           message = 'Marked unavailable'
         } else if (hasScheduleConflict) {
@@ -198,6 +199,7 @@ export async function POST(request: NextRequest) {
 
     // Original path: coverage_request_id + shift_ids
     const assignAsFloater = body.assign_as_floater === true
+    const ignoreAvailability = body.ignore_availability === true
     if (!sub_id || !coverage_request_id || !shift_ids || !Array.isArray(shift_ids)) {
       return createErrorResponse(
         'Missing required fields: sub_id, coverage_request_id, shift_ids',
@@ -359,7 +361,7 @@ export async function POST(request: NextRequest) {
       let status: 'available' | 'unavailable' | 'conflict_teaching' | 'conflict_sub' = 'available'
       let message = ''
 
-      if (!isAvailable) {
+      if (!ignoreAvailability && !isAvailable) {
         status = 'unavailable'
         message = 'Marked unavailable'
       } else if (hasScheduleConflict) {

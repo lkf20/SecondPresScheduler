@@ -36,6 +36,7 @@ type SubAssignmentRowFromQuery = {
   sub_id: string
   teacher_id: string
   is_floater?: boolean
+  non_sub_override?: boolean
   sub?: StaffLite | StaffLite[] | null
   teacher?: StaffLite | StaffLite[] | null
 }
@@ -83,6 +84,70 @@ export const getStaffNameParts = (
   }
 }
 
+const isMissingNonSubOverrideColumnError = (error: { code?: string; message?: string } | null) => {
+  if (!error) return false
+  if (error.code === '42703') return true
+  return /non_sub_override/i.test(error.message || '')
+}
+
+export async function fetchSubAssignmentsForRange({
+  supabase,
+  schoolId,
+  startDateISO,
+  endDateISO,
+}: {
+  supabase: Awaited<ReturnType<typeof createClient>>
+  schoolId: string
+  startDateISO: string
+  endDateISO: string
+}) {
+  const selectWithOverride = `
+          id,
+          date,
+          day_of_week_id,
+          time_slot_id,
+          classroom_id,
+          sub_id,
+          teacher_id,
+          is_floater,
+          non_sub_override,
+          sub:staff!sub_assignments_sub_id_fkey(id, first_name, last_name, display_name),
+          teacher:staff!sub_assignments_teacher_id_fkey(id, first_name, last_name, display_name)
+        `
+  const selectWithoutOverride = `
+          id,
+          date,
+          day_of_week_id,
+          time_slot_id,
+          classroom_id,
+          sub_id,
+          teacher_id,
+          is_floater,
+          sub:staff!sub_assignments_sub_id_fkey(id, first_name, last_name, display_name),
+          teacher:staff!sub_assignments_teacher_id_fkey(id, first_name, last_name, display_name)
+        `
+
+  let result: { data: any; error: any } = (await supabase
+    .from('sub_assignments')
+    .select(selectWithOverride)
+    .eq('status', 'active')
+    .eq('school_id', schoolId)
+    .gte('date', startDateISO)
+    .lte('date', endDateISO)) as any
+
+  if (isMissingNonSubOverrideColumnError(result.error as any)) {
+    result = await supabase
+      .from('sub_assignments')
+      .select(selectWithoutOverride)
+      .eq('status', 'active')
+      .eq('school_id', schoolId)
+      .gte('date', startDateISO)
+      .lte('date', endDateISO)
+  }
+
+  return result
+}
+
 type ScheduleCellRaw = ScheduleCellRow & {
   schedule_cell_class_groups?: Array<{
     enrollment: number | null
@@ -105,6 +170,7 @@ type WeeklySubAssignment = {
   sub_id: string
   teacher_id: string
   is_floater?: boolean
+  non_sub_override?: boolean
   sub_name: string
   sub_first_name?: string | null
   sub_last_name?: string | null
@@ -209,6 +275,7 @@ export interface WeeklyScheduleData {
     classroom_name: string
     is_floater?: boolean
     is_substitute?: boolean // True if this assignment comes from sub_assignments (week-specific)
+    non_sub_override?: boolean
     absent_teacher_id?: string // If this is a substitute, the ID of the teacher being replaced
     notes?: string | null // Temporary coverage notes (staffing_events.notes)
     enrollment?: number
@@ -668,27 +735,15 @@ export async function getScheduleSnapshotData({
 
   if (hasDateRange && startDateISO && endDateISO) {
     try {
-      // Fetch sub_assignments for the date range
-      const { data: subAssignmentsData, error: subAssignmentsError } = await supabase
-        .from('sub_assignments')
-        .select(
-          `
-          id,
-          date,
-          day_of_week_id,
-          time_slot_id,
-          classroom_id,
-          sub_id,
-          teacher_id,
-          is_floater,
-          sub:staff!sub_assignments_sub_id_fkey(id, first_name, last_name, display_name),
-          teacher:staff!sub_assignments_teacher_id_fkey(id, first_name, last_name, display_name)
-        `
-        )
-        .eq('status', 'active')
-        .eq('school_id', schoolId)
-        .gte('date', startDateISO)
-        .lte('date', endDateISO)
+      // Fetch sub_assignments for the date range with backward-compatible fallback
+      // for DBs that have not yet applied migration 116.
+      const { data: subAssignmentsData, error: subAssignmentsError } =
+        await fetchSubAssignmentsForRange({
+          supabase,
+          schoolId,
+          startDateISO,
+          endDateISO,
+        })
 
       if (subAssignmentsError) {
         console.warn('Error fetching sub_assignments:', subAssignmentsError.message)
@@ -706,6 +761,7 @@ export async function getScheduleSnapshotData({
             sub_id: sa.sub_id,
             teacher_id: sa.teacher_id,
             is_floater: sa.is_floater ?? false,
+            non_sub_override: sa.non_sub_override === true,
             sub_name: getStaffDisplayName(sa.sub, displayNameFormat),
             sub_first_name: subParts.first_name,
             sub_last_name: subParts.last_name,
@@ -989,6 +1045,7 @@ export async function getScheduleSnapshotData({
                 classroom_name: classroom.name,
                 is_floater: sub.is_floater ?? false,
                 is_substitute: true,
+                non_sub_override: sub.non_sub_override === true,
                 absent_teacher_id: sub.teacher_id,
                 enrollment: enrollment ?? 0,
                 required_teachers: undefined,

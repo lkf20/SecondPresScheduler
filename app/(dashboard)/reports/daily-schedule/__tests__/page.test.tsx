@@ -46,6 +46,13 @@ jest.mock('@/components/ui/popover', () => ({
   PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }))
 
+jest.mock('@/components/ui/tooltip', () => ({
+  TooltipProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Tooltip: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  TooltipContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}))
+
 const { toast: toastMock } = jest.requireMock('sonner') as {
   toast: jest.Mock & { error: jest.Mock; success: jest.Mock }
 }
@@ -552,5 +559,77 @@ describe("Today's Schedule report page", () => {
     await waitFor(() => {
       expect(editors[0].innerHTML).toContain('User Header')
     })
+  })
+
+  it('shows non-sub override tooltip indicator for substitute rows in non-print view', async () => {
+    ;(useDailySchedule as jest.Mock).mockReturnValue({
+      data: {
+        date: '2026-03-09',
+        day_of_week_id: 'day-mon',
+        day_name: 'Monday',
+        data: [
+          {
+            classroom_id: 'classroom-1',
+            classroom_name: 'Infant Room',
+            classroom_color: '#1d4ed8',
+            classroom_is_active: true,
+            days: [
+              {
+                day_of_week_id: 'day-mon',
+                day_name: 'Monday',
+                day_number: 1,
+                time_slots: [
+                  {
+                    time_slot_id: 'slot-am',
+                    time_slot_code: 'AM',
+                    time_slot_name: 'School Morning',
+                    time_slot_display_order: 1,
+                    time_slot_start_time: '09:00:00',
+                    time_slot_end_time: '12:00:00',
+                    time_slot_is_active: true,
+                    assignments: [
+                      {
+                        id: 'sub-assign-1',
+                        teacher_id: 'staff-override',
+                        teacher_name: 'Dana D.',
+                        teacher_first_name: 'Dana',
+                        teacher_last_name: 'D',
+                        teacher_display_name: 'Dana D.',
+                        is_substitute: true,
+                        non_sub_override: true,
+                        is_floater: false,
+                        is_flexible: false,
+                        absent_teacher_id: 'teacher-1',
+                        classroom_id: 'classroom-1',
+                        classroom_name: 'Infant Room',
+                      },
+                    ],
+                    absences: [
+                      {
+                        teacher_id: 'teacher-1',
+                        teacher_name: 'Sally A.',
+                        teacher_first_name: 'Sally',
+                        teacher_last_name: 'A',
+                        teacher_display_name: 'Sally A.',
+                        has_sub: true,
+                        is_partial: false,
+                      },
+                    ],
+                    schedule_cell: null,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        school_closures: [],
+        no_schedule: false,
+      },
+      isLoading: false,
+      error: null,
+    })
+
+    render(<DailyScheduleReportPage />)
+    expect(await screen.findByLabelText('Non-sub staff override')).toBeInTheDocument()
   })
 })

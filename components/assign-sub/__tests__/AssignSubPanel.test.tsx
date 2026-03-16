@@ -19,6 +19,7 @@ const mockRefresh = jest.fn()
 const mockPush = jest.fn()
 const mockToastSuccess = jest.fn()
 const mockToastError = jest.fn()
+const mockToastInfo = jest.fn()
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -31,6 +32,7 @@ jest.mock('sonner', () => ({
   toast: {
     success: (...args: unknown[]) => mockToastSuccess(...args),
     error: (...args: unknown[]) => mockToastError(...args),
+    info: (...args: unknown[]) => mockToastInfo(...args),
   },
 }))
 
@@ -272,6 +274,126 @@ describe('AssignSubPanel', () => {
     fireEvent.change(startDateInput, { target: { value: '2026-03-10' } })
   }
 
+  it('supports non-sub override assignment and skips substitute-contact writes', async () => {
+    const user = userEvent.setup()
+    const baseFetch = global.fetch as jest.Mock
+    global.fetch = jest.fn(
+      async (url: string | URL | globalThis.Request, options?: RequestInit) => {
+        const urlStr = url.toString()
+        if (urlStr.includes('/api/subs?include_non_sub=true&active_only=true')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve([
+                { id: 'sub-1', first_name: 'Anne', last_name: 'M.', active: true, is_sub: true },
+                {
+                  id: 'admin-1',
+                  first_name: 'Dana',
+                  last_name: 'Director',
+                  active: true,
+                  is_sub: false,
+                },
+              ]),
+          }) as Promise<Response>
+        }
+        if (urlStr.includes('/api/sub-finder/check-conflicts')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve([
+                { shift_key: '2026-03-10|slot-1', status: 'available' },
+                { shift_key: '2026-03-10|slot-2', status: 'available' },
+              ]),
+          }) as Promise<Response>
+        }
+        return baseFetch(url, options)
+      }
+    ) as jest.Mock
+
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('option-Search or select a teacher...-teacher-1')
+      ).toBeInTheDocument()
+    })
+    await user.click(screen.getByTestId('option-Search or select a teacher...-teacher-1'))
+
+    const overrideCheckbox = screen.getByLabelText(/Include non-sub staff/i)
+    await user.click(overrideCheckbox)
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/api/subs?include_non_sub=true&active_only=true')
+    })
+
+    await user.click(
+      screen.getByTestId('option-Search or select staff to cover this shift...-admin-1')
+    )
+    const startDateInput = await screen.findByTestId('date-Select start date')
+    fireEvent.change(startDateInput, { target: { value: '2026-03-10' } })
+
+    await waitFor(() => {
+      expect(screen.getByText(/Tue Mar 10 • AM • Preschool/i)).toBeInTheDocument()
+    })
+    await user.click(screen.getByRole('checkbox', { name: /Tue Mar 10 • AM • Preschool/i }))
+    await user.click(screen.getByRole('button', { name: /Create Time Off & Assign Sub/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/sub-finder/assign-shifts',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('"allow_non_sub_override":true'),
+        })
+      )
+    })
+
+    expect(global.fetch).not.toHaveBeenCalledWith(
+      expect.stringContaining('/api/sub-finder/substitute-contacts'),
+      expect.anything()
+    )
+  })
+
+  it('clears selected non-sub assignee when override toggle is turned off', async () => {
+    const user = userEvent.setup()
+    const baseFetch = global.fetch as jest.Mock
+    global.fetch = jest.fn(
+      async (url: string | URL | globalThis.Request, options?: RequestInit) => {
+        const urlStr = url.toString()
+        if (urlStr.includes('/api/subs?include_non_sub=true&active_only=true')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve([
+                {
+                  id: 'admin-1',
+                  first_name: 'Dana',
+                  last_name: 'Director',
+                  active: true,
+                  is_sub: false,
+                },
+              ]),
+          }) as Promise<Response>
+        }
+        return baseFetch(url, options)
+      }
+    ) as jest.Mock
+
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    const overrideCheckbox = await screen.findByLabelText(/Include non-sub staff/i)
+    await user.click(overrideCheckbox)
+    await user.click(
+      screen.getByTestId('option-Search or select staff to cover this shift...-admin-1')
+    )
+    await user.click(overrideCheckbox)
+
+    await waitFor(() => {
+      expect(mockToastInfo).toHaveBeenCalledWith(
+        expect.stringContaining('Cleared non-sub selection')
+      )
+    })
+  })
+
   it('Single date with no time off: shifts populate (no "No scheduled shifts found")', async () => {
     const user = userEvent.setup()
     renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
@@ -421,10 +543,11 @@ describe('AssignSubPanel', () => {
       expect(screen.getByText(/Marked unavailable/i)).toBeInTheDocument()
     })
 
-    const checkboxes = screen.getAllByRole('checkbox')
-
-    // crs-1 is unavailable, but should NOT be disabled
-    expect(checkboxes[0]).not.toBeDisabled()
+    // AM shift is unavailable, but should NOT be disabled
+    const amShiftCheckbox = screen.getByRole('checkbox', {
+      name: /Tue Mar 10 • AM • Preschool/i,
+    })
+    expect(amShiftCheckbox).not.toBeDisabled()
 
     // User can select the unavailable (AM) shift
     const amCheckbox = screen.getByRole('checkbox', {
@@ -435,11 +558,9 @@ describe('AssignSubPanel', () => {
 
     // Summary should show override warning or manual-override hint (conflictCount or per-shift hint)
     await waitFor(() => {
-      const overrideSummary = screen.queryByText(
-        /1 selected shift overrides the sub's availability or existing assignment/i
-      )
-      const manualOverrideHint = screen.queryByText(/Manual override available/i)
-      expect(overrideSummary ?? manualOverrideHint).toBeTruthy()
+      expect(
+        screen.getByText(/selected shift.*override.*availability or existing assignment/i)
+      ).toBeInTheDocument()
     })
   })
 
@@ -588,12 +709,14 @@ describe('AssignSubPanel', () => {
       expect(screen.getByText(/Tue Mar 10 • AM/i)).toBeInTheDocument()
     })
 
-    const checkboxes = screen.getAllByRole('checkbox')
-    expect(checkboxes[0]).not.toBeDisabled()
+    const amShiftCheckbox = screen.getByRole('checkbox', {
+      name: /Tue Mar 10 • AM/i,
+    })
+    expect(amShiftCheckbox).not.toBeDisabled()
 
     // User can select it and assign despite being unqualified
-    await user.click(checkboxes[0])
-    expect(checkboxes[0]).toBeChecked()
+    await user.click(amShiftCheckbox)
+    expect(amShiftCheckbox).toBeChecked()
   })
 
   it('shows School closed badge and disables checkbox for shifts on closed days', async () => {
@@ -648,8 +771,13 @@ describe('AssignSubPanel', () => {
     expect(screen.getByText(/Tue Mar 10 • AM/i)).toBeInTheDocument()
     expect(screen.getByText(/Tue Mar 10 • PM/i)).toBeInTheDocument()
 
-    const checkboxes = screen.getAllByRole('checkbox')
-    expect(checkboxes[0]).toBeDisabled()
-    expect(checkboxes[1]).not.toBeDisabled()
+    const closedShiftCheckbox = screen.getByRole('checkbox', {
+      name: /Tue Mar 10 • AM/i,
+    })
+    const openShiftCheckbox = screen.getByRole('checkbox', {
+      name: /Tue Mar 10 • PM/i,
+    })
+    expect(closedShiftCheckbox).toBeDisabled()
+    expect(openShiftCheckbox).not.toBeDisabled()
   })
 })
