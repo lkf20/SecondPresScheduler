@@ -215,9 +215,7 @@ describe('StaffFormClient', () => {
       'true'
     )
 
-    await user.click(
-      await screen.findByLabelText('Eligible to be assigned as a substitute')
-    )
+    await user.click(await screen.findByLabelText('Eligible to be assigned as a substitute'))
 
     await waitFor(() => {
       expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute(
@@ -274,9 +272,7 @@ describe('StaffFormClient', () => {
       expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute('data-active-tab', 'overview')
     })
 
-    await user.click(
-      await screen.findByLabelText('Eligible to be assigned as a substitute')
-    )
+    await user.click(await screen.findByLabelText('Eligible to be assigned as a substitute'))
     await user.click(screen.getByRole('button', { name: 'Go Preferences' }))
 
     expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute('data-active-tab', 'overview')
@@ -336,9 +332,7 @@ describe('StaffFormClient', () => {
       expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute('data-active-tab', 'overview')
     })
 
-    await user.click(
-      await screen.findByLabelText('Eligible to be assigned as a substitute')
-    )
+    await user.click(await screen.findByLabelText('Eligible to be assigned as a substitute'))
     await waitFor(() => {
       expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute(
         'data-show-availability',
