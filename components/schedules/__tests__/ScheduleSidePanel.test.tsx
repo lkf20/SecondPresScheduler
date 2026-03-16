@@ -38,7 +38,20 @@ jest.mock('@/lib/contexts/SchoolContext', () => ({
 }))
 
 jest.mock('@/components/ui/sheet', () => ({
-  Sheet: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  Sheet: ({
+    children,
+    onOpenChange,
+  }: {
+    children: React.ReactNode
+    onOpenChange?: (open: boolean) => void
+  }) => (
+    <div>
+      <button type="button" aria-label="Close panel" onClick={() => onOpenChange?.(false)}>
+        Close panel
+      </button>
+      {children}
+    </div>
+  ),
   SheetContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   SheetHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   SheetTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
@@ -217,6 +230,7 @@ const setupFetch = (
   },
   options?: {
     checkConflictsResponse?: { conflicts: any[] }
+    teacherSchedulesResponse?: any[]
     /** When set, capture the request body of PUT /api/schedule-cells/bulk for assertions */
     onBulkSave?: (body: { updates: Array<{ enrollment_for_staffing?: number | null }> }) => void
     /** When set, used for check-conflicts; return conflicts for apply (multi-cell) requests when desired */
@@ -226,6 +240,7 @@ const setupFetch = (
   }
 ) => {
   const checkConflictsResponse = options?.checkConflictsResponse ?? { conflicts: [] }
+  const teacherSchedulesResponse = options?.teacherSchedulesResponse
   const onBulkSave = options?.onBulkSave
   const getCheckConflictsResponse = options?.getCheckConflictsResponse
 
@@ -268,6 +283,12 @@ const setupFetch = (
       } as Response
     }
     if (url.includes('/api/teacher-schedules')) {
+      if (teacherSchedulesResponse) {
+        return {
+          ok: true,
+          json: async () => teacherSchedulesResponse,
+        } as Response
+      }
       // Return teachers matching buildProps() so panel populates and async updates complete predictably
       return {
         ok: true,
@@ -424,6 +445,102 @@ describe('ScheduleSidePanel interactions', () => {
 
   afterAll(() => {
     global.fetch = originalFetch
+  })
+
+  it('uses single-choice weekly note controls and hides preview when unchanged from baseline', async () => {
+    setupFetch({
+      start_date: '2026-03-10',
+      end_date: '2026-03-17',
+      weekdays: ['Monday'],
+      matching_shift_count: 2,
+    })
+    const props = buildProps()
+
+    renderWithQueryClient(<ScheduleSidePanel {...props} />)
+
+    await waitFor(() => {
+      expect(screen.getByText("This date's note")).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('Use baseline note')).toBeInTheDocument()
+    expect(screen.getByText('Custom note')).toBeInTheDocument()
+    expect(screen.getByText('Hide for this date')).toBeInTheDocument()
+    expect(
+      screen.getByText('Applies only to this date. Baseline note is unchanged.')
+    ).toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('Add a note for this date...')).not.toBeInTheDocument()
+    expect(screen.queryByText('Displayed in this weekly cell')).not.toBeInTheDocument()
+  })
+
+  it('shows preview when weekly note result differs from baseline (including hidden mode)', async () => {
+    setupFetch({
+      start_date: '2026-03-10',
+      end_date: '2026-03-17',
+      weekdays: ['Monday'],
+      matching_shift_count: 2,
+    })
+    const props = buildProps()
+    const selectedCellData = {
+      ...props.selectedCellData,
+      schedule_cell: {
+        ...props.selectedCellData.schedule_cell,
+        notes: 'Jenn S. 12:15',
+        weekly_note_override: {
+          override_mode: 'hidden' as const,
+          note: null,
+        },
+      },
+    }
+
+    renderWithQueryClient(<ScheduleSidePanel {...props} selectedCellData={selectedCellData} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Displayed in this weekly cell')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('No note')).toBeInTheDocument()
+  })
+
+  it('does not open unsaved dialog when closing read-only weekly cell panel after weekly-note interactions', async () => {
+    setupFetch(
+      {
+        start_date: '2026-03-10',
+        end_date: '2026-03-17',
+        weekdays: ['Monday'],
+        matching_shift_count: 2,
+      },
+      {
+        // Force assignment count mismatch to emulate real-world async teacher fetch differences.
+        teacherSchedulesResponse: [
+          {
+            id: 'ts-1',
+            classroom_id: 'class-1',
+            day_of_week_id: 'day-1',
+            time_slot_id: 'slot-1',
+            teacher_id: 'teacher-1',
+            is_floater: false,
+            teacher: {
+              first_name: 'Bella',
+              last_name: 'Wilson',
+              display_name: null,
+              staff_role_type_assignments: [],
+            },
+          },
+        ],
+      }
+    )
+    const props = buildProps()
+
+    renderWithQueryClient(<ScheduleSidePanel {...props} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Notes')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByLabelText('Close panel'))
+
+    expect(props.onClose).toHaveBeenCalled()
+    expect(screen.queryByTestId('unsaved-dialog')).not.toBeInTheDocument()
   })
 
   it('opens remove flex dialog and shows multi-shift choices', async () => {

@@ -64,7 +64,11 @@ export default function ScheduleCell({
   allClassGroupIds,
 }: ScheduleCellProps) {
   const scheduleCell = data?.schedule_cell
-  const notesText = (scheduleCell?.effective_notes ?? scheduleCell?.notes)?.trim() ?? ''
+  const notesSource =
+    scheduleCell && scheduleCell.effective_notes !== undefined
+      ? scheduleCell.effective_notes
+      : scheduleCell?.notes
+  const notesText = notesSource?.trim() ?? ''
   const isInactive = scheduleCell && !scheduleCell.is_active
   const showNotesBlock = showNotes && notesText.length > 0 && !isInactive
   const isActive = scheduleCell?.is_active ?? false

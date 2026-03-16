@@ -616,8 +616,7 @@ export default function ScheduleSidePanel({
   const [requiredStaffOverride, setRequiredStaffOverride] = useState<number | null>(null)
   const [preferredStaffOverride, setPreferredStaffOverride] = useState<number | null>(null)
   const [notes, setNotes] = useState<string | null>(null)
-  const [customizeWeeklyNote, setCustomizeWeeklyNote] = useState(false)
-  const [hideWeeklyNoteForDate, setHideWeeklyNoteForDate] = useState(false)
+  const [weeklyNoteMode, setWeeklyNoteMode] = useState<'baseline' | 'custom' | 'hidden'>('baseline')
   const [weeklyCustomNote, setWeeklyCustomNote] = useState('')
   const [weeklyNoteSaving, setWeeklyNoteSaving] = useState(false)
   const [weeklyNoteError, setWeeklyNoteError] = useState<string | null>(null)
@@ -1498,19 +1497,17 @@ export default function ScheduleSidePanel({
     if (!isOpen || !readOnly || panelMode !== 'cell') return
     const override = selectedCellData?.schedule_cell?.weekly_note_override ?? null
     if (!override) {
-      setCustomizeWeeklyNote(false)
-      setHideWeeklyNoteForDate(false)
+      setWeeklyNoteMode('baseline')
       setWeeklyCustomNote('')
       setWeeklyNoteError(null)
       return
     }
 
-    setCustomizeWeeklyNote(true)
     if (override.override_mode === 'hidden') {
-      setHideWeeklyNoteForDate(true)
+      setWeeklyNoteMode('hidden')
       setWeeklyCustomNote('')
     } else {
-      setHideWeeklyNoteForDate(false)
+      setWeeklyNoteMode('custom')
       setWeeklyCustomNote(override.note ?? '')
     }
     setWeeklyNoteError(null)
@@ -2041,6 +2038,12 @@ export default function ScheduleSidePanel({
       setHasUnsavedChanges(false)
       return
     }
+    // In read-only weekly cell mode, changes are saved through dedicated actions (e.g. weekly notes),
+    // so baseline unsaved-change tracking should not block panel close.
+    if (readOnly && panelMode === 'cell') {
+      setHasUnsavedChanges(false)
+      return
+    }
 
     const cellClassGroupIds = cell?.class_groups?.map(cg => cg.id) || []
     const classGroupEnrollmentMatch =
@@ -2084,6 +2087,8 @@ export default function ScheduleSidePanel({
     requiredStaffOverride,
     preferredStaffOverride,
     allAssignedTeachers,
+    readOnly,
+    panelMode,
   ])
 
   const handleClose = () => {
@@ -2095,12 +2100,17 @@ export default function ScheduleSidePanel({
   }
 
   const baselineNoteForSelectedCell = cell?.notes?.trim() ?? ''
+  const baselineEffectiveNote = baselineNoteForSelectedCell || null
   const weeklyEffectiveNote =
-    !customizeWeeklyNote || panelMode !== 'cell' || !readOnly
-      ? baselineNoteForSelectedCell || null
-      : hideWeeklyNoteForDate
+    panelMode !== 'cell' || !readOnly
+      ? baselineEffectiveNote
+      : weeklyNoteMode === 'hidden'
         ? null
-        : weeklyCustomNote.trim() || null
+        : weeklyNoteMode === 'baseline'
+          ? baselineEffectiveNote
+          : weeklyCustomNote.trim() || null
+  const showDisplayedWeeklyNote =
+    weeklyNoteMode === 'hidden' || weeklyEffectiveNote !== baselineEffectiveNote
 
   const focusWeeklyCustomNote = () => {
     window.setTimeout(() => {
@@ -2112,15 +2122,11 @@ export default function ScheduleSidePanel({
     }, 0)
   }
 
-  const handleCustomizeWeeklyNoteChange = (checked: boolean) => {
-    setCustomizeWeeklyNote(checked)
+  const handleWeeklyNoteModeChange = (value: 'baseline' | 'custom' | 'hidden') => {
+    setWeeklyNoteMode(value)
     setWeeklyNoteError(null)
-    if (!checked) {
-      setHideWeeklyNoteForDate(false)
-      return
-    }
-    setHideWeeklyNoteForDate(false)
-    if (!weeklyCustomNote.trim()) {
+    if (value !== 'custom') return
+    if (!weeklyCustomNote.trim() && baselineNoteForSelectedCell) {
       setWeeklyCustomNote(baselineNoteForSelectedCell)
     }
     focusWeeklyCustomNote()
@@ -2132,7 +2138,7 @@ export default function ScheduleSidePanel({
       return
     }
 
-    if (!customizeWeeklyNote) {
+    if (weeklyNoteMode === 'baseline') {
       setWeeklyNoteSaving(true)
       setWeeklyNoteError(null)
       try {
@@ -2174,8 +2180,8 @@ export default function ScheduleSidePanel({
       return
     }
 
-    if (!hideWeeklyNoteForDate && !weeklyCustomNote.trim()) {
-      setWeeklyNoteError('Enter a custom note or choose "Hide note for this date".')
+    if (weeklyNoteMode === 'custom' && !weeklyCustomNote.trim()) {
+      setWeeklyNoteError('Enter a custom note.')
       focusWeeklyCustomNote()
       return
     }
@@ -2192,8 +2198,8 @@ export default function ScheduleSidePanel({
           classroom_id: classroomId,
           time_slot_id: timeSlotId,
           use_baseline_note: false,
-          override_mode: hideWeeklyNoteForDate ? 'hidden' : 'custom',
-          note: hideWeeklyNoteForDate ? null : weeklyCustomNote.trim(),
+          override_mode: weeklyNoteMode === 'hidden' ? 'hidden' : 'custom',
+          note: weeklyNoteMode === 'hidden' ? null : weeklyCustomNote.trim(),
         }),
       })
       const payload = await response.json().catch(() => ({}))
@@ -4708,62 +4714,63 @@ export default function ScheduleSidePanel({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 pt-1">
-                        <Switch
-                          id="customize-weekly-note"
-                          checked={customizeWeeklyNote}
-                          onCheckedChange={handleCustomizeWeeklyNoteChange}
-                          disabled={slotIsInactive || weeklyNoteSaving}
-                        />
-                        <Label
-                          htmlFor="customize-weekly-note"
-                          className="text-sm font-normal cursor-pointer"
-                        >
-                          Customize note for this date
+                      <div className="space-y-3">
+                        <Label className="text-sm font-medium text-slate-700">
+                          This date&apos;s note
                         </Label>
+                        <RadioGroup
+                          value={weeklyNoteMode}
+                          onValueChange={value =>
+                            handleWeeklyNoteModeChange(value as 'baseline' | 'custom' | 'hidden')
+                          }
+                          className="space-y-2"
+                          disabled={slotIsInactive || weeklyNoteSaving}
+                        >
+                          <label className="flex items-center gap-2 text-sm">
+                            <RadioGroupItem value="baseline" id="weekly-note-mode-baseline" />
+                            Use baseline note
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <RadioGroupItem value="custom" id="weekly-note-mode-custom" />
+                            Custom note
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <RadioGroupItem value="hidden" id="weekly-note-mode-hidden" />
+                            Hide for this date
+                          </label>
+                        </RadioGroup>
+                        <p className="text-xs text-slate-500">
+                          Applies only to this date. Baseline note is unchanged.
+                        </p>
                       </div>
-
-                      {customizeWeeklyNote && (
+                      {weeklyNoteMode === 'custom' && (
                         <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
-                          <div className="flex items-center gap-2">
-                            <Checkbox
-                              id="hide-weekly-note"
-                              checked={hideWeeklyNoteForDate}
-                              onCheckedChange={checked => {
-                                setHideWeeklyNoteForDate(checked === true)
-                                setWeeklyNoteError(null)
-                              }}
-                              disabled={slotIsInactive || weeklyNoteSaving}
-                            />
-                            <Label
-                              htmlFor="hide-weekly-note"
-                              className="text-sm font-normal cursor-pointer"
-                            >
-                              Hide note for this date
-                            </Label>
-                          </div>
-                          {!hideWeeklyNoteForDate && (
-                            <Textarea
-                              id="weekly-custom-note"
-                              ref={weeklyCustomNoteRef}
-                              value={weeklyCustomNote}
-                              onChange={event => {
-                                setWeeklyCustomNote(event.target.value)
-                                setWeeklyNoteError(null)
-                              }}
-                              placeholder="Add a note for this date..."
-                              rows={3}
-                              className="text-base min-h-[80px]"
-                              disabled={slotIsInactive || weeklyNoteSaving}
-                            />
-                          )}
+                          <Textarea
+                            id="weekly-custom-note"
+                            ref={weeklyCustomNoteRef}
+                            value={weeklyCustomNote}
+                            onChange={event => {
+                              setWeeklyCustomNote(event.target.value)
+                              setWeeklyNoteError(null)
+                            }}
+                            placeholder="Add a note for this date..."
+                            rows={3}
+                            className="text-base min-h-[80px]"
+                            disabled={slotIsInactive || weeklyNoteSaving}
+                          />
                         </div>
                       )}
 
-                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                        <p className="text-xs text-slate-500 mb-1">Displayed in this weekly cell</p>
-                        <p className="text-sm text-slate-700">{weeklyEffectiveNote || 'No note'}</p>
-                      </div>
+                      {showDisplayedWeeklyNote && (
+                        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                          <p className="text-xs text-slate-500 mb-1">
+                            Displayed in this weekly cell
+                          </p>
+                          <p className="text-sm text-slate-700">
+                            {weeklyEffectiveNote || 'No note'}
+                          </p>
+                        </div>
+                      )}
 
                       {weeklyNoteError && (
                         <p className="text-sm text-red-600" role="alert">
