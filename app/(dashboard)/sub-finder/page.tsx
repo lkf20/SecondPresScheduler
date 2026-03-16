@@ -473,7 +473,10 @@ export default function SubFinderPage() {
 
   const renderRecommendedPlaceholder = () => (
     <div className="mt-2 space-y-3">
-      <div className="h-6 w-44 rounded bg-slate-200/80 animate-pulse" />
+      <div className="flex items-center gap-2">
+        <div className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0" />
+        <p className="text-sm text-muted-foreground">Finding recommended subs...</p>
+      </div>
       <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 animate-pulse">
         <div className="h-6 w-1/3 rounded bg-slate-200" />
         <div className="h-5 w-1/2 rounded bg-slate-200" />
@@ -1964,6 +1967,11 @@ export default function SubFinderPage() {
                                   setManualTeacherId(teacher.id)
                                   setManualTeacherSearch(name)
                                   setIsManualTeacherSearchOpen(false)
+                                  // Default to Custom date range when a teacher is selected
+                                  setPickDateChoice('custom')
+                                  const today = getTodayISO()
+                                  setManualStartDate(today)
+                                  setManualEndDate(today)
                                 }}
                               >
                                 {name}
@@ -2442,9 +2450,11 @@ export default function SubFinderPage() {
               )}
               {selectedAbsence && (
                 <div className="py-4 flex flex-col gap-6 w-full">
-                  {ENABLE_COLLAPSE_RECOMMENDED_ON_SHIFT &&
-                  selectedShift &&
-                  !showRecommendedWhenShiftSelected ? (
+                  {loading ? (
+                    renderRecommendedPlaceholder()
+                  ) : ENABLE_COLLAPSE_RECOMMENDED_ON_SHIFT &&
+                    selectedShift &&
+                    !showRecommendedWhenShiftSelected ? (
                     <button
                       type="button"
                       onClick={() => setShowRecommendedWhenShiftSelected(true)}
@@ -2453,8 +2463,6 @@ export default function SubFinderPage() {
                       <span>Show recommended subs</span>
                       <ChevronDown className="h-4 w-4" />
                     </button>
-                  ) : loading ? (
-                    renderRecommendedPlaceholder()
                   ) : recommendationsError &&
                     selectedAbsence &&
                     !selectedAbsence.id.startsWith('manual-') ? (
@@ -2922,9 +2930,11 @@ export default function SubFinderPage() {
                 className={cn('relative w-full py-6 flex flex-col gap-6')}
                 style={middleColumnContentStyle}
               >
-                {ENABLE_COLLAPSE_RECOMMENDED_ON_SHIFT &&
-                selectedShift &&
-                !showRecommendedWhenShiftSelected ? (
+                {loading ? (
+                  renderRecommendedPlaceholder()
+                ) : ENABLE_COLLAPSE_RECOMMENDED_ON_SHIFT &&
+                  selectedShift &&
+                  !showRecommendedWhenShiftSelected ? (
                   <button
                     type="button"
                     onClick={() => setShowRecommendedWhenShiftSelected(true)}
@@ -2933,8 +2943,6 @@ export default function SubFinderPage() {
                     <span>Show recommended subs</span>
                     <ChevronDown className="h-4 w-4" />
                   </button>
-                ) : loading ? (
-                  renderRecommendedPlaceholder()
                 ) : recommendationsError &&
                   selectedAbsence &&
                   !selectedAbsence.id.startsWith('manual-') ? (
