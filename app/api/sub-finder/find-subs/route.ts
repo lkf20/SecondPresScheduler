@@ -4,10 +4,13 @@ import { getTimeOffRequestById } from '@/lib/api/time-off'
 import { getTimeOffShifts } from '@/lib/api/time-off-shifts'
 import { getTeacherScheduledShifts } from '@/lib/api/time-off-shifts'
 import { getTimeOffRequests } from '@/lib/api/time-off'
+import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { findTopCombinations } from '@/lib/utils/sub-combination'
 import { buildShiftChips } from '@/lib/server/coverage/shift-chips'
 import { getUserSchoolId } from '@/lib/utils/auth'
+import { toDateStringISO } from '@/lib/utils/date'
+import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 
 interface Shift {
   date: string
@@ -124,6 +127,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Time off request not found' }, { status: 404 })
     }
 
+    // Enforce school scope (RLS does not restrict time_off_requests by school_id)
+    const requestSchoolId = (timeOffRequest as { school_id?: string | null }).school_id
+    if (requestSchoolId && requestSchoolId !== schoolId) {
+      return NextResponse.json(
+        { error: 'You do not have access to this time off request.' },
+        { status: 403 }
+      )
+    }
+
     // 2. Get all shifts that need coverage
     const shifts = await getTimeOffShifts(absence_id)
     const today = new Date()
@@ -142,6 +154,26 @@ export async function POST(request: NextRequest) {
 
     if (shiftsToUse.length === 0) {
       return NextResponse.json([])
+    }
+
+    // Exclude shifts on school-closed days (AGENTS.md: sub finder must respect closures)
+    const requestStartDate = timeOffRequest.start_date
+    const requestEndDate = timeOffRequest.end_date || timeOffRequest.start_date
+    const schoolClosures = await getSchoolClosuresForDateRange(
+      schoolId,
+      requestStartDate,
+      requestEndDate
+    )
+    const closureList = schoolClosures.map(c => ({ date: c.date, time_slot_id: c.time_slot_id }))
+    const shiftsOpen = shiftsToUse.filter(
+      s => !isSlotClosedOnDate(toDateStringISO(s.date), s.time_slot_id, closureList)
+    )
+    if (shiftsOpen.length === 0) {
+      return NextResponse.json({
+        subs: [],
+        recommended_combination: null,
+        recommended_combinations: [],
+      })
     }
 
     // Lookup classroom/class names from teacher schedule
@@ -240,8 +272,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Normalize shifts for easier processing
-    const shiftsToCover: Shift[] = shiftsToUse.map((shift: any) => {
+    // Normalize shifts for easier processing (use shiftsOpen to exclude school-closed shifts)
+    const shiftsToCover: Shift[] = shiftsOpen.map((shift: any) => {
       const key = `${shift.date}|${shift.time_slot?.code || ''}`
       const classGroupInfo = classGroupInfoMap.get(key) || {
         diaper_changing_required: false,
