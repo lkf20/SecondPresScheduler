@@ -9,6 +9,8 @@ type UnassignScope = 'single' | 'all_for_absence'
 
 type UnassignRequestBody = {
   absence_id?: string
+  /** Optional: when absence_id is coverage_request_id, use this to resolve to time_off_request_id */
+  coverage_request_id?: string
   sub_id?: string
   scope?: UnassignScope
   assignment_id?: string
@@ -30,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as UnassignRequestBody
-    const absenceId = body.absence_id
+    const absenceId = body.absence_id ?? body.coverage_request_id
     const subId = body.sub_id
     const scope = body.scope
     const assignmentId = body.assignment_id
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     if (!absenceId || !subId || (scope !== 'single' && scope !== 'all_for_absence')) {
       return NextResponse.json(
-        { error: 'absence_id, sub_id, and scope are required.' },
+        { error: 'absence_id (or coverage_request_id), sub_id, and scope are required.' },
         { status: 400 }
       )
     }
@@ -53,10 +55,48 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient()
 
-    const { data: timeOffRequest, error: requestError } = await supabase
+    // Resolve absence_id to time_off_request_id: try as time_off_request first, then as coverage_request
+    let timeOffRequestId: string
+    const { data: timeOffRequestRow, error: torError } = await supabase
       .from('time_off_requests')
       .select('id, teacher_id, start_date, end_date, school_id')
       .eq('id', absenceId)
+      .single()
+
+    if (torError || !timeOffRequestRow) {
+      const { data: coverageRow, error: crError } = await supabase
+        .from('coverage_requests')
+        .select('source_request_id, school_id')
+        .eq('id', absenceId)
+        .single()
+
+      if (crError || !coverageRow?.source_request_id) {
+        return NextResponse.json(
+          { error: 'Time off request or coverage request not found.' },
+          { status: 404 }
+        )
+      }
+      if (coverageRow.school_id !== schoolId) {
+        return NextResponse.json(
+          { error: 'You do not have access to this request.' },
+          { status: 403 }
+        )
+      }
+      timeOffRequestId = coverageRow.source_request_id
+    } else {
+      if (timeOffRequestRow.school_id !== schoolId) {
+        return NextResponse.json(
+          { error: 'You do not have access to this request.' },
+          { status: 403 }
+        )
+      }
+      timeOffRequestId = timeOffRequestRow.id
+    }
+
+    const { data: timeOffRequest, error: requestError } = await supabase
+      .from('time_off_requests')
+      .select('id, teacher_id, start_date, end_date, school_id')
+      .eq('id', timeOffRequestId)
       .single()
 
     if (requestError || !timeOffRequest) {
@@ -72,7 +112,7 @@ export async function POST(request: NextRequest) {
     const { data: timeOffShifts, error: shiftsError } = await supabase
       .from('time_off_shifts')
       .select('id, date, time_slot_id')
-      .eq('time_off_request_id', absenceId)
+      .eq('time_off_request_id', timeOffRequestId)
 
     if (shiftsError) {
       console.error('Failed to load time off shifts', shiftsError)

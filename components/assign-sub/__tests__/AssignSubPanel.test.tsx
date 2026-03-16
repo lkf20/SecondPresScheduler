@@ -339,7 +339,7 @@ describe('AssignSubPanel', () => {
     // Fill notes (reason defaults to Sick Day)
     const timeOffNotesInput = await screen.findByLabelText(/Notes \(optional\)/i)
     await user.type(timeOffNotesInput, 'Sick day requested')
-    const subNotesInput = screen.getByLabelText(/Notes for Sub \(optional\)/i)
+    const subNotesInput = screen.getByLabelText(/^Notes$/i)
     await user.type(subNotesInput, 'Anne agreed to cover')
 
     // Click Assign button

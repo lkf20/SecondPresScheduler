@@ -140,6 +140,33 @@ describe('POST /api/assign-sub/shifts', () => {
     expect(json.shifts.every((s: any) => s.school_closure === false)).toBe(true)
   })
 
+  it('normalizes ISO date strings and returns shifts', async () => {
+    const request = createJsonRequest('http://localhost:3000/api/assign-sub/shifts', 'POST', {
+      teacher_id: 'teacher-1',
+      start_date: '2026-03-10T00:00:00.000Z',
+      end_date: '2026-03-10T00:00:00.000Z',
+    })
+    const response = await POST(request as any)
+    const json = await response.json()
+    expect(response.status).toBe(200)
+    expect(getTeacherShiftsForAssignSub).toHaveBeenCalledWith(
+      'teacher-1',
+      '2026-03-10',
+      '2026-03-10'
+    )
+    expect(json.shifts).toHaveLength(2)
+  })
+
+  it('returns 400 when start_date is invalid', async () => {
+    const request = createJsonRequest('http://localhost:3000/api/assign-sub/shifts', 'POST', {
+      teacher_id: 'teacher-1',
+      start_date: 'not-a-date',
+      end_date: '2026-03-10',
+    })
+    const response = await POST(request as any)
+    expect(response.status).toBe(400)
+  })
+
   it('returns coverage_request_shift_id and assignment fields for assigned time-off shifts', async () => {
     ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
     ;(getTeacherShiftsForAssignSub as jest.Mock).mockResolvedValue([
@@ -215,6 +242,59 @@ describe('POST /api/assign-sub/shifts', () => {
     expect(shift.coverage_request_shift_id).toBe('crs-1')
     expect(shift.assignment_id).toBe('assign-1')
     expect(shift.assigned_sub_id).toBe('sub-1')
+    expect(shift.assigned_sub_name).toBe('Jane D.')
+  })
+
+  it('returns shifts from sub_assignments when baseline returns none (fallback for Update sub from Dashboard)', async () => {
+    ;(getTeacherShiftsForAssignSub as jest.Mock).mockResolvedValue([])
+    ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
+    const subAssignmentsChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'assign-1',
+            sub_id: 'sub-1',
+            date: '2026-03-10',
+            day_of_week_id: 'dow-2',
+            time_slot_id: 'slot-1',
+            classroom_id: 'class-1',
+            coverage_request_shift_id: 'crs-1',
+            staff: { first_name: 'Jane', last_name: 'Doe', display_name: null },
+            time_slots: { code: 'AM' },
+          },
+        ],
+      }),
+    }
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'time_off_requests')
+          return {
+            select: jest.fn().mockReturnThis(),
+            in: jest.fn().mockResolvedValue({ data: [] }),
+          }
+        if (table === 'sub_assignments') return subAssignmentsChain
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/assign-sub/shifts', 'POST', {
+      teacher_id: 'teacher-1',
+      start_date: '2026-03-10',
+      end_date: '2026-03-10',
+    })
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.shifts).toHaveLength(1)
+    const shift = json.shifts[0]
+    expect(shift.date).toBe('2026-03-10')
+    expect(shift.time_slot_code).toBe('AM')
+    expect(shift.coverage_request_shift_id).toBe('crs-1')
+    expect(shift.assignment_id).toBe('assign-1')
     expect(shift.assigned_sub_name).toBe('Jane D.')
   })
 })

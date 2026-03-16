@@ -30,9 +30,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { AlertTriangle, Check, Info, X, ExternalLink } from 'lucide-react'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { AlertTriangle, Check, Info, X, Wand2 } from 'lucide-react'
 import { CreateTimeOffRequestCard } from '@/components/time-off/CreateTimeOffRequestCard'
-import { parseLocalDate } from '@/lib/utils/date'
+import { parseLocalDate, toDateStringISO } from '@/lib/utils/date'
 import { DAY_NAMES, MONTH_NAMES, FULL_DAY_NAMES } from '@/lib/utils/date-format'
 import SearchableSelect, { type SearchableSelectOption } from '@/components/shared/SearchableSelect'
 import DatePickerInput from '@/components/ui/date-picker-input'
@@ -46,7 +47,7 @@ import { invalidateSubAssignment } from '@/lib/utils/invalidation'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
-
+import StaffChip from '@/components/ui/staff-chip'
 interface Teacher {
   id: string
   first_name?: string | null
@@ -142,7 +143,16 @@ export default function AssignSubPanel({
   const [changeSubShifts, setChangeSubShifts] = useState<Shift[] | null>(null)
   const [changeSubNewSubId, setChangeSubNewSubId] = useState<string | null>(null)
   const [changeSubSubmitting, setChangeSubSubmitting] = useState(false)
-  const [assignAsFloater, setAssignAsFloater] = useState(false)
+  /** Per-slot conflict resolution: 'floater' | 'move' (key = slotKey). Absent or undefined = do not assign. */
+  const [conflictResolutions, setConflictResolutions] = useState<
+    Record<string, 'floater' | 'move'>
+  >({})
+  /** Per-slot: user chose to replace current sub with selected sub (shift already covered by another sub). */
+  const [replaceResolutions, setReplaceResolutions] = useState<Record<string, boolean>>({})
+  const [showUnavailableConfirm, setShowUnavailableConfirm] = useState(false)
+  /** Shifts to remove sub from (opens confirm dialog). */
+  const [removeSubShifts, setRemoveSubShifts] = useState<Shift[] | null>(null)
+  const [removeSubSubmitting, setRemoveSubSubmitting] = useState(false)
   const { format: displayNameFormat } = useDisplayNameFormat()
   const isInitialMountRef = useRef(true)
   const appliedInitialRef = useRef(false)
@@ -210,16 +220,23 @@ export default function AssignSubPanel({
   }, [getDisplayName])
 
   const fetchShifts = useCallback(async () => {
-    if (!teacherId || !startDate) return
+    const tid = teacherId || initialTeacherIdProp
+    const start =
+      startDate ||
+      (initialStartDateProp ? toDateStringISO(initialStartDateProp) || initialStartDateProp : '')
+    const end =
+      endDate ||
+      (initialEndDateProp ? toDateStringISO(initialEndDateProp) || initialEndDateProp : '')
+    if (!tid || !start) return
     setLoading(true)
     try {
-      const effectiveEndDate = endDate || startDate
+      const effectiveEndDate = end || start
       const response = await fetch('/api/assign-sub/shifts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          teacher_id: teacherId,
-          start_date: startDate,
+          teacher_id: tid,
+          start_date: start,
           end_date: effectiveEndDate,
         }),
       })
@@ -268,16 +285,32 @@ export default function AssignSubPanel({
     } finally {
       setLoading(false)
     }
-  }, [teacherId, startDate, endDate])
+  }, [
+    teacherId,
+    startDate,
+    endDate,
+    initialTeacherIdProp,
+    initialStartDateProp,
+    initialEndDateProp,
+  ])
 
-  // Fetch shifts when teacher and dates are selected
+  // Fetch shifts when teacher and dates are selected (use state or initial props so we fetch as soon as panel opens with initials)
   useEffect(() => {
-    if (!teacherId || !startDate || isInitialMountRef.current) {
+    const tid = teacherId || initialTeacherIdProp
+    const start =
+      startDate ||
+      (initialStartDateProp ? toDateStringISO(initialStartDateProp) || initialStartDateProp : '')
+    if (!tid || !start) {
       isInitialMountRef.current = false
       return
     }
+    if (isInitialMountRef.current && !initialTeacherIdProp) {
+      isInitialMountRef.current = false
+      return
+    }
+    isInitialMountRef.current = false
     fetchShifts()
-  }, [teacherId, startDate, endDate, fetchShifts])
+  }, [teacherId, startDate, endDate, fetchShifts, initialTeacherIdProp, initialStartDateProp])
 
   // Fetch sub qualifications when sub is selected
   useEffect(() => {
@@ -484,18 +517,34 @@ export default function AssignSubPanel({
     }))
   }, [shifts])
 
-  // Handle shift toggle (single id)
-  const handleShiftToggle = (shiftId: string) => {
+  // Handle shift toggle (single id). When unchecking a conflict row, set resolution to do not assign.
+  const handleShiftToggle = (shiftId: string, opts?: { slotKey: string; hasConflict: boolean }) => {
+    const wasChecked = selectedShiftIds.has(shiftId)
     setSelectedShiftIds(prev => {
       const next = new Set(prev)
       if (next.has(shiftId)) next.delete(shiftId)
       else next.add(shiftId)
       return next
     })
+    if (wasChecked && opts?.slotKey) {
+      setConflictResolutions(prev => {
+        const next = { ...prev }
+        delete next[opts.slotKey]
+        return next
+      })
+      setReplaceResolutions(prev => {
+        const next = { ...prev }
+        delete next[opts.slotKey]
+        return next
+      })
+    }
   }
 
-  // Handle toggle for a group (e.g. floater slot): select all or deselect all
-  const handleShiftGroupToggle = (groupShifts: Shift[]) => {
+  // Handle toggle for a group (e.g. floater slot): select all or deselect all. When unchecking a conflict row, set resolution to do not assign.
+  const handleShiftGroupToggle = (
+    groupShifts: Shift[],
+    opts?: { slotKey: string; hasConflict: boolean }
+  ) => {
     const ids = groupShifts.map(s => s.id)
     const allSelected = ids.every(id => selectedShiftIds.has(id))
     setSelectedShiftIds(prev => {
@@ -504,7 +553,21 @@ export default function AssignSubPanel({
       else ids.forEach(id => next.add(id))
       return next
     })
+    if (allSelected && opts?.slotKey) {
+      setConflictResolutions(prev => {
+        const next = { ...prev }
+        delete next[opts.slotKey]
+        return next
+      })
+      setReplaceResolutions(prev => {
+        const next = { ...prev }
+        delete next[opts.slotKey]
+        return next
+      })
+    }
   }
+
+  const skipUnavailableCheckRef = useRef(false)
 
   // Handle assign (no coverage request up front; create time off if needed, then get coverage request per absence)
   const handleAssign = async () => {
@@ -513,16 +576,20 @@ export default function AssignSubPanel({
       return
     }
 
+    const selectedShifts = shifts.filter(s => selectedShiftIds.has(s.id) && !s.school_closure)
+    if (selectedShifts.length === 0) {
+      toast.error('No assignable shifts selected. Shifts on school-closed days cannot be assigned.')
+      return
+    }
+
+    if (!skipUnavailableCheckRef.current && selectedShifts.some(s => s.status === 'unavailable')) {
+      setShowUnavailableConfirm(true)
+      return
+    }
+    skipUnavailableCheckRef.current = false
+
     setSubmitting(true)
     try {
-      const selectedShifts = shifts.filter(s => selectedShiftIds.has(s.id) && !s.school_closure)
-      if (selectedShifts.length === 0) {
-        toast.error(
-          'No assignable shifts selected. Shifts on school-closed days cannot be assigned.'
-        )
-        setSubmitting(false)
-        return
-      }
       const shiftsWithoutTimeOff = selectedShifts.filter(s => !s.has_time_off)
 
       if (shiftsWithoutTimeOff.length > 0 && !timeOffReason?.trim()) {
@@ -617,6 +684,7 @@ export default function AssignSubPanel({
 
         const coverageRequestShiftIds: string[] = []
         const isFloaterShiftIds = new Set<string>()
+        const resolutionsForRequest: Record<string, 'floater' | 'move'> = {}
         for (const s of shiftsInGroup) {
           const keyWithClass = `${s.date}|${s.time_slot_code ?? ''}|${s.classroom_id ?? ''}`
           const keySimple = `${s.date}|${s.time_slot_code ?? ''}`
@@ -626,9 +694,12 @@ export default function AssignSubPanel({
             const slotKey = `${s.date}|${s.time_slot_id}`
             const group = shiftGroups.find(g => g.slotKey === slotKey)
             const isFloaterSlot = group ? group.shifts.length > 1 : false
-            const isConflictWithOverride =
-              assignAsFloater && (s.status === 'conflict_teaching' || s.status === 'conflict_sub')
-            if (isFloaterSlot || isConflictWithOverride) {
+            const resolution = conflictResolutions[slotKey]
+            const isFloaterResolution = resolution === 'floater'
+            if (resolution) {
+              resolutionsForRequest[id] = resolution
+            }
+            if (isFloaterSlot || isFloaterResolution) {
               isFloaterShiftIds.add(id)
             }
           }
@@ -663,6 +734,8 @@ export default function AssignSubPanel({
             coverage_request_id: coverageRequestId,
             sub_id: subId,
             selected_shift_ids: coverageRequestShiftIds,
+            resolutions:
+              Object.keys(resolutionsForRequest).length > 0 ? resolutionsForRequest : undefined,
           }),
         })
 
@@ -799,6 +872,49 @@ export default function AssignSubPanel({
     }
   }
 
+  // Remove sub: unassign selected shift(s) and refresh
+  const handleRemoveSubConfirm = async () => {
+    if (!removeSubShifts?.length) return
+    const first = removeSubShifts[0]
+    const timeOffRequestId = first.time_off_request_id
+    if (!timeOffRequestId) {
+      toast.error('This shift has no time off request.')
+      setRemoveSubShifts(null)
+      return
+    }
+    setRemoveSubSubmitting(true)
+    try {
+      for (const s of removeSubShifts) {
+        if (s.assignment_id && s.assigned_sub_id) {
+          const res = await fetch('/api/sub-finder/unassign-shifts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              absence_id: timeOffRequestId,
+              sub_id: s.assigned_sub_id,
+              scope: 'single',
+              assignment_id: s.assignment_id,
+            }),
+          })
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}))
+            throw new Error(err.error || 'Failed to remove sub')
+          }
+        }
+      }
+      clearDataHealthCache()
+      await invalidateSubAssignment(queryClient, schoolId)
+      fetchShifts()
+      setRemoveSubShifts(null)
+      const subName = first.assigned_sub_name ?? 'Sub'
+      toast.success(`Removed ${subName} from this shift.`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to remove sub')
+    } finally {
+      setRemoveSubSubmitting(false)
+    }
+  }
+
   // Reset form when panel closes; apply initial teacher/date once when panel opens with initial props
   useEffect(() => {
     if (!isOpen) {
@@ -811,7 +927,10 @@ export default function AssignSubPanel({
       setTimeOffReason('Sick Day')
       setTimeOffNotes('')
       setSubNotes('')
-      setAssignAsFloater(false)
+      setConflictResolutions({})
+      setReplaceResolutions({})
+      setRemoveSubShifts(null)
+      setShowUnavailableConfirm(false)
       isInitialMountRef.current = true
       appliedInitialRef.current = false
       return
@@ -819,8 +938,9 @@ export default function AssignSubPanel({
     const hasInitial = initialTeacherIdProp ?? initialStartDateProp ?? initialEndDateProp
     if (hasInitial && !appliedInitialRef.current) {
       if (initialTeacherIdProp) setTeacherId(initialTeacherIdProp)
-      if (initialStartDateProp) setStartDate(initialStartDateProp)
-      if (initialEndDateProp) setEndDate(initialEndDateProp)
+      if (initialStartDateProp)
+        setStartDate(toDateStringISO(initialStartDateProp) || initialStartDateProp)
+      if (initialEndDateProp) setEndDate(toDateStringISO(initialEndDateProp) || initialEndDateProp)
       appliedInitialRef.current = true
     }
   }, [isOpen, initialTeacherIdProp, initialStartDateProp, initialEndDateProp])
@@ -1017,57 +1137,37 @@ export default function AssignSubPanel({
                 <Label>
                   Shifts <span className="text-destructive">*</span>
                 </Label>
-                {shifts.some(
-                  s => s.status === 'conflict_teaching' || s.status === 'conflict_sub'
-                ) && (
-                  <div
-                    className="rounded-lg border-2 p-4 space-y-2"
-                    style={{
-                      backgroundColor: 'rgb(255, 251, 235)', // amber-50
-                      borderColor: 'rgb(251, 191, 36)', // amber-400
-                    }}
-                  >
-                    <div className="flex items-start gap-3">
-                      <Checkbox
-                        id="assign-as-floater"
-                        checked={assignAsFloater}
-                        onCheckedChange={value => setAssignAsFloater(value === true)}
-                        className="mt-0.5"
-                      />
-                      <div className="flex-1 space-y-1">
-                        <label
-                          htmlFor="assign-as-floater"
-                          className="text-sm font-medium cursor-pointer"
-                        >
-                          Assign as floater
-                        </label>
-                        <p className="text-sm text-muted-foreground">
-                          Allows assigning this sub to multiple rooms in the same time slot (counts
-                          as 0.5 each). Check this to enable conflict shifts below.
-                        </p>
-                        {assignAsFloater && (
-                          <p className="text-sm font-medium text-primary">
-                            Sub will cover multiple rooms as floater (0.5 each).
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
                 <div className="space-y-2 border rounded-lg p-4 bg-white">
                   {shiftGroups.map(({ slotKey, shifts: groupShifts }) => {
                     const isFloaterSlot = groupShifts.length > 1
                     const first = groupShifts[0]
                     const allSelected = groupShifts.every(s => selectedShiftIds.has(s.id))
+                    const isAlreadyCovered = groupShifts.some(s => s.assignment_id)
+                    const assignedSubId = groupShifts.find(s => s.assigned_sub_id)?.assigned_sub_id
+                    const coveredByCurrentSub = isAlreadyCovered && assignedSubId === subId
+                    const coveredByOtherSub =
+                      isAlreadyCovered && assignedSubId != null && assignedSubId !== subId
+                    const replaceChosen = replaceResolutions[slotKey]
+                    const hasConflict = groupShifts.some(
+                      s => s.status === 'conflict_teaching' || s.status === 'conflict_sub'
+                    )
+                    const resolution = conflictResolutions[slotKey]
+                    const conflictResolved =
+                      hasConflict && (resolution === 'floater' || resolution === 'move')
+                    // When coveredByOtherSub AND hasConflict: user must choose Floater or Move (conflictResolved).
+                    // Selecting Floater/Move implicitly replaces the current sub, so we don't also require replaceChosen.
                     const anyDisabled =
                       groupShifts.some(s => s.school_closure) ||
-                      (!assignAsFloater &&
-                        groupShifts.some(
-                          s => s.status === 'conflict_teaching' || s.status === 'conflict_sub'
-                        ))
+                      coveredByCurrentSub ||
+                      (coveredByOtherSub && !replaceChosen && !conflictResolved) ||
+                      (hasConflict && !conflictResolved)
                     const isAssignable = !anyDisabled
                     const hasSchoolClosure = groupShifts.some(s => s.school_closure)
                     const hasSoftWarning = groupShifts.some(s => s.status === 'unavailable')
+                    const hasConflictSub = groupShifts.some(s => s.status === 'conflict_sub')
+                    const hasConflictTeaching = groupShifts.some(
+                      s => s.status === 'conflict_teaching'
+                    )
                     const checkboxId = `shift-${slotKey}`
                     const floaterClassrooms = isFloaterSlot
                       ? groupShifts
@@ -1094,8 +1194,14 @@ export default function AssignSubPanel({
                           checked={allSelected}
                           onCheckedChange={() =>
                             isFloaterSlot
-                              ? handleShiftGroupToggle(groupShifts)
-                              : handleShiftToggle(first.id)
+                              ? handleShiftGroupToggle(groupShifts, {
+                                  slotKey,
+                                  hasConflict: !!hasConflict,
+                                })
+                              : handleShiftToggle(first.id, {
+                                  slotKey,
+                                  hasConflict: !!hasConflict,
+                                })
                           }
                           disabled={anyDisabled}
                           className="mt-1"
@@ -1103,9 +1209,24 @@ export default function AssignSubPanel({
                         <div className="flex-1 space-y-1">
                           <label
                             htmlFor={checkboxId}
-                            className="text-sm font-medium cursor-pointer"
+                            className="text-sm font-medium cursor-pointer flex flex-wrap items-center gap-2"
                           >
-                            {labelText}
+                            <span>{labelText}</span>
+                            {isAlreadyCovered &&
+                              assignedSubId &&
+                              (() => {
+                                const subName =
+                                  groupShifts.find(s => s.assigned_sub_name)?.assigned_sub_name ??
+                                  ''
+                                return subName ? (
+                                  <StaffChip
+                                    staffId={assignedSubId}
+                                    name={subName}
+                                    variant="sub"
+                                    navigable={false}
+                                  />
+                                ) : null
+                              })()}
                           </label>
                           {/* Role/context: Floater chip + note */}
                           {isFloaterSlot && (
@@ -1135,98 +1256,199 @@ export default function AssignSubPanel({
                               )}
                             </div>
                           )}
-                          {/* Blocking status: only when not assignable (school closed or conflict) */}
-                          {!isAssignable && (
+                          {/* Blocking status: only when not assignable (school closed or already covered) */}
+                          {!isAssignable && hasSchoolClosure && (
                             <div className="flex flex-wrap gap-2">
-                              {hasSchoolClosure && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs"
-                                  style={
-                                    {
-                                      backgroundColor: 'rgb(241, 245, 249)', // slate-100
-                                      borderWidth: '1px',
-                                      borderStyle: 'solid',
-                                      borderColor: 'rgb(203, 213, 225)', // slate-300
-                                      color: 'rgb(71, 85, 105)', // slate-600
-                                    } as React.CSSProperties
-                                  }
-                                >
-                                  School closed
-                                </Badge>
-                              )}
-                              {groupShifts.some(s => s.status === 'conflict_teaching') && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs"
-                                  style={
-                                    {
-                                      backgroundColor: 'rgb(254, 242, 242)', // red-50
-                                      borderWidth: '1px',
-                                      borderStyle: 'solid',
-                                      borderColor: 'rgb(252, 165, 165)', // red-300
-                                      color: 'rgb(153, 27, 27)', // red-800
-                                    } as React.CSSProperties
-                                  }
-                                >
-                                  <AlertTriangle className="h-3 w-3 mr-1" />
-                                  Conflict: Assigned to{' '}
-                                  {groupShifts.find(s => s.status === 'conflict_teaching')
-                                    ?.conflict_teaching_classroom_name ??
-                                    groupShifts.find(s => s.status === 'conflict_teaching')
-                                      ?.classroom_name ??
-                                    'classroom'}
-                                </Badge>
-                              )}
-                              {groupShifts.some(s => s.status === 'conflict_sub') && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs"
-                                  style={
-                                    {
-                                      backgroundColor: 'rgb(254, 242, 242)', // red-50
-                                      borderWidth: '1px',
-                                      borderStyle: 'solid',
-                                      borderColor: 'rgb(252, 165, 165)', // red-300
-                                      color: 'rgb(153, 27, 27)', // red-800
-                                    } as React.CSSProperties
-                                  }
-                                >
-                                  <AlertTriangle className="h-3 w-3 mr-1" />
-                                  Conflict:{' '}
-                                  {groupShifts.find(s => s.status === 'conflict_sub')
-                                    ?.conflict_message || 'Assigned to sub'}
-                                </Badge>
-                              )}
+                              <Badge
+                                variant="outline"
+                                className="text-xs"
+                                style={
+                                  {
+                                    backgroundColor: 'rgb(241, 245, 249)', // slate-100
+                                    borderWidth: '1px',
+                                    borderStyle: 'solid',
+                                    borderColor: 'rgb(203, 213, 225)', // slate-300
+                                    color: 'rgb(71, 85, 105)', // slate-600
+                                  } as React.CSSProperties
+                                }
+                              >
+                                School closed
+                              </Badge>
                             </div>
                           )}
-                          {/* Floater override note: when user checked "Assign as floater" and this group has conflict shifts */}
-                          {assignAsFloater &&
-                            (groupShifts.some(s => s.status === 'conflict_teaching') ||
-                              groupShifts.some(s => s.status === 'conflict_sub')) && (
-                              <div className="flex flex-wrap gap-2 mt-1">
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs border-dashed"
-                                  style={
-                                    {
-                                      backgroundColor: 'rgb(243, 232, 255)', // purple-100
-                                      borderWidth: '1px',
-                                      borderStyle: 'dashed',
-                                      borderColor: 'rgb(216, 180, 254)', // purple-300
-                                      color: 'rgb(107, 33, 168)', // purple-800
-                                    } as React.CSSProperties
-                                  }
-                                >
-                                  {groupShifts.some(s => s.status === 'conflict_teaching')
-                                    ? `Sub assigned to ${groupShifts.find(s => s.status === 'conflict_teaching')?.conflict_teaching_classroom_name ?? groupShifts.find(s => s.status === 'conflict_teaching')?.classroom_name ?? 'classroom'}. Sub will be assigned as a floater.`
-                                    : 'Sub has another assignment. Sub will be assigned as a floater.'}
-                                </Badge>
-                              </div>
-                            )}
-                          {/* Currently assigned + Change sub: when assignable and any shift has an assignment */}
+                          {/* Already covered by current selected sub: Remove Sub only */}
+                          {!isAssignable && coveredByCurrentSub && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-sm"
+                                onClick={() => setRemoveSubShifts(groupShifts)}
+                              >
+                                Remove sub
+                              </Button>
+                            </div>
+                          )}
+                          {/* Already covered by another sub: conflict-style banner with Replace option (stays visible after selection so user can change) */}
+                          {coveredByOtherSub && !hasConflict && (
+                            <div
+                              className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-3 space-y-2"
+                              style={{
+                                borderColor: 'rgb(251, 191, 36)',
+                                backgroundColor: 'rgb(255, 251, 235)',
+                              }}
+                            >
+                              <p className="text-sm text-amber-900 font-medium">
+                                This shift is assigned to{' '}
+                                {groupShifts.find(s => s.assigned_sub_name)?.assigned_sub_name ??
+                                  'another sub'}
+                                . Replace with{' '}
+                                {selectedSub ? getDisplayName(selectedSub) : 'selected sub'}?
+                              </p>
+                              <RadioGroup
+                                value={replaceChosen ? 'replace' : ''}
+                                onValueChange={(value: string) => {
+                                  const replace = value === 'replace'
+                                  setReplaceResolutions(prev => {
+                                    const next = { ...prev }
+                                    if (replace) next[slotKey] = true
+                                    else delete next[slotKey]
+                                    return next
+                                  })
+                                  setSelectedShiftIds(prev => {
+                                    const next = new Set(prev)
+                                    if (replace) groupShifts.forEach(s => next.add(s.id))
+                                    else groupShifts.forEach(s => next.delete(s.id))
+                                    return next
+                                  })
+                                }}
+                                className="grid gap-2"
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <RadioGroupItem value="" id={`${slotKey}-replace-none`} />
+                                  <Label
+                                    htmlFor={`${slotKey}-replace-none`}
+                                    className="text-sm font-normal cursor-pointer"
+                                  >
+                                    Do not assign this shift
+                                  </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <RadioGroupItem value="replace" id={`${slotKey}-replace-yes`} />
+                                  <Label
+                                    htmlFor={`${slotKey}-replace-yes`}
+                                    className="text-sm font-normal cursor-pointer"
+                                  >
+                                    Replace with{' '}
+                                    {selectedSub ? getDisplayName(selectedSub) : 'selected sub'}{' '}
+                                    (remove{' '}
+                                    {groupShifts.find(s => s.assigned_sub_name)
+                                      ?.assigned_sub_name ?? 'current sub'}
+                                    )
+                                  </Label>
+                                </div>
+                              </RadioGroup>
+                            </div>
+                          )}
+                          {/* Inline conflict resolution: same pattern as Baseline ConflictBanner */}
+                          {/* Conflict resolution: sub double-booked (conflict_sub/conflict_teaching). Hide when coveredByCurrentSub — that shift is already assigned to the selected sub; not a conflict. */}
+                          {hasConflict && !coveredByCurrentSub && (
+                            <div
+                              className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-3 space-y-2"
+                              style={{
+                                borderColor: 'rgb(251, 191, 36)',
+                                backgroundColor: 'rgb(255, 251, 235)',
+                              }}
+                            >
+                              <p className="text-sm text-amber-900 font-medium">
+                                {coveredByOtherSub && (
+                                  <>
+                                    This shift is assigned to{' '}
+                                    {groupShifts.find(s => s.assigned_sub_name)
+                                      ?.assigned_sub_name ?? 'another sub'}
+                                    .{' '}
+                                  </>
+                                )}
+                                {hasConflictSub &&
+                                  `${groupShifts.find(s => s.status === 'conflict_sub')?.conflict_message ?? 'This sub is already assigned elsewhere.'}`}
+                                {hasConflictTeaching &&
+                                  !hasConflictSub &&
+                                  `Sub is assigned to ${groupShifts.find(s => s.status === 'conflict_teaching')?.conflict_teaching_classroom_name ?? groupShifts.find(s => s.status === 'conflict_teaching')?.classroom_name ?? 'another classroom'} during this time.`}
+                                {coveredByOtherSub && (
+                                  <>
+                                    {' '}
+                                    To assign here, remove the current sub and resolve the conflict
+                                    below.
+                                  </>
+                                )}
+                              </p>
+                              <RadioGroup
+                                value={resolution ?? ''}
+                                onValueChange={(value: string) => {
+                                  const newResolution =
+                                    value === 'floater' || value === 'move' ? value : undefined
+                                  setConflictResolutions(prev => {
+                                    const next = { ...prev }
+                                    if (newResolution) next[slotKey] = newResolution
+                                    else delete next[slotKey]
+                                    return next
+                                  })
+                                  setSelectedShiftIds(prev => {
+                                    const next = new Set(prev)
+                                    if (newResolution) {
+                                      groupShifts.forEach(s => next.add(s.id))
+                                    } else {
+                                      groupShifts.forEach(s => next.delete(s.id))
+                                    }
+                                    return next
+                                  })
+                                }}
+                                className="grid gap-2"
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <RadioGroupItem value="" id={`${slotKey}-resolve-none`} />
+                                  <Label
+                                    htmlFor={`${slotKey}-resolve-none`}
+                                    className="text-sm font-normal cursor-pointer"
+                                  >
+                                    Do not assign this shift
+                                  </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <RadioGroupItem
+                                    value="floater"
+                                    id={`${slotKey}-resolve-floater`}
+                                  />
+                                  <Label
+                                    htmlFor={`${slotKey}-resolve-floater`}
+                                    className="text-sm font-normal cursor-pointer"
+                                  >
+                                    {coveredByOtherSub
+                                      ? `Remove ${groupShifts.find(s => s.assigned_sub_name)?.assigned_sub_name ?? 'current sub'} and mark ${selectedSub ? getDisplayName(selectedSub) : 'selected sub'} as floater (covers both rooms, 0.5 each)`
+                                      : 'Assign as Floater (sub covers both rooms, 0.5 each)'}
+                                  </Label>
+                                </div>
+                                {(hasConflictSub || hasConflictTeaching) && (
+                                  <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="move" id={`${slotKey}-resolve-move`} />
+                                    <Label
+                                      htmlFor={`${slotKey}-resolve-move`}
+                                      className="text-sm font-normal cursor-pointer"
+                                    >
+                                      {coveredByOtherSub
+                                        ? `Remove ${groupShifts.find(s => s.assigned_sub_name)?.assigned_sub_name ?? 'current sub'} and move ${selectedSub ? getDisplayName(selectedSub) : 'selected sub'} here (remove from other room)`
+                                        : 'Move sub here (remove sub from other room)'}
+                                    </Label>
+                                  </div>
+                                )}
+                              </RadioGroup>
+                            </div>
+                          )}
+                          {/* Currently assigned + Change sub: when assignable and has assignment and not in replace mode */}
                           {isAssignable &&
-                            groupShifts.some(s => s.assigned_sub_name || s.assignment_id) && (
+                            groupShifts.some(s => s.assigned_sub_name || s.assignment_id) &&
+                            !replaceChosen && (
                               <div className="flex flex-wrap items-center gap-2">
                                 <span
                                   className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-slate-600"
@@ -1244,7 +1466,14 @@ export default function AssignSubPanel({
                                   variant="ghost"
                                   size="sm"
                                   className="h-7 text-xs text-teal-700 hover:bg-teal-50"
-                                  onClick={() => setChangeSubShifts(groupShifts)}
+                                  onClick={() => {
+                                    if (!subId) {
+                                      toast.error('Please select a Sub to assign first.')
+                                      return
+                                    }
+                                    setChangeSubNewSubId(subId)
+                                    setChangeSubShifts(groupShifts)
+                                  }}
                                 >
                                   Change sub
                                 </Button>
@@ -1360,7 +1589,7 @@ export default function AssignSubPanel({
                 )}
 
                 <div className="space-y-2 rounded-lg border border-gray-200 bg-white p-4">
-                  <Label htmlFor="sub-notes">Notes for Sub (optional)</Label>
+                  <Label htmlFor="sub-notes">Notes</Label>
                   <Textarea
                     id="sub-notes"
                     value={subNotes}
@@ -1401,8 +1630,8 @@ export default function AssignSubPanel({
                   disabled={!teacherId || !startDate}
                   className="text-primary hover:text-primary hover:bg-primary/10"
                 >
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  View in Sub Finder
+                  <Wand2 className="h-4 w-4 mr-2" />
+                  Find Recommended Subs
                 </Button>
                 <Button type="button" variant="outline" onClick={onClose}>
                   Cancel
@@ -1424,7 +1653,7 @@ export default function AssignSubPanel({
         </div>
       </SheetContent>
 
-      {/* Change sub dialog: pick new sub and confirm to unassign current + assign new */}
+      {/* Change sub dialog: confirm replace current sub with the one selected in the panel */}
       <Dialog
         open={changeSubShifts !== null}
         onOpenChange={open => {
@@ -1438,33 +1667,11 @@ export default function AssignSubPanel({
           <DialogHeader>
             <DialogTitle>Change sub</DialogTitle>
             <DialogDescription>
-              Select the sub to assign to{' '}
               {changeSubShifts?.length === 1
-                ? formatShiftLabel(changeSubShifts[0])
-                : `${changeSubShifts?.length ?? 0} shifts`}
-              . The current sub will be unassigned.
+                ? `Replace ${changeSubShifts.find(s => s.assigned_sub_name)?.assigned_sub_name ?? 'current sub'} with ${changeSubNewSubId ? getDisplayName(subs.find(s => s.id === changeSubNewSubId)) : ''} for ${formatShiftLabel(changeSubShifts[0])}?`
+                : `Replace ${changeSubShifts?.find(s => s.assigned_sub_name)?.assigned_sub_name ?? 'current sub'} with ${changeSubNewSubId ? getDisplayName(subs.find(s => s.id === changeSubNewSubId)) : ''} for ${changeSubShifts?.length ?? 0} shifts?`}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 py-2">
-            <Label>New sub</Label>
-            <Select
-              value={changeSubNewSubId ?? ''}
-              onValueChange={v => setChangeSubNewSubId(v || null)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select sub" />
-              </SelectTrigger>
-              <SelectContent>
-                {subs
-                  .filter(s => (s as Sub & { active?: boolean }).active !== false)
-                  .map(s => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {getDisplayName(s)}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
           <DialogFooter>
             <Button
               type="button"
@@ -1483,6 +1690,85 @@ export default function AssignSubPanel({
               disabled={!changeSubNewSubId || changeSubSubmitting}
             >
               {changeSubSubmitting ? 'Updating...' : 'Confirm'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove sub confirmation */}
+      <Dialog
+        open={removeSubShifts !== null}
+        onOpenChange={open => {
+          if (!open) setRemoveSubShifts(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove sub</DialogTitle>
+            <DialogDescription>
+              {removeSubShifts?.length === 1 &&
+                removeSubShifts[0] &&
+                (() => {
+                  const subName = removeSubShifts[0].assigned_sub_name ?? 'this sub'
+                  const teacher = teacherId ? teachers.find(t => t.id === teacherId) : null
+                  const teacherName = teacher ? getDisplayName(teacher) : 'this teacher'
+                  const shiftLabel = formatShiftLabel(removeSubShifts[0])
+                  return `Are you sure you want to remove ${subName} from subbing for ${teacherName} on ${shiftLabel}?`
+                })()}
+              {removeSubShifts &&
+                removeSubShifts.length > 1 &&
+                `Are you sure you want to remove ${removeSubShifts.find(s => s.assigned_sub_name)?.assigned_sub_name ?? 'this sub'} from subbing for ${teacherId ? getDisplayName(teachers.find(t => t.id === teacherId)) : 'this teacher'} on ${removeSubShifts.length} shifts?`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRemoveSubShifts(null)}
+              disabled={removeSubSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleRemoveSubConfirm}
+              disabled={removeSubSubmitting}
+            >
+              {removeSubSubmitting ? 'Removing...' : 'Remove sub'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Unavailable sub override confirmation */}
+      <Dialog open={showUnavailableConfirm} onOpenChange={setShowUnavailableConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign unavailable sub?</DialogTitle>
+            <DialogDescription>
+              You are assigning{' '}
+              {subId ? getDisplayName(subs.find(s => s.id === subId)) : 'this sub'} to a shift they
+              have marked as unavailable in Settings. Are you sure you want to proceed?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowUnavailableConfirm(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setShowUnavailableConfirm(false)
+                skipUnavailableCheckRef.current = true
+                handleAssign()
+              }}
+            >
+              Yes, assign anyway
             </Button>
           </DialogFooter>
         </DialogContent>
