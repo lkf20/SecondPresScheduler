@@ -272,6 +272,8 @@ export function useSubFinderData({
     data: subRecommendationsData,
     isLoading: isLoadingRecommendations,
     isFetching: isFetchingRecommendations,
+    isError: isRecommendationsError,
+    error: recommendationsQueryError,
     refetch: refetchRecommendations,
   } = useSubRecommendations(selectedAbsenceId, recommendationParams)
 
@@ -527,6 +529,8 @@ export function useSubFinderData({
     recommendedCombinations,
     setRecommendedCombinations,
     loading,
+    recommendationsError: isRecommendationsError ? recommendationsQueryError : null,
+    refetchRecommendations,
     includePartiallyCovered,
     setIncludePartiallyCovered,
     includeFlexibleStaff,

@@ -81,6 +81,10 @@ import {
 import { BREAK_COVERAGE_ENABLED } from '@/lib/feature-flags'
 import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
 import { toast } from 'sonner'
+import { useSchool } from '@/lib/contexts/SchoolContext'
+import { useUnassignSub } from '@/lib/hooks/use-unassign-sub'
+import { RemoveSubDialog } from '@/components/remove-sub/RemoveSubDialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface Teacher {
   id: string
@@ -622,6 +626,25 @@ export default function ScheduleSidePanel({
   const [allAvailableClassGroups, setAllAvailableClassGroups] = useState<ClassGroupWithMeta[]>([])
   const [classrooms, setClassrooms] = useState<ClassroomWithAllowedClasses[]>([])
   const [conflicts, setConflicts] = useState<Conflict[]>([])
+  const [removeDialogSub, setRemoveDialogSub] = useState<{
+    id: string
+    teacher_id: string
+    teacher_name: string
+  } | null>(null)
+  const [removeDialogAbsence, setRemoveDialogAbsence] = useState<{
+    teacher_id: string
+    teacher_name: string
+    time_off_request_id?: string | null
+  } | null>(null)
+  const schoolId = useSchool()
+  const { unassign, isPending: isUnassignPending } = useUnassignSub({
+    schoolId,
+    onSuccess: async () => {
+      setRemoveDialogSub(null)
+      setRemoveDialogAbsence(null)
+      if (onRefresh) await Promise.resolve(onRefresh())
+    },
+  })
   const [conflictResolutions, setConflictResolutions] = useState<Map<string, ConflictResolution>>(
     new Map()
   )
@@ -4089,16 +4112,50 @@ export default function ScheduleSidePanel({
                                             Sub
                                           </span>
                                         </div>
-                                        <Button
-                                          type="button"
-                                          variant="teal"
-                                          size="sm"
-                                          className="h-8 px-2.5"
-                                          onClick={() => router.push(findSubLink)}
-                                          disabled={slotIsInactive}
-                                        >
-                                          Change Sub
-                                        </Button>
+                                        <div className="flex items-center gap-2">
+                                          {absence.time_off_request_id && (
+                                            <TooltipProvider>
+                                              <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                  <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                                                    onClick={() => {
+                                                      setRemoveDialogSub({
+                                                        id: sub.id,
+                                                        teacher_id: sub.teacher_id ?? '',
+                                                        teacher_name: sub.teacher_name ?? 'Sub',
+                                                      })
+                                                      setRemoveDialogAbsence({
+                                                        teacher_id: absence.teacher_id,
+                                                        teacher_name: absence.teacher_name,
+                                                        time_off_request_id:
+                                                          absence.time_off_request_id,
+                                                      })
+                                                    }}
+                                                    aria-label="Remove sub"
+                                                    disabled={slotIsInactive}
+                                                  >
+                                                    <XCircle className="h-4 w-4" />
+                                                  </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Remove sub</TooltipContent>
+                                              </Tooltip>
+                                            </TooltipProvider>
+                                          )}
+                                          <Button
+                                            type="button"
+                                            variant="teal"
+                                            size="sm"
+                                            className="h-8 px-2.5"
+                                            onClick={() => router.push(findSubLink)}
+                                            disabled={slotIsInactive}
+                                          >
+                                            Change Sub
+                                          </Button>
+                                        </div>
                                       </div>
                                     ))}
                                 </div>
@@ -5398,6 +5455,39 @@ export default function ScheduleSidePanel({
           )}
         </DialogContent>
       </Dialog>
+
+      <RemoveSubDialog
+        open={Boolean(removeDialogSub && removeDialogAbsence?.time_off_request_id)}
+        onOpenChange={open => {
+          if (!open) {
+            setRemoveDialogSub(null)
+            setRemoveDialogAbsence(null)
+          }
+        }}
+        context={
+          removeDialogSub && removeDialogAbsence?.time_off_request_id
+            ? {
+                absenceId: removeDialogAbsence.time_off_request_id,
+                subId: removeDialogSub.teacher_id,
+                subName: removeDialogSub.teacher_name,
+                teacherName: removeDialogAbsence.teacher_name,
+                assignmentId: removeDialogSub.id,
+                hasMultiple: false,
+              }
+            : null
+        }
+        onConfirm={async scope => {
+          if (!removeDialogSub || !removeDialogAbsence?.time_off_request_id) return
+          await unassign(scope, {
+            absenceId: removeDialogAbsence.time_off_request_id,
+            subId: removeDialogSub.teacher_id,
+            subName: removeDialogSub.teacher_name,
+            teacherName: removeDialogAbsence.teacher_name,
+            assignmentId: removeDialogSub.id,
+          })
+        }}
+        isPending={isUnassignPending}
+      />
     </>
   )
 }

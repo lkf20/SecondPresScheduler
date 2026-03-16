@@ -602,13 +602,14 @@ export default function ShiftSelectionTable({
                             <span
                               title={isSchoolClosed ? 'School closed' : 'Already recorded'}
                               className={cn(
-                                'absolute left-1/2 top-[calc(50%+10px)] -translate-x-1/2 text-[10px] italic leading-tight text-center whitespace-nowrap',
+                                'absolute left-1/2 top-[calc(50%+10px)] -translate-x-1/2 text-[10px] italic leading-tight text-center',
+                                isSchoolClosed ? 'whitespace-pre-line' : 'whitespace-nowrap',
                                 isSchoolClosed && 'text-slate-500',
                                 isRecorded && !isSchoolClosed && 'text-yellow-600',
                                 !isRecorded && !isSchoolClosed && 'opacity-0'
                               )}
                             >
-                              {isSchoolClosed ? 'School closed' : 'Recorded'}
+                              {isSchoolClosed ? 'School\nclosed' : 'Recorded'}
                             </span>
                           </div>
                         ) : (

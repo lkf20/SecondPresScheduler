@@ -254,11 +254,13 @@ export async function GET(request: NextRequest) {
         ),
         day_of_week:days_of_week(
           id,
-          name
+          name,
+          display_order
         ),
         time_slot:time_slots(
           id,
-          code
+          code,
+          display_order
         ),
         coverage_request_shift:coverage_request_shifts(
           coverage_request_id
@@ -752,7 +754,7 @@ export async function GET(request: NextRequest) {
       return row?.coverage_request_id ?? null
     }
 
-    // Process scheduled subs (exclude assignments on school closed days)
+    // Process scheduled subs (exclude assignments on school closed days), then sort by date then time slot order (earliest date, earliest slot)
     const processedScheduledSubs = (subAssignments || [])
       .filter((sa: any) => !isSlotClosedOnDate(sa.date, sa.time_slot_id, closureListForCoverage))
       .map((sa: any) => {
@@ -774,16 +776,25 @@ export async function GET(request: NextRequest) {
           id: sa.id,
           date: sa.date,
           day_name: dayOfWeek?.name || 'Unknown',
+          day_order: dayOfWeek?.display_order ?? 999,
           time_slot_code: timeSlot?.code || 'Unknown',
+          time_slot_order: timeSlot?.display_order ?? 999,
           classroom_name: classroom?.name || 'Unknown',
           classroom_color: classroom?.color || null,
           notes: sa.notes,
           sub_name: subName,
           sub_id: sub?.id,
           teacher_name: teacherName,
+          teacher_id: sa.teacher_id ?? teacher?.id ?? null,
           coverage_request_id: getCoverageRequestId(sa),
         }
       })
+      .sort((a: any, b: any) => {
+        if (a.date !== b.date) return a.date < b.date ? -1 : 1
+        if (a.day_order !== b.day_order) return a.day_order - b.day_order
+        return a.time_slot_order - b.time_slot_order
+      })
+      .map(({ day_order: _do, time_slot_order: _tso, ...rest }) => rest)
 
     // Calculate summary
     const summary = {

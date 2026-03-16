@@ -2,8 +2,13 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import SortableClassroomsTable from '@/components/settings/SortableClassroomsTable'
 
-const queryClient = new QueryClient()
 function wrapper({ children }: { children: React.ReactNode }) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  })
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 }
 

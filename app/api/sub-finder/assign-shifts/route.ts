@@ -30,12 +30,23 @@ export async function POST(request: NextRequest) {
       coverage_request_id,
       sub_id,
       selected_shift_ids, // Array of coverage_request_shift_ids
-      is_floater_shift_ids = [], // Optional: coverage_request_shift_ids to create as floater
+      is_floater_shift_ids = [], // Optional: coverage_request_shift_ids to create as floater (legacy)
+      resolutions = {}, // Optional: { [coverage_request_shift_id]: 'floater' | 'move' | 'replace' } for conflict/replace resolution
     } = body
 
-    const floaterShiftIds = Array.isArray(is_floater_shift_ids)
-      ? new Set(is_floater_shift_ids.filter((v: unknown): v is string => typeof v === 'string'))
-      : new Set<string>()
+    const resolutionsMap =
+      typeof resolutions === 'object' && resolutions !== null
+        ? (resolutions as Record<string, string>)
+        : {}
+    const floaterShiftIds = new Set<string>()
+    for (const id of Array.isArray(is_floater_shift_ids)
+      ? is_floater_shift_ids.filter((v: unknown): v is string => typeof v === 'string')
+      : []) {
+      floaterShiftIds.add(id)
+    }
+    for (const [id, r] of Object.entries(resolutionsMap)) {
+      if (r === 'floater') floaterShiftIds.add(id)
+    }
 
     if (
       !coverage_request_id ||
@@ -211,17 +222,9 @@ export async function POST(request: NextRequest) {
         .map((assignment: any) => assignment.coverage_request_shift_id)
         .filter((value: unknown): value is string => Boolean(value))
     )
-    const assignableCoverageRequestShifts = coverageRequestShifts.filter(
-      (shift: any) => !blockedShiftIds.has(shift.id)
-    )
-
-    if (assignableCoverageRequestShifts.length === 0) {
-      const blockedCount = blockedShiftIds.size
-      return createErrorResponse(
-        `Some selected shifts are already assigned (${blockedCount} shift${blockedCount === 1 ? '' : 's'}). Please unassign first or select uncovered shifts.`,
-        409
-      )
-    }
+    // Include all requested shifts so "replace" (cancel current sub, assign new) works for every selected shift.
+    // Conflict resolution (floater/move) is still required when the same sub is double-booked; that is enforced by hasSubCollision below.
+    const assignableCoverageRequestShifts = coverageRequestShifts
 
     // Reject assignment if any selected shift is on a school closed day
     const assignableDates = assignableCoverageRequestShifts.map((s: any) => toDateStringISO(s.date))
@@ -285,9 +288,17 @@ export async function POST(request: NextRequest) {
         (shift: any) => `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
       )
     )
+    const resolvedSlotKeys = new Set(
+      assignableCoverageRequestShifts
+        .filter((shift: any) => {
+          const r = resolutionsMap[shift.id]
+          return r === 'floater' || r === 'move'
+        })
+        .map((shift: any) => `${toDateStringISO(shift.date)}|${shift.time_slot_id}`)
+    )
     const { data: subScheduleCollisions, error: subCollisionError } = await supabase
       .from('sub_assignments')
-      .select('id, date, time_slot_id, is_partial')
+      .select('id, date, time_slot_id, is_partial, coverage_request_shift_id')
       .eq('sub_id', sub_id)
       .eq('status', 'active')
       .in('date', selectedDates)
@@ -297,14 +308,51 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Failed to validate sub scheduling conflicts', 500)
     }
 
-    const hasSubCollision = (subScheduleCollisions || []).some((assignment: any) =>
-      selectedShiftKeys.has(`${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`)
-    )
+    const hasSubCollision = (subScheduleCollisions || []).some((assignment: any) => {
+      const key = `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`
+      return selectedShiftKeys.has(key) && !resolvedSlotKeys.has(key)
+    })
     if (hasSubCollision) {
       return createErrorResponse(
         'Double booking prevented: this sub already has an active assignment for one or more selected shifts.',
         409
       )
+    }
+
+    // Resolve conflicts before insert: move = cancel existing sub_assignment; floater = set is_floater on existing and new.
+    // When resolution is 'move' with existing sub_assignment (conflict_sub): cancel it so sub is removed from other room, assign here.
+    // When resolution is 'move' with no existing sub_assignment (conflict_teaching: sub teaches in other room via teacher_schedules):
+    // we cannot remove from teacher_schedules; create full assignment here (is_floater: false).
+    const existingBySlotKey = new Map<string, any>()
+    for (const a of subScheduleCollisions || []) {
+      const key = `${toDateStringISO(a.date)}|${a.time_slot_id}`
+      existingBySlotKey.set(key, a)
+    }
+    for (const shift of assignableCoverageRequestShifts) {
+      const key = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
+      const existing = existingBySlotKey.get(key)
+      const resolution = resolutionsMap[shift.id]
+      if (!existing) continue
+      if (resolution === 'move') {
+        const { error: cancelErr } = await supabase
+          .from('sub_assignments')
+          .update({ status: 'cancelled' })
+          .eq('id', existing.id)
+        if (cancelErr) {
+          logAssignShiftsError('Error cancelling assignment for move resolution:', cancelErr)
+          return createErrorResponse('Failed to move sub assignment', 500)
+        }
+        existingBySlotKey.delete(key)
+      } else if (resolution === 'floater') {
+        const { error: updateErr } = await supabase
+          .from('sub_assignments')
+          .update({ is_floater: true })
+          .eq('id', existing.id)
+        if (updateErr) {
+          logAssignShiftsError('Error updating assignment to floater:', updateErr)
+          return createErrorResponse('Failed to set floater on existing assignment', 500)
+        }
+      }
     }
 
     const shiftsNeedingClassroom = assignableCoverageRequestShifts.filter(
@@ -332,9 +380,30 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Create sub_assignments for each selected shift
+    const shiftsToInsert = assignableCoverageRequestShifts
+
+    // Replace any current sub on these shifts: cancel existing active sub_assignments for each
+    // coverage_request_shift_id we're assigning to so we never have multiple subs per shift.
+    const shiftIdsWeAreAssigning = new Set(shiftsToInsert.map((s: any) => s.id))
+    for (const a of existingAssignments || []) {
+      const crShiftId = a.coverage_request_shift_id
+      if (crShiftId && shiftIdsWeAreAssigning.has(crShiftId)) {
+        const { error: replaceErr } = await supabase
+          .from('sub_assignments')
+          .update({ status: 'cancelled' })
+          .eq('id', a.id)
+        if (replaceErr) {
+          logAssignShiftsError(
+            'Error cancelling existing assignment when replacing sub:',
+            replaceErr
+          )
+          return createErrorResponse('Failed to replace existing sub on shift', 500)
+        }
+      }
+    }
+
     const { actorUserId, actorDisplayName } = await getAuditActorContext()
-    const assignments = assignableCoverageRequestShifts.map((shift: any) => {
+    const assignments = shiftsToInsert.map((shift: any) => {
       const fallbackKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
       const resolvedClassroomId = shift.classroom_id || fallbackClassroomMap.get(fallbackKey)
       if (!resolvedClassroomId) {
@@ -350,6 +419,7 @@ export async function POST(request: NextRequest) {
         classroom_id: resolvedClassroomId,
         coverage_request_shift_id: shift.id, // Required: link to coverage_request_shift
         is_partial: false,
+        is_floater: floaterShiftIds.has(shift.id),
         partial_start_time: null,
         partial_end_time: null,
         notes: null,

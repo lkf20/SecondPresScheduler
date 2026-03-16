@@ -59,6 +59,7 @@ type DashboardOverview = {
     sub_name: string
     sub_id?: string
     teacher_name: string
+    teacher_id?: string | null
     coverage_request_id?: string | null
   }>
 }

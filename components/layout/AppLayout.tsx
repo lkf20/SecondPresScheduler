@@ -4,6 +4,7 @@ import Header from './Header'
 import Sidebar from './Sidebar'
 import { Toaster } from 'sonner'
 import { PanelManagerProvider } from '@/lib/contexts/PanelManagerContext'
+import { AssignSubPanelProvider } from '@/lib/contexts/AssignSubPanelContext'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -27,14 +28,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <PanelManagerProvider>
-      <div className="min-h-screen bg-slate-50/70">
-        <Header userEmail={user.email || undefined} />
-        <Sidebar />
-        <main className="pt-16" style={{ paddingLeft: 'var(--sidebar-layout-width)' }}>
-          <div className="w-full px-4 py-4 md:pl-8">{children}</div>
-        </main>
-        <Toaster position="top-right" />
-      </div>
+      <AssignSubPanelProvider>
+        <div className="min-h-screen bg-slate-50/70">
+          <Header userEmail={user.email || undefined} />
+          <Sidebar />
+          <main className="pt-16" style={{ paddingLeft: 'var(--sidebar-layout-width)' }}>
+            <div className="w-full px-4 py-4 md:pl-8">{children}</div>
+          </main>
+          <Toaster position="top-right" />
+        </div>
+      </AssignSubPanelProvider>
     </PanelManagerProvider>
   )
 }

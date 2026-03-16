@@ -64,8 +64,6 @@ import { CreateTimeOffRequestCard } from '@/components/time-off/CreateTimeOffReq
 export default function SubFinderPage() {
   const ENABLE_SHIFT_FOCUS_MODE = true
   const ENABLE_COLLAPSE_RECOMMENDED_ON_SHIFT = true
-  const SHOW_MIDDLE_COLUMN_DEBUG_BORDERS = false
-  const SHOW_RIGHT_PANEL_DEBUG_BORDERS = false
   const router = useRouter()
   const queryClient = useQueryClient()
   const schoolId = useSchool()
@@ -73,6 +71,7 @@ export default function SubFinderPage() {
   const searchParams = useSearchParams()
   const requestedAbsenceId = searchParams.get('absence_id')
   const requestedTeacherId = searchParams.get('teacher_id')
+  const requestedOpenTeacher = searchParams.get('open_teacher')
   const requestedSubId = searchParams.get('sub_id')
   const requestedMode = searchParams.get('mode')
   const requestedStartDate = searchParams.get('start_date')
@@ -92,6 +91,8 @@ export default function SubFinderPage() {
     recommendedCombinations,
     setRecommendedCombinations,
     loading,
+    recommendationsError,
+    refetchRecommendations,
     includePartiallyCovered,
     setIncludePartiallyCovered,
     includeFlexibleStaff,
@@ -132,6 +133,9 @@ export default function SubFinderPage() {
   const leftPanelHasLoadedOnceRef = useRef(false) // When true, next absences reload clears main and closes right panel
   const previousAbsencesSignatureRef = useRef<string | null>(null) // Sorted absence IDs; clear only when this changes (not on refetch with same data)
   const manualParamsAppliedRef = useRef(false) // When true, we applied manual URL params this session; skip load-saved-state so dates aren't overwritten
+  const openTeacherAppliedRef = useRef(false) // When true, we opened the teacher dropdown from open_teacher=1 and stripped the param
+  const teacherSearchInputRef = useRef<HTMLInputElement>(null)
+  const [shouldFocusTeacherSearch, setShouldFocusTeacherSearch] = useState(false)
   const classroomReviewWarnedAbsenceIdsRef = useRef<Set<string>>(new Set())
 
   // Set ref synchronously when manual URL params are present so load-saved-state and other effects skip before they run
@@ -469,7 +473,10 @@ export default function SubFinderPage() {
 
   const renderRecommendedPlaceholder = () => (
     <div className="mt-2 space-y-3">
-      <div className="h-6 w-44 rounded bg-slate-200/80 animate-pulse" />
+      <div className="flex items-center gap-2">
+        <div className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0" />
+        <p className="text-sm text-muted-foreground">Finding recommended subs...</p>
+      </div>
       <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 animate-pulse">
         <div className="h-6 w-1/3 rounded bg-slate-200" />
         <div className="h-5 w-1/2 rounded bg-slate-200" />
@@ -1407,6 +1414,43 @@ export default function SubFinderPage() {
     setSelectedTeacherIds(manualTeacherId ? [manualTeacherId] : [])
   }, [manualTeacherId])
 
+  // When arriving from Find Sub hot button (open_teacher=1): clean slate, open teacher dropdown, strip param.
+  // useLayoutEffect so this runs before load-saved-state and restore-absence effects (no auto-selected absence).
+  useLayoutEffect(() => {
+    if (requestedOpenTeacher !== '1' || openTeacherAppliedRef.current) return
+    openTeacherAppliedRef.current = true
+    hasRestoredStateRef.current = true
+    clearSubFinderState()
+    selectedAbsenceIdRef.current = null
+    setSelectedAbsence(null)
+    setIsContactPanelOpen(false)
+    setIsManualTeacherSearchOpen(true)
+    setShouldFocusTeacherSearch(true)
+    // Persist focus request so it survives router.replace (which can unmount and cancel timeouts).
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('subFinderFocusTeacherSearch', '1')
+    }
+    const next = new URLSearchParams(searchParams.toString())
+    next.delete('open_teacher')
+    const query = next.toString()
+    router.replace(query ? `/sub-finder?${query}` : '/sub-finder')
+  }, [requestedOpenTeacher, searchParams, router])
+
+  // Focus teacher search on mount when we came from Find Sub (sessionStorage flag survives router.replace/remount).
+  // Do not clear the flag here so the next mount (after replace) can also focus; clear only after focus() runs.
+  useEffect(() => {
+    if (typeof sessionStorage === 'undefined') return
+    if (sessionStorage.getItem('subFinderFocusTeacherSearch') !== '1') return
+    const id = setTimeout(() => {
+      const el = teacherSearchInputRef.current
+      if (el) {
+        el.focus()
+        sessionStorage.removeItem('subFinderFocusTeacherSearch')
+      }
+    }, 150)
+    return () => clearTimeout(id)
+  }, [])
+
   // Filter absences based on selected teachers
   const filteredAbsences = useMemo(() => {
     let filtered = absences
@@ -1615,6 +1659,8 @@ export default function SubFinderPage() {
     if (absences.length === 0) return // Wait for absences to load
     // Do not overwrite when we landed with manual URL params (teacher + dates from Weekly Schedule)
     if (manualParamsAppliedRef.current) return
+    // Do not restore when user came from Find Sub hot button (clean slate: no teacher or absence selected)
+    if (openTeacherAppliedRef.current) return
     // Do not overwrite a freshly-set manual absence (from Find Subs in Pick dates flow)
     if (selectedAbsence?.id?.startsWith('manual-')) return
 
@@ -1877,6 +1923,7 @@ export default function SubFinderPage() {
                     <div className="rounded-md border border-slate-200 bg-white">
                       <div className="flex items-center border-b border-slate-100 px-2 py-1 gap-1">
                         <Input
+                          ref={teacherSearchInputRef}
                           placeholder="Search or select a teacher..."
                           value={manualTeacherSearch}
                           onChange={event => setManualTeacherSearch(event.target.value)}
@@ -1920,6 +1967,11 @@ export default function SubFinderPage() {
                                   setManualTeacherId(teacher.id)
                                   setManualTeacherSearch(name)
                                   setIsManualTeacherSearchOpen(false)
+                                  // Default to Custom date range when a teacher is selected
+                                  setPickDateChoice('custom')
+                                  const today = getTodayISO()
+                                  setManualStartDate(today)
+                                  setManualEndDate(today)
                                 }}
                               >
                                 {name}
@@ -2398,9 +2450,11 @@ export default function SubFinderPage() {
               )}
               {selectedAbsence && (
                 <div className="py-4 flex flex-col gap-6 w-full">
-                  {ENABLE_COLLAPSE_RECOMMENDED_ON_SHIFT &&
-                  selectedShift &&
-                  !showRecommendedWhenShiftSelected ? (
+                  {loading ? (
+                    renderRecommendedPlaceholder()
+                  ) : ENABLE_COLLAPSE_RECOMMENDED_ON_SHIFT &&
+                    selectedShift &&
+                    !showRecommendedWhenShiftSelected ? (
                     <button
                       type="button"
                       onClick={() => setShowRecommendedWhenShiftSelected(true)}
@@ -2409,8 +2463,28 @@ export default function SubFinderPage() {
                       <span>Show recommended subs</span>
                       <ChevronDown className="h-4 w-4" />
                     </button>
-                  ) : loading ? (
-                    renderRecommendedPlaceholder()
+                  ) : recommendationsError &&
+                    selectedAbsence &&
+                    !selectedAbsence.id.startsWith('manual-') ? (
+                    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-4 text-sm">
+                      <p className="font-medium text-amber-900">
+                        Couldn&apos;t load recommended subs for this absence.
+                      </p>
+                      <p className="mt-1 text-amber-800">
+                        {recommendationsError instanceof Error
+                          ? recommendationsError.message
+                          : 'Something went wrong.'}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-3"
+                        onClick={() => refetchRecommendations()}
+                      >
+                        Try again
+                      </Button>
+                    </div>
                   ) : displayRecommendedCombinations.length > 0 ? (
                     <>
                       <ShiftChipsLegend className="mb-3" />
@@ -2721,32 +2795,12 @@ export default function SubFinderPage() {
       <div className="hidden md:flex flex-1 flex-col md:flex-row items-stretch">
         {/* Middle Column */}
         <div
-          className={cn(
-            'relative flex-1 min-w-0 border-x bg-white transition-opacity h-full overflow-y-auto',
-            SHOW_MIDDLE_COLUMN_DEBUG_BORDERS &&
-              'outline outline-4 outline-red-500/90 outline-offset-[-4px] bg-red-50/20'
-          )}
+          className="relative flex-1 min-w-0 border-x bg-white transition-opacity h-full overflow-y-auto"
           style={{
             filter: isRightPanelOpen && !isContactPanelOpen ? 'brightness(0.9)' : undefined,
           }}
         >
-          {SHOW_MIDDLE_COLUMN_DEBUG_BORDERS && (
-            <div className="pointer-events-none absolute left-2 top-2 z-50 rounded bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">
-              OUTER
-            </div>
-          )}
-          <div
-            className={cn(
-              'relative w-full max-w-[1000px] px-8 md:px-10 lg:px-12',
-              SHOW_MIDDLE_COLUMN_DEBUG_BORDERS &&
-                'outline outline-4 outline-blue-500/90 outline-offset-[-4px] bg-blue-50/20'
-            )}
-          >
-            {SHOW_MIDDLE_COLUMN_DEBUG_BORDERS && (
-              <div className="pointer-events-none absolute left-2 top-2 z-50 rounded bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                INNER
-              </div>
-            )}
+          <div className="relative w-full max-w-[1000px] px-8 md:px-10 lg:px-12">
             {/* Fixed Header Bar */}
             {selectedAbsence && (
               <>
@@ -2873,20 +2927,14 @@ export default function SubFinderPage() {
 
             {selectedAbsence && (
               <div
-                className={cn(
-                  'relative w-full py-6 flex flex-col gap-6',
-                  SHOW_MIDDLE_COLUMN_DEBUG_BORDERS && 'border-2 border-emerald-500 bg-emerald-50/10'
-                )}
+                className={cn('relative w-full py-6 flex flex-col gap-6')}
                 style={middleColumnContentStyle}
               >
-                {SHOW_MIDDLE_COLUMN_DEBUG_BORDERS && (
-                  <div className="pointer-events-none absolute right-2 top-2 z-50 rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                    CONTENT
-                  </div>
-                )}
-                {ENABLE_COLLAPSE_RECOMMENDED_ON_SHIFT &&
-                selectedShift &&
-                !showRecommendedWhenShiftSelected ? (
+                {loading ? (
+                  renderRecommendedPlaceholder()
+                ) : ENABLE_COLLAPSE_RECOMMENDED_ON_SHIFT &&
+                  selectedShift &&
+                  !showRecommendedWhenShiftSelected ? (
                   <button
                     type="button"
                     onClick={() => setShowRecommendedWhenShiftSelected(true)}
@@ -2895,8 +2943,28 @@ export default function SubFinderPage() {
                     <span>Show recommended subs</span>
                     <ChevronDown className="h-4 w-4" />
                   </button>
-                ) : loading ? (
-                  renderRecommendedPlaceholder()
+                ) : recommendationsError &&
+                  selectedAbsence &&
+                  !selectedAbsence.id.startsWith('manual-') ? (
+                  <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-4 text-sm">
+                    <p className="font-medium text-amber-900">
+                      Couldn&apos;t load recommended subs for this absence.
+                    </p>
+                    <p className="mt-1 text-amber-800">
+                      {recommendationsError instanceof Error
+                        ? recommendationsError.message
+                        : 'Something went wrong.'}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => refetchRecommendations()}
+                    >
+                      Try again
+                    </Button>
+                  </div>
                 ) : displayRecommendedCombinations.length > 0 ? (
                   <>
                     <ShiftChipsLegend className="mb-3" />
@@ -3092,19 +3160,11 @@ export default function SubFinderPage() {
         {isRightPanelOpen && (
           <div
             ref={rightPanelRef}
-            className={cn(
-              'shrink-0 flex-none border-l bg-white transition-all h-full overflow-hidden',
-              SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-rose-500'
-            )}
+            className="shrink-0 flex-none border-l bg-white transition-all h-full overflow-hidden"
             style={{ width: '580px' }}
           >
             {selectedAbsence ? (
-              <div
-                className={cn(
-                  'h-full flex flex-col',
-                  SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-orange-500'
-                )}
-              >
+              <div className="h-full flex flex-col">
                 <div className="shrink-0 flex justify-end px-8 pt-4">
                   <button
                     type="button"
@@ -3115,12 +3175,7 @@ export default function SubFinderPage() {
                     <X className="h-4 w-4" />
                   </button>
                 </div>
-                <div
-                  className={cn(
-                    'mt-0 shrink-0 border-b border-slate-200 bg-white px-8 pt-3 pb-4 shadow-[0_1px_0_rgba(15,23,42,0.04)]',
-                    SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-blue-500'
-                  )}
-                >
+                <div className="mt-0 shrink-0 border-b border-slate-200 bg-white px-8 pt-3 pb-4 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
                   <div className="flex items-start justify-between">
                     <div className="flex flex-col gap-1">
                       {selectedShift ? (
@@ -3215,19 +3270,8 @@ export default function SubFinderPage() {
                     </div>
                   )}
 
-                  <div
-                    className={cn(
-                      'pt-3 space-y-2',
-                      SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-purple-500'
-                    )}
-                  >
-                    <div
-                      ref={subSearchRef}
-                      className={cn(
-                        'rounded-md border border-slate-200 bg-white',
-                        SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-emerald-500'
-                      )}
-                    >
+                  <div className="pt-3 space-y-2">
+                    <div ref={subSearchRef} className="rounded-md border border-slate-200 bg-white">
                       <div className="p-1.5">
                         <Input
                           placeholder="Search substitutes..."
@@ -3335,12 +3379,7 @@ export default function SubFinderPage() {
                   </div>
                 </div>
 
-                <div
-                  className={cn(
-                    'min-h-0 flex-1 overflow-y-auto px-8 pb-6',
-                    SHOW_RIGHT_PANEL_DEBUG_BORDERS && 'border-2 border-cyan-500'
-                  )}
-                >
+                <div className="min-h-0 flex-1 overflow-y-auto px-8 pb-6">
                   <RecommendedSubsList
                     subs={rightPanelSubs}
                     loading={loading}

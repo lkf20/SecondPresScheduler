@@ -190,6 +190,7 @@ describe('StaffFormClient', () => {
       return { ok: true, json: async () => ({}) } as Response
     }) as jest.Mock
 
+    // Staff has PERMANENT role + is_sub so the substitute checkbox is enabled (not disabled as "Substitute only")
     render(
       <StaffFormClient
         staff={
@@ -200,8 +201,8 @@ describe('StaffFormClient', () => {
             active: true,
             is_sub: true,
             school_id: 'school-1',
-            role_type_ids: [],
-            role_type_codes: [],
+            role_type_ids: ['role-perm'],
+            role_type_codes: ['PERMANENT'],
           } as any
         }
       />
@@ -215,7 +216,7 @@ describe('StaffFormClient', () => {
       'true'
     )
 
-    await user.click(await screen.findByLabelText('Substitute'))
+    await user.click(await screen.findByLabelText('Eligible to be assigned as a substitute'))
 
     await waitFor(() => {
       expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute(
@@ -272,7 +273,7 @@ describe('StaffFormClient', () => {
       expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute('data-active-tab', 'overview')
     })
 
-    await user.click(await screen.findByLabelText('Substitute'))
+    await user.click(await screen.findByLabelText('Eligible to be assigned as a substitute'))
     await user.click(screen.getByRole('button', { name: 'Go Preferences' }))
 
     expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute('data-active-tab', 'overview')
@@ -332,7 +333,7 @@ describe('StaffFormClient', () => {
       expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute('data-active-tab', 'overview')
     })
 
-    await user.click(await screen.findByLabelText('Substitute'))
+    await user.click(await screen.findByLabelText('Eligible to be assigned as a substitute'))
     await waitFor(() => {
       expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute(
         'data-show-availability',

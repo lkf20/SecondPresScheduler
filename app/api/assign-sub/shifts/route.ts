@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createErrorResponse, getErrorMessage } from '@/lib/utils/errors'
-import { getTeacherShiftsForAssignSub } from '@/lib/api/coverage-requests'
+import { getTeacherShiftsForAssignSub, type AssignSubShiftRow } from '@/lib/api/coverage-requests'
 import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 import { toDateStringISO } from '@/lib/utils/date'
@@ -39,12 +39,21 @@ export async function POST(request: NextRequest) {
     }
 
     const effectiveEndDate = end_date || start_date
+    const startDateNorm = toDateStringISO(start_date)
+    const endDateNorm = toDateStringISO(effectiveEndDate)
+    if (!startDateNorm) {
+      return createErrorResponse(new Error('Invalid start_date'), 'Invalid start_date', 400)
+    }
 
-    const rawShifts = await getTeacherShiftsForAssignSub(teacher_id, start_date, effectiveEndDate)
+    let rawShifts = await getTeacherShiftsForAssignSub(
+      teacher_id,
+      startDateNorm,
+      endDateNorm || startDateNorm
+    )
     const schoolClosures = await getSchoolClosuresForDateRange(
       schoolId,
-      start_date,
-      effectiveEndDate
+      startDateNorm,
+      endDateNorm || startDateNorm
     )
     const closureList = schoolClosures.map(c => ({ date: c.date, time_slot_id: c.time_slot_id }))
 
@@ -103,12 +112,33 @@ export async function POST(request: NextRequest) {
     const { data: assignments } = await supabase
       .from('sub_assignments')
       .select(
-        'id, sub_id, date, time_slot_id, staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name)'
+        'id, sub_id, date, day_of_week_id, time_slot_id, classroom_id, coverage_request_shift_id, staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name), time_slots(code)'
       )
       .eq('teacher_id', teacher_id)
       .eq('status', 'active')
-      .gte('date', start_date)
-      .lte('date', effectiveEndDate)
+      .gte('date', startDateNorm)
+      .lte('date', endDateNorm || startDateNorm)
+
+    const assignmentCrShiftByShiftId = new Map<string, string>()
+    if (rawShifts.length === 0 && (assignments?.length ?? 0) > 0) {
+      rawShifts = assignments!.map((a: Record<string, unknown>) => {
+        const dateStr = toDateStringISO(a.date as string)
+        const code = (a.time_slots as { code?: string } | null)?.code ?? ''
+        const id = `${dateStr}|${a.day_of_week_id ?? ''}|${a.time_slot_id}|${a.classroom_id ?? ''}`
+        const crShiftId = a.coverage_request_shift_id as string | undefined
+        if (crShiftId) assignmentCrShiftByShiftId.set(id, crShiftId)
+        return {
+          id,
+          date: dateStr,
+          day_of_week_id: String(a.day_of_week_id ?? ''),
+          time_slot_id: String(a.time_slot_id ?? ''),
+          time_slot_code: code,
+          classroom_id: (a.classroom_id as string) ?? null,
+          has_time_off: Boolean(crShiftId),
+          time_off_request_id: null,
+        } satisfies AssignSubShiftRow
+      })
+    }
 
     const assignmentByKey = new Map<string, { id: string; sub_id: string; sub_name: string }>()
     for (const a of assignments || []) {
@@ -135,7 +165,10 @@ export async function POST(request: NextRequest) {
       const keyFull = `${dateStr}|${shift.time_slot_code ?? ''}|${shift.classroom_id ?? ''}`
       const keySimple = `${dateStr}|${shift.time_slot_code ?? ''}`
       let coverage_request_shift_id: string | null = null
-      if (shift.time_off_request_id) {
+      const fromAssignment = assignmentCrShiftByShiftId.get(shift.id)
+      if (fromAssignment) {
+        coverage_request_shift_id = fromAssignment
+      } else if (shift.time_off_request_id) {
         const map = shiftMapByRequest.get(shift.time_off_request_id)
         coverage_request_shift_id = (map?.get(keyFull) ?? map?.get(keySimple) ?? null) || null
       }

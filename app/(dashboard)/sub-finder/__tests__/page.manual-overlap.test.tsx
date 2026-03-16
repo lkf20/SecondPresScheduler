@@ -248,11 +248,9 @@ describe('SubFinderPage - Manual Overlap', () => {
     const teacherOptions = await screen.findAllByText('John Doe')
     fireEvent.click(teacherOptions[0])
 
-    // Wait for "Pick dates" to appear
+    // Wait for "Pick dates" to appear (Custom date range is selected by default when teacher is selected)
     await screen.findAllByText('Pick dates')
 
-    // Select custom dates so the form renders
-    fireEvent.click(screen.getAllByText('Custom date range')[0])
     const startDateInput = screen.getAllByTestId('mock-datepicker-Select start date')[0]
     fireEvent.change(startDateInput, { target: { value: '2026-03-09' } })
 
@@ -289,7 +287,7 @@ describe('SubFinderPage - Manual Overlap', () => {
     // Wait for "Pick dates" to appear
     await screen.findAllByText('Pick dates')
 
-    fireEvent.click(screen.getAllByText('Custom date range')[0])
+    // Custom date range is selected by default when teacher is selected
     fireEvent.change(screen.getAllByTestId('mock-datepicker-Select start date')[0], {
       target: { value: '2026-03-09' },
     })
@@ -389,7 +387,7 @@ describe('SubFinderPage - Manual Overlap', () => {
 
     await screen.findAllByText('Pick dates')
 
-    fireEvent.click(screen.getAllByText('Custom date range')[0])
+    // Custom date range is selected by default when teacher is selected
     fireEvent.change(screen.getAllByTestId('mock-datepicker-Select start date')[0], {
       target: { value: '2026-03-09' },
     })
@@ -425,7 +423,7 @@ describe('SubFinderPage - Manual Overlap', () => {
 
     await screen.findAllByText('Pick dates')
 
-    fireEvent.click(screen.getAllByText('Custom date range')[0])
+    // Custom date range is selected by default when teacher is selected
     fireEvent.change(screen.getAllByTestId('mock-datepicker-Select start date')[0], {
       target: { value: '2026-03-09' },
     })
@@ -486,7 +484,7 @@ describe('SubFinderPage - Manual Overlap', () => {
 
     await screen.findAllByText('Pick dates')
 
-    fireEvent.click(screen.getAllByText('Custom date range')[0])
+    // Custom date range is selected by default when teacher is selected
     fireEvent.change(screen.getAllByTestId('mock-datepicker-Select start date')[0], {
       target: { value: '2026-03-09' },
     })
@@ -558,7 +556,7 @@ describe('SubFinderPage - Manual Overlap', () => {
 
     await screen.findAllByText('Pick dates')
 
-    fireEvent.click(screen.getAllByText('Custom date range')[0])
+    // Custom date range is selected by default when teacher is selected
     fireEvent.change(screen.getAllByTestId('mock-datepicker-Select start date')[0], {
       target: { value: '2026-03-09' },
     })
@@ -591,7 +589,7 @@ describe('SubFinderPage - Manual Overlap', () => {
 
     await screen.findAllByText('Pick dates')
 
-    fireEvent.click(screen.getAllByText('Custom date range')[0])
+    // Custom date range is selected by default when teacher is selected
     fireEvent.change(screen.getAllByTestId('mock-datepicker-Select start date')[0], {
       target: { value: '2026-03-09' },
     })
@@ -620,7 +618,7 @@ describe('SubFinderPage - Manual Overlap', () => {
 
     await screen.findAllByText('Pick dates')
 
-    fireEvent.click(screen.getAllByText('Custom date range')[0])
+    // Custom date range is selected by default when teacher is selected
     fireEvent.change(screen.getAllByTestId('mock-datepicker-Select start date')[0], {
       target: { value: '2026-03-09' },
     })
@@ -663,7 +661,7 @@ describe('SubFinderPage - Manual Overlap', () => {
 
     await screen.findAllByText('Pick dates')
 
-    fireEvent.click(screen.getAllByText('Custom date range')[0])
+    // Custom date range is selected by default when teacher is selected
     fireEvent.change(screen.getAllByTestId('mock-datepicker-Select start date')[0], {
       target: { value: '2026-03-09' },
     })

@@ -287,6 +287,19 @@ export function findTopCombinations(subs: Sub[], limit = 5): RecommendedCombinat
     return []
   }
 
+  // Ensure limit is at least the count of subs with 100% availability (can cover all shifts alone).
+  // Each such sub gets a single-sub carousel slot so users can see all fully-available options.
+  const hundredPercentCount = eligibleSubs.filter(sub => {
+    if (sub.coverage_percent !== 100) return false
+    const coverage = new Set<string>()
+    sub.can_cover?.forEach(shift => {
+      const key = `${shift.date}|${shift.time_slot_code}`
+      if (uncoveredShifts.has(key)) coverage.add(key)
+    })
+    return coverage.size === uncoveredShifts.size
+  }).length
+  const effectiveLimit = Math.max(limit, hundredPercentCount)
+
   const subsWithCoverage = eligibleSubs
     .map(sub => {
       const coverage = new Set<string>()
@@ -323,14 +336,14 @@ export function findTopCombinations(subs: Sub[], limit = 5): RecommendedCombinat
   }
 
   const dfs = (startIndex: number, selected: Sub[], covered: Set<string>) => {
-    if (results.length >= limit) return
+    if (results.length >= effectiveLimit) return
     if (selected.length > 0) {
       maybeAddCombo(selected, covered)
       if (covered.size === targetCount) return
     }
 
     for (let i = startIndex; i < subsWithCoverage.length; i++) {
-      if (results.length >= limit) return
+      if (results.length >= effectiveLimit) return
       const entry = subsWithCoverage[i]
       const nextCovered = new Set(covered)
       entry.coverage.forEach(shiftKey => nextCovered.add(shiftKey))
@@ -348,5 +361,5 @@ export function findTopCombinations(subs: Sub[], limit = 5): RecommendedCombinat
       if (a.subs.length !== b.subs.length) return a.subs.length - b.subs.length
       return b.totalShiftsCovered - a.totalShiftsCovered
     })
-    .slice(0, limit)
+    .slice(0, effectiveLimit)
 }

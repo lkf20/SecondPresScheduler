@@ -35,6 +35,10 @@ jest.mock('@/lib/server/coverage/shift-chips', () => ({
   buildShiftChips: jest.fn(),
 }))
 
+jest.mock('@/lib/api/school-calendar', () => ({
+  getSchoolClosuresForDateRange: jest.fn().mockResolvedValue([]),
+}))
+
 describe('POST /api/sub-finder/find-subs integration', () => {
   afterEach(() => {
     jest.restoreAllMocks()
@@ -78,6 +82,28 @@ describe('POST /api/sub-finder/find-subs integration', () => {
 
     expect(response.status).toBe(404)
     expect(json.error).toMatch(/not found/i)
+  })
+
+  it('returns 403 when absence belongs to another school', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(createClient as jest.Mock).mockResolvedValue({ from: jest.fn() })
+    ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
+      id: 'absence-other-school',
+      teacher_id: 'teacher-1',
+      school_id: 'school-2',
+      start_date: '2099-02-09',
+      end_date: '2099-02-09',
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/sub-finder/find-subs', 'POST', {
+      absence_id: 'absence-other-school',
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(403)
+    expect(json.error).toMatch(/do not have access|access to this time off/i)
   })
 
   it('returns empty array when no shifts remain to cover', async () => {

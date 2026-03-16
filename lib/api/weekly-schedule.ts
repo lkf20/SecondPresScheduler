@@ -34,6 +34,7 @@ type SubAssignmentRowFromQuery = {
   classroom_id: string
   sub_id: string
   teacher_id: string
+  is_floater?: boolean
   sub?: StaffLite | StaffLite[] | null
   teacher?: StaffLite | StaffLite[] | null
 }
@@ -620,10 +621,13 @@ export async function getScheduleSnapshotData({
           classroom_id,
           sub_id,
           teacher_id,
+          is_floater,
           sub:staff!sub_assignments_sub_id_fkey(id, first_name, last_name, display_name),
           teacher:staff!sub_assignments_teacher_id_fkey(id, first_name, last_name, display_name)
         `
         )
+        .eq('status', 'active')
+        .eq('school_id', schoolId)
         .gte('date', startDateISO)
         .lte('date', endDateISO)
 
@@ -642,6 +646,7 @@ export async function getScheduleSnapshotData({
             classroom_id: sa.classroom_id,
             sub_id: sa.sub_id,
             teacher_id: sa.teacher_id,
+            is_floater: sa.is_floater ?? false,
             sub_name: getStaffDisplayName(sa.sub, displayNameFormat),
             sub_first_name: subParts.first_name,
             sub_last_name: subParts.last_name,
@@ -663,13 +668,19 @@ export async function getScheduleSnapshotData({
     }
   }
 
-  // Staff who have an is_floater sub_assignment for (date, time_slot) in another room.
+  // Teachers who have an is_floater sub covering for them (teacher_id=absent) for (date, time_slot).
   // Used for conflict_teaching: when a teacher has baseline in room A and floater sub in room B,
   // their baseline assignment in room A should also count as floater (0.5) for that date/slot.
   const floaterSubSlots = new Set<string>()
+  // Subs who are floaters for (date, slot). When a baseline teacher is subbing as floater elsewhere,
+  // their baseline slots in other rooms should show as floater (purple chip) for that calendar day.
+  const floaterSubIdsBySlot = new Set<string>()
   for (const sa of subAssignments) {
-    if (sa.is_floater) {
-      floaterSubSlots.add(`${sa.sub_id}|${toDateStringISO(sa.date)}|${sa.time_slot_id}`)
+    if (sa.is_floater && sa.teacher_id) {
+      floaterSubSlots.add(`${sa.teacher_id}|${toDateStringISO(sa.date)}|${sa.time_slot_id}`)
+    }
+    if (sa.is_floater && sa.sub_id) {
+      floaterSubIdsBySlot.add(`${sa.sub_id}|${toDateStringISO(sa.date)}|${sa.time_slot_id}`)
     }
   }
 
@@ -781,7 +792,13 @@ export async function getScheduleSnapshotData({
               floaterSubSlots.has(
                 `${assignment.teacher_id}|${toDateStringISO(cellDate)}|${timeSlot.id}`
               )
-            const effectiveIsFloater = hasFloaterSubElsewhere || assignment.is_floater || false
+            const isFloaterSubElsewhere =
+              cellDate &&
+              floaterSubIdsBySlot.has(
+                `${assignment.teacher_id}|${toDateStringISO(cellDate)}|${timeSlot.id}`
+              )
+            const effectiveIsFloater =
+              hasFloaterSubElsewhere || isFloaterSubElsewhere || assignment.is_floater || false
 
             return {
               id: assignment.id,
@@ -897,7 +914,7 @@ export async function getScheduleSnapshotData({
                   sub.class_name || (matchingClassGroup ? matchingClassGroup.name : 'Unknown'),
                 classroom_id: sub.classroom_id,
                 classroom_name: classroom.name,
-                is_floater: false,
+                is_floater: sub.is_floater ?? false,
                 is_substitute: true,
                 absent_teacher_id: sub.teacher_id,
                 enrollment: enrollment ?? 0,

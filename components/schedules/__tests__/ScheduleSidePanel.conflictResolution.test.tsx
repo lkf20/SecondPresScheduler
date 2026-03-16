@@ -13,7 +13,15 @@
 /* eslint-disable react/display-name */
 import React, { useCallback, useState } from 'react'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import ScheduleSidePanel from '@/components/schedules/ScheduleSidePanel'
+
+function renderWithQueryClient(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+}
 
 const pushMock = jest.fn()
 const toastSuccessMock = jest.fn()
@@ -35,6 +43,10 @@ jest.mock('sonner', () => ({
 
 jest.mock('@/lib/hooks/use-display-name-format', () => ({
   useDisplayNameFormat: () => ({ format: 'first_last_initial' }),
+}))
+
+jest.mock('@/lib/contexts/SchoolContext', () => ({
+  useSchool: () => 'school-1',
 }))
 
 jest.mock('@/components/ui/sheet', () => ({
@@ -424,7 +436,7 @@ describe('ScheduleSidePanel conflict resolution', () => {
       )
     }
 
-    render(<PanelWrapper />)
+    renderWithQueryClient(<PanelWrapper />)
 
     // Wait for panel to show staffing summary with 3 scheduled (from initial selectedCellData)
     await waitFor(
