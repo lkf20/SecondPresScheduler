@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AssignSubPanelProvider } from '@/lib/contexts/AssignSubPanelContext'
 import DashboardClient from '../DashboardClient'
 
-const queryClient = new QueryClient()
 const mockRefetch = jest.fn()
 const mockUseDashboard = jest.fn()
 const mockUseProfile = jest.fn()
@@ -100,6 +99,12 @@ const defaultOverview = {
 }
 
 function renderDashboard(overview = defaultOverview) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  })
   return render(
     <QueryClientProvider client={queryClient}>
       <AssignSubPanelProvider>
