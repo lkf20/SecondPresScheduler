@@ -1439,13 +1439,17 @@ export default function DashboardClient({
         onConfirm={async scope => {
           if (!removeDialogAssignment?.coverage_request_id || !removeDialogAssignment?.sub_id)
             return
-          await unassign(scope, {
-            absenceId: removeDialogAssignment.coverage_request_id,
-            subId: removeDialogAssignment.sub_id,
-            subName: removeDialogAssignment.sub_name,
-            teacherName: removeDialogAssignment.teacher_name,
-            assignmentId: removeDialogAssignment.id,
-          })
+          try {
+            await unassign(scope, {
+              absenceId: removeDialogAssignment.coverage_request_id,
+              subId: removeDialogAssignment.sub_id,
+              subName: removeDialogAssignment.sub_name,
+              teacherName: removeDialogAssignment.teacher_name,
+              assignmentId: removeDialogAssignment.id,
+            })
+          } catch {
+            setRemoveDialogAssignment(null)
+          }
         }}
         isPending={isUnassignPending}
       />
