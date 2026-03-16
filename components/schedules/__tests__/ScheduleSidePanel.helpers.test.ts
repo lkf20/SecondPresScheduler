@@ -14,6 +14,7 @@ import {
   pickClassGroupForRatio,
   sortAbsencesByTeacherName,
   sortAssignmentsForPanel,
+  sortAssignmentsForPanelWithAbsencePriority,
   sortClassGroupsBySettingsOrder,
 } from '@/components/schedules/ScheduleSidePanel'
 
@@ -311,6 +312,32 @@ describe('ScheduleSidePanel helpers', () => {
     expect(result.baselineFlexAssignments.map(a => a.teacher_name)).toEqual(['Flex A.'])
     expect(result.temporaryCoverageAssignments.map(a => a.teacher_name)).toEqual(['Temp Cover B.'])
     expect(result.floaterAssignments.map(a => a.teacher_name)).toEqual(['Floater A.'])
+  })
+
+  it('excludes absent staff from assignment groups so staff appear only once', () => {
+    const result = sortAssignmentsForPanelWithAbsencePriority(
+      [
+        {
+          id: 'a-float',
+          teacher_id: 'teacher-joy',
+          teacher_name: 'Joy P.',
+          classroom_id: 'class-1',
+          classroom_name: 'Infant Room',
+          is_floater: true,
+        },
+        {
+          id: 'a-perm',
+          teacher_id: 'teacher-bella',
+          teacher_name: 'Bella W.',
+          classroom_id: 'class-1',
+          classroom_name: 'Infant Room',
+        },
+      ],
+      ['teacher-joy']
+    )
+
+    expect(result.permanentAssignments.map(a => a.teacher_name)).toEqual(['Bella W.'])
+    expect(result.floaterAssignments).toEqual([])
   })
 
   it('sorts class groups by settings order then name', () => {

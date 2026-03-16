@@ -480,13 +480,25 @@ export const sortAbsencesByTeacherName = (
 ) => [...absences].sort(compareByTeacherName)
 
 export const sortAssignmentsForPanel = (assignments: WeeklyScheduleData['assignments'] = []) => {
-  const permanentAssignments = assignments
+  return sortAssignmentsForPanelWithAbsencePriority(assignments, [])
+}
+
+export const sortAssignmentsForPanelWithAbsencePriority = (
+  assignments: WeeklyScheduleData['assignments'] = [],
+  absentTeacherIds: string[] = []
+) => {
+  const absentTeacherIdSet = new Set(absentTeacherIds.filter(Boolean))
+  const assignmentsForDisplay = assignments.filter(
+    assignment => !assignment.teacher_id || !absentTeacherIdSet.has(assignment.teacher_id)
+  )
+
+  const permanentAssignments = assignmentsForDisplay
     .filter(
       assignment => !assignment.is_substitute && !assignment.is_flexible && !assignment.is_floater
     )
     .sort(compareByTeacherName)
 
-  const flexibleAssignments = assignments.filter(
+  const flexibleAssignments = assignmentsForDisplay.filter(
     assignment => !assignment.is_substitute && assignment.is_flexible && !assignment.is_floater
   )
   const baselineFlexAssignments = flexibleAssignments
@@ -496,7 +508,7 @@ export const sortAssignmentsForPanel = (assignments: WeeklyScheduleData['assignm
     .filter(a => !!a.staffing_event_id)
     .sort(compareByTeacherName)
 
-  const floaterAssignments = assignments
+  const floaterAssignments = assignmentsForDisplay
     .filter(assignment => !assignment.is_substitute && assignment.is_floater)
     .sort(compareByTeacherName)
 
@@ -2611,6 +2623,10 @@ export default function ScheduleSidePanel({
   }, [])
 
   const handleSave = async () => {
+    // Boundary hardening: weekly read-only cell mode cannot persist baseline edits.
+    if (readOnly && panelMode !== 'editCell') {
+      return
+    }
     // Block save only when parent (classroom/time slot) is inactive; allow saving when user set cell to inactive
     if (isParentEffectivelyInactive) return
     // Block save when there are unresolved baseline conflicts (teacher double-booked in another room)
@@ -2622,8 +2638,14 @@ export default function ScheduleSidePanel({
     try {
       // Class groups required only when slot is active; inactive slots can be saved without class groups
       if (isActive && classGroupIds.length === 0) {
-        alert('At least one class group is required when slot is active')
+        const message = 'At least one class group is required when slot is active.'
+        if (showUnsavedDialog) {
+          setSaveErrorInDialog(message)
+        } else {
+          toast.error(message)
+        }
         setSaving(false)
+        onSaveEnd?.()
         return
       }
 
@@ -3017,7 +3039,7 @@ export default function ScheduleSidePanel({
       if (showUnsavedDialog) {
         setSaveErrorInDialog(message)
       } else {
-        alert(`Failed to save: ${message}`)
+        toast.error(`Failed to save: ${message}`)
       }
     } finally {
       setSaving(false)
@@ -3158,7 +3180,7 @@ export default function ScheduleSidePanel({
     } catch (error) {
       console.error('Error resolving conflicts:', error)
       const message = error instanceof Error ? error.message : 'Failed to resolve conflicts'
-      alert(`Failed to resolve conflicts: ${message}`)
+      toast.error(`Failed to resolve conflicts: ${message}`)
     } finally {
       setConflictResolutionApplying(false)
     }
@@ -3188,12 +3210,22 @@ export default function ScheduleSidePanel({
   )
 
   const sortedAbsences = sortAbsencesByTeacherName(selectedCellData?.absences ?? [])
+  const absentTeacherIds = sortedAbsences
+    .map(absence => absence.teacher_id)
+    .filter((teacherId): teacherId is string => Boolean(teacherId))
+  const absentTeacherIdSet = new Set(absentTeacherIds)
+  const assignmentsForDisplay = (selectedCellData?.assignments ?? []).filter(
+    assignment => !assignment.teacher_id || !absentTeacherIdSet.has(assignment.teacher_id)
+  )
   const {
     permanentAssignments: sortedPermanentAssignments,
     baselineFlexAssignments: sortedBaselineFlexAssignments,
     temporaryCoverageAssignments: sortedTemporaryCoverageAssignments,
     floaterAssignments: sortedFloaterAssignments,
-  } = sortAssignmentsForPanel(selectedCellData?.assignments ?? [])
+  } = sortAssignmentsForPanelWithAbsencePriority(
+    selectedCellData?.assignments ?? [],
+    absentTeacherIds
+  )
   const findSubLink = buildFindSubLink({
     absences: selectedCellData?.absences,
     assignments: selectedCellData?.assignments,
@@ -4248,12 +4280,11 @@ export default function ScheduleSidePanel({
                               is_partial: boolean
                               time_off_request_id?: string | null
                             }) => {
-                              const subsForAbsence =
-                                selectedCellData?.assignments?.filter(
-                                  assignment =>
-                                    assignment.is_substitute &&
-                                    assignment.absent_teacher_id === absence.teacher_id
-                                ) ?? []
+                              const subsForAbsence = assignmentsForDisplay.filter(
+                                assignment =>
+                                  assignment.is_substitute &&
+                                  assignment.absent_teacher_id === absence.teacher_id
+                              )
                               return (
                                 <div key={absence.teacher_id} className="space-y-2">
                                   <div className="flex items-center justify-between rounded-md border border-gray-300 bg-gray-100 px-3 py-2">
@@ -4268,9 +4299,8 @@ export default function ScheduleSidePanel({
                                     <div className="flex items-center gap-2">
                                       <Button
                                         type="button"
-                                        variant="teal"
-                                        size="sm"
-                                        className="h-8 px-2.5 text-sm"
+                                        variant="ghost"
+                                        className="h-8 gap-1.5 rounded-md border-0 bg-white px-3 font-medium text-teal-700 shadow-none hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
                                         onClick={() => router.push('/time-off')}
                                         disabled={slotIsInactive}
                                       >
@@ -4279,9 +4309,8 @@ export default function ScheduleSidePanel({
                                       {!absence.has_sub && (
                                         <Button
                                           type="button"
-                                          variant="teal"
-                                          size="sm"
-                                          className="h-8 px-2.5"
+                                          variant="ghost"
+                                          className="h-8 gap-1.5 rounded-md border-0 bg-white px-3 font-medium text-teal-700 shadow-none hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
                                           onClick={() => router.push(findSubLink)}
                                           disabled={slotIsInactive}
                                         >
@@ -4307,42 +4336,31 @@ export default function ScheduleSidePanel({
                                         </div>
                                         <div className="flex items-center gap-2">
                                           {absence.time_off_request_id && (
-                                            <TooltipProvider>
-                                              <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                  <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-                                                    onClick={() => {
-                                                      setRemoveDialogSub({
-                                                        id: sub.id,
-                                                        teacher_id: sub.teacher_id ?? '',
-                                                        teacher_name: sub.teacher_name ?? 'Sub',
-                                                      })
-                                                      setRemoveDialogAbsence({
-                                                        teacher_id: absence.teacher_id,
-                                                        teacher_name: absence.teacher_name,
-                                                        time_off_request_id:
-                                                          absence.time_off_request_id,
-                                                      })
-                                                    }}
-                                                    aria-label="Remove sub"
-                                                    disabled={slotIsInactive}
-                                                  >
-                                                    <XCircle className="h-4 w-4" />
-                                                  </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>Remove sub</TooltipContent>
-                                              </Tooltip>
-                                            </TooltipProvider>
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              className="h-8 gap-1.5 rounded-md border-0 bg-white px-3 font-medium text-rose-600 shadow-none hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-0"
+                                              onClick={() => {
+                                                setRemoveDialogSub({
+                                                  id: sub.id,
+                                                  teacher_id: sub.teacher_id ?? '',
+                                                  teacher_name: sub.teacher_name ?? 'Sub',
+                                                })
+                                                setRemoveDialogAbsence({
+                                                  teacher_id: absence.teacher_id,
+                                                  teacher_name: absence.teacher_name,
+                                                  time_off_request_id: absence.time_off_request_id,
+                                                })
+                                              }}
+                                              disabled={slotIsInactive}
+                                            >
+                                              Remove Sub
+                                            </Button>
                                           )}
                                           <Button
                                             type="button"
-                                            variant="teal"
-                                            size="sm"
-                                            className="h-8 px-2.5"
+                                            variant="ghost"
+                                            className="h-8 gap-1.5 rounded-md border-0 bg-white px-3 font-medium text-teal-700 shadow-none hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
                                             onClick={() => router.push(findSubLink)}
                                             disabled={slotIsInactive}
                                           >

@@ -237,12 +237,15 @@ const setupFetch = (
     getCheckConflictsResponse?: (body: {
       checks: Array<{ day_of_week_id: string; time_slot_id: string }>
     }) => { conflicts: any[] }
+    /** When set, fail PUT /api/schedule-cells/bulk with this error message */
+    bulkSaveFailureMessage?: string
   }
 ) => {
   const checkConflictsResponse = options?.checkConflictsResponse ?? { conflicts: [] }
   const teacherSchedulesResponse = options?.teacherSchedulesResponse
   const onBulkSave = options?.onBulkSave
   const getCheckConflictsResponse = options?.getCheckConflictsResponse
+  const bulkSaveFailureMessage = options?.bulkSaveFailureMessage
 
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
@@ -363,6 +366,12 @@ const setupFetch = (
         updates: Array<{ enrollment_for_staffing?: number | null }>
       }
       onBulkSave?.(body)
+      if (bulkSaveFailureMessage) {
+        return {
+          ok: false,
+          json: async () => ({ error: bulkSaveFailureMessage }),
+        } as Response
+      }
       return {
         ok: true,
         json: async () => body.updates ?? [],
@@ -543,6 +552,70 @@ describe('ScheduleSidePanel interactions', () => {
     expect(screen.queryByTestId('unsaved-dialog')).not.toBeInTheDocument()
   })
 
+  it('shows absent staff only once when they are also assigned as floater in the same weekly cell', async () => {
+    setupFetch({
+      start_date: '2026-03-10',
+      end_date: '2026-03-17',
+      weekdays: ['Monday'],
+      matching_shift_count: 2,
+    })
+    const props = buildProps()
+    const selectedCellData = {
+      ...props.selectedCellData,
+      assignments: [
+        {
+          id: 'a-floater-joy',
+          teacher_id: 'teacher-joy',
+          teacher_name: 'Joy P.',
+          classroom_id: 'class-1',
+          classroom_name: 'Infant Room',
+          is_floater: true,
+        },
+      ],
+      absences: [
+        {
+          teacher_id: 'teacher-joy',
+          teacher_name: 'Joy P.',
+          has_sub: false,
+          is_partial: false,
+          time_off_request_id: 'tor-joy',
+        },
+      ],
+    }
+
+    renderWithQueryClient(<ScheduleSidePanel {...props} selectedCellData={selectedCellData} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Staff Assignments')).toBeInTheDocument()
+    })
+
+    expect(screen.getAllByText('Joy P.')).toHaveLength(1)
+    expect(screen.getByText('Absent')).toBeInTheDocument()
+    expect(screen.queryByText('Floater')).not.toBeInTheDocument()
+  })
+
+  it('shows baseline Save controls only after explicit handoff from weekly read-only mode', async () => {
+    setupFetch({
+      start_date: '2026-03-10',
+      end_date: '2026-03-17',
+      weekdays: ['Monday'],
+      matching_shift_count: 2,
+    })
+
+    renderWithQueryClient(<ScheduleSidePanel {...buildProps()} />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Edit baseline staff' })).toBeInTheDocument()
+    })
+
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit baseline staff' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+    expect(await screen.findByRole('button', { name: 'Save' })).toBeInTheDocument()
+  })
+
   it('opens remove flex dialog and shows multi-shift choices', async () => {
     setupFetch({
       start_date: '2026-01-01',
@@ -572,6 +645,31 @@ describe('ScheduleSidePanel interactions', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('All Monday shifts')).toBeInTheDocument()
     expect(screen.getByText('All shifts')).toBeInTheDocument()
+  })
+
+  it('uses toast errors (not browser alert) when baseline save fails', async () => {
+    setupFetch(
+      {
+        start_date: '2026-03-10',
+        end_date: '2026-03-17',
+        weekdays: ['Monday'],
+        matching_shift_count: 2,
+      },
+      { bulkSaveFailureMessage: 'Bulk save failed for test' }
+    )
+    const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
+    const props = { ...buildProps(), readOnly: false as const }
+
+    renderWithQueryClient(<ScheduleSidePanel {...props} />)
+
+    const saveButton = await screen.findByRole('button', { name: 'Save' })
+    fireEvent.click(saveButton)
+
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith('Failed to save: Bulk save failed for test')
+    })
+    expect(alertSpy).not.toHaveBeenCalled()
+    alertSpy.mockRestore()
   })
 
   it('shows staffing summary chip and counts in the header', async () => {
