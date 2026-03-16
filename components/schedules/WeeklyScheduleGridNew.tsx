@@ -528,6 +528,12 @@ export default function WeeklyScheduleGridNew({
       is_active: boolean
       enrollment_for_staffing: number | null
       notes: string | null
+      effective_notes?: string | null
+      weekly_note_override?: {
+        override_mode: 'custom' | 'hidden'
+        note: string | null
+      } | null
+      is_note_hidden_for_date?: boolean
       class_groups?: Array<{
         id: string
         name: string

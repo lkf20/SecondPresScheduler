@@ -54,6 +54,7 @@ Formal contracts and quality standards (see [contracts/README.md](contracts/READ
 - **AUDIT_LOG_CONTRACT.md** — Audit log entry shape and rules
 - **AUDIT_LOG_CALL_SITES_NOT_COMPLIANT.md** — Call site compliance backlog
 - **SCHEDULE_SEMANTICS_CONTRACT.md** — Weekly/Baseline schedule invariants
+- **WEEKLY_SCHEDULE_CELL_NOTES_CONTRACT.md** — Weekly cell notes contract: baseline note inheritance, date-specific custom/hide overrides, API payload and migration constraints
 
 ### `/plans`
 

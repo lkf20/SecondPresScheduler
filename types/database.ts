@@ -636,6 +636,64 @@ export type Database = {
           },
         ]
       }
+      weekly_schedule_cell_notes: {
+        Row: {
+          classroom_id: string
+          created_at: string
+          date: string
+          id: string
+          note: string | null
+          override_mode: string
+          school_id: string
+          time_slot_id: string
+          updated_at: string
+        }
+        Insert: {
+          classroom_id: string
+          created_at?: string
+          date: string
+          id?: string
+          note?: string | null
+          override_mode: string
+          school_id: string
+          time_slot_id: string
+          updated_at?: string
+        }
+        Update: {
+          classroom_id?: string
+          created_at?: string
+          date?: string
+          id?: string
+          note?: string | null
+          override_mode?: string
+          school_id?: string
+          time_slot_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'weekly_schedule_cell_notes_classroom_id_fkey'
+            columns: ['classroom_id']
+            isOneToOne: false
+            referencedRelation: 'classrooms'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'weekly_schedule_cell_notes_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'weekly_schedule_cell_notes_time_slot_id_fkey'
+            columns: ['time_slot_id']
+            isOneToOne: false
+            referencedRelation: 'time_slots'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       schedule_settings: {
         Row: {
           created_at: string | null

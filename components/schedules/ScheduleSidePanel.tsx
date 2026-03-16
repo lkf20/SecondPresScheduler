@@ -123,7 +123,15 @@ type SelectedCellData = WeeklyScheduleData & {
         id: string
         is_active: boolean
         enrollment_for_staffing: number | null
+        /** Baseline note from schedule_cells.notes */
         notes: string | null
+        /** Effective weekly display note for this date/cell */
+        effective_notes?: string | null
+        weekly_note_override?: {
+          override_mode: 'custom' | 'hidden'
+          note: string | null
+        } | null
+        is_note_hidden_for_date?: boolean
         required_staff_override?: number | null
         preferred_staff_override?: number | null
       })
@@ -593,6 +601,12 @@ export default function ScheduleSidePanel({
         is_active: boolean
         enrollment_for_staffing: number | null
         notes: string | null
+        effective_notes?: string | null
+        weekly_note_override?: {
+          override_mode: 'custom' | 'hidden'
+          note: string | null
+        } | null
+        is_note_hidden_for_date?: boolean
       })
     | null
   >(null)
@@ -602,6 +616,12 @@ export default function ScheduleSidePanel({
   const [requiredStaffOverride, setRequiredStaffOverride] = useState<number | null>(null)
   const [preferredStaffOverride, setPreferredStaffOverride] = useState<number | null>(null)
   const [notes, setNotes] = useState<string | null>(null)
+  const [customizeWeeklyNote, setCustomizeWeeklyNote] = useState(false)
+  const [hideWeeklyNoteForDate, setHideWeeklyNoteForDate] = useState(false)
+  const [weeklyCustomNote, setWeeklyCustomNote] = useState('')
+  const [weeklyNoteSaving, setWeeklyNoteSaving] = useState(false)
+  const [weeklyNoteError, setWeeklyNoteError] = useState<string | null>(null)
+  const weeklyCustomNoteRef = useRef<HTMLTextAreaElement | null>(null)
   const [selectedTeachers, setSelectedTeachers] = useState<Teacher[]>([])
   const [selectedFlexTeachers, setSelectedFlexTeachers] = useState<Teacher[]>([])
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(false)
@@ -1276,6 +1296,12 @@ export default function ScheduleSidePanel({
         is_active: boolean
         enrollment_for_staffing: number | null
         notes: string | null
+        effective_notes?: string | null
+        weekly_note_override?: {
+          override_mode: 'custom' | 'hidden'
+          note: string | null
+        } | null
+        is_note_hidden_for_date?: boolean
         required_staff_override?: number | null
         preferred_staff_override?: number | null
       },
@@ -1466,6 +1492,29 @@ export default function ScheduleSidePanel({
       })
       .catch(console.error)
   }, [isOpen, classroomId, dayId, timeSlotId, selectedCellData, initializeFromCell])
+
+  // Initialize weekly note override UI state from selected weekly cell snapshot.
+  useEffect(() => {
+    if (!isOpen || !readOnly || panelMode !== 'cell') return
+    const override = selectedCellData?.schedule_cell?.weekly_note_override ?? null
+    if (!override) {
+      setCustomizeWeeklyNote(false)
+      setHideWeeklyNoteForDate(false)
+      setWeeklyCustomNote('')
+      setWeeklyNoteError(null)
+      return
+    }
+
+    setCustomizeWeeklyNote(true)
+    if (override.override_mode === 'hidden') {
+      setHideWeeklyNoteForDate(true)
+      setWeeklyCustomNote('')
+    } else {
+      setHideWeeklyNoteForDate(false)
+      setWeeklyCustomNote(override.note ?? '')
+    }
+    setWeeklyNoteError(null)
+  }, [isOpen, readOnly, panelMode, selectedCellData?.schedule_cell?.weekly_note_override])
 
   // Load allowed class groups for this classroom only when panel opens or classroom changes.
   // Separate effect so we do not reset when selectedCellData or initializeFromCell change (which would make the dropdown show all class groups).
@@ -2042,6 +2091,144 @@ export default function ScheduleSidePanel({
       setShowUnsavedDialog(true)
     } else {
       onClose()
+    }
+  }
+
+  const baselineNoteForSelectedCell = cell?.notes?.trim() ?? ''
+  const weeklyEffectiveNote =
+    !customizeWeeklyNote || panelMode !== 'cell' || !readOnly
+      ? baselineNoteForSelectedCell || null
+      : hideWeeklyNoteForDate
+        ? null
+        : weeklyCustomNote.trim() || null
+
+  const focusWeeklyCustomNote = () => {
+    window.setTimeout(() => {
+      weeklyCustomNoteRef.current?.focus()
+      weeklyCustomNoteRef.current?.setSelectionRange(
+        weeklyCustomNoteRef.current.value.length,
+        weeklyCustomNoteRef.current.value.length
+      )
+    }, 0)
+  }
+
+  const handleCustomizeWeeklyNoteChange = (checked: boolean) => {
+    setCustomizeWeeklyNote(checked)
+    setWeeklyNoteError(null)
+    if (!checked) {
+      setHideWeeklyNoteForDate(false)
+      return
+    }
+    setHideWeeklyNoteForDate(false)
+    if (!weeklyCustomNote.trim()) {
+      setWeeklyCustomNote(baselineNoteForSelectedCell)
+    }
+    focusWeeklyCustomNote()
+  }
+
+  const handleSaveWeeklyNote = async () => {
+    if (!cellDateISO) {
+      setWeeklyNoteError('Select a calendar date before saving weekly notes.')
+      return
+    }
+
+    if (!customizeWeeklyNote) {
+      setWeeklyNoteSaving(true)
+      setWeeklyNoteError(null)
+      try {
+        const response = await fetch('/api/weekly-schedule/cell-note', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: cellDateISO,
+            day_of_week_id: dayId,
+            classroom_id: classroomId,
+            time_slot_id: timeSlotId,
+            use_baseline_note: true,
+          }),
+        })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          throw new Error((payload as { error?: string }).error || 'Failed to save weekly note.')
+        }
+        setCell(prev =>
+          prev
+            ? {
+                ...prev,
+                effective_notes:
+                  (payload as { effective_note?: string | null }).effective_note ?? null,
+                weekly_note_override: null,
+                is_note_hidden_for_date: false,
+              }
+            : prev
+        )
+        toast.success('Weekly note now uses baseline note.')
+        await Promise.resolve(onRefresh?.())
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Failed to save weekly note settings.'
+        setWeeklyNoteError(message)
+      } finally {
+        setWeeklyNoteSaving(false)
+      }
+      return
+    }
+
+    if (!hideWeeklyNoteForDate && !weeklyCustomNote.trim()) {
+      setWeeklyNoteError('Enter a custom note or choose "Hide note for this date".')
+      focusWeeklyCustomNote()
+      return
+    }
+
+    setWeeklyNoteSaving(true)
+    setWeeklyNoteError(null)
+    try {
+      const response = await fetch('/api/weekly-schedule/cell-note', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: cellDateISO,
+          day_of_week_id: dayId,
+          classroom_id: classroomId,
+          time_slot_id: timeSlotId,
+          use_baseline_note: false,
+          override_mode: hideWeeklyNoteForDate ? 'hidden' : 'custom',
+          note: hideWeeklyNoteForDate ? null : weeklyCustomNote.trim(),
+        }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error((payload as { error?: string }).error || 'Failed to save weekly note.')
+      }
+
+      const nextOverride =
+        (
+          payload as {
+            weekly_note_override?: {
+              override_mode: 'custom' | 'hidden'
+              note: string | null
+            } | null
+          }
+        ).weekly_note_override ?? null
+      setCell(prev =>
+        prev
+          ? {
+              ...prev,
+              effective_notes:
+                (payload as { effective_note?: string | null }).effective_note ?? null,
+              weekly_note_override: nextOverride,
+              is_note_hidden_for_date:
+                (payload as { is_note_hidden_for_date?: boolean }).is_note_hidden_for_date ?? false,
+            }
+          : prev
+      )
+      toast.success('Weekly note saved.')
+      await Promise.resolve(onRefresh?.())
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save weekly note.'
+      setWeeklyNoteError(message)
+    } finally {
+      setWeeklyNoteSaving(false)
     }
   }
 
@@ -4507,6 +4694,93 @@ export default function ScheduleSidePanel({
                         <Pencil className="mr-1.5 h-3.5 w-3.5" />
                         Edit class groups, enrollment & ratios
                       </Button>
+                    </div>
+
+                    <div className="rounded-lg bg-white border border-gray-200 p-6 space-y-4">
+                      <h3 className="text-sm font-semibold text-slate-900">Notes</h3>
+
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-slate-700">Baseline note</Label>
+                        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 min-h-[44px]">
+                          {baselineNoteForSelectedCell || (
+                            <span className="text-slate-500">No baseline note</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 pt-1">
+                        <Switch
+                          id="customize-weekly-note"
+                          checked={customizeWeeklyNote}
+                          onCheckedChange={handleCustomizeWeeklyNoteChange}
+                          disabled={slotIsInactive || weeklyNoteSaving}
+                        />
+                        <Label
+                          htmlFor="customize-weekly-note"
+                          className="text-sm font-normal cursor-pointer"
+                        >
+                          Customize note for this date
+                        </Label>
+                      </div>
+
+                      {customizeWeeklyNote && (
+                        <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id="hide-weekly-note"
+                              checked={hideWeeklyNoteForDate}
+                              onCheckedChange={checked => {
+                                setHideWeeklyNoteForDate(checked === true)
+                                setWeeklyNoteError(null)
+                              }}
+                              disabled={slotIsInactive || weeklyNoteSaving}
+                            />
+                            <Label
+                              htmlFor="hide-weekly-note"
+                              className="text-sm font-normal cursor-pointer"
+                            >
+                              Hide note for this date
+                            </Label>
+                          </div>
+                          {!hideWeeklyNoteForDate && (
+                            <Textarea
+                              id="weekly-custom-note"
+                              ref={weeklyCustomNoteRef}
+                              value={weeklyCustomNote}
+                              onChange={event => {
+                                setWeeklyCustomNote(event.target.value)
+                                setWeeklyNoteError(null)
+                              }}
+                              placeholder="Add a note for this date..."
+                              rows={3}
+                              className="text-base min-h-[80px]"
+                              disabled={slotIsInactive || weeklyNoteSaving}
+                            />
+                          )}
+                        </div>
+                      )}
+
+                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                        <p className="text-xs text-slate-500 mb-1">Displayed in this weekly cell</p>
+                        <p className="text-sm text-slate-700">{weeklyEffectiveNote || 'No note'}</p>
+                      </div>
+
+                      {weeklyNoteError && (
+                        <p className="text-sm text-red-600" role="alert">
+                          {weeklyNoteError}
+                        </p>
+                      )}
+
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          variant="teal"
+                          onClick={() => void handleSaveWeeklyNote()}
+                          disabled={!cellDateISO || slotIsInactive || weeklyNoteSaving}
+                        >
+                          {weeklyNoteSaving ? 'Saving note...' : 'Save note for this date'}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 )}

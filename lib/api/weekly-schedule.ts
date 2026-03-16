@@ -7,6 +7,7 @@ import { Database } from '@/types/database'
 
 type ClassGroupRow = Database['public']['Tables']['class_groups']['Row']
 type ScheduleCellRow = Database['public']['Tables']['schedule_cells']['Row']
+type WeeklyScheduleCellNoteRow = Database['public']['Tables']['weekly_schedule_cell_notes']['Row']
 type StaffRow = Database['public']['Tables']['staff']['Row']
 type StaffLite = {
   id: string
@@ -88,6 +89,11 @@ type ScheduleCellRaw = ScheduleCellRow & {
     class_group: ClassGroupRow | null
   }>
   class_groups?: Array<ClassGroupRow & { enrollment?: number | null }>
+}
+
+type WeeklyScheduleNoteOverride = {
+  override_mode: 'custom' | 'hidden'
+  note: string | null
 }
 
 type WeeklySubAssignment = {
@@ -250,7 +256,13 @@ export interface WeeklyScheduleDataByClassroom {
         id: string
         is_active: boolean
         enrollment_for_staffing: number | null
+        /** Baseline note from schedule_cells.notes */
         notes: string | null
+        /** Effective note shown in weekly grid for this date/cell (baseline, custom, or hidden=null). */
+        effective_notes?: string | null
+        /** Date-specific override row (if present). */
+        weekly_note_override?: WeeklyScheduleNoteOverride | null
+        is_note_hidden_for_date?: boolean
         required_staff_override?: number | null
         preferred_staff_override?: number | null
         class_groups?: Array<{
@@ -607,6 +619,53 @@ export async function getScheduleSnapshotData({
   // Fetch substitute assignments for the selected date range (if provided)
   let subAssignments: WeeklySubAssignment[] = []
 
+  // Fetch weekly date-specific note overrides for the selected date range.
+  let weeklyNoteOverrides = new Map<string, WeeklyScheduleNoteOverride>()
+  if (hasDateRange && startDateISO && endDateISO) {
+    try {
+      const { data: weeklyNotesData, error: weeklyNotesError } = await supabase
+        .from('weekly_schedule_cell_notes')
+        .select('date, classroom_id, time_slot_id, override_mode, note')
+        .eq('school_id', schoolId)
+        .gte('date', startDateISO)
+        .lte('date', endDateISO)
+
+      if (weeklyNotesError) {
+        if (
+          weeklyNotesError.code === '42P01' ||
+          weeklyNotesError.message?.includes('does not exist')
+        ) {
+          weeklyNoteOverrides = new Map()
+        } else {
+          console.warn('Error fetching weekly schedule cell notes:', weeklyNotesError.message)
+        }
+      } else if (weeklyNotesData) {
+        weeklyNoteOverrides = new Map(
+          (
+            weeklyNotesData as Array<
+              Pick<
+                WeeklyScheduleCellNoteRow,
+                'date' | 'classroom_id' | 'time_slot_id' | 'override_mode' | 'note'
+              >
+            >
+          ).map(row => [
+            `${toDateStringISO(row.date)}|${row.classroom_id}|${row.time_slot_id}`,
+            {
+              override_mode:
+                row.override_mode === 'hidden' || row.override_mode === 'custom'
+                  ? row.override_mode
+                  : 'custom',
+              note: row.note,
+            } satisfies WeeklyScheduleNoteOverride,
+          ])
+        )
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      console.warn('Error fetching weekly schedule cell notes:', errorMessage)
+    }
+  }
+
   if (hasDateRange && startDateISO && endDateISO) {
     try {
       // Fetch sub_assignments for the date range
@@ -712,6 +771,9 @@ export async function getScheduleSnapshotData({
           is_active: boolean
           enrollment_for_staffing: number | null
           notes: string | null
+          effective_notes?: string | null
+          weekly_note_override?: WeeklyScheduleNoteOverride | null
+          is_note_hidden_for_date?: boolean
           class_groups?: Array<{
             id: string
             name: string
@@ -765,6 +827,20 @@ export async function getScheduleSnapshotData({
         // Build assignments when schedule_cell exists and has class groups and/or we have teacher assignments.
         // Include inactive slots so the UI can display assigned teachers (with gray styling).
         const classGroups = scheduleCell?.class_groups || []
+        const slotDateISO =
+          hasDateRange && startDateISO && day.day_number != null
+            ? getCellDateISO(startDateISO, day.day_number)
+            : null
+        const weeklyNoteOverride =
+          slotDateISO != null
+            ? (weeklyNoteOverrides.get(`${slotDateISO}|${classroom.id}|${timeSlot.id}`) ?? null)
+            : null
+        const effectiveNote =
+          weeklyNoteOverride?.override_mode === 'hidden'
+            ? null
+            : weeklyNoteOverride?.override_mode === 'custom'
+              ? (weeklyNoteOverride.note ?? null)
+              : (scheduleCell?.notes ?? null)
 
         if (scheduleCell && (classGroups.length > 0 || assignmentsForSlot.length > 0)) {
           const classGroupIds = classGroups.map(cg => cg.id)
@@ -774,10 +850,7 @@ export async function getScheduleSnapshotData({
           // All teachers assigned to this classroom/day/time are included.
           // Conflict_teaching override: if this teacher has an is_floater sub_assignment
           // for this date/slot in another room, treat their baseline as floater too.
-          const cellDate =
-            hasDateRange && startDateISO && day.day_number != null
-              ? getCellDateISO(startDateISO, day.day_number)
-              : null
+          const cellDate = slotDateISO
           const teachers = assignmentsForSlot.map(assignment => {
             const teacherInfo = assignment.teacher
               ? {
@@ -1073,6 +1146,9 @@ export async function getScheduleSnapshotData({
                 is_active: scheduleCell.is_active,
                 enrollment_for_staffing: scheduleCell.enrollment_for_staffing,
                 notes: scheduleCell.notes,
+                effective_notes: effectiveNote,
+                weekly_note_override: weeklyNoteOverride,
+                is_note_hidden_for_date: weeklyNoteOverride?.override_mode === 'hidden',
                 required_staff_override: scheduleCell.required_staff_override ?? null,
                 preferred_staff_override: scheduleCell.preferred_staff_override ?? null,
                 class_groups: classGroups || [],

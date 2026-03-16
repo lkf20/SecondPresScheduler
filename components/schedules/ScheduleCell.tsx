@@ -15,7 +15,10 @@ interface ScheduleCellProps {
       id: string
       is_active: boolean
       enrollment_for_staffing: number | null
+      /** Baseline note from schedule_cells */
       notes: string | null
+      /** Effective weekly note shown in grid for this date/cell */
+      effective_notes?: string | null
       required_staff_override?: number | null
       preferred_staff_override?: number | null
       class_groups?: Array<{
@@ -61,7 +64,7 @@ export default function ScheduleCell({
   allClassGroupIds,
 }: ScheduleCellProps) {
   const scheduleCell = data?.schedule_cell
-  const notesText = scheduleCell?.notes?.trim() ?? ''
+  const notesText = (scheduleCell?.effective_notes ?? scheduleCell?.notes)?.trim() ?? ''
   const isInactive = scheduleCell && !scheduleCell.is_active
   const showNotesBlock = showNotes && notesText.length > 0 && !isInactive
   const isActive = scheduleCell?.is_active ?? false
