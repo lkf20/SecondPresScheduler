@@ -18,6 +18,12 @@ const logAssignShiftsError = (...args: unknown[]) => {
   }
 }
 
+const isMissingNonSubOverrideColumnError = (error: { code?: string; message?: string } | null) => {
+  if (!error) return false
+  if (error.code === '42703') return true
+  return /non_sub_override/i.test(error.message || '')
+}
+
 // See docs/domain/data-lifecycle.md: sub_assignments lifecycle
 /**
  * POST /api/sub-finder/assign-shifts
@@ -439,17 +445,50 @@ export async function POST(request: NextRequest) {
     // Heal stale counters before inserting, then retry once if constraint violation persists.
     await reconcileCoverageRequestCounters(coverage_request_id)
 
-    const insertAssignments = () => supabase.from('sub_assignments').insert(assignments).select()
-    let { data: createdAssignments, error: insertError } = await insertAssignments()
+    const insertAssignments = async (
+      rows: typeof assignments
+    ): Promise<{ data: any[] | null; error: any | null }> => {
+      const result = await (supabase.from('sub_assignments').insert(rows).select() as any)
+      return result
+    }
+
+    let { data: createdAssignments, error: insertError } = await insertAssignments(assignments)
+
+    if (isMissingNonSubOverrideColumnError(insertError as any)) {
+      if (isNonSubOverride) {
+        return createErrorResponse(
+          'Non-sub override assignments require the latest database migration before they can be recorded.',
+          503
+        )
+      }
+
+      const legacyAssignments = assignments.map(({ non_sub_override: _omit, ...rest }) => rest)
+      const retryLegacy = await insertAssignments(legacyAssignments as any)
+      createdAssignments = retryLegacy.data
+      insertError = retryLegacy.error
+    }
 
     if (
       insertError?.message?.includes('coverage_requests_counters_check') ||
       insertError?.details?.includes('coverage_requests_counters_check')
     ) {
       await reconcileCoverageRequestCounters(coverage_request_id)
-      const retryResult = await insertAssignments()
+      const retryResult = await insertAssignments(assignments)
       createdAssignments = retryResult.data
       insertError = retryResult.error
+
+      if (isMissingNonSubOverrideColumnError(insertError as any)) {
+        if (isNonSubOverride) {
+          return createErrorResponse(
+            'Non-sub override assignments require the latest database migration before they can be recorded.',
+            503
+          )
+        }
+        const legacyAssignments = assignments.map(({ non_sub_override: _omit, ...rest }) => rest)
+        const retryLegacy = await insertAssignments(legacyAssignments as any)
+        createdAssignments = retryLegacy.data
+        insertError = retryLegacy.error
+      }
     }
 
     if (insertError) {

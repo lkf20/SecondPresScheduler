@@ -378,6 +378,275 @@ describe('POST /api/sub-finder/assign-shifts integration', () => {
     )
   })
 
+  it('falls back to legacy insert without non_sub_override when column is missing for normal sub assignments', async () => {
+    let insertedPayloads: Array<Array<Record<string, unknown>>> = []
+    const coverageRequestsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      update: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          in: jest.fn().mockResolvedValue({ error: null }),
+        }),
+      }),
+      single: jest.fn().mockResolvedValue({
+        data: {
+          teacher_id: 'teacher-1',
+          source_request_id: 'timeoff-1',
+          request_type: 'absence',
+          school_id: 'school-1',
+        },
+        error: null,
+      }),
+    }
+    const coverageRequestShiftsQuery = {
+      select: jest.fn().mockImplementation((columns?: string, options?: { head?: boolean }) => {
+        if (options?.head) {
+          return {
+            eq: jest.fn().mockReturnValue({
+              eq: jest.fn().mockResolvedValue({ count: 1, error: null }),
+            }),
+          }
+        }
+        if (columns?.includes('classroom_id')) {
+          return {
+            eq: jest.fn().mockReturnThis(),
+            in: jest.fn().mockResolvedValue({
+              data: [
+                {
+                  id: 'shift-1',
+                  date: '2099-02-10',
+                  day_of_week_id: 'day-1',
+                  time_slot_id: 'slot-1',
+                  classroom_id: 'classroom-1',
+                },
+              ],
+              error: null,
+            }),
+          }
+        }
+        return {
+          eq: jest.fn().mockReturnThis(),
+          in: jest.fn().mockResolvedValue({
+            data: [
+              {
+                id: 'shift-1',
+                date: '2099-02-10',
+                days_of_week: { name: 'Monday' },
+                time_slots: { code: 'EM' },
+              },
+            ],
+            error: null,
+          }),
+        }
+      }),
+    }
+
+    const subAssignmentsQuery: any = {
+      select: jest.fn((columns?: string) => {
+        // Existing assignment lookup and covered rows lookup return empty.
+        if (columns?.includes('coverage_request_shifts!inner')) return subAssignmentsQuery
+        return subAssignmentsQuery
+      }),
+      eq: jest.fn((column: string) => {
+        if (column === 'coverage_request_shifts.status') {
+          return Promise.resolve({ data: [], error: null })
+        }
+        return subAssignmentsQuery
+      }),
+      in: jest.fn((column: string) => {
+        if (column === 'date') return subAssignmentsQuery
+        if (column === 'time_slot_id') return Promise.resolve({ data: [], error: null })
+        if (column === 'coverage_request_shift_id')
+          return Promise.resolve({ data: [], error: null })
+        return Promise.resolve({ data: [], error: null })
+      }),
+      update: jest.fn().mockReturnValue({
+        eq: jest.fn().mockResolvedValue({ data: null, error: null }),
+      }),
+      insert: jest.fn((assignments: Array<Record<string, unknown>>) => {
+        insertedPayloads.push(assignments)
+        const includesOverride = Object.prototype.hasOwnProperty.call(
+          assignments[0] || {},
+          'non_sub_override'
+        )
+        return {
+          select: jest.fn().mockResolvedValue(
+            includesOverride
+              ? {
+                  data: null,
+                  error: {
+                    code: '42703',
+                    message: 'column sub_assignments.non_sub_override does not exist',
+                  },
+                }
+              : {
+                  data: [{ id: 'assignment-1', coverage_request_shift_id: 'shift-1' }],
+                  error: null,
+                }
+          ),
+        }
+      }),
+    }
+
+    const substituteContactsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({ data: null, error: null }),
+    }
+    const overridesQuery = {
+      select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({ data: [], error: null }),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'coverage_requests') return coverageRequestsQuery
+        if (table === 'coverage_request_shifts') return coverageRequestShiftsQuery
+        if (table === 'sub_assignments') return subAssignmentsQuery
+        if (table === 'staff') return createStaffQuery()
+        if (table === 'substitute_contacts') return substituteContactsQuery
+        if (table === 'sub_contact_shift_overrides') return overridesQuery
+        if (table === 'teacher_schedules') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockResolvedValue({ data: [], error: null }),
+          }
+        }
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/assign-shifts',
+      'POST',
+      {
+        coverage_request_id: 'coverage-1',
+        sub_id: 'sub-1',
+        selected_shift_ids: ['shift-1'],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.success).toBe(true)
+    expect(insertedPayloads).toHaveLength(2)
+    expect(insertedPayloads[0][0]).toHaveProperty('non_sub_override', false)
+    expect(insertedPayloads[1][0]).not.toHaveProperty('non_sub_override')
+  })
+
+  it('returns 503 for non-sub override assignment when non_sub_override column is missing', async () => {
+    const coverageRequestsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      update: jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({
+          in: jest.fn().mockResolvedValue({ error: null }),
+        }),
+      }),
+      single: jest.fn().mockResolvedValue({
+        data: {
+          teacher_id: 'teacher-1',
+          source_request_id: 'timeoff-1',
+          request_type: 'absence',
+          school_id: 'school-1',
+        },
+        error: null,
+      }),
+    }
+    const coverageRequestShiftsQuery = {
+      select: jest.fn().mockImplementation((columns?: string, options?: { head?: boolean }) => {
+        if (options?.head) {
+          return {
+            eq: jest.fn().mockReturnValue({
+              eq: jest.fn().mockResolvedValue({ count: 1, error: null }),
+            }),
+          }
+        }
+        if (columns?.includes('classroom_id')) {
+          return {
+            eq: jest.fn().mockReturnThis(),
+            in: jest.fn().mockResolvedValue({
+              data: [
+                {
+                  id: 'shift-1',
+                  date: '2099-02-10',
+                  day_of_week_id: 'day-1',
+                  time_slot_id: 'slot-1',
+                  classroom_id: 'classroom-1',
+                },
+              ],
+              error: null,
+            }),
+          }
+        }
+        return {
+          eq: jest.fn().mockReturnThis(),
+          in: jest.fn().mockResolvedValue({
+            data: [],
+            error: null,
+          }),
+        }
+      }),
+    }
+    const subAssignmentsQuery = createSubAssignmentsQuery({
+      insertData: null,
+      insertError: {
+        code: '42703',
+        message: 'column sub_assignments.non_sub_override does not exist',
+      },
+    })
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'coverage_requests') return coverageRequestsQuery
+        if (table === 'coverage_request_shifts') return coverageRequestShiftsQuery
+        if (table === 'sub_assignments') return subAssignmentsQuery
+        if (table === 'staff') {
+          return createStaffQuery({
+            subRecord: {
+              id: 'staff-override',
+              school_id: 'school-1',
+              first_name: 'Alex',
+              last_name: 'Admin',
+              display_name: null,
+              active: true,
+              is_sub: false,
+            },
+          })
+        }
+        if (table === 'teacher_schedules') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockResolvedValue({ data: [], error: null }),
+          }
+        }
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/assign-shifts',
+      'POST',
+      {
+        coverage_request_id: 'coverage-1',
+        sub_id: 'staff-override',
+        allow_non_sub_override: true,
+        selected_shift_ids: ['shift-1'],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(503)
+    expect(json.error).toMatch(/require.*latest database migration/i)
+  })
+
   it('creates assignments and returns assigned shift details on success', async () => {
     let coverageRequestShiftsSelectCount = 0
 
