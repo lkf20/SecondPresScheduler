@@ -1,6 +1,15 @@
 /* eslint-disable react/display-name */
+import React from 'react'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import ScheduleSidePanel from '@/components/schedules/ScheduleSidePanel'
+
+function renderWithQueryClient(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+}
 
 const pushMock = jest.fn()
 const toastSuccessMock = jest.fn()
@@ -22,6 +31,10 @@ jest.mock('sonner', () => ({
 
 jest.mock('@/lib/hooks/use-display-name-format', () => ({
   useDisplayNameFormat: () => ({ format: 'first_last_initial' }),
+}))
+
+jest.mock('@/lib/contexts/SchoolContext', () => ({
+  useSchool: () => 'school-1',
 }))
 
 jest.mock('@/components/ui/sheet', () => ({
@@ -421,7 +434,7 @@ describe('ScheduleSidePanel interactions', () => {
       matching_shift_count: 6,
     })
 
-    render(<ScheduleSidePanel {...buildProps()} />)
+    renderWithQueryClient(<ScheduleSidePanel {...buildProps()} />)
     await waitFor(() => expect(screen.getByText('Bella W.')).toBeInTheDocument())
     await act(async () => {
       await new Promise(r => setTimeout(r, 50))
@@ -452,7 +465,7 @@ describe('ScheduleSidePanel interactions', () => {
       matching_shift_count: 6,
     })
 
-    render(<ScheduleSidePanel {...buildProps()} />)
+    renderWithQueryClient(<ScheduleSidePanel {...buildProps()} />)
     await waitFor(() => expect(screen.getByText('Bella W.')).toBeInTheDocument(), { timeout: 3000 })
     await act(async () => {
       await new Promise(r => setTimeout(r, 50))
@@ -470,7 +483,7 @@ describe('ScheduleSidePanel interactions', () => {
       matching_shift_count: 6,
     })
 
-    render(<ScheduleSidePanel {...buildProps()} />)
+    renderWithQueryClient(<ScheduleSidePanel {...buildProps()} />)
 
     await waitFor(
       () => {
@@ -523,7 +536,7 @@ describe('ScheduleSidePanel interactions', () => {
       },
     }
 
-    render(<ScheduleSidePanel {...propsWithoutEventId} />)
+    renderWithQueryClient(<ScheduleSidePanel {...propsWithoutEventId} />)
     await waitFor(() => expect(screen.getByText('Amy P.')).toBeInTheDocument(), { timeout: 3000 })
     await act(async () => {
       await new Promise(r => setTimeout(r, 50))
@@ -541,7 +554,7 @@ describe('ScheduleSidePanel interactions', () => {
       matching_shift_count: 1,
     })
 
-    render(<ScheduleSidePanel {...buildProps()} />)
+    renderWithQueryClient(<ScheduleSidePanel {...buildProps()} />)
     await waitFor(() => expect(screen.getByText('Bella W.')).toBeInTheDocument(), { timeout: 3000 })
     await act(async () => {
       await new Promise(r => setTimeout(r, 50))
@@ -598,7 +611,7 @@ describe('ScheduleSidePanel interactions', () => {
       classroomName: 'Silver Room',
     }
 
-    render(<ScheduleSidePanel {...baselineProps} />)
+    renderWithQueryClient(<ScheduleSidePanel {...baselineProps} />)
 
     // Wait for conflict check to run and ConflictBanner to appear (teachers come from selectedCellData; check-conflicts returns conflict)
     await waitFor(
@@ -644,7 +657,7 @@ describe('ScheduleSidePanel interactions', () => {
     )
 
     const props = buildProps()
-    render(
+    renderWithQueryClient(
       <ScheduleSidePanel
         {...props}
         readOnly={false}
@@ -700,7 +713,7 @@ describe('ScheduleSidePanel interactions', () => {
     )
 
     const props = buildProps()
-    render(
+    renderWithQueryClient(
       <ScheduleSidePanel
         {...props}
         readOnly={false}
@@ -770,7 +783,7 @@ describe('ScheduleSidePanel interactions', () => {
       schedule_cell: props.selectedCellData?.schedule_cell,
     }
 
-    render(
+    renderWithQueryClient(
       <ScheduleSidePanel
         {...props}
         readOnly={false}
@@ -837,7 +850,7 @@ describe('ScheduleSidePanel interactions', () => {
     )
 
     const props = buildProps()
-    render(
+    renderWithQueryClient(
       <ScheduleSidePanel
         {...props}
         readOnly={false}
@@ -904,7 +917,7 @@ describe('ScheduleSidePanel interactions', () => {
     })
 
     const props = buildProps()
-    render(
+    renderWithQueryClient(
       <ScheduleSidePanel
         {...props}
         readOnly={false}
@@ -960,7 +973,9 @@ describe('ScheduleSidePanel interactions', () => {
       },
     }
 
-    render(<ScheduleSidePanel {...props} readOnly={false} selectedCellData={selectedCellData} />)
+    renderWithQueryClient(
+      <ScheduleSidePanel {...props} readOnly={false} selectedCellData={selectedCellData} />
+    )
 
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument(), {
       timeout: 3000,
@@ -995,7 +1010,7 @@ describe('ScheduleSidePanel interactions', () => {
     })
 
     const props = buildProps()
-    render(
+    renderWithQueryClient(
       <ScheduleSidePanel
         {...props}
         readOnly={false}
@@ -1025,7 +1040,7 @@ describe('ScheduleSidePanel interactions', () => {
     })
 
     const props = buildProps()
-    render(
+    renderWithQueryClient(
       <ScheduleSidePanel
         {...props}
         readOnly
@@ -1061,7 +1076,7 @@ describe('ScheduleSidePanel interactions', () => {
     })
 
     const props = buildProps()
-    render(
+    renderWithQueryClient(
       <ScheduleSidePanel
         {...props}
         readOnly={false}
@@ -1085,7 +1100,7 @@ describe('ScheduleSidePanel interactions', () => {
     })
 
     const props = buildProps()
-    render(
+    renderWithQueryClient(
       <ScheduleSidePanel
         {...props}
         readOnly={false}
@@ -1109,7 +1124,7 @@ describe('ScheduleSidePanel interactions', () => {
     })
 
     const props = buildProps()
-    render(
+    renderWithQueryClient(
       <ScheduleSidePanel
         {...props}
         readOnly
@@ -1142,7 +1157,7 @@ describe('ScheduleSidePanel interactions', () => {
     })
 
     const props = buildProps()
-    render(
+    renderWithQueryClient(
       <ScheduleSidePanel
         {...props}
         readOnly
@@ -1201,7 +1216,7 @@ describe('ScheduleSidePanel - Add Temporary Coverage', () => {
       matching_shift_count: 10,
     })
 
-    render(<ScheduleSidePanel {...buildPropsFromDashboard()} />)
+    renderWithQueryClient(<ScheduleSidePanel {...buildPropsFromDashboard()} />)
 
     await waitFor(
       () => {
@@ -1222,7 +1237,7 @@ describe('ScheduleSidePanel - Add Temporary Coverage', () => {
       matching_shift_count: 10,
     })
 
-    render(<ScheduleSidePanel {...buildPropsFromDashboard()} />)
+    renderWithQueryClient(<ScheduleSidePanel {...buildPropsFromDashboard()} />)
 
     await waitFor(
       () => {
@@ -1247,7 +1262,7 @@ describe('ScheduleSidePanel - Add Temporary Coverage', () => {
       matching_shift_count: 10,
     })
 
-    render(<ScheduleSidePanel {...buildPropsFromDashboard()} />)
+    renderWithQueryClient(<ScheduleSidePanel {...buildPropsFromDashboard()} />)
 
     await waitFor(
       () => {
@@ -1272,7 +1287,7 @@ describe('ScheduleSidePanel - Add Temporary Coverage', () => {
       matching_shift_count: 10,
     })
 
-    render(<ScheduleSidePanel {...buildProps()} weekStartISO="2026-03-09" />)
+    renderWithQueryClient(<ScheduleSidePanel {...buildProps()} weekStartISO="2026-03-09" />)
 
     await waitFor(() => expect(screen.getByText('Bella W.')).toBeInTheDocument(), { timeout: 3000 })
     await act(async () => {
@@ -1302,7 +1317,7 @@ describe('ScheduleSidePanel - Add Temporary Coverage', () => {
       matching_shift_count: 10,
     })
 
-    render(<ScheduleSidePanel {...buildProps()} weekStartISO="2026-03-09" />)
+    renderWithQueryClient(<ScheduleSidePanel {...buildProps()} weekStartISO="2026-03-09" />)
 
     await waitFor(() => expect(screen.getByText('Bella W.')).toBeInTheDocument())
     await act(async () => {

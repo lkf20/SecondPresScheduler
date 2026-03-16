@@ -365,14 +365,8 @@ describe('AssignSubPanel', () => {
     const subNotesInput = screen.getByLabelText(/^Notes$/i)
     await user.type(subNotesInput, 'Anne agreed to cover')
 
-    // Click Assign button (AM shift is unavailable per check-conflicts mock, so dialog appears)
+    // Click Assign (AM shift is 'available' per check-conflicts mock, so no dialog)
     await user.click(assignBtn)
-
-    // Confirm override when assigning unavailable sub
-    const assignAnywayBtn = await screen.findByRole('button', {
-      name: /yes, assign anyway/i,
-    })
-    await user.click(assignAnywayBtn)
 
     await waitFor(() => {
       expect(mockToastSuccess).toHaveBeenCalledWith(
