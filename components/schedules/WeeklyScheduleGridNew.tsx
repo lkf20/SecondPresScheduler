@@ -554,8 +554,13 @@ export default function WeeklyScheduleGridNew({
     time_slot_is_active?: boolean
     classroom_is_active?: boolean
   }>()
-  const { setActivePanel, previousPanel, restorePreviousPanel, registerPanelCloseHandler } =
-    usePanelManager()
+  const {
+    setActivePanel,
+    previousPanel,
+    restorePreviousPanel,
+    clearPreviousPanel,
+    registerPanelCloseHandler,
+  } = usePanelManager()
   const savedCellRef = useRef<typeof selectedCell>(null)
 
   // Calculate assignment counts for filter chips
@@ -665,7 +670,9 @@ export default function WeeklyScheduleGridNew({
     // badge could flash from "meets required" to "below required" before the panel closes.
     setSelectedCellSnapshot(undefined)
     setSelectedCell(null)
+    savedCellRef.current = null
     setActivePanel(null)
+    clearPreviousPanel()
     try {
       if (onRefresh) {
         await Promise.resolve(onRefresh())
@@ -676,9 +683,11 @@ export default function WeeklyScheduleGridNew({
   }
 
   const handleClosePanel = () => {
+    savedCellRef.current = null
     setSelectedCell(null)
     setSelectedCellSnapshot(undefined)
     setActivePanel(null)
+    clearPreviousPanel()
   }
 
   // Handle panel restoration when Add Time Off closes

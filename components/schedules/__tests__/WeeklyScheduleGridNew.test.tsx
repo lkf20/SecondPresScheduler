@@ -4,7 +4,9 @@ import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
 
 const setActivePanelMock = jest.fn()
 const restorePreviousPanelMock = jest.fn()
+const clearPreviousPanelMock = jest.fn()
 const registerPanelCloseHandlerMock = jest.fn(() => jest.fn())
+let previousPanelMock: { type: 'schedule'; restoreCallback?: () => void } | null = null
 
 beforeEach(() => {
   global.fetch = jest.fn(async (input: RequestInfo | URL) => {
@@ -19,8 +21,9 @@ beforeEach(() => {
 jest.mock('@/lib/contexts/PanelManagerContext', () => ({
   usePanelManager: () => ({
     setActivePanel: setActivePanelMock,
-    previousPanel: null,
+    previousPanel: previousPanelMock,
     restorePreviousPanel: restorePreviousPanelMock,
+    clearPreviousPanel: clearPreviousPanelMock,
     registerPanelCloseHandler: registerPanelCloseHandlerMock,
   }),
 }))
@@ -131,6 +134,7 @@ const scheduleData: WeeklyScheduleDataByClassroom[] = [
 describe('WeeklyScheduleGridNew interactions', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    previousPanelMock = null
   })
 
   it('requests filter panel close when a cell is clicked while filters are open', () => {
@@ -280,5 +284,52 @@ describe('WeeklyScheduleGridNew interactions', () => {
     await waitFor(() => {
       expect(setActivePanelMock).toHaveBeenCalledWith(null)
     })
+  })
+
+  it('does not immediately reopen after manual close when stale restore state exists', async () => {
+    const { rerender } = render(
+      <WeeklyScheduleGridNew
+        data={scheduleData}
+        selectedDayIds={['day-mon']}
+        layout="days-x-classrooms"
+        readOnly
+      />
+    )
+
+    fireEvent.click(screen.getByText('Bella W.'))
+    await screen.findByText('Panel: Infant Room')
+
+    // Simulate previous close-request flow that stored a cell in savedCellRef.
+    const closeHandler = registerPanelCloseHandlerMock.mock.calls[0]?.[1] as
+      | (() => void)
+      | undefined
+    expect(closeHandler).toBeDefined()
+    closeHandler?.()
+
+    await waitFor(() => {
+      expect(screen.queryByText('Panel: Infant Room')).not.toBeInTheDocument()
+    })
+
+    // Reopen panel normally.
+    fireEvent.click(screen.getByText('Bella W.'))
+    await screen.findByText('Panel: Infant Room')
+
+    // Inject stale previous-panel state and rerender to simulate intermittent real-world state.
+    previousPanelMock = { type: 'schedule', restoreCallback: jest.fn() }
+    rerender(
+      <WeeklyScheduleGridNew
+        data={scheduleData}
+        selectedDayIds={['day-mon']}
+        layout="days-x-classrooms"
+        readOnly
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Panel' }))
+
+    await waitFor(() => {
+      expect(screen.queryByText('Panel: Infant Room')).not.toBeInTheDocument()
+    })
+    expect(clearPreviousPanelMock).toHaveBeenCalled()
   })
 })
