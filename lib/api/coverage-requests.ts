@@ -139,6 +139,10 @@ export async function getTeacherShiftsForAssignSub(
 ): Promise<AssignSubShiftRow[]> {
   const supabase = await createClient()
 
+  const startNorm = toDateStringISO(startDate)
+  const endNorm = toDateStringISO(endDate || startDate)
+  if (!startNorm) return []
+
   const { data: schedule, error: scheduleError } = await supabase
     .from('teacher_schedules')
     .select(
@@ -223,7 +227,7 @@ export async function getTeacherShiftsForAssignSub(
     }
   })
 
-  const expandedDates = expandDateRangeWithTimeZone(startDate, endDate, 'UTC')
+  const expandedDates = expandDateRangeWithTimeZone(startNorm, endNorm, 'UTC')
   const shiftsByDate = new Map<
     string,
     Array<{ day_of_week_id: string; time_slot_id: string; classroom_id: string | null }>
@@ -250,8 +254,8 @@ export async function getTeacherShiftsForAssignSub(
     .from('time_off_requests')
     .select('id, start_date, end_date')
     .eq('teacher_id', teacherId)
-    .lte('start_date', endDate)
-    .gte('end_date', startDate)
+    .lte('start_date', endNorm)
+    .gte('end_date', startNorm)
 
   if (timeOffRequests && timeOffRequests.length > 0) {
     const requestIds = timeOffRequests.map(req => req.id)
