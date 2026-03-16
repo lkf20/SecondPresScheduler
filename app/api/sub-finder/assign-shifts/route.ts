@@ -217,11 +217,6 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Failed to validate existing assignments', 500)
     }
 
-    const blockedShiftIds = new Set(
-      (existingAssignments || [])
-        .map((assignment: any) => assignment.coverage_request_shift_id)
-        .filter((value: unknown): value is string => Boolean(value))
-    )
     // Include all requested shifts so "replace" (cancel current sub, assign new) works for every selected shift.
     // Conflict resolution (floater/move) is still required when the same sub is double-booked; that is enforced by hasSubCollision below.
     const assignableCoverageRequestShifts = coverageRequestShifts
