@@ -768,6 +768,7 @@ export default function ContactSubPanel({
     return (await response.json()) as {
       shift_overrides: Array<{
         coverage_request_shift_id: string
+        shift_key: string
         selected: boolean
         override_availability: boolean
       }>
@@ -923,6 +924,26 @@ export default function ContactSubPanel({
       const resolvedOverrides = await resolveShiftOverrides()
       const selectedShiftIds = resolvedOverrides.selected_shift_ids
 
+      // Build set of partially-covered shift keys so we can send them as partial_assignments
+      const partialShiftKeySet = new Set(
+        requestShiftDetails
+          .filter(s => s.status === 'partially_covered')
+          .map(s => `${s.date}|${s.time_slot_code}`)
+      )
+      // Map coverage_request_shift_id → shift_key from overrides response
+      const shiftIdToKeyMap = new Map<string, string>(
+        (resolvedOverrides.shift_overrides || []).map(o => [
+          o.coverage_request_shift_id,
+          o.shift_key,
+        ])
+      )
+      const partialAssignmentIds = selectedShiftIds.filter(id =>
+        partialShiftKeySet.has(shiftIdToKeyMap.get(id) ?? '')
+      )
+      const fullAssignmentIds = selectedShiftIds.filter(
+        id => !partialShiftKeySet.has(shiftIdToKeyMap.get(id) ?? '')
+      )
+
       if (!selectedShiftIds || selectedShiftIds.length === 0) {
         throw new Error('No valid shifts selected for assignment')
       }
@@ -981,9 +1002,12 @@ export default function ContactSubPanel({
       const assignPayload = {
         coverage_request_id: coverageRequestId,
         sub_id: sub.id,
-        selected_shift_ids: selectedShiftIds,
+        selected_shift_ids: fullAssignmentIds,
         ...(resolvedOverrides.is_floater_shift_ids?.length
           ? { is_floater_shift_ids: resolvedOverrides.is_floater_shift_ids }
+          : {}),
+        ...(partialAssignmentIds.length > 0
+          ? { partial_assignments: partialAssignmentIds.map(id => ({ shift_id: id })) }
           : {}),
       }
 
@@ -1606,7 +1630,14 @@ export default function ContactSubPanel({
                   const shiftKey = `${shift.date}|${shift.time_slot_code}`
                   const shiftKeyNorm = toShiftKeyNormalized(shift.date, shift.time_slot_code)
                   const assignedToThisSub = assignedShiftByKey.get(shiftKey)
-                  const assignedElsewhere = !assignedToThisSub && Boolean(shift.sub_name)
+                  // For partially_covered shifts, sub_name is set but assignment is additive:
+                  // do NOT treat this as blocking. Only fully_covered shifts are truly assignedElsewhere.
+                  const isPartiallyByOther =
+                    !assignedToThisSub &&
+                    shift.status === 'partially_covered' &&
+                    Boolean(shift.sub_name)
+                  const assignedElsewhere =
+                    !assignedToThisSub && !isPartiallyByOther && Boolean(shift.sub_name)
                   const canCoverThisShift =
                     (responseStatus === 'declined_all'
                       ? false
@@ -1617,11 +1648,13 @@ export default function ContactSubPanel({
                     responseStatus === 'declined_all'
                       ? 'Declined this shift'
                       : cannotCoverReasonByKey.get(shiftKey) ||
-                        (!canCoverThisShift ? 'Unavailable for this shift' : null)
+                        (!canCoverThisShift && !isPartiallyByOther
+                          ? 'Unavailable for this shift'
+                          : null)
                   const canAssignFromCheckbox =
                     !assignedToThisSub &&
                     !assignedElsewhere &&
-                    (canCoverThisShift || isOverridden) &&
+                    (canCoverThisShift || isOverridden || isPartiallyByOther) &&
                     !isSubInactive &&
                     responseStatus !== 'declined_all'
                   const canSwapToThisSub =
@@ -1630,12 +1663,18 @@ export default function ContactSubPanel({
                     !isSubInactive &&
                     responseStatus !== 'declined_all'
                   const needsOverride =
-                    !assignedToThisSub && !assignedElsewhere && !canCoverThisShift
+                    !assignedToThisSub &&
+                    !assignedElsewhere &&
+                    !isPartiallyByOther &&
+                    !canCoverThisShift
                   const cannotCoverMeta = getCannotCoverMeta(cannotCoverReason || null)
                   const canOverrideThisRow = cannotCoverMeta.canOverride
-                  const isAvailableForShift = canCoverThisShift || assignedToThisSub || isOverridden
+                  const isAvailableForShift =
+                    canCoverThisShift || assignedToThisSub || isOverridden || isPartiallyByOther
                   const cardLeftBorderColor = isAvailableForShift
-                    ? 'rgb(110, 231, 183)' // emerald-300 (green when sub is available for this shift)
+                    ? isPartiallyByOther
+                      ? '#F59E0B' // amber for partially-covered (can add another partial)
+                      : 'rgb(110, 231, 183)' // emerald-300 (green when sub is available for this shift)
                     : 'rgb(226, 232, 240)' // slate-200 (gray when not available)
 
                   return (
@@ -1681,6 +1720,10 @@ export default function ContactSubPanel({
                         {assignedToThisSub ? (
                           <p className="text-sm text-emerald-700 font-medium">
                             Assigned to this sub
+                          </p>
+                        ) : isPartiallyByOther ? (
+                          <p className="text-xs font-medium" style={{ color: '#92400E' }}>
+                            Partially covered — adding as partial
                           </p>
                         ) : !assignedElsewhere &&
                           (cannotCoverReason || responseStatus === 'declined_all') &&

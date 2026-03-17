@@ -86,11 +86,20 @@ interface Shift {
   school_closure?: boolean
   /** For Change sub: coverage request shift id (when has_time_off). */
   coverage_request_shift_id?: string
-  /** When shift is already assigned. */
+  /** When shift is already assigned (primary assignment for legacy single-value fields). */
   assignment_id?: string
   assigned_sub_id?: string
   assigned_sub_name?: string
   assigned_non_sub_override?: boolean
+  /** Multi-value: all active assignments for this shift (includes partial assignments) */
+  assigned_subs?: Array<{
+    assignment_id: string
+    sub_id: string
+    sub_name: string
+    is_partial: boolean
+    partial_start_time?: string | null
+    partial_end_time?: string | null
+  }>
 }
 
 interface Qualification {
@@ -153,6 +162,12 @@ export default function AssignSubPanel({
   >({})
   /** Per-slot: user chose to replace current sub with selected sub (shift already covered by another sub). */
   const [replaceResolutions, setReplaceResolutions] = useState<Record<string, boolean>>({})
+  /** Per-slot: whether the assignment should be partial (key = slotKey). */
+  const [partialSlotKeys, setPartialSlotKeys] = useState<Set<string>>(new Set())
+  /** Per-slot optional time range when partial (key = slotKey). */
+  const [partialTimes, setPartialTimes] = useState<
+    Record<string, { start?: string; end?: string }>
+  >({})
   const [showUnavailableConfirm, setShowUnavailableConfirm] = useState(false)
   /** Shifts to remove sub from (opens confirm dialog). */
   const [removeSubShifts, setRemoveSubShifts] = useState<Shift[] | null>(null)
@@ -706,7 +721,12 @@ export default function AssignSubPanel({
         const coverageRequestId = covData.coverage_request_id
         const shiftMap = covData.shift_map || {}
 
-        const coverageRequestShiftIds: string[] = []
+        const fullCoverageRequestShiftIds: string[] = []
+        const partialAssignmentsForRequest: Array<{
+          shift_id: string
+          start_time?: string
+          end_time?: string
+        }> = []
         const isFloaterShiftIds = new Set<string>()
         const resolutionsForRequest: Record<string, 'floater' | 'move' | 'replace'> = {}
         for (const s of shiftsInGroup) {
@@ -714,7 +734,6 @@ export default function AssignSubPanel({
           const keySimple = `${s.date}|${s.time_slot_code ?? ''}`
           const id = shiftMap[keyWithClass] ?? shiftMap[keySimple]
           if (id) {
-            coverageRequestShiftIds.push(id)
             const slotKey = `${s.date}|${s.time_slot_id}`
             const group = shiftGroups.find(g => g.slotKey === slotKey)
             const isFloaterSlot = group ? group.shifts.length > 1 : false
@@ -728,9 +747,23 @@ export default function AssignSubPanel({
             if (isFloaterSlot || isFloaterResolution) {
               isFloaterShiftIds.add(id)
             }
+            if (partialSlotKeys.has(slotKey)) {
+              const times = partialTimes[slotKey] ?? {}
+              partialAssignmentsForRequest.push({
+                shift_id: id,
+                ...(times.start ? { start_time: times.start } : {}),
+                ...(times.end ? { end_time: times.end } : {}),
+              })
+            } else {
+              fullCoverageRequestShiftIds.push(id)
+            }
           }
         }
 
+        const coverageRequestShiftIds = [
+          ...fullCoverageRequestShiftIds,
+          ...partialAssignmentsForRequest.map(p => p.shift_id),
+        ]
         if (coverageRequestShiftIds.length === 0) continue
 
         if (subId && coverageRequestId && !selectedSubIsNonSub) {
@@ -759,10 +792,13 @@ export default function AssignSubPanel({
           body: JSON.stringify({
             coverage_request_id: coverageRequestId,
             sub_id: subId,
-            selected_shift_ids: coverageRequestShiftIds,
+            selected_shift_ids: fullCoverageRequestShiftIds,
             allow_non_sub_override: selectedSubIsNonSub,
             ...(isFloaterShiftIds.size > 0
               ? { is_floater_shift_ids: Array.from(isFloaterShiftIds) }
+              : {}),
+            ...(partialAssignmentsForRequest.length > 0
+              ? { partial_assignments: partialAssignmentsForRequest }
               : {}),
             resolutions:
               Object.keys(resolutionsForRequest).length > 0 ? resolutionsForRequest : undefined,
@@ -961,6 +997,8 @@ export default function AssignSubPanel({
       setSubNotes('')
       setConflictResolutions({})
       setReplaceResolutions({})
+      setPartialSlotKeys(new Set())
+      setPartialTimes({})
       setRemoveSubShifts(null)
       setShowUnavailableConfirm(false)
       isInitialMountRef.current = true
@@ -1210,8 +1248,23 @@ export default function AssignSubPanel({
                     const isAlreadyCovered = groupShifts.some(s => s.assignment_id)
                     const assignedSubId = groupShifts.find(s => s.assigned_sub_id)?.assigned_sub_id
                     const coveredByCurrentSub = isAlreadyCovered && assignedSubId === subId
+                    // A shift with only partial assignments that haven't hit the cap is NOT
+                    // coveredByOtherSub — the user can add another partial.
+                    // coveredByOtherSub remains true when: a different sub has a FULL assignment.
+                    const firstShift = groupShifts[0]
+                    const existingAssignedSubs = firstShift?.assigned_subs ?? []
+                    const hasFullByOtherSub = existingAssignedSubs.some(
+                      a => !a.is_partial && a.sub_id !== subId
+                    )
+                    const partialCountByOthers = existingAssignedSubs.filter(
+                      a => a.is_partial && a.sub_id !== subId
+                    ).length
+                    const partialCapReached = partialCountByOthers >= 4
                     const coveredByOtherSub =
-                      isAlreadyCovered && assignedSubId != null && assignedSubId !== subId
+                      isAlreadyCovered &&
+                      assignedSubId != null &&
+                      assignedSubId !== subId &&
+                      (hasFullByOtherSub || partialCapReached)
                     const replaceChosen = replaceResolutions[slotKey]
                     const hasConflict = groupShifts.some(
                       s => s.status === 'conflict_teaching' || s.status === 'conflict_sub'
@@ -1278,19 +1331,31 @@ export default function AssignSubPanel({
                           >
                             <span>{labelText}</span>
                             {isAlreadyCovered &&
-                              assignedSubId &&
                               (() => {
-                                const subName =
-                                  groupShifts.find(s => s.assigned_sub_name)?.assigned_sub_name ??
-                                  ''
-                                return subName ? (
+                                const allAssigned =
+                                  firstShift?.assigned_subs ??
+                                  (assignedSubId &&
+                                  groupShifts.find(s => s.assigned_sub_name)?.assigned_sub_name
+                                    ? [
+                                        {
+                                          assignment_id: firstShift?.assignment_id ?? '',
+                                          sub_id: assignedSubId,
+                                          sub_name:
+                                            groupShifts.find(s => s.assigned_sub_name)
+                                              ?.assigned_sub_name ?? '',
+                                          is_partial: false,
+                                        },
+                                      ]
+                                    : [])
+                                return allAssigned.map(a => (
                                   <StaffChip
-                                    staffId={assignedSubId}
-                                    name={subName}
+                                    key={a.assignment_id}
+                                    staffId={a.sub_id}
+                                    name={a.sub_name}
                                     variant="sub"
                                     navigable={false}
                                   />
-                                ) : null
+                                ))
                               })()}
                           </label>
                           {/* Role/context: Floater chip + note */}
@@ -1355,6 +1420,98 @@ export default function AssignSubPanel({
                               </Button>
                             </div>
                           )}
+                          {/* Partially covered by other subs (partial assignments, not at cap): informational note */}
+                          {!coveredByOtherSub && partialCountByOthers > 0 && !partialCapReached && (
+                            <div
+                              className="mt-2 rounded-md border p-2 text-sm"
+                              style={{
+                                borderColor: '#F59E0B',
+                                backgroundColor: '#FEF3C7',
+                                color: '#92400E',
+                                borderStyle: 'dashed',
+                              }}
+                            >
+                              {partialCountByOthers} partial sub
+                              {partialCountByOthers !== 1 ? 's' : ''} already assigned. Selecting
+                              this shift will add{' '}
+                              {selectedSub ? getDisplayName(selectedSub) : 'this sub'} as another
+                              partial (up to 4 allowed).
+                            </div>
+                          )}
+                          {/* Partial assignment toggle: shown when shift is selected, not a floater, not blocked */}
+                          {allSelected &&
+                            !isFloaterSlot &&
+                            !coveredByOtherSub &&
+                            !hasSchoolClosure && (
+                              <div className="mt-2 space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <Checkbox
+                                    id={`partial-${slotKey}`}
+                                    checked={partialSlotKeys.has(slotKey)}
+                                    onCheckedChange={(checked: boolean) => {
+                                      setPartialSlotKeys(prev => {
+                                        const next = new Set(prev)
+                                        if (checked) next.add(slotKey)
+                                        else {
+                                          next.delete(slotKey)
+                                          setPartialTimes(t => {
+                                            const nt = { ...t }
+                                            delete nt[slotKey]
+                                            return nt
+                                          })
+                                        }
+                                        return next
+                                      })
+                                    }}
+                                  />
+                                  <label
+                                    htmlFor={`partial-${slotKey}`}
+                                    className="text-xs text-muted-foreground cursor-pointer"
+                                  >
+                                    Partial shift (sub covers part of this shift)
+                                  </label>
+                                </div>
+                                {partialSlotKeys.has(slotKey) && (
+                                  <div className="flex items-center gap-2 pl-6">
+                                    <div className="flex items-center gap-1">
+                                      <label className="text-xs text-muted-foreground w-10">
+                                        From
+                                      </label>
+                                      <input
+                                        type="time"
+                                        className="text-xs border rounded px-1 py-0.5 h-7"
+                                        value={partialTimes[slotKey]?.start ?? ''}
+                                        onChange={e =>
+                                          setPartialTimes(prev => ({
+                                            ...prev,
+                                            [slotKey]: { ...prev[slotKey], start: e.target.value },
+                                          }))
+                                        }
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <label className="text-xs text-muted-foreground w-6">
+                                        to
+                                      </label>
+                                      <input
+                                        type="time"
+                                        className="text-xs border rounded px-1 py-0.5 h-7"
+                                        value={partialTimes[slotKey]?.end ?? ''}
+                                        onChange={e =>
+                                          setPartialTimes(prev => ({
+                                            ...prev,
+                                            [slotKey]: { ...prev[slotKey], end: e.target.value },
+                                          }))
+                                        }
+                                      />
+                                    </div>
+                                    <span className="text-xs text-muted-foreground">
+                                      (optional)
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           {/* Already covered by another sub: conflict-style banner with Replace option (stays visible after selection so user can change) */}
                           {coveredByOtherSub && !hasConflict && (
                             <div
