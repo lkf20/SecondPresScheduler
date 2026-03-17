@@ -110,9 +110,9 @@ export async function POST(request: NextRequest) {
     }
 
     const selectWithOverride =
-      'id, sub_id, date, day_of_week_id, time_slot_id, classroom_id, coverage_request_shift_id, non_sub_override, staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name), time_slots(code)'
+      'id, sub_id, date, day_of_week_id, time_slot_id, classroom_id, coverage_request_shift_id, non_sub_override, is_partial, partial_start_time, partial_end_time, created_at, staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name), time_slots(code)'
     const selectWithoutOverride =
-      'id, sub_id, date, day_of_week_id, time_slot_id, classroom_id, coverage_request_shift_id, staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name), time_slots(code)'
+      'id, sub_id, date, day_of_week_id, time_slot_id, classroom_id, coverage_request_shift_id, is_partial, partial_start_time, partial_end_time, created_at, staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name), time_slots(code)'
 
     let { data: assignments, error: assignmentsError } = await supabase
       .from('sub_assignments')
@@ -162,9 +162,19 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Multi-value map: key -> array of assignments (supports multiple partials per shift)
     const assignmentByKey = new Map<
       string,
-      { id: string; sub_id: string; sub_name: string; non_sub_override: boolean }
+      Array<{
+        id: string
+        sub_id: string
+        sub_name: string
+        non_sub_override: boolean
+        is_partial: boolean
+        partial_start_time: string | null
+        partial_end_time: string | null
+        created_at: string
+      }>
     >()
     for (const a of assignments || []) {
       const key = `${toDateStringISO(a.date)}|${a.time_slot_id}`
@@ -178,12 +188,22 @@ export async function POST(request: NextRequest) {
             display_name: sub.display_name ?? null,
           })
         : 'Unknown'
-      assignmentByKey.set(key, {
+      const entry = {
         id: a.id,
         sub_id: a.sub_id,
         sub_name,
-        non_sub_override: a.non_sub_override === true,
-      })
+        non_sub_override: (a as any).non_sub_override === true,
+        is_partial: (a as any).is_partial === true,
+        partial_start_time: (a as any).partial_start_time ?? null,
+        partial_end_time: (a as any).partial_end_time ?? null,
+        created_at: (a as any).created_at ?? '',
+      }
+      const existing = assignmentByKey.get(key)
+      if (existing) {
+        existing.push(entry)
+      } else {
+        assignmentByKey.set(key, [entry])
+      }
     }
 
     const shifts = rawShifts.map(shift => {
@@ -203,14 +223,40 @@ export async function POST(request: NextRequest) {
         coverage_request_shift_id = (map?.get(keyFull) ?? map?.get(keySimple) ?? null) || null
       }
       const assignKey = `${dateStr}|${shift.time_slot_id}`
-      const assignment = assignmentByKey.get(assignKey)
+      const assignmentList = assignmentByKey.get(assignKey) ?? []
+
+      // Deterministic primary assignment: prefer active full (is_partial=false) first,
+      // then most recently created partial (ORDER BY is_partial ASC, created_at DESC, id DESC).
+      // This ensures legacy single-value fields remain stable and predictable for consumers
+      // that have not yet migrated to the assigned_subs array.
+      const sortedAssignments = [...assignmentList].sort((a, b) => {
+        if (a.is_partial !== b.is_partial) return a.is_partial ? 1 : -1
+        if (a.created_at !== b.created_at) return a.created_at > b.created_at ? -1 : 1
+        return a.id > b.id ? -1 : 1
+      })
+      const primary = sortedAssignments[0]
+
       return {
         ...base,
         coverage_request_shift_id: coverage_request_shift_id ?? undefined,
-        assignment_id: assignment?.id,
-        assigned_sub_id: assignment?.sub_id,
-        assigned_sub_name: assignment?.sub_name,
-        assigned_non_sub_override: assignment?.non_sub_override ?? false,
+        // Legacy single-value fields (backward compatible; populated from primary assignment)
+        assignment_id: primary?.id,
+        assigned_sub_id: primary?.sub_id,
+        assigned_sub_name: primary?.sub_name,
+        assigned_non_sub_override: primary?.non_sub_override ?? false,
+        // New multi-value field for partial assignment support
+        assigned_subs:
+          sortedAssignments.length > 0
+            ? sortedAssignments.map(a => ({
+                assignment_id: a.id,
+                sub_id: a.sub_id,
+                sub_name: a.sub_name,
+                is_partial: a.is_partial,
+                partial_start_time: a.partial_start_time,
+                partial_end_time: a.partial_end_time,
+                non_sub_override: a.non_sub_override,
+              }))
+            : undefined,
       }
     })
 

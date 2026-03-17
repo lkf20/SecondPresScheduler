@@ -298,7 +298,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Get existing sub assignments
+    // Get existing sub assignments (for sub's own collision detection)
     const { data: existingAssignments } = await supabase
       .from('sub_assignments')
       .select(
@@ -323,7 +323,6 @@ export async function POST(request: NextRequest) {
           `${teacher?.first_name || ''} ${teacher?.last_name || ''}`.trim() ||
           'Unknown'
 
-        // Get classroom name from the assignment if available
         let classroomName = null
         if (assignment.classroom_id) {
           const { data: classroom } = await supabase
@@ -341,13 +340,40 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Fetch existing active assignments on each target shift (for partial coverage flags).
+    // These are derived from the TARGET SHIFT's assignments, not the candidate sub's collisions.
+    const { data: shiftActiveAssignments } = await supabase
+      .from('sub_assignments')
+      .select('coverage_request_shift_id, is_partial')
+      .eq('status', 'active')
+      .in(
+        'coverage_request_shift_id',
+        coverageRequestShifts.map(s => s.id)
+      )
+
+    // Build per-shift partial coverage info
+    const shiftPartialInfoMap = new Map<
+      string,
+      { hasExistingPartial: boolean; canAddPartial: boolean }
+    >()
+    for (const shift of coverageRequestShifts) {
+      const shiftAssignments = (shiftActiveAssignments || []).filter(
+        (a: any) => a.coverage_request_shift_id === shift.id
+      )
+      const hasFullAssignment = shiftAssignments.some((a: any) => a.is_partial === false)
+      const partialCount = shiftAssignments.filter((a: any) => a.is_partial === true).length
+      const hasExistingPartial = partialCount > 0
+      // Can add partial: no existing full AND partial count < 4
+      const canAddPartial = !hasFullAssignment && partialCount < 4
+      shiftPartialInfoMap.set(shift.id, { hasExistingPartial, canAddPartial })
+    }
+
     // Check each shift for conflicts
     const conflicts = coverageRequestShifts.map(shift => {
       const dayBasedKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
       const dateBasedKey = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
       const conflictKey = dateBasedKey
 
-      // Check date-based exception first, then fall back to day-based availability
       const isAvailable = dateBasedAvailabilityMap.has(dateBasedKey)
         ? dateBasedAvailabilityMap.get(dateBasedKey)!
         : dayBasedAvailabilityMap.has(dayBasedKey)
@@ -386,10 +412,16 @@ export async function POST(request: NextRequest) {
         message = ''
       }
 
+      const partialInfo = shiftPartialInfoMap.get(shift.id)
+
       return {
         shift_id: shift.id,
         status,
         message,
+        // Additive boolean flags for partial coverage state on this shift.
+        // Derived from the TARGET SHIFT's active assignments, independent of the sub's own conflicts.
+        has_existing_partial_coverage: partialInfo?.hasExistingPartial ?? false,
+        can_add_partial: partialInfo?.canAddPartial ?? true,
         ...(status === 'conflict_teaching' && scheduleConflictClassroomByKey.has(conflictKey)
           ? { conflict_classroom_name: scheduleConflictClassroomByKey.get(conflictKey)! }
           : {}),

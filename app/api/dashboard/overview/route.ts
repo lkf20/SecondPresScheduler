@@ -9,6 +9,7 @@ import { MONTH_NAMES } from '@/lib/utils/date-format'
 import { getStaffDisplayName, type DisplayNameFormat } from '@/lib/utils/staff-display-name'
 import { filterCoverageRequestsToActiveTimeOffOnly } from '@/lib/dashboard/filter-draft-time-off'
 import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
+import { deriveShiftCoverageStatus } from '@/lib/schedules/coverage-weights'
 
 export async function GET(request: NextRequest) {
   try {
@@ -474,34 +475,42 @@ export async function GET(request: NextRequest) {
 
         const totalShifts = requestShifts.length
 
-        const assignmentMap = new Map<string, { hasFull: boolean; hasPartial: boolean }>()
-        const subNameByShiftId = new Map<string, string>()
+        // Multi-value map: shiftId -> array of { is_partial, sub_name }
+        // Handles multiple partial assignments per shift correctly.
+        const assignmentMap = new Map<string, Array<{ is_partial: boolean }>>()
+        // Array-based sub names per shift (last-write-wins replaced with accumulate)
+        const subNamesByShiftId = new Map<string, string[]>()
 
         assignedSubs.forEach((assignment: any) => {
           const key =
             assignment.coverage_request_shift_id ||
             `${assignment.date}|${assignment.day_of_week_id}|${assignment.time_slot_id}`
-          const existing = assignmentMap.get(key) || { hasFull: false, hasPartial: false }
           const isPartial =
-            assignment.is_partial || assignment.assignment_type === 'Partial Sub Shift'
-          if (isPartial) {
-            existing.hasPartial = true
-          } else {
-            existing.hasFull = true
-          }
+            assignment.is_partial === true || assignment.assignment_type === 'Partial Sub Shift'
+          const existing = assignmentMap.get(key) ?? []
+          existing.push({ is_partial: isPartial })
           assignmentMap.set(key, existing)
           if (assignment.coverage_request_shift_id && assignment.sub) {
             const subName = getStaffDisplayName(assignment.sub as any, displayNameFormat) || 'Sub'
-            subNameByShiftId.set(assignment.coverage_request_shift_id, subName)
+            const names = subNamesByShiftId.get(assignment.coverage_request_shift_id) ?? []
+            names.push(subName)
+            subNamesByShiftId.set(assignment.coverage_request_shift_id, names)
           }
         })
 
-        const assignedShifts = Array.from(assignmentMap.values()).filter(
-          entry => entry.hasFull || entry.hasPartial
-        ).length
-        const partialShifts = Array.from(assignmentMap.values()).filter(
-          entry => entry.hasPartial && !entry.hasFull
-        ).length
+        // Use centralized helper for per-shift status derivation
+        let assignedShifts = 0
+        let partialShifts = 0
+        for (const [, entries] of assignmentMap) {
+          if (entries.length === 0) continue
+          const shiftStatus = deriveShiftCoverageStatus({ assignments: entries })
+          if (shiftStatus === 'fully_covered') {
+            assignedShifts++
+          } else if (shiftStatus === 'partially_covered') {
+            assignedShifts++ // counts as "has coverage" for binary assigned/unassigned
+            partialShifts++
+          }
+        }
         const uncoveredShifts = totalShifts - assignedShifts
         const remainingShifts = uncoveredShifts
 
@@ -575,12 +584,13 @@ export async function GET(request: NextRequest) {
         }> = []
 
         requestShifts.forEach((shift: any) => {
-          const assignment = assignmentMap.get(shift.id)
+          const shiftAssignments = assignmentMap.get(shift.id) ?? []
+          const derivedStatus = deriveShiftCoverageStatus({ assignments: shiftAssignments })
 
           let status: 'covered' | 'partial' | 'uncovered' = 'uncovered'
-          if (assignment?.hasFull) {
+          if (derivedStatus === 'fully_covered') {
             status = 'covered'
-          } else if (assignment?.hasPartial) {
+          } else if (derivedStatus === 'partially_covered') {
             status = 'partial'
           }
 
@@ -600,9 +610,12 @@ export async function GET(request: NextRequest) {
 
           const classroom = shift.classroom_id ? classroomsMap.get(shift.classroom_id) : null
 
+          const subNames = subNamesByShiftId.get(shift.id) ?? []
           const assignedSubName =
             status === 'covered' || status === 'partial'
-              ? (subNameByShiftId.get(shift.id) ?? null)
+              ? subNames.length > 0
+                ? subNames.join(', ')
+                : null
               : null
 
           shiftDetails.push({
