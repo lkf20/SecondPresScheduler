@@ -791,7 +791,9 @@ describe('Dashboard vs Weekly absence sync (API integration invariant)', () => {
 
     expect(dashboardJson.coverage_requests).toHaveLength(1)
     expect(dashboardJson.coverage_requests[0].shift_details).toHaveLength(1)
-    expect(dashboardJson.coverage_requests[0].shift_details[0].status).toBe('partial')
+    // Phase 1: 2 partials each at 0.5 = 1.0 total weight → fully_covered → 'covered'
+    // (2 × 0.5 ≥ 1.0 threshold in deriveShiftCoverageStatus)
+    expect(dashboardJson.coverage_requests[0].shift_details[0].status).toBe('covered')
 
     const dashboardTuples = extractDashboardAbsenceCoverageTuples(dashboardJson)
     const weeklyTuples = extractWeeklyAbsenceCoverageTuples(weeklyJson, {
