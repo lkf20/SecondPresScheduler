@@ -13,13 +13,14 @@
 - **Exception:** When the user selects `floater` or `move` resolution for that shift, the conflict is resolved and the assignment proceeds.
 - **DB:** See [sub-assignment-integrity.md](../sub-assignment-integrity.md). A partial unique index can enforce this at the DB level; currently enforcement is in the API.
 
-### Rule 2: One sub per coverage shift
+### Rule 2: One full sub per coverage shift; up to 4 partial subs
 
-**Multiple subs cannot be assigned for the same teacher during the same day, time slot, and classroom (i.e. per coverage_request_shift_id).**
+**A full (non-partial) sub assignment is exclusive per `coverage_request_shift_id`. Partial assignments are additive (up to a cap of 4).**
 
-- **Scope:** One active `sub_assignment` per `coverage_request_shift_id` where `status = 'active'`.
-- **Enforcement:** Before inserting new assignments, `POST /api/sub-finder/assign-shifts` cancels any existing active `sub_assignments` for the `coverage_request_shift_id`s being assigned. This "replace" behavior ensures we never create a second active sub for the same shift.
-- **DB:** No unique constraint currently; enforcement is in the API. See [sub-assignment-integrity.md](../sub-assignment-integrity.md) for recommendations.
+- **Full assignments:** Only one active `sub_assignment` with `is_partial = false` per `coverage_request_shift_id` where `status = 'active'`. Inserting a full assignment cancels ALL existing active assignments for that shift (both full and partial).
+- **Partial assignments (Phase 1):** Multiple partial subs are allowed for the same shift (maximum 4). A partial assignment cancels any existing full assignment for that shift but does not affect other partial assignments.
+- **DB enforcement:** Conditional unique index `idx_sub_assignments_one_active_full_per_shift` on `(coverage_request_shift_id) WHERE status = 'active' AND is_partial = false` enforces full-assignment exclusivity at the DB level.
+- **API:** `POST /api/sub-finder/assign-shifts` accepts an optional `partial_assignments` array (`[{shift_id, partial_start_time?, partial_end_time?}]`). Shifts in `partial_assignments` are assigned as partial (`is_partial = true`). Remaining shifts in `selected_shift_ids` are full. Validation: no floater+partial combination; no duplicate shift_ids; time values must be HH:mm; cap of 4 partials per shift.
 
 ### Rule 3: Floater allows same slot, different classrooms
 
@@ -151,13 +152,47 @@ Same as conflict_sub / conflict_teaching; the assign-shifts API (1) cancels exis
 
 ---
 
+---
+
+## Phase 1 Partial Assignments
+
+**Added in migration 117.** Allows multiple subs to cover portions of a single absence shift.
+
+### Key rules
+
+- `is_partial` is NOT NULL (migration normalized to `false` for all existing rows).
+- A shift can have up to **4 active partial assignments** (Phase 1 cap; enforced in API).
+- A full assignment and partial assignments cannot coexist on the same shift.
+- Coverage weight: full = 1.0, partial = 0.5 (approximation; Phase 2 will use time-based logic). Two partials ≥ 1.0 → shift is `fully_covered`.
+- UI shows `(approx.)` label wherever partial coverage counts are displayed.
+
+### check-conflicts response (new flags)
+
+`POST /api/sub-finder/check-conflicts` now includes per-shift boolean flags in the response:
+
+| Field                           | Description                                                         |
+| ------------------------------- | ------------------------------------------------------------------- |
+| `has_existing_partial_coverage` | `true` if the target shift already has ≥1 active partial assignment |
+| `can_add_partial`               | `true` if no full assignment exists AND partial count < 4           |
+
+These flags are derived from the **target shift's** active assignments, independent of the candidate sub's own conflicts.
+
+### Conflict resolution updates
+
+- `coveredByOtherSub` in `AssignSubPanel` is only `true` when another sub has a **full** assignment OR the partial cap is reached. Shifts with partial-only coverage that haven't hit the cap are NOT blocked — the director can add another partial.
+- When a shift is `partially_covered` in `ContactSubPanel`, `assignedElsewhere` is NOT set — the sub can be added as another partial. The card shows amber border and "Partially covered — adding as partial" label.
+
+### Unassign with multiple partials
+
+`POST /api/sub-finder/unassign-shifts` with `scope: 'single'` requires `assignment_id` when the target shift has multiple active assignments (returns 400 if not provided). This prevents accidental removal of the wrong partial.
+
 ## Summary of Database Tables
 
-| Table                     | Relevant columns                                                                      | Used for                                              |
-| ------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `sub_assignments`         | `sub_id`, `date`, `time_slot_id`, `coverage_request_shift_id`, `status`, `is_floater` | Sub assignments; conflict detection; replace/cancel   |
-| `coverage_request_shifts` | `id`, `coverage_request_id`, `date`, `time_slot_id`, `classroom_id`                   | Target shifts for assignment; one sub per shift       |
-| `teacher_schedules`       | `teacher_id`, `day_of_week_id`, `time_slot_id`, `classroom_id`                        | conflict_teaching detection (sub's teaching schedule) |
+| Table                     | Relevant columns                                                                                                                              | Used for                                                    |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `sub_assignments`         | `sub_id`, `date`, `time_slot_id`, `coverage_request_shift_id`, `status`, `is_floater`, `is_partial`, `partial_start_time`, `partial_end_time` | Sub assignments; conflict detection; replace/cancel/partial |
+| `coverage_request_shifts` | `id`, `coverage_request_id`, `date`, `time_slot_id`, `classroom_id`                                                                           | Target shifts for assignment                                |
+| `teacher_schedules`       | `teacher_id`, `day_of_week_id`, `time_slot_id`, `classroom_id`                                                                                | conflict_teaching detection (sub's teaching schedule)       |
 
 ---
 

@@ -57,7 +57,7 @@ The database schema has evolved from the initial 17 tables (migration 001) to th
 
 25. **substitute_contacts** - Per-coverage-request contact status (sub × coverage_request; status, notes, timestamps)
 26. **sub_contact_shift_overrides** - Per-shift overrides for substitute_contacts (e.g. override_availability)
-27. **sub_assignments** - Actual sub assignments (master calendar: sub × date × slot × classroom)
+27. **sub_assignments** - Actual sub assignments (master calendar: sub × date × slot × classroom). Key columns: `is_partial NOT NULL DEFAULT false`, `partial_start_time`, `partial_end_time`. A conditional unique index `idx_sub_assignments_one_active_full_per_shift` prevents two active full assignments for the same `coverage_request_shift_id`. Multiple active partial assignments (up to 4) are allowed per shift.
 
 (Former **sub_contact_overrides** and **sub_contact_log** were removed in migrations 073 and 072.)
 
@@ -77,7 +77,7 @@ The database schema has evolved from the initial 17 tables (migration 001) to th
 - **Foreign Key Constraints** - Ensures referential integrity
 - **Unique Constraints** - Prevents duplicate data where appropriate
 - **Automatic Timestamps** - `created_at` and `updated_at` managed automatically where applicable
-- **Triggers** - Auto-update `updated_at` on row updates; `auto_create_coverage_request_shift_from_time_off_shift` (migration 104) creates a `coverage_request_shift` on INSERT into `time_off_shifts` and **raises** if the teacher has no scheduled classroom for that day/slot (no "Unknown" fallback). The "Unknown (needs review)" classroom placeholder was removed in migration 105.
+- **Triggers** - Auto-update `updated_at` on row updates; `auto_create_coverage_request_shift_from_time_off_shift` (migration 104) creates a `coverage_request_shift` on INSERT into `time_off_shifts` and **raises** if the teacher has no scheduled classroom for that day/slot (no "Unknown" fallback). The "Unknown (needs review)" classroom placeholder was removed in migration 105. `update_coverage_request_covered_shifts` (rewritten in migration 117) maintains `covered_shifts` and `status` on `coverage_requests` in a status-transition-aware and count-aware way (increments on first active assignment per shift; decrements when last active assignment is removed).
 - **Indexes** - Performance indexes on frequently queried columns
 - **Row Level Security** - RLS policies for data access control (school-scoped where applicable)
 
