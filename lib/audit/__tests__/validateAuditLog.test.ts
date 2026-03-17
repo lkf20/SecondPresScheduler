@@ -199,6 +199,42 @@ describe('validateAuditLogEntry', () => {
     })
   })
 
+  describe('sub_assignment partial assignment (Phase 1)', () => {
+    it('passes sub_assignment assign with partial_count and sub/teacher names', () => {
+      const entry: AuditLogEntryInput = {
+        schoolId: 'school-uuid',
+        actorUserId: 'user-uuid',
+        actorDisplayName: 'Jane Admin',
+        action: 'assign',
+        category: 'sub_assignment',
+        entityType: 'coverage_request',
+        entityId: 'coverage-request-uuid',
+        details: {
+          changed_fields: ['sub_assignments'],
+          sub_id: 'sub-uuid',
+          sub_name: 'Alex Substitute',
+          assignee_is_sub: true,
+          non_sub_override: false,
+          teacher_id: 'teacher-uuid',
+          teacher_name: 'Maria Garcia',
+          assignment_ids: ['assign-uuid-1', 'assign-uuid-2'],
+          shift_ids: ['shift-uuid-1', 'shift-uuid-2'],
+          full_count: 0,
+          partial_count: 2,
+          partial_shifts: [
+            { shift_id: 'shift-uuid-1', partial_start_time: '09:00', partial_end_time: '09:45' },
+            { shift_id: 'shift-uuid-2', partial_start_time: null, partial_end_time: null },
+          ],
+          summary:
+            'Assigned Alex Substitute to cover 2 shifts (2 partial, approx.) for Maria Garcia',
+        },
+      }
+      const result = validateAuditLogEntry(entry)
+      expect(result.valid).toBe(true)
+      expect(result.errors).toHaveLength(0)
+    })
+  })
+
   describe('bad examples (must fail)', () => {
     it('fails generic update with only IDs and no human-readable names', () => {
       const entry: AuditLogEntryInput = {

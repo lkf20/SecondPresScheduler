@@ -220,6 +220,7 @@ describe('POST /api/sub-finder/check-conflicts integration', () => {
         ],
         error: null,
       }),
+      in: jest.fn().mockResolvedValue({ data: [], error: null }),
     }
 
     const classroomsQuery = {
@@ -326,6 +327,7 @@ describe('POST /api/sub-finder/check-conflicts integration', () => {
         ],
         error: null,
       }),
+      in: jest.fn().mockResolvedValue({ data: [], error: null }),
     }
 
     ;(createClient as jest.Mock).mockResolvedValue({
@@ -434,6 +436,7 @@ describe('POST /api/sub-finder/check-conflicts integration', () => {
         ],
         error: null,
       }),
+      in: jest.fn().mockResolvedValue({ data: [], error: null }),
     }
 
     ;(createClient as jest.Mock).mockResolvedValue({
@@ -526,6 +529,7 @@ describe('POST /api/sub-finder/check-conflicts integration', () => {
       eq: jest.fn().mockReturnThis(),
       gte: jest.fn().mockReturnThis(),
       lte: jest.fn().mockResolvedValue({ data: [], error: null }),
+      in: jest.fn().mockResolvedValue({ data: [], error: null }),
     }
 
     ;(createClient as jest.Mock).mockResolvedValue({
@@ -569,5 +573,172 @@ describe('POST /api/sub-finder/check-conflicts integration', () => {
       expect.stringMatching(/error fetching shifts/i),
       expect.any(Error)
     )
+  })
+
+  // ─── Phase 1: Partial coverage flags ─────────────────────────────────────
+
+  it('returns has_existing_partial_coverage=true and can_add_partial=true when shift has 1 partial assignment', async () => {
+    const coverageRequestsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({
+        data: { teacher_id: 'teacher-1', start_date: '2099-02-10', end_date: '2099-02-10' },
+        error: null,
+      }),
+    }
+
+    const coverageRequestShiftsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      in: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'shift-1',
+            date: '2099-02-10',
+            day_of_week_id: 'day-1',
+            time_slot_id: 'slot-1',
+            classroom_id: 'classroom-1',
+          },
+        ],
+        error: null,
+      }),
+    }
+
+    // One partial assignment exists on shift-1
+    const subAssignmentsShiftQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockReturnThis(),
+      in: jest.fn().mockResolvedValue({
+        data: [{ coverage_request_shift_id: 'shift-1', is_partial: true }],
+        error: null,
+      }),
+    }
+
+    ;(getSubAvailability as jest.Mock).mockResolvedValue([
+      { day_of_week_id: 'day-1', time_slot_id: 'slot-1', is_available: true },
+    ])
+    ;(getSubAvailabilityExceptions as jest.Mock).mockResolvedValue([])
+    ;(getTeacherScheduledShifts as jest.Mock).mockResolvedValue([])
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValue([])
+    ;(getTimeOffRequests as jest.Mock).mockResolvedValue([])
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'coverage_requests') return coverageRequestsQuery
+        if (table === 'coverage_request_shifts') return coverageRequestShiftsQuery
+        if (table === 'sub_assignments') return subAssignmentsShiftQuery
+        return {
+          select: jest.fn().mockReturnThis(),
+          eq: jest.fn().mockReturnThis(),
+          in: jest.fn().mockResolvedValue({ data: [], error: null }),
+          gte: jest.fn().mockReturnThis(),
+          lte: jest.fn().mockResolvedValue({ data: [], error: null }),
+        }
+      }),
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/check-conflicts',
+      'POST',
+      { sub_id: 'sub-1', coverage_request_id: 'coverage-1', shift_ids: ['shift-1'] }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json).toEqual([
+      expect.objectContaining({
+        shift_id: 'shift-1',
+        has_existing_partial_coverage: true,
+        can_add_partial: true,
+      }),
+    ])
+  })
+
+  it('returns can_add_partial=false when shift already has 4 partial assignments', async () => {
+    const coverageRequestsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({
+        data: { teacher_id: 'teacher-1', start_date: '2099-02-10', end_date: '2099-02-10' },
+        error: null,
+      }),
+    }
+
+    const coverageRequestShiftsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      in: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'shift-1',
+            date: '2099-02-10',
+            day_of_week_id: 'day-1',
+            time_slot_id: 'slot-1',
+            classroom_id: 'classroom-1',
+          },
+        ],
+        error: null,
+      }),
+    }
+
+    // 4 partial assignments already on shift-1 (at cap)
+    const subAssignmentsShiftQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockReturnThis(),
+      in: jest.fn().mockResolvedValue({
+        data: [
+          { coverage_request_shift_id: 'shift-1', is_partial: true },
+          { coverage_request_shift_id: 'shift-1', is_partial: true },
+          { coverage_request_shift_id: 'shift-1', is_partial: true },
+          { coverage_request_shift_id: 'shift-1', is_partial: true },
+        ],
+        error: null,
+      }),
+    }
+
+    ;(getSubAvailability as jest.Mock).mockResolvedValue([
+      { day_of_week_id: 'day-1', time_slot_id: 'slot-1', is_available: true },
+    ])
+    ;(getSubAvailabilityExceptions as jest.Mock).mockResolvedValue([])
+    ;(getTeacherScheduledShifts as jest.Mock).mockResolvedValue([])
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValue([])
+    ;(getTimeOffRequests as jest.Mock).mockResolvedValue([])
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'coverage_requests') return coverageRequestsQuery
+        if (table === 'coverage_request_shifts') return coverageRequestShiftsQuery
+        if (table === 'sub_assignments') return subAssignmentsShiftQuery
+        return {
+          select: jest.fn().mockReturnThis(),
+          eq: jest.fn().mockReturnThis(),
+          in: jest.fn().mockResolvedValue({ data: [], error: null }),
+          gte: jest.fn().mockReturnThis(),
+          lte: jest.fn().mockResolvedValue({ data: [], error: null }),
+        }
+      }),
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/check-conflicts',
+      'POST',
+      { sub_id: 'sub-1', coverage_request_id: 'coverage-1', shift_ids: ['shift-1'] }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json).toEqual([
+      expect.objectContaining({
+        shift_id: 'shift-1',
+        has_existing_partial_coverage: true,
+        can_add_partial: false,
+      }),
+    ])
   })
 })
