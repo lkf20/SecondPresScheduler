@@ -1,6 +1,16 @@
 export type SubFinderCoverageStatus = 'uncovered' | 'partially_covered' | 'fully_covered'
 export type SubFinderAssignmentStatus = 'pending' | 'confirmed' | 'declined' | 'no_response'
 
+export interface SubFinderAssignedSub {
+  assignment_id: string
+  sub_id: string
+  sub_name: string
+  is_partial: boolean
+  partial_start_time?: string | null
+  partial_end_time?: string | null
+  non_sub_override?: boolean
+}
+
 export interface SubFinderShift {
   id: string
   date: string
@@ -16,6 +26,8 @@ export interface SubFinderShift {
   is_partial?: boolean
   assignment_status?: SubFinderAssignmentStatus | null
   contact_status?: SubFinderAssignmentStatus | null
+  /** Multiple subs for partially covered shifts (each partial assignment has its own entry) */
+  assigned_subs?: SubFinderAssignedSub[]
   /** For display order: date → day → time_slot (AGENTS.md) */
   day_display_order?: number | null
   time_slot_display_order?: number | null

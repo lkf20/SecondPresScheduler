@@ -170,11 +170,14 @@ function ScheduleLegend({
   showLegendSubstitutes,
   showLegendTemporaryCoverage = true,
   showSchoolClosed = false,
+  showPartialSub = false,
   noWrapper = false,
 }: {
   showLegendSubstitutes: boolean
   showLegendTemporaryCoverage?: boolean
   showSchoolClosed?: boolean
+  /** Show "Partial Sub Coverage" legend item when partial assignments exist in the displayed week */
+  showPartialSub?: boolean
   noWrapper?: boolean
 }) {
   const content = (
@@ -224,6 +227,20 @@ function ScheduleLegend({
               Substitute
             </span>
           </div>
+          {showPartialSub && (
+            <div className="flex items-center gap-2">
+              <span
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border border-dashed"
+                style={{
+                  borderColor: '#F59E0B',
+                  backgroundColor: '#FEF3C7',
+                  color: '#92400E',
+                }}
+              >
+                Partial Sub Coverage
+              </span>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
               Absent
@@ -757,6 +774,20 @@ export default function WeeklyScheduleGridNew({
   )
 
   // Transform data for days-x-classrooms layout (only (day, timeSlot) rows that have data for that day)
+  // True when any absence in the displayed week has a partial sub (is_partial + has_sub)
+  const hasPartialSubInWeek = useMemo(() => {
+    if (!showLegendSubstitutes) return false
+    return data.some(classroom =>
+      classroom.days.some(day =>
+        day.time_slots.some(slot =>
+          (slot.absences ?? []).some(
+            (a: { has_sub: boolean; is_partial: boolean }) => a.has_sub && a.is_partial
+          )
+        )
+      )
+    )
+  }, [data, showLegendSubstitutes])
+
   const daysXClassroomsData = useMemo(() => {
     if (layout !== 'days-x-classrooms') return null
 
@@ -842,6 +873,7 @@ export default function WeeklyScheduleGridNew({
             showLegendSubstitutes={showLegendSubstitutes}
             showLegendTemporaryCoverage={showLegendTemporaryCoverage}
             showSchoolClosed={schoolClosures.length > 0}
+            showPartialSub={hasPartialSubInWeek}
             noWrapper
           />
           {contentBelowLegend && (
@@ -1209,6 +1241,7 @@ export default function WeeklyScheduleGridNew({
             showLegendSubstitutes={showLegendSubstitutes}
             showLegendTemporaryCoverage={showLegendTemporaryCoverage}
             showSchoolClosed={schoolClosures.length > 0}
+            showPartialSub={hasPartialSubInWeek}
             noWrapper
           />
           {contentBelowLegend && (
