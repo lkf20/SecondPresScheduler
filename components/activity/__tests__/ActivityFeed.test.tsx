@@ -36,6 +36,42 @@ describe('ActivityFeed', () => {
     expect(screen.getByRole('button', { name: 'School Calendar' })).toBeInTheDocument()
   })
 
+  it('renders slot codes in school-closure activity copy when available', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        rows: [
+          {
+            id: 'log-slot',
+            created_at: '2026-03-18T10:00:00.000Z',
+            action: 'create',
+            category: 'school_calendar',
+            entity_type: 'school_closure',
+            entity_id: 'closure-slot',
+            details: {
+              date: '2026-03-09',
+              whole_day: false,
+              time_slot_code: 'LB1',
+              reason: 'Staff Meeting',
+            },
+            actor_user_id: 'user-1',
+            actor_display_name: 'Director',
+          },
+        ],
+        nextCursor: null,
+        actors: [],
+      }),
+    }) as jest.Mock
+
+    render(<ActivityFeed />)
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Created school closure for March 9 LB1: Staff Meeting')
+      ).toBeInTheDocument()
+    })
+  })
+
   it('preserves staff links in formatted messages when staff id is present', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,

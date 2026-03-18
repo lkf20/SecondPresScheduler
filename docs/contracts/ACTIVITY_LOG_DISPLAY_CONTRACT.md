@@ -76,9 +76,15 @@ This contract defines how audit events MUST be rendered in user-facing Activity 
   - `create`: MUST render `Created school closure for <date-or-range>`
   - `update`: MUST render `Updated school closure for <date-or-range>`
   - `delete`: MUST render `Deleted school closure for <date-or-range>`
+- For slot-specific closures (`whole_day=false`), message MUST append slot codes after the date/range:
+  - single: `... for March 9 LB1`
+  - multi: `... for March 9 LB1, LB2, AC`
+- Slot codes SHOULD come from `details.time_slot_code` (single) or `details.time_slot_codes` (multi) when available.
 - Required examples:
   - `Created school closure for April 26`
   - `Created school closure for April 22-26`
+  - `Created school closure for March 9 LB1: Staff Meeting`
+  - `Created school closure for March 9 LB1, LB2, AC: Staff Meeting`
 
 ## Fallback Behavior
 
@@ -101,6 +107,8 @@ This contract defines how audit events MUST be rendered in user-facing Activity 
 
 - `Created school closure for April 26`
 - `Created school closure for April 22-26`
+- `Created school closure for March 9 LB1: Staff Meeting`
+- `Created school closure for March 9 LB1, LB2, AC: Staff Meeting`
 - `Unassigned Victoria I. from Anne M. (1 shift)`
 - `Assigned coverage override for Victoria I. to cover Anne M.`
 

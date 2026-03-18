@@ -121,12 +121,13 @@ function buildSchoolClosureMessage(
         : ''
   const base = rangeLabel ? `${verb} school closure for ${rangeLabel}` : `${verb} school closure`
   const reason = typeof details.reason === 'string' && details.reason.trim() ? details.reason : null
-  const slotSuffix =
-    row.action !== 'delete' && details.whole_day === false
-      ? details.time_slot_code
-        ? ` (${details.time_slot_code})`
-        : ' (specific time slot)'
-      : ''
+  const slotCodes =
+    Array.isArray(details.time_slot_codes) && details.time_slot_codes.length > 0
+      ? details.time_slot_codes.filter(Boolean).join(', ')
+      : typeof details.time_slot_code === 'string' && details.time_slot_code.trim()
+        ? details.time_slot_code.trim()
+        : null
+  const slotSuffix = details.whole_day === false ? ` ${slotCodes || 'specific time slot'}` : ''
   return `${base}${slotSuffix}${reason ? `: ${reason}` : ''}`
 }
 

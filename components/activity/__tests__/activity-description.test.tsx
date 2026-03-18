@@ -29,6 +29,40 @@ describe('activity-description formatter', () => {
     expect(text).toBe('Created school closure for April 26')
   })
 
+  it('formats school closure create message with a specific slot code', () => {
+    const text = formatActivityDescriptionText({
+      ...baseRow,
+      category: 'school_calendar',
+      entity_type: 'school_closure',
+      action: 'create',
+      details: {
+        date: '2026-03-09',
+        whole_day: false,
+        time_slot_code: 'LB1',
+        reason: 'Staff Meeting',
+      },
+    })
+
+    expect(text).toBe('Created school closure for March 9 LB1: Staff Meeting')
+  })
+
+  it('formats school closure create message with multiple slot codes', () => {
+    const text = formatActivityDescriptionText({
+      ...baseRow,
+      category: 'school_calendar',
+      entity_type: 'school_closure',
+      action: 'create',
+      details: {
+        date: '2026-03-09',
+        whole_day: false,
+        time_slot_codes: ['LB1', 'LB2', 'AC'],
+        reason: 'Staff Meeting',
+      },
+    })
+
+    expect(text).toBe('Created school closure for March 9 LB1, LB2, AC: Staff Meeting')
+  })
+
   it('formats school closure create message for a date range', () => {
     const text = formatActivityDescriptionText({
       ...baseRow,

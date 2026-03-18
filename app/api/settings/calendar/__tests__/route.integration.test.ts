@@ -14,6 +14,7 @@ import {
 } from '@/lib/api/school-calendar'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { logAuditEvent } from '@/lib/audit/logAuditEvent'
+import { createClient } from '@/lib/supabase/server'
 
 jest.mock('@/lib/api/school-calendar', () => ({
   getCalendarSettings: jest.fn(),
@@ -36,12 +37,32 @@ jest.mock('@/lib/audit/logAuditEvent', () => ({
   logAuditEvent: jest.fn().mockResolvedValue(true),
 }))
 
+jest.mock('@/lib/supabase/server', () => ({
+  createClient: jest.fn(),
+}))
+
 describe('calendar settings route integration', () => {
   let consoleErrorSpy: jest.SpyInstance
 
   beforeEach(() => {
     jest.clearAllMocks()
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: (table: string) => {
+        if (table === 'time_slots') {
+          return {
+            select: () => ({
+              eq: async () => ({ data: [], error: null }),
+            }),
+          }
+        }
+        return {
+          select: () => ({
+            eq: async () => ({ data: [], error: null }),
+          }),
+        }
+      },
+    })
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getCalendarSettings as jest.Mock).mockResolvedValue({
       first_day_of_school: '2024-08-15',
