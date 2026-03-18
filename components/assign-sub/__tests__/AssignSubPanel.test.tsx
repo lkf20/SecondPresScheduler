@@ -394,6 +394,23 @@ describe('AssignSubPanel', () => {
     })
   })
 
+  it('shows override enabled chip only when include non-sub is on', async () => {
+    const user = userEvent.setup()
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+
+    const overrideCheckbox = await screen.findByLabelText(/Include non-sub staff/i)
+    expect(screen.queryByText('Override enabled')).not.toBeInTheDocument()
+
+    await user.click(overrideCheckbox)
+    expect(screen.getByText('Override enabled')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Director override enabled\. Non-sub staff can be selected\./i)
+    ).toBeInTheDocument()
+
+    await user.click(overrideCheckbox)
+    expect(screen.queryByText('Override enabled')).not.toBeInTheDocument()
+  })
+
   it('Single date with no time off: shifts populate (no "No scheduled shifts found")', async () => {
     const user = userEvent.setup()
     renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
