@@ -79,7 +79,7 @@ This contract defines how audit events MUST be rendered in user-facing Activity 
 - For slot-specific closures (`whole_day=false`), message MUST append slot codes after the date/range:
   - single: `... for March 9 LB1`
   - multi: `... for March 9 LB1, LB2, AC`
-- Slot codes SHOULD come from `details.time_slot_code` (single) or `details.time_slot_codes` (multi) when available.
+- Slot codes SHOULD come from `details.time_slot_code` (single) or `details.time_slot_codes` (multi), and MAY be resolved at display time from `time_slot_id` / `time_slot_ids` when code fields are missing.
 - Required examples:
   - `Created school closure for April 26`
   - `Created school closure for April 22-26`

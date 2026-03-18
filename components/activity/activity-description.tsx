@@ -14,6 +14,7 @@ export type ActivityRow = {
 
 type FormatOptions = {
   renderStaffName?: (staffId: string | null | undefined, name: string) => React.ReactNode
+  resolveTimeSlotCode?: (timeSlotId: string) => string | null | undefined
 }
 
 const ACTION_VERB_MAP: Record<string, string> = {
@@ -111,7 +112,8 @@ function asText(value: React.ReactNode): string {
 function buildSchoolClosureMessage(
   row: ActivityRow,
   details: Record<string, any>,
-  verb: string
+  verb: string,
+  options: FormatOptions
 ): string {
   const rangeLabel =
     details.start_date && details.end_date
@@ -121,12 +123,30 @@ function buildSchoolClosureMessage(
         : ''
   const base = rangeLabel ? `${verb} school closure for ${rangeLabel}` : `${verb} school closure`
   const reason = typeof details.reason === 'string' && details.reason.trim() ? details.reason : null
+  const resolvedSingleTimeSlotCode =
+    !details.time_slot_code &&
+    typeof details.time_slot_id === 'string' &&
+    options.resolveTimeSlotCode
+      ? options.resolveTimeSlotCode(details.time_slot_id)
+      : null
+  const resolvedMultiTimeSlotCodes =
+    !details.time_slot_codes && Array.isArray(details.time_slot_ids) && options.resolveTimeSlotCode
+      ? details.time_slot_ids
+          .map((id: unknown) =>
+            typeof id === 'string' ? options.resolveTimeSlotCode?.(id) || null : null
+          )
+          .filter(Boolean)
+      : null
   const slotCodes =
     Array.isArray(details.time_slot_codes) && details.time_slot_codes.length > 0
       ? details.time_slot_codes.filter(Boolean).join(', ')
-      : typeof details.time_slot_code === 'string' && details.time_slot_code.trim()
-        ? details.time_slot_code.trim()
-        : null
+      : Array.isArray(resolvedMultiTimeSlotCodes) && resolvedMultiTimeSlotCodes.length > 0
+        ? resolvedMultiTimeSlotCodes.join(', ')
+        : typeof details.time_slot_code === 'string' && details.time_slot_code.trim()
+          ? details.time_slot_code.trim()
+          : typeof resolvedSingleTimeSlotCode === 'string' && resolvedSingleTimeSlotCode.trim()
+            ? resolvedSingleTimeSlotCode.trim()
+            : null
   const slotSuffix = details.whole_day === false ? ` ${slotCodes || 'specific time slot'}` : ''
   return `${base}${slotSuffix}${reason ? `: ${reason}` : ''}`
 }
@@ -313,7 +333,7 @@ export function formatActivityDescription(
       return 'Updated school calendar settings'
     }
     if (row.entity_type === 'school_closure') {
-      return buildSchoolClosureMessage(row, details, verb)
+      return buildSchoolClosureMessage(row, details, verb, options)
     }
   }
 
@@ -321,6 +341,9 @@ export function formatActivityDescription(
   return `${verb} ${entityLabel}`
 }
 
-export function formatActivityDescriptionText(row: ActivityRow): string {
-  return asText(formatActivityDescription(row))
+export function formatActivityDescriptionText(
+  row: ActivityRow,
+  options: FormatOptions = {}
+): string {
+  return asText(formatActivityDescription(row, options))
 }

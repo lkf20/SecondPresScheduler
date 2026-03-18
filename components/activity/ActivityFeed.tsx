@@ -82,6 +82,7 @@ export function ActivityFeed({
   const [isInitialLoading, setIsInitialLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [timeSlotCodeById, setTimeSlotCodeById] = useState<Record<string, string>>({})
 
   const canLoadMore = Boolean(cursor) && !isLoadingMore
 
@@ -167,6 +168,35 @@ export function ActivityFeed({
     }
   }, [selectedCategory, selectedActor, fetchRows, queryCache])
 
+  useEffect(() => {
+    let isActive = true
+
+    const fetchTimeSlots = async () => {
+      try {
+        const response = await fetch('/api/timeslots')
+        if (!response.ok) return
+        const payload = (await response.json()) as Array<{
+          id?: string | null
+          code?: string | null
+        }>
+        if (!isActive || !Array.isArray(payload)) return
+        const nextMap: Record<string, string> = {}
+        payload.forEach(slot => {
+          if (!slot?.id || !slot?.code) return
+          nextMap[slot.id] = slot.code
+        })
+        setTimeSlotCodeById(nextMap)
+      } catch {
+        // Non-blocking: formatter falls back when timeslot lookup is unavailable.
+      }
+    }
+
+    fetchTimeSlots()
+    return () => {
+      isActive = false
+    }
+  }, [])
+
   const emptyStateLabel = useMemo(() => {
     if (selectedCategory !== 'all' || selectedActor) {
       return 'No activity matches the current filters.'
@@ -251,6 +281,8 @@ export function ActivityFeed({
                     {formatActivityDescription(row, {
                       renderStaffName: (staffId, name) =>
                         staffId ? <StaffLink staffId={staffId} name={name} /> : name,
+                      resolveTimeSlotCode: (timeSlotId: string) =>
+                        timeSlotCodeById[timeSlotId] ?? null,
                     })}
                   </p>
                   <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">

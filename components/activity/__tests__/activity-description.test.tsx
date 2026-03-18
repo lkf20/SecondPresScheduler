@@ -63,6 +63,28 @@ describe('activity-description formatter', () => {
     expect(text).toBe('Created school closure for March 9 LB1, LB2, AC: Staff Meeting')
   })
 
+  it('resolves slot code from time_slot_id when code is not present in details', () => {
+    const text = formatActivityDescriptionText(
+      {
+        ...baseRow,
+        category: 'school_calendar',
+        entity_type: 'school_closure',
+        action: 'create',
+        details: {
+          date: '2026-03-09',
+          whole_day: false,
+          time_slot_id: 'slot-lb1',
+          reason: 'Staff Meeting',
+        },
+      },
+      {
+        resolveTimeSlotCode: (timeSlotId: string) => (timeSlotId === 'slot-lb1' ? 'LB1' : null),
+      }
+    )
+
+    expect(text).toBe('Created school closure for March 9 LB1: Staff Meeting')
+  })
+
   it('formats school closure create message for a date range', () => {
     const text = formatActivityDescriptionText({
       ...baseRow,
