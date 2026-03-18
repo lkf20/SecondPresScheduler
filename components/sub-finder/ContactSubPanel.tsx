@@ -445,58 +445,81 @@ export default function ContactSubPanel({
   useEffect(() => {
     if (!isOpen || !sub || !absence) return
 
+    // Reset per-sub contact state immediately so we don't carry status from a previously viewed sub.
+    setContactId(null)
+    setIsContacted(false)
+    setContactedAt(null)
+    setResponseStatus('none')
+    setNotes('')
+    setCoverageRequestId(null)
+    setOverriddenShiftIds(new Set())
+    setIsSubInactive(false)
+    setRemainingShiftKeys(new Set())
+    setRemainingShiftCount(null)
+
+    let isCancelled = false
+
     if (absence.id.startsWith('manual-')) {
-      setCoverageRequestId(null)
-      setFetching(false)
+      if (!isCancelled) {
+        setCoverageRequestId(null)
+        setFetching(false)
+      }
       return
     }
 
     // Optional: use cached data for immediate display to avoid loading flash
     if (initialContactData) {
-      setContactId(initialContactData.id)
-      setIsContacted(initialContactData.is_contacted ?? false)
-      setContactedAt(initialContactData.contacted_at)
-      setResponseStatus(normalizeResponseStatus(initialContactData.response_status))
-      setNotes(initialContactData.notes || '')
-      setCoverageRequestId(initialContactData.coverage_request_id || null)
-      applyShiftSelections(initialContactData)
+      if (!isCancelled) {
+        setContactId(initialContactData.id)
+        setIsContacted(initialContactData.is_contacted ?? false)
+        setContactedAt(initialContactData.contacted_at)
+        setResponseStatus(normalizeResponseStatus(initialContactData.response_status))
+        setNotes(initialContactData.notes || '')
+        setCoverageRequestId(initialContactData.coverage_request_id || null)
+        applyShiftSelections(initialContactData)
+      }
       fetch(`/api/subs/${sub.id}`)
         .then(res => (res.ok ? res.json() : null))
         .then(subData => {
-          if (subData) setIsSubInactive(!subData.active)
+          if (!isCancelled && subData) setIsSubInactive(!subData.active)
         })
         .catch(() => {})
     }
 
     const fetchContactData = async () => {
-      if (!initialContactData) setFetching(true)
+      if (!initialContactData && !isCancelled) setFetching(true)
       try {
         const [coverageResponse, subResponse] = await Promise.all([
           fetch(`/api/sub-finder/coverage-request/${absence.id}`),
           fetch(`/api/subs/${sub.id}`).catch(() => null),
         ])
+        if (isCancelled) return
 
         if (!coverageResponse.ok) {
           const errorBody = await coverageResponse.text().catch(() => '')
           logContactPanelError(
             `Failed to fetch coverage request: status=${coverageResponse.status} statusText=${coverageResponse.statusText} url=${coverageResponse.url} body=${errorBody.slice(0, 200)}`
           )
-          setFetching(false)
+          if (!isCancelled) setFetching(false)
           return
         }
         const coverageData = await coverageResponse.json()
+        if (isCancelled) return
         setCoverageRequestId(coverageData.coverage_request_id)
 
         if (subResponse?.ok) {
           const subData = await subResponse.json()
+          if (isCancelled) return
           setIsSubInactive(!subData.active)
         }
 
         const contactResponse = await fetch(
           `/api/sub-finder/substitute-contacts?coverage_request_id=${coverageData.coverage_request_id}&sub_id=${sub.id}`
         )
+        if (isCancelled) return
         if (contactResponse.ok) {
           const contactData = await contactResponse.json()
+          if (isCancelled) return
           if (contactData) {
             setContactId(contactData.id)
             setIsContacted(contactData.is_contacted ?? false)
@@ -509,11 +532,14 @@ export default function ContactSubPanel({
       } catch (error) {
         logContactPanelError('Error fetching contact data:', error)
       } finally {
-        setFetching(false)
+        if (!isCancelled) setFetching(false)
       }
     }
 
     fetchContactData()
+    return () => {
+      isCancelled = true
+    }
   }, [isOpen, subId, absenceId])
 
   // Fetch remaining shifts for the coverage request (computed server-side)
@@ -1196,7 +1222,7 @@ export default function ContactSubPanel({
     responseStatus === 'declined_all'
       ? requestShiftDetails.map(shift => {
           const s = shift as typeof shift & { sub_id?: string | null }
-          const assignedToThisSub = s.sub_id === sub.id || shift.sub_name === sub.name
+          const assignedToThisSub = s.sub_id === sub.id
           if (assignedToThisSub) {
             return { ...shift, status: 'uncovered' as const, sub_name: null, sub_id: null }
           }
@@ -1698,9 +1724,9 @@ export default function ContactSubPanel({
                       </div>
 
                       <div className="mt-auto pt-2 border-t border-slate-200">
-                        <div className="flex items-center justify-center gap-4">
-                          {assignedToThisSub && (
-                            <>
+                        {!previewMode && (
+                          <div className="flex items-center justify-center gap-4">
+                            {assignedToThisSub && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1709,123 +1735,108 @@ export default function ContactSubPanel({
                               >
                                 Remove
                               </Button>
-                              <div className="w-px h-4 bg-slate-300" />
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  setChangeDialogShift({
-                                    date: shift.date,
-                                    time_slot_code: shift.time_slot_code,
-                                    fromSubName: sub.name,
-                                  })
-                                }
-                                className="text-teal-700 hover:text-teal-800 hover:bg-transparent px-0 h-auto font-medium hover:underline"
-                              >
-                                Replace with {sub.name}
-                              </Button>
-                            </>
-                          )}
+                            )}
 
-                          {!assignedToThisSub && assignedElsewhere && (
-                            <>
-                              {!canSwapToThisSub && canOverrideThisRow && (
-                                <>
-                                  {responseStatus === 'declined_all' ? (
-                                    <span className="text-sm font-medium text-slate-500">
-                                      Locked
-                                    </span>
-                                  ) : (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleToggleOverride(shiftKey)}
-                                      disabled={isSubInactive}
-                                      className="text-teal-700 hover:text-teal-800 hover:bg-transparent px-0 h-auto font-medium hover:underline"
-                                    >
-                                      {isOverridden ? 'Override on' : 'Override'}
-                                    </Button>
-                                  )}
-                                  <div className="w-px h-4 bg-slate-300" />
-                                </>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  setChangeDialogShift({
-                                    date: shift.date,
-                                    time_slot_code: shift.time_slot_code,
-                                    fromSubName: shift.sub_name || null,
-                                    toSubName: sub.name,
-                                  })
-                                }
-                                disabled={!canSwapToThisSub}
-                                className="text-teal-700 hover:text-teal-800 hover:bg-transparent px-0 h-auto font-medium hover:underline disabled:opacity-50"
-                              >
-                                Replace with {sub.name}
-                              </Button>
-                            </>
-                          )}
-
-                          {!assignedToThisSub && !assignedElsewhere && (
-                            <>
-                              {responseStatus === 'declined_all' ? (
-                                <span className="text-sm font-medium text-slate-500">Locked</span>
-                              ) : (
-                                <>
-                                  {cannotCoverReason && (
-                                    <>
+                            {!assignedToThisSub && assignedElsewhere && (
+                              <>
+                                {!canSwapToThisSub && canOverrideThisRow && (
+                                  <>
+                                    {responseStatus === 'declined_all' ? (
+                                      <span className="text-sm font-medium text-slate-500">
+                                        Locked
+                                      </span>
+                                    ) : (
                                       <Button
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => handleToggleOverride(shiftKey)}
-                                        disabled={isSubInactive || !canOverrideThisRow}
-                                        className="text-teal-700 hover:text-teal-800 hover:bg-transparent px-0 h-auto font-medium hover:underline disabled:opacity-50"
+                                        disabled={isSubInactive}
+                                        className="text-teal-700 hover:text-teal-800 hover:bg-transparent px-0 h-auto font-medium hover:underline"
                                       >
-                                        {isOverridden
-                                          ? 'Override on'
-                                          : canOverrideThisRow
-                                            ? 'Override'
-                                            : 'Locked'}
+                                        {isOverridden ? 'Override on' : 'Override'}
                                       </Button>
-                                      <div className="w-px h-4 bg-slate-300" />
-                                    </>
-                                  )}
-                                  <label
-                                    className={`inline-flex items-center justify-center gap-2 text-sm ${
-                                      canAssignFromCheckbox
-                                        ? 'cursor-pointer text-teal-700 hover:text-teal-800'
-                                        : 'cursor-not-allowed text-slate-400'
-                                    }`}
-                                  >
-                                    <span className="font-medium hover:underline">Assign</span>
-                                    <Checkbox
-                                      checked={isSelected}
-                                      onCheckedChange={() =>
-                                        handleShiftToggle(
-                                          shiftKey,
-                                          canCoverThisShift || isOverridden
-                                        )
-                                      }
-                                      disabled={!canAssignFromCheckbox}
-                                      className={
+                                    )}
+                                    <div className="w-px h-4 bg-slate-300" />
+                                  </>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    setChangeDialogShift({
+                                      date: shift.date,
+                                      time_slot_code: shift.time_slot_code,
+                                      fromSubName: shift.sub_name || null,
+                                      toSubName: sub.name,
+                                    })
+                                  }
+                                  disabled={!canSwapToThisSub}
+                                  className="text-teal-700 hover:text-teal-800 hover:bg-transparent px-0 h-auto font-medium hover:underline disabled:opacity-50"
+                                >
+                                  Replace with {sub.name}
+                                </Button>
+                              </>
+                            )}
+
+                            {!assignedToThisSub && !assignedElsewhere && (
+                              <>
+                                {responseStatus === 'declined_all' ? (
+                                  <span className="text-sm font-medium text-slate-500">Locked</span>
+                                ) : (
+                                  <>
+                                    {cannotCoverReason && (
+                                      <>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleToggleOverride(shiftKey)}
+                                          disabled={isSubInactive || !canOverrideThisRow}
+                                          className="text-teal-700 hover:text-teal-800 hover:bg-transparent px-0 h-auto font-medium hover:underline disabled:opacity-50"
+                                        >
+                                          {isOverridden
+                                            ? 'Override on'
+                                            : canOverrideThisRow
+                                              ? 'Override'
+                                              : 'Locked'}
+                                        </Button>
+                                        <div className="w-px h-4 bg-slate-300" />
+                                      </>
+                                    )}
+                                    <label
+                                      className={`inline-flex items-center justify-center gap-2 text-sm ${
                                         canAssignFromCheckbox
-                                          ? '!border focus-visible:!ring-2 focus-visible:!ring-[#0d9488] data-[state=checked]:!bg-[#0d9488] data-[state=checked]:!border-[#0d9488] data-[state=checked]:text-white'
-                                          : ''
-                                      }
-                                      style={
-                                        canAssignFromCheckbox
-                                          ? { borderColor: '#0d9488', borderWidth: 1 }
-                                          : undefined
-                                      }
-                                    />
-                                  </label>
-                                </>
-                              )}
-                            </>
-                          )}
-                        </div>
+                                          ? 'cursor-pointer text-teal-700 hover:text-teal-800'
+                                          : 'cursor-not-allowed text-slate-400'
+                                      }`}
+                                    >
+                                      <span className="font-medium hover:underline">Assign</span>
+                                      <Checkbox
+                                        checked={isSelected}
+                                        onCheckedChange={() =>
+                                          handleShiftToggle(
+                                            shiftKey,
+                                            canCoverThisShift || isOverridden
+                                          )
+                                        }
+                                        disabled={!canAssignFromCheckbox}
+                                        className={
+                                          canAssignFromCheckbox
+                                            ? '!border focus-visible:!ring-2 focus-visible:!ring-[#0d9488] data-[state=checked]:!bg-[#0d9488] data-[state=checked]:!border-[#0d9488] data-[state=checked]:text-white'
+                                            : ''
+                                        }
+                                        style={
+                                          canAssignFromCheckbox
+                                            ? { borderColor: '#0d9488', borderWidth: 1 }
+                                            : undefined
+                                        }
+                                      />
+                                    </label>
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )

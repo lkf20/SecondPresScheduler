@@ -126,6 +126,128 @@ describe('ContactSubPanel', () => {
     expect(screen.getByRole('radio', { name: /pending/i })).toHaveAttribute('aria-checked', 'true')
   })
 
+  it('defaults to Not contacted when switching to a different sub, even if previous fetch resolves confirmed', async () => {
+    let resolveFirstSubContact: ((value: Response) => void) | null = null
+
+    global.fetch = jest.fn((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/timeslots')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [],
+        } as Response)
+      }
+      if (url.includes('/api/sub-finder/coverage-request/')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ coverage_request_id: 'coverage-1' }),
+        } as Response)
+      }
+      if (url.includes('/api/subs/sub-1')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ active: true }),
+        } as Response)
+      }
+      if (url.includes('/api/subs/sub-2')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ active: true }),
+        } as Response)
+      }
+      if (url.includes('sub_id=sub-1')) {
+        return new Promise(resolve => {
+          resolveFirstSubContact = resolve
+        })
+      }
+      if (url.includes('sub_id=sub-2')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 'contact-2',
+            is_contacted: false,
+            contacted_at: null,
+            response_status: 'none',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: [],
+            override_shift_keys: [],
+          }),
+        } as Response)
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({}),
+      } as Response)
+    }) as jest.Mock
+
+    const { rerender } = render(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        variant="inline"
+        sub={baseSub}
+        absence={baseAbsence}
+        initialContactData={{
+          id: 'contact-1',
+          is_contacted: true,
+          contacted_at: '2026-02-09T12:00:00.000Z',
+          response_status: 'confirmed',
+          notes: '',
+          coverage_request_id: 'coverage-1',
+          selected_shift_keys: [],
+          override_shift_keys: [],
+        }}
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('radio', { name: /confirmed/i })).toHaveAttribute(
+        'aria-checked',
+        'true'
+      )
+    })
+
+    rerender(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        variant="inline"
+        sub={{
+          ...baseSub,
+          id: 'sub-2',
+          name: 'Taylor B.',
+        }}
+        absence={baseAbsence}
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('radio', { name: /not contacted/i })).toHaveAttribute(
+        'aria-checked',
+        'true'
+      )
+    })
+
+    resolveFirstSubContact?.({
+      ok: true,
+      json: async () => ({
+        id: 'contact-1',
+        is_contacted: true,
+        contacted_at: '2026-02-09T12:00:00.000Z',
+        response_status: 'confirmed',
+        notes: '',
+      }),
+    } as Response)
+
+    await waitFor(() => {
+      expect(screen.getByRole('radio', { name: /not contacted/i })).toHaveAttribute(
+        'aria-checked',
+        'true'
+      )
+    })
+  })
+
   it('returns null when closed and no sub is selected', () => {
     const { container } = render(
       <ContactSubPanel
@@ -1698,6 +1820,163 @@ describe('ContactSubPanel', () => {
       })
 
       expect(screen.getByRole('button', { name: /replace with sally a\./i })).toBeInTheDocument()
+    })
+
+    it('does not show Replace when shift is already assigned to this sub', async () => {
+      render(
+        <ContactSubPanel
+          isOpen
+          onClose={jest.fn()}
+          variant="inline"
+          sub={{
+            ...baseSub,
+            assigned_shifts: [
+              {
+                coverage_request_shift_id: 'crs-1',
+                date: '2026-02-09',
+                day_name: 'Monday',
+                time_slot_code: 'EM',
+              },
+            ],
+            can_cover: [
+              { date: '2026-02-09', day_name: 'Monday', time_slot_code: 'EM', class_name: null },
+            ],
+            cannot_cover: [],
+          }}
+          absence={{
+            ...baseAbsence,
+            shifts: {
+              shift_details: [
+                {
+                  date: '2026-02-09',
+                  day_name: 'Monday',
+                  time_slot_code: 'EM',
+                  status: 'fully_covered',
+                  sub_name: 'Sally A.',
+                  sub_id: 'sub-1',
+                },
+              ],
+            },
+          }}
+          initialContactData={{
+            id: 'contact-1',
+            is_contacted: true,
+            contacted_at: '2026-02-09T12:00:00.000Z',
+            response_status: 'confirmed',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: [],
+            override_shift_keys: [],
+          }}
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Shift assignments')).toBeInTheDocument()
+      })
+
+      expect(screen.getByText(/assigned to this sub/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /remove/i })).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /replace with sally a\./i })
+      ).not.toBeInTheDocument()
+    })
+
+    it('uses sub id (not name) to decide if the current sub owns a covered shift', async () => {
+      render(
+        <ContactSubPanel
+          isOpen
+          onClose={jest.fn()}
+          variant="inline"
+          sub={{
+            ...baseSub,
+            name: 'Victoria I.',
+            can_cover: [],
+            cannot_cover: [],
+          }}
+          absence={{
+            ...baseAbsence,
+            shifts: {
+              shift_details: [
+                {
+                  date: '2026-02-09',
+                  day_name: 'Monday',
+                  time_slot_code: 'EM',
+                  status: 'fully_covered',
+                  sub_name: 'Victoria I.',
+                  sub_id: 'different-sub-id',
+                },
+              ],
+            },
+          }}
+          initialContactData={{
+            id: 'contact-1',
+            is_contacted: true,
+            contacted_at: '2026-02-09T12:00:00.000Z',
+            response_status: 'declined_all',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: [],
+            override_shift_keys: [],
+          }}
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Shift assignments')).toBeInTheDocument()
+      })
+
+      expect(screen.getByText('0 of 1 upcoming shifts need coverage')).toBeInTheDocument()
+    })
+
+    it('hides Replace action in preview mode for covered shifts', async () => {
+      render(
+        <ContactSubPanel
+          isOpen
+          onClose={jest.fn()}
+          variant="inline"
+          previewMode
+          sub={{
+            ...baseSub,
+            can_cover: [
+              { date: '2026-02-09', day_name: 'Monday', time_slot_code: 'EM', class_name: null },
+            ],
+            cannot_cover: [],
+          }}
+          absence={{
+            ...baseAbsence,
+            shifts: {
+              shift_details: [
+                {
+                  date: '2026-02-09',
+                  day_name: 'Monday',
+                  time_slot_code: 'EM',
+                  status: 'fully_covered',
+                  sub_name: 'Bella W.',
+                },
+              ],
+            },
+          }}
+          initialContactData={{
+            id: 'contact-1',
+            is_contacted: true,
+            contacted_at: '2026-02-09T12:00:00.000Z',
+            response_status: 'confirmed',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: [],
+            override_shift_keys: [],
+          }}
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Shift assignments')).toBeInTheDocument()
+      })
+
+      expect(
+        screen.queryByRole('button', { name: /replace with sally a\./i })
+      ).not.toBeInTheDocument()
     })
 
     it('shows Override button when sub cannot cover but reason is overridable', async () => {
