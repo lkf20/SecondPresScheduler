@@ -153,6 +153,9 @@ export interface RecommendedSub {
     date: string
     day_name: string
     time_slot_code: string
+    is_partial?: boolean
+    partial_start_time?: string | null
+    partial_end_time?: string | null
   }>
   remaining_shift_keys?: string[]
   remaining_shift_count?: number
@@ -176,6 +179,14 @@ interface Absence {
       sub_id?: string | null
       classroom_name?: string | null
       class_name?: string | null
+      assigned_subs?: Array<{
+        assignment_id: string
+        sub_id: string
+        sub_name: string
+        is_partial: boolean
+        partial_start_time?: string | null
+        partial_end_time?: string | null
+      }>
     }>
   }
 }
@@ -238,6 +249,9 @@ export default function ContactSubPanel({
       date: string
       day_name: string
       time_slot_code: string
+      is_partial?: boolean
+      partial_start_time?: string | null
+      partial_end_time?: string | null
     }>
   >([])
   const [loading, setLoading] = useState(false)
@@ -595,6 +609,11 @@ export default function ContactSubPanel({
     const month = MONTH_NAMES[date.getMonth()]
     const day = date.getDate()
     return `${dayName} ${month} ${day}`
+  }
+
+  const formatPartialTimeWindow = (start?: string | null, end?: string | null) => {
+    if (!start && !end) return null
+    return `${start ?? '--:--'}-${end ?? '--:--'}`
   }
 
   // Format date range for display
@@ -1297,6 +1316,14 @@ export default function ContactSubPanel({
         sub_name?: string | null
         sub_id?: string | null
         status?: 'uncovered' | 'partially_covered' | 'fully_covered'
+        assigned_subs?: Array<{
+          assignment_id: string
+          sub_id: string
+          sub_name: string
+          is_partial: boolean
+          partial_start_time?: string | null
+          partial_end_time?: string | null
+        }>
       }
     >()
 
@@ -1615,6 +1642,18 @@ export default function ContactSubPanel({
                       time_slot_code: shift.time_slot_code,
                       status: shift.status || 'uncovered',
                       sub_name: shift.sub_name || null,
+                      sub_names:
+                        shift.assigned_subs?.map(assignment => assignment.sub_name) || undefined,
+                      partial_time_windows:
+                        shift.assigned_subs
+                          ?.filter(assignment => assignment.is_partial)
+                          .map(assignment =>
+                            formatPartialTimeWindow(
+                              assignment.partial_start_time,
+                              assignment.partial_end_time
+                            )
+                          )
+                          .filter((value): value is string => Boolean(value)) || undefined,
                       is_partial: shift.status === 'partially_covered',
                     })),
                   }}
@@ -1653,12 +1692,35 @@ export default function ContactSubPanel({
                   const shiftKey = `${shift.date}|${shift.time_slot_code}`
                   const shiftKeyNorm = toShiftKeyNormalized(shift.date, shift.time_slot_code)
                   const assignedToThisSub = assignedShiftByKey.get(shiftKey)
+                  const assignedToThisSubTimeWindow = assignedToThisSub
+                    ? formatPartialTimeWindow(
+                        assignedToThisSub.partial_start_time,
+                        assignedToThisSub.partial_end_time
+                      )
+                    : null
                   // For partially_covered shifts, sub_name is set but assignment is additive:
                   // do NOT treat this as blocking. Only fully_covered shifts are truly assignedElsewhere.
                   const isPartiallyByOther =
                     !assignedToThisSub &&
                     shift.status === 'partially_covered' &&
                     Boolean(shift.sub_name)
+                  const partialAssignmentsByOther = (shift.assigned_subs || []).filter(
+                    assignment => assignment.is_partial && assignment.sub_id !== sub.id
+                  )
+                  const partialByOtherSummary =
+                    partialAssignmentsByOther.length > 0
+                      ? partialAssignmentsByOther
+                          .map(assignment => {
+                            const window = formatPartialTimeWindow(
+                              assignment.partial_start_time,
+                              assignment.partial_end_time
+                            )
+                            return window
+                              ? `${assignment.sub_name} (${window})`
+                              : `${assignment.sub_name}`
+                          })
+                          .join(', ')
+                      : shift.sub_name || null
                   const assignedElsewhere =
                     !assignedToThisSub && !isPartiallyByOther && Boolean(shift.sub_name)
                   const canCoverThisShift =
@@ -1742,13 +1804,30 @@ export default function ContactSubPanel({
                         }`}
                       >
                         {assignedToThisSub ? (
-                          <p className="text-sm text-emerald-700 font-medium">
-                            Assigned to this sub
-                          </p>
+                          <div className="space-y-1">
+                            <p className="text-sm text-emerald-700 font-medium">
+                              Assigned to this sub
+                            </p>
+                            {assignedToThisSub.is_partial && (
+                              <p className="text-xs font-medium" style={{ color: '#92400E' }}>
+                                Partial assignment
+                                {assignedToThisSubTimeWindow
+                                  ? ` (${assignedToThisSubTimeWindow})`
+                                  : ''}
+                              </p>
+                            )}
+                          </div>
                         ) : isPartiallyByOther ? (
-                          <p className="text-xs font-medium" style={{ color: '#92400E' }}>
-                            Partially covered. You can add another partial assignment.
-                          </p>
+                          <div className="space-y-1">
+                            <p className="text-xs font-medium" style={{ color: '#92400E' }}>
+                              Partially covered. You can add another partial assignment.
+                            </p>
+                            {partialByOtherSummary && (
+                              <p className="text-xs text-amber-800">
+                                Current partial coverage: {partialByOtherSummary}
+                              </p>
+                            )}
+                          </div>
                         ) : !assignedElsewhere &&
                           (cannotCoverReason || responseStatus === 'declined_all') &&
                           !isOverridden ? (

@@ -162,8 +162,23 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Multi-value map: key -> array of assignments (supports multiple partials per shift)
-    const assignmentByKey = new Map<
+    // Multi-value maps for assignment lookup:
+    // 1) coverage_request_shift_id (preferred, exact identity for time-off-backed shifts)
+    // 2) date|time_slot_id|classroom_id fallback for non-time-off / legacy rows
+    const assignmentByCoverageShiftId = new Map<
+      string,
+      Array<{
+        id: string
+        sub_id: string
+        sub_name: string
+        non_sub_override: boolean
+        is_partial: boolean
+        partial_start_time: string | null
+        partial_end_time: string | null
+        created_at: string
+      }>
+    >()
+    const assignmentBySlotClassKey = new Map<
       string,
       Array<{
         id: string
@@ -177,7 +192,8 @@ export async function POST(request: NextRequest) {
       }>
     >()
     for (const a of assignments || []) {
-      const key = `${toDateStringISO(a.date)}|${a.time_slot_id}`
+      const dateISO = toDateStringISO(a.date)
+      const slotClassKey = `${dateISO}|${a.time_slot_id}|${a.classroom_id ?? ''}`
       const sub = (
         a as { staff?: { first_name?: string; last_name?: string; display_name?: string } | null }
       ).staff
@@ -198,11 +214,21 @@ export async function POST(request: NextRequest) {
         partial_end_time: (a as any).partial_end_time ?? null,
         created_at: (a as any).created_at ?? '',
       }
-      const existing = assignmentByKey.get(key)
-      if (existing) {
-        existing.push(entry)
+      const coverageShiftId = (a as any).coverage_request_shift_id as string | null | undefined
+      if (coverageShiftId) {
+        const existingByCrShift = assignmentByCoverageShiftId.get(coverageShiftId)
+        if (existingByCrShift) {
+          existingByCrShift.push(entry)
+        } else {
+          assignmentByCoverageShiftId.set(coverageShiftId, [entry])
+        }
+      }
+
+      const existingBySlotClass = assignmentBySlotClassKey.get(slotClassKey)
+      if (existingBySlotClass) {
+        existingBySlotClass.push(entry)
       } else {
-        assignmentByKey.set(key, [entry])
+        assignmentBySlotClassKey.set(slotClassKey, [entry])
       }
     }
 
@@ -222,8 +248,13 @@ export async function POST(request: NextRequest) {
         const map = shiftMapByRequest.get(shift.time_off_request_id)
         coverage_request_shift_id = (map?.get(keyFull) ?? map?.get(keySimple) ?? null) || null
       }
-      const assignKey = `${dateStr}|${shift.time_slot_id}`
-      const assignmentList = assignmentByKey.get(assignKey) ?? []
+      const slotClassKey = `${dateStr}|${shift.time_slot_id}|${shift.classroom_id ?? ''}`
+      const assignmentList =
+        (coverage_request_shift_id
+          ? assignmentByCoverageShiftId.get(coverage_request_shift_id)
+          : undefined) ??
+        assignmentBySlotClassKey.get(slotClassKey) ??
+        []
 
       // Deterministic primary assignment: prefer active full (is_partial=false) first,
       // then most recently created partial (ORDER BY is_partial ASC, created_at DESC, id DESC).

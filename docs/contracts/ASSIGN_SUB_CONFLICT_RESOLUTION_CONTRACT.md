@@ -21,6 +21,7 @@
 - **Partial assignments (Phase 1):** Multiple partial subs are allowed for the same shift (maximum 4). A partial assignment cancels any existing full assignment for that shift but does not affect other partial assignments.
 - **DB enforcement:** Conditional unique index `idx_sub_assignments_one_active_full_per_shift` on `(coverage_request_shift_id) WHERE status = 'active' AND is_partial = false` enforces full-assignment exclusivity at the DB level.
 - **API:** `POST /api/sub-finder/assign-shifts` accepts an optional `partial_assignments` array (`[{shift_id, partial_start_time?, partial_end_time?}]`). Shifts in `partial_assignments` are assigned as partial (`is_partial = true`). Remaining shifts in `selected_shift_ids` are full. Validation: no floater+partial combination; no duplicate shift_ids; time values must be HH:mm; cap of 4 partials per shift.
+- **Payload contract:** Any shift included in `partial_assignments` must also be present in `selected_shift_ids`.
 
 ### Rule 3: Floater allows same slot, different classrooms
 
@@ -181,6 +182,26 @@ These flags are derived from the **target shift's** active assignments, independ
 
 - `coveredByOtherSub` in `AssignSubPanel` is only `true` when another sub has a **full** assignment OR the partial cap is reached. Shifts with partial-only coverage that haven't hit the cap are NOT blocked — the director can add another partial.
 - When a shift is `partially_covered` in `ContactSubPanel`, `assignedElsewhere` is NOT set — the sub can be added as another partial. The card shows amber border and "Partially covered — adding as partial" label.
+- `coveredByCurrentSub` in `AssignSubPanel` only blocks assignment when the selected sub has a **full** assignment on the shift, or when the partial cap is reached. A selected sub with partial-only coverage under cap remains assignable.
+- `POST /api/assign-sub/shifts` must return assignment state scoped to the exact shift identity (prefer `coverage_request_shift_id`, fallback `date|time_slot_id|classroom_id`) so assignment status does not bleed across classrooms in the same slot.
+
+### Partial UI requirements
+
+- **Assign Sub panel:** A single badge next to the shift label (e.g. "Thu Mar 26 • AM • Infant Room") shows existing assignees. Full assignees use the standard sub chip; partial assignees use a **partial-styled badge**: yellow background and border (per `coverageColorValues.partial`), Clock icon, and text like "Victoria I. (partial 9 am to 10:30 am)" using friendly 12-hour time. There is no separate "Currently: …" line for partial-only shifts—that line is shown only when the shift has a full assignment (with optional "Change sub").
+- **Contact & Assign panel:** For `partially_covered` shifts, keep additive messaging and show explicit partial coverage context. When the selected sub is assigned as partial, show "Partial assignment" with optional time window.
+- **Shift detail surfaces:** Partial assignment rows (e.g., `ShiftStatusCard`, `CoverageSummary`) should include optional partial time windows when available.
+
+### Partial-only shift: add vs replace (Assign Sub panel)
+
+When a shift has **only partial** assignees and is under the cap (4), the panel does **not** use the Conflict Banner. An informational note shows **"N partial shift sub(s) already assigned."** The panel then shows **two radio options**:
+
+1. **Add [selected sub] as a partial shift sub (default)**  
+   The user selects this to add the chosen sub as another partial. No From/To time inputs are shown; the shift is sent in `partial_assignments` (times optional from API; UI does not expose them for add). No unassign is performed.
+
+2. **Replace [current partial sub(s)] with [selected sub] as a full or partial shift sub**  
+   The user selects this to replace the existing partial assignee(s) with the selected sub. The panel shows the **Partial shift (sub covers part of this shift)** checkbox. If **unchecked**, the new sub is assigned as full (no From/To). If **checked**, the panel shows **From / To** time inputs and the shift is sent as partial. On Assign, the panel first calls `POST /api/sub-finder/unassign-shifts` for each existing partial assignment on that shift (by `assignment_id`), then calls `POST /api/sub-finder/assign-shifts` with the new sub (full or partial per checkbox).
+
+Full assignment (or partial cap reached) continues to use the Conflict Banner: "This shift is assigned to [sub]. Replace with [selected sub]?" with Do not assign / Replace.
 
 ### Unassign with multiple partials
 

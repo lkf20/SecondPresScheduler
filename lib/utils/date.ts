@@ -185,3 +185,35 @@ export function getTomorrowISO(): string {
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
 }
+
+/**
+ * Format a time string (HH:mm or HH:mm:ss) as friendly 12-hour text, e.g. "9 am", "10:30 am".
+ */
+function formatTimeFriendly(time: string): string {
+  const parts = time.trim().split(':')
+  const hour = parseInt(parts[0] ?? '0', 10)
+  const minute = parseInt(parts[1] ?? '0', 10)
+  const is12 = hour === 12
+  const is0 = hour === 0
+  const displayHour = is0 ? 12 : is12 ? 12 : hour % 12
+  const suffix = hour >= 12 && !is12 ? 'pm' : 'am'
+  if (minute === 0) return `${displayHour} ${suffix}`
+  return `${displayHour}:${String(minute).padStart(2, '0')} ${suffix}`
+}
+
+/**
+ * Format partial shift time range for display, e.g. "9 am to 10:30 am".
+ * Accepts HH:mm or HH:mm:ss. Returns null if both start and end are missing.
+ */
+export function formatPartialTimeRangeFriendly(
+  start?: string | null,
+  end?: string | null
+): string | null {
+  if (!start && !end) return null
+  const startStr = start?.trim() ? formatTimeFriendly(start) : null
+  const endStr = end?.trim() ? formatTimeFriendly(end) : null
+  if (startStr && endStr) return `${startStr} to ${endStr}`
+  if (startStr) return startStr
+  if (endStr) return endStr
+  return null
+}

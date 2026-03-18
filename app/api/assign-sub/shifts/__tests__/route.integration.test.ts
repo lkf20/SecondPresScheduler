@@ -214,6 +214,8 @@ describe('POST /api/assign-sub/shifts', () => {
             sub_id: 'sub-1',
             date: '2026-03-10',
             time_slot_id: 'slot-1',
+            classroom_id: 'class-1',
+            coverage_request_shift_id: 'crs-1',
             staff: { first_name: 'Jane', last_name: 'Doe', display_name: null },
           },
         ],
@@ -296,5 +298,212 @@ describe('POST /api/assign-sub/shifts', () => {
     expect(shift.coverage_request_shift_id).toBe('crs-1')
     expect(shift.assignment_id).toBe('assign-1')
     expect(shift.assigned_sub_name).toBe('Jane D.')
+  })
+
+  it('does not bleed assignment state across same date/slot in different classrooms', async () => {
+    ;(getTeacherShiftsForAssignSub as jest.Mock).mockResolvedValue([
+      {
+        id: '2026-03-10|dow-2|slot-1|class-1',
+        date: '2026-03-10',
+        day_of_week_id: 'dow-2',
+        time_slot_id: 'slot-1',
+        time_slot_code: 'AM',
+        classroom_id: 'class-1',
+        has_time_off: false,
+        time_off_request_id: null,
+      },
+      {
+        id: '2026-03-10|dow-2|slot-1|class-2',
+        date: '2026-03-10',
+        day_of_week_id: 'dow-2',
+        time_slot_id: 'slot-1',
+        time_slot_code: 'AM',
+        classroom_id: 'class-2',
+        has_time_off: false,
+        time_off_request_id: null,
+      },
+    ])
+    ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
+    const subAssignmentsChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'assign-1',
+            sub_id: 'sub-1',
+            date: '2026-03-10',
+            day_of_week_id: 'dow-2',
+            time_slot_id: 'slot-1',
+            classroom_id: 'class-1',
+            coverage_request_shift_id: null,
+            is_partial: false,
+            partial_start_time: null,
+            partial_end_time: null,
+            created_at: '2026-03-10T08:00:00.000Z',
+            staff: { first_name: 'Victoria', last_name: 'I.', display_name: null },
+            time_slots: { code: 'AM' },
+          },
+          {
+            id: 'assign-2',
+            sub_id: 'sub-2',
+            date: '2026-03-10',
+            day_of_week_id: 'dow-2',
+            time_slot_id: 'slot-1',
+            classroom_id: 'class-2',
+            coverage_request_shift_id: null,
+            is_partial: false,
+            partial_start_time: null,
+            partial_end_time: null,
+            created_at: '2026-03-10T08:05:00.000Z',
+            staff: { first_name: 'Cheyenne', last_name: 'A.', display_name: null },
+            time_slots: { code: 'AM' },
+          },
+        ],
+      }),
+    }
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'time_off_requests')
+          return {
+            select: jest.fn().mockReturnThis(),
+            in: jest.fn().mockResolvedValue({ data: [] }),
+          }
+        if (table === 'sub_assignments') return subAssignmentsChain
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/assign-sub/shifts', 'POST', {
+      teacher_id: 'teacher-1',
+      start_date: '2026-03-10',
+      end_date: '2026-03-10',
+    })
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.shifts).toHaveLength(2)
+    const roomOne = json.shifts.find((s: any) => s.classroom_id === 'class-1')
+    const roomTwo = json.shifts.find((s: any) => s.classroom_id === 'class-2')
+    expect(roomOne.assigned_sub_name).toBe('Victoria I.')
+    expect(roomTwo.assigned_sub_name).toBe('Cheyenne A.')
+  })
+
+  it('returns assigned_subs with partial metadata and keeps full assignment as primary', async () => {
+    ;(getTeacherShiftsForAssignSub as jest.Mock).mockResolvedValue([
+      {
+        id: '2026-03-10|dow-2|slot-1|class-1',
+        date: '2026-03-10',
+        day_of_week_id: 'dow-2',
+        time_slot_id: 'slot-1',
+        time_slot_code: 'AM',
+        classroom_id: 'class-1',
+        has_time_off: true,
+        time_off_request_id: 'tor-1',
+      },
+    ])
+    ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
+
+    const timeOffChain = {
+      select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockResolvedValue({
+        data: [{ id: 'tor-1', coverage_request_id: 'cr-1' }],
+      }),
+    }
+    const coverageShiftsChain = {
+      select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'crs-1',
+            coverage_request_id: 'cr-1',
+            date: '2026-03-10',
+            time_slot_id: 'slot-1',
+            classroom_id: 'class-1',
+            time_slots: { code: 'AM' },
+          },
+        ],
+      }),
+    }
+    const subAssignmentsChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'assign-full',
+            sub_id: 'sub-1',
+            date: '2026-03-10',
+            day_of_week_id: 'dow-2',
+            time_slot_id: 'slot-1',
+            classroom_id: 'class-1',
+            coverage_request_shift_id: 'crs-1',
+            is_partial: false,
+            partial_start_time: null,
+            partial_end_time: null,
+            created_at: '2026-03-10T07:00:00.000Z',
+            staff: { first_name: 'Victoria', last_name: 'I.', display_name: null },
+            time_slots: { code: 'AM' },
+          },
+          {
+            id: 'assign-partial',
+            sub_id: 'sub-2',
+            date: '2026-03-10',
+            day_of_week_id: 'dow-2',
+            time_slot_id: 'slot-1',
+            classroom_id: 'class-1',
+            coverage_request_shift_id: 'crs-1',
+            is_partial: true,
+            partial_start_time: '08:00',
+            partial_end_time: '10:30',
+            created_at: '2026-03-10T08:30:00.000Z',
+            staff: { first_name: 'Cheyenne', last_name: 'A.', display_name: null },
+            time_slots: { code: 'AM' },
+          },
+        ],
+      }),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'time_off_requests') return timeOffChain
+        if (table === 'coverage_request_shifts') return coverageShiftsChain
+        if (table === 'sub_assignments') return subAssignmentsChain
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/assign-sub/shifts', 'POST', {
+      teacher_id: 'teacher-1',
+      start_date: '2026-03-10',
+      end_date: '2026-03-10',
+    })
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.shifts).toHaveLength(1)
+    const shift = json.shifts[0]
+    expect(shift.assigned_sub_name).toBe('Victoria I.')
+    expect(shift.assigned_subs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          assignment_id: 'assign-full',
+          sub_name: 'Victoria I.',
+          is_partial: false,
+        }),
+        expect.objectContaining({
+          assignment_id: 'assign-partial',
+          sub_name: 'Cheyenne A.',
+          is_partial: true,
+          partial_start_time: '08:00',
+          partial_end_time: '10:30',
+        }),
+      ])
+    )
   })
 })

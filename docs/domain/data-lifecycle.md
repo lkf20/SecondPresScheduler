@@ -40,6 +40,8 @@ write paths.
 - **Allowed writers:** `app/api/sub-finder/*`, `lib/api/sub-assignments.ts`
 - **Lifecycle:** `active -> cancelled` (see status transitions below).
 - **Partial assignments (Phase 1):** `is_partial NOT NULL DEFAULT false`. When `is_partial = true`, the assignment covers a portion of the shift (optional `partial_start_time`/`partial_end_time` in HH:mm). A full assignment cancels all existing actives for that shift. A partial is additive (up to 4 per shift); it only cancels any existing full assignment. Coverage weight: full = 1.0, partial = 0.5 (approximation). Two partials ≥ 1.0 → shift is `fully_covered`. Unassigning a specific partial requires `assignment_id` when multiple partials exist.
+- **Assign payload contract:** `POST /api/sub-finder/assign-shifts` expects optional partial metadata in `partial_assignments[*].partial_start_time` / `partial_assignments[*].partial_end_time` (not generic `start_time`/`end_time`), and each partial `shift_id` must also be included in `selected_shift_ids`.
+- **Read/UI contract:** Assignment read surfaces should preserve partial metadata for display (`is_partial`, optional `partial_start_time`, `partial_end_time`), including `assigned_subs[]` and response summaries like `assigned_shifts`.
 - **Derived vs stored:**
   - **Stored:** `status`, `coverage_request_shift_id`, `sub_id`, `is_partial`, `partial_start_time`, `partial_end_time`
   - **Derived:** coverage progress indicators (counts, badges, percent-filled); shift `status` (`uncovered` / `partially_covered` / `fully_covered`) via `deriveShiftCoverageStatus` in `lib/schedules/coverage-weights.ts`

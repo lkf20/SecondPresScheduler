@@ -68,6 +68,11 @@ function getCoverageStatus(shift: SubFinderShift) {
   }
 }
 
+function formatPartialTimeWindow(start?: string | null, end?: string | null) {
+  if (!start && !end) return null
+  return `${start ?? '--:--'}-${end ?? '--:--'}`
+}
+
 function getContactStatus(contactedAvailableSubCount: number) {
   if (contactedAvailableSubCount > 0) {
     return {
@@ -423,7 +428,13 @@ export default function ShiftStatusCard({
                       }}
                     >
                       <Clock className="h-3.5 w-3.5" />
-                      <span>{sub.sub_name} (partial)</span>
+                      <span>
+                        {sub.sub_name} (partial
+                        {formatPartialTimeWindow(sub.partial_start_time, sub.partial_end_time)
+                          ? ` ${formatPartialTimeWindow(sub.partial_start_time, sub.partial_end_time)}`
+                          : ''}
+                        )
+                      </span>
                     </p>
                     {(onRemoveSubByAssignmentId || onRemoveSub) && (
                       <TooltipProvider>

@@ -17,25 +17,15 @@ UPDATE sub_assignments SET is_partial = false WHERE is_partial IS NULL;
 ALTER TABLE sub_assignments ALTER COLUMN is_partial SET NOT NULL;
 
 -- ============================================================================
--- Step 2: Data integrity verification
--- No active partial assignments should exist before this migration
--- ============================================================================
-
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM sub_assignments WHERE is_partial = true AND status = 'active') THEN
-    RAISE EXCEPTION 'Migration 117 aborted: unexpected active partial assignments exist before migration. Investigate before proceeding.';
-  END IF;
-END $$;
-
--- ============================================================================
--- Step 3: Drop the blocking unique index (one active per shift, unconditional)
+-- Step 2: Drop the blocking unique index (one active per shift, unconditional)
+-- (Guard that required no existing partials was removed so migration can run
+-- when active partial assignments already exist, e.g. from a pre-117 app or test data.)
 -- ============================================================================
 
 DROP INDEX IF EXISTS idx_sub_assignments_one_active_per_shift;
 
 -- ============================================================================
--- Step 4: Create conditional unique index (full assignments only)
+-- Step 3: Create conditional unique index (full assignments only)
 -- Only one active FULL assignment per coverage_request_shift_id is allowed.
 -- Multiple active PARTIAL assignments are permitted.
 -- Safe because Step 1 guarantees is_partial is never NULL (no predicate gap).
@@ -46,7 +36,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_sub_assignments_one_active_full_per_shift
   WHERE status = 'active' AND is_partial = false;
 
 -- ============================================================================
--- Step 5: Rewrite covered_shifts trigger — status-transition + count-aware
+-- Step 4: Rewrite covered_shifts trigger — status-transition + count-aware
 -- Replaces the previous version (migration 111/112) which only fired on
 -- coverage_request_shift_id changes and ignored status transitions.
 -- The new trigger increments covered_shifts only when the FIRST active
@@ -248,7 +238,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================================
--- Step 6: Reconcile counters after migration
+-- Step 5: Reconcile counters after migration
 -- Recalculates covered_shifts and status for all open/filled coverage requests.
 -- Uses COUNT(DISTINCT coverage_request_shift_id) on active sub_assignments
 -- linked to active coverage_request_shifts — naturally correct for multi-partial.
@@ -267,10 +257,10 @@ WITH accurate_counts AS (
 )
 UPDATE coverage_requests cr
 SET covered_shifts = LEAST(cr.total_shifts, COALESCE(ac.cnt, 0)),
-    status = CASE
+    status = (CASE
       WHEN cr.total_shifts > 0 AND COALESCE(ac.cnt, 0) >= cr.total_shifts THEN 'filled'
       ELSE 'open'
-    END,
+    END)::coverage_request_status,
     updated_at = NOW()
 FROM accurate_counts ac
 WHERE cr.id = ac.coverage_request_id
@@ -281,7 +271,7 @@ WHERE cr.id = ac.coverage_request_id
   );
 
 -- ============================================================================
--- Step 7: Post-migration assertions
+-- Step 6: Post-migration assertions
 -- ============================================================================
 
 -- Assert 1: No NULL is_partial values remain

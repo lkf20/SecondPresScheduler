@@ -981,6 +981,16 @@ describe('ContactSubPanel', () => {
                 time_slot_code: 'EM',
                 status: 'partially_covered',
                 sub_name: 'Bella W.',
+                assigned_subs: [
+                  {
+                    assignment_id: 'assign-1',
+                    sub_id: 'sub-bella',
+                    sub_name: 'Bella W.',
+                    is_partial: true,
+                    partial_start_time: '08:00',
+                    partial_end_time: '10:30',
+                  },
+                ],
               },
             ],
           },
@@ -1005,6 +1015,62 @@ describe('ContactSubPanel', () => {
     expect(
       screen.getByText('Partially covered. You can add another partial assignment.')
     ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Current partial coverage: Bella W\. \(08:00-10:30\)/i)
+    ).toBeInTheDocument()
+  })
+
+  it('shows explicit partial label when shift is assigned to this sub as partial', async () => {
+    render(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        variant="inline"
+        sub={{
+          ...baseSub,
+          assigned_shifts: [
+            {
+              coverage_request_shift_id: 'crs-1',
+              date: '2026-02-09',
+              day_name: 'Monday',
+              time_slot_code: 'EM',
+              is_partial: true,
+              partial_start_time: '09:00',
+              partial_end_time: '10:15',
+            },
+          ],
+        }}
+        absence={{
+          ...baseAbsence,
+          shifts: {
+            shift_details: [
+              {
+                date: '2026-02-09',
+                day_name: 'Monday',
+                time_slot_code: 'EM',
+                status: 'partially_covered',
+                sub_name: 'Sally A.',
+              },
+            ],
+          },
+        }}
+        initialContactData={{
+          id: 'contact-1',
+          is_contacted: true,
+          contacted_at: '2026-02-09T12:00:00.000Z',
+          response_status: 'confirmed',
+          notes: '',
+          coverage_request_id: 'coverage-1',
+          selected_shift_keys: [],
+          override_shift_keys: [],
+        }}
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Assigned to this sub')).toBeInTheDocument()
+    })
+    expect(screen.getByText(/Partial assignment \(09:00-10:15\)/i)).toBeInTheDocument()
   })
 
   it('shows toast error when save fails while resolving shift overrides', async () => {

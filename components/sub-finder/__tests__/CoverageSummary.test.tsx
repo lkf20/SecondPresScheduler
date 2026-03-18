@@ -74,4 +74,32 @@ describe('CoverageSummary', () => {
     await user.click(screen.getByText('Sally A.', { selector: 'span.font-bold' }))
     expect(onShiftClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'shift-1' }))
   })
+
+  it('renders partial badge text with sub names and partial time windows', () => {
+    render(
+      <CoverageSummary
+        shifts={{
+          total: 1,
+          uncovered: 0,
+          partially_covered: 1,
+          fully_covered: 0,
+          shift_details: [
+            {
+              id: 'shift-partial-1',
+              date: '2026-02-10',
+              day_name: 'Tuesday',
+              time_slot_code: 'EM',
+              status: 'partially_covered',
+              sub_names: ['Victoria I.'],
+              partial_time_windows: ['08:00-10:30'],
+            },
+          ],
+        }}
+      />
+    )
+
+    expect(screen.getByText(/Victoria I\./i)).toBeInTheDocument()
+    expect(screen.getByText(/08:00-10:30/i)).toBeInTheDocument()
+    expect(screen.getByText(/\(partial\)/i)).toBeInTheDocument()
+  })
 })

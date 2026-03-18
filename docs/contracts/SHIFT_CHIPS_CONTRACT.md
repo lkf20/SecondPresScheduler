@@ -51,6 +51,12 @@ Use availability/status tokens from shared color system (`shiftStatusColorValues
 | `unavailable`                  | `shiftStatusColorValues.unavailable.bg` / `.border`      | `shiftStatusColorValues.unavailable.text` | `Uncovered` (status pill style)                                                            | Reason text when present (e.g. `Not qualified for this class`) |
 | `assigned elsewhere` indicator | keep base availability/unavailability color for this sub | matches base state                        | show other-sub pill with name when required by surface                                     | `Assigned to <Sub Name>.`                                      |
 
+#### Contact & Assign partial context (availability mode)
+
+- In Contact & Assign (`ContactSubPanel`), a shift that is already `partially_covered` by other subs remains assignable (additive) and must show explicit helper copy that partial coverage already exists.
+- If partial assignee time windows are available, show them in contextual copy (for example, `Current partial coverage: Victoria I. (08:00-10:30)`).
+- When the selected sub is assigned as partial, assigned-state text must include a partial indicator and optional time window.
+
 #### Availability Mode assigned-pill tokens
 
 - Assigned-sub pills in availability mode must use the standard teal assigned-pill style:
@@ -77,6 +83,7 @@ Use availability/status tokens from shared color system (`shiftStatusColorValues
 - Multi-partial shifts must not silently collapse to one sub when multiple assignees are available in data:
   - Prefer `assigned_sub_names: string[]` or equivalent canonical array.
   - If UI truncates for space, provide full list in tooltip.
+- When partial time windows exist (`partial_start_time`, `partial_end_time`), prefer rendering them in partial summary surfaces (`CoverageSummary`, shift detail rows) using `HH:mm-HH:mm`. **Assign Sub panel** uses friendly 12-hour time in the partial badge (e.g. "9 am to 10:30 am") and a single badge next to the shift label with yellow styling and Clock icon.
 
 ---
 

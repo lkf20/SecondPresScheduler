@@ -62,4 +62,27 @@ describe('ShiftStatusCard', () => {
     findSubButton.click()
     expect(onSelectShift).toHaveBeenCalledWith(shift)
   })
+
+  it('shows per-sub partial rows with time windows for partially covered shift', () => {
+    const shift = buildSubFinderShift({
+      status: 'partially_covered',
+      date: '2026-02-09',
+      day_name: 'Monday',
+      time_slot_code: 'EM',
+      assigned_subs: [
+        {
+          assignment_id: 'assign-1',
+          sub_id: 'sub-1',
+          sub_name: 'Victoria I.',
+          is_partial: true,
+          partial_start_time: '08:00',
+          partial_end_time: '10:30',
+        },
+      ],
+    })
+
+    render(<ShiftStatusCard shift={shift} teacherName="Amy P." />)
+
+    expect(screen.getByText(/Victoria I\. \(partial 08:00-10:30\)/i)).toBeInTheDocument()
+  })
 })

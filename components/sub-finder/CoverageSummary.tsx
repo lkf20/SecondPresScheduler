@@ -18,6 +18,8 @@ interface ShiftDetail {
   sub_name?: string | null
   /** Multiple sub names for partially covered shifts (each partial assignment) */
   sub_names?: string[]
+  /** Optional partial time windows (HH:mm-HH:mm) for compact display */
+  partial_time_windows?: string[]
   is_partial?: boolean
   day_display_order?: number | null
   time_slot_display_order?: number | null
@@ -234,6 +236,12 @@ export default function CoverageSummary({
                               : shift.sub_name}
                           </span>{' '}
                           (partial)
+                          {shift.partial_time_windows && shift.partial_time_windows.length > 0 ? (
+                            <span className="font-normal">
+                              {' '}
+                              {shift.partial_time_windows.join(', ')}
+                            </span>
+                          ) : null}
                         </>
                       ) : null}
                     </>

@@ -31,13 +31,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { AlertTriangle, Check, Info, X, Wand2 } from 'lucide-react'
+import { AlertTriangle, Check, Clock, Info, X, Wand2 } from 'lucide-react'
 import { CreateTimeOffRequestCard } from '@/components/time-off/CreateTimeOffRequestCard'
-import { parseLocalDate, toDateStringISO } from '@/lib/utils/date'
+import { parseLocalDate, toDateStringISO, formatPartialTimeRangeFriendly } from '@/lib/utils/date'
 import { DAY_NAMES, MONTH_NAMES, FULL_DAY_NAMES } from '@/lib/utils/date-format'
 import SearchableSelect, { type SearchableSelectOption } from '@/components/shared/SearchableSelect'
 import DatePickerInput from '@/components/ui/date-picker-input'
-import { getPanelBackgroundClasses } from '@/lib/utils/colors'
+import { getPanelBackgroundClasses, coverageColorValues } from '@/lib/utils/colors'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
@@ -168,6 +168,8 @@ export default function AssignSubPanel({
   const [partialTimes, setPartialTimes] = useState<
     Record<string, { start?: string; end?: string }>
   >({})
+  /** Per-slot: user chose "Replace current partial sub" for a shift that has only partial(s) (under cap). */
+  const [replacePartialSlotKeys, setReplacePartialSlotKeys] = useState<Set<string>>(new Set())
   const [showUnavailableConfirm, setShowUnavailableConfirm] = useState(false)
   /** Shifts to remove sub from (opens confirm dialog). */
   const [removeSubShifts, setRemoveSubShifts] = useState<Shift[] | null>(null)
@@ -513,7 +515,7 @@ export default function AssignSubPanel({
     })
   }, [subQualifications, teacherClasses])
 
-  // Clear shift selection only when the shift list changes (e.g. new teacher/date range).
+  // Clear shift selection and partial/replace-partial state when the shift list changes (e.g. new teacher/date range).
   // Do not clear when subId changes, so the user can select shifts then pick a sub and assign.
   useEffect(() => {
     if (shifts.length === 0) {
@@ -521,6 +523,9 @@ export default function AssignSubPanel({
       return
     }
     setSelectedShiftIds(new Set())
+    setPartialSlotKeys(new Set())
+    setReplacePartialSlotKeys(new Set())
+    setPartialTimes({})
   }, [shiftIdsKey])
 
   // Calculate summary stats (exclude school-closure shifts from assignable counts)
@@ -556,6 +561,48 @@ export default function AssignSubPanel({
     }))
   }, [shifts])
 
+  // When a shift with only partial assignees (under cap) is selected, auto-check and lock Partial (add-partial mode).
+  // When the shift is deselected, clear partial and replace-partial state for that slot.
+  useEffect(() => {
+    const partialNext = new Set(partialSlotKeys)
+    const replacePartialNext = new Set(replacePartialSlotKeys)
+    for (const { slotKey, shifts: groupShifts } of shiftGroups) {
+      const allSelected = groupShifts.every(s => selectedShiftIds.has(s.id))
+      const firstShift = groupShifts[0]
+      const existingAssignedSubs = firstShift?.assigned_subs ?? []
+      const hasFullByOtherSub = existingAssignedSubs.some(a => !a.is_partial && a.sub_id !== subId)
+      const partialCountByOthers = existingAssignedSubs.filter(
+        a => a.is_partial && a.sub_id !== subId
+      ).length
+      const partialCountTotal = existingAssignedSubs.filter(a => a.is_partial).length
+      const partialCapReached = partialCountTotal >= 4
+      const addPartialMode =
+        allSelected &&
+        !hasFullByOtherSub &&
+        !partialCapReached &&
+        partialCountByOthers > 0 &&
+        !replacePartialSlotKeys.has(slotKey)
+
+      if (addPartialMode) {
+        partialNext.add(slotKey)
+      }
+      if (!allSelected) {
+        partialNext.delete(slotKey)
+        replacePartialNext.delete(slotKey)
+      }
+    }
+    const partialChanged =
+      partialNext.size !== partialSlotKeys.size ||
+      [...partialNext].some(k => !partialSlotKeys.has(k)) ||
+      [...partialSlotKeys].some(k => !partialNext.has(k))
+    const replacePartialChanged =
+      replacePartialNext.size !== replacePartialSlotKeys.size ||
+      [...replacePartialNext].some(k => !replacePartialSlotKeys.has(k)) ||
+      [...replacePartialSlotKeys].some(k => !replacePartialNext.has(k))
+    if (partialChanged) setPartialSlotKeys(partialNext)
+    if (replacePartialChanged) setReplacePartialSlotKeys(replacePartialNext)
+  }, [selectedShiftIds, shiftGroups, subId, partialSlotKeys, replacePartialSlotKeys])
+
   // Handle shift toggle (single id). When unchecking a conflict row, set resolution to do not assign.
   const handleShiftToggle = (shiftId: string, opts?: { slotKey: string; hasConflict: boolean }) => {
     const wasChecked = selectedShiftIds.has(shiftId)
@@ -574,6 +621,16 @@ export default function AssignSubPanel({
       setReplaceResolutions(prev => {
         const next = { ...prev }
         delete next[opts.slotKey]
+        return next
+      })
+      setReplacePartialSlotKeys(prev => {
+        const next = new Set(prev)
+        next.delete(opts.slotKey)
+        return next
+      })
+      setPartialSlotKeys(prev => {
+        const next = new Set(prev)
+        next.delete(opts.slotKey)
         return next
       })
     }
@@ -601,6 +658,16 @@ export default function AssignSubPanel({
       setReplaceResolutions(prev => {
         const next = { ...prev }
         delete next[opts.slotKey]
+        return next
+      })
+      setReplacePartialSlotKeys(prev => {
+        const next = new Set(prev)
+        next.delete(opts.slotKey)
+        return next
+      })
+      setPartialSlotKeys(prev => {
+        const next = new Set(prev)
+        next.delete(opts.slotKey)
         return next
       })
     }
@@ -721,11 +788,35 @@ export default function AssignSubPanel({
         const coverageRequestId = covData.coverage_request_id
         const shiftMap = covData.shift_map || {}
 
+        // Replace-partial: unassign existing partial assignments for shifts where user chose "Replace current partial"
+        for (const s of shiftsInGroup) {
+          const slotKey = `${s.date}|${s.time_slot_id}`
+          if (replacePartialSlotKeys.has(slotKey)) {
+            const partials = (s.assigned_subs ?? []).filter(a => a.is_partial)
+            for (const a of partials) {
+              const unassignRes = await fetch('/api/sub-finder/unassign-shifts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  absence_id: timeOffRequestId,
+                  sub_id: a.sub_id,
+                  scope: 'single',
+                  assignment_id: a.assignment_id,
+                }),
+              })
+              if (!unassignRes.ok) {
+                const err = await unassignRes.json().catch(() => ({}))
+                throw new Error(err.error || 'Failed to unassign current partial sub')
+              }
+            }
+          }
+        }
+
         const fullCoverageRequestShiftIds: string[] = []
         const partialAssignmentsForRequest: Array<{
           shift_id: string
-          start_time?: string
-          end_time?: string
+          partial_start_time?: string
+          partial_end_time?: string
         }> = []
         const isFloaterShiftIds = new Set<string>()
         const resolutionsForRequest: Record<string, 'floater' | 'move' | 'replace'> = {}
@@ -751,8 +842,8 @@ export default function AssignSubPanel({
               const times = partialTimes[slotKey] ?? {}
               partialAssignmentsForRequest.push({
                 shift_id: id,
-                ...(times.start ? { start_time: times.start } : {}),
-                ...(times.end ? { end_time: times.end } : {}),
+                ...(times.start ? { partial_start_time: times.start } : {}),
+                ...(times.end ? { partial_end_time: times.end } : {}),
               })
             } else {
               fullCoverageRequestShiftIds.push(id)
@@ -792,7 +883,7 @@ export default function AssignSubPanel({
           body: JSON.stringify({
             coverage_request_id: coverageRequestId,
             sub_id: subId,
-            selected_shift_ids: fullCoverageRequestShiftIds,
+            selected_shift_ids: coverageRequestShiftIds,
             allow_non_sub_override: selectedSubIsNonSub,
             ...(isFloaterShiftIds.size > 0
               ? { is_floater_shift_ids: Array.from(isFloaterShiftIds) }
@@ -1246,25 +1337,42 @@ export default function AssignSubPanel({
                     const first = groupShifts[0]
                     const allSelected = groupShifts.every(s => selectedShiftIds.has(s.id))
                     const isAlreadyCovered = groupShifts.some(s => s.assignment_id)
-                    const assignedSubId = groupShifts.find(s => s.assigned_sub_id)?.assigned_sub_id
-                    const coveredByCurrentSub = isAlreadyCovered && assignedSubId === subId
                     // A shift with only partial assignments that haven't hit the cap is NOT
                     // coveredByOtherSub — the user can add another partial.
                     // coveredByOtherSub remains true when: a different sub has a FULL assignment.
                     const firstShift = groupShifts[0]
                     const existingAssignedSubs = firstShift?.assigned_subs ?? []
+                    const hasAnyByCurrentSub = existingAssignedSubs.some(a => a.sub_id === subId)
+                    const hasAnyByOtherSub = existingAssignedSubs.some(a => a.sub_id !== subId)
+                    const hasFullByCurrentSub = existingAssignedSubs.some(
+                      a => !a.is_partial && a.sub_id === subId
+                    )
                     const hasFullByOtherSub = existingAssignedSubs.some(
                       a => !a.is_partial && a.sub_id !== subId
                     )
                     const partialCountByOthers = existingAssignedSubs.filter(
                       a => a.is_partial && a.sub_id !== subId
                     ).length
-                    const partialCapReached = partialCountByOthers >= 4
+                    const partialCountTotal = existingAssignedSubs.filter(a => a.is_partial).length
+                    const partialCapReached = partialCountTotal >= 4
+                    const coveredByCurrentSub =
+                      isAlreadyCovered &&
+                      hasAnyByCurrentSub &&
+                      (hasFullByCurrentSub || partialCapReached)
                     const coveredByOtherSub =
                       isAlreadyCovered &&
-                      assignedSubId != null &&
-                      assignedSubId !== subId &&
+                      hasAnyByOtherSub &&
                       (hasFullByOtherSub || partialCapReached)
+                    const fullAssignment = existingAssignedSubs.find(a => !a.is_partial)
+                    const partialAssignments = existingAssignedSubs.filter(a => a.is_partial)
+                    const legacyAssignedSub = groupShifts.find(
+                      s => Boolean(s.assigned_sub_id) && Boolean(s.assigned_sub_name)
+                    )
+                    const legacyAssignedName = groupShifts.find(
+                      s => s.assigned_sub_name
+                    )?.assigned_sub_name
+                    const currentAssignmentLabel =
+                      fullAssignment?.sub_name || legacyAssignedName || 'Assigned'
                     const replaceChosen = replaceResolutions[slotKey]
                     const hasConflict = groupShifts.some(
                       s => s.status === 'conflict_teaching' || s.status === 'conflict_sub'
@@ -1334,28 +1442,56 @@ export default function AssignSubPanel({
                               (() => {
                                 const allAssigned =
                                   firstShift?.assigned_subs ??
-                                  (assignedSubId &&
-                                  groupShifts.find(s => s.assigned_sub_name)?.assigned_sub_name
+                                  (legacyAssignedSub?.assigned_sub_id &&
+                                  legacyAssignedSub.assigned_sub_name
                                     ? [
                                         {
                                           assignment_id: firstShift?.assignment_id ?? '',
-                                          sub_id: assignedSubId,
-                                          sub_name:
-                                            groupShifts.find(s => s.assigned_sub_name)
-                                              ?.assigned_sub_name ?? '',
+                                          sub_id: legacyAssignedSub.assigned_sub_id,
+                                          sub_name: legacyAssignedSub.assigned_sub_name,
                                           is_partial: false,
                                         },
                                       ]
                                     : [])
-                                return allAssigned.map(a => (
-                                  <StaffChip
-                                    key={a.assignment_id}
-                                    staffId={a.sub_id}
-                                    name={a.sub_name}
-                                    variant="sub"
-                                    navigable={false}
-                                  />
-                                ))
+                                return allAssigned.map(a =>
+                                  a.is_partial ? (
+                                    <span
+                                      key={a.assignment_id}
+                                      className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium"
+                                      style={{
+                                        backgroundColor: coverageColorValues.partial.bg,
+                                        borderColor: coverageColorValues.partial.border,
+                                        color: coverageColorValues.partial.text,
+                                      }}
+                                    >
+                                      <Clock
+                                        className="h-3.5 w-3.5 shrink-0"
+                                        style={{ color: coverageColorValues.partial.icon }}
+                                      />
+                                      <span>
+                                        {a.sub_name} (partial
+                                        {formatPartialTimeRangeFriendly(
+                                          a.partial_start_time,
+                                          a.partial_end_time
+                                        )
+                                          ? ` ${formatPartialTimeRangeFriendly(
+                                              a.partial_start_time,
+                                              a.partial_end_time
+                                            )}`
+                                          : ''}
+                                        )
+                                      </span>
+                                    </span>
+                                  ) : (
+                                    <StaffChip
+                                      key={a.assignment_id}
+                                      staffId={a.sub_id}
+                                      name={a.sub_name}
+                                      variant="sub"
+                                      navigable={false}
+                                    />
+                                  )
+                                )
                               })()}
                           </label>
                           {/* Role/context: Floater chip + note */}
@@ -1431,11 +1567,8 @@ export default function AssignSubPanel({
                                 borderStyle: 'dashed',
                               }}
                             >
-                              {partialCountByOthers} partial sub
-                              {partialCountByOthers !== 1 ? 's' : ''} already assigned. Selecting
-                              this shift will add{' '}
-                              {selectedSub ? getDisplayName(selectedSub) : 'this sub'} as another
-                              partial (up to 4 allowed).
+                              {partialCountByOthers} partial shift sub
+                              {partialCountByOthers !== 1 ? 's' : ''} already assigned.
                             </div>
                           )}
                           {/* Partial assignment toggle: shown when shift is selected, not a floater, not blocked */}
@@ -1444,72 +1577,252 @@ export default function AssignSubPanel({
                             !coveredByOtherSub &&
                             !hasSchoolClosure && (
                               <div className="mt-2 space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <Checkbox
-                                    id={`partial-${slotKey}`}
-                                    checked={partialSlotKeys.has(slotKey)}
-                                    onCheckedChange={(checked: boolean) => {
-                                      setPartialSlotKeys(prev => {
-                                        const next = new Set(prev)
-                                        if (checked) next.add(slotKey)
-                                        else {
-                                          next.delete(slotKey)
-                                          setPartialTimes(t => {
-                                            const nt = { ...t }
-                                            delete nt[slotKey]
-                                            return nt
-                                          })
+                                {/* Partial-only shift: radio choice — Add as partial (with From/To) or Replace (with optional Partial checkbox + From/To) */}
+                                {!coveredByOtherSub &&
+                                  partialCountByOthers > 0 &&
+                                  !partialCapReached && (
+                                    <fieldset
+                                      className="space-y-2 border-0 p-0 m-0 min-w-0"
+                                      aria-describedby={
+                                        selectedSub ? undefined : `partial-choice-hint-${slotKey}`
+                                      }
+                                    >
+                                      {!selectedSub && (
+                                        <p
+                                          id={`partial-choice-hint-${slotKey}`}
+                                          className="text-xs text-muted-foreground sr-only"
+                                        >
+                                          Select a sub above to see their name in the options below.
+                                        </p>
+                                      )}
+                                      <RadioGroup
+                                        value={
+                                          replacePartialSlotKeys.has(slotKey)
+                                            ? 'replace'
+                                            : 'add_partial'
                                         }
-                                        return next
-                                      })
-                                    }}
-                                  />
-                                  <label
-                                    htmlFor={`partial-${slotKey}`}
-                                    className="text-xs text-muted-foreground cursor-pointer"
-                                  >
-                                    Partial shift (sub covers part of this shift)
-                                  </label>
-                                </div>
-                                {partialSlotKeys.has(slotKey) && (
-                                  <div className="flex items-center gap-2 pl-6">
-                                    <div className="flex items-center gap-1">
-                                      <label className="text-xs text-muted-foreground w-10">
-                                        From
-                                      </label>
-                                      <input
-                                        type="time"
-                                        className="text-xs border rounded px-1 py-0.5 h-7"
-                                        value={partialTimes[slotKey]?.start ?? ''}
-                                        onChange={e =>
-                                          setPartialTimes(prev => ({
-                                            ...prev,
-                                            [slotKey]: { ...prev[slotKey], start: e.target.value },
-                                          }))
-                                        }
-                                      />
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      <label className="text-xs text-muted-foreground w-6">
-                                        to
-                                      </label>
-                                      <input
-                                        type="time"
-                                        className="text-xs border rounded px-1 py-0.5 h-7"
-                                        value={partialTimes[slotKey]?.end ?? ''}
-                                        onChange={e =>
-                                          setPartialTimes(prev => ({
-                                            ...prev,
-                                            [slotKey]: { ...prev[slotKey], end: e.target.value },
-                                          }))
-                                        }
-                                      />
-                                    </div>
-                                    <span className="text-xs text-muted-foreground">
-                                      (optional)
-                                    </span>
-                                  </div>
-                                )}
+                                        onValueChange={(value: string) => {
+                                          if (value === 'replace') {
+                                            setReplacePartialSlotKeys(prev =>
+                                              new Set(prev).add(slotKey)
+                                            )
+                                            setPartialSlotKeys(prev => {
+                                              const next = new Set(prev)
+                                              next.delete(slotKey)
+                                              return next
+                                            })
+                                            setPartialTimes(prev => {
+                                              const nt = { ...prev }
+                                              delete nt[slotKey]
+                                              return nt
+                                            })
+                                          } else {
+                                            setReplacePartialSlotKeys(prev => {
+                                              const next = new Set(prev)
+                                              next.delete(slotKey)
+                                              return next
+                                            })
+                                            setPartialSlotKeys(prev => new Set(prev).add(slotKey))
+                                          }
+                                        }}
+                                        className="space-y-2"
+                                      >
+                                        <div className="flex items-center space-x-2">
+                                          <RadioGroupItem
+                                            value="add_partial"
+                                            id={`${slotKey}-partial-add`}
+                                          />
+                                          <Label
+                                            htmlFor={`${slotKey}-partial-add`}
+                                            className="text-sm font-normal cursor-pointer"
+                                          >
+                                            Add{' '}
+                                            {selectedSub
+                                              ? getDisplayName(selectedSub)
+                                              : 'selected sub'}{' '}
+                                            as a partial shift sub
+                                          </Label>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                          <RadioGroupItem
+                                            value="replace"
+                                            id={`${slotKey}-partial-replace`}
+                                          />
+                                          <Label
+                                            htmlFor={`${slotKey}-partial-replace`}
+                                            className="text-sm font-normal cursor-pointer"
+                                          >
+                                            Replace{' '}
+                                            {partialAssignments.length === 1
+                                              ? partialAssignments[0].sub_name
+                                              : `${partialAssignments.length} partial shift subs`}{' '}
+                                            with{' '}
+                                            {selectedSub
+                                              ? getDisplayName(selectedSub)
+                                              : 'selected sub'}{' '}
+                                            as a full or partial shift sub
+                                          </Label>
+                                        </div>
+                                      </RadioGroup>
+                                      {/* Replace: show Partial checkbox; if checked, show From/To (hidden unless Replace + Partial) */}
+                                      {replacePartialSlotKeys.has(slotKey) && (
+                                        <>
+                                          <div className="flex items-center gap-2 pl-6">
+                                            <Checkbox
+                                              id={`partial-replace-${slotKey}`}
+                                              checked={partialSlotKeys.has(slotKey)}
+                                              onCheckedChange={(checked: boolean) => {
+                                                setPartialSlotKeys(prev => {
+                                                  const next = new Set(prev)
+                                                  if (checked) next.add(slotKey)
+                                                  else {
+                                                    next.delete(slotKey)
+                                                    setPartialTimes(t => {
+                                                      const nt = { ...t }
+                                                      delete nt[slotKey]
+                                                      return nt
+                                                    })
+                                                  }
+                                                  return next
+                                                })
+                                              }}
+                                            />
+                                            <label
+                                              htmlFor={`partial-replace-${slotKey}`}
+                                              className="text-xs text-muted-foreground cursor-pointer"
+                                            >
+                                              Partial shift (sub covers part of this shift)
+                                            </label>
+                                          </div>
+                                          {partialSlotKeys.has(slotKey) && (
+                                            <div className="flex flex-wrap items-center gap-2 pl-6">
+                                              <div className="flex items-center gap-1">
+                                                <label className="text-xs text-muted-foreground w-10">
+                                                  From
+                                                </label>
+                                                <input
+                                                  type="time"
+                                                  className="text-xs border rounded px-1 py-0.5 h-7"
+                                                  value={partialTimes[slotKey]?.start ?? ''}
+                                                  onChange={e =>
+                                                    setPartialTimes(prev => ({
+                                                      ...prev,
+                                                      [slotKey]: {
+                                                        ...prev[slotKey],
+                                                        start: e.target.value,
+                                                      },
+                                                    }))
+                                                  }
+                                                  aria-label="Partial start time"
+                                                />
+                                              </div>
+                                              <div className="flex items-center gap-1">
+                                                <label className="text-xs text-muted-foreground w-6">
+                                                  to
+                                                </label>
+                                                <input
+                                                  type="time"
+                                                  className="text-xs border rounded px-1 py-0.5 h-7"
+                                                  value={partialTimes[slotKey]?.end ?? ''}
+                                                  onChange={e =>
+                                                    setPartialTimes(prev => ({
+                                                      ...prev,
+                                                      [slotKey]: {
+                                                        ...prev[slotKey],
+                                                        end: e.target.value,
+                                                      },
+                                                    }))
+                                                  }
+                                                  aria-label="Partial end time"
+                                                />
+                                              </div>
+                                              <span className="text-xs text-muted-foreground">
+                                                (optional)
+                                              </span>
+                                            </div>
+                                          )}
+                                        </>
+                                      )}
+                                    </fieldset>
+                                  )}
+                                {/* No existing partials: normal unlocked Partial checkbox (not in add-partial or replace-partial mode) */}
+                                {!replacePartialSlotKeys.has(slotKey) &&
+                                  (partialCountByOthers === 0 || partialCapReached) && (
+                                    <>
+                                      <div className="flex items-center gap-2">
+                                        <Checkbox
+                                          id={`partial-${slotKey}`}
+                                          checked={partialSlotKeys.has(slotKey)}
+                                          onCheckedChange={(checked: boolean) => {
+                                            setPartialSlotKeys(prev => {
+                                              const next = new Set(prev)
+                                              if (checked) next.add(slotKey)
+                                              else {
+                                                next.delete(slotKey)
+                                                setPartialTimes(t => {
+                                                  const nt = { ...t }
+                                                  delete nt[slotKey]
+                                                  return nt
+                                                })
+                                              }
+                                              return next
+                                            })
+                                          }}
+                                        />
+                                        <label
+                                          htmlFor={`partial-${slotKey}`}
+                                          className="text-xs text-muted-foreground cursor-pointer"
+                                        >
+                                          Partial shift (sub covers part of this shift)
+                                        </label>
+                                      </div>
+                                      {partialSlotKeys.has(slotKey) && (
+                                        <div className="flex items-center gap-2 pl-6">
+                                          <div className="flex items-center gap-1">
+                                            <label className="text-xs text-muted-foreground w-10">
+                                              From
+                                            </label>
+                                            <input
+                                              type="time"
+                                              className="text-xs border rounded px-1 py-0.5 h-7"
+                                              value={partialTimes[slotKey]?.start ?? ''}
+                                              onChange={e =>
+                                                setPartialTimes(prev => ({
+                                                  ...prev,
+                                                  [slotKey]: {
+                                                    ...prev[slotKey],
+                                                    start: e.target.value,
+                                                  },
+                                                }))
+                                              }
+                                            />
+                                          </div>
+                                          <div className="flex items-center gap-1">
+                                            <label className="text-xs text-muted-foreground w-6">
+                                              to
+                                            </label>
+                                            <input
+                                              type="time"
+                                              className="text-xs border rounded px-1 py-0.5 h-7"
+                                              value={partialTimes[slotKey]?.end ?? ''}
+                                              onChange={e =>
+                                                setPartialTimes(prev => ({
+                                                  ...prev,
+                                                  [slotKey]: {
+                                                    ...prev[slotKey],
+                                                    end: e.target.value,
+                                                  },
+                                                }))
+                                              }
+                                            />
+                                          </div>
+                                          <span className="text-xs text-muted-foreground">
+                                            (optional)
+                                          </span>
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
                               </div>
                             )}
                           {/* Already covered by another sub: conflict-style banner with Replace option (stays visible after selection so user can change) */}
@@ -1667,52 +1980,48 @@ export default function AssignSubPanel({
                               </RadioGroup>
                             </div>
                           )}
-                          {/* Currently assigned + Change sub: when assignable and has assignment and not in replace mode */}
-                          {isAssignable &&
-                            groupShifts.some(s => s.assigned_sub_name || s.assignment_id) &&
-                            !replaceChosen && (
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span
-                                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-slate-600"
-                                  style={{
-                                    backgroundColor: 'rgb(241, 245, 249)',
-                                    border: '1px solid rgb(226, 232, 240)',
-                                  }}
-                                >
-                                  Currently:{' '}
-                                  {groupShifts.find(s => s.assigned_sub_name)?.assigned_sub_name ??
-                                    'Assigned'}
-                                  {groupShifts.some(s => s.assigned_non_sub_override) && (
-                                    <span
-                                      className="ml-1 rounded-full px-1.5 py-0.5 text-[10px]"
-                                      style={{
-                                        backgroundColor: 'rgb(255, 251, 235)', // amber-50
-                                        color: 'rgb(146, 64, 14)', // amber-800
-                                        border: '1px solid rgb(252, 211, 77)', // amber-300
-                                      }}
-                                    >
-                                      Non-sub override
-                                    </span>
-                                  )}
-                                </span>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 text-xs text-teal-700 hover:bg-teal-50"
-                                  onClick={() => {
-                                    if (!subId) {
-                                      toast.error('Please select a Sub to assign first.')
-                                      return
-                                    }
-                                    setChangeSubNewSubId(subId)
-                                    setChangeSubShifts(groupShifts)
-                                  }}
-                                >
-                                  Change sub
-                                </Button>
-                              </div>
-                            )}
+                          {/* Currently assigned + Change sub: when assignable and has full assignment (partial shown only in badge next to shift) and not in replace mode */}
+                          {isAssignable && fullAssignment && !replaceChosen && (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-slate-600"
+                                style={{
+                                  backgroundColor: 'rgb(241, 245, 249)',
+                                  border: '1px solid rgb(226, 232, 240)',
+                                }}
+                              >
+                                Currently: {currentAssignmentLabel}
+                                {groupShifts.some(s => s.assigned_non_sub_override) && (
+                                  <span
+                                    className="ml-1 rounded-full px-1.5 py-0.5 text-[10px]"
+                                    style={{
+                                      backgroundColor: 'rgb(255, 251, 235)', // amber-50
+                                      color: 'rgb(146, 64, 14)', // amber-800
+                                      border: '1px solid rgb(252, 211, 77)', // amber-300
+                                    }}
+                                  >
+                                    Non-sub override
+                                  </span>
+                                )}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs text-teal-700 hover:bg-teal-50"
+                                onClick={() => {
+                                  if (!subId) {
+                                    toast.error('Please select a Sub to assign first.')
+                                    return
+                                  }
+                                  setChangeSubNewSubId(subId)
+                                  setChangeSubShifts(groupShifts)
+                                }}
+                              >
+                                Change sub
+                              </Button>
+                            </div>
+                          )}
                           {/* Informational: only when assignable */}
                           {isAssignable && (
                             <div className="flex flex-wrap gap-2">

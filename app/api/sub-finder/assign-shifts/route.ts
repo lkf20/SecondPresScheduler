@@ -40,11 +40,15 @@ interface PartialAssignmentInput {
  * POST /api/sub-finder/assign-shifts
  * Assign a sub to selected shifts by creating sub_assignments.
  *
+ * Used by both Assign Sub panel and Contact & Assign (Sub Finder); same payload shape.
  * Supports partial assignments via `partial_assignments` array (Phase 1).
  * A shift listed in `partial_assignments` is treated as a partial assignment (is_partial=true).
  * A shift in `selected_shift_ids` but NOT in `partial_assignments` is a full assignment.
  * Full assignments replace ALL existing actives for the shift (replace semantics).
  * Partial assignments replace any existing FULL assignment but are additive to other partials.
+ * Requires migration 117: old index idx_sub_assignments_one_active_per_shift allows only one
+ * active per shift; 117 replaces it with idx_sub_assignments_one_active_full_per_shift so
+ * multiple partials per shift are allowed.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -390,6 +394,7 @@ export async function POST(request: NextRequest) {
 
       return true
     })
+
     if (hasSubCollision) {
       return createErrorResponse(
         'Double booking prevented: this sub already has an active assignment for one or more selected shifts.',
@@ -582,6 +587,16 @@ export async function POST(request: NextRequest) {
         details: insertError.details,
         hint: insertError.hint,
       })
+      const isOldPartialIndexError =
+        insertError?.code === '23505' &&
+        typeof insertError?.message === 'string' &&
+        insertError.message.includes('idx_sub_assignments_one_active_per_shift')
+      if (isOldPartialIndexError) {
+        return createErrorResponse(
+          'Cannot add partial assignment: the database still has the old unique index that allows only one assignment per shift. Run migrations (e.g. supabase db push) so migration 117 is applied—it replaces that index to allow multiple partial assignments per shift.',
+          503
+        )
+      }
       return createErrorResponse(
         `Failed to create assignments: ${insertError.message || 'Database error'}`,
         500
@@ -636,6 +651,9 @@ export async function POST(request: NextRequest) {
       date: string
       day_name: string
       time_slot_code: string
+      is_partial?: boolean
+      partial_start_time?: string | null
+      partial_end_time?: string | null
     }> = []
 
     if (coverageRequestShifts && createdAssignments) {
@@ -654,8 +672,20 @@ export async function POST(request: NextRequest) {
         .in('id', shiftIds)
 
       if (shiftDetails) {
+        const assignmentByShiftId = new Map(
+          (createdAssignments || [])
+            .filter((assignment: any) => assignment.coverage_request_shift_id)
+            .map((assignment: any) => [assignment.coverage_request_shift_id, assignment])
+        )
         assignedShiftDetails.push(
           ...shiftDetails.map((shift: any) => ({
+            ...(assignmentByShiftId.get(shift.id)
+              ? {
+                  is_partial: assignmentByShiftId.get(shift.id).is_partial === true,
+                  partial_start_time: assignmentByShiftId.get(shift.id).partial_start_time ?? null,
+                  partial_end_time: assignmentByShiftId.get(shift.id).partial_end_time ?? null,
+                }
+              : {}),
             coverage_request_shift_id: shift.id,
             date: shift.date,
             day_name: shift.days_of_week?.name || '',
