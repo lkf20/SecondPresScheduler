@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ContactSubPanel from '@/components/sub-finder/ContactSubPanel'
 
@@ -835,6 +835,176 @@ describe('ContactSubPanel', () => {
       expect(onAssignmentComplete).toHaveBeenCalled()
       expect(mockRefresh).toHaveBeenCalled()
     })
+  })
+
+  it('includes partial_assignments with optional times when partial shift is selected', async () => {
+    const user = userEvent.setup()
+
+    mockAssignMutateAsync.mockResolvedValueOnce({
+      assigned_shifts: [],
+      assignments_created: 1,
+      partial_assignments_created: 1,
+      full_assignments_created: 0,
+    })
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+
+      if (url.includes('/api/subs/')) {
+        return {
+          ok: true,
+          json: async () => ({ active: true }),
+        } as Response
+      }
+      if (url.includes('/api/sub-finder/coverage-request/')) {
+        return {
+          ok: true,
+          json: async () => ({ coverage_request_id: 'coverage-1' }),
+        } as Response
+      }
+      if (url.includes('/api/sub-finder/substitute-contacts?')) {
+        return {
+          ok: true,
+          json: async () => ({
+            id: 'contact-1',
+            is_contacted: true,
+            contacted_at: '2026-02-09T12:00:00.000Z',
+            response_status: 'pending',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: [],
+            override_shift_keys: [],
+          }),
+        } as Response
+      }
+
+      if (url === '/api/sub-finder/shift-overrides' && init?.method === 'POST') {
+        return {
+          ok: true,
+          json: async () => ({
+            shift_overrides: [
+              {
+                coverage_request_shift_id: 'crs-1',
+                shift_key: '2026-02-09|EM',
+                selected: true,
+                override_availability: false,
+              },
+            ],
+            selected_shift_ids: ['crs-1'],
+          }),
+        } as Response
+      }
+
+      if (url === '/api/sub-finder/substitute-contacts' && init?.method === 'PUT') {
+        return {
+          ok: true,
+          json: async () => ({ id: 'contact-1' }),
+        } as Response
+      }
+
+      if (url.includes('/assigned-shifts')) {
+        return {
+          ok: true,
+          json: async () => ({
+            remaining_shift_keys: [],
+            remaining_shift_count: 0,
+          }),
+        } as Response
+      }
+
+      return {
+        ok: true,
+        json: async () => ({}),
+      } as Response
+    }) as jest.Mock
+
+    render(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        variant="inline"
+        sub={baseSub}
+        absence={baseAbsence}
+        initialContactData={{
+          id: 'contact-1',
+          is_contacted: true,
+          contacted_at: '2026-02-09T12:00:00.000Z',
+          response_status: 'confirmed',
+          notes: '',
+          coverage_request_id: 'coverage-1',
+          selected_shift_keys: ['2026-02-09|EM'],
+          override_shift_keys: [],
+        }}
+      />
+    )
+
+    const shiftCheckboxes = await screen.findAllByRole('checkbox')
+    await user.click(shiftCheckboxes[0])
+
+    await user.click(screen.getByLabelText(/partial shift \(sub covers part of this shift\)/i))
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '10:15' } })
+
+    await user.click(screen.getByRole('button', { name: /^assign$/i }))
+    await user.click(screen.getByRole('button', { name: /assign without confirming/i }))
+
+    await waitFor(() => {
+      expect(mockAssignMutateAsync).toHaveBeenCalledWith({
+        coverage_request_id: 'coverage-1',
+        sub_id: 'sub-1',
+        selected_shift_ids: ['crs-1'],
+        partial_assignments: [
+          {
+            shift_id: 'crs-1',
+            partial_start_time: '09:00',
+            partial_end_time: '10:15',
+          },
+        ],
+      })
+    })
+  })
+
+  it('shows helper copy when shift already has partial coverage', async () => {
+    render(
+      <ContactSubPanel
+        isOpen
+        onClose={jest.fn()}
+        variant="inline"
+        sub={baseSub}
+        absence={{
+          ...baseAbsence,
+          shifts: {
+            shift_details: [
+              {
+                date: '2026-02-09',
+                day_name: 'Monday',
+                time_slot_code: 'EM',
+                status: 'partially_covered',
+                sub_name: 'Bella W.',
+              },
+            ],
+          },
+        }}
+        initialContactData={{
+          id: 'contact-1',
+          is_contacted: true,
+          contacted_at: '2026-02-09T12:00:00.000Z',
+          response_status: 'confirmed',
+          notes: '',
+          coverage_request_id: 'coverage-1',
+          selected_shift_keys: [],
+          override_shift_keys: [],
+        }}
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Shift assignments')).toBeInTheDocument()
+    })
+
+    expect(
+      screen.getByText('Partially covered. You can add another partial assignment.')
+    ).toBeInTheDocument()
   })
 
   it('shows toast error when save fails while resolving shift overrides', async () => {

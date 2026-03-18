@@ -7,12 +7,13 @@ import { cn } from '@/lib/utils'
 import { coverageColorValues, shiftStatusColorValues } from '@/lib/utils/colors'
 import { DAY_NAMES, MONTH_NAMES } from '@/lib/utils/date-format'
 import { sortShiftDetailsByDisplayOrder } from '@/lib/utils/shift-display-order'
+import { Check, Clock3 } from 'lucide-react'
 
-interface Shift {
+interface ShiftBase {
   date: string
   time_slot_code: string
   day_name?: string
-  reason?: string // Reason for unavailable shifts
+  reason?: string
   classroom_name?: string | null
   class_name?: string | null
   classroom_color?: string | null
@@ -20,37 +21,50 @@ interface Shift {
   time_slot_display_order?: number | null
 }
 
-/** Shift status for sub-finder (can cover / cannot cover / assigned) */
+type AssignmentOwner = 'this_sub' | 'other_sub'
+
 export type ShiftChipSubFinderStatus = 'assigned' | 'available' | 'unavailable'
-/** Shift status for dashboard coverage (time off chips) */
 export type ShiftChipCoverageStatus = 'covered' | 'partial' | 'uncovered'
 
-interface ShiftChipsProps {
-  canCover?: Shift[]
-  cannotCover?: Shift[] // Includes reason field for unavailable shifts
-  assigned?: Shift[] // Optional list of assigned shifts
-  shifts?: Array<{
-    date: string
-    time_slot_code: string
-    status: ShiftChipSubFinderStatus | ShiftChipCoverageStatus
-    assignment_owner?: 'this_sub' | 'other_sub'
-    assigned_sub_name?: string | null
-    reason?: string
-    classroom_name?: string | null
-    class_name?: string | null
-    classroom_color?: string | null
-  }>
-  /** When true, shifts use status covered|partial|uncovered and show coverage pill (Dashboard Upcoming Time off) */
-  coverageVariant?: boolean
-  showLegend?: boolean // Whether to show the color legend
-  isDeclined?: boolean // If true, all chips will be gray
-  recommendedShifts?: Shift[] // Optional list of recommended shifts (for showing checkmarks)
-  softAvailableStyle?: boolean // If true, use lower-saturation available chip colors
-  /** When a shift is assigned to "this sub", show this name on the chip (e.g. the card's sub name) */
+export type AvailabilityShift = ShiftBase & {
+  status: ShiftChipSubFinderStatus
+  assignment_owner?: AssignmentOwner
+  assigned_sub_name?: string | null
+}
+
+export type CoverageShift = ShiftBase & {
+  status: ShiftChipCoverageStatus
+  assignment_owner?: AssignmentOwner
+  assigned_sub_name?: string | null
+  assigned_sub_names?: string[]
+}
+
+const isCoverageShift = (shift: ShiftBase & { status: string }): shift is CoverageShift =>
+  shift.status === 'covered' || shift.status === 'partial' || shift.status === 'uncovered'
+
+type AvailabilityInputShift = ShiftBase
+
+type AvailabilityProps = {
+  mode: 'availability'
+  canCover?: AvailabilityInputShift[]
+  cannotCover?: AvailabilityInputShift[]
+  assigned?: AvailabilityInputShift[]
+  shifts?: AvailabilityShift[]
+  showLegend?: boolean
+  isDeclined?: boolean
+  recommendedShifts?: AvailabilityInputShift[]
+  softAvailableStyle?: boolean
   thisSubName?: string | null
 }
 
-// Format shift label as "Mon AM • Feb 9"
+type CoverageProps = {
+  mode: 'coverage'
+  shifts: CoverageShift[]
+  showLegend?: boolean
+}
+
+type ShiftChipsProps = AvailabilityProps | CoverageProps
+
 export function formatShiftLabel(dateString: string, timeSlotCode: string): string {
   const date = parseLocalDate(dateString)
   const dayName = DAY_NAMES[date.getDay()]
@@ -59,7 +73,6 @@ export function formatShiftLabel(dateString: string, timeSlotCode: string): stri
   return `${dayName} ${timeSlotCode} • ${month} ${day}`
 }
 
-// Parts for stacked chip display: "Mon AM" on first line, "March 16" on second
 function getShiftLabelParts(
   dateString: string,
   timeSlotCode: string
@@ -82,17 +95,11 @@ const formatShiftTooltipLabel = (dateString: string, timeSlotCode: string): stri
   return `${dayName} ${timeSlotCode} • ${month} ${day}`
 }
 
-/** Pill styles shared by Recommended Subs and Dashboard (single source of truth) */
 const assignedPillStyles = {
   thisSub: {
     backgroundColor: 'rgb(204, 251, 241)' as const,
     color: 'rgb(15, 118, 110)' as const,
     borderColor: 'rgb(153, 246, 228)' as const,
-  },
-  otherSub: {
-    backgroundColor: 'rgb(226, 232, 240)' as const,
-    color: 'rgb(71, 85, 105)' as const,
-    borderColor: 'rgb(203, 213, 225)' as const,
   },
   uncovered: {
     backgroundColor: coverageColorValues.uncovered.bg,
@@ -101,7 +108,6 @@ const assignedPillStyles = {
   },
 } as const
 
-/** Normalize shift key so recommendedShifts (from combination) and shifts (from absence) match */
 function normalizeShiftKey(dateString: string, timeSlotCode: string): string {
   try {
     const d = parseLocalDate(dateString)
@@ -114,7 +120,11 @@ function normalizeShiftKey(dateString: string, timeSlotCode: string): string {
   }
 }
 
-/** Standalone legend for shift chip colors (e.g. above Recommended subs card). Matches weekly schedule legend: light gray box, text-sm. */
+const appendSentencePeriod = (value: string): string => {
+  if (!value.trim()) return value
+  return /[.!?]$/.test(value) ? value : `${value}.`
+}
+
 export function ShiftChipsLegend({ className }: { className?: string }) {
   const legendAvailableColors = {
     bg: 'rgb(246, 253, 251)',
@@ -171,9 +181,7 @@ export function ShiftChipsLegend({ className }: { className?: string }) {
               borderColor: 'rgb(153, 246, 228)',
             }}
           >
-            <span className="font-bold leading-none" style={{ fontSize: '10px' }}>
-              ✓
-            </span>
+            <Check className="h-3 w-3" aria-hidden />
             Assigned Sub
           </span>
         </div>
@@ -190,111 +198,73 @@ export function ShiftChipsLegend({ className }: { className?: string }) {
   )
 }
 
-export default function ShiftChips({
-  canCover = [],
-  cannotCover = [],
-  assigned = [],
-  shifts,
-  coverageVariant = false,
-  showLegend = false,
-  isDeclined = false,
-  recommendedShifts = [],
-  softAvailableStyle = true,
-  thisSubName = null,
-}: ShiftChipsProps) {
-  if (
-    canCover.length === 0 &&
-    cannotCover.length === 0 &&
-    assigned.length === 0 &&
-    (!shifts || shifts.length === 0)
-  ) {
-    return null
-  }
+export default function ShiftChips(props: ShiftChipsProps) {
+  const isCoverageMode = props.mode === 'coverage'
+  const showLegend = props.showLegend ?? false
+  const softAvailableStyle = !isCoverageMode ? (props.softAvailableStyle ?? true) : false
+  const isDeclined = !isCoverageMode ? (props.isDeclined ?? false) : false
+  const thisSubName = !isCoverageMode ? (props.thisSubName ?? null) : null
+  const recommendedShifts = !isCoverageMode ? (props.recommendedShifts ?? []) : []
 
-  type ShiftItem = {
-    date: string
-    time_slot_code: string
-    status: ShiftChipSubFinderStatus | ShiftChipCoverageStatus
-    assignment_owner?: 'this_sub' | 'other_sub'
-    assigned_sub_name?: string | null
-    reason?: string
-    classroom_name?: string | null
-    class_name?: string | null
-    classroom_color?: string | null
-  }
-
+  type ShiftItem = AvailabilityShift | CoverageShift
   const allShiftsMap = new Map<string, ShiftItem>()
 
-  // Add assigned shifts first (highest priority)
-  assigned.forEach(shift => {
-    const key = `${shift.date}|${shift.time_slot_code}`
-    allShiftsMap.set(key, {
-      date: shift.date,
-      time_slot_code: shift.time_slot_code,
-      status: 'assigned',
-      assignment_owner: 'this_sub',
-      classroom_name: shift.classroom_name || null,
-      class_name: shift.class_name || null,
-      classroom_color: shift.classroom_color ?? null,
+  if (isCoverageMode) {
+    props.shifts.forEach(shift => {
+      allShiftsMap.set(`${shift.date}|${shift.time_slot_code}`, shift)
     })
-  })
+  } else {
+    const assigned = props.assigned ?? []
+    const canCover = props.canCover ?? []
+    const cannotCover = props.cannotCover ?? []
 
-  // Add can_cover shifts (only if not already assigned)
-  canCover.forEach(shift => {
-    const key = `${shift.date}|${shift.time_slot_code}`
-    if (!allShiftsMap.has(key)) {
-      allShiftsMap.set(key, {
-        date: shift.date,
-        time_slot_code: shift.time_slot_code,
-        status: 'available',
-        classroom_name: shift.classroom_name || null,
-        class_name: shift.class_name || null,
-        classroom_color: shift.classroom_color ?? null,
+    assigned.forEach(shift => {
+      allShiftsMap.set(`${shift.date}|${shift.time_slot_code}`, {
+        ...shift,
+        status: 'assigned',
+        assignment_owner: 'this_sub',
       })
-    }
-  })
+    })
 
-  // Add cannot_cover shifts (only if not already assigned)
-  cannotCover.forEach(shift => {
-    const key = `${shift.date}|${shift.time_slot_code}`
-    if (!allShiftsMap.has(key)) {
-      allShiftsMap.set(key, {
-        date: shift.date,
-        time_slot_code: shift.time_slot_code,
-        status: 'unavailable',
-        reason: shift.reason, // Store reason for tooltip
-        classroom_name: shift.classroom_name || null,
-        class_name: shift.class_name || null,
-        classroom_color: shift.classroom_color ?? null,
-      })
-    }
-  })
+    canCover.forEach(shift => {
+      const key = `${shift.date}|${shift.time_slot_code}`
+      if (!allShiftsMap.has(key)) {
+        allShiftsMap.set(key, { ...shift, status: 'available' })
+      }
+    })
 
-  // Convert to array and sort by date, then day display_order, then time_slot display_order (AGENTS.md)
-  const allShifts = shifts
-    ? shifts
-    : sortShiftDetailsByDisplayOrder(Array.from(allShiftsMap.values()))
+    cannotCover.forEach(shift => {
+      const key = `${shift.date}|${shift.time_slot_code}`
+      if (!allShiftsMap.has(key)) {
+        allShiftsMap.set(key, { ...shift, status: 'unavailable' })
+      }
+    })
 
-  // Create a Set of recommended shift keys for quick lookup (normalize dates so combination + absence formats match)
+    props.shifts?.forEach(shift => {
+      allShiftsMap.set(`${shift.date}|${shift.time_slot_code}`, shift)
+    })
+  }
+
+  const allShifts = sortShiftDetailsByDisplayOrder(Array.from(allShiftsMap.values()))
+  if (allShifts.length === 0) return null
+
   const recommendedShiftKeys = new Set(
     recommendedShifts.map(shift => normalizeShiftKey(shift.date, shift.time_slot_code))
   )
+
   const legendAvailableColors = softAvailableStyle
-    ? {
-        bg: 'rgb(246, 253, 251)',
-        border: 'rgb(196, 234, 226)',
-      }
-    : {
-        bg: shiftStatusColorValues.available.bg,
-        border: shiftStatusColorValues.available.border,
-      }
+    ? { bg: 'rgb(246, 253, 251)', border: 'rgb(196, 234, 226)' }
+    : { bg: shiftStatusColorValues.available.bg, border: shiftStatusColorValues.available.border }
 
   return (
     <TooltipProvider>
       <div className="space-y-2">
         <div className="flex flex-wrap" style={{ overflow: 'visible' }}>
           {allShifts.map((shift, idx) => {
-            const shiftLabel = formatShiftLabel(shift.date, shift.time_slot_code)
+            if (isCoverageMode && !isCoverageShift(shift)) {
+              return null
+            }
+
             const { daySlot, datePart } = getShiftLabelParts(shift.date, shift.time_slot_code)
             const tooltipLabel = formatShiftTooltipLabel(shift.date, shift.time_slot_code)
             const classroomName = shift.classroom_name
@@ -304,69 +274,159 @@ export default function ShiftChips({
                 ? `${classroomName} (${classGroupName})`
                 : classroomName
               : classGroupName || 'Classroom unavailable'
-            const status = isDeclined ? 'declined' : shift.status
-            const isCoverageStatus = (s: string): s is ShiftChipCoverageStatus =>
-              s === 'covered' || s === 'partial' || s === 'uncovered'
-            const useCoverageVariant = coverageVariant && isCoverageStatus(shift.status)
-            const twoToneStatus =
-              status === 'unavailable' || status === 'declined' ? 'unavailable' : 'available'
-            const baseColorValues = shiftStatusColorValues[twoToneStatus]
-            const colorValues =
-              useCoverageVariant && isCoverageStatus(shift.status)
-                ? shift.status === 'uncovered'
-                  ? shiftStatusColorValues.unavailable
-                  : {
-                      bg: coverageColorValues[shift.status].bg,
-                      border: coverageColorValues[shift.status].border,
-                      text: coverageColorValues[shift.status].text,
-                    }
-                : softAvailableStyle && twoToneStatus === 'available'
-                  ? {
-                      ...baseColorValues,
-                      bg: 'rgb(246, 253, 251)' as const,
-                      border: 'rgb(196, 234, 226)' as const,
-                      text: 'rgb(15, 118, 110)' as const,
-                    }
-                  : baseColorValues
-            const shiftKey = normalizeShiftKey(shift.date, shift.time_slot_code)
-            const isRecommended = !useCoverageVariant && recommendedShiftKeys.has(shiftKey)
-            const cornerIndicator = useCoverageVariant ? null : isRecommended ? (
-              <div
-                aria-hidden="true"
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: '50%',
-                  backgroundColor: '#fde68a',
-                  flexShrink: 0,
-                }}
-              />
-            ) : shift.assignment_owner === 'this_sub' ? (
-              <div
-                aria-hidden="true"
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: '50%',
-                  backgroundColor: 'rgb(204, 251, 241)',
-                  color: 'rgb(15, 118, 110)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 8,
-                  fontWeight: 700,
-                  flexShrink: 0,
-                }}
-              >
-                ✓
-              </div>
-            ) : null
 
-            const indicatorToShow = cornerIndicator
+            const shiftKey = normalizeShiftKey(shift.date, shift.time_slot_code)
+            const isRecommended = !isCoverageMode && recommendedShiftKeys.has(shiftKey)
+            const availabilityStatus = isDeclined
+              ? 'unavailable'
+              : shift.status === 'unavailable'
+                ? 'unavailable'
+                : 'available'
+
+            const coverageStatus = isCoverageShift(shift) ? shift.status : null
+            const colorValues = isCoverageMode
+              ? coverageStatus === 'uncovered'
+                ? shiftStatusColorValues.unavailable
+                : {
+                    bg: coverageColorValues[coverageStatus!].bg,
+                    border: coverageColorValues[coverageStatus!].border,
+                    text: coverageColorValues[coverageStatus!].text,
+                  }
+              : softAvailableStyle && availabilityStatus === 'available'
+                ? {
+                    ...shiftStatusColorValues.available,
+                    bg: 'rgb(246, 253, 251)' as const,
+                    border: 'rgb(196, 234, 226)' as const,
+                    text: 'rgb(15, 118, 110)' as const,
+                  }
+                : shiftStatusColorValues[availabilityStatus]
+
+            const assignedNames =
+              'assigned_sub_names' in shift && shift.assigned_sub_names?.length
+                ? shift.assigned_sub_names.join(', ')
+                : shift.assigned_sub_name || null
+
+            const cornerIndicator =
+              isCoverageMode || !isRecommended ? null : (
+                <div
+                  aria-hidden="true"
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    backgroundColor: '#fde68a',
+                    flexShrink: 0,
+                  }}
+                />
+              )
+
+            const pillClassName =
+              'mt-2 inline-flex min-w-0 max-w-full shrink-0 items-center gap-1 truncate rounded-full border px-1.5 py-0.5 text-xs font-medium'
+
+            const pill = (() => {
+              if (isCoverageMode) {
+                if (assignedNames) {
+                  const isPartial = shift.status === 'partial'
+                  return (
+                    <span
+                      className={pillClassName}
+                      style={{
+                        backgroundColor: isPartial
+                          ? coverageColorValues.partialAssignedPill.bg
+                          : assignedPillStyles.thisSub.backgroundColor,
+                        borderColor: isPartial
+                          ? coverageColorValues.partialAssignedPill.border
+                          : assignedPillStyles.thisSub.borderColor,
+                        color: isPartial
+                          ? coverageColorValues.partialAssignedPill.text
+                          : assignedPillStyles.thisSub.color,
+                      }}
+                    >
+                      {isPartial ? (
+                        <Clock3 className="h-3 w-3 shrink-0" aria-hidden />
+                      ) : (
+                        <Check className="h-3 w-3 shrink-0" aria-hidden />
+                      )}
+                      <span className="min-w-0 truncate">{assignedNames}</span>
+                    </span>
+                  )
+                }
+
+                return (
+                  <span
+                    className={`${pillClassName} min-h-[1.5rem] justify-center`}
+                    style={{
+                      backgroundColor: coverageColorValues[coverageStatus!].bg,
+                      borderColor: coverageColorValues[coverageStatus!].border,
+                      color: coverageColorValues[coverageStatus!].text,
+                      borderStyle: coverageStatus === 'partial' ? 'dashed' : 'solid',
+                    }}
+                  >
+                    {coverageStatus === 'covered'
+                      ? 'Covered'
+                      : coverageStatus === 'partial'
+                        ? 'Partial'
+                        : 'Uncovered'}
+                  </span>
+                )
+              }
+
+              if (shift.assignment_owner === 'this_sub' || shift.status === 'assigned') {
+                return (
+                  <span className={pillClassName} style={assignedPillStyles.thisSub}>
+                    <Check className="h-3 w-3 shrink-0" aria-hidden />
+                    <span className="min-w-0 truncate">{thisSubName || 'This sub'}</span>
+                  </span>
+                )
+              }
+
+              if (shift.assignment_owner === 'other_sub' && assignedNames) {
+                return (
+                  <span className={pillClassName} style={assignedPillStyles.thisSub}>
+                    <Check className="h-3 w-3 shrink-0" aria-hidden />
+                    <span className="min-w-0 truncate">{assignedNames}</span>
+                  </span>
+                )
+              }
+
+              return (
+                <span
+                  className={`${pillClassName} min-h-[1.5rem] justify-center`}
+                  style={assignedPillStyles.uncovered}
+                >
+                  Uncovered
+                </span>
+              )
+            })()
+
+            const tooltipStatusLine = (() => {
+              if (isCoverageMode) {
+                if (shift.status === 'partial' && assignedNames) {
+                  return appendSentencePeriod(`Partial shift assigned to ${assignedNames}`)
+                }
+                if (shift.status === 'covered' && assignedNames) {
+                  return `Assigned to ${assignedNames}`
+                }
+                if (shift.status === 'partial') return 'Partially covered shift'
+                if (shift.status === 'covered') return 'Covered shift'
+                return 'Uncovered shift'
+              }
+
+              if (shift.assignment_owner === 'this_sub' || shift.status === 'assigned') {
+                return 'Assigned to this sub'
+              }
+              if (shift.assignment_owner === 'other_sub' && assignedNames) {
+                return `Assigned to ${assignedNames}`
+              }
+              if (shift.status === 'unavailable' && shift.reason) {
+                return shift.reason
+              }
+              if (shift.status === 'available') return 'This sub can cover this shift'
+              return null
+            })()
 
             const badge = (
               <div
-                key={`shift-${shift.date}-${shift.time_slot_code}-${idx}`}
                 className="relative inline-block shrink-0 mr-3 mb-3"
                 style={{ overflow: 'visible' }}
               >
@@ -389,184 +449,165 @@ export default function ShiftChips({
                     } as React.CSSProperties
                   }
                 >
-                  {/* Text: centered; overflow hidden keeps uniform height with nested chip. Order: classroom, day/slot, date, sub/uncovered. Classroom: temporary plain text (was colored chip via getClassroomPillStyle). */}
                   <span className="inline-flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 overflow-hidden leading-tight text-center">
                     <span className="shrink-0 truncate text-[10px] font-medium uppercase text-slate-400">
                       {classroomLabel}
                     </span>
                     <span className="shrink-0 text-base font-medium">{daySlot}</span>
                     <span className="shrink-0 text-sm opacity-90">{datePart}</span>
-                    {(() => {
-                      const showOtherSubPill =
-                        shift.assignment_owner === 'other_sub' ||
-                        (useCoverageVariant &&
-                          isCoverageStatus(shift.status) &&
-                          (shift.status === 'covered' || shift.status === 'partial') &&
-                          !!shift.assigned_sub_name)
-                      const pillClassName =
-                        'mt-2 inline-flex min-w-0 max-w-full shrink-0 items-center gap-1 truncate rounded-full border px-1.5 py-0.5 text-xs font-medium'
-                      const checkmarkSpan = (
-                        <span
-                          className="shrink-0 font-bold leading-none"
-                          style={{ fontSize: '10px' }}
-                        >
-                          ✓
-                        </span>
-                      )
-                      if (shift.assignment_owner === 'this_sub') {
-                        return (
-                          <span className={pillClassName} style={assignedPillStyles.thisSub}>
-                            {checkmarkSpan}
-                            <span className="min-w-0 truncate">{thisSubName || 'This sub'}</span>
-                          </span>
-                        )
-                      }
-                      if (showOtherSubPill) {
-                        return (
-                          <span className={pillClassName} style={assignedPillStyles.thisSub}>
-                            {checkmarkSpan}
-                            <span className="min-w-0 truncate">
-                              {shift.assigned_sub_name || 'Other sub'}
-                            </span>
-                          </span>
-                        )
-                      }
-                      if (useCoverageVariant && isCoverageStatus(shift.status)) {
-                        return (
-                          <span
-                            className={`${pillClassName} min-h-[1.5rem] justify-center`}
-                            style={{
-                              backgroundColor: coverageColorValues[shift.status].bg,
-                              borderColor: coverageColorValues[shift.status].border,
-                              color: coverageColorValues[shift.status].text,
-                            }}
-                          >
-                            {shift.status === 'covered'
-                              ? 'Covered'
-                              : shift.status === 'partial'
-                                ? 'Partial'
-                                : 'Uncovered'}
-                          </span>
-                        )
-                      }
-                      return (
-                        <span
-                          className={`${pillClassName} min-h-[1.5rem] justify-center`}
-                          style={assignedPillStyles.uncovered}
-                        >
-                          Uncovered
-                        </span>
-                      )
-                    })()}
+                    {pill}
                   </span>
                 </Badge>
-                {/* Corner indicator: AFTER Badge so it paints on top; outside Badge to avoid overflow-hidden */}
-                {indicatorToShow && (
+                {cornerIndicator ? (
                   <div
                     className="absolute z-10"
-                    style={{
-                      top: 5,
-                      left: 5,
-                      pointerEvents: 'none',
-                      overflow: 'visible',
-                    }}
+                    style={{ top: 5, left: 5, pointerEvents: 'none', overflow: 'visible' }}
                   >
-                    {indicatorToShow}
+                    {cornerIndicator}
                   </div>
-                )}
+                ) : null}
               </div>
             )
 
             return (
               <Tooltip key={`shift-${shift.date}-${shift.time_slot_code}-${idx}`}>
-                <TooltipTrigger asChild>{badge}</TooltipTrigger>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="p-0 m-0 border-0 bg-transparent rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                    aria-label={`${tooltipLabel}. ${classroomLabel}${tooltipStatusLine ? `. ${tooltipStatusLine}` : ''}`}
+                  >
+                    {badge}
+                  </button>
+                </TooltipTrigger>
                 <TooltipContent side="top">
                   <div className="text-base">
                     <div>{tooltipLabel}</div>
                     <div className={classroomName ? 'font-semibold' : undefined}>
                       {classroomLabel}
                     </div>
-                    {shift.status === 'unavailable' && shift.reason && (
-                      <div className="text-muted-foreground">{shift.reason}</div>
-                    )}
-                    {shift.assignment_owner === 'this_sub' && (
-                      <div className="text-muted-foreground">Assigned to this sub</div>
-                    )}
-                    {(shift.assignment_owner === 'other_sub' ||
-                      (useCoverageVariant && shift.assigned_sub_name)) && (
-                      <div className="text-muted-foreground">
-                        Assigned to {shift.assigned_sub_name || 'another sub'}
-                      </div>
-                    )}
+                    {tooltipStatusLine ? (
+                      <div className="text-muted-foreground">{tooltipStatusLine}</div>
+                    ) : null}
                   </div>
                 </TooltipContent>
               </Tooltip>
             )
           })}
         </div>
-        {showLegend && (
-          <div className="mt-2 p-3 bg-white rounded-md border border-gray-200">
-            <div className="flex flex-wrap items-center gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-gray-700">Key:</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span
-                  aria-hidden="true"
-                  className="inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium"
-                  style={{
-                    backgroundColor: legendAvailableColors.bg,
-                    color: 'rgb(15, 118, 110)',
-                    borderWidth: '1px',
-                    borderStyle: 'solid',
-                    borderColor: legendAvailableColors.border,
-                  }}
-                >
-                  Can cover
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span
-                  aria-hidden="true"
-                  className="inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium"
-                  style={{
-                    backgroundColor: shiftStatusColorValues.unavailable.bg,
-                    color: shiftStatusColorValues.unavailable.text,
-                    borderWidth: '1px',
-                    borderStyle: 'solid',
-                    borderColor: shiftStatusColorValues.unavailable.border,
-                  }}
-                >
-                  Cannot cover
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span
-                  aria-hidden="true"
-                  className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium"
-                  style={{
-                    backgroundColor: 'rgb(204, 251, 241)',
-                    color: 'rgb(15, 118, 110)',
-                    borderColor: 'rgb(153, 246, 228)',
-                  }}
-                >
-                  <span className="font-bold leading-none" style={{ fontSize: '10px' }}>
-                    ✓
+
+        {showLegend &&
+          (isCoverageMode ? (
+            <div className="mt-2 p-3 bg-white rounded-md border border-gray-200">
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-gray-700">Key:</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium"
+                    style={{
+                      backgroundColor: coverageColorValues.covered.bg,
+                      color: coverageColorValues.covered.text,
+                      borderColor: coverageColorValues.covered.border,
+                    }}
+                  >
+                    <Check className="h-3 w-3" aria-hidden />
+                    Covered
                   </span>
-                  Assigned Sub
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span
-                  className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: '#fde68a' }}
-                  aria-hidden="true"
-                />
-                <span className="text-gray-600">Recommended assignment</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium"
+                    style={{
+                      backgroundColor: coverageColorValues.partial.bg,
+                      color: coverageColorValues.partial.text,
+                      borderColor: coverageColorValues.partial.border,
+                      borderStyle: 'dashed',
+                    }}
+                  >
+                    <Clock3 className="h-3 w-3" aria-hidden />
+                    Partial
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium"
+                    style={{
+                      backgroundColor: coverageColorValues.uncovered.bg,
+                      color: coverageColorValues.uncovered.text,
+                      borderColor: coverageColorValues.uncovered.border,
+                    }}
+                  >
+                    Uncovered
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="mt-2 p-3 bg-white rounded-md border border-gray-200">
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-gray-700">Key:</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium"
+                    style={{
+                      backgroundColor: legendAvailableColors.bg,
+                      color: 'rgb(15, 118, 110)',
+                      borderWidth: '1px',
+                      borderStyle: 'solid',
+                      borderColor: legendAvailableColors.border,
+                    }}
+                  >
+                    Can cover
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium"
+                    style={{
+                      backgroundColor: shiftStatusColorValues.unavailable.bg,
+                      color: shiftStatusColorValues.unavailable.text,
+                      borderWidth: '1px',
+                      borderStyle: 'solid',
+                      borderColor: shiftStatusColorValues.unavailable.border,
+                    }}
+                  >
+                    Cannot cover
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium"
+                    style={{
+                      backgroundColor: 'rgb(204, 251, 241)',
+                      color: 'rgb(15, 118, 110)',
+                      borderColor: 'rgb(153, 246, 228)',
+                    }}
+                  >
+                    <Check className="h-3 w-3" aria-hidden />
+                    Assigned Sub
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: '#fde68a' }}
+                    aria-hidden="true"
+                  />
+                  <span className="text-gray-600">Recommended assignment</span>
+                </div>
+              </div>
+            </div>
+          ))}
       </div>
     </TooltipProvider>
   )

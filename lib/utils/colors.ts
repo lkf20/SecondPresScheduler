@@ -72,6 +72,12 @@ export const coverageColorValues = {
     text: 'rgb(202, 138, 4)', // yellow-600 (darker yellow, less amber)
     icon: 'rgb(202, 138, 4)', // yellow-600
   },
+  partialAssignedPill: {
+    bg: 'rgb(254, 249, 195)', // yellow-100 (lighter option)
+    border: 'rgb(250, 204, 21)', // yellow-400
+    text: 'rgb(161, 98, 7)', // amber-700
+    icon: 'rgb(161, 98, 7)', // amber-700
+  },
   uncovered: {
     bg: 'rgb(243, 244, 246)', // gray-100
     border: 'rgb(209, 213, 219)', // gray-300

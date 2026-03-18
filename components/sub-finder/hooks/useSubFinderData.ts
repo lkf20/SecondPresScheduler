@@ -43,6 +43,8 @@ export interface Absence {
       assignment_id?: string | null
       is_partial?: boolean
       assignment_status?: SubFinderAssignmentStatus | null
+      day_display_order?: number | null
+      time_slot_display_order?: number | null
     }>
     shift_details_sorted?: Array<{
       id: string
@@ -58,6 +60,8 @@ export interface Absence {
       assignment_id?: string | null
       is_partial?: boolean
       assignment_status?: SubFinderAssignmentStatus | null
+      day_display_order?: number | null
+      time_slot_display_order?: number | null
     }>
     coverage_segments?: Array<{
       id: string

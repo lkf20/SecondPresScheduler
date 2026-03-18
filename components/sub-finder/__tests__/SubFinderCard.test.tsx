@@ -2,8 +2,10 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import SubFinderCard from '@/components/sub-finder/SubFinderCard'
 
+const mockShiftChips = jest.fn(() => <div data-testid="shift-chips" />)
+
 jest.mock('@/components/sub-finder/ShiftChips', () => {
-  const MockShiftChips = () => <div data-testid="shift-chips" />
+  const MockShiftChips = (props: any) => mockShiftChips(props)
   MockShiftChips.displayName = 'MockShiftChips'
   return MockShiftChips
 })
@@ -15,6 +17,10 @@ jest.mock('@/components/sub-finder/SubCardHeader', () => {
 })
 
 describe('SubFinderCard', () => {
+  beforeEach(() => {
+    mockShiftChips.mockClear()
+  })
+
   it('renders assignment and contact feedback states', () => {
     render(
       <SubFinderCard
@@ -139,5 +145,52 @@ describe('SubFinderCard', () => {
 
     await user.click(screen.getByRole('button', { name: /contact & assign/i }))
     expect(onContact).toHaveBeenCalledTimes(1)
+  })
+
+  it('maps partially covered shifts to partial status in recommended strip and enables coverage variant', () => {
+    render(
+      <SubFinderCard
+        name="Sally A."
+        phone={null}
+        shiftsCovered={1}
+        totalShifts={2}
+        canCover={[]}
+        cannotCover={[]}
+        assigned={[]}
+        recommendedShiftCount={1}
+        allShifts={[
+          {
+            id: 'shift-partial',
+            date: '2026-03-26',
+            day_name: 'Thursday',
+            time_slot_code: 'AM',
+            class_name: null,
+            classroom_name: 'Infant Room',
+            status: 'partially_covered',
+            sub_name: 'Victoria I.',
+            day_display_order: 4,
+            time_slot_display_order: 2,
+          },
+        ]}
+      />
+    )
+
+    const recommendedStripCall = mockShiftChips.mock.calls.find(
+      call => call?.[0]?.mode === 'coverage'
+    )?.[0]
+
+    expect(recommendedStripCall).toBeTruthy()
+    expect(recommendedStripCall.shifts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          date: '2026-03-26',
+          time_slot_code: 'AM',
+          status: 'partial',
+          assigned_sub_name: 'Victoria I.',
+          day_display_order: 4,
+          time_slot_display_order: 2,
+        }),
+      ])
+    )
   })
 })

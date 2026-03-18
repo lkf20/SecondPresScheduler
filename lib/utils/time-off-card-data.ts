@@ -44,6 +44,7 @@ export type TimeOffCardData = {
     classroom_name?: string | null
     classroom_color?: string | null
     sub_name?: string | null
+    assigned_sub_names?: string[]
     sub_id?: string | null
     assignment_id?: string | null
     is_partial?: boolean
@@ -159,6 +160,7 @@ export function transformTimeOffCardData(
       hasFull: boolean
       hasPartial: boolean
       subName: string | null
+      subNames: Set<string>
       subId: string | null
       assignmentId: string | null
     }
@@ -170,6 +172,7 @@ export function transformTimeOffCardData(
       hasFull: false,
       hasPartial: false,
       subName: null,
+      subNames: new Set<string>(),
       subId: null,
       assignmentId: null,
     }
@@ -184,7 +187,7 @@ export function transformTimeOffCardData(
 
     // Get sub name if available
     if (assignment.sub) {
-      existing.subName =
+      const displayName =
         getStaffDisplayName(
           {
             first_name: assignment.sub.first_name ?? '',
@@ -193,6 +196,10 @@ export function transformTimeOffCardData(
           },
           displayNameFormat
         ) || null
+      existing.subName = displayName
+      if (displayName) {
+        existing.subNames.add(displayName)
+      }
       existing.subId = assignment.sub.id ?? null
     }
     existing.assignmentId = assignment.id ?? null
@@ -251,6 +258,12 @@ export function transformTimeOffCardData(
         classroom_name: classroom?.name || undefined,
         classroom_color: classroom?.color || undefined,
         sub_name: assignment?.subName || undefined,
+        assigned_sub_names:
+          assignment?.subNames && assignment.subNames.size > 0
+            ? Array.from(assignment.subNames).sort((a, b) =>
+                a.localeCompare(b, undefined, { sensitivity: 'base' })
+              )
+            : undefined,
         sub_id: assignment?.subId || undefined,
         assignment_id: assignment?.assignmentId || undefined,
         is_partial: assignment?.hasPartial && !assignment?.hasFull,

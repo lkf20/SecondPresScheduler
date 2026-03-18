@@ -581,6 +581,8 @@ export async function GET(request: NextRequest) {
           classroom_name?: string | null
           classroom_color?: string | null
           assigned_sub_name?: string | null
+          day_display_order?: number | null
+          time_slot_display_order?: number | null
         }> = []
 
         requestShifts.forEach((shift: any) => {
@@ -630,6 +632,8 @@ export async function GET(request: NextRequest) {
             classroom_name: classroom?.name ?? null,
             classroom_color: classroom?.color ?? null,
             assigned_sub_name: assignedSubName,
+            day_display_order: dayOfWeek?.display_order ?? null,
+            time_slot_display_order: timeSlot?.display_order ?? null,
           })
         })
 

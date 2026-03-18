@@ -18,8 +18,13 @@ export function useSubFinderShifts(
   upcomingShiftCount: number
 } {
   const shiftDetails = useMemo<SubFinderShift[]>(() => {
-    if (!absence?.shifts?.shift_details?.length) return []
-    return absence.shifts.shift_details.map(shift => ({
+    const sourceShifts =
+      absence?.shifts?.shift_details_sorted?.length &&
+      absence.shifts.shift_details_sorted.length > 0
+        ? absence.shifts.shift_details_sorted
+        : absence?.shifts?.shift_details
+    if (!sourceShifts?.length) return []
+    return sourceShifts.map(shift => ({
       id: shift.id,
       date: shift.date,
       day_name: shift.day_name,
@@ -33,6 +38,8 @@ export function useSubFinderShifts(
       assignment_id: shift.assignment_id ?? null,
       is_partial: shift.is_partial ?? false,
       assignment_status: shift.assignment_status ?? null,
+      day_display_order: shift.day_display_order ?? null,
+      time_slot_display_order: shift.time_slot_display_order ?? null,
     }))
   }, [absence])
 

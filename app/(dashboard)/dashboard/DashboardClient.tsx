@@ -72,7 +72,18 @@ type CoverageRequestItem = {
   partial_shifts: number
   remaining_shifts: number
   status: 'needs_coverage' | 'partially_covered' | 'covered'
-  shift_details?: Array<{ label: string; status: 'covered' | 'partial' | 'uncovered' }>
+  shift_details?: Array<{
+    label: string
+    status: 'covered' | 'partial' | 'uncovered'
+    date?: string
+    time_slot_code?: string
+    classroom_name?: string | null
+    classroom_color?: string | null
+    assigned_sub_name?: string | null
+    assigned_sub_names?: string[]
+    day_display_order?: number | null
+    time_slot_display_order?: number | null
+  }>
 }
 
 export type ScheduledSubItem = {
@@ -486,14 +497,12 @@ export default function DashboardClient({
       },
       {
         key: 'partially_covered' as const,
-        label: 'Partially Covered (approx.)',
+        label: 'Partially Covered',
         count: overview.summary.partially_covered_shifts,
         tone: amberColors.text,
         cardStyle: `${neutralColors.border} bg-white ${neutralColors.textMedium}`,
         icon: Clock,
         iconStyle: `${amberColors.bg} ${amberColors.icon}`,
-        tooltip:
-          'Each partial assignment counts as approximately 50% coverage. Exact time-based coverage coming in a future update.',
       },
       {
         key: 'absences' as const,
@@ -727,7 +736,7 @@ export default function DashboardClient({
                 <CardContent className="p-4 flex flex-col flex-1">
                   <div className="text-base font-normal flex items-center gap-1">
                     {item.label}
-                    {'tooltip' in item && item.tooltip ? (
+                    {'tooltip' in item && typeof item.tooltip === 'string' && item.tooltip ? (
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -751,7 +760,7 @@ export default function DashboardClient({
                           item.key === 'uncovered'
                             ? ({ color: coverageColorValues.uncovered.icon } as React.CSSProperties)
                             : item.key === 'partially_covered'
-                              ? ({ color: '#B45309' } as React.CSSProperties) // amber-700
+                              ? ({ color: '#CA8A04' } as React.CSSProperties) // yellow-600
                               : item.key === 'scheduled'
                                 ? ({ color: '#0D9488' } as React.CSSProperties) // teal-600
                                 : item.key === 'absences'
@@ -788,7 +797,16 @@ export default function DashboardClient({
                                       borderColor: 'rgba(0, 0, 0, 0)',
                                       borderImage: 'none',
                                     } as React.CSSProperties)
-                                  : undefined
+                                  : item.key === 'partially_covered'
+                                    ? ({
+                                        backgroundColor: 'rgba(243, 244, 246, 1)', // gray-100
+                                        color: '#EAB308', // yellow-500
+                                        borderWidth: '0px',
+                                        borderStyle: 'none',
+                                        borderColor: 'rgba(0, 0, 0, 0)',
+                                        borderImage: 'none',
+                                      } as React.CSSProperties)
+                                    : undefined
                           }
                         >
                           <item.icon className="h-5 w-5" />

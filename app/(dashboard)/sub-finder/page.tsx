@@ -1299,14 +1299,10 @@ export default function SubFinderPage() {
   // Register panel with PanelManager when it opens
   useEffect(() => {
     if (isContactPanelOpen && selectedSub && selectedAbsence) {
-      setActivePanel('contact-sub', () => {
-        // Restore callback - save current state and reopen
-        savedSubRef.current = selectedSub
-        savedAbsenceRef.current = selectedAbsence
-        setSelectedSub(selectedSub)
-        setSelectedAbsence(selectedAbsence)
-        setIsContactPanelOpen(true)
-      })
+      // Mark contact panel as active. Do not register a restore callback here:
+      // previous panel restore state should only come from explicit savePreviousPanel(...) calls
+      // when transitioning to another panel (e.g. opening Time Off).
+      setActivePanel('contact-sub')
 
       // Register close request handler
       const unregister = registerPanelCloseHandler('contact-sub', () => {

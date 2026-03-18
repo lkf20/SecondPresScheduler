@@ -29,7 +29,18 @@ type DashboardOverview = {
     partial_shifts: number
     remaining_shifts: number
     status: 'needs_coverage' | 'partially_covered' | 'covered'
-    shift_details?: Array<{ label: string; status: 'covered' | 'partial' | 'uncovered' }>
+    shift_details?: Array<{
+      label: string
+      status: 'covered' | 'partial' | 'uncovered'
+      date?: string
+      time_slot_code?: string
+      classroom_name?: string | null
+      classroom_color?: string | null
+      assigned_sub_name?: string | null
+      assigned_sub_names?: string[]
+      day_display_order?: number | null
+      time_slot_display_order?: number | null
+    }>
   }>
   staffing_targets: Array<{
     id: string

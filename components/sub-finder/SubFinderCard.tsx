@@ -60,6 +60,8 @@ interface SubFinderCardProps {
     classroom_name?: string | null
     class_name?: string | null
     classroom_color?: string | null
+    day_display_order?: number | null
+    time_slot_display_order?: number | null
   }>
   coverageSegments?: Array<'assigned' | 'available' | 'unavailable'>
   notes?: string | null
@@ -181,7 +183,6 @@ export default function SubFinderCard({
   const showCompactStatusBadge = condensedStatus || useStatusBadgeOnly
   const isCompactLayout = condensedStatus || useStatusBadgeOnly
   const hasRecommendedSubset = recommendedShiftCount !== undefined && recommendedShiftCount > 0
-  const canCoverKeys = new Set(canCover.map(s => `${s.date}|${s.time_slot_code}`))
   const orderedShiftsForStrip =
     allShifts && allShifts.length > 0 ? sortShiftDetailsByDisplayOrder([...allShifts]) : []
   const declinedCardStyle = isDeclined
@@ -293,10 +294,7 @@ export default function SubFinderCard({
         {hasRecommendedSubset && orderedShiftsForStrip.length > 0 && (
           <div className="w-full mt-3 mb-2">
             <ShiftChips
-              canCover={[]}
-              cannotCover={[]}
-              assigned={[]}
-              thisSubName={name}
+              mode="coverage"
               shifts={orderedShiftsForStrip.map(shift => {
                 const key = `${shift.date}|${shift.time_slot_code}`
                 const assignedToThisSub = thisSubAssignedKeys.has(key)
@@ -305,38 +303,54 @@ export default function SubFinderCard({
                   return {
                     date: shift.date,
                     time_slot_code: shift.time_slot_code,
-                    status: 'assigned' as const,
+                    status: 'covered' as const,
                     assignment_owner: 'this_sub' as const,
                     classroom_name: shift.classroom_name ?? null,
                     class_name: shift.class_name ?? null,
                     classroom_color: shift.classroom_color ?? null,
+                    day_display_order: shift.day_display_order ?? null,
+                    time_slot_display_order: shift.time_slot_display_order ?? null,
                   }
                 }
                 if (assignedElsewhere) {
-                  const canCoverThisShift = thisSubCanCoverKeys.has(key)
+                  if (shift.status === 'partially_covered') {
+                    return {
+                      date: shift.date,
+                      time_slot_code: shift.time_slot_code,
+                      status: 'partial' as const,
+                      assignment_owner: 'other_sub' as const,
+                      assigned_sub_name: shift.sub_name ?? null,
+                      classroom_name: shift.classroom_name ?? null,
+                      class_name: shift.class_name ?? null,
+                      classroom_color: shift.classroom_color ?? null,
+                      day_display_order: shift.day_display_order ?? null,
+                      time_slot_display_order: shift.time_slot_display_order ?? null,
+                    }
+                  }
                   return {
                     date: shift.date,
                     time_slot_code: shift.time_slot_code,
-                    status: canCoverThisShift ? ('available' as const) : ('unavailable' as const),
+                    status: 'covered' as const,
                     assignment_owner: 'other_sub' as const,
                     assigned_sub_name: shift.sub_name ?? null,
                     classroom_name: shift.classroom_name ?? null,
                     class_name: shift.class_name ?? null,
                     classroom_color: shift.classroom_color ?? null,
+                    day_display_order: shift.day_display_order ?? null,
+                    time_slot_display_order: shift.time_slot_display_order ?? null,
                   }
                 }
                 return {
                   date: shift.date,
                   time_slot_code: shift.time_slot_code,
-                  status: canCoverKeys.has(key) ? ('available' as const) : ('unavailable' as const),
+                  status: 'uncovered' as const,
                   classroom_name: shift.classroom_name ?? null,
                   class_name: shift.class_name ?? null,
                   classroom_color: shift.classroom_color ?? null,
+                  day_display_order: shift.day_display_order ?? null,
+                  time_slot_display_order: shift.time_slot_display_order ?? null,
                 }
               })}
-              isDeclined={isDeclined}
-              recommendedShifts={recommendedShifts ?? canCover}
-              softAvailableStyle={softChipColors}
             />
             {!previewMode && onContact && (
               <div className="mt-6 border-t border-slate-200 pt-4 flex flex-wrap items-center justify-between gap-3">
@@ -393,6 +407,7 @@ export default function SubFinderCard({
                   assigned.length > 0 ||
                   (shiftChips?.length ?? 0) > 0) && (
                   <ShiftChips
+                    mode="availability"
                     canCover={canCover}
                     cannotCover={cannotCover}
                     assigned={assigned}
@@ -507,6 +522,7 @@ export default function SubFinderCard({
                 </p>
               )}
               <ShiftChips
+                mode="availability"
                 canCover={allCanCover}
                 cannotCover={allCannotCover}
                 thisSubName={name}
@@ -536,6 +552,8 @@ export default function SubFinderCard({
                     classroom_name: shift.classroom_name || null,
                     class_name: shift.class_name || null,
                     classroom_color: shift.classroom_color ?? null,
+                    day_display_order: shift.day_display_order ?? null,
+                    time_slot_display_order: shift.time_slot_display_order ?? null,
                   }
                 })}
                 isDeclined={isDeclined}
