@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
+import { createClient } from '@/lib/supabase/server'
 import {
   getCalendarSettings,
   updateCalendarSettings,
@@ -89,6 +90,27 @@ export async function PATCH(request: NextRequest) {
     const validation = validateCalendarPatchBody(body)
     if (!validation.valid) return validation.response
     const normalized: NormalizedCalendarPatch = validation.normalized
+    const supabase = await createClient()
+    const { data: timeSlotRows } = await supabase
+      .from('time_slots')
+      .select('id, code')
+      .eq('school_id', schoolId)
+    const timeSlotCodeById = new Map(
+      (timeSlotRows ?? [])
+        .filter(row => row.id)
+        .map(row => [row.id as string, row.code || null] as const)
+    )
+    const getTimeSlotCode = (timeSlotId?: string | null) =>
+      timeSlotId ? (timeSlotCodeById.get(timeSlotId) ?? null) : null
+    const buildClosureSummary = (
+      date: string,
+      wholeDay: boolean,
+      reason?: string | null,
+      timeSlotCode?: string | null
+    ) =>
+      wholeDay
+        ? `${date} (whole day)${reason ? `: ${reason}` : ''}`
+        : `${date}${timeSlotCode ? ` (${timeSlotCode})` : ' (time slot)'}${reason ? `: ${reason}` : ''}`
 
     // --- Calendar settings (first/last day of school) ---
     if (body.first_day_of_school !== undefined || body.last_day_of_school !== undefined) {
@@ -145,9 +167,8 @@ export async function PATCH(request: NextRequest) {
         notes: notes !== undefined ? notes : before.notes,
       })
       const wholeDay = updated.time_slot_id === null
-      const summary = wholeDay
-        ? `${updated.date} (whole day)${updated.reason ? `: ${updated.reason}` : ''}`
-        : `${updated.date} (time slot)${updated.reason ? `: ${updated.reason}` : ''}`
+      const timeSlotCode = getTimeSlotCode(updated.time_slot_id)
+      const summary = buildClosureSummary(updated.date, wholeDay, updated.reason, timeSlotCode)
       const auditEntry = {
         schoolId,
         actorUserId: actor.actorUserId,
@@ -161,6 +182,7 @@ export async function PATCH(request: NextRequest) {
           after: { reason: updated.reason, notes: updated.notes },
           date: updated.date,
           time_slot_id: updated.time_slot_id,
+          time_slot_code: timeSlotCode,
           whole_day: wholeDay,
           summary,
         },
@@ -184,9 +206,8 @@ export async function PATCH(request: NextRequest) {
         }
         await deleteSchoolClosure(schoolId, id)
         const wholeDay = toDelete.time_slot_id === null
-        const summary = wholeDay
-          ? `${toDelete.date} (whole day)${toDelete.reason ? `: ${toDelete.reason}` : ''}`
-          : `${toDelete.date} (time slot)${toDelete.reason ? `: ${toDelete.reason}` : ''}`
+        const timeSlotCode = getTimeSlotCode(toDelete.time_slot_id)
+        const summary = buildClosureSummary(toDelete.date, wholeDay, toDelete.reason, timeSlotCode)
         const auditEntry = {
           schoolId,
           actorUserId: actor.actorUserId,
@@ -198,6 +219,7 @@ export async function PATCH(request: NextRequest) {
           details: {
             date: toDelete.date,
             time_slot_id: toDelete.time_slot_id,
+            time_slot_code: timeSlotCode,
             reason: toDelete.reason,
             whole_day: wholeDay,
             summary,
@@ -216,9 +238,8 @@ export async function PATCH(request: NextRequest) {
           notes: item.notes,
         })
         const wholeDay = updated.time_slot_id === null
-        const summary = wholeDay
-          ? `${updated.date} (whole day)${updated.reason ? `: ${updated.reason}` : ''}`
-          : `${updated.date} (time slot)${updated.reason ? `: ${updated.reason}` : ''}`
+        const timeSlotCode = getTimeSlotCode(updated.time_slot_id)
+        const summary = buildClosureSummary(updated.date, wholeDay, updated.reason, timeSlotCode)
         const auditEntry = {
           schoolId,
           actorUserId: actor.actorUserId,
@@ -239,6 +260,7 @@ export async function PATCH(request: NextRequest) {
               notes: updated.notes,
             },
             date: updated.date,
+            time_slot_code: timeSlotCode,
             whole_day: wholeDay,
             summary,
           },
@@ -288,9 +310,8 @@ export async function PATCH(request: NextRequest) {
             })
             createdClosureIdsToRollback.push(created.id)
             const wholeDay = created.time_slot_id === null
-            const summary = wholeDay
-              ? `${date} (whole day)${reason ? `: ${reason}` : ''}`
-              : `${date} (time slot)${reason ? `: ${reason}` : ''}`
+            const timeSlotCode = getTimeSlotCode(created.time_slot_id)
+            const summary = buildClosureSummary(date, wholeDay, reason, timeSlotCode)
             auditEntriesToLog.push({
               schoolId,
               actorUserId: actor.actorUserId,
@@ -302,6 +323,7 @@ export async function PATCH(request: NextRequest) {
               details: {
                 date: created.date,
                 time_slot_id: created.time_slot_id,
+                time_slot_code: timeSlotCode,
                 reason: created.reason,
                 notes: created.notes,
                 whole_day: wholeDay,
@@ -346,9 +368,8 @@ export async function PATCH(request: NextRequest) {
       )
       for (const c of toDelete) {
         const wholeDay = c.time_slot_id === null
-        const summary = wholeDay
-          ? `${c.date} (whole day)${c.reason ? `: ${c.reason}` : ''}`
-          : `${c.date} (time slot)${c.reason ? `: ${c.reason}` : ''}`
+        const timeSlotCode = getTimeSlotCode(c.time_slot_id)
+        const summary = buildClosureSummary(c.date, wholeDay, c.reason, timeSlotCode)
         const auditEntry = {
           schoolId,
           actorUserId: actor.actorUserId,
@@ -360,6 +381,7 @@ export async function PATCH(request: NextRequest) {
           details: {
             date: c.date,
             time_slot_id: c.time_slot_id,
+            time_slot_code: timeSlotCode,
             reason: c.reason,
             whole_day: wholeDay,
             summary,
@@ -369,9 +391,8 @@ export async function PATCH(request: NextRequest) {
       }
       for (const c of created) {
         const wholeDay = c.time_slot_id === null
-        const summary = wholeDay
-          ? `${c.date} (whole day)${c.reason ? `: ${c.reason}` : ''}`
-          : `${c.date} (time slot)${c.reason ? `: ${c.reason}` : ''}`
+        const timeSlotCode = getTimeSlotCode(c.time_slot_id)
+        const summary = buildClosureSummary(c.date, wholeDay, c.reason, timeSlotCode)
         const auditEntry = {
           schoolId,
           actorUserId: actor.actorUserId,
@@ -383,6 +404,7 @@ export async function PATCH(request: NextRequest) {
           details: {
             date: c.date,
             time_slot_id: c.time_slot_id,
+            time_slot_code: timeSlotCode,
             reason: c.reason,
             notes: c.notes,
             whole_day: wholeDay,
@@ -437,9 +459,8 @@ export async function PATCH(request: NextRequest) {
             })
             createdClosureIdsToRollback.push(created.id)
             const wholeDay = created.time_slot_id === null
-            const summary = wholeDay
-              ? `${date} (whole day)${reason ? `: ${reason}` : ''}`
-              : `${date} (time slot)${reason ? `: ${reason}` : ''}`
+            const timeSlotCode = getTimeSlotCode(created.time_slot_id)
+            const summary = buildClosureSummary(date, wholeDay, reason, timeSlotCode)
             const auditEntry = {
               schoolId,
               actorUserId: actor.actorUserId,
@@ -451,6 +472,7 @@ export async function PATCH(request: NextRequest) {
               details: {
                 date: created.date,
                 time_slot_id: created.time_slot_id,
+                time_slot_code: timeSlotCode,
                 reason: created.reason,
                 notes: created.notes,
                 whole_day: wholeDay,
@@ -479,9 +501,8 @@ export async function PATCH(request: NextRequest) {
       )
       for (const c of toDelete) {
         const wholeDay = c.time_slot_id === null
-        const summary = wholeDay
-          ? `${c.date} (whole day)${c.reason ? `: ${c.reason}` : ''}`
-          : `${c.date} (time slot)${c.reason ? `: ${c.reason}` : ''}`
+        const timeSlotCode = getTimeSlotCode(c.time_slot_id)
+        const summary = buildClosureSummary(c.date, wholeDay, c.reason, timeSlotCode)
         const auditEntry = {
           schoolId,
           actorUserId: actor.actorUserId,
@@ -493,6 +514,7 @@ export async function PATCH(request: NextRequest) {
           details: {
             date: c.date,
             time_slot_id: c.time_slot_id,
+            time_slot_code: timeSlotCode,
             reason: c.reason,
             whole_day: wholeDay,
             summary,

@@ -5,18 +5,10 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import StaffLink from '@/components/ui/staff-link'
 import { cn } from '@/lib/utils'
-
-type ActivityRow = {
-  id: string
-  created_at: string
-  action: string
-  category: string
-  entity_type: string
-  entity_id: string | null
-  details: Record<string, any> | null
-  actor_user_id: string | null
-  actor_display_name: string
-}
+import {
+  formatActivityDescription,
+  type ActivityRow,
+} from '@/components/activity/activity-description'
 
 type ActorOption = {
   id: string
@@ -29,6 +21,7 @@ const CATEGORY_OPTIONS = [
   { key: 'sub_assignment', label: 'Sub Assignments' },
   { key: 'baseline_schedule', label: 'Baseline' },
   { key: 'temporary_coverage', label: 'Temporary Coverage' },
+  { key: 'school_calendar', label: 'School Calendar' },
   { key: 'staff', label: 'Staff' },
   { key: 'coverage', label: 'Coverage' },
 ]
@@ -42,169 +35,6 @@ function toRelativeTime(dateString: string) {
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
   if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`
   return new Date(dateString).toLocaleDateString()
-}
-
-function formatMonthDay(dateStr: string): string {
-  if (!dateStr || typeof dateStr !== 'string') return ''
-  const [y, m, d] = dateStr.split('-').map(Number)
-  if (!y || !m || !d) return ''
-  const date = new Date(y, m - 1, d)
-  const month = date.toLocaleString('en-US', { month: 'long' })
-  return `${month} ${date.getDate()}`
-}
-
-function formatTimeOffDateRange(details: Record<string, any>): string {
-  const start = details.start_date ?? details.after?.start_date
-  const end = details.end_date ?? details.after?.end_date
-  if (!start) return ''
-  const startStr = formatMonthDay(start)
-  if (!startStr) return ''
-  if (!end || end === start) return ` for ${startStr}`
-  const endStr = formatMonthDay(end)
-  if (!endStr) return ` for ${startStr}`
-  return ` for ${startStr} - ${endStr}`
-}
-
-function renderTeacherPart(details: Record<string, any>): React.ReactNode {
-  const teacherId = details.teacher_id
-  const teacherName = details.teacher_name || 'Unknown'
-  if (teacherId && teacherName) {
-    return <StaffLink staffId={teacherId} name={teacherName} />
-  }
-  return teacherName
-}
-
-function formatDescription(row: ActivityRow): React.ReactNode {
-  const details = row.details || {}
-
-  if (row.category === 'time_off') {
-    const teacherPart = details.teacher_name
-      ? details.teacher_id
-        ? [' for ', renderTeacherPart(details)]
-        : ` for ${details.teacher_name}`
-      : null
-    const dateRange = formatTimeOffDateRange(details)
-    if (row.action === 'create')
-      return (
-        <>
-          Created time off request{teacherPart}
-          {dateRange}
-        </>
-      )
-    if (row.action === 'cancel') return <>Cancelled time off request{teacherPart}</>
-    if (row.action === 'status_change') {
-      const before = details.before?.status ? `from ${details.before.status} ` : ''
-      const after = details.after?.status ? `to ${details.after.status}` : ''
-      return (
-        <>
-          Updated time off request{teacherPart}
-          {dateRange} {before}
-          {after}
-        </>
-      )
-    }
-    return (
-      <>
-        Updated time off request{teacherPart}
-        {dateRange}
-      </>
-    )
-  }
-
-  if (row.category === 'sub_assignment') {
-    if (details.summary && typeof details.summary === 'string') {
-      return details.summary
-    }
-    const count = Array.isArray(details.assignment_ids) ? details.assignment_ids.length : null
-    const suffix = details.non_sub_override === true ? ' (non-sub override)' : ''
-    return count
-      ? `Assigned sub coverage (${count} shifts)${suffix}`
-      : `Assigned sub coverage${suffix}`
-  }
-
-  if (row.category === 'temporary_coverage') {
-    const teacherPart = renderTeacherPart({
-      ...details,
-      teacher_name: details.teacher_name || 'staff',
-    })
-    if (row.action === 'assign') {
-      const classroom = details.classroom_name
-      return classroom ? (
-        <>
-          Assigned {teacherPart} for temporary coverage to {classroom}
-        </>
-      ) : (
-        <>Assigned {teacherPart} for temporary coverage</>
-      )
-    }
-    if (row.action === 'cancel') {
-      const count = details.removed_count
-      return count ? (
-        <>
-          Removed temporary coverage for {teacherPart} ({count} shift{count !== 1 ? 's' : ''})
-        </>
-      ) : (
-        <>Removed temporary coverage for {teacherPart}</>
-      )
-    }
-  }
-
-  if (row.category === 'coverage') {
-    return 'Updated coverage details'
-  }
-
-  if (row.category === 'baseline_schedule') {
-    if (row.entity_type === 'schedule_cell') {
-      const slotLabel = [details.day_name, details.time_slot_code, details.classroom_name]
-        .filter(Boolean)
-        .join(' ')
-      if (row.action === 'create') {
-        return slotLabel ? `Created ${slotLabel}` : 'Created baseline schedule cell'
-      }
-      if (row.action === 'update') {
-        if (details.bulk && details.summary) return `Updated ${details.summary}`
-        if (details.bulk && details.cell_count) {
-          return `Updated baseline schedule (${details.cell_count} cell${details.cell_count !== 1 ? 's' : ''})`
-        }
-        return slotLabel ? `Updated ${slotLabel}` : 'Updated baseline schedule cell'
-      }
-      if (row.action === 'delete') {
-        return slotLabel ? `Deactivated ${slotLabel}` : 'Deactivated baseline schedule cell'
-      }
-    }
-    if (row.entity_type === 'teacher_schedule') {
-      const teacherPart = renderTeacherPart({
-        ...details,
-        teacher_name: details.teacher_name ?? 'teacher',
-      })
-      const slotLabel = [details.classroom_name, details.day_name, details.time_slot_code]
-        .filter(Boolean)
-        .join(' ')
-      if (row.action === 'assign') {
-        return slotLabel ? (
-          <>
-            Assigned {teacherPart} to {slotLabel} baseline schedule
-          </>
-        ) : (
-          <>Assigned {teacherPart} to baseline schedule</>
-        )
-      }
-      if (row.action === 'unassign') {
-        return slotLabel ? (
-          <>
-            Removed {teacherPart} from {slotLabel} baseline schedule
-          </>
-        ) : (
-          <>Removed {teacherPart} from baseline schedule</>
-        )
-      }
-      if (row.action === 'update') return 'Updated teacher assignment in baseline schedule'
-      if (details.reason?.startsWith('conflict_resolution'))
-        return 'Resolved baseline schedule conflict'
-    }
-  }
-
-  return `${row.action.replace('_', ' ')} ${row.entity_type.replace('_', ' ')}`
 }
 
 function getEntityHref(row: ActivityRow) {
@@ -252,6 +82,7 @@ export function ActivityFeed({
   const [isInitialLoading, setIsInitialLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [timeSlotCodeById, setTimeSlotCodeById] = useState<Record<string, string>>({})
 
   const canLoadMore = Boolean(cursor) && !isLoadingMore
 
@@ -337,6 +168,35 @@ export function ActivityFeed({
     }
   }, [selectedCategory, selectedActor, fetchRows, queryCache])
 
+  useEffect(() => {
+    let isActive = true
+
+    const fetchTimeSlots = async () => {
+      try {
+        const response = await fetch('/api/timeslots')
+        if (!response.ok) return
+        const payload = (await response.json()) as Array<{
+          id?: string | null
+          code?: string | null
+        }>
+        if (!isActive || !Array.isArray(payload)) return
+        const nextMap: Record<string, string> = {}
+        payload.forEach(slot => {
+          if (!slot?.id || !slot?.code) return
+          nextMap[slot.id] = slot.code
+        })
+        setTimeSlotCodeById(nextMap)
+      } catch {
+        // Non-blocking: formatter falls back when timeslot lookup is unavailable.
+      }
+    }
+
+    fetchTimeSlots()
+    return () => {
+      isActive = false
+    }
+  }, [])
+
   const emptyStateLabel = useMemo(() => {
     if (selectedCategory !== 'all' || selectedActor) {
       return 'No activity matches the current filters.'
@@ -417,7 +277,14 @@ export function ActivityFeed({
                       {toRelativeTime(row.created_at)}
                     </time>
                   </div>
-                  <p className="mt-1 text-sm text-slate-700">{formatDescription(row)}</p>
+                  <p className="mt-1 text-sm text-slate-700">
+                    {formatActivityDescription(row, {
+                      renderStaffName: (staffId, name) =>
+                        staffId ? <StaffLink staffId={staffId} name={name} /> : name,
+                      resolveTimeSlotCode: (timeSlotId: string) =>
+                        timeSlotCodeById[timeSlotId] ?? null,
+                    })}
+                  </p>
                   <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
                     <span className="rounded bg-slate-100 px-1.5 py-0.5 uppercase">
                       {row.category}
