@@ -25,7 +25,7 @@ Fix any failures before opening the PR.
 
 ## 3. Open the PR
 
-- [ ] Use the [PR template](../../.github/PULL_REQUEST_TEMPLATE.md): fill in **Risks**, **Checks run** (check the boxes for the commands you ran), **Evidence**, and **Tests** (for non-trivial changes)
+- [ ] Use the [PR template](../../.github/PULL_REQUEST_TEMPLATE.md): fill in **Summary** (key change list), **Risks**, **Checks run** (check the boxes for the commands you ran), **Evidence**, and **Tests** (for non-trivial changes)
 - [ ] Push your branch and open the PR; CI will run lint, type-check, Jest, e2e-smoke, and e2e-gold
 
 ## 4. Database migrations

@@ -1,16 +1,14 @@
 /** @jest-environment node */
 
 const existsSyncMock = jest.fn()
-const readdirSyncMock = jest.fn()
-const executablePathMock = jest.fn()
 const launchMock = jest.fn()
 const homedirMock = jest.fn()
+const chromiumExecutablePathMock = jest.fn()
 
 jest.mock('node:fs', () => ({
   __esModule: true,
   default: {
     existsSync: (...args: unknown[]) => existsSyncMock(...args),
-    readdirSync: (...args: unknown[]) => readdirSyncMock(...args),
   },
 }))
 
@@ -21,10 +19,19 @@ jest.mock('node:os', () => ({
   },
 }))
 
-jest.mock('puppeteer', () => ({
+jest.mock('@sparticuz/chromium', () => ({
   __esModule: true,
   default: {
-    executablePath: () => executablePathMock(),
+    args: ['--foo'],
+    defaultViewport: { width: 1200, height: 800 },
+    headless: 'shell',
+    executablePath: (...args: unknown[]) => chromiumExecutablePathMock(...args),
+  },
+}))
+
+jest.mock('puppeteer-core', () => ({
+  __esModule: true,
+  default: {
     launch: (...args: unknown[]) => launchMock(...args),
   },
 }))
@@ -34,9 +41,8 @@ describe('puppeteer launch helpers', () => {
     jest.resetModules()
     jest.clearAllMocks()
     homedirMock.mockReturnValue('/home/test')
-    executablePathMock.mockReturnValue('/mock/default-chrome')
-    existsSyncMock.mockImplementation((candidate: string) => candidate === '/mock/default-chrome')
-    readdirSyncMock.mockReturnValue([])
+    chromiumExecutablePathMock.mockResolvedValue('/mock/chromium')
+    existsSyncMock.mockImplementation((candidate: string) => candidate === '/mock/chromium')
     delete process.env.PUPPETEER_EXECUTABLE_PATH
   })
 
@@ -45,24 +51,16 @@ describe('puppeteer launch helpers', () => {
     existsSyncMock.mockImplementation((candidate: string) => candidate === '/custom/chrome')
     const { resolvePuppeteerExecutablePath } = await import('@/lib/reports/puppeteer-launch')
 
-    expect(resolvePuppeteerExecutablePath()).toBe('/custom/chrome')
+    await expect(resolvePuppeteerExecutablePath()).resolves.toBe('/custom/chrome')
   })
 
-  it('falls back to cache probing when executablePath is unavailable', async () => {
-    executablePathMock.mockReturnValue('/missing/default')
-    const linuxCandidate = '/home/test/.cache/puppeteer/chrome/linux-127/chrome-linux64/chrome'
-    existsSyncMock.mockImplementation((candidate: string) => {
-      if (candidate === '/home/test/.cache/puppeteer/chrome') return true
-      return candidate === linuxCandidate
-    })
-    readdirSyncMock.mockReturnValue([{ isDirectory: () => true, name: 'linux-127' }])
-
+  it('falls back to @sparticuz/chromium executable path', async () => {
     const { resolvePuppeteerExecutablePath } = await import('@/lib/reports/puppeteer-launch')
 
-    expect(resolvePuppeteerExecutablePath()).toBe(linuxCandidate)
+    await expect(resolvePuppeteerExecutablePath()).resolves.toBe('/mock/chromium')
   })
 
-  it('launchPdfBrowser passes executablePath and sandbox args', async () => {
+  it('launchPdfBrowser passes executablePath and chromium launch options', async () => {
     launchMock.mockResolvedValue({ ok: true })
     const { launchPdfBrowser } = await import('@/lib/reports/puppeteer-launch')
 
@@ -70,9 +68,21 @@ describe('puppeteer launch helpers', () => {
 
     expect(launchMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        executablePath: '/mock/default-chrome',
-        args: expect.arrayContaining(['--no-sandbox', '--disable-setuid-sandbox']),
+        executablePath: '/mock/chromium',
+        args: expect.arrayContaining(['--foo', '--no-sandbox', '--disable-setuid-sandbox']),
+        defaultViewport: { width: 1200, height: 800 },
+        headless: 'shell',
       })
+    )
+  })
+
+  it('throws when no executable path can be resolved', async () => {
+    chromiumExecutablePathMock.mockResolvedValue(null)
+    existsSyncMock.mockReturnValue(false)
+    const { launchPdfBrowser } = await import('@/lib/reports/puppeteer-launch')
+
+    await expect(launchPdfBrowser()).rejects.toThrow(
+      'Unable to resolve Chromium executable path for PDF generation.'
     )
   })
 })
