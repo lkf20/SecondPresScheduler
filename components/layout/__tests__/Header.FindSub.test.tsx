@@ -16,6 +16,7 @@ import Header from '@/components/layout/Header'
 
 const mockPush = jest.fn()
 const mockRefresh = jest.fn()
+const mockQueryClientClear = jest.fn()
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -25,6 +26,12 @@ jest.mock('next/navigation', () => ({
   }),
   usePathname: () => '/dashboard',
   useSearchParams: () => new URLSearchParams(),
+}))
+
+jest.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({
+    clear: mockQueryClientClear,
+  }),
 }))
 
 jest.mock('@/lib/supabase/client', () => ({
