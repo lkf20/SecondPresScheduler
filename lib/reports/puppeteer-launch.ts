@@ -1,111 +1,35 @@
 import fs from 'node:fs'
 import os from 'node:os'
-import path from 'node:path'
-import puppeteer from 'puppeteer'
+import chromium from '@sparticuz/chromium'
+import puppeteer from 'puppeteer-core'
 
-const PUPPETEER_ARGS = ['--no-sandbox', '--disable-setuid-sandbox']
+const EXTRA_PUPPETEER_ARGS = ['--no-sandbox', '--disable-setuid-sandbox']
 
-const listVersionDirs = (cacheBase: string) => {
-  try {
-    if (!fs.existsSync(cacheBase)) return []
-    return fs
-      .readdirSync(cacheBase, { withFileTypes: true })
-      .filter(entry => entry.isDirectory())
-      .map(entry => entry.name)
-      .sort()
-      .reverse()
-  } catch {
-    return []
-  }
+const getLaunchArgs = () => {
+  const args = [...chromium.args, ...EXTRA_PUPPETEER_ARGS]
+  return Array.from(new Set(args))
 }
 
-const candidatesForVersion = (cacheBase: string, versionDir: string) => [
-  // Linux (Vercel/serverless)
-  path.join(cacheBase, versionDir, 'chrome-linux64', 'chrome'),
-  path.join(cacheBase, versionDir, 'chrome-linux', 'chrome'),
-  path.join(cacheBase, versionDir, 'chrome-headless-shell-linux64', 'chrome-headless-shell'),
-  // macOS
-  path.join(
-    cacheBase,
-    versionDir,
-    'chrome-mac-arm64',
-    'Google Chrome for Testing.app',
-    'Contents',
-    'MacOS',
-    'Google Chrome for Testing'
-  ),
-  path.join(
-    cacheBase,
-    versionDir,
-    'chrome-mac-x64',
-    'Google Chrome for Testing.app',
-    'Contents',
-    'MacOS',
-    'Google Chrome for Testing'
-  ),
-]
+const envExecutablePath = () => process.env.PUPPETEER_EXECUTABLE_PATH || null
 
-const getCandidateExecutablePaths = () => {
-  const envPath = process.env.PUPPETEER_EXECUTABLE_PATH
-  const cacheRoots = [
-    path.join(process.cwd(), '.cache', 'puppeteer', 'chrome'),
-    path.join(os.homedir(), '.cache', 'puppeteer', 'chrome'),
-  ]
-
-  const candidatePaths: string[] = []
-  if (envPath) candidatePaths.push(envPath)
-
-  for (const cacheBase of cacheRoots) {
-    const versions = listVersionDirs(cacheBase)
-    for (const versionDir of versions) {
-      candidatePaths.push(...candidatesForVersion(cacheBase, versionDir))
-    }
+export const resolvePuppeteerExecutablePath = async () => {
+  const fromEnv = envExecutablePath()
+  if (fromEnv && fs.existsSync(fromEnv)) {
+    return fromEnv
   }
 
-  return {
-    envPath,
-    cacheRoots,
-    candidatePaths,
-  }
-}
-
-export const resolvePuppeteerExecutablePath = () => {
-  const { envPath, cacheRoots } = getCandidateExecutablePaths()
-  if (envPath && fs.existsSync(envPath)) return envPath
-
-  // Puppeteer-resolved path (works when browser is installed and traced correctly).
-  try {
-    const defaultPath = puppeteer.executablePath()
-    if (defaultPath && fs.existsSync(defaultPath)) return defaultPath
-  } catch {
-    // Continue to manual cache probing below.
-  }
-
-  for (const cacheBase of cacheRoots) {
-    const versions = listVersionDirs(cacheBase)
-    for (const versionDir of versions) {
-      const match = candidatesForVersion(cacheBase, versionDir).find(candidate =>
-        fs.existsSync(candidate)
-      )
-      if (match) return match
-    }
+  const fromChromium = await chromium.executablePath()
+  if (fromChromium && fs.existsSync(fromChromium)) {
+    return fromChromium
   }
 
   return undefined
 }
 
-export const getPuppeteerLaunchDiagnostics = () => {
-  const { envPath, cacheRoots, candidatePaths } = getCandidateExecutablePaths()
-
-  let defaultExecutablePath: string | null = null
-  let defaultExecutablePathError: string | null = null
-  try {
-    defaultExecutablePath = puppeteer.executablePath()
-  } catch (error) {
-    defaultExecutablePathError = error instanceof Error ? error.message : String(error)
-  }
-
-  const resolvedExecutablePath = resolvePuppeteerExecutablePath()
+export const getPuppeteerLaunchDiagnostics = async () => {
+  const configuredExecutablePath = envExecutablePath()
+  const chromiumExecutablePath = await chromium.executablePath()
+  const resolvedExecutablePath = await resolvePuppeteerExecutablePath()
 
   return {
     runtime: {
@@ -118,37 +42,37 @@ export const getPuppeteerLaunchDiagnostics = () => {
     env: {
       vercel: process.env.VERCEL === '1',
       nodeEnv: process.env.NODE_ENV || null,
-      puppeteerExecutablePath: envPath || null,
-      puppeteerSkipDownload: process.env.PUPPETEER_SKIP_DOWNLOAD || null,
-      npmConfigIgnoreScripts: process.env.NPM_CONFIG_IGNORE_SCRIPTS || null,
+      puppeteerExecutablePath: configuredExecutablePath,
+      chromiumPath: process.env.CHROMIUM_PATH || null,
     },
     puppeteer: {
-      defaultExecutablePath,
-      defaultExecutablePathExists: defaultExecutablePath
-        ? fs.existsSync(defaultExecutablePath)
+      configuredExecutablePath,
+      configuredExecutablePathExists: configuredExecutablePath
+        ? fs.existsSync(configuredExecutablePath)
         : false,
-      defaultExecutablePathError,
+      chromiumExecutablePath: chromiumExecutablePath || null,
+      chromiumExecutablePathExists: chromiumExecutablePath
+        ? fs.existsSync(chromiumExecutablePath)
+        : false,
       resolvedExecutablePath: resolvedExecutablePath || null,
       resolvedExecutablePathExists: resolvedExecutablePath
         ? fs.existsSync(resolvedExecutablePath)
         : false,
+      launchArgCount: getLaunchArgs().length,
     },
-    cacheRoots: cacheRoots.map(cacheBase => ({
-      path: cacheBase,
-      exists: fs.existsSync(cacheBase),
-      versions: listVersionDirs(cacheBase),
-    })),
-    candidates: candidatePaths.slice(0, 200).map(candidate => ({
-      path: candidate,
-      exists: fs.existsSync(candidate),
-    })),
   }
 }
 
-export const launchPdfBrowser = () => {
-  const executablePath = resolvePuppeteerExecutablePath()
+export const launchPdfBrowser = async () => {
+  const executablePath = await resolvePuppeteerExecutablePath()
+  if (!executablePath) {
+    throw new Error('Unable to resolve Chromium executable path for PDF generation.')
+  }
+
   return puppeteer.launch({
-    args: PUPPETEER_ARGS,
     executablePath,
+    args: getLaunchArgs(),
+    defaultViewport: chromium.defaultViewport,
+    headless: 'shell',
   })
 }

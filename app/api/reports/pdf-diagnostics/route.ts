@@ -20,7 +20,7 @@ export async function GET() {
 
     return NextResponse.json({
       checked_at: new Date().toISOString(),
-      diagnostics: getPuppeteerLaunchDiagnostics(),
+      diagnostics: await getPuppeteerLaunchDiagnostics(),
     })
   } catch (error: any) {
     return NextResponse.json(
