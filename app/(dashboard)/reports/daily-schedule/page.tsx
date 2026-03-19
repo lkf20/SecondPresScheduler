@@ -111,27 +111,9 @@ const formatGeneratedAt = (date: Date) =>
     hour12: true,
   }).format(date)
 
-const formatSlotTime = (value: string) => {
-  const [rawHour, rawMinute] = value.split(':')
-  const hour = Number(rawHour)
-  const minute = Number(rawMinute)
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return value
-  const displayHour = hour % 12 === 0 ? 12 : hour % 12
-  return minute === 0 ? `${displayHour}` : `${displayHour}:${String(minute).padStart(2, '0')}`
-}
-
-const formatSlotRange = (start: string | null, end: string | null) => {
-  if (!start || !end) return null
-  const [startHour] = start.split(':')
-  const [endHour] = end.split(':')
-  const startHourNum = Number(startHour)
-  const endHourNum = Number(endHour)
-  if (!Number.isFinite(startHourNum) || !Number.isFinite(endHourNum)) {
-    return `${start} - ${end}`
-  }
-  const startSuffix = startHourNum >= 12 ? 'pm' : 'am'
-  const endSuffix = endHourNum >= 12 ? 'pm' : 'am'
-  return `${formatSlotTime(start)} ${startSuffix}\n${formatSlotTime(end)} ${endSuffix}`
+const getSlotCodeCharacters = (code: string | null | undefined) => {
+  const normalized = (code ?? '').replace(/\s+/g, '')
+  return normalized ? normalized.split('') : ['-']
 }
 
 const buildPdfUrl = ({
@@ -338,6 +320,8 @@ export default function DailyScheduleReportPage() {
   const displayShowAbsencesAndSubs = showAbsencesAndSubs
   const displayColorFriendly = colorFriendly
   const displayCondensedLayout = false
+  const gridBorderColor = '#64748b'
+  const firstColumnWidthPx = displayCondensedLayout ? 30 : 34
 
   return (
     <div className="space-y-6">
@@ -761,10 +745,19 @@ export default function DailyScheduleReportPage() {
 
           {!isLoading && !error && !noSchedule && (
             <div className="space-y-3">
-              <div className="overflow-auto border rounded-md print:border-none print:overflow-visible">
+              <div
+                className="overflow-auto rounded-md border border-slate-500 print:border-none print:overflow-visible"
+                style={{ borderColor: gridBorderColor }}
+              >
                 <table className="w-full table-fixed border-collapse">
                   <colgroup>
-                    <col className={displayCondensedLayout ? 'w-[70px]' : 'w-[80px]'} />
+                    <col
+                      style={{
+                        width: `${firstColumnWidthPx}px`,
+                        minWidth: `${firstColumnWidthPx}px`,
+                        maxWidth: `${firstColumnWidthPx}px`,
+                      }}
+                    />
                     {scheduleData.map(classroom => (
                       <col key={classroom.classroom_id} />
                     ))}
@@ -773,11 +766,17 @@ export default function DailyScheduleReportPage() {
                     <tr>
                       <th
                         className={cn(
-                          'border bg-slate-50 px-3 py-2 text-left text-[12px] font-medium text-slate-700 print:bg-slate-50',
+                          'border border-slate-500 bg-slate-50 px-2 py-2 text-center text-[12px] font-medium text-slate-700 print:bg-slate-50',
                           displayCondensedLayout && 'px-2 py-1'
                         )}
+                        style={{
+                          borderColor: gridBorderColor,
+                          width: `${firstColumnWidthPx}px`,
+                          minWidth: `${firstColumnWidthPx}px`,
+                          maxWidth: `${firstColumnWidthPx}px`,
+                        }}
                       >
-                        Time
+                        <span aria-hidden="true">&nbsp;</span>
                       </th>
                       {scheduleData.map(classroom => {
                         const split = splitClassroomName(classroom.classroom_name)
@@ -785,13 +784,13 @@ export default function DailyScheduleReportPage() {
                           <th
                             key={classroom.classroom_id}
                             className={cn(
-                              'border px-3 py-2 text-center text-[9px] font-semibold tracking-[0.04em] uppercase text-slate-700 bg-white print:bg-white border-b-2 border-b-slate-400',
+                              'border border-slate-500 px-3 py-2 text-center text-[9px] font-semibold tracking-[0.04em] uppercase text-slate-700 bg-white print:bg-white border-b-2 border-b-slate-500',
                               displayCondensedLayout && 'px-2 py-1'
                             )}
                             style={
                               displayColorFriendly && classroom.classroom_color
-                                ? { color: classroom.classroom_color }
-                                : undefined
+                                ? { color: classroom.classroom_color, borderColor: gridBorderColor }
+                                : { borderColor: gridBorderColor }
                             }
                           >
                             <div className="flex flex-col items-center leading-tight text-center">
@@ -815,26 +814,35 @@ export default function DailyScheduleReportPage() {
                         <tr key={slot.id} className="align-top">
                           <td
                             className={cn(
-                              'border bg-slate-50 px-3 py-2 align-middle text-xs font-medium text-slate-600',
+                              'border border-slate-500 bg-slate-50 px-1 py-2 align-middle text-xs font-medium text-slate-600',
                               displayCondensedLayout && 'px-2 py-1'
                             )}
+                            style={{
+                              borderColor: gridBorderColor,
+                              width: `${firstColumnWidthPx}px`,
+                              minWidth: `${firstColumnWidthPx}px`,
+                              maxWidth: `${firstColumnWidthPx}px`,
+                            }}
                           >
-                            <div className="flex flex-col gap-1">
-                              <div className="text-sm text-slate-800">{slot.code}</div>
-                              {slot.start_time && slot.end_time && (
-                                <div className="text-[11px] font-medium text-slate-400 whitespace-pre-line">
-                                  {formatSlotRange(slot.start_time, slot.end_time)}
+                            <div className="flex flex-col items-center justify-center gap-0 leading-none">
+                              {getSlotCodeCharacters(slot.code).map((char, idx) => (
+                                <div
+                                  key={`${slot.id}-code-char-${idx}`}
+                                  className="text-[13px] font-semibold uppercase text-slate-700"
+                                >
+                                  {char}
                                 </div>
-                              )}
+                              ))}
                             </div>
                           </td>
                           {isSlotClosed ? (
                             <td
                               colSpan={Math.max(scheduleData.length, 1)}
                               className={cn(
-                                'border bg-slate-100 px-3 py-2 align-middle text-center text-sm font-medium text-slate-500',
+                                'border border-slate-500 bg-slate-100 px-3 py-2 align-middle text-center text-sm font-medium text-slate-500',
                                 displayCondensedLayout && 'px-2 py-1'
                               )}
+                              style={{ borderColor: gridBorderColor }}
                             >
                               <div className="flex flex-col items-center justify-center">
                                 <span>School Closed</span>
@@ -1127,9 +1135,10 @@ export default function DailyScheduleReportPage() {
                                 <td
                                   key={classroom.classroom_id}
                                   className={cn(
-                                    'border px-2.5 py-2',
+                                    'border border-slate-500 px-2.5 py-2',
                                     displayCondensedLayout && 'px-2 py-1'
                                   )}
+                                  style={{ borderColor: gridBorderColor }}
                                 >
                                   <div
                                     className={cn(
@@ -1158,7 +1167,10 @@ export default function DailyScheduleReportPage() {
                                       </ul>
                                     )}
                                     {slotNotes ? (
-                                      <div className="mt-2 border-t border-slate-200 pt-1 text-[11px] leading-4 text-slate-600">
+                                      <div
+                                        className="mt-2 border-t border-slate-500 pt-1 text-[11px] leading-4 text-slate-600"
+                                        style={{ borderColor: gridBorderColor }}
+                                      >
                                         {slotNotes}
                                       </div>
                                     ) : null}
