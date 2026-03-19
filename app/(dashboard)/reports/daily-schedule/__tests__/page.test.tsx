@@ -134,6 +134,22 @@ describe("Today's Schedule report page", () => {
     })
   })
 
+  it('uses darker slate borders and stacked slot codes in the first column', async () => {
+    render(<DailyScheduleReportPage />)
+
+    const table = await screen.findByRole('table')
+    const headers = screen.getAllByRole('columnheader')
+    const firstHeader = headers[0]
+
+    expect(table).toBeInTheDocument()
+    expect(firstHeader.className).toContain('border-slate-500')
+    expect(firstHeader).toHaveStyle({ borderColor: '#64748b' })
+    expect(screen.queryByText(/^Time$/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/9 am/i)).not.toBeInTheDocument()
+    expect(screen.getByText('A')).toBeInTheDocument()
+    expect(screen.getByText('M')).toBeInTheDocument()
+  })
+
   it('renders closure reason when a slot is closed', async () => {
     ;(useDailySchedule as jest.Mock).mockReturnValue({
       data: {

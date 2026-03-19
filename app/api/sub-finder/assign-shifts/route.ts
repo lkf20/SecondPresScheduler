@@ -96,11 +96,13 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('partial_assignments must be an array', 400)
     }
 
-    const uniqueSelectedShiftIds = Array.from(
-      new Set(
-        selected_shift_ids.filter((value: unknown): value is string => typeof value === 'string')
-      )
+    const selectedShiftIds = selected_shift_ids.filter(
+      (value: unknown): value is string => typeof value === 'string'
     )
+    if (selectedShiftIds.length !== selected_shift_ids.length) {
+      return createErrorResponse('selected_shift_ids must contain only string values', 400)
+    }
+    const uniqueSelectedShiftIds = Array.from(new Set(selectedShiftIds))
 
     // Build map: shift_id -> { partial_start_time, partial_end_time }
     const partialAssignmentsMap = new Map<
@@ -156,9 +158,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Duplicate check on selected_shift_ids
-    if (uniqueSelectedShiftIds.length !== selected_shift_ids.length) {
-      return createErrorResponse('selected_shift_ids contains duplicate values', 400)
+    // Defensive dedupe: some UI paths can transiently produce duplicate IDs.
+    if (uniqueSelectedShiftIds.length !== selectedShiftIds.length) {
+      logAssignShiftsError('Deduped duplicate selected_shift_ids in assign-shifts', {
+        coverage_request_id,
+        sub_id,
+        selected_shift_ids: selectedShiftIds,
+        unique_selected_shift_ids: uniqueSelectedShiftIds,
+      })
     }
 
     const supabase = await createClient()

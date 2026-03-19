@@ -37,27 +37,9 @@ const formatISO = (date: Date) => {
   return `${year}-${month}-${day}`
 }
 
-const formatSlotTime = (value: string) => {
-  const [rawHour, rawMinute] = value.split(':')
-  const hour = Number(rawHour)
-  const minute = Number(rawMinute)
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return value
-  const displayHour = hour % 12 === 0 ? 12 : hour % 12
-  return minute === 0 ? `${displayHour}` : `${displayHour}:${String(minute).padStart(2, '0')}`
-}
-
-const formatSlotRange = (start: string | null, end: string | null) => {
-  if (!start || !end) return ''
-  const [startHour] = start.split(':')
-  const [endHour] = end.split(':')
-  const startHourNum = Number(startHour)
-  const endHourNum = Number(endHour)
-  if (!Number.isFinite(startHourNum) || !Number.isFinite(endHourNum)) {
-    return `${start} - ${end}`
-  }
-  const startSuffix = startHourNum >= 12 ? 'pm' : 'am'
-  const endSuffix = endHourNum >= 12 ? 'pm' : 'am'
-  return `${formatSlotTime(start)} ${startSuffix}<br>${formatSlotTime(end)} ${endSuffix}`
+const getSlotCodeCharacters = (code: string | null | undefined) => {
+  const normalized = (code ?? '').replace(/\s+/g, '')
+  return normalized ? normalized.split('') : ['-']
 }
 
 const splitClassroomName = (name: string) => {
@@ -175,10 +157,10 @@ export function buildDailySchedulePdfHtml({
     tempCoverage: options.colorFriendly ? '#BE185D' : '#334155',
     sub: options.colorFriendly ? '#0F766E' : '#334155',
     absent: '#94A3B8',
-    grid: '#E2E8F0',
+    grid: '#64748B',
     header: '#0F172A',
   }
-  const timeColWidth = 72
+  const timeColWidth = 30
   const fontSize = 11
   const topHeaderRichHtml = sanitizeRichTextHtml(options.topHeaderHtml || '', 2000)
   const footerNotesRichHtml = sanitizeRichTextHtml(options.footerNotesHtml || '', 4000)
@@ -190,7 +172,7 @@ export function buildDailySchedulePdfHtml({
         const textColor =
           options.colorFriendly && classroom.classroom_color ? classroom.classroom_color : '#334155'
         return `
-          <th style="border:1px solid ${color.grid}; border-bottom:2px solid #94A3B8; padding:6px; text-align:center; font-size:8px; font-weight:600; color:${textColor}; text-transform: uppercase; letter-spacing: 0.4px;">
+          <th style="border:1px solid ${color.grid}; border-bottom:2px solid ${color.grid}; padding:6px; text-align:center; font-size:8px; font-weight:600; color:${textColor}; text-transform: uppercase; letter-spacing: 0.4px;">
             <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%; line-height:1.2; text-align:center;">
               <div>${escapeHtml(split.line1)}</div>
               ${split.line2 ? `<div>${escapeHtml(split.line2)}</div>` : ''}
@@ -202,13 +184,13 @@ export function buildDailySchedulePdfHtml({
   const buildRows = (classrooms: WeeklyScheduleDataByClassroom[]) =>
     timeSlots
       .map(slot => {
+        const slotCodeHtml = getSlotCodeCharacters(slot.code)
+          .map(char => `<div>${escapeHtml(char)}</div>`)
+          .join('')
         const timeCell = `
-        <td style="border:1px solid ${color.grid}; background:#F8FAFC; padding:6px; vertical-align:middle; font-size:12px; font-weight:500; color:#475569;">
-          <div style="display:flex; flex-direction:column; gap:4px;">
-            <div style="font-size:12px; color:${color.header};">${escapeHtml(slot.code)}</div>
-            <div style="font-size:11px; font-weight:500; color:#94A3B8; line-height:1.2;">
-              ${formatSlotRange(slot.start_time, slot.end_time)}
-            </div>
+        <td style="border:1px solid ${color.grid}; background:#F8FAFC; padding:2px 0; vertical-align:middle; font-size:12px; font-weight:500; color:#475569;">
+          <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; line-height:1.0; font-size:13px; font-weight:600; color:#334155;">
+            ${slotCodeHtml}
           </div>
         </td>`
 
@@ -482,7 +464,7 @@ export function buildDailySchedulePdfHtml({
       </colgroup>
       <thead>
         <tr>
-          <th style="border:1px solid ${color.grid}; background:#F8FAFC; padding:6px; text-align:left; font-size:12px; font-weight:600; color:#334155;">Time</th>
+          <th style="border:1px solid ${color.grid}; background:#F8FAFC; padding:2px 0; text-align:center; font-size:12px; font-weight:600; color:#334155;">&nbsp;</th>
           ${buildTableHeaders(classrooms)}
         </tr>
       </thead>

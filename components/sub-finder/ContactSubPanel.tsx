@@ -968,7 +968,7 @@ export default function ContactSubPanel({
       }
 
       const resolvedOverrides = await resolveShiftOverrides()
-      const selectedShiftIds = resolvedOverrides.selected_shift_ids
+      const selectedShiftIds = Array.from(new Set(resolvedOverrides.selected_shift_ids))
 
       // Map coverage_request_shift_id → shift_key from overrides response
       const shiftIdToKeyMap = new Map<string, string>(
