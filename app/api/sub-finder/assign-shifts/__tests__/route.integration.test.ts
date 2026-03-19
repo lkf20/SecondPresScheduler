@@ -1621,7 +1621,68 @@ describe('POST /api/sub-finder/assign-shifts integration', () => {
     expect(json.error).toMatch(/cannot combine partial and floater/i)
   })
 
-  it('returns 400 when selected_shift_ids contains duplicates', async () => {
+  it('dedupes selected_shift_ids when duplicates are provided', async () => {
+    const coverageRequestsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({
+        data: {
+          teacher_id: 'teacher-1',
+          source_request_id: 'timeoff-1',
+          request_type: 'absence',
+          school_id: 'school-1',
+        },
+        error: null,
+      }),
+    }
+    const coverageRequestShiftsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      in: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'shift-1',
+            date: '2099-02-10',
+            day_of_week_id: 'day-1',
+            time_slot_id: 'slot-1',
+            classroom_id: 'class-1',
+          },
+        ],
+        error: null,
+      }),
+    }
+    const subAssignmentsQuery = createSubAssignmentsQuery()
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'coverage_requests') return coverageRequestsQuery
+        if (table === 'coverage_request_shifts') return coverageRequestShiftsQuery
+        if (table === 'sub_assignments') return subAssignmentsQuery
+        if (table === 'staff') return createStaffQuery()
+        if (table === 'substitute_contacts') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            single: jest.fn().mockResolvedValue({ data: { id: 'contact-1' }, error: null }),
+          }
+        }
+        if (table === 'sub_contact_shift_overrides') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            in: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockResolvedValue({ data: [], error: null }),
+          }
+        }
+        if (table === 'teacher_schedules') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockResolvedValue({ data: [], error: null }),
+          }
+        }
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
     const request = createJsonRequest(
       'http://localhost:3000/api/sub-finder/assign-shifts',
       'POST',
@@ -1632,8 +1693,9 @@ describe('POST /api/sub-finder/assign-shifts integration', () => {
       }
     )
     const response = await POST(request as any)
-    expect(response.status).toBe(400)
+    expect(response.status).toBe(200)
     const json = await response.json()
-    expect(json.error).toMatch(/duplicate/i)
+    expect(json.success).toBe(true)
+    expect(json.assignments_created).toBe(1)
   })
 })

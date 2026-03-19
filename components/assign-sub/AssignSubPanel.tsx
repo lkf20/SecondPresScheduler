@@ -837,7 +837,7 @@ export default function AssignSubPanel({
         for (const s of shiftsInGroup) {
           const keyWithClass = `${s.date}|${s.time_slot_code ?? ''}|${s.classroom_id ?? ''}`
           const keySimple = `${s.date}|${s.time_slot_code ?? ''}`
-          const id = shiftMap[keyWithClass] ?? shiftMap[keySimple]
+          const id = s.coverage_request_shift_id ?? shiftMap[keyWithClass] ?? shiftMap[keySimple]
           if (id) {
             const slotKey = `${s.date}|${s.time_slot_id}`
             const group = shiftGroups.find(g => g.slotKey === slotKey)
@@ -885,10 +885,12 @@ export default function AssignSubPanel({
           }
         }
 
-        const coverageRequestShiftIds = [
-          ...fullCoverageRequestShiftIds,
-          ...partialAssignmentsForRequest.map(p => p.shift_id),
-        ]
+        const coverageRequestShiftIds = Array.from(
+          new Set([
+            ...fullCoverageRequestShiftIds,
+            ...partialAssignmentsForRequest.map(p => p.shift_id),
+          ])
+        )
         if (coverageRequestShiftIds.length === 0 && reassignmentsForRequest.length === 0) continue
 
         if (subId && coverageRequestId && !selectedSubIsNonSub) {
@@ -1072,7 +1074,7 @@ export default function AssignSubPanel({
         s.coverage_request_shift_id ??
         shiftMap[`${s.date}|${s.time_slot_code ?? ''}|${s.classroom_id ?? ''}`] ??
         shiftMap[`${s.date}|${s.time_slot_code ?? ''}`]
-      if (id) coverageRequestShiftIds.push(id)
+      if (id && !coverageRequestShiftIds.includes(id)) coverageRequestShiftIds.push(id)
     }
     if (coverageRequestShiftIds.length === 0) {
       toast.error('Could not resolve shifts to update.')
