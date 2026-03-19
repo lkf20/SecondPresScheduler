@@ -5,10 +5,12 @@ import StaffFormClient from '@/components/staff/StaffFormClient'
 
 const pushMock = jest.fn()
 const refreshMock = jest.fn()
+const backMock = jest.fn()
+let mockSearchParams = new URLSearchParams()
 
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: pushMock, refresh: refreshMock }),
-  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: pushMock, refresh: refreshMock, back: backMock }),
+  useSearchParams: () => mockSearchParams,
 }))
 
 jest.mock('@tanstack/react-query', () => ({
@@ -85,6 +87,7 @@ const originalFetch = global.fetch
 describe('StaffFormClient', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockSearchParams = new URLSearchParams()
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
       if (url.includes('/api/staff-role-types')) {
@@ -352,5 +355,37 @@ describe('StaffFormClient', () => {
         'preferences'
       )
     })
+  })
+
+  it('shows Staff Settings back button and routes to /staff when coming from staff settings', async () => {
+    const user = userEvent.setup()
+    mockSearchParams = new URLSearchParams('from=staff-settings&tab=preferences')
+
+    render(
+      <StaffFormClient
+        staff={
+          {
+            id: 'staff-1',
+            first_name: 'Amy',
+            last_name: 'P',
+            active: true,
+            is_sub: false,
+            school_id: 'school-1',
+            role_type_ids: [],
+            role_type_codes: [],
+          } as any
+        }
+      />
+    )
+
+    await waitFor(() => {
+      expect((global.fetch as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(3)
+    })
+
+    const backButton = screen.getByRole('button', { name: 'Back to Staff Settings' })
+    await user.click(backButton)
+
+    expect(pushMock).toHaveBeenCalledWith('/staff')
+    expect(backMock).not.toHaveBeenCalled()
   })
 })

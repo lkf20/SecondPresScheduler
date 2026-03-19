@@ -730,7 +730,12 @@ export default function StaffPageClient({
           cellClassName="text-base"
           initialSortKey="full_name"
           initialSortDirection="asc"
-          onRowClick={row => router.push(`/staff/${row.id as string}?${searchParams.toString()}`)}
+          onRowClick={row => {
+            const params = new URLSearchParams(searchParams.toString())
+            params.set('from', 'staff-settings')
+            const queryString = params.toString()
+            router.push(`/staff/${row.id as string}${queryString ? `?${queryString}` : ''}`)
+          }}
         />
       </div>
     </div>
