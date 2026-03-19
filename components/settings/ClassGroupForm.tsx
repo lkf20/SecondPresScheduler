@@ -22,6 +22,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 import { useUnsavedNavigationGuard } from '@/lib/hooks/use-unsaved-navigation-guard'
 import { invalidateSchedulingSurfaces } from '@/lib/utils/invalidation'
+import { validateOptionalRatio, validateRequiredRatio } from '@/lib/validations/class-group-ratios'
 
 type ClassGroup = Database['public']['Tables']['class_groups']['Row']
 
@@ -38,14 +39,45 @@ const nullableNumberSchema = (min?: number, max?: number) =>
     })
     .optional()
 
+const requiredRatioSchema = z
+  .union([z.string(), z.number(), z.null(), z.undefined()])
+  .transform((value, ctx): number => {
+    try {
+      return validateRequiredRatio(value)
+    } catch (error) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          error instanceof Error ? error.message : 'Required ratio must be a valid number',
+      })
+      return z.NEVER
+    }
+  })
+
+const preferredRatioSchema = z
+  .union([z.string(), z.number(), z.null(), z.undefined()])
+  .transform((value, ctx): number | undefined => {
+    try {
+      const parsed = validateOptionalRatio(value, { allowNull: true })
+      return parsed === null ? undefined : parsed
+    } catch (error) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          error instanceof Error ? error.message : 'Preferred ratio must be a valid number',
+      })
+      return z.NEVER
+    }
+  })
+
 const classSchema = z.object({
   name: z.string().min(1, 'Class group name is required'),
   notes: z.string().optional(),
   age_unit: z.enum(['months', 'years']).default('years'),
   min_age: nullableNumberSchema(0, 18),
   max_age: nullableNumberSchema(0, 18),
-  required_ratio: z.number().int().min(1, 'Required ratio must be at least 1'),
-  preferred_ratio: nullableNumberSchema(1),
+  required_ratio: requiredRatioSchema,
+  preferred_ratio: preferredRatioSchema.optional(),
   diaper_changing_required: z.boolean().optional(),
   lifting_children_required: z.boolean().optional(),
   toileting_assistance_required: z.boolean().optional(),
@@ -381,6 +413,7 @@ export default function ClassGroupForm({
                 <Input
                   type="number"
                   min="1"
+                  step="0.1"
                   {...register('required_ratio', { valueAsNumber: true })}
                   placeholder="e.g., 8"
                 />
@@ -393,6 +426,7 @@ export default function ClassGroupForm({
                 <Input
                   type="number"
                   min="1"
+                  step="0.1"
                   {...register('preferred_ratio')}
                   placeholder="Optional"
                 />

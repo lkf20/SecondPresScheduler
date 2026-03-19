@@ -75,6 +75,45 @@ describe('class groups id route integration', () => {
     expect(json.name).toBe('Updated Group')
   })
 
+  it('PUT accepts decimal ratios and normalizes preferred null', async () => {
+    ;(updateClassGroup as jest.Mock).mockResolvedValue({ id: 'cg-1', name: 'Updated Group' })
+
+    const response = await PUT(
+      new Request('http://localhost/api/class-groups/cg-1', {
+        method: 'PUT',
+        body: JSON.stringify({ required_ratio: '3.3', preferred_ratio: null }),
+      }) as any,
+      {
+        params: Promise.resolve({ id: 'cg-1' }),
+      }
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(updateClassGroup).toHaveBeenCalledWith('cg-1', {
+      required_ratio: 3.3,
+      preferred_ratio: null,
+    })
+    expect(json.id).toBe('cg-1')
+  })
+
+  it('PUT rejects required_ratio with more than one decimal place', async () => {
+    const response = await PUT(
+      new Request('http://localhost/api/class-groups/cg-1', {
+        method: 'PUT',
+        body: JSON.stringify({ required_ratio: 3.33 }),
+      }) as any,
+      {
+        params: Promise.resolve({ id: 'cg-1' }),
+      }
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(json.error).toMatch(/at most one decimal place/i)
+    expect(updateClassGroup).not.toHaveBeenCalled()
+  })
+
   it('DELETE removes class group by id', async () => {
     ;(deleteClassGroup as jest.Mock).mockResolvedValue(undefined)
 

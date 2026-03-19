@@ -42,3 +42,21 @@ export const resolveConflictSchema = z.object({
     .uuid({ message: 'conflicting_schedule_id must be a valid UUID' })
     .optional(),
 })
+
+export const bulkApplyTeacherSchedulesSchema = z.object({
+  target_cells: z
+    .array(
+      z.object({
+        classroom_id: z.string().uuid({ message: 'classroom_id must be a valid UUID' }),
+        day_of_week_id: z.string().uuid({ message: 'day_of_week_id must be a valid UUID' }),
+        time_slot_id: z.string().uuid({ message: 'time_slot_id must be a valid UUID' }),
+      })
+    )
+    .min(1, { message: 'At least one target cell is required' }),
+  teachers: z.array(
+    z.object({
+      teacher_id: z.string().uuid({ message: 'teacher_id must be a valid UUID' }),
+      is_floater: z.boolean().optional().default(false),
+    })
+  ),
+})

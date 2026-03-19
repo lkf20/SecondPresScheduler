@@ -1,6 +1,7 @@
 import {
   getEffectiveClassroomIds,
   getEffectiveTimeSlotIds,
+  getClearedScheduleFilters,
   isStaffingNarrowing,
   type ScheduleFilterInput,
   type ItemWithActive,
@@ -168,6 +169,43 @@ describe('schedule-filter-helpers', () => {
           slotFilterMode: 'select',
         })
       ).toBe(false)
+    })
+  })
+
+  describe('getClearedScheduleFilters', () => {
+    it('resets display filters with viewNotes enabled by default', () => {
+      const cleared = getClearedScheduleFilters(
+        {
+          selectedDayIds: ['day-mon'],
+          selectedTimeSlotIds: ['slot-1'],
+          selectedClassroomIds: ['class-1'],
+          slotFilterMode: 'select',
+          showInactiveClassrooms: true,
+          showInactiveTimeSlots: true,
+          displayFilters: {
+            belowRequired: false,
+            belowPreferred: false,
+            fullyStaffed: false,
+            inactive: false,
+            viewNotes: false,
+          },
+          displayMode: 'all-scheduled-staff',
+        },
+        {
+          defaultDayIds: ['day-mon', 'day-tue'],
+          allTimeSlotIds: ['slot-1', 'slot-2'],
+          allClassroomIds: ['class-1', 'class-2'],
+          defaultDisplayMode: 'all-scheduled-staff',
+        }
+      )
+
+      expect(cleared.displayFilters).toEqual({
+        belowRequired: true,
+        belowPreferred: true,
+        fullyStaffed: true,
+        inactive: true,
+        viewNotes: true,
+      })
     })
   })
 })

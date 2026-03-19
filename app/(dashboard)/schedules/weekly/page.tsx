@@ -191,7 +191,7 @@ export default function WeeklySchedulePage() {
           belowPreferred: true,
           fullyStaffed: true,
           inactive: true,
-          viewNotes: false,
+          viewNotes: true,
         },
         displayMode: 'all-scheduled-staff',
         layout: 'days-x-classrooms', // Default layout
@@ -222,7 +222,7 @@ export default function WeeklySchedulePage() {
         belowPreferred: true,
         fullyStaffed: true,
         inactive: true,
-        viewNotes: false,
+        viewNotes: true,
       },
       displayMode: prev?.displayMode ?? 'all-scheduled-staff',
       layout: prev?.layout ?? 'days-x-classrooms',
@@ -709,7 +709,7 @@ export default function WeeklySchedulePage() {
             }
             displayModeCounts={displayModeCounts}
             displayMode={filters?.displayMode ?? 'all-scheduled-staff'}
-            showNotes={filters?.displayFilters?.viewNotes ?? false}
+            showNotes={filters?.displayFilters?.viewNotes ?? true}
             onDisplayModeChange={mode => {
               setFilters(prev => {
                 if (prev) {
@@ -729,7 +729,7 @@ export default function WeeklySchedulePage() {
                     belowPreferred: true,
                     fullyStaffed: true,
                     inactive: true,
-                    viewNotes: false,
+                    viewNotes: true,
                   },
                   displayMode: mode,
                   layout: 'days-x-classrooms' as const,

@@ -80,6 +80,44 @@ describe('class groups collection route integration', () => {
     expect(json.id).toBe('cg-2')
   })
 
+  it('POST accepts decimal ratios and forwards normalized values', async () => {
+    ;(createClassGroup as jest.Mock).mockResolvedValue({ id: 'cg-3', name: 'Preschool' })
+
+    const response = await POST(
+      new Request('http://localhost/api/class-groups', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Preschool',
+          required_ratio: 3.3,
+          preferred_ratio: '4.5',
+        }),
+      }) as any
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(createClassGroup).toHaveBeenCalledWith({
+      name: 'Preschool',
+      required_ratio: 3.3,
+      preferred_ratio: 4.5,
+    })
+    expect(json.id).toBe('cg-3')
+  })
+
+  it('POST rejects ratios with more than one decimal place', async () => {
+    const response = await POST(
+      new Request('http://localhost/api/class-groups', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Preschool', required_ratio: 3.33 }),
+      }) as any
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(json.error).toMatch(/at most one decimal place/i)
+    expect(createClassGroup).not.toHaveBeenCalled()
+  })
+
   it('POST routes failures through createErrorResponse', async () => {
     ;(createClassGroup as jest.Mock).mockRejectedValue(new Error('insert failed'))
 
