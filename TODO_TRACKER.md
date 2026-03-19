@@ -38,6 +38,7 @@ Features to implement soon (within the next few weeks).
 - [ ] Dashboard background refresh - refresh coverage summary every 60-120 seconds and show a subtle "Last updated" timestamp with a small manual refresh option
 - [ ] Dashboard time range setting - add a Settings option to configure how far ahead the dashboard looks (e.g., 2 weeks, 3 weeks)
 - [ ] Dashboard time horizon control - allow changing the dashboard’s upcoming window directly within the dashboard (e.g., switch from 2 weeks to 3 weeks)
+- [ ] Dashboard Action Required banner: add per-shift quick actions in expanded details (deep-link to baseline schedule and/or school calendar for each issue)
 - [x] Create profile entry for current user - manually create profile entry linking auth user to school (needed for testing audit logging and override functionality) ✅ Added API endpoint and UI page at /setup/profile
 - [ ] Enhanced profile creation UI - create thorough profile creation process where users add their name, select a role, choose/assign school, and provide other necessary information (expand beyond the basic auto-creation)
 - [ ] User onboarding UI - create UI flow for onboarding new users, collecting necessary information (name, role, school assignment)

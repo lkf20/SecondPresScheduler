@@ -115,6 +115,15 @@ type DashboardOverview = {
   scheduled_subs: ScheduledSubItem[]
 }
 
+type OrphanedShiftIssue = {
+  shift_id: string
+  date: string
+  reason: 'school_closed' | 'missing_baseline' | string
+  teacher_name?: string | null
+  day_name?: string | null
+  time_slot_code?: string | null
+}
+
 /** One card: same classroom + time slot + day and same required/scheduled/preferred across dates */
 export type StaffingTargetGroup = {
   dateStart: string
@@ -377,6 +386,8 @@ export default function DashboardClient({
   )
 
   const [orphanedShiftsCount, setOrphanedShiftsCount] = useState<number>(0)
+  const [orphanedShifts, setOrphanedShifts] = useState<OrphanedShiftIssue[]>([])
+  const [orphanedBannerExpanded, setOrphanedBannerExpanded] = useState(false)
   const [dataHealthFetchKey, setDataHealthFetchKey] = useState(0)
 
   const schoolId = useSchool()
@@ -401,8 +412,10 @@ export default function DashboardClient({
   useEffect(() => {
     const cached = getDataHealthCache()
     if (cached) {
-      if (cached.data.orphanedShifts) {
-        setOrphanedShiftsCount(cached.data.orphanedShifts.length)
+      if (Array.isArray(cached.data.orphanedShifts)) {
+        const items = cached.data.orphanedShifts as OrphanedShiftIssue[]
+        setOrphanedShifts(items)
+        setOrphanedShiftsCount(items.length)
       }
       return
     }
@@ -414,12 +427,18 @@ export default function DashboardClient({
       .then(data => {
         if (data == null) return
         setDataHealthCache(data)
-        if (data.orphanedShifts) {
-          setOrphanedShiftsCount(data.orphanedShifts.length)
+        if (Array.isArray(data.orphanedShifts)) {
+          const items = data.orphanedShifts as OrphanedShiftIssue[]
+          setOrphanedShifts(items)
+          setOrphanedShiftsCount(items.length)
         }
       })
       .catch(console.error)
   }, [dataHealthFetchKey])
+
+  useEffect(() => {
+    if (orphanedShiftsCount === 0) setOrphanedBannerExpanded(false)
+  }, [orphanedShiftsCount])
 
   const router = useRouter()
 
@@ -531,15 +550,23 @@ export default function DashboardClient({
     }
   }, [overview.coverage_requests])
 
+  const sortedCoverageRequests = useMemo(() => {
+    return [...overview.coverage_requests].sort((a, b) => {
+      if (a.start_date !== b.start_date) return a.start_date.localeCompare(b.start_date)
+      if (a.end_date !== b.end_date) return a.end_date.localeCompare(b.end_date)
+      return a.teacher_name.localeCompare(b.teacher_name)
+    })
+  }, [overview.coverage_requests])
+
   const filteredCoverageRequests = useMemo(() => {
     if (coverageFilter === 'needs') {
-      return overview.coverage_requests.filter(request => request.status !== 'covered')
+      return sortedCoverageRequests.filter(request => request.status !== 'covered')
     }
     if (coverageFilter === 'covered') {
-      return overview.coverage_requests.filter(request => request.status === 'covered')
+      return sortedCoverageRequests.filter(request => request.status === 'covered')
     }
-    return overview.coverage_requests
-  }, [coverageFilter, overview.coverage_requests])
+    return sortedCoverageRequests
+  }, [coverageFilter, sortedCoverageRequests])
 
   const belowRequiredGroups = useMemo(
     () =>
@@ -689,15 +716,56 @@ export default function DashboardClient({
       </section>
 
       {orphanedShiftsCount > 0 && (
-        <section className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-start gap-3">
-          <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <span className="font-semibold">Action Required:</span> {orphanedShiftsCount} future
-            time-off shift{orphanedShiftsCount !== 1 ? 's' : ''}{' '}
-            {orphanedShiftsCount !== 1 ? 'are' : 'is'} missing a scheduled classroom or fall
-            {orphanedShiftsCount !== 1 ? '' : 's'} on a closed day. Please review the baseline
-            schedule or school calendar to resolve this conflict.
+        <section className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold">Action Required:</span> {orphanedShiftsCount} future
+                time-off shift{orphanedShiftsCount !== 1 ? 's' : ''}{' '}
+                {orphanedShiftsCount !== 1 ? 'are' : 'is'} missing a scheduled classroom or fall
+                {orphanedShiftsCount !== 1 ? '' : 's'} on a closed day. Please review the baseline
+                schedule or school calendar to resolve this conflict.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOrphanedBannerExpanded(prev => !prev)}
+              aria-label={
+                orphanedBannerExpanded ? 'Collapse issue details' : 'Expand issue details'
+              }
+              className="inline-flex items-center justify-center rounded-md p-1 text-amber-700 hover:bg-amber-100"
+            >
+              {orphanedBannerExpanded ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </button>
           </div>
+          {orphanedBannerExpanded && (
+            <ul className="mt-3 space-y-1 pl-8 list-disc" data-testid="orphaned-shift-list">
+              {orphanedShifts
+                .slice()
+                .sort((a, b) => a.date.localeCompare(b.date))
+                .map(issue => {
+                  const reasonLabel =
+                    issue.reason === 'school_closed'
+                      ? 'falls on a school closure'
+                      : issue.reason === 'missing_baseline'
+                        ? 'is missing a baseline classroom assignment'
+                        : issue.reason
+                  const daySlot = [issue.day_name, issue.time_slot_code].filter(Boolean).join(' ')
+                  return (
+                    <li key={issue.shift_id}>
+                      {formatFullDateLabel(issue.date)}
+                      {issue.teacher_name ? ` • ${issue.teacher_name}` : ''}
+                      {daySlot ? ` • ${daySlot}` : ''} • {reasonLabel}
+                    </li>
+                  )
+                })}
+            </ul>
+          )}
         </section>
       )}
 
@@ -906,7 +974,16 @@ export default function DashboardClient({
           >
             <div className="flex flex-wrap items-center justify-between gap-3 xl:flex-1">
               <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-slate-900" />
+                <span
+                  data-testid="coverage-header-icon-circle"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full"
+                  style={{
+                    backgroundColor: 'rgba(243, 244, 246, 1)', // gray-100
+                    color: 'rgba(55, 65, 81, 1)', // gray-700
+                  }}
+                >
+                  <Calendar className="h-5 w-5" />
+                </span>
                 <h2 className="text-lg font-semibold text-slate-900">
                   Upcoming Time Off & Coverage
                 </h2>
@@ -1042,7 +1119,16 @@ export default function DashboardClient({
             className="flex w-full items-center justify-between gap-3 xl:pointer-events-none xl:cursor-default"
           >
             <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-slate-900" />
+              <span
+                data-testid="scheduled-subs-header-icon-circle"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full"
+                style={{
+                  backgroundColor: 'rgba(236, 253, 245, 1)', // emerald-50
+                  color: '#0D9488', // teal-600 (summary card icon color)
+                }}
+              >
+                <Users className="h-5 w-5" />
+              </span>
               <h2 className="text-lg font-semibold text-slate-900">Scheduled Subs</h2>
             </div>
             <div className="xl:hidden">
@@ -1177,7 +1263,16 @@ export default function DashboardClient({
             className="flex w-full items-center justify-between gap-3 xl:pointer-events-none xl:cursor-default"
           >
             <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-slate-900" />
+              <span
+                data-testid="staffing-target-header-icon-circle"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full"
+                style={{
+                  backgroundColor: staffingColorValues.below_required.bg,
+                  color: staffingColorValues.below_required.text,
+                }}
+              >
+                <AlertCircle className="h-5 w-5" />
+              </span>
               <h2 className="text-lg font-semibold text-slate-900">Below Staffing Target</h2>
             </div>
             <div className="xl:hidden">

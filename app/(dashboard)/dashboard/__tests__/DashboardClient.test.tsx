@@ -1,8 +1,9 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AssignSubPanelProvider } from '@/lib/contexts/AssignSubPanelContext'
 import DashboardClient from '../DashboardClient'
+import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
 
 const mockRefetch = jest.fn()
 const mockUseDashboard = jest.fn()
@@ -117,6 +118,7 @@ function renderDashboard(overview = defaultOverview) {
 describe('DashboardClient - Below Staffing Target', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    clearDataHealthCache()
 
     global.fetch = jest.fn().mockImplementation(url => {
       if (url === '/api/dashboard/data-health') {
@@ -159,6 +161,71 @@ describe('DashboardClient - Below Staffing Target', () => {
 
     expect(screen.getByText(/below staffing target/i)).toBeInTheDocument()
     expect(screen.getByText(/all classrooms meet staffing targets/i)).toBeInTheDocument()
+  })
+
+  it('renders light icon circles for section headers', () => {
+    renderDashboard()
+
+    expect(screen.getByTestId('coverage-header-icon-circle')).toHaveStyle({
+      backgroundColor: 'rgba(243, 244, 246, 1)',
+      color: 'rgba(55, 65, 81, 1)',
+    })
+    expect(screen.getByTestId('scheduled-subs-header-icon-circle')).toHaveStyle({
+      backgroundColor: 'rgba(236, 253, 245, 1)',
+      color: '#0D9488',
+    })
+    expect(screen.getByTestId('staffing-target-header-icon-circle')).toBeInTheDocument()
+  })
+
+  it('shows expandable orphaned shift details in action-required banner', async () => {
+    const user = userEvent.setup()
+    ;(global.fetch as jest.Mock).mockImplementation(url => {
+      if (url === '/api/dashboard/data-health') {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              orphanedShifts: [
+                {
+                  shift_id: 'shift-1',
+                  date: '2026-03-12',
+                  reason: 'missing_baseline',
+                  teacher_name: 'Anne M.',
+                  day_name: 'Thursday',
+                  time_slot_code: 'LB1',
+                },
+                {
+                  shift_id: 'shift-2',
+                  date: '2026-03-13',
+                  reason: 'school_closed',
+                  teacher_name: 'Victoria I.',
+                  day_name: 'Friday',
+                  time_slot_code: 'AM',
+                },
+              ],
+            }),
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ orphanedShifts: [] }),
+      })
+    })
+
+    renderDashboard()
+
+    await waitFor(() => {
+      expect(screen.getByText(/Action Required:/i)).toBeInTheDocument()
+    })
+
+    expect(screen.queryByTestId('orphaned-shift-list')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /expand issue details/i }))
+
+    expect(screen.getByTestId('orphaned-shift-list')).toBeInTheDocument()
+    expect(screen.getByText(/Anne M\./)).toBeInTheDocument()
+    expect(screen.getByText(/Victoria I\./)).toBeInTheDocument()
+    expect(screen.getByText(/missing a baseline classroom assignment/i)).toBeInTheDocument()
+    expect(screen.getByText(/falls on a school closure/i)).toBeInTheDocument()
   })
 
   it('shows exclusion note about permanent staff, floaters, and temporary coverage', () => {
@@ -421,6 +488,7 @@ describe('DashboardClient - Below Staffing Target', () => {
 describe('DashboardClient - Scheduled Subs', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    clearDataHealthCache()
     global.fetch = jest
       .fn()
       .mockImplementation(() =>
@@ -496,5 +564,78 @@ describe('DashboardClient - Scheduled Subs', () => {
 
     expect(screen.getByText('Jane D.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /remove sub/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('DashboardClient - Upcoming Time Off ordering', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    clearDataHealthCache()
+    global.fetch = jest
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ orphanedShifts: [] }) })
+      ) as jest.Mock
+    mockUseProfile.mockReturnValue({ data: { first_name: 'Test' }, isLoading: false })
+    mockUseDisplayNameFormat.mockReturnValue({ format: 'first_last_initial', isLoaded: true })
+  })
+
+  it('sorts upcoming time off by soonest start date first', () => {
+    const overviewWithUnsortedCoverage = {
+      ...defaultOverview,
+      coverage_requests: [
+        {
+          id: 'cr-late',
+          source_request_id: 'tor-late',
+          request_type: 'time_off',
+          teacher_name: 'Later Start',
+          start_date: '2026-03-20',
+          end_date: '2026-03-20',
+          reason: null,
+          notes: null,
+          classrooms: [],
+          classroom_label: '',
+          total_shifts: 1,
+          assigned_shifts: 0,
+          covered_shifts: 0,
+          uncovered_shifts: 1,
+          partial_shifts: 0,
+          remaining_shifts: 1,
+          status: 'needs_coverage' as const,
+        },
+        {
+          id: 'cr-soon',
+          source_request_id: 'tor-soon',
+          request_type: 'time_off',
+          teacher_name: 'Sooner Start',
+          start_date: '2026-03-08',
+          end_date: '2026-03-08',
+          reason: null,
+          notes: null,
+          classrooms: [],
+          classroom_label: '',
+          total_shifts: 1,
+          assigned_shifts: 0,
+          covered_shifts: 0,
+          uncovered_shifts: 1,
+          partial_shifts: 0,
+          remaining_shifts: 1,
+          status: 'needs_coverage' as const,
+        },
+      ],
+    }
+
+    mockUseDashboard.mockReturnValue({
+      data: overviewWithUnsortedCoverage,
+      isLoading: false,
+      isFetching: false,
+      refetch: mockRefetch,
+    })
+
+    renderDashboard(overviewWithUnsortedCoverage)
+
+    const cards = screen.getAllByTestId('time-off-card')
+    expect(cards[0]).toHaveTextContent('Sooner Start')
+    expect(cards[1]).toHaveTextContent('Later Start')
   })
 })

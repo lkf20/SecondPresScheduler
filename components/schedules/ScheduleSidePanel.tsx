@@ -2809,198 +2809,237 @@ export default function ScheduleSidePanel({
         throw new Error(message)
       }
 
-      // Update teacher assignments for each day/time slot combination
-      // Fetch all schedules once at the start; use cache: 'no-store' so we see latest state
-      // (e.g. after conflict resolution "remove from other" so we don't overwrite with stale data)
-      const allSchedulesResponse = await fetch('/api/teacher-schedules', { cache: 'no-store' })
-      if (!allSchedulesResponse.ok) {
-        const errorBody = await allSchedulesResponse.json().catch(() => ({}))
-        const detail =
-          (errorBody as { error?: string; message?: string }).error ??
-          (errorBody as { message?: string }).message ??
-          allSchedulesResponse.statusText
-        throw new Error(`Failed to fetch current teacher schedules${detail ? `: ${detail}` : ''}`)
-      }
-      const allSchedules = await allSchedulesResponse.json()
-
-      const deletePromises: Promise<void>[] = []
-      const createPromises: Promise<void>[] = []
-
-      log(
-        '[ScheduleSidePanel] Starting save - allAssignedTeachers:',
-        allAssignedTeachers.map(t => ({
-          name: t.name,
-          teacher_id: t.teacher_id,
-          is_floater: t.is_floater ?? false,
-          is_flexible: t.is_flexible,
+      // Update teacher assignments for each day/time slot combination.
+      // For multi-cell apply, use a dedicated bulk endpoint with rollback semantics to avoid
+      // partial state when one target cell write fails.
+      if (applyCellCount > 1) {
+        const teacherPayload = allAssignedTeachers
+          .filter(t => !!t.teacher_id)
+          .map(t => ({
+            teacher_id: t.teacher_id as string,
+            is_floater: t.is_floater === true,
+          }))
+        const targetCells = updates.map(u => ({
+          classroom_id: u.classroom_id,
+          day_of_week_id: u.day_of_week_id,
+          time_slot_id: u.time_slot_id,
         }))
-      )
-      log('[ScheduleSidePanel] classGroupIds:', classGroupIds)
-
-      for (const updateDayId of daysToUpdate) {
-        for (const updateTimeSlotId of timeSlotsToUpdate) {
-          // Filter current schedules for this specific cell
-          const currentSchedules = allSchedules.filter(
-            (s: TeacherSchedule) =>
-              s.classroom_id === classroomId &&
-              s.day_of_week_id === updateDayId &&
-              s.time_slot_id === updateTimeSlotId
+        const teacherResponse = await fetch('/api/teacher-schedules/bulk-apply', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            target_cells: targetCells,
+            teachers: teacherPayload,
+          }),
+        })
+        if (!teacherResponse.ok) {
+          const errorBody = await teacherResponse.json().catch(() => ({}))
+          const detail =
+            (errorBody as { error?: string; message?: string }).error ??
+            (errorBody as { message?: string }).message ??
+            teacherResponse.statusText
+          throw new Error(
+            `Failed to update teacher schedules for selected cells${detail ? `: ${detail}` : ''}`
           )
+        }
+      } else {
+        // Single-cell save keeps the existing granular flow for parity with current behavior.
+        // Fetch all schedules once at the start; use cache: 'no-store' so we see latest state
+        // (e.g. after conflict resolution "remove from other" so we don't overwrite with stale data)
+        const allSchedulesResponse = await fetch('/api/teacher-schedules', { cache: 'no-store' })
+        if (!allSchedulesResponse.ok) {
+          const errorBody = await allSchedulesResponse.json().catch(() => ({}))
+          const detail =
+            (errorBody as { error?: string; message?: string }).error ??
+            (errorBody as { message?: string }).message ??
+            allSchedulesResponse.statusText
+          throw new Error(`Failed to fetch current teacher schedules${detail ? `: ${detail}` : ''}`)
+        }
+        const allSchedules = await allSchedulesResponse.json()
 
-          // Use first class group ID for teacher schedules (teachers are assigned to the slot, not individual class groups)
-          // Allow null class group when no class groups are assigned (teachers can exist without class groups)
-          log('[ScheduleSidePanel] Processing cell:', {
-            updateDayId,
-            updateTimeSlotId,
-            currentSchedulesCount: currentSchedules.length,
-          })
+        const deletePromises: Promise<void>[] = []
+        const createPromises: Promise<void>[] = []
 
-          const schedulesForThisSlot = currentSchedules
+        log(
+          '[ScheduleSidePanel] Starting save - allAssignedTeachers:',
+          allAssignedTeachers.map(t => ({
+            name: t.name,
+            teacher_id: t.teacher_id,
+            is_floater: t.is_floater ?? false,
+            is_flexible: t.is_flexible,
+          }))
+        )
+        log('[ScheduleSidePanel] classGroupIds:', classGroupIds)
 
-          {
-            const newTeacherIds = new Set(allAssignedTeachers.map(t => t.teacher_id))
-
-            // Remove assignments that are no longer selected
-            // For schedules with wrong class group, we'll update them instead of deleting
-            for (const schedule of schedulesForThisSlot) {
-              if (!newTeacherIds.has(schedule.teacher_id)) {
-                log('[ScheduleSidePanel] Deleting schedule - teacher no longer selected:', {
-                  teacher_id: schedule.teacher_id,
-                  schedule_id: schedule.id,
-                })
-                deletePromises.push(
-                  fetch(`/api/teacher-schedules/${schedule.id}`, {
-                    method: 'DELETE',
-                  }).then(async deleteResponse => {
-                    if (!deleteResponse.ok) {
-                      console.error(`Failed to delete teacher schedule ${schedule.id}`)
-                      const errorData = await deleteResponse.json().catch(() => ({}))
-                      throw new Error(
-                        errorData.error ||
-                          `Failed to delete teacher schedule: ${deleteResponse.statusText}`
-                      )
-                    }
-                    log('[ScheduleSidePanel] Successfully deleted schedule:', schedule.id)
-                  })
-                )
-              }
-            }
-
-            // Add new assignments
-            // For each selected teacher, check if they have a schedule for this slot
-            // If not, check if they have a schedule for a different class - if so, delete it first, then create new one
-            log(
-              '[ScheduleSidePanel] Processing teachers for save:',
-              allAssignedTeachers.length,
-              'teachers'
+        for (const updateDayId of daysToUpdate) {
+          for (const updateTimeSlotId of timeSlotsToUpdate) {
+            // Filter current schedules for this specific cell
+            const currentSchedules = allSchedules.filter(
+              (s: TeacherSchedule) =>
+                s.classroom_id === classroomId &&
+                s.day_of_week_id === updateDayId &&
+                s.time_slot_id === updateTimeSlotId
             )
-            for (const teacher of allAssignedTeachers) {
-              if (!teacher.teacher_id) {
-                console.warn('[ScheduleSidePanel] Teacher missing teacher_id:', teacher)
-                continue
-              }
 
-              // Check if teacher already has a schedule for this slot with matching class group
-              const teacherScheduleForThisSlot = schedulesForThisSlot.find(
-                (s: TeacherSchedule) => s.teacher_id === teacher.teacher_id
-              )
+            // Use first class group ID for teacher schedules (teachers are assigned to the slot, not individual class groups)
+            // Allow null class group when no class groups are assigned (teachers can exist without class groups)
+            log('[ScheduleSidePanel] Processing cell:', {
+              updateDayId,
+              updateTimeSlotId,
+              currentSchedulesCount: currentSchedules.length,
+            })
 
-              log(
-                '[ScheduleSidePanel] Teacher:',
-                teacher.name,
-                'hasSchedule:',
-                !!teacherScheduleForThisSlot
-              )
+            const schedulesForThisSlot = currentSchedules
 
-              if (!teacherScheduleForThisSlot) {
-                // Create new schedule for this teacher
-                const payload = {
-                  teacher_id: teacher.teacher_id,
-                  day_of_week_id: updateDayId,
-                  time_slot_id: updateTimeSlotId,
-                  classroom_id: classroomId,
-                  is_floater: teacher.is_floater ?? false,
-                }
-                log('[ScheduleSidePanel] Creating new schedule for teacher:', teacher.name, payload)
-                createPromises.push(
-                  fetch('/api/teacher-schedules', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                  }).then(async createResponse => {
-                    if (!createResponse.ok) {
-                      const errorData = await createResponse.json().catch(() => ({}))
-                      const errorMessage = errorData.error || createResponse.statusText
+            {
+              const newTeacherIds = new Set(allAssignedTeachers.map(t => t.teacher_id))
 
-                      // If it's a duplicate key violation, it's okay - the schedule already exists
-                      if (
-                        errorMessage.includes('already exists') ||
-                        errorMessage.includes('duplicate key')
-                      ) {
-                        log(
-                          `[ScheduleSidePanel] Teacher schedule already exists for teacher ${teacher.teacher_id} in this cell, skipping creation`
-                        )
-                        return // Silently skip - this is not an error
-                      }
-
-                      // For other errors, throw
-                      console.error(
-                        `[ScheduleSidePanel] Failed to create teacher schedule for teacher ${teacher.teacher_id}`
-                      )
-                      console.error('[ScheduleSidePanel] Error details:', errorData)
-                      throw new Error(`Failed to create teacher schedule: ${errorMessage}`)
-                    }
-                    const created = await createResponse.json()
-                    log('[ScheduleSidePanel] Successfully created schedule:', created)
-                    return created
+              // Remove assignments that are no longer selected
+              // For schedules with wrong class group, we'll update them instead of deleting
+              for (const schedule of schedulesForThisSlot) {
+                if (!newTeacherIds.has(schedule.teacher_id)) {
+                  log('[ScheduleSidePanel] Deleting schedule - teacher no longer selected:', {
+                    teacher_id: schedule.teacher_id,
+                    schedule_id: schedule.id,
                   })
-                )
-              } else {
-                // Teacher already has a schedule - update floater status if needed
-                if (teacherScheduleForThisSlot.is_floater !== (teacher.is_floater ?? false)) {
-                  createPromises.push(
-                    fetch(`/api/teacher-schedules/${teacherScheduleForThisSlot.id}`, {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        is_floater: teacher.is_floater ?? false,
-                      }),
-                    }).then(async updateResponse => {
-                      if (!updateResponse.ok) {
-                        console.error(
-                          `Failed to update teacher schedule ${teacherScheduleForThisSlot.id}`
-                        )
-                        const errorData = await updateResponse.json().catch(() => ({}))
+                  deletePromises.push(
+                    fetch(`/api/teacher-schedules/${schedule.id}`, {
+                      method: 'DELETE',
+                    }).then(async deleteResponse => {
+                      if (!deleteResponse.ok) {
+                        console.error(`Failed to delete teacher schedule ${schedule.id}`)
+                        const errorData = await deleteResponse.json().catch(() => ({}))
                         throw new Error(
                           errorData.error ||
-                            `Failed to update teacher schedule: ${updateResponse.statusText}`
+                            `Failed to delete teacher schedule: ${deleteResponse.statusText}`
                         )
                       }
-                      const updatedSchedule = await updateResponse.json().catch(() => null)
-                      if (!updatedSchedule?.id) {
-                        throw new Error(
-                          `Failed to update teacher schedule ${teacherScheduleForThisSlot.id}: empty response`
-                        )
-                      }
+                      log('[ScheduleSidePanel] Successfully deleted schedule:', schedule.id)
                     })
                   )
+                }
+              }
+
+              // Add new assignments
+              // For each selected teacher, check if they have a schedule for this slot
+              // If not, check if they have a schedule for a different class - if so, delete it first, then create new one
+              log(
+                '[ScheduleSidePanel] Processing teachers for save:',
+                allAssignedTeachers.length,
+                'teachers'
+              )
+              for (const teacher of allAssignedTeachers) {
+                if (!teacher.teacher_id) {
+                  console.warn('[ScheduleSidePanel] Teacher missing teacher_id:', teacher)
+                  continue
+                }
+
+                // Check if teacher already has a schedule for this slot with matching class group
+                const teacherScheduleForThisSlot = schedulesForThisSlot.find(
+                  (s: TeacherSchedule) => s.teacher_id === teacher.teacher_id
+                )
+
+                log(
+                  '[ScheduleSidePanel] Teacher:',
+                  teacher.name,
+                  'hasSchedule:',
+                  !!teacherScheduleForThisSlot
+                )
+
+                if (!teacherScheduleForThisSlot) {
+                  // Create new schedule for this teacher
+                  const payload = {
+                    teacher_id: teacher.teacher_id,
+                    day_of_week_id: updateDayId,
+                    time_slot_id: updateTimeSlotId,
+                    classroom_id: classroomId,
+                    is_floater: teacher.is_floater ?? false,
+                  }
+                  log(
+                    '[ScheduleSidePanel] Creating new schedule for teacher:',
+                    teacher.name,
+                    payload
+                  )
+                  createPromises.push(
+                    fetch('/api/teacher-schedules', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(payload),
+                    }).then(async createResponse => {
+                      if (!createResponse.ok) {
+                        const errorData = await createResponse.json().catch(() => ({}))
+                        const errorMessage = errorData.error || createResponse.statusText
+
+                        // If it's a duplicate key violation, it's okay - the schedule already exists
+                        if (
+                          errorMessage.includes('already exists') ||
+                          errorMessage.includes('duplicate key')
+                        ) {
+                          log(
+                            `[ScheduleSidePanel] Teacher schedule already exists for teacher ${teacher.teacher_id} in this cell, skipping creation`
+                          )
+                          return // Silently skip - this is not an error
+                        }
+
+                        // For other errors, throw
+                        console.error(
+                          `[ScheduleSidePanel] Failed to create teacher schedule for teacher ${teacher.teacher_id}`
+                        )
+                        console.error('[ScheduleSidePanel] Error details:', errorData)
+                        throw new Error(`Failed to create teacher schedule: ${errorMessage}`)
+                      }
+                      const created = await createResponse.json()
+                      log('[ScheduleSidePanel] Successfully created schedule:', created)
+                      return created
+                    })
+                  )
+                } else {
+                  // Teacher already has a schedule - update floater status if needed
+                  if (teacherScheduleForThisSlot.is_floater !== (teacher.is_floater ?? false)) {
+                    createPromises.push(
+                      fetch(`/api/teacher-schedules/${teacherScheduleForThisSlot.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          is_floater: teacher.is_floater ?? false,
+                        }),
+                      }).then(async updateResponse => {
+                        if (!updateResponse.ok) {
+                          console.error(
+                            `Failed to update teacher schedule ${teacherScheduleForThisSlot.id}`
+                          )
+                          const errorData = await updateResponse.json().catch(() => ({}))
+                          throw new Error(
+                            errorData.error ||
+                              `Failed to update teacher schedule: ${updateResponse.statusText}`
+                          )
+                        }
+                        const updatedSchedule = await updateResponse.json().catch(() => null)
+                        if (!updatedSchedule?.id) {
+                          throw new Error(
+                            `Failed to update teacher schedule ${teacherScheduleForThisSlot.id}: empty response`
+                          )
+                        }
+                      })
+                    )
+                  }
                 }
               }
             }
           }
         }
-      }
 
-      // Wait for all delete and create operations to complete
-      log(
-        '[ScheduleSidePanel] Waiting for',
-        deletePromises.length,
-        'deletes and',
-        createPromises.length,
-        'creates'
-      )
-      await Promise.all([...deletePromises, ...createPromises])
-      log('[ScheduleSidePanel] All teacher schedule operations completed')
+        // Wait for all delete and create operations to complete
+        log(
+          '[ScheduleSidePanel] Waiting for',
+          deletePromises.length,
+          'deletes and',
+          createPromises.length,
+          'creates'
+        )
+        await Promise.all([...deletePromises, ...createPromises])
+        log('[ScheduleSidePanel] All teacher schedule operations completed')
+      }
 
       clearDataHealthCache()
       setHasUnsavedChanges(false)

@@ -143,6 +143,7 @@ export default function BaselineSchedulePage() {
   const hasInitializedFilters = useRef(false)
   useEffect(() => {
     if (hasInitializedFilters.current) return
+    if (isLoadingSettings) return
     if (
       filters === null &&
       availableDays.length > 0 &&
@@ -188,13 +189,20 @@ export default function BaselineSchedulePage() {
           belowPreferred: true,
           fullyStaffed: true,
           inactive: true,
-          viewNotes: false,
+          viewNotes: true,
         },
         displayMode: 'permanent-only', // Baseline schedule only shows permanent teachers
         layout: 'days-x-classrooms', // Default layout
       })
     }
-  }, [filters, availableDays, availableTimeSlots, availableClassrooms, selectedDayIds])
+  }, [
+    filters,
+    isLoadingSettings,
+    availableDays,
+    availableTimeSlots,
+    availableClassrooms,
+    selectedDayIds,
+  ])
 
   useEffect(() => {
     if (!focusClassroomId || !focusDayId || !focusTimeSlotId) return
@@ -219,7 +227,7 @@ export default function BaselineSchedulePage() {
         belowPreferred: true,
         fullyStaffed: true,
         inactive: true,
-        viewNotes: false,
+        viewNotes: true,
       },
       displayMode: 'permanent-only', // Baseline schedule only shows permanent teachers
       layout: prev?.layout ?? 'days-x-classrooms',
@@ -248,6 +256,18 @@ export default function BaselineSchedulePage() {
 
     setFilters(prev => (prev ? { ...prev, selectedClassroomIds: nextSelected } : prev))
   }, [availableClassroomIds, filters])
+
+  // Keep selected day filters constrained to settings-selected day IDs.
+  // This repairs stale localStorage values (e.g. Saturday/Sunday previously selected)
+  // when settings now only allow Monday-Friday.
+  useEffect(() => {
+    if (!filters || selectedDayIds.length === 0) return
+
+    const nextSelected = reconcileSelectedIdsWithAvailable(filters.selectedDayIds, selectedDayIds)
+    if (nextSelected === filters.selectedDayIds) return
+
+    setFilters(prev => (prev ? { ...prev, selectedDayIds: nextSelected } : prev))
+  }, [selectedDayIds, filters])
 
   // Normalize selected time slot IDs against current available time slots.
   useEffect(() => {
@@ -456,7 +476,7 @@ export default function BaselineSchedulePage() {
             scheduleDayIdsFromSettings={selectedDayIds}
             weekStartISO={weekStartISO}
             displayMode={filters?.displayMode ?? 'permanent-only'}
-            showNotes={filters?.displayFilters?.viewNotes ?? false}
+            showNotes={filters?.displayFilters?.viewNotes ?? true}
             layout={filters?.layout ?? 'days-x-classrooms'}
             onRefresh={handleRefresh}
             onFilterPanelOpenChange={setFilterPanelOpen}

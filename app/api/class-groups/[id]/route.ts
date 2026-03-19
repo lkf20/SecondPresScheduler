@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getClassGroupById, updateClassGroup, deleteClassGroup } from '@/lib/api/class-groups'
 import { createErrorResponse } from '@/lib/utils/errors'
 import { revalidatePath } from 'next/cache'
+import {
+  RatioValidationError,
+  validateOptionalRatio,
+  validateRequiredRatio,
+} from '@/lib/validations/class-group-ratios'
 
 function revalidateClassGroupDependentPaths() {
   revalidatePath('/settings/classes')
@@ -31,10 +36,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params
     const body = await request.json()
+    if ('required_ratio' in body) {
+      body.required_ratio = validateRequiredRatio(body.required_ratio)
+    }
+    if ('preferred_ratio' in body) {
+      body.preferred_ratio = validateOptionalRatio(body.preferred_ratio, { allowNull: true })
+    }
     const classGroup = await updateClassGroup(id, body)
     revalidateClassGroupDependentPaths()
     return NextResponse.json(classGroup)
   } catch (error) {
+    if (error instanceof RatioValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
     return createErrorResponse(
       error,
       'Failed to update class group',
