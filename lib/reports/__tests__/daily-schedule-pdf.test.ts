@@ -329,6 +329,84 @@ describe('daily schedule pdf html', () => {
     expect(html).toContain('Footer note')
   })
 
+  it('renders temporary coverage in legend and cell lines for color and black-and-white modes', () => {
+    const dataWithTempCoverage = [
+      {
+        ...baseData[0],
+        days: [
+          {
+            ...baseData[0].days[0],
+            time_slots: [
+              {
+                ...baseData[0].days[0].time_slots[0],
+                assignments: [
+                  {
+                    id: 'temp-coverage-1',
+                    teacher_id: 'teacher-temp',
+                    teacher_name: 'Temp Cover Teacher',
+                    teacher_first_name: 'Temp',
+                    teacher_last_name: 'Teacher',
+                    teacher_display_name: 'Temp Cover Teacher',
+                    is_substitute: false,
+                    is_floater: false,
+                    is_flexible: true,
+                    staffing_event_id: 'event-temp-1',
+                    event_category: 'standard',
+                    classroom_id: 'classroom-1',
+                    classroom_name: 'Infant Room',
+                  },
+                ],
+                absences: [],
+              },
+            ],
+          },
+        ],
+      },
+    ] as any
+
+    const colorHtml = buildDailySchedulePdfHtml({
+      dateISO: '2026-03-09',
+      generatedAt: 'Mar 9, 2026, 9:00 AM',
+      data: dataWithTempCoverage,
+      options: {
+        showAbsencesAndSubs: true,
+        showEnrollment: false,
+        showPreferredRatios: false,
+        showRequiredRatios: false,
+        colorFriendly: true,
+        layout: 'one',
+        teacherNameFormat: 'default',
+      },
+      timeZone: 'America/New_York',
+      schoolClosures: [],
+    })
+
+    expect(colorHtml).toContain('Temporary Coverage')
+    expect(colorHtml).toContain('color:#BE185D')
+    expect(colorHtml).toContain('Temp Cover Teacher')
+
+    const bwHtml = buildDailySchedulePdfHtml({
+      dateISO: '2026-03-09',
+      generatedAt: 'Mar 9, 2026, 9:00 AM',
+      data: dataWithTempCoverage,
+      options: {
+        showAbsencesAndSubs: true,
+        showEnrollment: false,
+        showPreferredRatios: false,
+        showRequiredRatios: false,
+        colorFriendly: false,
+        layout: 'one',
+        teacherNameFormat: 'default',
+      },
+      timeZone: 'America/New_York',
+      schoolClosures: [],
+    })
+
+    expect(bwHtml).toContain('◇ Temporary Coverage')
+    expect(bwHtml).toContain('◇ Temp Cover Teacher')
+    expect(bwHtml).toContain('color:#334155')
+  })
+
   it('renders schedule cell notes only when showNotes is enabled', () => {
     const dataWithNotes = [
       {
