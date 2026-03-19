@@ -48,10 +48,12 @@ if (alreadyInstalled) {
   process.exit(0)
 }
 
-console.log(`[puppeteer-install] installing chrome for testing into ${puppeteerCacheDir} ...`)
+console.log(
+  `[puppeteer-install] installing chrome-headless-shell for testing into ${puppeteerCacheDir} ...`
+)
 const installResult = spawnSync(
   process.platform === 'win32' ? 'npx.cmd' : 'npx',
-  ['puppeteer', 'browsers', 'install', 'chrome', '--path', puppeteerCacheDir],
+  ['puppeteer', 'browsers', 'install', 'chrome-headless-shell', '--path', puppeteerCacheDir],
   {
     stdio: 'inherit',
     env: {
