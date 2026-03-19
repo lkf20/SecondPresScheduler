@@ -132,6 +132,14 @@ export default function SubPreferencesSection({
   const [capabilitiesState, setCapabilitiesState] = useState(defaultCapabilitiesState)
   const [baselineSnapshot, setBaselineSnapshot] = useState<PreferencesSnapshot | null>(null)
   const lastHandledExternalSaveSignalRef = useRef(0)
+  const loadStateRef = useRef({ preferences: false, qualifications: false })
+
+  const markLoaded = useCallback((key: 'preferences' | 'qualifications') => {
+    loadStateRef.current[key] = true
+    if (loadStateRef.current.preferences && loadStateRef.current.qualifications) {
+      setLoading(false)
+    }
+  }, [])
   const currentSnapshot = useMemo(
     () =>
       buildSnapshot(
@@ -168,8 +176,10 @@ export default function SubPreferencesSection({
       })
     } catch (error) {
       console.error('Error fetching preferences:', error)
+    } finally {
+      markLoaded('preferences')
     }
-  }, [subId, defaultCapabilitiesState])
+  }, [subId, defaultCapabilitiesState, markLoaded])
 
   const fetchQualifications = useCallback(async () => {
     try {
@@ -188,11 +198,13 @@ export default function SubPreferencesSection({
     } catch (error) {
       console.error('Error fetching qualifications:', error)
     } finally {
-      setLoading(false)
+      markLoaded('qualifications')
     }
-  }, [subId, defaultCapabilitiesState])
+  }, [subId, defaultCapabilitiesState, markLoaded])
 
   useEffect(() => {
+    loadStateRef.current = { preferences: false, qualifications: false }
+    setLoading(true)
     const cached = preferencesCache.get(subId)
     const cachedBaseline = preferencesBaselineCache.get(subId) || null
     setBaselineSnapshot(cachedBaseline)
@@ -217,6 +229,7 @@ export default function SubPreferencesSection({
         : preferencesDirtyCache.get(subId) === true
       setHasUnsavedChanges(dirty)
       preferencesDirtyCache.set(subId, dirty)
+      loadStateRef.current = { preferences: true, qualifications: true }
       setLoading(false)
       if (!dirty) {
         fetchPreferences()

@@ -4,7 +4,7 @@ import { GET } from '@/app/api/reports/sub-availability/pdf/route'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getScheduleSettings } from '@/lib/api/schedule-settings'
-import puppeteer from 'puppeteer'
+import { launchPdfBrowser } from '@/lib/reports/puppeteer-launch'
 
 jest.mock('@/lib/supabase/server', () => ({
   createClient: jest.fn(),
@@ -18,12 +18,8 @@ jest.mock('@/lib/api/schedule-settings', () => ({
   getScheduleSettings: jest.fn(),
 }))
 
-jest.mock('puppeteer', () => ({
-  __esModule: true,
-  default: {
-    executablePath: jest.fn(() => '/mock/chrome'),
-    launch: jest.fn(),
-  },
+jest.mock('@/lib/reports/puppeteer-launch', () => ({
+  launchPdfBrowser: jest.fn(),
 }))
 
 type TableDataMap = Record<string, any[]>
@@ -110,7 +106,7 @@ describe('GET /api/reports/sub-availability/pdf', () => {
     closeMock.mockResolvedValue(undefined)
     setContentMock.mockResolvedValue(undefined)
     pdfMock.mockResolvedValue(Buffer.from('fake-pdf'))
-    ;(puppeteer.launch as jest.Mock).mockResolvedValue(browserMock)
+    ;(launchPdfBrowser as jest.Mock).mockResolvedValue(browserMock)
   })
 
   afterEach(() => {
@@ -165,7 +161,7 @@ describe('GET /api/reports/sub-availability/pdf', () => {
 
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toBe('application/pdf')
-    expect(puppeteer.launch).toHaveBeenCalled()
+    expect(launchPdfBrowser).toHaveBeenCalled()
     expect(setContentMock).toHaveBeenCalled()
     expect(pdfMock).toHaveBeenCalled()
   })
@@ -191,7 +187,7 @@ describe('GET /api/reports/sub-availability/pdf', () => {
         sub_class_preferences: [],
       })
     )
-    ;(puppeteer.launch as jest.Mock).mockRejectedValue(new Error('browser failed'))
+    ;(launchPdfBrowser as jest.Mock).mockRejectedValue(new Error('browser failed'))
 
     const response = await GET(request)
     const json = await response.json()
