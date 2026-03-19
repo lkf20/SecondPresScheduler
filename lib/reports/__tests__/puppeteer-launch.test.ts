@@ -23,7 +23,6 @@ jest.mock('@sparticuz/chromium', () => ({
   __esModule: true,
   default: {
     args: ['--foo'],
-    defaultViewport: { width: 1200, height: 800 },
     headless: 'shell',
     executablePath: (...args: unknown[]) => chromiumExecutablePathMock(...args),
   },
@@ -70,7 +69,6 @@ describe('puppeteer launch helpers', () => {
       expect.objectContaining({
         executablePath: '/mock/chromium',
         args: expect.arrayContaining(['--foo', '--no-sandbox', '--disable-setuid-sandbox']),
-        defaultViewport: { width: 1200, height: 800 },
         headless: 'shell',
       })
     )
