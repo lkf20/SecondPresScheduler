@@ -5,9 +5,12 @@ import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 
 const puppeteerCacheDir = path.resolve(process.cwd(), '.cache', 'puppeteer')
-const cacheRoot = path.join(puppeteerCacheDir, 'chrome')
+const cacheRoots = [
+  path.join(puppeteerCacheDir, 'chrome'),
+  path.join(puppeteerCacheDir, 'chrome-headless-shell'),
+]
 
-const listVersionDirs = () => {
+const listVersionDirs = cacheRoot => {
   try {
     if (!fs.existsSync(cacheRoot)) return []
     return fs
@@ -21,16 +24,20 @@ const listVersionDirs = () => {
   }
 }
 
-const executableCandidates = versionDir => [
+const executableCandidates = (cacheRoot, versionDir) => [
   path.join(cacheRoot, versionDir, 'chrome-linux64', 'chrome'),
   path.join(cacheRoot, versionDir, 'chrome-linux', 'chrome'),
   path.join(cacheRoot, versionDir, 'chrome-headless-shell-linux64', 'chrome-headless-shell'),
 ]
 
 const findInstalledExecutable = () => {
-  for (const versionDir of listVersionDirs()) {
-    const candidate = executableCandidates(versionDir).find(filePath => fs.existsSync(filePath))
-    if (candidate) return candidate
+  for (const cacheRoot of cacheRoots) {
+    for (const versionDir of listVersionDirs(cacheRoot)) {
+      const candidate = executableCandidates(cacheRoot, versionDir).find(filePath =>
+        fs.existsSync(filePath)
+      )
+      if (candidate) return candidate
+    }
   }
   return null
 }
@@ -71,8 +78,12 @@ if (installResult.status !== 0) {
 const installedExecutable = findInstalledExecutable()
 if (!installedExecutable) {
   console.error('[puppeteer-install] install completed but no executable was found')
-  console.error(`[puppeteer-install] checked cache root: ${cacheRoot}`)
-  console.error(`[puppeteer-install] versions seen: ${listVersionDirs().join(', ') || '(none)'}`)
+  console.error(`[puppeteer-install] checked cache roots: ${cacheRoots.join(', ')}`)
+  console.error(
+    `[puppeteer-install] versions seen: ${cacheRoots
+      .map(root => `${root}=[${listVersionDirs(root).join(', ') || '(none)'}]`)
+      .join('; ')}`
+  )
   process.exit(1)
 }
 
