@@ -116,8 +116,7 @@ export async function GET() {
           return getStaffDisplayName(teacher) || null
         })()
         const dayName = ((shift as any).day_of_week as { name?: string } | null)?.name ?? null
-        const timeSlotCode =
-          ((shift as any).time_slot as { code?: string } | null)?.code ?? null
+        const timeSlotCode = ((shift as any).time_slot as { code?: string } | null)?.code ?? null
 
         orphanedShifts.push({
           shift_id: shift.id,

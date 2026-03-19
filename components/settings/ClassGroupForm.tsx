@@ -47,8 +47,7 @@ const requiredRatioSchema = z
     } catch (error) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message:
-          error instanceof Error ? error.message : 'Required ratio must be a valid number',
+        message: error instanceof Error ? error.message : 'Required ratio must be a valid number',
       })
       return z.NEVER
     }
@@ -63,8 +62,7 @@ const preferredRatioSchema = z
     } catch (error) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message:
-          error instanceof Error ? error.message : 'Preferred ratio must be a valid number',
+        message: error instanceof Error ? error.message : 'Preferred ratio must be a valid number',
       })
       return z.NEVER
     }

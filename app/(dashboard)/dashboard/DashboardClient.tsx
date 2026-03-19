@@ -721,8 +721,8 @@ export default function DashboardClient({
             <div className="flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <div>
-                <span className="font-semibold">Action Required:</span> {orphanedShiftsCount}{' '}
-                future time-off shift{orphanedShiftsCount !== 1 ? 's' : ''}{' '}
+                <span className="font-semibold">Action Required:</span> {orphanedShiftsCount} future
+                time-off shift{orphanedShiftsCount !== 1 ? 's' : ''}{' '}
                 {orphanedShiftsCount !== 1 ? 'are' : 'is'} missing a scheduled classroom or fall
                 {orphanedShiftsCount !== 1 ? '' : 's'} on a closed day. Please review the baseline
                 schedule or school calendar to resolve this conflict.
@@ -731,7 +731,9 @@ export default function DashboardClient({
             <button
               type="button"
               onClick={() => setOrphanedBannerExpanded(prev => !prev)}
-              aria-label={orphanedBannerExpanded ? 'Collapse issue details' : 'Expand issue details'}
+              aria-label={
+                orphanedBannerExpanded ? 'Collapse issue details' : 'Expand issue details'
+              }
               className="inline-flex items-center justify-center rounded-md p-1 text-amber-700 hover:bg-amber-100"
             >
               {orphanedBannerExpanded ? (
