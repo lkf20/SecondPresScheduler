@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import SubAvailabilityReportPage from '@/app/(dashboard)/reports/sub-availability/page'
 
@@ -11,6 +12,12 @@ jest.mock('sonner', () => ({
   },
 }))
 
+jest.mock('@/components/ui/popover', () => ({
+  Popover: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  PopoverTrigger: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  PopoverContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+}))
+
 describe('Sub Availability report page', () => {
   const openMock = jest.fn()
   let originalOpen: typeof window.open
@@ -18,6 +25,7 @@ describe('Sub Availability report page', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    window.localStorage.clear()
     originalOpen = window.open
     window.open = openMock as any
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
@@ -84,7 +92,7 @@ describe('Sub Availability report page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Print PDF' }))
 
     expect(openMock).toHaveBeenCalledWith(
-      '/api/reports/sub-availability/pdf?colorFriendly=true&nameFormat=display',
+      '/api/reports/sub-availability/pdf?colorFriendly=true&nameFormat=display&paperSize=letter',
       '_blank',
       'noopener,noreferrer'
     )
@@ -111,7 +119,7 @@ describe('Sub Availability report page', () => {
 
     await waitFor(() => {
       expect(openMock).toHaveBeenCalledWith(
-        '/api/reports/sub-availability/pdf?colorFriendly=false&nameFormat=display',
+        '/api/reports/sub-availability/pdf?colorFriendly=false&nameFormat=display&paperSize=letter',
         '_blank',
         'noopener,noreferrer'
       )
@@ -123,12 +131,40 @@ describe('Sub Availability report page', () => {
     render(<SubAvailabilityReportPage />)
     await screen.findByText('Test S.')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Full Name' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Full name' }))
     fireEvent.click(screen.getByRole('button', { name: 'Print PDF' }))
 
     await waitFor(() => {
       expect(openMock).toHaveBeenCalledWith(
-        '/api/reports/sub-availability/pdf?colorFriendly=true&nameFormat=full',
+        '/api/reports/sub-availability/pdf?colorFriendly=true&nameFormat=full&paperSize=letter',
+        '_blank',
+        'noopener,noreferrer'
+      )
+    })
+  })
+
+  it('saves pdf settings defaults and uses saved paper size', async () => {
+    openMock.mockReturnValue({} as Window)
+    render(<SubAvailabilityReportPage />)
+    await screen.findByText('Test S.')
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Full name' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Legal' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save as default' }))
+
+    expect(window.localStorage.getItem('subAvailabilityReportSettings')).toBe(
+      JSON.stringify({
+        colorFriendly: true,
+        nameFormat: 'full',
+        paperSize: 'legal',
+      })
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Print PDF' }))
+
+    await waitFor(() => {
+      expect(openMock).toHaveBeenCalledWith(
+        '/api/reports/sub-availability/pdf?colorFriendly=true&nameFormat=full&paperSize=legal',
         '_blank',
         'noopener,noreferrer'
       )

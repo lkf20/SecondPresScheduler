@@ -23,6 +23,8 @@ const parseBoolean = (value: string | null, fallback: boolean) => {
 }
 const parseNameFormat = (value: string | null): 'display' | 'full' =>
   value === 'full' ? 'full' : 'display'
+const parsePaperSize = (value: string | null): 'letter' | 'legal' =>
+  value === 'legal' ? 'legal' : 'letter'
 const parseFooterNotesHtml = (value: string | null) =>
   truncateRichText(value, MAX_FOOTER_NOTES_HTML)
 const parseTopHeaderHtml = (value: string | null) => truncateRichText(value, MAX_TOP_HEADER_HTML)
@@ -43,6 +45,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const colorFriendly = parseBoolean(searchParams.get('colorFriendly'), true)
     const nameFormat = parseNameFormat(searchParams.get('nameFormat'))
+    const paperSize = parsePaperSize(searchParams.get('paperSize'))
     const footerNotesHtml = parseFooterNotesHtml(searchParams.get('footerNotesHtml'))
     const topHeaderHtml = parseTopHeaderHtml(searchParams.get('topHeaderHtml'))
 
@@ -68,13 +71,14 @@ export async function GET(request: Request) {
       colorFriendly,
       footerNotesHtml,
       topHeaderHtml,
+      paperSize,
     })
 
     const browser = await launchPdfBrowser()
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'networkidle0' })
     const pdf = await page.pdf({
-      format: 'letter',
+      format: paperSize,
       landscape: true,
       printBackground: true,
       margin: {

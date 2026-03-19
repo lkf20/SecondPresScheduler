@@ -196,6 +196,102 @@ describe('WeeklyScheduleGridNew interactions', () => {
     })
   })
 
+  it('scrolls to the requested day header when a scroll request is provided', async () => {
+    const { container, rerender } = render(
+      <WeeklyScheduleGridNew
+        data={scheduleData}
+        selectedDayIds={['day-mon']}
+        layout="days-x-classrooms"
+        scrollToDayId="day-mon"
+        scrollToDayRequestId={0}
+        readOnly
+      />
+    )
+
+    const dayHeader = container.querySelector('[data-day-header-id="day-mon"]') as HTMLElement
+    expect(dayHeader).toBeTruthy()
+    const scrollContainer = dayHeader.closest('.overflow-x-auto') as HTMLElement
+    expect(scrollContainer).toBeTruthy()
+
+    const scrollToMock = jest.fn()
+    ;(scrollContainer as any).scrollTo = scrollToMock
+    Object.defineProperty(scrollContainer, 'scrollLeft', { value: 0, writable: true })
+    scrollContainer.getBoundingClientRect = jest.fn(() => ({
+      left: 100,
+      top: 0,
+      right: 700,
+      bottom: 400,
+      width: 600,
+      height: 400,
+      x: 100,
+      y: 0,
+      toJSON: () => '',
+    })) as any
+    dayHeader.getBoundingClientRect = jest.fn(() => ({
+      left: 380,
+      top: 0,
+      right: 500,
+      bottom: 36,
+      width: 120,
+      height: 36,
+      x: 380,
+      y: 0,
+      toJSON: () => '',
+    })) as any
+
+    rerender(
+      <WeeklyScheduleGridNew
+        data={scheduleData}
+        selectedDayIds={['day-mon']}
+        layout="days-x-classrooms"
+        scrollToDayId="day-mon"
+        scrollToDayRequestId={1}
+        readOnly
+      />
+    )
+
+    await waitFor(() => {
+      expect(scrollToMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          behavior: 'smooth',
+        })
+      )
+    })
+  })
+
+  it('does nothing when the requested day header is not rendered', async () => {
+    const { container, rerender } = render(
+      <WeeklyScheduleGridNew
+        data={scheduleData}
+        selectedDayIds={['day-mon']}
+        layout="days-x-classrooms"
+        scrollToDayId="day-fri"
+        scrollToDayRequestId={0}
+        readOnly
+      />
+    )
+
+    const dayHeader = container.querySelector('[data-day-header-id="day-mon"]') as HTMLElement
+    const scrollContainer = dayHeader.closest('.overflow-x-auto') as HTMLElement
+    const scrollToMock = jest.fn()
+    ;(scrollContainer as any).scrollTo = scrollToMock
+
+    rerender(
+      <WeeklyScheduleGridNew
+        data={scheduleData}
+        selectedDayIds={['day-mon']}
+        layout="days-x-classrooms"
+        scrollToDayId="day-fri"
+        scrollToDayRequestId={1}
+        readOnly
+      />
+    )
+
+    await waitFor(() => {
+      expect(scrollToMock).not.toHaveBeenCalled()
+    })
+  })
+
   it('emits display mode changes from filter chips', () => {
     const onDisplayModeChange = jest.fn()
 

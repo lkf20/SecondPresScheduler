@@ -251,6 +251,38 @@ describe('GET /api/reports/sub-availability/pdf', () => {
     expect(setContentMock).toHaveBeenCalled()
   })
 
+  it('accepts paperSize query param', async () => {
+    ;(createClient as jest.Mock).mockResolvedValue(
+      makeSupabaseMock({
+        days_of_week: [{ id: 'day-mon', name: 'Mon', display_order: 1 }],
+        time_slots: [
+          {
+            id: 'slot-am',
+            code: 'AM',
+            name: 'Morning',
+            display_order: 1,
+            school_id: 'school-1',
+            is_active: true,
+          },
+        ],
+        class_groups: [],
+        staff: [],
+        sub_availability: [],
+        sub_class_preferences: [],
+      })
+    )
+
+    const response = await GET(
+      new Request('http://localhost/api/reports/sub-availability/pdf?paperSize=legal')
+    )
+    expect(response.status).toBe(200)
+    expect(pdfMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        format: 'legal',
+      })
+    )
+  })
+
   it('accepts nameFormat query param', async () => {
     ;(createClient as jest.Mock).mockResolvedValue(
       makeSupabaseMock({
