@@ -72,7 +72,6 @@ export const launchPdfBrowser = async () => {
   return puppeteer.launch({
     executablePath,
     args: getLaunchArgs(),
-    defaultViewport: chromium.defaultViewport,
     headless: 'shell',
   })
 }
