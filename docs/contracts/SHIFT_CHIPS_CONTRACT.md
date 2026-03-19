@@ -16,6 +16,19 @@ Do not mix semantics within a single chip.
 - Use **Availability Mode** when rendering recommendation/eligibility views for a specific sub (e.g. Recommended Subs cards, Contact & Assign availability chips).
 - If a surface needs both meanings, render separate chips/rows or clearly separate sections; never overload one chip with dual semantics.
 
+### Surface Mode Matrix (Current)
+
+- `components/sub-finder/SubFinderCard.tsx`:
+  - recommended strip chips: `availability`
+  - expanded "all shifts" chips: `availability`
+  - primary shift chips (when shown): `availability`
+- `components/sub-finder/ContactSubPanel.tsx`:
+  - shift chips in Contact & Assign rows: `availability`
+- `components/shared/TimeOffCard.tsx`:
+  - dashboard/time-off expanded shift chips: `coverage`
+
+Rule: in Sub Finder surfaces, `ShiftChips` must always use `availability` mode.
+
 ---
 
 ### Coverage Mode States
@@ -144,12 +157,18 @@ See: [DAY_ONLY_REASSIGNMENT_CONTRACT.md](./DAY_ONLY_REASSIGNMENT_CONTRACT.md).
 
 ---
 
-### Coverage Mapping Checklist (Recommended Subs)
+### Recommended Subs Checklist
 
-- In Recommended Subs coverage strips (`SubFinderCard` with `mode="coverage"`), any shift assigned to the current card sub (`assignment_owner = "this_sub"`) must include `assigned_sub_name` (or `assigned_sub_names`) so the pill renders the sub name instead of generic `Covered`.
+- In Recommended Subs cards (`SubFinderCard`), primary shift strips must use **availability mode** (`mode="availability"`), not coverage mode.
+- Recommended strips must show:
+  - soft green available background for coverable shifts,
+  - amber recommended corner dot for recommended assignments,
+  - assigned-sub pill/name when another sub is already assigned.
+- In availability mode, if a shift is already covered by another sub and the current sub is **not** explicitly in `cannot_cover`, display that shift as `available` (green), not `unavailable` (gray).
 - If multiple assignees exist (for example two partial subs on the same shift), mapping must preserve the full list in `assigned_sub_names` and pass it through to `ShiftChips`; do not collapse to a single `sub_name`.
-- `covered` without assignee name is valid only when assignee identity is genuinely unknown/unavailable in data.
-- Add a regression test at the `SubFinderCard` level to assert this mapping.
+- Add regression tests at:
+  - `SubFinderCard` level to assert recommended strip mode/props,
+  - `ShiftChips` level to assert green background + amber recommended dot.
 
 ---
 

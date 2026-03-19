@@ -1687,7 +1687,7 @@ export default function ContactSubPanel({
                   </p>
                 </div>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 items-start gap-4">
                 {actionableShifts.map(shift => {
                   const shiftKey = `${shift.date}|${shift.time_slot_code}`
                   const shiftKeyNorm = toShiftKeyNormalized(shift.date, shift.time_slot_code)

@@ -163,4 +163,30 @@ describe('ShiftChips', () => {
     })
     expect(trigger).toHaveFocus()
   })
+
+  it('shows soft green available background and recommended amber corner dot in availability mode', () => {
+    const { container } = render(
+      <ShiftChips
+        mode="availability"
+        canCover={[{ date: '2026-03-26', time_slot_code: 'AM', classroom_name: 'Infant Room' }]}
+        cannotCover={[]}
+        recommendedShifts={[{ date: '2026-03-26', time_slot_code: 'AM' }]}
+      />
+    )
+
+    const trigger = screen.getByRole('button', {
+      name: /Thu AM • Mar 26\. Infant Room\. This sub can cover this shift/i,
+    })
+    const badge = trigger.querySelector('.box-border') as HTMLElement
+    expect(badge).toBeTruthy()
+    expect(badge).toHaveStyle({
+      backgroundColor: 'rgb(246, 253, 251)',
+      borderColor: 'rgb(196, 234, 226)',
+    })
+
+    const recommendedDot = container.querySelector(
+      'div[style*="background-color: rgb(253, 230, 138)"]'
+    )
+    expect(recommendedDot).toBeTruthy()
+  })
 })
