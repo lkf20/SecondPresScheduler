@@ -153,6 +153,9 @@ export interface RecommendedSub {
     date: string
     day_name: string
     time_slot_code: string
+    is_partial?: boolean
+    partial_start_time?: string | null
+    partial_end_time?: string | null
   }>
   remaining_shift_keys?: string[]
   remaining_shift_count?: number
@@ -176,6 +179,14 @@ interface Absence {
       sub_id?: string | null
       classroom_name?: string | null
       class_name?: string | null
+      assigned_subs?: Array<{
+        assignment_id: string
+        sub_id: string
+        sub_name: string
+        is_partial: boolean
+        partial_start_time?: string | null
+        partial_end_time?: string | null
+      }>
     }>
   }
 }
@@ -238,6 +249,9 @@ export default function ContactSubPanel({
       date: string
       day_name: string
       time_slot_code: string
+      is_partial?: boolean
+      partial_start_time?: string | null
+      partial_end_time?: string | null
     }>
   >([])
   const [loading, setLoading] = useState(false)
@@ -245,6 +259,10 @@ export default function ContactSubPanel({
   const [coverageRequestId, setCoverageRequestId] = useState<string | null>(null)
   const [contactId, setContactId] = useState<string | null>(null)
   const [overriddenShiftIds, setOverriddenShiftIds] = useState<Set<string>>(new Set())
+  const [partialShiftKeys, setPartialShiftKeys] = useState<Set<string>>(new Set())
+  const [partialShiftTimes, setPartialShiftTimes] = useState<
+    Record<string, { start?: string; end?: string }>
+  >({})
   const [isSubInactive, setIsSubInactive] = useState(false)
   const [remainingShiftKeys, setRemainingShiftKeys] = useState<Set<string>>(new Set())
   const [remainingShiftCount, setRemainingShiftCount] = useState<number | null>(null)
@@ -276,6 +294,8 @@ export default function ContactSubPanel({
     if (nextStatus === 'declined_all') {
       setSelectedShifts(new Set())
       setOverriddenShiftIds(new Set())
+      setPartialShiftKeys(new Set())
+      setPartialShiftTimes({})
     }
     // When changing from declined to confirmed/pending/not contacted, refresh so availability is shown again.
     if (wasDeclinedAll && nextStatus !== 'declined_all' && onAssignmentComplete) {
@@ -388,6 +408,9 @@ export default function ContactSubPanel({
   }
 
   const applyShiftSelections = (data: ContactData) => {
+    setPartialShiftKeys(new Set())
+    setPartialShiftTimes({})
+
     if (data.response_status === 'declined_all') {
       setSelectedShifts(new Set())
       setOverriddenShiftIds(new Set())
@@ -427,6 +450,8 @@ export default function ContactSubPanel({
   useEffect(() => {
     if (sub?.can_cover) {
       setSelectedShifts(new Set())
+      setPartialShiftKeys(new Set())
+      setPartialShiftTimes({})
     }
   }, [sub?.can_cover])
 
@@ -435,6 +460,8 @@ export default function ContactSubPanel({
     if (responseStatus === 'declined_all') {
       setSelectedShifts(new Set())
       setOverriddenShiftIds(new Set())
+      setPartialShiftKeys(new Set())
+      setPartialShiftTimes({})
     }
   }, [responseStatus])
 
@@ -445,81 +472,58 @@ export default function ContactSubPanel({
   useEffect(() => {
     if (!isOpen || !sub || !absence) return
 
-    // Reset per-sub contact state immediately so we don't carry status from a previously viewed sub.
-    setContactId(null)
-    setIsContacted(false)
-    setContactedAt(null)
-    setResponseStatus('none')
-    setNotes('')
-    setCoverageRequestId(null)
-    setOverriddenShiftIds(new Set())
-    setIsSubInactive(false)
-    setRemainingShiftKeys(new Set())
-    setRemainingShiftCount(null)
-
-    let isCancelled = false
-
     if (absence.id.startsWith('manual-')) {
-      if (!isCancelled) {
-        setCoverageRequestId(null)
-        setFetching(false)
-      }
+      setCoverageRequestId(null)
+      setFetching(false)
       return
     }
 
     // Optional: use cached data for immediate display to avoid loading flash
     if (initialContactData) {
-      if (!isCancelled) {
-        setContactId(initialContactData.id)
-        setIsContacted(initialContactData.is_contacted ?? false)
-        setContactedAt(initialContactData.contacted_at)
-        setResponseStatus(normalizeResponseStatus(initialContactData.response_status))
-        setNotes(initialContactData.notes || '')
-        setCoverageRequestId(initialContactData.coverage_request_id || null)
-        applyShiftSelections(initialContactData)
-      }
+      setContactId(initialContactData.id)
+      setIsContacted(initialContactData.is_contacted ?? false)
+      setContactedAt(initialContactData.contacted_at)
+      setResponseStatus(normalizeResponseStatus(initialContactData.response_status))
+      setNotes(initialContactData.notes || '')
+      setCoverageRequestId(initialContactData.coverage_request_id || null)
+      applyShiftSelections(initialContactData)
       fetch(`/api/subs/${sub.id}`)
         .then(res => (res.ok ? res.json() : null))
         .then(subData => {
-          if (!isCancelled && subData) setIsSubInactive(!subData.active)
+          if (subData) setIsSubInactive(!subData.active)
         })
         .catch(() => {})
     }
 
     const fetchContactData = async () => {
-      if (!initialContactData && !isCancelled) setFetching(true)
+      if (!initialContactData) setFetching(true)
       try {
         const [coverageResponse, subResponse] = await Promise.all([
           fetch(`/api/sub-finder/coverage-request/${absence.id}`),
           fetch(`/api/subs/${sub.id}`).catch(() => null),
         ])
-        if (isCancelled) return
 
         if (!coverageResponse.ok) {
           const errorBody = await coverageResponse.text().catch(() => '')
           logContactPanelError(
             `Failed to fetch coverage request: status=${coverageResponse.status} statusText=${coverageResponse.statusText} url=${coverageResponse.url} body=${errorBody.slice(0, 200)}`
           )
-          if (!isCancelled) setFetching(false)
+          setFetching(false)
           return
         }
         const coverageData = await coverageResponse.json()
-        if (isCancelled) return
         setCoverageRequestId(coverageData.coverage_request_id)
 
         if (subResponse?.ok) {
           const subData = await subResponse.json()
-          if (isCancelled) return
           setIsSubInactive(!subData.active)
         }
 
         const contactResponse = await fetch(
           `/api/sub-finder/substitute-contacts?coverage_request_id=${coverageData.coverage_request_id}&sub_id=${sub.id}`
         )
-        if (isCancelled) return
         if (contactResponse.ok) {
           const contactData = await contactResponse.json()
-          if (isCancelled) return
           if (contactData) {
             setContactId(contactData.id)
             setIsContacted(contactData.is_contacted ?? false)
@@ -532,14 +536,11 @@ export default function ContactSubPanel({
       } catch (error) {
         logContactPanelError('Error fetching contact data:', error)
       } finally {
-        if (!isCancelled) setFetching(false)
+        setFetching(false)
       }
     }
 
     fetchContactData()
-    return () => {
-      isCancelled = true
-    }
   }, [isOpen, subId, absenceId])
 
   // Fetch remaining shifts for the coverage request (computed server-side)
@@ -593,6 +594,8 @@ export default function ContactSubPanel({
       setCoverageRequestId(null)
       setContactId(null)
       setOverriddenShiftIds(new Set())
+      setPartialShiftKeys(new Set())
+      setPartialShiftTimes({})
       setIsSubInactive(false)
       setRemainingShiftKeys(new Set())
       setRemainingShiftCount(null)
@@ -606,6 +609,11 @@ export default function ContactSubPanel({
     const month = MONTH_NAMES[date.getMonth()]
     const day = date.getDate()
     return `${dayName} ${month} ${day}`
+  }
+
+  const formatPartialTimeWindow = (start?: string | null, end?: string | null) => {
+    if (!start && !end) return null
+    return `${start ?? '--:--'}-${end ?? '--:--'}`
   }
 
   // Format date range for display
@@ -742,6 +750,18 @@ export default function ContactSubPanel({
     const newSelected = new Set(selectedShifts)
     if (newSelected.has(shiftKey)) {
       newSelected.delete(shiftKey)
+      setPartialShiftKeys(prev => {
+        if (!prev.has(shiftKey)) return prev
+        const next = new Set(prev)
+        next.delete(shiftKey)
+        return next
+      })
+      setPartialShiftTimes(prev => {
+        if (!(shiftKey in prev)) return prev
+        const next = { ...prev }
+        delete next[shiftKey]
+        return next
+      })
     } else {
       newSelected.add(shiftKey)
     }
@@ -794,6 +814,7 @@ export default function ContactSubPanel({
     return (await response.json()) as {
       shift_overrides: Array<{
         coverage_request_shift_id: string
+        shift_key: string
         selected: boolean
         override_availability: boolean
       }>
@@ -949,6 +970,24 @@ export default function ContactSubPanel({
       const resolvedOverrides = await resolveShiftOverrides()
       const selectedShiftIds = resolvedOverrides.selected_shift_ids
 
+      // Map coverage_request_shift_id → shift_key from overrides response
+      const shiftIdToKeyMap = new Map<string, string>(
+        (resolvedOverrides.shift_overrides || []).map(o => [
+          o.coverage_request_shift_id,
+          o.shift_key,
+        ])
+      )
+      const partialAssignments = selectedShiftIds
+        .filter(id => partialShiftKeys.has(shiftIdToKeyMap.get(id) ?? ''))
+        .map(id => {
+          const shiftKey = shiftIdToKeyMap.get(id) ?? ''
+          const times = partialShiftTimes[shiftKey]
+          return {
+            shift_id: id,
+            ...(times?.start ? { partial_start_time: times.start } : {}),
+            ...(times?.end ? { partial_end_time: times.end } : {}),
+          }
+        })
       if (!selectedShiftIds || selectedShiftIds.length === 0) {
         throw new Error('No valid shifts selected for assignment')
       }
@@ -1011,6 +1050,7 @@ export default function ContactSubPanel({
         ...(resolvedOverrides.is_floater_shift_ids?.length
           ? { is_floater_shift_ids: resolvedOverrides.is_floater_shift_ids }
           : {}),
+        ...(partialAssignments.length > 0 ? { partial_assignments: partialAssignments } : {}),
       }
 
       // Use the mutation hook which handles cache invalidation automatically
@@ -1276,6 +1316,14 @@ export default function ContactSubPanel({
         sub_name?: string | null
         sub_id?: string | null
         status?: 'uncovered' | 'partially_covered' | 'fully_covered'
+        assigned_subs?: Array<{
+          assignment_id: string
+          sub_id: string
+          sub_name: string
+          is_partial: boolean
+          partial_start_time?: string | null
+          partial_end_time?: string | null
+        }>
       }
     >()
 
@@ -1594,6 +1642,18 @@ export default function ContactSubPanel({
                       time_slot_code: shift.time_slot_code,
                       status: shift.status || 'uncovered',
                       sub_name: shift.sub_name || null,
+                      sub_names:
+                        shift.assigned_subs?.map(assignment => assignment.sub_name) || undefined,
+                      partial_time_windows:
+                        shift.assigned_subs
+                          ?.filter(assignment => assignment.is_partial)
+                          .map(assignment =>
+                            formatPartialTimeWindow(
+                              assignment.partial_start_time,
+                              assignment.partial_end_time
+                            )
+                          )
+                          .filter((value): value is string => Boolean(value)) || undefined,
                       is_partial: shift.status === 'partially_covered',
                     })),
                   }}
@@ -1627,27 +1687,76 @@ export default function ContactSubPanel({
                   </p>
                 </div>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 items-start gap-4">
                 {actionableShifts.map(shift => {
                   const shiftKey = `${shift.date}|${shift.time_slot_code}`
                   const shiftKeyNorm = toShiftKeyNormalized(shift.date, shift.time_slot_code)
                   const assignedToThisSub = assignedShiftByKey.get(shiftKey)
-                  const assignedElsewhere = !assignedToThisSub && Boolean(shift.sub_name)
+                  const assignedToThisSubFromShift = (shift.assigned_subs || []).find(
+                    assignment => assignment.sub_id === sub.id
+                  )
+                  const assignedToThisSubAssignment =
+                    assignedToThisSub ??
+                    (assignedToThisSubFromShift
+                      ? ({
+                          ...assignedToThisSubFromShift,
+                          id: assignedToThisSubFromShift.assignment_id,
+                          coverage_request_shift_id: '',
+                          date: shift.date,
+                          day_name: '',
+                          time_slot_code: shift.time_slot_code,
+                        } as (typeof assignedShifts)[number])
+                      : null)
+                  const isAssignedToThisSub =
+                    Boolean(assignedToThisSubAssignment) || shift.sub_id === sub.id
+                  const assignedToThisSubTimeWindow = assignedToThisSubAssignment
+                    ? formatPartialTimeWindow(
+                        assignedToThisSubAssignment.partial_start_time,
+                        assignedToThisSubAssignment.partial_end_time
+                      )
+                    : null
+                  // For partially_covered shifts, sub_name is set but assignment is additive:
+                  // do NOT treat this as blocking. Only fully_covered shifts are truly assignedElsewhere.
+                  const isPartiallyByOther =
+                    !isAssignedToThisSub &&
+                    shift.status === 'partially_covered' &&
+                    Boolean(shift.sub_name)
+                  const partialAssignmentsByOther = (shift.assigned_subs || []).filter(
+                    assignment => assignment.is_partial && assignment.sub_id !== sub.id
+                  )
+                  const partialByOtherSummary =
+                    partialAssignmentsByOther.length > 0
+                      ? partialAssignmentsByOther
+                          .map(assignment => {
+                            const window = formatPartialTimeWindow(
+                              assignment.partial_start_time,
+                              assignment.partial_end_time
+                            )
+                            return window
+                              ? `${assignment.sub_name} (${window})`
+                              : `${assignment.sub_name}`
+                          })
+                          .join(', ')
+                      : shift.sub_name || null
+                  const assignedElsewhere =
+                    !isAssignedToThisSub && !isPartiallyByOther && Boolean(shift.sub_name)
                   const canCoverThisShift =
                     (responseStatus === 'declined_all'
                       ? false
-                      : canCoverShiftKeys.has(shiftKeyNorm)) || Boolean(assignedToThisSub)
+                      : canCoverShiftKeys.has(shiftKeyNorm)) || isAssignedToThisSub
                   const isOverridden = overriddenShiftIds.has(shiftKey)
                   const isSelected = selectedShifts.has(shiftKey)
                   const cannotCoverReason =
                     responseStatus === 'declined_all'
                       ? 'Declined this shift'
                       : cannotCoverReasonByKey.get(shiftKey) ||
-                        (!canCoverThisShift ? 'Unavailable for this shift' : null)
+                        (!canCoverThisShift && !isPartiallyByOther
+                          ? 'Unavailable for this shift'
+                          : null)
                   const canAssignFromCheckbox =
-                    !assignedToThisSub &&
+                    !isAssignedToThisSub &&
                     !assignedElsewhere &&
-                    (canCoverThisShift || isOverridden) &&
+                    (canCoverThisShift || isOverridden || isPartiallyByOther) &&
                     !isSubInactive &&
                     responseStatus !== 'declined_all'
                   const canSwapToThisSub =
@@ -1656,12 +1765,18 @@ export default function ContactSubPanel({
                     !isSubInactive &&
                     responseStatus !== 'declined_all'
                   const needsOverride =
-                    !assignedToThisSub && !assignedElsewhere && !canCoverThisShift
+                    !isAssignedToThisSub &&
+                    !assignedElsewhere &&
+                    !isPartiallyByOther &&
+                    !canCoverThisShift
                   const cannotCoverMeta = getCannotCoverMeta(cannotCoverReason || null)
                   const canOverrideThisRow = cannotCoverMeta.canOverride
-                  const isAvailableForShift = canCoverThisShift || assignedToThisSub || isOverridden
+                  const isAvailableForShift =
+                    canCoverThisShift || isAssignedToThisSub || isOverridden || isPartiallyByOther
                   const cardLeftBorderColor = isAvailableForShift
-                    ? 'rgb(110, 231, 183)' // emerald-300 (green when sub is available for this shift)
+                    ? isPartiallyByOther
+                      ? '#F59E0B' // amber for partially-covered (can add another partial)
+                      : 'rgb(110, 231, 183)' // emerald-300 (green when sub is available for this shift)
                     : 'rgb(226, 232, 240)' // slate-200 (gray when not available)
 
                   return (
@@ -1676,6 +1791,7 @@ export default function ContactSubPanel({
                         }`}
                       >
                         <ShiftChips
+                          mode="availability"
                           canCover={[]}
                           cannotCover={[]}
                           shifts={[
@@ -1684,7 +1800,7 @@ export default function ContactSubPanel({
                               time_slot_code: shift.time_slot_code,
                               status:
                                 canCoverThisShift || isOverridden ? 'available' : 'unavailable',
-                              assignment_owner: assignedToThisSub
+                              assignment_owner: isAssignedToThisSub
                                 ? 'this_sub'
                                 : assignedElsewhere
                                   ? 'other_sub'
@@ -1704,10 +1820,31 @@ export default function ContactSubPanel({
                           responseStatus === 'declined_all' ? 'mt-0' : 'mt-1'
                         }`}
                       >
-                        {assignedToThisSub ? (
-                          <p className="text-sm text-emerald-700 font-medium">
-                            Assigned to this sub
-                          </p>
+                        {isAssignedToThisSub ? (
+                          <div className="space-y-1">
+                            <p className="text-sm text-emerald-700 font-medium">
+                              Assigned to this sub
+                            </p>
+                            {assignedToThisSubAssignment?.is_partial && (
+                              <p className="text-xs font-medium" style={{ color: '#92400E' }}>
+                                Partial assignment
+                                {assignedToThisSubTimeWindow
+                                  ? ` (${assignedToThisSubTimeWindow})`
+                                  : ''}
+                              </p>
+                            )}
+                          </div>
+                        ) : isPartiallyByOther ? (
+                          <div className="space-y-1">
+                            <p className="text-xs font-medium" style={{ color: '#92400E' }}>
+                              Partially covered. You can add another partial assignment.
+                            </p>
+                            {partialByOtherSummary && (
+                              <p className="text-xs text-amber-800">
+                                Current partial coverage: {partialByOtherSummary}
+                              </p>
+                            )}
+                          </div>
                         ) : !assignedElsewhere &&
                           (cannotCoverReason || responseStatus === 'declined_all') &&
                           !isOverridden ? (
@@ -1726,18 +1863,20 @@ export default function ContactSubPanel({
                       <div className="mt-auto pt-2 border-t border-slate-200">
                         {!previewMode && (
                           <div className="flex items-center justify-center gap-4">
-                            {assignedToThisSub && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setRemoveDialogShift(assignedToThisSub)}
-                                className="text-rose-700 hover:text-rose-800 hover:bg-transparent px-0 h-auto font-medium hover:underline"
-                              >
-                                Remove
-                              </Button>
+                            {assignedToThisSubAssignment && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setRemoveDialogShift(assignedToThisSubAssignment)}
+                                  className="text-rose-700 hover:text-rose-800 hover:bg-transparent px-0 h-auto font-medium hover:underline"
+                                >
+                                  Remove
+                                </Button>
+                              </>
                             )}
 
-                            {!assignedToThisSub && assignedElsewhere && (
+                            {!isAssignedToThisSub && assignedElsewhere && (
                               <>
                                 {!canSwapToThisSub && canOverrideThisRow && (
                                   <>
@@ -1778,7 +1917,7 @@ export default function ContactSubPanel({
                               </>
                             )}
 
-                            {!assignedToThisSub && !assignedElsewhere && (
+                            {!isAssignedToThisSub && !assignedElsewhere && (
                               <>
                                 {responseStatus === 'declined_all' ? (
                                   <span className="text-sm font-medium text-slate-500">Locked</span>
@@ -1837,6 +1976,80 @@ export default function ContactSubPanel({
                             )}
                           </div>
                         )}
+                        {!isAssignedToThisSub &&
+                          !assignedElsewhere &&
+                          isSelected &&
+                          responseStatus !== 'declined_all' && (
+                            <div className="mt-3 space-y-2 rounded-md border border-slate-200 bg-white px-3 py-2">
+                              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                                <Checkbox
+                                  checked={partialShiftKeys.has(shiftKey)}
+                                  onCheckedChange={(checked: boolean) => {
+                                    setPartialShiftKeys(prev => {
+                                      const next = new Set(prev)
+                                      if (checked) {
+                                        next.add(shiftKey)
+                                      } else {
+                                        next.delete(shiftKey)
+                                        setPartialShiftTimes(times => {
+                                          const nextTimes = { ...times }
+                                          delete nextTimes[shiftKey]
+                                          return nextTimes
+                                        })
+                                      }
+                                      return next
+                                    })
+                                  }}
+                                />
+                                <span>Partial shift (sub covers part of this shift)</span>
+                              </label>
+                              {partialShiftKeys.has(shiftKey) && (
+                                <div className="space-y-2 pl-6">
+                                  <p className="text-xs text-muted-foreground">Optional:</p>
+                                  <div className="flex items-center gap-2">
+                                    <label
+                                      className="w-10 text-xs text-muted-foreground"
+                                      htmlFor={`partial-from-${shiftKey}`}
+                                    >
+                                      From
+                                    </label>
+                                    <input
+                                      id={`partial-from-${shiftKey}`}
+                                      type="time"
+                                      className="h-7 rounded border px-1 py-0.5 text-xs"
+                                      value={partialShiftTimes[shiftKey]?.start ?? ''}
+                                      onChange={e =>
+                                        setPartialShiftTimes(prev => ({
+                                          ...prev,
+                                          [shiftKey]: { ...prev[shiftKey], start: e.target.value },
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <label
+                                      className="w-10 text-xs text-muted-foreground"
+                                      htmlFor={`partial-to-${shiftKey}`}
+                                    >
+                                      To
+                                    </label>
+                                    <input
+                                      id={`partial-to-${shiftKey}`}
+                                      type="time"
+                                      className="h-7 rounded border px-1 py-0.5 text-xs"
+                                      value={partialShiftTimes[shiftKey]?.end ?? ''}
+                                      onChange={e =>
+                                        setPartialShiftTimes(prev => ({
+                                          ...prev,
+                                          [shiftKey]: { ...prev[shiftKey], end: e.target.value },
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
                       </div>
                     </div>
                   )

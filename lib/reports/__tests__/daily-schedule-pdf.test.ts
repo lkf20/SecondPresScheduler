@@ -503,4 +503,58 @@ describe('daily schedule pdf html', () => {
     expect(html).not.toContain('.x{}')
     expect(html).not.toContain('onclick=')
   })
+
+  it('includes Reassigned in legend and renders reassigned rows as Name *', () => {
+    const dataWithReassigned = [
+      {
+        ...baseData[0],
+        days: [
+          {
+            ...baseData[0].days[0],
+            time_slots: [
+              {
+                ...baseData[0].days[0].time_slots[0],
+                assignments: [],
+                absences: [
+                  {
+                    teacher_id: 'teacher-reassigned',
+                    teacher_name: 'Jenn S.',
+                    teacher_first_name: 'Jenn',
+                    teacher_last_name: 'S',
+                    teacher_display_name: 'Jenn S.',
+                    has_sub: true,
+                    is_partial: false,
+                    is_reassigned: true,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ] as any
+
+    const html = buildDailySchedulePdfHtml({
+      dateISO: '2026-03-09',
+      generatedAt: 'Mar 9, 2026, 9:00 AM',
+      data: dataWithReassigned,
+      options: {
+        showAbsencesAndSubs: true,
+        showEnrollment: false,
+        showPreferredRatios: false,
+        showRequiredRatios: false,
+        colorFriendly: true,
+        layout: 'one',
+        teacherNameFormat: 'default',
+      },
+      timeZone: 'America/New_York',
+      schoolClosures: [],
+    })
+
+    expect(html).toContain('text-decoration: line-through;">Reassigned</span> *')
+    expect(html).toContain(
+      'color:#475569;"><span style="text-decoration: line-through;">Reassigned</span> *</div>'
+    )
+    expect(html).toContain('text-decoration: line-through;">Jenn S.</span> *</span>')
+  })
 })

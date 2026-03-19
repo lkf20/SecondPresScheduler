@@ -14,6 +14,7 @@ import {
   Settings,
   RefreshCw,
   XCircle,
+  Clock,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -71,7 +72,18 @@ type CoverageRequestItem = {
   partial_shifts: number
   remaining_shifts: number
   status: 'needs_coverage' | 'partially_covered' | 'covered'
-  shift_details?: Array<{ label: string; status: 'covered' | 'partial' | 'uncovered' }>
+  shift_details?: Array<{
+    label: string
+    status: 'covered' | 'partial' | 'uncovered'
+    date?: string
+    time_slot_code?: string
+    classroom_name?: string | null
+    classroom_color?: string | null
+    assigned_sub_name?: string | null
+    assigned_sub_names?: string[]
+    day_display_order?: number | null
+    time_slot_display_order?: number | null
+  }>
 }
 
 export type ScheduledSubItem = {
@@ -491,7 +503,7 @@ export default function DashboardClient({
     const infoColors = { text: 'text-blue-600', bg: 'bg-blue-100', icon: 'text-blue-600' }
     const tealColors = { text: 'text-teal-700', bg: 'bg-teal-100', icon: 'text-teal-600' }
 
-    // Partially Covered Shifts card hidden until partial shift assignment is built out (see TODO_TRACKER).
+    const amberColors = { text: 'text-amber-700', bg: 'bg-amber-50', icon: 'text-amber-600' }
     return [
       {
         key: 'uncovered' as const,
@@ -501,6 +513,15 @@ export default function DashboardClient({
         cardStyle: `${neutralColors.border} bg-white ${neutralColors.textMedium}`,
         icon: AlertTriangle,
         iconStyle: `${uncoveredColors.bg} ${uncoveredColors.icon}`,
+      },
+      {
+        key: 'partially_covered' as const,
+        label: 'Partially Covered',
+        count: overview.summary.partially_covered_shifts,
+        tone: amberColors.text,
+        cardStyle: `${neutralColors.border} bg-white ${neutralColors.textMedium}`,
+        icon: Clock,
+        iconStyle: `${amberColors.bg} ${amberColors.icon}`,
       },
       {
         key: 'absences' as const,
@@ -781,7 +802,23 @@ export default function DashboardClient({
                 )}
               >
                 <CardContent className="p-4 flex flex-col flex-1">
-                  <div className="text-base font-normal">{item.label}</div>
+                  <div className="text-base font-normal flex items-center gap-1">
+                    {item.label}
+                    {'tooltip' in item && typeof item.tooltip === 'string' && item.tooltip ? (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full text-xs text-muted-foreground cursor-help">
+                              ⓘ
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs text-sm">
+                            {item.tooltip}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : null}
+                  </div>
                   <div className="mt-3 h-px w-full bg-black/10" />
                   {'count' in item ? (
                     <div className="mt-3 flex items-center justify-between">
@@ -790,11 +827,13 @@ export default function DashboardClient({
                         style={
                           item.key === 'uncovered'
                             ? ({ color: coverageColorValues.uncovered.icon } as React.CSSProperties)
-                            : item.key === 'scheduled'
-                              ? ({ color: '#0D9488' } as React.CSSProperties) // teal-600
-                              : item.key === 'absences'
-                                ? ({ color: 'rgba(55, 65, 81, 1)' } as React.CSSProperties) // gray-700
-                                : undefined
+                            : item.key === 'partially_covered'
+                              ? ({ color: '#CA8A04' } as React.CSSProperties) // yellow-600
+                              : item.key === 'scheduled'
+                                ? ({ color: '#0D9488' } as React.CSSProperties) // teal-600
+                                : item.key === 'absences'
+                                  ? ({ color: 'rgba(55, 65, 81, 1)' } as React.CSSProperties) // gray-700
+                                  : undefined
                         }
                       >
                         {item.count}
@@ -826,7 +865,16 @@ export default function DashboardClient({
                                       borderColor: 'rgba(0, 0, 0, 0)',
                                       borderImage: 'none',
                                     } as React.CSSProperties)
-                                  : undefined
+                                  : item.key === 'partially_covered'
+                                    ? ({
+                                        backgroundColor: 'rgba(243, 244, 246, 1)', // gray-100
+                                        color: '#EAB308', // yellow-500
+                                        borderWidth: '0px',
+                                        borderStyle: 'none',
+                                        borderColor: 'rgba(0, 0, 0, 0)',
+                                        borderImage: 'none',
+                                      } as React.CSSProperties)
+                                    : undefined
                           }
                         >
                           <item.icon className="h-5 w-5" />

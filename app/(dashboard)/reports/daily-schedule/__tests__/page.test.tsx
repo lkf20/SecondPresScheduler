@@ -583,7 +583,7 @@ describe("Today's Schedule report page", () => {
     })
   })
 
-  it('shows non-sub override tooltip indicator for substitute rows in non-print view', async () => {
+  it('does not show non-sub override tooltip indicator in non-print view', async () => {
     ;(useDailySchedule as jest.Mock).mockReturnValue({
       data: {
         date: '2026-03-09',
@@ -652,6 +652,71 @@ describe("Today's Schedule report page", () => {
     })
 
     render(<DailyScheduleReportPage />)
-    expect(await screen.findByLabelText('Non-sub staff override')).toBeInTheDocument()
+    expect(await screen.findByText('Dana D.')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Non-sub staff override')).not.toBeInTheDocument()
+  })
+
+  it('shows Reassigned legend and renders reassigned staff as Name *', async () => {
+    ;(useDailySchedule as jest.Mock).mockReturnValue({
+      data: {
+        date: '2026-03-09',
+        day_of_week_id: 'day-mon',
+        day_name: 'Monday',
+        data: [
+          {
+            classroom_id: 'classroom-1',
+            classroom_name: 'Infant Room',
+            classroom_color: '#1d4ed8',
+            classroom_is_active: true,
+            days: [
+              {
+                day_of_week_id: 'day-mon',
+                day_name: 'Monday',
+                day_number: 1,
+                time_slots: [
+                  {
+                    time_slot_id: 'slot-am',
+                    time_slot_code: 'AM',
+                    time_slot_name: 'School Morning',
+                    time_slot_display_order: 1,
+                    time_slot_start_time: '09:00:00',
+                    time_slot_end_time: '12:00:00',
+                    time_slot_is_active: true,
+                    assignments: [],
+                    absences: [
+                      {
+                        teacher_id: 'teacher-reassigned',
+                        teacher_name: 'Jenn S.',
+                        teacher_first_name: 'Jenn',
+                        teacher_last_name: 'S',
+                        teacher_display_name: 'Jenn S.',
+                        has_sub: true,
+                        is_partial: false,
+                        is_reassigned: true,
+                      },
+                    ],
+                    schedule_cell: null,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        school_closures: [],
+        no_schedule: false,
+      },
+      isLoading: false,
+      error: null,
+    })
+
+    render(<DailyScheduleReportPage />)
+    expect(await screen.findByText('Reassigned')).toBeInTheDocument()
+    const reassignedName = screen.getByText('Jenn S.')
+    const reassignedRow = reassignedName.closest('span')?.parentElement
+    expect(reassignedName).toBeInTheDocument()
+    expect(reassignedRow).toBeTruthy()
+    expect(reassignedRow).toHaveTextContent('Jenn S. *')
+    expect(reassignedName).toHaveClass('line-through')
+    expect(reassignedRow).not.toHaveClass('line-through')
   })
 })

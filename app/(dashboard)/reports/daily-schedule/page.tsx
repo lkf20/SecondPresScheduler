@@ -2,13 +2,12 @@
 
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ChevronLeft, ChevronRight, CornerDownRight, Info, Settings2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CornerDownRight, Settings2 } from 'lucide-react'
 import { toast } from 'sonner'
 import DatePickerInput from '@/components/ui/date-picker-input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import ReportRichTextEditors from '@/components/reports/ReportRichTextEditors'
 import { useDailySchedule } from '@/lib/hooks/use-daily-schedule'
 import {
@@ -713,6 +712,11 @@ export default function DailyScheduleReportPage() {
                   Absent
                 </span>
               </div>
+              <div className="flex items-center gap-2">
+                <span className={cn(displayColorFriendly ? 'text-slate-600' : 'text-slate-700')}>
+                  <span className="line-through">Reassigned</span> *
+                </span>
+              </div>
               {showRequiredRatios && showPreferredRatios && (
                 <div className="flex items-center gap-2 text-xs text-slate-600">
                   <span>(R) Required ratio · (P) Preferred ratio</span>
@@ -1016,27 +1020,46 @@ export default function DailyScheduleReportPage() {
                                   const subsForAbsence =
                                     substitutesByAbsentTeacher.get(absence.teacher_id) || []
                                   const isNoSub = !absence.has_sub && subsForAbsence.length === 0
+                                  const isReassigned = absence.is_reassigned === true
                                   teacherRows.push({
                                     key: `absence-${absence.teacher_id}`,
-                                    className: 'text-slate-400',
+                                    className: isReassigned ? 'text-slate-600' : 'text-slate-400',
                                     content: (
                                       <>
-                                        <span className="line-through">
-                                          {formatTeacherName(
-                                            {
-                                              teacher_name: absence.teacher_name,
-                                              teacher_first_name: absence.teacher_first_name,
-                                              teacher_last_name: absence.teacher_last_name,
-                                              teacher_display_name: absence.teacher_display_name,
-                                            },
-                                            teacherNameFormat
-                                          )}
-                                        </span>
+                                        {isReassigned ? (
+                                          <span>
+                                            <span className="line-through">
+                                              {formatTeacherName(
+                                                {
+                                                  teacher_name: absence.teacher_name,
+                                                  teacher_first_name: absence.teacher_first_name,
+                                                  teacher_last_name: absence.teacher_last_name,
+                                                  teacher_display_name:
+                                                    absence.teacher_display_name,
+                                                },
+                                                teacherNameFormat
+                                              )}
+                                            </span>{' '}
+                                            *
+                                          </span>
+                                        ) : (
+                                          <span className="line-through">
+                                            {formatTeacherName(
+                                              {
+                                                teacher_name: absence.teacher_name,
+                                                teacher_first_name: absence.teacher_first_name,
+                                                teacher_last_name: absence.teacher_last_name,
+                                                teacher_display_name: absence.teacher_display_name,
+                                              },
+                                              teacherNameFormat
+                                            )}
+                                          </span>
+                                        )}
                                       </>
                                     ),
                                   })
 
-                                  if (isNoSub) {
+                                  if (isNoSub && !isReassigned) {
                                     const noSubArrowClass = displayColorFriendly
                                       ? 'text-amber-700'
                                       : 'text-slate-500'
@@ -1093,23 +1116,6 @@ export default function DailyScheduleReportPage() {
                                               teacherNameFormat
                                             )}
                                           </span>
-                                          {sub.non_sub_override === true && (
-                                            <TooltipProvider>
-                                              <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                  <span
-                                                    className="inline-flex"
-                                                    aria-label="Non-sub staff override"
-                                                  >
-                                                    <Info className="h-3 w-3 text-amber-700" />
-                                                  </span>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                  <p className="text-sm">Non-sub staff override</p>
-                                                </TooltipContent>
-                                              </Tooltip>
-                                            </TooltipProvider>
-                                          )}
                                         </span>
                                       ),
                                     })

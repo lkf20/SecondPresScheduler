@@ -34,7 +34,11 @@ interface ShiftStatusCardProps {
   responseSummary?: string
   onSelectShift?: (shift: SubFinderShift) => void
   onRemoveSub?: (shift: SubFinderShift) => void
+  /** For partial shifts: removal by specific assignment_id */
+  onRemoveSubByAssignmentId?: (shift: SubFinderShift, assignmentId: string) => void
   onChangeSub?: (shift: SubFinderShift) => void
+  /** For multi-assignment shifts: change a specific assignment row by assignment_id */
+  onChangeSubByAssignmentId?: (shift: SubFinderShift, assignmentId: string) => void
   /** When provided, tooltip names are clickable and open the Contact & Assign panel for that sub. */
   onSelectSubForContact?: (subId: string) => void
   /** When true, hide Find Sub button (Sub Finder preview-only mode). */
@@ -64,6 +68,23 @@ function getCoverageStatus(shift: SubFinderShift) {
     className: 'text-emerald-600',
     iconStyle: undefined as React.CSSProperties | undefined,
   }
+}
+
+function formatPartialTimeWindow(start?: string | null, end?: string | null) {
+  if (!start || !end) return null
+
+  const formatTime = (value: string) => {
+    const [hoursRaw, minutesRaw] = value.split(':')
+    const hours = Number(hoursRaw)
+    const minutes = Number(minutesRaw)
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return value
+    const period = hours >= 12 ? 'pm' : 'am'
+    const hour12 = ((hours + 11) % 12) + 1
+    if (minutes === 0) return `${hour12} ${period}`
+    return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`
+  }
+
+  return `${formatTime(start)} to ${formatTime(end)}`
 }
 
 function getContactStatus(contactedAvailableSubCount: number) {
@@ -274,7 +295,9 @@ export default function ShiftStatusCard({
   responseSummary,
   onSelectShift,
   onRemoveSub,
+  onRemoveSubByAssignmentId,
   onChangeSub,
+  onChangeSubByAssignmentId,
   onSelectSubForContact,
   previewMode = false,
 }: ShiftStatusCardProps) {
@@ -284,10 +307,27 @@ export default function ShiftStatusCard({
   const hasConfirmedSub = Boolean(shift.sub_name) && shift.status === 'fully_covered'
   const hasAssignedSub = Boolean(shift.sub_name) && Boolean(shift.sub_id)
   const isCovered = shift.status === 'fully_covered'
+  const isPartiallyCovered = shift.status === 'partially_covered'
+  // Use assigned_subs array for multi-partial display; fall back to single sub
+  const assignedSubs =
+    shift.assigned_subs && shift.assigned_subs.length > 0
+      ? shift.assigned_subs
+      : hasAssignedSub && shift.sub_id && shift.sub_name && shift.assignment_id
+        ? [
+            {
+              assignment_id: shift.assignment_id,
+              sub_id: shift.sub_id,
+              sub_name: shift.sub_name,
+              is_partial: shift.is_partial ?? false,
+            },
+          ]
+        : []
 
   const statusBorderColor = isCovered
     ? shiftStatusColorValues.available.border
-    : shiftStatusColorValues.unavailable.border
+    : isPartiallyCovered
+      ? '#F59E0B' // amber-400 for partial coverage
+      : shiftStatusColorValues.unavailable.border
   const statusIconCircleClass =
     'inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-slate-50'
 
@@ -313,7 +353,7 @@ export default function ShiftStatusCard({
           : undefined
       }
     >
-      {!hasAssignedSub && !hasConfirmedSub ? (
+      {!isPartiallyCovered && !hasAssignedSub && !hasConfirmedSub ? (
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex justify-between items-start gap-6">
             <div className="min-w-0 flex flex-wrap items-center gap-2">
@@ -387,8 +427,108 @@ export default function ShiftStatusCard({
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5 text-base text-slate-700 min-w-[220px] justify-center self-center">
-            {hasAssignedSub ? (
+          <div className="flex min-w-[220px] max-w-full flex-col gap-1.5 self-stretch text-base text-slate-700 md:min-w-[280px]">
+            {isPartiallyCovered && assignedSubs.length > 0 ? (
+              // Partially covered: show per-assignment rows + "Add Sub" action
+              <div className="mt-1 flex w-full flex-col gap-2">
+                {assignedSubs.map(sub => (
+                  <div key={sub.assignment_id} className="flex items-center justify-between gap-2">
+                    <p
+                      className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm font-medium leading-tight"
+                      style={{
+                        backgroundColor: coverageColorValues.partialAssignedPill.bg,
+                        color: coverageColorValues.partialAssignedPill.text,
+                        borderStyle: 'dashed',
+                        borderColor: coverageColorValues.partialAssignedPill.border,
+                      }}
+                    >
+                      <Clock
+                        className="h-3.5 w-3.5 shrink-0"
+                        style={{ color: coverageColorValues.partialAssignedPill.icon }}
+                      />
+                      <span className="truncate">
+                        {sub.sub_name}{' '}
+                        {formatPartialTimeWindow(sub.partial_start_time, sub.partial_end_time)
+                          ? `(${formatPartialTimeWindow(sub.partial_start_time, sub.partial_end_time)})`
+                          : '(partial)'}
+                      </span>
+                    </p>
+                    <div className="flex shrink-0 items-center justify-end gap-1.5">
+                      {!previewMode &&
+                        (onChangeSubByAssignmentId || onChangeSub || onSelectShift) && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={event => {
+                                    event.stopPropagation()
+                                    if (onChangeSubByAssignmentId) {
+                                      onChangeSubByAssignmentId(shift, sub.assignment_id)
+                                      return
+                                    }
+                                    if (onChangeSub) {
+                                      onChangeSub(shift)
+                                      return
+                                    }
+                                    onSelectShift?.(shift)
+                                  }}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200"
+                                  style={{ backgroundColor: '#f5fbfa' }}
+                                  aria-label={`Change ${sub.sub_name}`}
+                                >
+                                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>Change {sub.sub_name}</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      {(onRemoveSubByAssignmentId || onRemoveSub) && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={event => {
+                                  event.stopPropagation()
+                                  if (onRemoveSubByAssignmentId) {
+                                    onRemoveSubByAssignmentId(shift, sub.assignment_id)
+                                  } else {
+                                    onRemoveSub?.(shift)
+                                  }
+                                }}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
+                                style={{ color: '#9f1239', backgroundColor: '#fff7f8' }}
+                                aria-label={`Remove ${sub.sub_name}`}
+                              >
+                                <XCircle className="h-3.5 w-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent>Remove {sub.sub_name}</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {!previewMode && onSelectShift && (
+                  <Button
+                    type="button"
+                    variant="teal"
+                    size="sm"
+                    aria-label="Add another sub to this shift"
+                    onClick={e => {
+                      e.stopPropagation()
+                      onSelectShift(shift)
+                    }}
+                    className="mt-1 shrink-0 gap-1.5 self-end"
+                  >
+                    Add Sub <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            ) : hasAssignedSub ? (
               <div className="mt-2">
                 <div className="flex items-center justify-between gap-3">
                   <p

@@ -468,6 +468,8 @@ export default function RecommendedSubsList({
         classroom_name?: string | null
         class_name?: string | null
         classroom_color?: string | null
+        day_display_order?: number | null
+        time_slot_display_order?: number | null
       }>
     >((acc, shift) => {
       const key = `${shift.date}|${shift.time_slot_code}`
@@ -482,6 +484,8 @@ export default function RecommendedSubsList({
           classroom_name: shift.classroom_name ?? null,
           class_name: shift.class_name ?? null,
           classroom_color: shift.classroom_color ?? null,
+          day_display_order: shift.day_display_order ?? null,
+          time_slot_display_order: shift.time_slot_display_order ?? null,
         })
         return acc
       }
@@ -493,6 +497,8 @@ export default function RecommendedSubsList({
           classroom_name: shift.classroom_name ?? null,
           class_name: shift.class_name ?? null,
           classroom_color: shift.classroom_color ?? null,
+          day_display_order: shift.day_display_order ?? null,
+          time_slot_display_order: shift.time_slot_display_order ?? null,
         })
         return acc
       }
@@ -505,6 +511,8 @@ export default function RecommendedSubsList({
         classroom_name: shift.classroom_name ?? null,
         class_name: shift.class_name ?? null,
         classroom_color: shift.classroom_color ?? null,
+        day_display_order: shift.day_display_order ?? null,
+        time_slot_display_order: shift.time_slot_display_order ?? null,
       })
       return acc
     }, [])

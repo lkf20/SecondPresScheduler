@@ -8,6 +8,7 @@ import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 import { toDateStringISO } from '@/lib/utils/date'
 import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
+import { reconcileCoverageRequestCounters } from '@/lib/api/coverage-request-counters'
 
 const shouldDebugLog =
   process.env.NODE_ENV === 'development' || process.env.SUB_FINDER_DEBUG === 'true'
@@ -24,10 +25,30 @@ const isMissingNonSubOverrideColumnError = (error: { code?: string; message?: st
   return /non_sub_override/i.test(error.message || '')
 }
 
+/** HH:mm format validation for optional partial times */
+const HH_MM_RE = /^\d{2}:\d{2}$/
+
+/** One entry in the optional partial_assignments array */
+interface PartialAssignmentInput {
+  shift_id: string
+  partial_start_time?: string | null
+  partial_end_time?: string | null
+}
+
 // See docs/domain/data-lifecycle.md: sub_assignments lifecycle
 /**
  * POST /api/sub-finder/assign-shifts
- * Assign a sub to selected shifts by creating sub_assignments
+ * Assign a sub to selected shifts by creating sub_assignments.
+ *
+ * Used by both Assign Sub panel and Contact & Assign (Sub Finder); same payload shape.
+ * Supports partial assignments via `partial_assignments` array (Phase 1).
+ * A shift listed in `partial_assignments` is treated as a partial assignment (is_partial=true).
+ * A shift in `selected_shift_ids` but NOT in `partial_assignments` is a full assignment.
+ * Full assignments replace ALL existing actives for the shift (replace semantics).
+ * Partial assignments replace any existing FULL assignment but are additive to other partials.
+ * Requires migration 117: old index idx_sub_assignments_one_active_per_shift allows only one
+ * active per shift; 117 replaces it with idx_sub_assignments_one_active_full_per_shift so
+ * multiple partials per shift are allowed.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -38,7 +59,8 @@ export async function POST(request: NextRequest) {
       allow_non_sub_override = false,
       selected_shift_ids, // Array of coverage_request_shift_ids
       is_floater_shift_ids = [], // Optional: coverage_request_shift_ids to create as floater (legacy)
-      resolutions = {}, // Optional: { [coverage_request_shift_id]: 'floater' | 'move' | 'replace' } for conflict/replace resolution
+      resolutions = {}, // Optional: { [coverage_request_shift_id]: 'floater' | 'move' | 'replace' }
+      partial_assignments = [], // Optional: Array<{ shift_id, partial_start_time?, partial_end_time? }>
     } = body
 
     const resolutionsMap =
@@ -67,6 +89,78 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // -------------------------------------------------------------------------
+    // Validate and build partial_assignments map
+    // -------------------------------------------------------------------------
+    if (!Array.isArray(partial_assignments)) {
+      return createErrorResponse('partial_assignments must be an array', 400)
+    }
+
+    const uniqueSelectedShiftIds = Array.from(
+      new Set(
+        selected_shift_ids.filter((value: unknown): value is string => typeof value === 'string')
+      )
+    )
+
+    // Build map: shift_id -> { partial_start_time, partial_end_time }
+    const partialAssignmentsMap = new Map<
+      string,
+      { partial_start_time: string | null; partial_end_time: string | null }
+    >()
+    const seenPartialShiftIds = new Set<string>()
+    for (const pa of partial_assignments as PartialAssignmentInput[]) {
+      if (!pa || typeof pa.shift_id !== 'string') {
+        return createErrorResponse(
+          'Each entry in partial_assignments must have a string shift_id',
+          400
+        )
+      }
+      if (!uniqueSelectedShiftIds.includes(pa.shift_id)) {
+        return createErrorResponse(
+          `Shift ID in partial_assignments not found in selected_shift_ids: ${pa.shift_id}`,
+          400
+        )
+      }
+      if (seenPartialShiftIds.has(pa.shift_id)) {
+        return createErrorResponse(`Duplicate shift_id in partial_assignments: ${pa.shift_id}`, 400)
+      }
+      seenPartialShiftIds.add(pa.shift_id)
+
+      // Validate optional time format
+      if (pa.partial_start_time != null && !HH_MM_RE.test(pa.partial_start_time)) {
+        return createErrorResponse(
+          `partial_start_time must be HH:mm format, got: ${pa.partial_start_time}`,
+          400
+        )
+      }
+      if (pa.partial_end_time != null && !HH_MM_RE.test(pa.partial_end_time)) {
+        return createErrorResponse(
+          `partial_end_time must be HH:mm format, got: ${pa.partial_end_time}`,
+          400
+        )
+      }
+
+      partialAssignmentsMap.set(pa.shift_id, {
+        partial_start_time: pa.partial_start_time ?? null,
+        partial_end_time: pa.partial_end_time ?? null,
+      })
+    }
+
+    // Reject floater + partial combination
+    for (const shiftId of partialAssignmentsMap.keys()) {
+      if (floaterShiftIds.has(shiftId)) {
+        return createErrorResponse(
+          'Cannot combine partial and floater assignments for the same shift.',
+          400
+        )
+      }
+    }
+
+    // Duplicate check on selected_shift_ids
+    if (uniqueSelectedShiftIds.length !== selected_shift_ids.length) {
+      return createErrorResponse('selected_shift_ids contains duplicate values', 400)
+    }
+
     const supabase = await createClient()
     const schoolId = await getUserSchoolId()
     if (!schoolId) {
@@ -76,58 +170,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const reconcileCoverageRequestCounters = async (coverageRequestId: string) => {
-      const [
-        { count: totalActiveShifts, error: totalError },
-        { data: coveredRows, error: coveredError },
-      ] = await Promise.all([
-        supabase
-          .from('coverage_request_shifts')
-          .select('id', { count: 'exact', head: true })
-          .eq('coverage_request_id', coverageRequestId)
-          .eq('status', 'active'),
-        supabase
-          .from('sub_assignments')
-          .select(
-            'coverage_request_shift_id, coverage_request_shifts!inner(coverage_request_id, status)'
-          )
-          .eq('status', 'active')
-          .eq('coverage_request_shifts.coverage_request_id', coverageRequestId)
-          .eq('coverage_request_shifts.status', 'active'),
-      ])
-
-      if (totalError) throw totalError
-      if (coveredError) throw coveredError
-
-      const total = totalActiveShifts || 0
-      const coveredDistinct = new Set(
-        (coveredRows || [])
-          .map((row: any) => row.coverage_request_shift_id)
-          .filter((value: unknown): value is string => Boolean(value))
-      ).size
-      const covered = Math.min(coveredDistinct, total)
-
-      const { error: updateError } = await supabase
-        .from('coverage_requests')
-        .update({
-          total_shifts: total,
-          covered_shifts: covered,
-          status: total > 0 && covered === total ? 'filled' : 'open',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', coverageRequestId)
-        .in('status', ['open', 'filled'])
-
-      if (updateError) throw updateError
-    }
-
     // Get active coverage_request to get teacher_id
-    // The coverage_requests table has teacher_id directly, and source_request_id for time_off requests
     const { data: coverageRequest, error: coverageError } = await supabase
       .from('coverage_requests')
       .select('teacher_id, source_request_id, request_type, school_id')
       .eq('id', coverage_request_id)
-      .in('status', ['open', 'filled']) // Only active coverage requests
+      .in('status', ['open', 'filled'])
       .single()
 
     if (coverageError) {
@@ -154,7 +202,6 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('You do not have access to this coverage request.', 403)
     }
 
-    // Get teacher_id directly from coverage_request (it's stored there)
     const teacherId = (coverageRequest as any).teacher_id
     if (!teacherId) {
       return createErrorResponse('Teacher ID not found in coverage request', 404)
@@ -195,18 +242,12 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
     const teacherName = teacherRow ? getStaffDisplayName(teacherRow) : null
 
-    const uniqueSelectedShiftIds = Array.from(
-      new Set(
-        selected_shift_ids.filter((value: unknown): value is string => typeof value === 'string')
-      )
-    )
-
     // Get active coverage_request_shifts for the selected shifts
     const { data: coverageRequestShifts, error: shiftsError } = await supabase
       .from('coverage_request_shifts')
       .select('id, date, day_of_week_id, time_slot_id, classroom_id')
       .eq('coverage_request_id', coverage_request_id)
-      .eq('status', 'active') // Only active shifts
+      .eq('status', 'active')
       .in('id', uniqueSelectedShiftIds)
 
     if (shiftsError) {
@@ -218,15 +259,13 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('No valid shifts found for assignment', 404)
     }
 
-    // Prevent duplicate/overlapping active assignments on the same shift.
-    // Scope to resolved active shifts for this coverage request to avoid stale client payloads.
     const targetShiftIds = coverageRequestShifts
       .map((shift: any) => shift.id)
       .filter((value: unknown): value is string => Boolean(value))
 
     const { data: existingAssignments, error: existingAssignmentsError } = await supabase
       .from('sub_assignments')
-      .select('id, coverage_request_shift_id')
+      .select('id, coverage_request_shift_id, is_partial')
       .eq('status', 'active')
       .in('coverage_request_shift_id', targetShiftIds)
 
@@ -234,8 +273,26 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Failed to validate existing assignments', 500)
     }
 
-    // Include all requested shifts so "replace" (cancel current sub, assign new) works for every selected shift.
-    // Conflict resolution (floater/move) is still required when the same sub is double-booked; that is enforced by hasSubCollision below.
+    // -------------------------------------------------------------------------
+    // Cap check: reject if adding partial would exceed 4 partials per shift
+    // -------------------------------------------------------------------------
+    // Count existing active partial assignments per shift (from DB)
+    const existingPartialCountByShift = new Map<string, number>()
+    for (const a of existingAssignments || []) {
+      if (a.is_partial && a.coverage_request_shift_id) {
+        existingPartialCountByShift.set(
+          a.coverage_request_shift_id,
+          (existingPartialCountByShift.get(a.coverage_request_shift_id) ?? 0) + 1
+        )
+      }
+    }
+    for (const [shiftId] of partialAssignmentsMap) {
+      const existingCount = existingPartialCountByShift.get(shiftId) ?? 0
+      if (existingCount >= 4) {
+        return createErrorResponse('Maximum of 4 partial assignments per shift reached.', 400)
+      }
+    }
+
     const assignableCoverageRequestShifts = coverageRequestShifts
 
     // Reject assignment if any selected shift is on a school closed day
@@ -320,10 +377,24 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Failed to validate sub scheduling conflicts', 500)
     }
 
+    // Sub collision check: allow partial+partial on same slot (additive), block otherwise.
+    // Full-on-full collision still requires explicit resolution (replace/floater/move).
     const hasSubCollision = (subScheduleCollisions || []).some((assignment: any) => {
       const key = `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`
-      return selectedShiftKeys.has(key) && !resolvedSlotKeys.has(key)
+      if (!selectedShiftKeys.has(key) || resolvedSlotKeys.has(key)) return false
+
+      // Determine if the new assignment for this slot is partial
+      const shiftForThisKey = assignableCoverageRequestShifts.find(
+        (s: any) => `${toDateStringISO(s.date)}|${s.time_slot_id}` === key
+      )
+      const isNewPartial = shiftForThisKey ? partialAssignmentsMap.has(shiftForThisKey.id) : false
+
+      // If both existing and new are partial: additive, no collision
+      if (assignment.is_partial && isNewPartial) return false
+
+      return true
     })
+
     if (hasSubCollision) {
       return createErrorResponse(
         'Double booking prevented: this sub already has an active assignment for one or more selected shifts.',
@@ -331,10 +402,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Resolve conflicts before insert: move = cancel existing sub_assignment; floater = set is_floater on existing and new.
-    // When resolution is 'move' with existing sub_assignment (conflict_sub): cancel it so sub is removed from other room, assign here.
-    // When resolution is 'move' with no existing sub_assignment (conflict_teaching: sub teaches in other room via teacher_schedules):
-    // we cannot remove from teacher_schedules; create full assignment here (is_floater: false).
+    // Resolve conflicts before insert: move = cancel existing; floater = set is_floater flag
     const existingBySlotKey = new Map<string, any>()
     for (const a of subScheduleCollisions || []) {
       const key = `${toDateStringISO(a.date)}|${a.time_slot_id}`
@@ -394,25 +462,47 @@ export async function POST(request: NextRequest) {
 
     const shiftsToInsert = assignableCoverageRequestShifts
 
-    // Replace any current sub on these shifts: cancel existing active sub_assignments for each
-    // coverage_request_shift_id we're assigning to so we never have multiple subs per shift.
+    // -------------------------------------------------------------------------
+    // Replace existing assignments (branching logic for full vs partial)
+    // - Full assignment: cancel ALL existing active assignments for the shift
+    // - Partial assignment: cancel any existing FULL assignment; leave other partials
+    // -------------------------------------------------------------------------
     const shiftIdsWeAreAssigning = new Set(shiftsToInsert.map((s: any) => s.id))
     for (const a of existingAssignments || []) {
       const crShiftId = a.coverage_request_shift_id
-      if (crShiftId && shiftIdsWeAreAssigning.has(crShiftId)) {
+      if (!crShiftId || !shiftIdsWeAreAssigning.has(crShiftId)) continue
+
+      const isNewAssignmentPartial = partialAssignmentsMap.has(crShiftId)
+
+      if (!isNewAssignmentPartial) {
+        // New is FULL → cancel all existing actives (replace semantics)
         const { error: replaceErr } = await supabase
           .from('sub_assignments')
           .update({ status: 'cancelled' })
           .eq('id', a.id)
         if (replaceErr) {
           logAssignShiftsError(
-            'Error cancelling existing assignment when replacing sub:',
+            'Error cancelling existing assignment when replacing with full assignment:',
             replaceErr
           )
           return createErrorResponse('Failed to replace existing sub on shift', 500)
         }
+      } else if (!a.is_partial) {
+        // New is PARTIAL and existing is FULL → cancel the full (partial supersedes full)
+        const { error: replaceErr } = await supabase
+          .from('sub_assignments')
+          .update({ status: 'cancelled' })
+          .eq('id', a.id)
+        if (replaceErr) {
+          logAssignShiftsError('Error cancelling full assignment when adding partial:', replaceErr)
+          return createErrorResponse('Failed to replace full assignment when adding partial', 500)
+        }
       }
+      // Existing is partial, new is partial → additive, no cancel
     }
+
+    // Reconcile counters after any cancellations, before insert
+    await reconcileCoverageRequestCounters(supabase, coverage_request_id)
 
     const { actorUserId, actorDisplayName } = await getAuditActorContext()
     const assignments = shiftsToInsert.map((shift: any) => {
@@ -421,6 +511,8 @@ export async function POST(request: NextRequest) {
       if (!resolvedClassroomId) {
         throw new Error('Missing classroom assignment for selected shifts')
       }
+      const partialMeta = partialAssignmentsMap.get(shift.id)
+      const isPartial = partialMeta !== undefined
       return {
         sub_id,
         teacher_id: teacherId,
@@ -429,21 +521,18 @@ export async function POST(request: NextRequest) {
         time_slot_id: shift.time_slot_id,
         assignment_type: 'Substitute Shift' as const,
         classroom_id: resolvedClassroomId,
-        coverage_request_shift_id: shift.id, // Required: link to coverage_request_shift
-        is_partial: false,
+        coverage_request_shift_id: shift.id,
+        is_partial: isPartial,
         is_floater: floaterShiftIds.has(shift.id),
-        partial_start_time: null,
-        partial_end_time: null,
+        partial_start_time: partialMeta?.partial_start_time ?? null,
+        partial_end_time: partialMeta?.partial_end_time ?? null,
         notes: null,
-        status: 'active', // Default status
-        assignment_kind: 'absence_coverage', // Default assignment kind
+        status: 'active',
+        assignment_kind: 'absence_coverage',
         non_sub_override: isNonSubOverride,
         school_id: requestSchoolId,
       }
     })
-
-    // Heal stale counters before inserting, then retry once if constraint violation persists.
-    await reconcileCoverageRequestCounters(coverage_request_id)
 
     const insertAssignments = async (
       rows: typeof assignments
@@ -472,7 +561,7 @@ export async function POST(request: NextRequest) {
       insertError?.message?.includes('coverage_requests_counters_check') ||
       insertError?.details?.includes('coverage_requests_counters_check')
     ) {
-      await reconcileCoverageRequestCounters(coverage_request_id)
+      await reconcileCoverageRequestCounters(supabase, coverage_request_id)
       const retryResult = await insertAssignments(assignments)
       createdAssignments = retryResult.data
       insertError = retryResult.error
@@ -498,13 +587,23 @@ export async function POST(request: NextRequest) {
         details: insertError.details,
         hint: insertError.hint,
       })
+      const isOldPartialIndexError =
+        insertError?.code === '23505' &&
+        typeof insertError?.message === 'string' &&
+        insertError.message.includes('idx_sub_assignments_one_active_per_shift')
+      if (isOldPartialIndexError) {
+        return createErrorResponse(
+          'Cannot add partial assignment: the database still has the old unique index that allows only one assignment per shift. Run migrations (e.g. supabase db push) so migration 117 is applied—it replaces that index to allow multiple partial assignments per shift.',
+          503
+        )
+      }
       return createErrorResponse(
         `Failed to create assignments: ${insertError.message || 'Database error'}`,
         500
       )
     }
 
-    // Get substitute contact ID to check for overrides
+    // Get substitute contact ID for override logging
     const { data: substituteContact } = await supabase
       .from('substitute_contacts')
       .select('id')
@@ -512,7 +611,6 @@ export async function POST(request: NextRequest) {
       .eq('sub_id', sub_id)
       .single()
 
-    // Get shift overrides to check for overrides
     if (substituteContact) {
       const { data: shiftOverrides } = await supabase
         .from('sub_contact_shift_overrides')
@@ -520,7 +618,6 @@ export async function POST(request: NextRequest) {
         .in('coverage_request_shift_id', uniqueSelectedShiftIds)
         .eq('substitute_contact_id', substituteContact.id)
 
-      // Log any overridden shifts
       if (shiftOverrides) {
         for (const override of shiftOverrides) {
           if (override.override_availability) {
@@ -548,16 +645,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Get assigned shift details for response
+    // Build assigned shift details for response
     const assignedShiftDetails: Array<{
       coverage_request_shift_id: string
       date: string
       day_name: string
       time_slot_code: string
+      is_partial?: boolean
+      partial_start_time?: string | null
+      partial_end_time?: string | null
     }> = []
 
     if (coverageRequestShifts && createdAssignments) {
-      // Get day names and time slot codes
       const shiftIds = assignableCoverageRequestShifts.map((s: any) => s.id)
       const { data: shiftDetails } = await supabase
         .from('coverage_request_shifts')
@@ -573,8 +672,20 @@ export async function POST(request: NextRequest) {
         .in('id', shiftIds)
 
       if (shiftDetails) {
+        const assignmentByShiftId = new Map(
+          (createdAssignments || [])
+            .filter((assignment: any) => assignment.coverage_request_shift_id)
+            .map((assignment: any) => [assignment.coverage_request_shift_id, assignment])
+        )
         assignedShiftDetails.push(
           ...shiftDetails.map((shift: any) => ({
+            ...(assignmentByShiftId.get(shift.id)
+              ? {
+                  is_partial: assignmentByShiftId.get(shift.id).is_partial === true,
+                  partial_start_time: assignmentByShiftId.get(shift.id).partial_start_time ?? null,
+                  partial_end_time: assignmentByShiftId.get(shift.id).partial_end_time ?? null,
+                }
+              : {}),
             coverage_request_shift_id: shift.id,
             date: shift.date,
             day_name: shift.days_of_week?.name || '',
@@ -584,13 +695,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Revalidate all pages that might show this data
     revalidatePath('/dashboard')
     revalidatePath('/time-off')
     revalidatePath('/schedules/weekly')
     revalidatePath('/sub-finder')
     revalidatePath('/reports')
 
+    const fullCount = assignments.filter(a => !a.is_partial).length
+    const partialCount = assignments.filter(a => a.is_partial).length
     const shiftCount = createdAssignments?.length ?? assignableCoverageRequestShifts.length
     const sortedDates = Array.from(
       new Set(assignableCoverageRequestShifts.map((s: any) => s.date).filter(Boolean))
@@ -607,9 +719,10 @@ export async function POST(request: NextRequest) {
         : sortedDates.length === 1
           ? formatMonthDay(sortedDates[0])
           : `${formatMonthDay(sortedDates[0])} – ${formatMonthDay(sortedDates[sortedDates.length - 1])}`
+    const partialNote = partialCount > 0 ? ` (${partialCount} partial)` : ''
     const summary =
       subName && teacherName
-        ? `Assigned ${subName} to cover ${shiftCount} shift${shiftCount !== 1 ? 's' : ''} for ${teacherName}${dateLabel ? ` on ${dateLabel}` : ''}${isNonSubOverride ? ' (non-sub override)' : ''}`
+        ? `Assigned ${subName} to cover ${shiftCount} shift${shiftCount !== 1 ? 's' : ''}${partialNote} for ${teacherName}${dateLabel ? ` on ${dateLabel}` : ''}${isNonSubOverride ? ' (non-sub override)' : ''}`
         : undefined
 
     await logAuditEvent({
@@ -630,6 +743,19 @@ export async function POST(request: NextRequest) {
         teacher_name: teacherName ?? undefined,
         assignment_ids: (createdAssignments || []).map((assignment: any) => assignment.id),
         shift_ids: uniqueSelectedShiftIds,
+        full_count: fullCount,
+        partial_count: partialCount,
+        ...(partialCount > 0
+          ? {
+              partial_shifts: Array.from(partialAssignmentsMap.entries()).map(
+                ([shiftId, meta]) => ({
+                  shift_id: shiftId,
+                  partial_start_time: meta.partial_start_time,
+                  partial_end_time: meta.partial_end_time,
+                })
+              ),
+            }
+          : {}),
         ...(summary ? { summary } : {}),
       },
     })
@@ -637,6 +763,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       assignments_created: createdAssignments?.length || 0,
+      full_assignments_created: fullCount,
+      partial_assignments_created: partialCount,
       assignments: createdAssignments,
       non_sub_override: isNonSubOverride,
       assigned_shifts: assignedShiftDetails,

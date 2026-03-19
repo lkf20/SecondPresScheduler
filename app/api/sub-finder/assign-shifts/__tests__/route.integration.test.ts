@@ -29,6 +29,10 @@ jest.mock('@/lib/api/school-calendar', () => ({
   getSchoolClosuresForDateRange: jest.fn().mockResolvedValue([]),
 }))
 
+jest.mock('@/lib/api/coverage-request-counters', () => ({
+  reconcileCoverageRequestCounters: jest.fn().mockResolvedValue(undefined),
+}))
+
 const createStaffQuery = ({
   subRecord = {
     id: 'sub-1',
@@ -1527,5 +1531,109 @@ describe('POST /api/sub-finder/assign-shifts integration', () => {
       is_floater: true,
       coverage_request_shift_id: 'shift-1',
     })
+  })
+
+  // ─── Phase 1: Partial assignment validation ────────────────────────────────
+
+  it('returns 400 when partial_assignments is not an array', async () => {
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/assign-shifts',
+      'POST',
+      {
+        coverage_request_id: 'req-1',
+        sub_id: 'sub-1',
+        selected_shift_ids: ['shift-1'],
+        partial_assignments: 'not-an-array',
+      }
+    )
+    const response = await POST(request as any)
+    expect(response.status).toBe(400)
+    const json = await response.json()
+    expect(json.error).toMatch(/partial_assignments must be an array/i)
+  })
+
+  it('returns 400 when partial_assignments contains a shift_id not in selected_shift_ids', async () => {
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/assign-shifts',
+      'POST',
+      {
+        coverage_request_id: 'req-1',
+        sub_id: 'sub-1',
+        selected_shift_ids: ['shift-1'],
+        partial_assignments: [{ shift_id: 'shift-99' }],
+      }
+    )
+    const response = await POST(request as any)
+    expect(response.status).toBe(400)
+    const json = await response.json()
+    expect(json.error).toMatch(/not found in selected_shift_ids/i)
+  })
+
+  it('returns 400 when partial_assignments has duplicate shift_id entries', async () => {
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/assign-shifts',
+      'POST',
+      {
+        coverage_request_id: 'req-1',
+        sub_id: 'sub-1',
+        selected_shift_ids: ['shift-1'],
+        partial_assignments: [{ shift_id: 'shift-1' }, { shift_id: 'shift-1' }],
+      }
+    )
+    const response = await POST(request as any)
+    expect(response.status).toBe(400)
+    const json = await response.json()
+    expect(json.error).toMatch(/duplicate shift_id/i)
+  })
+
+  it('returns 400 when partial_start_time is not HH:mm format', async () => {
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/assign-shifts',
+      'POST',
+      {
+        coverage_request_id: 'req-1',
+        sub_id: 'sub-1',
+        selected_shift_ids: ['shift-1'],
+        partial_assignments: [{ shift_id: 'shift-1', partial_start_time: '9:00 AM' }],
+      }
+    )
+    const response = await POST(request as any)
+    expect(response.status).toBe(400)
+    const json = await response.json()
+    expect(json.error).toMatch(/partial_start_time must be HH:mm/i)
+  })
+
+  it('returns 400 when floater and partial are combined for the same shift', async () => {
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/assign-shifts',
+      'POST',
+      {
+        coverage_request_id: 'req-1',
+        sub_id: 'sub-1',
+        selected_shift_ids: ['shift-1'],
+        is_floater_shift_ids: ['shift-1'],
+        partial_assignments: [{ shift_id: 'shift-1' }],
+      }
+    )
+    const response = await POST(request as any)
+    expect(response.status).toBe(400)
+    const json = await response.json()
+    expect(json.error).toMatch(/cannot combine partial and floater/i)
+  })
+
+  it('returns 400 when selected_shift_ids contains duplicates', async () => {
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/assign-shifts',
+      'POST',
+      {
+        coverage_request_id: 'req-1',
+        sub_id: 'sub-1',
+        selected_shift_ids: ['shift-1', 'shift-1'],
+      }
+    )
+    const response = await POST(request as any)
+    expect(response.status).toBe(400)
+    const json = await response.json()
+    expect(json.error).toMatch(/duplicate/i)
   })
 })

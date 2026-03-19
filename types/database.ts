@@ -226,7 +226,7 @@ export type Database = {
           day_of_week_id: string | null
           end_time: string | null
           id: string
-          is_partial: boolean | null
+          is_partial: boolean
           school_id: string
           start_time: string | null
           status: Database['public']['Enums']['coverage_request_shift_status']
@@ -241,7 +241,7 @@ export type Database = {
           day_of_week_id?: string | null
           end_time?: string | null
           id?: string
-          is_partial?: boolean | null
+          is_partial?: boolean
           school_id: string
           start_time?: string | null
           status?: Database['public']['Enums']['coverage_request_shift_status']
@@ -256,7 +256,7 @@ export type Database = {
           day_of_week_id?: string | null
           end_time?: string | null
           id?: string
-          is_partial?: boolean | null
+          is_partial?: boolean
           school_id?: string
           start_time?: string | null
           status?: Database['public']['Enums']['coverage_request_shift_status']
@@ -962,6 +962,7 @@ export type Database = {
           partial_end_time: string | null
           partial_start_time: string | null
           school_id: string | null
+          staffing_event_shift_id: string | null
           status: Database['public']['Enums']['sub_assignment_status']
           sub_id: string
           teacher_id: string
@@ -984,6 +985,7 @@ export type Database = {
           partial_end_time?: string | null
           partial_start_time?: string | null
           school_id?: string | null
+          staffing_event_shift_id?: string | null
           status?: Database['public']['Enums']['sub_assignment_status']
           sub_id: string
           teacher_id: string
@@ -1006,6 +1008,7 @@ export type Database = {
           partial_end_time?: string | null
           partial_start_time?: string | null
           school_id?: string | null
+          staffing_event_shift_id?: string | null
           status?: Database['public']['Enums']['sub_assignment_status']
           sub_id?: string
           teacher_id?: string
@@ -1046,6 +1049,13 @@ export type Database = {
             columns: ['teacher_id']
             isOneToOne: false
             referencedRelation: 'staff'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'sub_assignments_staffing_event_shift_id_fkey'
+            columns: ['staffing_event_shift_id']
+            isOneToOne: false
+            referencedRelation: 'staffing_event_shifts'
             referencedColumns: ['id']
           },
           {

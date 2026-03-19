@@ -22,7 +22,23 @@ type TimeOffCardData = {
   partial: number
   uncovered: number
   classrooms: Array<{ id: string; name: string; color: string | null }>
-  shift_details?: Array<{ label: string; status: 'covered' | 'partial' | 'uncovered' }>
+  shift_details?: Array<{
+    label: string
+    status: 'covered' | 'partial' | 'uncovered'
+    id?: string
+    date?: string
+    day_name?: string
+    time_slot_code?: string
+    class_name?: string | null
+    classroom_name?: string | null
+    classroom_color?: string | null
+    sub_name?: string | null
+    assigned_sub_name?: string | null
+    assigned_sub_names?: string[]
+    assignment_id?: string | null
+    day_display_order?: number | null
+    time_slot_display_order?: number | null
+  }>
 }
 
 type TimeOffRequestsResponse = {

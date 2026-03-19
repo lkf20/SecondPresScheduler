@@ -7,6 +7,7 @@ import { coverageColorValues, neutralColors, getHeaderClasses } from '@/lib/util
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { sortShiftDetailsByDisplayOrder } from '@/lib/utils/shift-display-order'
+import { PARTIAL_APPROX_LABEL, PARTIAL_APPROX_TOOLTIP } from '@/lib/schedules/coverage-weights'
 
 interface ShiftDetail {
   id: string
@@ -15,6 +16,10 @@ interface ShiftDetail {
   time_slot_code: string
   status: 'uncovered' | 'partially_covered' | 'fully_covered'
   sub_name?: string | null
+  /** Multiple sub names for partially covered shifts (each partial assignment) */
+  sub_names?: string[]
+  /** Optional partial time windows (HH:mm-HH:mm) for compact display */
+  partial_time_windows?: string[]
   is_partial?: boolean
   day_display_order?: number | null
   time_slot_display_order?: number | null
@@ -85,9 +90,19 @@ export default function CoverageSummary({
   const totalShifts = shifts.total
   const coveredShiftsWithSubs = shift_details.filter(shift => Boolean(shift.sub_name))
   const coveredCount = coveredShiftsWithSubs.length
+  // Collect sub names: prefer sub_names array when available (multiple partials), else sub_name
   const coveredSubNames = Array.from(
-    new Set(coveredShiftsWithSubs.map(shift => shift.sub_name).filter(Boolean))
+    new Set(
+      coveredShiftsWithSubs.flatMap(shift =>
+        shift.sub_names && shift.sub_names.length > 0
+          ? shift.sub_names
+          : shift.sub_name
+            ? [shift.sub_name]
+            : []
+      )
+    )
   ) as string[]
+  const partialCount = shift_details.filter(s => s.status === 'partially_covered').length
   const headerLabel = headerText ?? `${uncovered} of ${totalShifts} Shifts Require Subs`
   const headerClass =
     variant === 'compact' ? 'text-lg font-normal text-slate-700' : getHeaderClasses('xl')
@@ -101,7 +116,23 @@ export default function CoverageSummary({
     >
       {/* Header */}
       <div className={cn('flex flex-wrap items-center gap-3', coveredCount > 0 ? 'mb-2' : 'mb-0')}>
-        <div className={headerClass}>{headerLabel}</div>
+        <div className={headerClass}>
+          {headerLabel}
+          {partialCount > 0 ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="ml-1.5 text-sm font-normal text-amber-700 cursor-help">
+                    {partialCount} partially covered {PARTIAL_APPROX_LABEL}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs text-sm">
+                  {PARTIAL_APPROX_TOOLTIP}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : null}
+        </div>
         <div className="h-2 rounded-full overflow-hidden flex gap-0.5">
           {(
             shifts.coverage_segments ||
@@ -192,9 +223,27 @@ export default function CoverageSummary({
                     <>
                       {baseLabel} - <span className="font-bold">{shift.sub_name}</span>
                     </>
-                  ) : shift.status === 'partially_covered' && shift.sub_name ? (
+                  ) : shift.status === 'partially_covered' ? (
                     <>
-                      {baseLabel} - <span className="font-bold">{shift.sub_name}</span> (Partial)
+                      {baseLabel}
+                      {(shift.sub_names && shift.sub_names.length > 0) || shift.sub_name ? (
+                        <>
+                          {' '}
+                          -{' '}
+                          <span className="font-bold">
+                            {shift.sub_names && shift.sub_names.length > 0
+                              ? shift.sub_names.join(', ')
+                              : shift.sub_name}
+                          </span>{' '}
+                          (partial)
+                          {shift.partial_time_windows && shift.partial_time_windows.length > 0 ? (
+                            <span className="font-normal">
+                              {' '}
+                              {shift.partial_time_windows.join(', ')}
+                            </span>
+                          ) : null}
+                        </>
+                      ) : null}
                     </>
                   ) : (
                     baseLabel

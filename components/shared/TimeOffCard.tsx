@@ -55,6 +55,9 @@ export interface TimeOffCardProps {
         classroom_name?: string | null
         classroom_color?: string | null
         assigned_sub_name?: string | null
+        assigned_sub_names?: string[]
+        day_display_order?: number | null
+        time_slot_display_order?: number | null
       }>
   // Optional props
   notes?: string | null
@@ -409,7 +412,10 @@ export default function TimeOffCard({
                   classroom_name?: string | null
                   classroom_color?: string | null
                   assigned_sub_name?: string | null
+                  assigned_sub_names?: string[]
                   sub_name?: string | null
+                  day_display_order?: number | null
+                  time_slot_display_order?: number | null
                 }
                 return {
                   date: o.date,
@@ -418,9 +424,12 @@ export default function TimeOffCard({
                   classroom_name: o.classroom_name ?? null,
                   classroom_color: o.classroom_color ?? null,
                   assigned_sub_name: o.assigned_sub_name ?? o.sub_name ?? null,
+                  assigned_sub_names: o.assigned_sub_names ?? [],
+                  day_display_order: o.day_display_order ?? null,
+                  time_slot_display_order: o.time_slot_display_order ?? null,
                 }
               })
-              return <ShiftChips coverageVariant shifts={shifts} />
+              return <ShiftChips mode="coverage" shifts={shifts} />
             }
             return (
               <div className="flex flex-wrap items-center gap-1.5">

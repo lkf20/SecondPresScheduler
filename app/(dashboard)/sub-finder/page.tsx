@@ -844,6 +844,13 @@ export default function SubFinderPage() {
   const subCoverageCounts = useMemo(() => {
     const counts = new Map<string, number>()
     shiftDetails.forEach(shift => {
+      if (shift.assigned_subs && shift.assigned_subs.length > 0) {
+        shift.assigned_subs.forEach(assignment => {
+          if (!assignment.sub_id) return
+          counts.set(assignment.sub_id, (counts.get(assignment.sub_id) || 0) + 1)
+        })
+        return
+      }
       if (!shift.sub_id) return
       counts.set(shift.sub_id, (counts.get(shift.sub_id) || 0) + 1)
     })
@@ -1074,9 +1081,49 @@ export default function SubFinderPage() {
     setRemoveDialogShift(shift)
   }, [])
 
+  const handleOpenRemoveDialogByAssignment = useCallback(
+    (shift: SubFinderShift, assignmentId: string) => {
+      const selectedAssignment = shift.assigned_subs?.find(
+        assignment => assignment.assignment_id === assignmentId
+      )
+      if (!selectedAssignment) {
+        setRemoveDialogShift(shift)
+        return
+      }
+      setRemoveDialogShift({
+        ...shift,
+        assignment_id: selectedAssignment.assignment_id,
+        sub_id: selectedAssignment.sub_id,
+        sub_name: selectedAssignment.sub_name,
+        is_partial: selectedAssignment.is_partial,
+      })
+    },
+    []
+  )
+
   const handleOpenChangeDialog = useCallback((shift: SubFinderShift) => {
     setChangeDialogShift(shift)
   }, [])
+
+  const handleOpenChangeDialogByAssignment = useCallback(
+    (shift: SubFinderShift, assignmentId: string) => {
+      const selectedAssignment = shift.assigned_subs?.find(
+        assignment => assignment.assignment_id === assignmentId
+      )
+      if (!selectedAssignment) {
+        setChangeDialogShift(shift)
+        return
+      }
+      setChangeDialogShift({
+        ...shift,
+        assignment_id: selectedAssignment.assignment_id,
+        sub_id: selectedAssignment.sub_id,
+        sub_name: selectedAssignment.sub_name,
+        is_partial: selectedAssignment.is_partial,
+      })
+    },
+    []
+  )
 
   const handleCloseChangeDialog = useCallback(() => {
     setChangeDialogShift(null)
@@ -1299,14 +1346,10 @@ export default function SubFinderPage() {
   // Register panel with PanelManager when it opens
   useEffect(() => {
     if (isContactPanelOpen && selectedSub && selectedAbsence) {
-      setActivePanel('contact-sub', () => {
-        // Restore callback - save current state and reopen
-        savedSubRef.current = selectedSub
-        savedAbsenceRef.current = selectedAbsence
-        setSelectedSub(selectedSub)
-        setSelectedAbsence(selectedAbsence)
-        setIsContactPanelOpen(true)
-      })
+      // Mark contact panel as active. Do not register a restore callback here:
+      // previous panel restore state should only come from explicit savePreviousPanel(...) calls
+      // when transitioning to another panel (e.g. opening Time Off).
+      setActivePanel('contact-sub')
 
       // Register close request handler
       const unregister = registerPanelCloseHandler('contact-sub', () => {
@@ -2552,7 +2595,9 @@ export default function SubFinderPage() {
                         }
                         onSelectShift={handleSelectShift}
                         onChangeSub={handleOpenChangeDialog}
+                        onChangeSubByAssignmentId={handleOpenChangeDialogByAssignment}
                         onRemoveSub={handleOpenRemoveDialog}
+                        onRemoveSubByAssignmentId={handleOpenRemoveDialogByAssignment}
                         onSelectSubForContact={isPreviewMode ? undefined : handleCombinationContact}
                         previewMode={isPreviewMode}
                       />
@@ -3135,7 +3180,9 @@ export default function SubFinderPage() {
                           }
                           onSelectShift={handleSelectShift}
                           onChangeSub={handleOpenChangeDialog}
+                          onChangeSubByAssignmentId={handleOpenChangeDialogByAssignment}
                           onRemoveSub={handleOpenRemoveDialog}
+                          onRemoveSubByAssignmentId={handleOpenRemoveDialogByAssignment}
                           onSelectSubForContact={
                             isPreviewMode ? undefined : handleCombinationContact
                           }

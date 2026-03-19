@@ -46,6 +46,14 @@ jest.mock('@/lib/hooks/use-display-name-format', () => ({
 
 jest.mock('@/lib/utils/colors', () => ({
   getPanelBackgroundClasses: () => 'bg-white',
+  coverageColorValues: {
+    partial: {
+      bg: 'rgb(254, 252, 232)',
+      border: 'rgb(253, 224, 71)',
+      text: 'rgb(202, 138, 4)',
+      icon: 'rgb(202, 138, 4)',
+    },
+  },
 }))
 
 jest.mock('@/components/ui/sheet', () => ({
@@ -796,5 +804,375 @@ describe('AssignSubPanel', () => {
     })
     expect(closedShiftCheckbox).toBeDisabled()
     expect(openShiftCheckbox).not.toBeDisabled()
+  })
+
+  it('shows explicit partial assignee label and keeps partial-only shifts assignable', async () => {
+    const user = userEvent.setup()
+    const defaultFetch = global.fetch as jest.Mock
+    global.fetch = jest.fn((url: string | URL | globalThis.Request, options?: RequestInit) => {
+      const urlStr = url.toString()
+      if (urlStr.includes('/api/assign-sub/shifts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              shifts: [
+                {
+                  id: '2026-03-10|dow-2|slot-1',
+                  date: '2026-03-10',
+                  day_of_week_id: 'dow-2',
+                  time_slot_id: 'slot-1',
+                  time_slot_code: 'AM',
+                  classroom_id: 'class-1',
+                  has_time_off: true,
+                  time_off_request_id: 'tor-existing',
+                  assignment_id: 'assign-partial-1',
+                  assigned_sub_id: 'sub-victoria',
+                  assigned_sub_name: 'Victoria I.',
+                  assigned_subs: [
+                    {
+                      assignment_id: 'assign-partial-1',
+                      sub_id: 'sub-victoria',
+                      sub_name: 'Victoria I.',
+                      is_partial: true,
+                      partial_start_time: '08:00',
+                      partial_end_time: '10:30',
+                    },
+                  ],
+                },
+              ],
+            }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/check-conflicts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([{ shift_key: '2026-03-10|slot-1', status: 'available' }]),
+        }) as Promise<Response>
+      }
+      return defaultFetch(url, options)
+    }) as any
+
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    await fillForm(user)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Victoria I\. \(partial 8 am to 10:30 am\)/i)).toBeInTheDocument()
+      expect(screen.getByText(/1 partial shift sub already assigned\./i)).toBeInTheDocument()
+    })
+
+    const checkbox = screen.getByRole('checkbox', { name: /Tue Mar 10 • AM • Preschool/i })
+    expect(checkbox).not.toBeDisabled()
+  })
+
+  it('shows Add as partial vs Replace radio options and From/To or Partial checkbox by choice', async () => {
+    const user = userEvent.setup()
+    const defaultFetch = global.fetch as jest.Mock
+    global.fetch = jest.fn((url: string | URL | globalThis.Request, options?: RequestInit) => {
+      const urlStr = url.toString()
+      if (urlStr.includes('/api/assign-sub/shifts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              shifts: [
+                {
+                  id: '2026-03-10|dow-2|slot-1',
+                  date: '2026-03-10',
+                  day_of_week_id: 'dow-2',
+                  time_slot_id: 'slot-1',
+                  time_slot_code: 'AM',
+                  classroom_id: 'class-1',
+                  has_time_off: true,
+                  time_off_request_id: 'tor-existing',
+                  assignment_id: 'assign-partial-1',
+                  assigned_sub_id: 'sub-victoria',
+                  assigned_sub_name: 'Victoria I.',
+                  assigned_subs: [
+                    {
+                      assignment_id: 'assign-partial-1',
+                      sub_id: 'sub-victoria',
+                      sub_name: 'Victoria I.',
+                      is_partial: true,
+                      partial_start_time: '08:00',
+                      partial_end_time: '10:30',
+                    },
+                  ],
+                },
+              ],
+            }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/check-conflicts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([{ shift_key: '2026-03-10|slot-1', status: 'available' }]),
+        }) as Promise<Response>
+      }
+      return defaultFetch(url, options)
+    }) as any
+
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    await fillForm(user)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Victoria I\. \(partial 8 am to 10:30 am\)/i)).toBeInTheDocument()
+    })
+
+    const shiftCheckbox = screen.getByRole('checkbox', { name: /Tue Mar 10 • AM • Preschool/i })
+    await user.click(shiftCheckbox)
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('radio', { name: /Add .+ as a partial shift sub/i })
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('radio', {
+          name: /Replace Victoria I\. with .+ as a full or partial shift sub/i,
+        })
+      ).toBeInTheDocument()
+    })
+
+    const addPartialRadio = screen.getByRole('radio', {
+      name: /Add .+ as a partial shift sub/i,
+    })
+    expect(addPartialRadio).toBeChecked()
+    expect(screen.queryByLabelText('Partial start time')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Partial end time')).not.toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('radio', {
+        name: /Replace Victoria I\. with .+ as a full or partial shift sub/i,
+      })
+    )
+
+    await waitFor(() => {
+      const replaceRadio = screen.getByRole('radio', {
+        name: /Replace Victoria I\. with .+ as a full or partial shift sub/i,
+      })
+      expect(replaceRadio).toBeChecked()
+      const partialCheckbox = screen.getByRole('checkbox', {
+        name: /Partial shift \(sub covers part of this shift\)/i,
+      })
+      expect(partialCheckbox).toBeInTheDocument()
+      expect(partialCheckbox).not.toBeChecked()
+    })
+
+    expect(screen.queryByLabelText('Partial start time')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Partial end time')).not.toBeInTheDocument()
+
+    const partialCheckbox = screen.getByRole('checkbox', {
+      name: /Partial shift \(sub covers part of this shift\)/i,
+    })
+    await user.click(partialCheckbox)
+
+    await waitFor(() => {
+      expect(partialCheckbox).toBeChecked()
+      expect(screen.getByLabelText('Partial start time')).toBeInTheDocument()
+      expect(screen.getByLabelText('Partial end time')).toBeInTheDocument()
+    })
+  })
+
+  it('sends partial payload with selected_shift_ids union and partial_start/end keys', async () => {
+    const user = userEvent.setup()
+    const defaultFetch = global.fetch as jest.Mock
+    global.fetch = jest.fn((url: string | URL | globalThis.Request, options?: RequestInit) => {
+      const urlStr = url.toString()
+      if (urlStr.includes('/api/assign-sub/shifts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              shifts: [
+                {
+                  id: '2026-03-10|dow-2|slot-2',
+                  date: '2026-03-10',
+                  day_of_week_id: 'dow-2',
+                  time_slot_id: 'slot-2',
+                  time_slot_code: 'PM',
+                  classroom_id: 'class-1',
+                  has_time_off: true,
+                  time_off_request_id: 'tor-existing',
+                },
+              ],
+            }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/check-conflicts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([{ shift_key: '2026-03-10|slot-2', status: 'available' }]),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/assign-shifts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({ assignments_created: 1, assigned_shifts: [{}], success: true }),
+        }) as Promise<Response>
+      }
+      return defaultFetch(url, options)
+    }) as any
+
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    await fillForm(user)
+
+    const checkbox = await screen.findByRole('checkbox', { name: /Tue Mar 10 • PM • Preschool/i })
+    await user.click(checkbox)
+    await user.click(screen.getByLabelText(/Partial shift/i))
+    const timeInputs = document.querySelectorAll('input[type="time"]')
+    fireEvent.change(timeInputs[0], { target: { value: '09:00' } })
+    fireEvent.change(timeInputs[1], { target: { value: '10:15' } })
+
+    await user.click(screen.getByRole('button', { name: /Assign 1 shift/i }))
+
+    await waitFor(() => {
+      const assignCall = (global.fetch as jest.Mock).mock.calls.find((call: any[]) =>
+        String(call[0]).includes('/api/sub-finder/assign-shifts')
+      )
+      expect(assignCall).toBeTruthy()
+      const payload = JSON.parse(assignCall[1].body)
+      expect(payload.selected_shift_ids).toEqual(['crs-2'])
+      expect(payload.partial_assignments).toEqual([
+        {
+          shift_id: 'crs-2',
+          partial_start_time: '09:00',
+          partial_end_time: '10:15',
+        },
+      ])
+    })
+  })
+
+  it('uses reassignment flow for conflict_teaching when user selects reassign', async () => {
+    const user = userEvent.setup()
+    const defaultFetch = global.fetch as jest.Mock
+    global.fetch = jest.fn((url: string | URL | globalThis.Request, options?: RequestInit) => {
+      const urlStr = url.toString()
+      if (urlStr.includes('/api/assign-sub/shifts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              shifts: [
+                {
+                  id: '2026-03-10|dow-2|slot-1',
+                  date: '2026-03-10',
+                  day_of_week_id: 'dow-2',
+                  time_slot_id: 'slot-1',
+                  time_slot_code: 'AM',
+                  classroom_id: 'class-target',
+                  has_time_off: true,
+                  time_off_request_id: 'tor-existing',
+                },
+              ],
+            }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/classrooms/class-target')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ name: 'Infant Room' }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/check-conflicts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve([
+              {
+                shift_key: '2026-03-10|slot-1',
+                status: 'conflict_teaching',
+                message: 'Conflict: Assigned to Green Room',
+                conflict_classroom_name: 'Green Room',
+                conflict_classroom_id: 'class-source',
+              },
+            ]),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/coverage-request/tor-existing')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              coverage_request_id: 'cr-1',
+              shift_map: {
+                '2026-03-10|AM|class-target': 'crs-1',
+                '2026-03-10|AM': 'crs-1',
+              },
+            }),
+        }) as Promise<Response>
+      }
+      if (
+        urlStr.includes('/api/sub-finder/substitute-contacts?coverage_request_id=cr-1&sub_id=sub-1')
+      ) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ id: 'contact-1' }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/substitute-contacts') && options?.method === 'PUT') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/staffing-events/flex') && options?.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({ id: 'event-1', shift_count: 1, linked_sub_assignment_count: 1 }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/assign-shifts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ assignments_created: 0 }),
+        }) as Promise<Response>
+      }
+      return defaultFetch(url, options)
+    }) as any
+
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    await fillForm(user)
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Sub is assigned to Green Room during this time\./i)
+      ).toBeInTheDocument()
+    })
+    expect(
+      screen.queryByRole('radio', { name: /Move sub here \(remove sub from other room\)/i })
+    ).not.toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('radio', {
+        name: /Reassign staff here \(staff will be removed from baseline assignment for this shift only\)/i,
+      })
+    )
+
+    await user.click(screen.getByRole('button', { name: /Assign 1 shift/i }))
+
+    await waitFor(() => {
+      const reassignCall = (global.fetch as jest.Mock).mock.calls.find((call: any[]) =>
+        String(call[0]).includes('/api/staffing-events/flex')
+      )
+      expect(reassignCall).toBeTruthy()
+      const payload = JSON.parse(reassignCall[1].body)
+      expect(payload.event_category).toBe('reassignment')
+      expect(payload.shifts).toEqual([
+        expect.objectContaining({
+          date: '2026-03-10',
+          time_slot_id: 'slot-1',
+          classroom_id: 'class-target',
+          source_classroom_id: 'class-source',
+          coverage_request_shift_id: 'crs-1',
+        }),
+      ])
+    })
+
+    const assignShiftCalls = (global.fetch as jest.Mock).mock.calls.filter((call: any[]) =>
+      String(call[0]).includes('/api/sub-finder/assign-shifts')
+    )
+    expect(assignShiftCalls).toHaveLength(0)
   })
 })

@@ -30,6 +30,8 @@ type Shift = {
   classroom_name?: string | null
   classroom_color?: string | null
   reason?: string
+  sub_name?: string | null
+  assigned_sub_names?: string[]
   day_display_order?: number | null
   time_slot_display_order?: number | null
 }
@@ -60,6 +62,8 @@ interface SubFinderCardProps {
     classroom_name?: string | null
     class_name?: string | null
     classroom_color?: string | null
+    day_display_order?: number | null
+    time_slot_display_order?: number | null
   }>
   coverageSegments?: Array<'assigned' | 'available' | 'unavailable'>
   notes?: string | null
@@ -133,6 +137,9 @@ export default function SubFinderCard({
   const thisSubCanCoverKeys = new Set(
     allCanCover.map(shift => `${shift.date}|${shift.time_slot_code}`)
   )
+  const recommendedShiftKeys = new Set(
+    (recommendedShifts ?? canCover).map(shift => `${shift.date}|${shift.time_slot_code}`)
+  )
   const thisSubCannotCoverReason = new Map(
     allCannotCover.map(shift => [
       `${shift.date}|${shift.time_slot_code}`,
@@ -181,7 +188,6 @@ export default function SubFinderCard({
   const showCompactStatusBadge = condensedStatus || useStatusBadgeOnly
   const isCompactLayout = condensedStatus || useStatusBadgeOnly
   const hasRecommendedSubset = recommendedShiftCount !== undefined && recommendedShiftCount > 0
-  const canCoverKeys = new Set(canCover.map(s => `${s.date}|${s.time_slot_code}`))
   const orderedShiftsForStrip =
     allShifts && allShifts.length > 0 ? sortShiftDetailsByDisplayOrder([...allShifts]) : []
   const declinedCardStyle = isDeclined
@@ -293,49 +299,56 @@ export default function SubFinderCard({
         {hasRecommendedSubset && orderedShiftsForStrip.length > 0 && (
           <div className="w-full mt-3 mb-2">
             <ShiftChips
-              canCover={[]}
-              cannotCover={[]}
-              assigned={[]}
+              mode="availability"
+              canCover={allCanCover}
+              cannotCover={allCannotCover}
               thisSubName={name}
               shifts={orderedShiftsForStrip.map(shift => {
                 const key = `${shift.date}|${shift.time_slot_code}`
+                const explicitlyCannotCover = thisSubCannotCoverReason.has(key)
+                const canCoverThisSub =
+                  thisSubAssignedKeys.has(key) ||
+                  thisSubCanCoverKeys.has(key) ||
+                  recommendedShiftKeys.has(key)
                 const assignedToThisSub = thisSubAssignedKeys.has(key)
-                const assignedElsewhere = shift.status !== 'uncovered' && !assignedToThisSub
-                if (assignedToThisSub) {
-                  return {
-                    date: shift.date,
-                    time_slot_code: shift.time_slot_code,
-                    status: 'assigned' as const,
-                    assignment_owner: 'this_sub' as const,
-                    classroom_name: shift.classroom_name ?? null,
-                    class_name: shift.class_name ?? null,
-                    classroom_color: shift.classroom_color ?? null,
-                  }
-                }
-                if (assignedElsewhere) {
-                  const canCoverThisShift = thisSubCanCoverKeys.has(key)
-                  return {
-                    date: shift.date,
-                    time_slot_code: shift.time_slot_code,
-                    status: canCoverThisShift ? ('available' as const) : ('unavailable' as const),
-                    assignment_owner: 'other_sub' as const,
-                    assigned_sub_name: shift.sub_name ?? null,
-                    classroom_name: shift.classroom_name ?? null,
-                    class_name: shift.class_name ?? null,
-                    classroom_color: shift.classroom_color ?? null,
-                  }
-                }
+                const assignedToOtherSub = shift.status !== 'uncovered' && !assignedToThisSub
+                const inferredAvailableFromExistingCoverage =
+                  assignedToOtherSub && !explicitlyCannotCover
+                const mappedAssignedSubNames =
+                  Array.isArray(shift.assigned_sub_names) && shift.assigned_sub_names.length > 0
+                    ? shift.assigned_sub_names
+                    : shift.sub_name
+                      ? [shift.sub_name]
+                      : []
                 return {
                   date: shift.date,
                   time_slot_code: shift.time_slot_code,
-                  status: canCoverKeys.has(key) ? ('available' as const) : ('unavailable' as const),
+                  status: assignedToThisSub
+                    ? ('assigned' as const)
+                    : canCoverThisSub || inferredAvailableFromExistingCoverage
+                      ? ('available' as const)
+                      : ('unavailable' as const),
+                  assignment_owner: assignedToThisSub
+                    ? ('this_sub' as const)
+                    : assignedToOtherSub
+                      ? ('other_sub' as const)
+                      : undefined,
+                  assigned_sub_name: assignedToOtherSub
+                    ? (mappedAssignedSubNames[0] ?? shift.sub_name ?? null)
+                    : null,
+                  assigned_sub_names:
+                    assignedToOtherSub && mappedAssignedSubNames.length > 0
+                      ? mappedAssignedSubNames
+                      : undefined,
+                  reason: thisSubCannotCoverReason.get(key),
                   classroom_name: shift.classroom_name ?? null,
                   class_name: shift.class_name ?? null,
                   classroom_color: shift.classroom_color ?? null,
+                  day_display_order: shift.day_display_order ?? null,
+                  time_slot_display_order: shift.time_slot_display_order ?? null,
                 }
               })}
-              isDeclined={isDeclined}
-              recommendedShifts={recommendedShifts ?? canCover}
+              recommendedShifts={hasRecommendedSubset ? (recommendedShifts ?? canCover) : []}
               softAvailableStyle={softChipColors}
             />
             {!previewMode && onContact && (
@@ -393,6 +406,7 @@ export default function SubFinderCard({
                   assigned.length > 0 ||
                   (shiftChips?.length ?? 0) > 0) && (
                   <ShiftChips
+                    mode="availability"
                     canCover={canCover}
                     cannotCover={cannotCover}
                     assigned={assigned}
@@ -507,19 +521,23 @@ export default function SubFinderCard({
                 </p>
               )}
               <ShiftChips
+                mode="availability"
                 canCover={allCanCover}
                 cannotCover={allCannotCover}
                 thisSubName={name}
                 shifts={allShifts.map(shift => {
                   const key = `${shift.date}|${shift.time_slot_code}`
+                  const explicitlyCannotCover = thisSubCannotCoverReason.has(key)
                   const canCoverThisSub =
                     thisSubAssignedKeys.has(key) || thisSubCanCoverKeys.has(key)
                   const assignedToThisSub = thisSubAssignedKeys.has(key)
                   const assignedToOtherSub = shift.status !== 'uncovered' && !assignedToThisSub
+                  const inferredAvailableFromExistingCoverage =
+                    assignedToOtherSub && !explicitlyCannotCover
                   // Chip color reflects whether this sub can cover; if assigned elsewhere but sub can cover, show green
                   const status = assignedToThisSub
                     ? 'assigned'
-                    : canCoverThisSub
+                    : canCoverThisSub || inferredAvailableFromExistingCoverage
                       ? 'available'
                       : 'unavailable'
                   return {
@@ -532,10 +550,18 @@ export default function SubFinderCard({
                         ? ('other_sub' as const)
                         : undefined,
                     assigned_sub_name: assignedToOtherSub ? shift.sub_name || null : null,
+                    assigned_sub_names:
+                      assignedToOtherSub &&
+                      Array.isArray(shift.assigned_sub_names) &&
+                      shift.assigned_sub_names.length > 0
+                        ? shift.assigned_sub_names
+                        : undefined,
                     reason: thisSubCannotCoverReason.get(key),
                     classroom_name: shift.classroom_name || null,
                     class_name: shift.class_name || null,
                     classroom_color: shift.classroom_color ?? null,
+                    day_display_order: shift.day_display_order ?? null,
+                    time_slot_display_order: shift.time_slot_display_order ?? null,
                   }
                 })}
                 isDeclined={isDeclined}

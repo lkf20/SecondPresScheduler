@@ -10,6 +10,7 @@ import { getUserSchoolId } from '@/lib/utils/auth'
 import { findTopCombinations } from '@/lib/utils/sub-combination'
 import { buildShiftChips } from '@/lib/server/coverage/shift-chips'
 import { sortShiftDetailsByDisplayOrder } from '@/lib/utils/shift-display-order'
+import { deriveShiftCoverageStatus } from '@/lib/schedules/coverage-weights'
 
 interface ManualShiftInput {
   date: string
@@ -26,6 +27,7 @@ interface ShiftDetail {
   classroom_name: string | null
   status: 'uncovered' | 'partially_covered' | 'fully_covered'
   sub_name?: string | null
+  sub_names?: string[]
   is_partial?: boolean
 }
 
@@ -126,35 +128,38 @@ export async function POST(request: NextRequest) {
       console.error('Error fetching sub assignments:', subError)
     }
 
-    const coverageMap = new Map<string, 'uncovered' | 'partially_covered' | 'fully_covered'>()
-    const assignmentMap = new Map<string, { sub_name: string; is_partial: boolean }>()
+    // Multi-value map: key -> array of assignment entries (handles multiple partials)
+    const assignmentMap = new Map<string, Array<{ sub_name: string; is_partial: boolean }>>()
 
     shifts.forEach(shift => {
       const key = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
-      coverageMap.set(key, 'uncovered')
+      assignmentMap.set(key, [])
     })
     ;(subAssignments || []).forEach((assignment: any) => {
       const key = `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`
-      if (!coverageMap.has(key)) return
+      if (!assignmentMap.has(key)) return
       const sub = assignment.sub as any
       const sub_name =
         sub?.display_name ||
         (sub?.first_name && sub?.last_name ? `${sub.first_name} ${sub.last_name}` : 'Unknown Sub')
-      assignmentMap.set(key, {
-        sub_name,
-        is_partial: assignment.is_partial || assignment.assignment_type === 'Partial Sub Shift',
-      })
-      if (assignment.is_partial || assignment.assignment_type === 'Partial Sub Shift') {
-        coverageMap.set(key, 'partially_covered')
-      } else {
-        coverageMap.set(key, 'fully_covered')
-      }
+      const isPartial =
+        assignment.is_partial === true || assignment.assignment_type === 'Partial Sub Shift'
+      assignmentMap.get(key)!.push({ sub_name, is_partial: isPartial })
     })
+
+    // Derive coverage status using the centralized helper
+    const coverageMap = new Map<string, 'uncovered' | 'partially_covered' | 'fully_covered'>()
+    for (const [key, entries] of assignmentMap) {
+      coverageMap.set(
+        key,
+        deriveShiftCoverageStatus({ assignments: entries.map(e => ({ is_partial: e.is_partial })) })
+      )
+    }
 
     const shiftDetails: ShiftDetail[] = shifts.map(shift => {
       const key = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
       const status = coverageMap.get(key) || 'uncovered'
-      const assignment = assignmentMap.get(key)
+      const entries = assignmentMap.get(key) ?? []
       const scheduleKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
       const scheduleEntry = scheduleLookup.get(scheduleKey)
       const classroom_name = scheduleEntry?.classrooms?.size
@@ -164,6 +169,10 @@ export async function POST(request: NextRequest) {
         ? Array.from(scheduleEntry.classes).join(', ')
         : null
 
+      // For display: comma-join multiple sub names
+      const sub_name = entries.length > 0 ? entries.map(e => e.sub_name).join(', ') : null
+      const is_partial = entries.length > 0 && entries.every(e => e.is_partial)
+
       return {
         id: `${shift.date}-${shift.time_slot_id}`,
         date: shift.date,
@@ -172,8 +181,9 @@ export async function POST(request: NextRequest) {
         class_name,
         classroom_name,
         status,
-        sub_name: assignment?.sub_name || null,
-        is_partial: assignment?.is_partial || false,
+        sub_name,
+        sub_names: entries.map(e => e.sub_name),
+        is_partial,
         day_display_order: dayDisplayOrderMap.get(shift.day_of_week_id) ?? null,
         time_slot_display_order: slotDisplayOrderMap.get(shift.time_slot_id) ?? null,
       }

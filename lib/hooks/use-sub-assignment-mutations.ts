@@ -10,13 +10,30 @@ import {
 import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
 import { toast } from 'sonner'
 
-type AssignShiftsData = {
+export type PartialAssignmentInput = {
+  /** coverage_request_shift_id */
+  shift_id: string
+  /** Optional HH:mm informational start time */
+  partial_start_time?: string | null
+  /** Optional HH:mm informational end time */
+  partial_end_time?: string | null
+}
+
+export type AssignShiftsData = {
   sub_id: string
   coverage_request_id: string
   selected_shift_ids: string[]
   notes?: string
   /** Coverage_request_shift_ids to create as floater (0.5 each). Used for floater slots and conflict override. */
   is_floater_shift_ids?: string[]
+  /**
+   * Optional: shifts to create as partial assignments (is_partial=true).
+   * Shifts in selected_shift_ids but NOT in this array are created as full assignments.
+   * Each entry must have a shift_id present in selected_shift_ids.
+   */
+  partial_assignments?: PartialAssignmentInput[]
+  /** Conflict resolutions per shift_id: 'floater' | 'move' | 'replace' */
+  resolutions?: Record<string, string>
 }
 
 type UnassignShiftData = {
@@ -66,18 +83,23 @@ export function useAssignSubShifts() {
         invalidateWeeklySchedule(queryClient, schoolId),
       ])
 
-      const subName = data?.sub_name || 'Sub'
-      const requestedShiftCount = variables.selected_shift_ids.length
+      // Use server result counts (not payload intent) for accurate toast messaging
       const assignedShiftCount =
-        typeof data?.assignments_created === 'number'
-          ? data.assignments_created
-          : requestedShiftCount
-      const skippedShiftCount = Math.max(0, requestedShiftCount - assignedShiftCount)
+        typeof data?.assignments_created === 'number' ? data.assignments_created : 0
+      const partialCount =
+        typeof data?.partial_assignments_created === 'number' ? data.partial_assignments_created : 0
+      const fullCount =
+        typeof data?.full_assignments_created === 'number' ? data.full_assignments_created : 0
+
+      const partialNote =
+        partialCount > 0 && fullCount === 0
+          ? ' (partial)'
+          : partialCount > 0
+            ? ` (${partialCount} partial)`
+            : ''
 
       toast.success(
-        `Assigned ${subName} to ${assignedShiftCount} shift${assignedShiftCount !== 1 ? 's' : ''}${
-          skippedShiftCount > 0 ? ` (${skippedShiftCount} already assigned and skipped)` : ''
-        }`
+        `Assigned ${assignedShiftCount} shift${assignedShiftCount !== 1 ? 's' : ''}${partialNote}`
       )
     },
     onError: (error: Error, variables, context) => {

@@ -38,6 +38,7 @@ interface ScheduleCellProps {
       teacher_name: string
       has_sub: boolean
       is_partial: boolean
+      is_reassigned?: boolean
       time_off_request_id?: string
     }>
     classroom_name?: string
@@ -384,30 +385,38 @@ export default function ScheduleCell({
                   const absence = group.absence
                   const teacherName = absence.teacher_name || 'Unknown'
                   const hasSubForAbsence = substitutes.length > 0 || absence.has_sub === true
+                  const isReassigned = absence.is_reassigned === true
+                  const absenceSuffix = isReassigned ? (
+                    '*'
+                  ) : !hasSubForAbsence ? (
+                    <AlertTriangle
+                      className={`h-3 w-3 shrink-0 ${
+                        staffingStatus === 'green'
+                          ? 'text-gray-400'
+                          : staffingStatus === 'amber'
+                            ? 'text-amber-700'
+                            : staffingStatus === 'red'
+                              ? 'text-red-600'
+                              : 'text-amber-700'
+                      }`}
+                    />
+                  ) : undefined
 
                   const chip = (
                     <StaffChip
                       key={`absent-${absence.teacher_id}`}
                       staffId={absence.teacher_id}
                       name={teacherName}
-                      variant="absent"
+                      variant={isReassigned ? 'reassigned' : 'absent'}
                       navigable={false}
-                      title={hasSubForAbsence ? 'Absent' : 'No sub assigned'}
-                      suffix={
-                        !hasSubForAbsence ? (
-                          <AlertTriangle
-                            className={`h-3 w-3 shrink-0 ${
-                              staffingStatus === 'green'
-                                ? 'text-gray-400'
-                                : staffingStatus === 'amber'
-                                  ? 'text-amber-700'
-                                  : staffingStatus === 'red'
-                                    ? 'text-red-600'
-                                    : 'text-amber-700'
-                            }`}
-                          />
-                        ) : undefined
+                      title={
+                        isReassigned
+                          ? 'Reassigned (not absent)'
+                          : hasSubForAbsence
+                            ? 'Absent'
+                            : 'No sub assigned'
                       }
+                      suffix={absenceSuffix}
                     />
                   )
 

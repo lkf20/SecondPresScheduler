@@ -110,9 +110,9 @@ export async function POST(request: NextRequest) {
     }
 
     const selectWithOverride =
-      'id, sub_id, date, day_of_week_id, time_slot_id, classroom_id, coverage_request_shift_id, non_sub_override, staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name), time_slots(code)'
+      'id, sub_id, date, day_of_week_id, time_slot_id, classroom_id, coverage_request_shift_id, non_sub_override, is_partial, partial_start_time, partial_end_time, created_at, staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name), time_slots(code)'
     const selectWithoutOverride =
-      'id, sub_id, date, day_of_week_id, time_slot_id, classroom_id, coverage_request_shift_id, staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name), time_slots(code)'
+      'id, sub_id, date, day_of_week_id, time_slot_id, classroom_id, coverage_request_shift_id, is_partial, partial_start_time, partial_end_time, created_at, staff!sub_assignments_sub_id_fkey(first_name, last_name, display_name), time_slots(code)'
 
     let { data: assignments, error: assignmentsError } = await supabase
       .from('sub_assignments')
@@ -162,12 +162,38 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const assignmentByKey = new Map<
+    // Multi-value maps for assignment lookup:
+    // 1) coverage_request_shift_id (preferred, exact identity for time-off-backed shifts)
+    // 2) date|time_slot_id|classroom_id fallback for non-time-off / legacy rows
+    const assignmentByCoverageShiftId = new Map<
       string,
-      { id: string; sub_id: string; sub_name: string; non_sub_override: boolean }
+      Array<{
+        id: string
+        sub_id: string
+        sub_name: string
+        non_sub_override: boolean
+        is_partial: boolean
+        partial_start_time: string | null
+        partial_end_time: string | null
+        created_at: string
+      }>
+    >()
+    const assignmentBySlotClassKey = new Map<
+      string,
+      Array<{
+        id: string
+        sub_id: string
+        sub_name: string
+        non_sub_override: boolean
+        is_partial: boolean
+        partial_start_time: string | null
+        partial_end_time: string | null
+        created_at: string
+      }>
     >()
     for (const a of assignments || []) {
-      const key = `${toDateStringISO(a.date)}|${a.time_slot_id}`
+      const dateISO = toDateStringISO(a.date)
+      const slotClassKey = `${dateISO}|${a.time_slot_id}|${a.classroom_id ?? ''}`
       const sub = (
         a as { staff?: { first_name?: string; last_name?: string; display_name?: string } | null }
       ).staff
@@ -178,12 +204,32 @@ export async function POST(request: NextRequest) {
             display_name: sub.display_name ?? null,
           })
         : 'Unknown'
-      assignmentByKey.set(key, {
+      const entry = {
         id: a.id,
         sub_id: a.sub_id,
         sub_name,
-        non_sub_override: a.non_sub_override === true,
-      })
+        non_sub_override: (a as any).non_sub_override === true,
+        is_partial: (a as any).is_partial === true,
+        partial_start_time: (a as any).partial_start_time ?? null,
+        partial_end_time: (a as any).partial_end_time ?? null,
+        created_at: (a as any).created_at ?? '',
+      }
+      const coverageShiftId = (a as any).coverage_request_shift_id as string | null | undefined
+      if (coverageShiftId) {
+        const existingByCrShift = assignmentByCoverageShiftId.get(coverageShiftId)
+        if (existingByCrShift) {
+          existingByCrShift.push(entry)
+        } else {
+          assignmentByCoverageShiftId.set(coverageShiftId, [entry])
+        }
+      }
+
+      const existingBySlotClass = assignmentBySlotClassKey.get(slotClassKey)
+      if (existingBySlotClass) {
+        existingBySlotClass.push(entry)
+      } else {
+        assignmentBySlotClassKey.set(slotClassKey, [entry])
+      }
     }
 
     const shifts = rawShifts.map(shift => {
@@ -202,15 +248,46 @@ export async function POST(request: NextRequest) {
         const map = shiftMapByRequest.get(shift.time_off_request_id)
         coverage_request_shift_id = (map?.get(keyFull) ?? map?.get(keySimple) ?? null) || null
       }
-      const assignKey = `${dateStr}|${shift.time_slot_id}`
-      const assignment = assignmentByKey.get(assignKey)
+      const slotClassKey = `${dateStr}|${shift.time_slot_id}|${shift.classroom_id ?? ''}`
+      const assignmentList =
+        (coverage_request_shift_id
+          ? assignmentByCoverageShiftId.get(coverage_request_shift_id)
+          : undefined) ??
+        assignmentBySlotClassKey.get(slotClassKey) ??
+        []
+
+      // Deterministic primary assignment: prefer active full (is_partial=false) first,
+      // then most recently created partial (ORDER BY is_partial ASC, created_at DESC, id DESC).
+      // This ensures legacy single-value fields remain stable and predictable for consumers
+      // that have not yet migrated to the assigned_subs array.
+      const sortedAssignments = [...assignmentList].sort((a, b) => {
+        if (a.is_partial !== b.is_partial) return a.is_partial ? 1 : -1
+        if (a.created_at !== b.created_at) return a.created_at > b.created_at ? -1 : 1
+        return a.id > b.id ? -1 : 1
+      })
+      const primary = sortedAssignments[0]
+
       return {
         ...base,
         coverage_request_shift_id: coverage_request_shift_id ?? undefined,
-        assignment_id: assignment?.id,
-        assigned_sub_id: assignment?.sub_id,
-        assigned_sub_name: assignment?.sub_name,
-        assigned_non_sub_override: assignment?.non_sub_override ?? false,
+        // Legacy single-value fields (backward compatible; populated from primary assignment)
+        assignment_id: primary?.id,
+        assigned_sub_id: primary?.sub_id,
+        assigned_sub_name: primary?.sub_name,
+        assigned_non_sub_override: primary?.non_sub_override ?? false,
+        // New multi-value field for partial assignment support
+        assigned_subs:
+          sortedAssignments.length > 0
+            ? sortedAssignments.map(a => ({
+                assignment_id: a.id,
+                sub_id: a.sub_id,
+                sub_name: a.sub_name,
+                is_partial: a.is_partial,
+                partial_start_time: a.partial_start_time,
+                partial_end_time: a.partial_end_time,
+                non_sub_override: a.non_sub_override,
+              }))
+            : undefined,
       }
     })
 

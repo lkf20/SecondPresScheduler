@@ -13,13 +13,15 @@
 - **Exception:** When the user selects `floater` or `move` resolution for that shift, the conflict is resolved and the assignment proceeds.
 - **DB:** See [sub-assignment-integrity.md](../sub-assignment-integrity.md). A partial unique index can enforce this at the DB level; currently enforcement is in the API.
 
-### Rule 2: One sub per coverage shift
+### Rule 2: One full sub per coverage shift; up to 4 partial subs
 
-**Multiple subs cannot be assigned for the same teacher during the same day, time slot, and classroom (i.e. per coverage_request_shift_id).**
+**A full (non-partial) sub assignment is exclusive per `coverage_request_shift_id`. Partial assignments are additive (up to a cap of 4).**
 
-- **Scope:** One active `sub_assignment` per `coverage_request_shift_id` where `status = 'active'`.
-- **Enforcement:** Before inserting new assignments, `POST /api/sub-finder/assign-shifts` cancels any existing active `sub_assignments` for the `coverage_request_shift_id`s being assigned. This "replace" behavior ensures we never create a second active sub for the same shift.
-- **DB:** No unique constraint currently; enforcement is in the API. See [sub-assignment-integrity.md](../sub-assignment-integrity.md) for recommendations.
+- **Full assignments:** Only one active `sub_assignment` with `is_partial = false` per `coverage_request_shift_id` where `status = 'active'`. Inserting a full assignment cancels ALL existing active assignments for that shift (both full and partial).
+- **Partial assignments (Phase 1):** Multiple partial subs are allowed for the same shift (maximum 4). A partial assignment cancels any existing full assignment for that shift but does not affect other partial assignments.
+- **DB enforcement:** Conditional unique index `idx_sub_assignments_one_active_full_per_shift` on `(coverage_request_shift_id) WHERE status = 'active' AND is_partial = false` enforces full-assignment exclusivity at the DB level.
+- **API:** `POST /api/sub-finder/assign-shifts` accepts an optional `partial_assignments` array (`[{shift_id, partial_start_time?, partial_end_time?}]`). Shifts in `partial_assignments` are assigned as partial (`is_partial = true`). Remaining shifts in `selected_shift_ids` are full. Validation: no floater+partial combination; no duplicate shift_ids; time values must be HH:mm; cap of 4 partials per shift.
+- **Payload contract:** Any shift included in `partial_assignments` must also be present in `selected_shift_ids`.
 
 ### Rule 3: Floater allows same slot, different classrooms
 
@@ -31,13 +33,13 @@ When `is_floater = true`, a sub can have multiple active `sub_assignments` for t
 
 The Assign Sub panel (`AssignSubPanel.tsx`) and Sub Finder surface several conflict scenarios. Each has a Conflict banner with resolution options. The table below maps conflict type → resolution options → database logic.
 
-| Conflict Type                        | Description                                                                                           | Resolution Options                                                                                             | Database Update Logic                                 |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| **conflict_sub**                     | Sub is already assigned as a sub in another room (another sub shift) for the same date/time.          | Do not assign; Assign as Floater; Move sub here (remove from other room)                                       | See [conflict_sub](#conflict_sub)                     |
-| **conflict_teaching**                | Sub has a teaching schedule (baseline in `teacher_schedules`) in another room for the same date/time. | Do not assign; Assign as Floater; Move sub here (remove from other room)                                       | See [conflict_teaching](#conflict_teaching)           |
-| **Already covered by different sub** | Shift already has an assigned sub (different from the one selected).                                  | Replace with selected sub (remove current sub); Do not assign                                                  | See [replace sub](#replace-sub)                       |
-| **Already covered by selected sub**  | Shift already has an assigned sub (same as selected).                                                 | Remove sub (no assign)                                                                                         | See [remove sub](#remove-sub)                         |
-| **Replace + Conflict (combined)**    | Shift has a different sub (e.g. Victoria) AND selected sub has a conflict (already in another room).  | Do not assign; Remove [current sub] and mark [selected sub] as Floater; Move sub here (remove from other room) | See [replace + conflict](#replace--conflict-combined) |
+| Conflict Type                        | Description                                                                                           | Resolution Options                                                                                                                     | Database Update Logic                                 |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| **conflict_sub**                     | Sub is already assigned as a sub in another room (another sub shift) for the same date/time.          | Do not assign; Assign as Floater; Move sub here (remove from other room)                                                               | See [conflict_sub](#conflict_sub)                     |
+| **conflict_teaching**                | Sub has a teaching schedule (baseline in `teacher_schedules`) in another room for the same date/time. | Do not assign; Assign as Floater; Reassign staff here (remove from baseline room for this shift only)                                  | See [conflict_teaching](#conflict_teaching)           |
+| **Already covered by different sub** | Shift already has an assigned sub (different from the one selected).                                  | Replace with selected sub (remove current sub); Do not assign                                                                          | See [replace sub](#replace-sub)                       |
+| **Already covered by selected sub**  | Shift already has an assigned sub (same as selected).                                                 | Remove sub (no assign)                                                                                                                 | See [remove sub](#remove-sub)                         |
+| **Replace + Conflict (combined)**    | Shift has a different sub (e.g. Victoria) AND selected sub has a conflict (already in another room).  | Do not assign; Remove [current sub] and mark [selected sub] as Floater; choose Move (`conflict_sub`) or Reassign (`conflict_teaching`) | See [replace + conflict](#replace--conflict-combined) |
 
 ---
 
@@ -51,13 +53,18 @@ The Assign Sub panel (`AssignSubPanel.tsx`) and Sub Finder surface several confl
 
 1. **Do not assign this shift** — No DB change.
 2. **Remove [current sub] and mark [selected sub] as Floater (covers both rooms, 0.5 each)** — Cancel current sub; update selected sub's existing assignment to `is_floater = true`; insert new assignment with `is_floater = true`.
-3. **Move sub here (remove sub from other room)** — Cancel current sub; cancel selected sub's assignment in the other room; insert new assignment here (full).
+3. **Move sub here (remove sub from other room)** — Available when selected sub has `conflict_sub`. Cancel current sub; cancel selected sub's assignment in the other room; insert new assignment here (full).
+4. **Reassign staff here (remove from baseline room for this shift only)** — Available when selected sub has `conflict_teaching`. Cancels current sub and creates day-only reassignment overlay.
 
 ### Database Logic
 
-Same as conflict_sub / conflict_teaching; the assign-shifts API (1) cancels existing assignments for the coverage_request_shift_ids being assigned (replace), then (2) applies floater or move resolution for the selected sub's collision. Both operations occur in a single assign-shifts call when `resolutions` includes `floater` or `move` for the relevant shift ids.
+For `conflict_sub`: assign-shifts API (1) cancels existing assignments for the coverage_request_shift_ids being assigned (replace), then (2) applies floater or move resolution in the same assign-shifts call.
+For `conflict_teaching`: replace is followed by day-only reassignment (`POST /api/staffing-events/flex`, `event_category='reassignment'`) rather than `move`.
 
-**UX:** The row is enabled only when the user selects Floater or Move. Plain "Replace" (without conflict resolution) cannot be used when the selected sub has a conflict—the API would reject with 409 (double booking). The panel never shows the simple Replace banner when `hasConflict` is true; it shows the conflict banner with combined copy when both `coveredByOtherSub` and `hasConflict`.
+**UX:** The row is enabled only when the user selects a conflict resolution.
+For `conflict_sub`: Floater or Move.
+For `conflict_teaching`: Floater or Reassign.
+Plain "Replace" (without conflict resolution) cannot be used when the selected sub has a conflict—the API would reject with 409 (double booking). The panel never shows the simple Replace banner when `hasConflict` is true; it shows the conflict banner with combined copy when both `coveredByOtherSub` and `hasConflict`.
 
 ---
 
@@ -95,17 +102,19 @@ Same as conflict_sub / conflict_teaching; the assign-shifts API (1) cancels exis
 
 1. **Do not assign this shift** — No DB change.
 2. **Assign as Floater (sub covers both rooms, 0.5 each)** — Sub keeps their teaching schedule; new sub_assignment is created with `is_floater = true` so they count 0.5 here and their teaching schedule remains.
-3. **Move sub here (remove sub from other room)** — We **cannot** remove the sub from their teaching schedule (that would require editing the baseline). We create a full `sub_assignment` here (`is_floater = false`). The sub will appear in both places (teaching + sub) until baseline is changed manually.
+3. **Reassign staff here (remove from baseline room for this shift only)** — Preferred when the selected person is baseline-teaching elsewhere this slot and the director intends a day-only room move. Creates a day-only reassignment overlay (`staffing_event_shifts.event_category = 'reassignment'`) from source classroom to target classroom; baseline is not mutated.
 
 ### Database Logic
 
-| Resolution    | Action                                                                                                                            |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Do not assign | No API call.                                                                                                                      |
-| Floater       | New `sub_assignment` inserted with `is_floater = true`. No change to `teacher_schedules`.                                         |
-| Move          | New `sub_assignment` inserted with `is_floater = false`. No change to `teacher_schedules`—baseline is not modified by Assign Sub. |
+| Resolution    | Action                                                                                                                                                                                                                                                      |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Do not assign | No API call.                                                                                                                                                                                                                                                |
+| Floater       | New `sub_assignment` inserted with `is_floater = true`. No change to `teacher_schedules`.                                                                                                                                                                   |
+| Reassign      | Insert `staffing_event` + `staffing_event_shift` reassignment row(s) with `source_classroom_id` and target `classroom_id`; if linked to `coverage_request_shift_id`, create `sub_assignment` (`non_sub_override = true`) tied by `staffing_event_shift_id`. |
 
-**Note:** "Move" for conflict_teaching does not literally remove the sub from the other room; it assigns them fully here. The label "Move sub here (remove sub from other room)" reflects user intent. Actual removal from the teaching room requires a baseline schedule edit.
+**Note:** For baseline-teaching conflicts, reassignment is the canonical "remove from other room for this day only" flow. It preserves baseline data and adjusts weekly schedule read output via overlay/exclusion rules.
+
+See: [DAY_ONLY_REASSIGNMENT_CONTRACT.md](./DAY_ONLY_REASSIGNMENT_CONTRACT.md).
 
 ---
 
@@ -143,21 +152,75 @@ Same as conflict_sub / conflict_teaching; the assign-shifts API (1) cancels exis
 
 ### Database Logic
 
-| Resolution | Action                                                                                                                                                                                                |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Remove sub | `POST /api/sub-finder/unassign-shifts` with `absence_id` (time_off_request_id), `sub_id`, `scope: 'single'`, `assignment_id`. API updates `sub_assignments.status = 'cancelled'` for that assignment. |
+| Resolution | Action                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Remove sub | `POST /api/sub-finder/unassign-shifts` with `absence_id` (time_off_request_id), `sub_id`, `scope: 'single'`, `assignment_id`. API updates `sub_assignments.status = 'cancelled'` for that assignment. If the removed assignment is linked to day-only reassignment via `staffing_event_shift_id`, API also cancels the linked `staffing_event_shift`; if no active shifts remain for that event, API cancels `staffing_events.status`. |
 
 **Assign Sub panel:** `handleRemoveSubConfirm` calls unassign-shifts, then `fetchShifts()` to refresh. Row updates: no teacher chip, checkbox re-enabled, gray background removed.
 
 ---
 
+---
+
+## Phase 1 Partial Assignments
+
+**Added in migration 117.** Allows multiple subs to cover portions of a single absence shift.
+
+### Key rules
+
+- `is_partial` is NOT NULL (migration normalized to `false` for all existing rows).
+- A shift can have up to **4 active partial assignments** (Phase 1 cap; enforced in API).
+- A full assignment and partial assignments cannot coexist on the same shift.
+- Coverage weight: full = 1.0, partial = 0.5 (approximation; Phase 2 will use time-based logic). Two partials ≥ 1.0 → shift is `fully_covered`.
+- UI shows `(approx.)` label wherever partial coverage counts are displayed.
+
+### check-conflicts response (new flags)
+
+`POST /api/sub-finder/check-conflicts` now includes per-shift boolean flags in the response:
+
+| Field                           | Description                                                         |
+| ------------------------------- | ------------------------------------------------------------------- |
+| `has_existing_partial_coverage` | `true` if the target shift already has ≥1 active partial assignment |
+| `can_add_partial`               | `true` if no full assignment exists AND partial count < 4           |
+
+These flags are derived from the **target shift's** active assignments, independent of the candidate sub's own conflicts.
+
+### Conflict resolution updates
+
+- `coveredByOtherSub` in `AssignSubPanel` is only `true` when another sub has a **full** assignment OR the partial cap is reached. Shifts with partial-only coverage that haven't hit the cap are NOT blocked — the director can add another partial.
+- When a shift is `partially_covered` in `ContactSubPanel`, `assignedElsewhere` is NOT set — the sub can be added as another partial. The card shows amber border and "Partially covered — adding as partial" label.
+- `coveredByCurrentSub` in `AssignSubPanel` only blocks assignment when the selected sub has a **full** assignment on the shift, or when the partial cap is reached. A selected sub with partial-only coverage under cap remains assignable.
+- `POST /api/assign-sub/shifts` must return assignment state scoped to the exact shift identity (prefer `coverage_request_shift_id`, fallback `date|time_slot_id|classroom_id`) so assignment status does not bleed across classrooms in the same slot.
+
+### Partial UI requirements
+
+- **Assign Sub panel:** A single badge next to the shift label (e.g. "Thu Mar 26 • AM • Infant Room") shows existing assignees. Full assignees use the standard sub chip; partial assignees use a **partial-styled badge**: yellow background and border (per `coverageColorValues.partial`), Clock icon, and text like "Victoria I. (partial 9 am to 10:30 am)" using friendly 12-hour time. There is no separate "Currently: …" line for partial-only shifts—that line is shown only when the shift has a full assignment (with optional "Change sub").
+- **Contact & Assign panel:** For `partially_covered` shifts, keep additive messaging and show explicit partial coverage context. When the selected sub is assigned as partial, show "Partial assignment" with optional time window.
+- **Shift detail surfaces:** Partial assignment rows (e.g., `ShiftStatusCard`, `CoverageSummary`) should include optional partial time windows when available.
+
+### Partial-only shift: add vs replace (Assign Sub panel)
+
+When a shift has **only partial** assignees and is under the cap (4), the panel does **not** use the Conflict Banner. An informational note shows **"N partial shift sub(s) already assigned."** The panel then shows **two radio options**:
+
+1. **Add [selected sub] as a partial shift sub (default)**  
+   The user selects this to add the chosen sub as another partial. No From/To time inputs are shown; the shift is sent in `partial_assignments` (times optional from API; UI does not expose them for add). No unassign is performed.
+
+2. **Replace [current partial sub(s)] with [selected sub] as a full or partial shift sub**  
+   The user selects this to replace the existing partial assignee(s) with the selected sub. The panel shows the **Partial shift (sub covers part of this shift)** checkbox. If **unchecked**, the new sub is assigned as full (no From/To). If **checked**, the panel shows **From / To** time inputs and the shift is sent as partial. On Assign, the panel first calls `POST /api/sub-finder/unassign-shifts` for each existing partial assignment on that shift (by `assignment_id`), then calls `POST /api/sub-finder/assign-shifts` with the new sub (full or partial per checkbox).
+
+Full assignment (or partial cap reached) continues to use the Conflict Banner: "This shift is assigned to [sub]. Replace with [selected sub]?" with Do not assign / Replace.
+
+### Unassign with multiple partials
+
+`POST /api/sub-finder/unassign-shifts` with `scope: 'single'` requires `assignment_id` when the target shift has multiple active assignments (returns 400 if not provided). This prevents accidental removal of the wrong partial.
+
 ## Summary of Database Tables
 
-| Table                     | Relevant columns                                                                      | Used for                                              |
-| ------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `sub_assignments`         | `sub_id`, `date`, `time_slot_id`, `coverage_request_shift_id`, `status`, `is_floater` | Sub assignments; conflict detection; replace/cancel   |
-| `coverage_request_shifts` | `id`, `coverage_request_id`, `date`, `time_slot_id`, `classroom_id`                   | Target shifts for assignment; one sub per shift       |
-| `teacher_schedules`       | `teacher_id`, `day_of_week_id`, `time_slot_id`, `classroom_id`                        | conflict_teaching detection (sub's teaching schedule) |
+| Table                     | Relevant columns                                                                                                                              | Used for                                                    |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `sub_assignments`         | `sub_id`, `date`, `time_slot_id`, `coverage_request_shift_id`, `status`, `is_floater`, `is_partial`, `partial_start_time`, `partial_end_time` | Sub assignments; conflict detection; replace/cancel/partial |
+| `coverage_request_shifts` | `id`, `coverage_request_id`, `date`, `time_slot_id`, `classroom_id`                                                                           | Target shifts for assignment                                |
+| `teacher_schedules`       | `teacher_id`, `day_of_week_id`, `time_slot_id`, `classroom_id`                                                                                | conflict_teaching detection (sub's teaching schedule)       |
 
 ---
 

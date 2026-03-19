@@ -67,6 +67,7 @@ interface SubMatch {
     date: string
     day_name: string
     time_slot_code: string
+    classroom_id?: string | null
     classroom_name?: string | null
   }>
 }
@@ -237,6 +238,7 @@ export async function POST(request: NextRequest) {
       }
     >()
     const shiftIdMap = new Map<string, string>() // key: date|time_slot_code|classroom_id, value: coverage_request_shift_id
+    const coverageRequestShiftIds = new Set<string>()
 
     if (coverageRequestId) {
       const { data: coverageRequestShifts } = await supabase
@@ -272,6 +274,7 @@ export async function POST(request: NextRequest) {
           // Create shift ID map: date|time_slot_code|classroom_id -> coverage_request_shift_id
           const shiftIdKey = `${shift.date}|${shift.time_slots?.code || ''}|${shift.classroom_id || ''}`
           shiftIdMap.set(shiftIdKey, shift.id)
+          coverageRequestShiftIds.add(shift.id)
         })
       }
     }
@@ -307,7 +310,7 @@ export async function POST(request: NextRequest) {
         time_slot_id: shift.time_slot_id,
         time_slot_code: shift.time_slot?.code || '',
         class_group_id: classGroupInfo.class_group_id,
-        classroom_id: null, // TODO: Get from schedule cells
+        classroom_id: shift.classroom_id ?? null,
         classroom_name,
         classroom_color,
         diaper_changing_required: classGroupInfo.diaper_changing_required,
@@ -315,9 +318,18 @@ export async function POST(request: NextRequest) {
         class_group_name: class_name,
       }
     })
-    const shiftsToCoverByDateTimeSlot = new Map<string, Shift>()
+    const shiftsToCoverByExactKey = new Map<string, Shift>()
+    const shiftsToCoverByDateTimeSlot = new Map<string, Shift[]>()
     shiftsToCover.forEach(shift => {
-      shiftsToCoverByDateTimeSlot.set(`${shift.date}|${shift.time_slot_id}`, shift)
+      const exactKey = `${shift.date}|${shift.time_slot_id}|${shift.classroom_id || ''}`
+      shiftsToCoverByExactKey.set(exactKey, shift)
+      const dateTimeKey = `${shift.date}|${shift.time_slot_id}`
+      const existing = shiftsToCoverByDateTimeSlot.get(dateTimeKey)
+      if (existing) {
+        existing.push(shift)
+      } else {
+        shiftsToCoverByDateTimeSlot.set(dateTimeKey, [shift])
+      }
     })
 
     const { data: roleTypes, error: roleTypesError } = await supabase
@@ -384,6 +396,7 @@ export async function POST(request: NextRequest) {
           date,
           time_slot_id,
           classroom_id,
+          coverage_request_shift_id,
           time_slots:time_slots(code),
           days_of_week:day_of_week_id(name),
           classrooms:classroom_id(name)
@@ -562,6 +575,7 @@ export async function POST(request: NextRequest) {
             date: string
             day_name: string
             time_slot_code: string
+            classroom_id?: string | null
             classroom_name?: string | null
           }> = []
           const assignedShiftKeySet = new Set<string>()
@@ -572,20 +586,39 @@ export async function POST(request: NextRequest) {
 
           const subActiveAssignments = activeSubAssignmentsBySub.get(sub.id) || []
           subActiveAssignments.forEach((assignment: any) => {
-            const key = `${assignment.date}|${assignment.time_slot_id}`
+            const exactKey = `${assignment.date}|${assignment.time_slot_id}|${assignment.classroom_id || ''}`
+            const dateTimeKey = `${assignment.date}|${assignment.time_slot_id}`
             if (assignment.teacher_id === timeOffRequest.teacher_id) {
-              const matchingShift = shiftsToCoverByDateTimeSlot.get(key)
+              const matchesCurrentCoverageShift =
+                assignment.coverage_request_shift_id &&
+                coverageRequestShiftIds.has(assignment.coverage_request_shift_id)
+
+              const exactMatchingShift = shiftsToCoverByExactKey.get(exactKey)
+              const matchingShift =
+                exactMatchingShift ??
+                (() => {
+                  // Date+slot fallback is only safe when coverage-shift ids are not available
+                  // (legacy data) and there is exactly one candidate shift for the slot.
+                  if (coverageRequestShiftIds.size > 0) return undefined
+                  const candidates = shiftsToCoverByDateTimeSlot.get(dateTimeKey) || []
+                  return candidates.length === 1 ? candidates[0] : undefined
+                })()
+
+              if (!matchesCurrentCoverageShift && !matchingShift) return
               if (!matchingShift) return
-              assignedShiftKeySet.add(key)
+              assignedShiftKeySet.add(
+                `${matchingShift.date}|${matchingShift.time_slot_id}|${matchingShift.classroom_id || ''}`
+              )
               assignedShifts.push({
                 date: assignment.date,
                 day_name: assignment.days_of_week?.name || matchingShift.day_name,
                 time_slot_code: assignment.time_slots?.code || matchingShift.time_slot_code,
+                classroom_id: matchingShift.classroom_id ?? assignment.classroom_id ?? null,
                 classroom_name: matchingShift.classroom_name || null,
               })
             } else {
-              if (!externalSubAssignmentConflictsByKey.has(key)) {
-                externalSubAssignmentConflictsByKey.set(key, {
+              if (!externalSubAssignmentConflictsByKey.has(dateTimeKey)) {
+                externalSubAssignmentConflictsByKey.set(dateTimeKey, {
                   classroom_name: assignment.classrooms?.name || null,
                 })
               }

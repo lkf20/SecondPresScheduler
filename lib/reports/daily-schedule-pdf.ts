@@ -370,6 +370,7 @@ export function buildDailySchedulePdfHtml({
                       .map(absence => {
                         const subsForAbsence =
                           substitutesByAbsentTeacher.get(absence.teacher_id) || []
+                        const isReassigned = absence.is_reassigned === true
                         const subLines = subsForAbsence
                           .map(
                             sub =>
@@ -387,24 +388,38 @@ export function buildDailySchedulePdfHtml({
                           )
                           .join('')
                         const noSubLine =
-                          !absence.has_sub && subsForAbsence.length === 0
+                          !isReassigned && !absence.has_sub && subsForAbsence.length === 0
                             ? options.colorFriendly
                               ? `<div style="color:#B45309; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">↳ <span style="background:#FEF3C7; color:#92400E; border-radius:2px; padding:1px 4px;">No sub</span></div>`
                               : `<div style="color:#64748B; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">↳ <span style="background:#F1F5F9; color:#475569; border-radius:2px; padding:1px 4px;">No sub</span></div>`
                             : ''
                         return `
-                    <div style="color:${color.absent}; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">
-                      <span style="text-decoration: line-through;">${escapeHtml(
-                        formatTeacherName(
-                          {
-                            teacher_name: absence.teacher_name,
-                            teacher_first_name: absence.teacher_first_name,
-                            teacher_last_name: absence.teacher_last_name,
-                            teacher_display_name: absence.teacher_display_name,
-                          },
-                          options.teacherNameFormat
-                        )
-                      )}</span>
+                    <div style="color:${isReassigned ? '#475569' : color.absent}; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">
+                      ${
+                        isReassigned
+                          ? `<span><span style="text-decoration: line-through;">${escapeHtml(
+                              formatTeacherName(
+                                {
+                                  teacher_name: absence.teacher_name,
+                                  teacher_first_name: absence.teacher_first_name,
+                                  teacher_last_name: absence.teacher_last_name,
+                                  teacher_display_name: absence.teacher_display_name,
+                                },
+                                options.teacherNameFormat
+                              )
+                            )}</span> *</span>`
+                          : `<span style="text-decoration: line-through;">${escapeHtml(
+                              formatTeacherName(
+                                {
+                                  teacher_name: absence.teacher_name,
+                                  teacher_first_name: absence.teacher_first_name,
+                                  teacher_last_name: absence.teacher_last_name,
+                                  teacher_display_name: absence.teacher_display_name,
+                                },
+                                options.teacherNameFormat
+                              )
+                            )}</span>`
+                      }
                     </div>
                     ${noSubLine}
                     ${subLines}`
@@ -532,6 +547,7 @@ export function buildDailySchedulePdfHtml({
                   }</div>
                   <div style="color:${color.sub};">↳ Sub</div>
                   <div style="color:${color.absent}; text-decoration: line-through;">Absent</div>
+                  <div style="color:#475569;"><span style="text-decoration: line-through;">Reassigned</span> *</div>
                   ${
                     options.showRequiredRatios && options.showPreferredRatios
                       ? `<div style="color:#64748B;">(R) Required ratio · (P) Preferred ratio</div>`

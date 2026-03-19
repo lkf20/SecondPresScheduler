@@ -54,7 +54,7 @@ Enable directors to quickly cover absence shifts when no substitute is available
   - Assign Sub panel (selected assignee + confirmation copy)
   - Change-sub/assignment detail dialogs
   - Activity feed entry details
-  - Non-print daily schedule UI via tooltip only (no printable legend row change)
+  - Daily Schedule report does not show a dedicated override icon/tooltip in cell rows
 
 ## State Model
 

@@ -62,8 +62,18 @@ export async function POST(request: NextRequest) {
       slotKeyToShiftIds.get(key)!.push(shift.id)
     })
 
+    // Build reverse map: coverage_request_shift_id -> shift key (date|time_slot_code)
+    const shiftIdToKey = new Map<string, string>()
+    ;(shifts || []).forEach((shift: any) => {
+      const timeSlot = Array.isArray(shift.time_slots) ? shift.time_slots[0] : shift.time_slots
+      const timeSlotCode = timeSlot?.code || ''
+      if (!shift.date || !timeSlotCode) return
+      shiftIdToKey.set(shift.id, `${shift.date}|${timeSlotCode}`)
+    })
+
     const shiftOverrides: Array<{
       coverage_request_shift_id: string
+      shift_key: string
       selected: boolean
       override_availability: boolean
     }> = []
@@ -76,6 +86,7 @@ export async function POST(request: NextRequest) {
       shiftIds.forEach(shiftId => {
         shiftOverrides.push({
           coverage_request_shift_id: shiftId,
+          shift_key: shiftIdToKey.get(shiftId) ?? key,
           selected,
           override_availability: false,
         })
@@ -93,6 +104,7 @@ export async function POST(request: NextRequest) {
       shiftIds.forEach(shiftId => {
         shiftOverrides.push({
           coverage_request_shift_id: shiftId,
+          shift_key: shiftIdToKey.get(shiftId) ?? key,
           selected,
           override_availability: override,
         })

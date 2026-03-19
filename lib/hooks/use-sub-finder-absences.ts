@@ -30,6 +30,16 @@ export type SubFinderAbsence = {
       id?: string
       status: 'covered' | 'partial' | 'fully_covered' | 'partially_covered' | 'uncovered'
       sub_name?: string | null
+      assigned_sub_names?: string[]
+      assigned_subs?: Array<{
+        assignment_id: string
+        sub_id: string
+        sub_name: string
+        is_partial: boolean
+        partial_start_time?: string | null
+        partial_end_time?: string | null
+        non_sub_override?: boolean
+      }>
       sub_id?: string | null
       assignment_id?: string | null
       assignment_status?: 'pending' | 'confirmed' | 'declined' | 'no_response' | 'none' | null
@@ -49,6 +59,16 @@ export type SubFinderAbsence = {
       id?: string
       status: 'covered' | 'partial' | 'fully_covered' | 'partially_covered' | 'uncovered'
       sub_name?: string | null
+      assigned_sub_names?: string[]
+      assigned_subs?: Array<{
+        assignment_id: string
+        sub_id: string
+        sub_name: string
+        is_partial: boolean
+        partial_start_time?: string | null
+        partial_end_time?: string | null
+        non_sub_override?: boolean
+      }>
       sub_id?: string | null
       assignment_id?: string | null
       assignment_status?: 'pending' | 'confirmed' | 'declined' | 'no_response' | 'none' | null

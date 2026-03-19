@@ -86,10 +86,19 @@ Every log entry must include:
 
 ### `sub_assignment` / `coverage`
 
-| Action     | Required in `details`                                  | Human-readable required                                                       |
-| ---------- | ------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| `assign`   | `teacher_id` or `sub_id`, assignment/shift identifiers | `teacher_name` and/or sub name; enough to describe "who was assigned to what" |
-| `unassign` | Same as assign                                         | Same names                                                                    |
+| Action     | Required in `details`                                                                 | Human-readable required                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `assign`   | `teacher_id` or `sub_id`, assignment/shift identifiers, `full_count`, `partial_count` | `teacher_name` and/or sub name; `summary` when partial assignments exist; enough to describe "who was assigned to what" |
+| `unassign` | Same as assign; `was_partial`, `remaining_partials_on_shift` when applicable          | Same names                                                                                                              |
+
+**Phase 1 partial assignment additions:** When `partial_count > 0`, `details` must include:
+
+- `full_count` — number of full assignments created
+- `partial_count` — number of partial assignments created
+- `partial_shifts` — array of `{shift_id, partial_start_time, partial_end_time}` for each partial
+- `summary` — human-readable summary including `(approx.)` note
+
+For unassign: `was_partial` (boolean) and `remaining_partials_on_shift` (integer) are required when the removed assignment was partial.
 
 ### `temporary_coverage` + `staffing_event`
 
@@ -97,6 +106,14 @@ Every log entry must include:
 | -------- | ------------------------------------------------------------------------------- | --------------------------------------------- |
 | `assign` | `staff_id`, `start_date`, `end_date`, `shift_count`; optionally `classroom_ids` | `teacher_name`, `classroom_name` (or summary) |
 | `cancel` | `staff_id`, `scope`, `removed_count`, `remaining_active_shifts`                 | `teacher_name`                                |
+
+For day-only reassignment (`event_category = 'reassignment'`), `details` must also include:
+
+- `source_classroom_id`, `source_classroom_name`
+- `classroom_id`, `classroom_name` (target)
+- `date`, `time_slot_id`, `time_slot_code` when single-shift scoped
+- `coverage_request_shift_id` when linked to absence coverage
+- `linked_sub_assignment_count` (assign) / `linked_sub_assignment_cancelled_count` (cancel)
 
 ### `school_calendar` + `calendar_settings`
 

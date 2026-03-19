@@ -16,6 +16,21 @@ interface ShiftInput {
   classroom_id?: string | null
 }
 
+type ScheduledConflictRoom = {
+  id: string | null
+  name: string | null
+}
+
+const findTeachingConflictRoom = (
+  rooms: ScheduledConflictRoom[],
+  targetClassroomId?: string | null
+): ScheduledConflictRoom | null => {
+  if (rooms.length === 0) return null
+  if (!targetClassroomId) return rooms[0]
+  const differentRoom = rooms.find(room => !room.id || room.id !== targetClassroomId)
+  return differentRoom ?? null
+}
+
 /**
  * POST /api/sub-finder/check-conflicts
  * Check conflicts for a sub and specific shifts.
@@ -79,17 +94,21 @@ export async function POST(request: NextRequest) {
       })
 
       const subScheduledShifts = await getTeacherScheduledShifts(sub_id, startDate, endDate)
-      const scheduleConflicts = new Set(
-        subScheduledShifts.map(
-          (s: { date: string; time_slot_id: string }) =>
-            `${toDateStringISO(s.date)}|${s.time_slot_id}`
-        )
-      )
-      const scheduleConflictClassroomByKey = new Map<string, string>()
+      const scheduleRoomsByKey = new Map<string, ScheduledConflictRoom[]>()
       subScheduledShifts.forEach(
-        (s: { date: string; time_slot_id: string; classroom_name?: string | null }) => {
+        (s: {
+          date: string
+          time_slot_id: string
+          classroom_id?: string | null
+          classroom_name?: string | null
+        }) => {
           const key = `${toDateStringISO(s.date)}|${s.time_slot_id}`
-          if (s.classroom_name) scheduleConflictClassroomByKey.set(key, s.classroom_name)
+          const list = scheduleRoomsByKey.get(key) ?? []
+          list.push({
+            id: s.classroom_id ?? null,
+            name: s.classroom_name ?? null,
+          })
+          scheduleRoomsByKey.set(key, list)
         }
       )
 
@@ -157,7 +176,11 @@ export async function POST(request: NextRequest) {
             ? dayBasedAvailabilityMap.get(dayBasedKey)!
             : false
 
-        const hasScheduleConflict = scheduleConflicts.has(dateBasedKey)
+        const teachingConflictRoom = findTeachingConflictRoom(
+          scheduleRoomsByKey.get(dateBasedKey) ?? [],
+          shift.classroom_id ?? null
+        )
+        const hasScheduleConflict = Boolean(teachingConflictRoom)
         const hasTimeOffConflict = timeOffConflicts.has(dateBasedKey)
         const assignmentConflict = assignmentConflicts.get(dateBasedKey)
 
@@ -169,7 +192,7 @@ export async function POST(request: NextRequest) {
           message = 'Marked unavailable'
         } else if (hasScheduleConflict) {
           status = 'conflict_teaching'
-          const teachingRoom = scheduleConflictClassroomByKey.get(dateBasedKey)
+          const teachingRoom = teachingConflictRoom?.name
           message = teachingRoom
             ? `Conflict: Assigned to ${teachingRoom}`
             : `Conflict: Assigned to ${shift.classroom_id ? 'classroom' : 'teach'}`
@@ -188,8 +211,13 @@ export async function POST(request: NextRequest) {
           shift_key: dateBasedKey,
           status,
           message,
-          ...(status === 'conflict_teaching' && scheduleConflictClassroomByKey.has(dateBasedKey)
-            ? { conflict_classroom_name: scheduleConflictClassroomByKey.get(dateBasedKey)! }
+          ...(status === 'conflict_teaching' && teachingConflictRoom
+            ? {
+                ...(teachingConflictRoom.name
+                  ? { conflict_classroom_name: teachingConflictRoom.name }
+                  : {}),
+                conflict_classroom_id: teachingConflictRoom.id,
+              }
             : {}),
         }
       })
@@ -266,14 +294,21 @@ export async function POST(request: NextRequest) {
 
     // Get sub's regular teaching schedule
     const subScheduledShifts = await getTeacherScheduledShifts(sub_id, startDate, endDate)
-    const scheduleConflicts = new Set<string>()
-    const scheduleConflictClassroomByKey = new Map<string, string>()
+    const scheduleRoomsByKey = new Map<string, ScheduledConflictRoom[]>()
     subScheduledShifts.forEach(
-      (scheduledShift: { date: string; time_slot_id: string; classroom_name?: string | null }) => {
+      (scheduledShift: {
+        date: string
+        time_slot_id: string
+        classroom_id?: string | null
+        classroom_name?: string | null
+      }) => {
         const key = `${toDateStringISO(scheduledShift.date)}|${scheduledShift.time_slot_id}`
-        scheduleConflicts.add(key)
-        if (scheduledShift.classroom_name)
-          scheduleConflictClassroomByKey.set(key, scheduledShift.classroom_name)
+        const list = scheduleRoomsByKey.get(key) ?? []
+        list.push({
+          id: scheduledShift.classroom_id ?? null,
+          name: scheduledShift.classroom_name ?? null,
+        })
+        scheduleRoomsByKey.set(key, list)
       }
     )
 
@@ -298,7 +333,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Get existing sub assignments
+    // Get existing sub assignments (for sub's own collision detection)
     const { data: existingAssignments } = await supabase
       .from('sub_assignments')
       .select(
@@ -323,7 +358,6 @@ export async function POST(request: NextRequest) {
           `${teacher?.first_name || ''} ${teacher?.last_name || ''}`.trim() ||
           'Unknown'
 
-        // Get classroom name from the assignment if available
         let classroomName = null
         if (assignment.classroom_id) {
           const { data: classroom } = await supabase
@@ -341,20 +375,51 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Fetch existing active assignments on each target shift (for partial coverage flags).
+    // These are derived from the TARGET SHIFT's assignments, not the candidate sub's collisions.
+    const { data: shiftActiveAssignments } = await supabase
+      .from('sub_assignments')
+      .select('coverage_request_shift_id, is_partial')
+      .eq('status', 'active')
+      .in(
+        'coverage_request_shift_id',
+        coverageRequestShifts.map(s => s.id)
+      )
+
+    // Build per-shift partial coverage info
+    const shiftPartialInfoMap = new Map<
+      string,
+      { hasExistingPartial: boolean; canAddPartial: boolean }
+    >()
+    for (const shift of coverageRequestShifts) {
+      const shiftAssignments = (shiftActiveAssignments || []).filter(
+        (a: any) => a.coverage_request_shift_id === shift.id
+      )
+      const hasFullAssignment = shiftAssignments.some((a: any) => a.is_partial === false)
+      const partialCount = shiftAssignments.filter((a: any) => a.is_partial === true).length
+      const hasExistingPartial = partialCount > 0
+      // Can add partial: no existing full AND partial count < 4
+      const canAddPartial = !hasFullAssignment && partialCount < 4
+      shiftPartialInfoMap.set(shift.id, { hasExistingPartial, canAddPartial })
+    }
+
     // Check each shift for conflicts
     const conflicts = coverageRequestShifts.map(shift => {
       const dayBasedKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
       const dateBasedKey = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
       const conflictKey = dateBasedKey
 
-      // Check date-based exception first, then fall back to day-based availability
       const isAvailable = dateBasedAvailabilityMap.has(dateBasedKey)
         ? dateBasedAvailabilityMap.get(dateBasedKey)!
         : dayBasedAvailabilityMap.has(dayBasedKey)
           ? dayBasedAvailabilityMap.get(dayBasedKey)!
           : false
 
-      const hasScheduleConflict = scheduleConflicts.has(conflictKey)
+      const teachingConflictRoom = findTeachingConflictRoom(
+        scheduleRoomsByKey.get(conflictKey) ?? [],
+        shift.classroom_id ?? null
+      )
+      const hasScheduleConflict = Boolean(teachingConflictRoom)
       const hasTimeOffConflict = timeOffConflicts.has(conflictKey)
       const assignmentConflict = assignmentConflicts.get(conflictKey)
 
@@ -366,7 +431,7 @@ export async function POST(request: NextRequest) {
         message = 'Marked unavailable'
       } else if (hasScheduleConflict) {
         status = 'conflict_teaching'
-        const teachingRoom = scheduleConflictClassroomByKey.get(conflictKey)
+        const teachingRoom = teachingConflictRoom?.name
         message = teachingRoom
           ? `Conflict: Assigned to ${teachingRoom}`
           : `Conflict: Assigned to ${shift.classroom_id ? 'classroom' : 'teach'}`
@@ -386,12 +451,23 @@ export async function POST(request: NextRequest) {
         message = ''
       }
 
+      const partialInfo = shiftPartialInfoMap.get(shift.id)
+
       return {
         shift_id: shift.id,
         status,
         message,
-        ...(status === 'conflict_teaching' && scheduleConflictClassroomByKey.has(conflictKey)
-          ? { conflict_classroom_name: scheduleConflictClassroomByKey.get(conflictKey)! }
+        // Additive boolean flags for partial coverage state on this shift.
+        // Derived from the TARGET SHIFT's active assignments, independent of the sub's own conflicts.
+        has_existing_partial_coverage: partialInfo?.hasExistingPartial ?? false,
+        can_add_partial: partialInfo?.canAddPartial ?? true,
+        ...(status === 'conflict_teaching' && teachingConflictRoom
+          ? {
+              ...(teachingConflictRoom.name
+                ? { conflict_classroom_name: teachingConflictRoom.name }
+                : {}),
+              conflict_classroom_id: teachingConflictRoom.id,
+            }
           : {}),
       }
     })
