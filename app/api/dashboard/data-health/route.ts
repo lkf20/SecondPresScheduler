@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getTodayISO, toDateStringISO } from '@/lib/utils/date'
 import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
+import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 export async function GET() {
   try {
@@ -17,7 +18,21 @@ export async function GET() {
     // Find all future coverage_request_shifts that are not cancelled (shift row and parent coverage_request)
     const { data: shiftsRaw, error: shiftsError } = await supabase
       .from('coverage_request_shifts')
-      .select('id, date, day_of_week_id, time_slot_id, coverage_requests!inner(teacher_id, status)')
+      .select(
+        `
+        id,
+        date,
+        day_of_week_id,
+        time_slot_id,
+        day_of_week:days_of_week(name),
+        time_slot:time_slots(code),
+        coverage_requests!inner(
+          teacher_id,
+          status,
+          teacher:staff!coverage_requests_teacher_id_fkey(first_name, last_name, display_name)
+        )
+      `
+      )
       .eq('school_id', schoolId)
       .gte('date', today)
       .neq('status', 'cancelled')
@@ -76,7 +91,14 @@ export async function GET() {
         .map(b => baselineKey(b.teacher_id, b.day_of_week_id, b.time_slot_id))
     )
 
-    const orphanedShifts: Array<{ shift_id: string; date: string; reason: string }> = []
+    const orphanedShifts: Array<{
+      shift_id: string
+      date: string
+      reason: string
+      teacher_name: string | null
+      day_name: string | null
+      time_slot_code: string | null
+    }> = []
 
     for (const shift of shifts) {
       const dateNorm = toDateStringISO(shift.date)
@@ -88,10 +110,21 @@ export async function GET() {
       )
 
       if (isClosed || !hasBaseline) {
+        const teacherName = (() => {
+          const teacher = (shift.coverage_requests as any)?.teacher
+          if (!teacher) return null
+          return getStaffDisplayName(teacher) || null
+        })()
+        const dayName = ((shift as any).day_of_week as { name?: string } | null)?.name ?? null
+        const timeSlotCode = ((shift as any).time_slot as { code?: string } | null)?.code ?? null
+
         orphanedShifts.push({
           shift_id: shift.id,
           date: dateNorm || shift.date,
           reason: isClosed ? 'school_closed' : 'missing_baseline',
+          teacher_name: teacherName,
+          day_name: dayName,
+          time_slot_code: timeSlotCode,
         })
       }
     }

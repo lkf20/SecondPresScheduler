@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { Settings2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import ReportRichTextEditors from '@/components/reports/ReportRichTextEditors'
 import { hasRichTextContent, sanitizeRichTextHtml } from '@/lib/reports/rich-text'
 import { useReportDefaults } from '@/lib/hooks/use-report-defaults'
@@ -37,8 +39,11 @@ type ReportData = {
 }
 
 export default function SubAvailabilityReportPage() {
+  const settingsKey = 'subAvailabilityReportSettings'
   const [colorFriendly, setColorFriendly] = useState(true)
   const [nameFormat, setNameFormat] = useState<'display' | 'full'>('display')
+  const [paperSize, setPaperSize] = useState<'letter' | 'legal'>('letter')
+  const [isPdfSettingsOpen, setIsPdfSettingsOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reportData, setReportData] = useState<ReportData | null>(null)
@@ -54,6 +59,29 @@ export default function SubAvailabilityReportPage() {
     saveTopDefault: handleSaveTopHeaderDefault,
     saveFooterDefault: handleSaveFooterDefault,
   } = useReportDefaults({ defaultsUrl: SUB_AVAILABILITY_DEFAULTS_URL })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const raw = window.localStorage.getItem(settingsKey)
+    if (!raw) return
+
+    try {
+      const parsed = JSON.parse(raw) as Partial<{
+        colorFriendly: boolean
+        nameFormat: 'display' | 'full'
+        paperSize: 'letter' | 'legal'
+      }>
+      if (typeof parsed.colorFriendly === 'boolean') setColorFriendly(parsed.colorFriendly)
+      if (parsed.nameFormat === 'display' || parsed.nameFormat === 'full') {
+        setNameFormat(parsed.nameFormat)
+      }
+      if (parsed.paperSize === 'letter' || parsed.paperSize === 'legal') {
+        setPaperSize(parsed.paperSize)
+      }
+    } catch {
+      window.localStorage.removeItem(settingsKey)
+    }
+  }, [settingsKey])
 
   useEffect(() => {
     let mounted = true
@@ -88,10 +116,11 @@ export default function SubAvailabilityReportPage() {
     const params = new URLSearchParams()
     params.set('colorFriendly', String(colorFriendly))
     params.set('nameFormat', nameFormat)
+    params.set('paperSize', paperSize)
     if (hasRichTextContent(topHeaderHtml)) params.set('topHeaderHtml', topHeaderHtml)
     if (hasRichTextContent(footerNotesHtml)) params.set('footerNotesHtml', footerNotesHtml)
     return `${SUB_AVAILABILITY_PDF_URL}?${params.toString()}`
-  }, [colorFriendly, nameFormat, topHeaderHtml, footerNotesHtml])
+  }, [colorFriendly, nameFormat, paperSize, topHeaderHtml, footerNotesHtml])
 
   const dayStartIndexes = useMemo(() => {
     if (!reportData?.report_context.columns?.length) return new Set<number>()
@@ -176,30 +205,86 @@ export default function SubAvailabilityReportPage() {
                 Black &amp; White
               </button>
             </div>
-            <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-1">
-              <button
-                type="button"
-                onClick={() => setNameFormat('display')}
-                className={cn(
-                  'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
-                  nameFormat === 'display' ? 'bg-[#172554] text-white' : 'text-slate-600'
-                )}
-              >
-                Display Name
-              </button>
-              <button
-                type="button"
-                onClick={() => setNameFormat('full')}
-                className={cn(
-                  'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
-                  nameFormat === 'full' ? 'bg-[#172554] text-white' : 'text-slate-600'
-                )}
-              >
-                Full Name
-              </button>
-            </div>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <Popover open={isPdfSettingsOpen} onOpenChange={setIsPdfSettingsOpen}>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="outline" size="icon" aria-label="PDF settings">
+                  <Settings2 className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72" align="start">
+                <div className="space-y-4 text-sm text-slate-700">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    PDF Options
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Name Format
+                    </div>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="subAvailabilityNameFormat"
+                        className="h-4 w-4 accent-teal-600"
+                        checked={nameFormat === 'display'}
+                        onChange={() => setNameFormat('display')}
+                      />
+                      Display name
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="subAvailabilityNameFormat"
+                        className="h-4 w-4 accent-teal-600"
+                        checked={nameFormat === 'full'}
+                        onChange={() => setNameFormat('full')}
+                      />
+                      Full name
+                    </label>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Paper Size
+                    </div>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="subAvailabilityPaperSize"
+                        className="h-4 w-4 accent-teal-600"
+                        checked={paperSize === 'letter'}
+                        onChange={() => setPaperSize('letter')}
+                      />
+                      Letter
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="subAvailabilityPaperSize"
+                        className="h-4 w-4 accent-teal-600"
+                        checked={paperSize === 'legal'}
+                        onChange={() => setPaperSize('legal')}
+                      />
+                      Legal
+                    </label>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      if (typeof window === 'undefined') return
+                      window.localStorage.setItem(
+                        settingsKey,
+                        JSON.stringify({ colorFriendly, nameFormat, paperSize })
+                      )
+                      setIsPdfSettingsOpen(false)
+                    }}
+                  >
+                    Save as default
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
             <Button type="button" onClick={openPdf}>
               Print PDF
             </Button>

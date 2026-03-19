@@ -89,6 +89,7 @@ export default function StaffFormClient({
 
   const returnPage = searchParams.get('returnPage') || '1'
   const returnSearch = searchParams.get('returnSearch')
+  const fromStaffSettings = searchParams.get('from') === 'staff-settings'
 
   useEffect(() => {
     const fetchRoleTypes = async () => {
@@ -141,7 +142,7 @@ export default function StaffFormClient({
   const getReturnUrl = () => {
     const params = new URLSearchParams()
     searchParams.forEach((value, key) => {
-      if (key !== 'tab') params.set(key, value)
+      if (key !== 'tab' && key !== 'from') params.set(key, value)
     })
     const queryString = params.toString()
     return `/staff${queryString ? `?${queryString}` : ''}`
@@ -425,7 +426,9 @@ export default function StaffFormClient({
           type="button"
           onClick={() =>
             navigateBackWithUnsavedGuard(() => {
-              if (typeof window !== 'undefined' && window.history.length > 1) {
+              if (fromStaffSettings) {
+                router.push(getReturnUrl())
+              } else if (typeof window !== 'undefined' && window.history.length > 1) {
                 router.back()
               } else {
                 router.push(getReturnUrl())
@@ -435,7 +438,7 @@ export default function StaffFormClient({
           className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back
+          {fromStaffSettings ? 'Back to Staff Settings' : 'Back'}
         </button>
       </div>
       <div className="mb-6 max-w-2xl">

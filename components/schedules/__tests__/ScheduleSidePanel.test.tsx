@@ -239,6 +239,17 @@ const setupFetch = (
     }) => { conflicts: any[] }
     /** When set, fail PUT /api/schedule-cells/bulk with this error message */
     bulkSaveFailureMessage?: string
+    /** When set, capture body of PUT /api/teacher-schedules/bulk-apply */
+    onBulkTeacherApply?: (body: {
+      target_cells: Array<{
+        classroom_id: string
+        day_of_week_id: string
+        time_slot_id: string
+      }>
+      teachers: Array<{ teacher_id: string; is_floater: boolean }>
+    }) => void
+    /** When set, fail PUT /api/teacher-schedules/bulk-apply with this message */
+    bulkTeacherApplyFailureMessage?: string
   }
 ) => {
   const checkConflictsResponse = options?.checkConflictsResponse ?? { conflicts: [] }
@@ -246,6 +257,8 @@ const setupFetch = (
   const onBulkSave = options?.onBulkSave
   const getCheckConflictsResponse = options?.getCheckConflictsResponse
   const bulkSaveFailureMessage = options?.bulkSaveFailureMessage
+  const onBulkTeacherApply = options?.onBulkTeacherApply
+  const bulkTeacherApplyFailureMessage = options?.bulkTeacherApplyFailureMessage
 
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
@@ -283,6 +296,27 @@ const setupFetch = (
       return {
         ok: true,
         json: async () => response,
+      } as Response
+    }
+    if (url.includes('/api/teacher-schedules/bulk-apply') && init?.method === 'PUT' && init?.body) {
+      const body = JSON.parse(init.body as string) as {
+        target_cells: Array<{
+          classroom_id: string
+          day_of_week_id: string
+          time_slot_id: string
+        }>
+        teachers: Array<{ teacher_id: string; is_floater: boolean }>
+      }
+      onBulkTeacherApply?.(body)
+      if (bulkTeacherApplyFailureMessage) {
+        return {
+          ok: false,
+          json: async () => ({ error: bulkTeacherApplyFailureMessage }),
+        } as Response
+      }
+      return {
+        ok: true,
+        json: async () => ({ target_cell_count: body.target_cells.length }),
       } as Response
     }
     if (url.includes('/api/teacher-schedules')) {
@@ -960,6 +994,94 @@ describe('ScheduleSidePanel interactions', () => {
     await waitFor(() => {
       expect(bulkPutCalled).toBe(true)
     })
+  })
+
+  it('Apply to multiple cells sends floater flags through bulk teacher apply payload', async () => {
+    let bulkTeacherApplyBody: {
+      target_cells: Array<{
+        classroom_id: string
+        day_of_week_id: string
+        time_slot_id: string
+      }>
+      teachers: Array<{ teacher_id: string; is_floater: boolean }>
+    } | null = null
+
+    setupFetch(
+      {
+        start_date: '2026-02-09',
+        end_date: '2026-02-09',
+        weekdays: ['Monday'],
+        matching_shift_count: 1,
+      },
+      {
+        getCheckConflictsResponse: () => ({ conflicts: [] }),
+        teacherSchedulesResponse: [
+          {
+            id: 'ts-1',
+            classroom_id: 'class-1',
+            day_of_week_id: 'day-1',
+            time_slot_id: 'slot-1',
+            teacher_id: 'teacher-1',
+            is_floater: true,
+            teacher: {
+              first_name: 'Bella',
+              last_name: 'Wilson',
+              display_name: null,
+              staff_role_type_assignments: [],
+            },
+          },
+        ],
+        onBulkTeacherApply: body => {
+          bulkTeacherApplyBody = body
+        },
+      }
+    )
+
+    const props = buildProps()
+    renderWithQueryClient(
+      <ScheduleSidePanel
+        {...props}
+        readOnly={false}
+        selectedDayIds={['day-1', 'day-2']}
+        selectedCellData={{
+          ...props.selectedCellData,
+          schedule_cell: props.selectedCellData?.schedule_cell,
+          assignments: [
+            {
+              id: 'a-1',
+              teacher_id: 'teacher-1',
+              teacher_name: 'Bella W.',
+              classroom_id: 'class-1',
+              classroom_name: 'Infant Room',
+              is_floater: true,
+            },
+          ],
+        }}
+      />
+    )
+
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument(), {
+      timeout: 3000,
+    })
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50))
+    })
+
+    const applyToOtherDaysButton = screen.getByRole('button', { name: 'Apply to other days' })
+    await act(async () => {
+      fireEvent.click(applyToOtherDaysButton)
+    })
+
+    const saveButton = screen.getByRole('button', { name: 'Save' })
+    await act(async () => {
+      fireEvent.click(saveButton)
+    })
+
+    await waitFor(() => {
+      expect(bulkTeacherApplyBody).not.toBeNull()
+    })
+    expect(bulkTeacherApplyBody!.teachers).toEqual([{ teacher_id: 'teacher-1', is_floater: true }])
+    expect(bulkTeacherApplyBody!.target_cells).toHaveLength(2)
   })
 
   it('Unsaved dialog shows block reason and disables Save when user has direct-assignment conflicts and tries to close', async () => {

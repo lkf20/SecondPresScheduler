@@ -172,6 +172,7 @@ export function buildDailySchedulePdfHtml({
     permanent: '#0F172A',
     floater: options.colorFriendly ? '#7E22CE' : '#334155',
     flex: options.colorFriendly ? '#1E40AF' : '#334155',
+    tempCoverage: options.colorFriendly ? '#BE185D' : '#334155',
     sub: options.colorFriendly ? '#0F766E' : '#334155',
     absent: '#94A3B8',
     grid: '#E2E8F0',
@@ -264,6 +265,17 @@ export function buildDailySchedulePdfHtml({
                       !a.is_substitute &&
                       !a.is_floater &&
                       a.is_flexible &&
+                      !a.staffing_event_id &&
+                      !absentTeacherIds.has(a.teacher_id)
+                  )
+                  .sort(sortByName)
+                const temporaryCoverageTeachers = assignments
+                  .filter(
+                    a =>
+                      !a.is_substitute &&
+                      !a.is_floater &&
+                      a.is_flexible &&
+                      Boolean(a.staffing_event_id) &&
                       !absentTeacherIds.has(a.teacher_id)
                   )
                   .sort(sortByName)
@@ -334,6 +346,24 @@ export function buildDailySchedulePdfHtml({
                       )
                     )}</div>`
                   })
+                  .join('')
+                const temporaryCoverageLines = temporaryCoverageTeachers
+                  .map(
+                    t =>
+                      `<div style="color:${color.tempCoverage}; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">${
+                        options.colorFriendly ? '' : '◇ '
+                      }${escapeHtml(
+                        formatTeacherName(
+                          {
+                            teacher_name: t.teacher_name,
+                            teacher_first_name: t.teacher_first_name,
+                            teacher_last_name: t.teacher_last_name,
+                            teacher_display_name: t.teacher_display_name,
+                          },
+                          options.teacherNameFormat
+                        )
+                      )}</div>`
+                  )
                   .join('')
                 const absenceLines = options.showAbsencesAndSubs
                   ? sortedAbsences
@@ -409,7 +439,11 @@ export function buildDailySchedulePdfHtml({
                   (line): line is string => typeof line === 'string' && line.length > 0
                 )
                 const hasTeacherContent = Boolean(
-                  teacherLines || floaterLines || flexLines || absenceLines
+                  teacherLines ||
+                  floaterLines ||
+                  flexLines ||
+                  temporaryCoverageLines ||
+                  absenceLines
                 )
                 const metricsBlock =
                   metricsLines.length > 0
@@ -428,6 +462,7 @@ export function buildDailySchedulePdfHtml({
                 ${teacherLines}
                 ${floaterLines}
                 ${flexLines}
+                ${temporaryCoverageLines}
                 ${absenceLines}
                 ${notesBlock}
               </div>
@@ -503,6 +538,9 @@ export function buildDailySchedulePdfHtml({
                   <div style="color:${color.permanent};">Permanent</div>
                   <div style="color:${color.flex};">${
                     options.colorFriendly ? 'Flex' : '◦ Flex'
+                  }</div>
+                  <div style="color:${color.tempCoverage};">${
+                    options.colorFriendly ? 'Temporary Coverage' : '◇ Temporary Coverage'
                   }</div>
                   <div style="color:${color.floater};">${
                     options.colorFriendly ? 'Floater' : '↔ Floater'

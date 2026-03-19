@@ -1,8 +1,4 @@
 import { NextResponse } from 'next/server'
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-import puppeteer from 'puppeteer'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { getSubAvailabilityReportData } from '@/lib/api/sub-availability'
 import {
@@ -16,6 +12,7 @@ import {
   MAX_TOP_HEADER_HTML,
   truncateRichText,
 } from '@/lib/reports/rich-text'
+import { launchPdfBrowser } from '@/lib/reports/puppeteer-launch'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -26,50 +23,11 @@ const parseBoolean = (value: string | null, fallback: boolean) => {
 }
 const parseNameFormat = (value: string | null): 'display' | 'full' =>
   value === 'full' ? 'full' : 'display'
+const parsePaperSize = (value: string | null): 'letter' | 'legal' =>
+  value === 'legal' ? 'legal' : 'letter'
 const parseFooterNotesHtml = (value: string | null) =>
   truncateRichText(value, MAX_FOOTER_NOTES_HTML)
 const parseTopHeaderHtml = (value: string | null) => truncateRichText(value, MAX_TOP_HEADER_HTML)
-
-const resolveExecutablePath = () => {
-  const envPath = process.env.PUPPETEER_EXECUTABLE_PATH
-  if (envPath && fs.existsSync(envPath)) return envPath
-
-  const defaultPath = puppeteer.executablePath()
-  if (defaultPath && fs.existsSync(defaultPath)) return defaultPath
-
-  const cacheBase = path.join(os.homedir(), '.cache', 'puppeteer', 'chrome')
-  if (!fs.existsSync(cacheBase)) return undefined
-  const versions = fs
-    .readdirSync(cacheBase, { withFileTypes: true })
-    .filter(entry => entry.isDirectory() && entry.name.startsWith('mac-'))
-    .map(entry => entry.name)
-    .sort()
-  const latest = versions.at(-1)
-  if (!latest) return undefined
-
-  const candidates = [
-    path.join(
-      cacheBase,
-      latest,
-      'chrome-mac-arm64',
-      'Google Chrome for Testing.app',
-      'Contents',
-      'MacOS',
-      'Google Chrome for Testing'
-    ),
-    path.join(
-      cacheBase,
-      latest,
-      'chrome-mac-x64',
-      'Google Chrome for Testing.app',
-      'Contents',
-      'MacOS',
-      'Google Chrome for Testing'
-    ),
-  ]
-
-  return candidates.find(candidate => fs.existsSync(candidate))
-}
 
 export async function GET(request: Request) {
   try {
@@ -87,6 +45,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const colorFriendly = parseBoolean(searchParams.get('colorFriendly'), true)
     const nameFormat = parseNameFormat(searchParams.get('nameFormat'))
+    const paperSize = parsePaperSize(searchParams.get('paperSize'))
     const footerNotesHtml = parseFooterNotesHtml(searchParams.get('footerNotesHtml'))
     const topHeaderHtml = parseTopHeaderHtml(searchParams.get('topHeaderHtml'))
 
@@ -112,16 +71,14 @@ export async function GET(request: Request) {
       colorFriendly,
       footerNotesHtml,
       topHeaderHtml,
+      paperSize,
     })
 
-    const browser = await puppeteer.launch({
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      executablePath: resolveExecutablePath(),
-    })
+    const browser = await launchPdfBrowser()
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'networkidle0' })
     const pdf = await page.pdf({
-      format: 'letter',
+      format: paperSize,
       landscape: true,
       printBackground: true,
       margin: {

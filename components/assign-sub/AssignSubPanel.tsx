@@ -1252,22 +1252,44 @@ export default function AssignSubPanel({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="sub-select">
-                  Staff to assign <span className="text-destructive">*</span>
-                </Label>
-                <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                  <Checkbox
-                    id="include-non-sub-override"
-                    checked={includeNonSubOverride}
-                    onCheckedChange={checked => setIncludeNonSubOverride(checked === true)}
-                  />
-                  <Label
-                    htmlFor="include-non-sub-override"
-                    className="text-sm font-normal text-slate-700"
-                  >
-                    Include non-sub staff (director override)
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="sub-select">
+                    Staff to assign <span className="text-destructive">*</span>
                   </Label>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="include-non-sub-override"
+                      checked={includeNonSubOverride}
+                      onCheckedChange={checked => setIncludeNonSubOverride(checked === true)}
+                    />
+                    <Label
+                      htmlFor="include-non-sub-override"
+                      className="text-xs font-normal text-slate-500"
+                    >
+                      Include non-sub staff
+                    </Label>
+                  </div>
                 </div>
+                {includeNonSubOverride && (
+                  <div className="flex items-center justify-end">
+                    <Badge
+                      variant="outline"
+                      className="font-normal"
+                      style={{
+                        backgroundColor: 'rgb(255, 251, 235)', // amber-50
+                        borderColor: 'rgb(252, 211, 77)', // amber-300
+                        color: 'rgb(146, 64, 14)', // amber-800
+                      }}
+                    >
+                      Override enabled
+                    </Badge>
+                  </div>
+                )}
+                {includeNonSubOverride && (
+                  <p className="text-xs text-amber-700">
+                    Director override enabled. Non-sub staff can be selected.
+                  </p>
+                )}
                 <SearchableSelect
                   options={subOptions}
                   value={subId}

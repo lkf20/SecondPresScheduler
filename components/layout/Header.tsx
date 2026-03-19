@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { CalendarPlus, History, LogOut, Printer, UserPlus, UserSearch } from 'lucide-react'
@@ -32,6 +33,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils'
 import { getTodayISO } from '@/lib/utils/date'
 import { ActivityFeed } from '@/components/activity/ActivityFeed'
+import { performClientLogout } from '@/lib/auth/client-logout'
 
 interface HeaderProps {
   userEmail?: string
@@ -39,6 +41,7 @@ interface HeaderProps {
 
 export default function Header({ userEmail }: HeaderProps) {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const supabase = createClient()
   const [isTimeOffSheetOpen, setIsTimeOffSheetOpen] = useState(false)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
@@ -76,9 +79,10 @@ export default function Header({ userEmail }: HeaderProps) {
   }
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
+    await performClientLogout({
+      signOut: () => supabase.auth.signOut(),
+      clearQueryCache: () => queryClient.clear(),
+    })
   }
 
   const handleTimeOffSuccess = (

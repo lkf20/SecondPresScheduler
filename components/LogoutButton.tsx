@@ -1,16 +1,18 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
+import { performClientLogout } from '@/lib/auth/client-logout'
 
 export default function LogoutButton() {
-  const router = useRouter()
   const supabase = createClient()
+  const queryClient = useQueryClient()
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
+    await performClientLogout({
+      signOut: () => supabase.auth.signOut(),
+      clearQueryCache: () => queryClient.clear(),
+    })
   }
 
   return (

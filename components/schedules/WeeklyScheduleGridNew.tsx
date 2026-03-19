@@ -92,6 +92,10 @@ interface WeeklyScheduleGridNewProps {
   onClosureChangeReason?: (closureId: string, newReason: string) => void | Promise<void>
   /** Day IDs selected in Settings (Days & Time slots). Used for Apply Changes to day checkboxes only. */
   scheduleDayIdsFromSettings?: string[]
+  /** Optional day id to scroll to in the grid (no-op if not currently rendered). */
+  scrollToDayId?: string | null
+  /** Change this key to re-trigger a scroll attempt for the same day id. */
+  scrollToDayRequestId?: number
 }
 
 type WeeklyScheduleCellData = WeeklyScheduleData & {
@@ -527,7 +531,10 @@ export default function WeeklyScheduleGridNew({
   onClosureMarkOpenForDay,
   onClosureChangeReason,
   scheduleDayIdsFromSettings,
+  scrollToDayId,
+  scrollToDayRequestId,
 }: WeeklyScheduleGridNewProps) {
+  const gridRootRef = useRef<HTMLDivElement | null>(null)
   const [selectedCell, setSelectedCell] = useState<{
     dayId: string
     dayName: string
@@ -784,6 +791,28 @@ export default function WeeklyScheduleGridNew({
     [filteredDays, timeSlotsByDay]
   )
 
+  useEffect(() => {
+    if (!scrollToDayId || !scrollToDayRequestId) return
+    const root = gridRootRef.current
+    if (!root) return
+
+    const safeDayId = scrollToDayId.replace(/"/g, '\\"')
+    const dayHeader = root.querySelector<HTMLElement>(`[data-day-header-id="${safeDayId}"]`)
+    if (!dayHeader) return
+
+    const scrollContainer = dayHeader.closest('.overflow-x-auto') as HTMLElement | null
+    if (!scrollContainer) return
+
+    const containerRect = scrollContainer.getBoundingClientRect()
+    const headerRect = dayHeader.getBoundingClientRect()
+    const nextLeft = scrollContainer.scrollLeft + (headerRect.left - containerRect.left) - 24
+
+    scrollContainer.scrollTo({
+      left: Math.max(0, nextLeft),
+      behavior: 'smooth',
+    })
+  }, [layout, scrollToDayId, scrollToDayRequestId, filteredDays, daysWithTimeSlots])
+
   // Transform data for days-x-classrooms layout (only (day, timeSlot) rows that have data for that day)
   // True when any absence in the displayed week has a partial sub (is_partial + has_sub)
   const hasPartialSubInWeek = useMemo(() => {
@@ -886,7 +915,7 @@ export default function WeeklyScheduleGridNew({
   // Render days-x-classrooms layout
   if (layout === 'days-x-classrooms' && daysXClassroomsData && daysXClassroomsGrid) {
     return (
-      <>
+      <div ref={gridRootRef}>
         <div className="mb-6 rounded-md border border-gray-200 bg-gray-100 p-3 space-y-4">
           <ScheduleLegend
             showLegendSubstitutes={showLegendSubstitutes}
@@ -1056,6 +1085,7 @@ export default function WeeklyScheduleGridNew({
 
                         {/* Day Section Header */}
                         <div
+                          data-day-header-id={day.id}
                           className="sticky rounded-lg flex items-center"
                           style={{
                             position: 'sticky',
@@ -1248,14 +1278,14 @@ export default function WeeklyScheduleGridNew({
             cellDateISO={cellDateISO}
           />
         )}
-      </>
+      </div>
     )
   }
 
   // Render classrooms-x-days layout
   if (layout === 'classrooms-x-days' && classroomsXDaysGrid) {
     return (
-      <div className="space-y-4">
+      <div ref={gridRootRef} className="space-y-4">
         <div className="rounded-md border border-gray-200 bg-gray-100 p-3 space-y-4">
           <ScheduleLegend
             showLegendSubstitutes={showLegendSubstitutes}
@@ -1361,6 +1391,7 @@ export default function WeeklyScheduleGridNew({
                   {filteredDays.map((day, dayIndex) => (
                     <div
                       key={`day-header-${day.id}`}
+                      data-day-header-id={day.id}
                       className="sticky top-0 z-20 text-center pt-2 pb-0.5"
                       style={{
                         position: 'sticky',

@@ -127,7 +127,7 @@ describe("Today's Schedule report page", () => {
 
     await waitFor(() => {
       expect(openMock).toHaveBeenCalledWith(
-        '/api/reports/daily-schedule/pdf?date=2026-03-09&showAbsencesAndSubs=true&showEnrollment=false&showNotes=false&showPreferredRatios=false&showRequiredRatios=false&colorFriendly=false&layout=one&teacherNameFormat=default&paperSize=letter',
+        '/api/reports/daily-schedule/pdf?date=2026-03-09&showAbsencesAndSubs=true&showEnrollment=false&showNotes=false&showPreferredRatios=false&showRequiredRatios=false&colorFriendly=true&layout=one&teacherNameFormat=default&paperSize=letter',
         '_blank',
         'noopener,noreferrer'
       )
@@ -269,6 +269,21 @@ describe("Today's Schedule report page", () => {
                         classroom_name: 'Infant Room',
                       },
                       {
+                        id: 'assignment-temp',
+                        teacher_id: 'teacher-temp',
+                        teacher_name: 'Temp Cover Teacher',
+                        teacher_first_name: 'Temp',
+                        teacher_last_name: 'Teacher',
+                        teacher_display_name: 'Temp Cover Teacher',
+                        is_substitute: false,
+                        is_floater: false,
+                        is_flexible: true,
+                        staffing_event_id: 'event-temp-1',
+                        event_category: 'standard',
+                        classroom_id: 'classroom-1',
+                        classroom_name: 'Infant Room',
+                      },
+                      {
                         id: 'assignment-floater',
                         teacher_id: 'teacher-floater',
                         teacher_name: 'Floater Teacher',
@@ -310,12 +325,16 @@ describe("Today's Schedule report page", () => {
     const { container } = render(<DailyScheduleReportPage />)
     const table = await screen.findByRole('table')
     expect(table).toBeInTheDocument()
+    expect(screen.getByText('Temporary Coverage')).toBeInTheDocument()
 
-    // In Black & White mode (default), schedule cells should not use non-gray accent classes.
+    fireEvent.click(screen.getByRole('button', { name: 'Black & White' }))
+
+    // In Black & White mode, schedule cells should not use non-gray accent classes.
     const reportContainer = container.querySelector('.daily-report-print-area') || container
     const forbiddenColorSelectors = [
       '.text-blue-800',
       '.text-purple-700',
+      '.text-rose-700',
       '.text-teal-600',
       '.text-amber-700',
       '.text-orange-600',
@@ -329,6 +348,9 @@ describe("Today's Schedule report page", () => {
     const noSubBadge = screen.getByText('No sub')
     expect(noSubBadge.className).toContain('bg-slate-100')
     expect(noSubBadge.className).toContain('text-slate-600')
+    expect(screen.getByText('Temp Cover Teacher')).toBeInTheDocument()
+    const bwText = (reportContainer.textContent || '').split('◇')
+    expect(bwText.length).toBeGreaterThanOrEqual(3)
   })
 
   it('does not render enrollment text when Show enrollments is disabled', async () => {

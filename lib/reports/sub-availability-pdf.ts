@@ -238,12 +238,14 @@ export function buildSubAvailabilityPdfHtml({
   colorFriendly = true,
   footerNotesHtml = '',
   topHeaderHtml = '',
+  paperSize = 'letter',
 }: {
   generatedAt: string
   reportContext: SubAvailabilityReportContext
   colorFriendly?: boolean
   footerNotesHtml?: string
   topHeaderHtml?: string
+  paperSize?: 'letter' | 'legal'
 }) {
   const { columns, dayHeaders, rows } = reportContext
   const columnCount = columns.length
@@ -343,7 +345,7 @@ export function buildSubAvailabilityPdfHtml({
     <title>Sub Availability</title>
     <style>
       @page {
-        size: letter landscape;
+        size: ${paperSize} landscape;
         margin: 0.22in;
       }
       * { box-sizing: border-box; }

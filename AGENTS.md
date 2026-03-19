@@ -97,6 +97,7 @@ When adding a new UI element (e.g. a chip, badge, or label):
 ## Audit logs
 
 - New or changed audit logging must satisfy [docs/contracts/AUDIT_LOG_CONTRACT.md](docs/contracts/AUDIT_LOG_CONTRACT.md) and pass the validator in `lib/audit/validateAuditLog.ts`.
+- New or changed Activity-feed wording/formatting must satisfy [docs/contracts/ACTIVITY_LOG_DISPLAY_CONTRACT.md](docs/contracts/ACTIVITY_LOG_DISPLAY_CONTRACT.md) and remain consistent across Activity surfaces.
 - See [docs/contracts/AUDIT_LOG_CALL_SITES_NOT_COMPLIANT.md](docs/contracts/AUDIT_LOG_CALL_SITES_NOT_COMPLIANT.md) for in-progress call sites.
 
 ## Editing database rows

@@ -1,8 +1,4 @@
 import { NextResponse } from 'next/server'
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-import puppeteer from 'puppeteer'
 import { getScheduleSnapshotData } from '@/lib/api/weekly-schedule'
 import { getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import { getUserSchoolId } from '@/lib/utils/auth'
@@ -17,6 +13,7 @@ import {
   truncateRichText,
 } from '@/lib/reports/rich-text'
 import { filterActiveDailyScheduleData, resolveDailyScheduleDay } from '@/lib/api/daily-schedule'
+import { launchPdfBrowser } from '@/lib/reports/puppeteer-launch'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -138,53 +135,7 @@ export async function GET(request: Request) {
       schoolClosures,
     })
 
-    const resolveExecutablePath = () => {
-      const envPath = process.env.PUPPETEER_EXECUTABLE_PATH
-      if (envPath && fs.existsSync(envPath)) return envPath
-
-      const defaultPath = puppeteer.executablePath()
-      if (defaultPath && fs.existsSync(defaultPath)) return defaultPath
-
-      const cacheBase = path.join(os.homedir(), '.cache', 'puppeteer', 'chrome')
-      if (!fs.existsSync(cacheBase)) return undefined
-      const versions = fs
-        .readdirSync(cacheBase, { withFileTypes: true })
-        .filter(entry => entry.isDirectory() && entry.name.startsWith('mac-'))
-        .map(entry => entry.name)
-        .sort()
-      const latest = versions.at(-1)
-      if (!latest) return undefined
-
-      const candidates = [
-        path.join(
-          cacheBase,
-          latest,
-          'chrome-mac-arm64',
-          'Google Chrome for Testing.app',
-          'Contents',
-          'MacOS',
-          'Google Chrome for Testing'
-        ),
-        path.join(
-          cacheBase,
-          latest,
-          'chrome-mac-x64',
-          'Google Chrome for Testing.app',
-          'Contents',
-          'MacOS',
-          'Google Chrome for Testing'
-        ),
-      ]
-
-      return candidates.find(candidate => fs.existsSync(candidate))
-    }
-
-    const executablePath = resolveExecutablePath()
-
-    const browser = await puppeteer.launch({
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      executablePath,
-    })
+    const browser = await launchPdfBrowser()
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'networkidle0' })
     const pdf = await page.pdf({

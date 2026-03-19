@@ -9,7 +9,7 @@ The database schema has evolved from the initial 17 tables (migration 001) to th
 ### Core Reference Tables (4)
 
 1. **classrooms** - Physical room locations with capacity, optional notes, color, order, and `is_active`
-2. **class_groups** - Logical class names with parent-child relationships, age/ratio fields, care requirements, optional notes (the former **classes** table was removed in migrations 054/058)
+2. **class_groups** - Logical class names with parent-child relationships, age/ratio fields (required/preferred ratios support one decimal place, e.g. `3.3`), care requirements, optional notes (the former **classes** table was removed in migrations 054/058)
 3. **time_slots** - Time periods (e.g. EM, AM, LB, AC) with default start/end times, display order, and `is_active`
 4. **days_of_week** - Days of the week (Monday–Friday)
 

@@ -119,7 +119,7 @@ export default function FilterPanel({
         belowPreferred: initialFilters?.displayFilters?.belowPreferred ?? true,
         fullyStaffed: initialFilters?.displayFilters?.fullyStaffed ?? true,
         inactive: initialFilters?.displayFilters?.inactive ?? true,
-        viewNotes: initialFilters?.displayFilters?.viewNotes ?? false,
+        viewNotes: initialFilters?.displayFilters?.viewNotes ?? true,
       },
       displayMode,
       layout: initialFilters?.layout ?? 'days-x-classrooms', // Default: Days across the top

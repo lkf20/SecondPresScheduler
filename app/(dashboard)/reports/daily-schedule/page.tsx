@@ -235,7 +235,7 @@ export default function DailyScheduleReportPage() {
   const [showPreferredRatios, setShowPreferredRatios] = useState(false)
   const [showRequiredRatios, setShowRequiredRatios] = useState(false)
   const [showAbsencesAndSubs, setShowAbsencesAndSubs] = useState(true)
-  const [colorFriendly, setColorFriendly] = useState(false)
+  const [colorFriendly, setColorFriendly] = useState(true)
   const [pdfLayout, setPdfLayout] = useState<'one' | 'two'>('one')
   const [teacherNameFormat, setTeacherNameFormat] = useState<'default' | 'first_last'>('default')
   const [paperSize, setPaperSize] = useState<'letter' | 'legal'>('letter')
@@ -680,6 +680,12 @@ export default function DailyScheduleReportPage() {
                 </span>
               </div>
               <div className="flex items-center gap-2">
+                {!displayColorFriendly && <span className="text-slate-600">◇</span>}
+                <span className={cn(displayColorFriendly ? 'text-rose-700' : 'text-slate-600')}>
+                  Temporary Coverage
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
                 {!displayColorFriendly && <span className="text-slate-600">↔</span>}
                 <span className={cn(displayColorFriendly ? 'text-purple-700' : 'text-slate-600')}>
                   Floater
@@ -886,6 +892,17 @@ export default function DailyScheduleReportPage() {
                                     !a.is_substitute &&
                                     !a.is_floater &&
                                     a.is_flexible &&
+                                    !a.staffing_event_id &&
+                                    !absentTeacherIds.has(a.teacher_id)
+                                )
+                                .sort(sortByName)
+                              const temporaryCoverageTeachers = assignments
+                                .filter(
+                                  a =>
+                                    !a.is_substitute &&
+                                    !a.is_floater &&
+                                    a.is_flexible &&
+                                    Boolean(a.staffing_event_id) &&
                                     !absentTeacherIds.has(a.teacher_id)
                                 )
                                 .sort(sortByName)
@@ -937,6 +954,34 @@ export default function DailyScheduleReportPage() {
                                           teacher_first_name: flexTeacher.teacher_first_name,
                                           teacher_last_name: flexTeacher.teacher_last_name,
                                           teacher_display_name: flexTeacher.teacher_display_name,
+                                        },
+                                        teacherNameFormat
+                                      )}
+                                    </>
+                                  ),
+                                })
+                              })
+
+                              temporaryCoverageTeachers.forEach(temporaryCoverageTeacher => {
+                                teacherRows.push({
+                                  key: `temporary-coverage-${temporaryCoverageTeacher.id}`,
+                                  className: displayColorFriendly
+                                    ? 'text-rose-700'
+                                    : 'text-slate-700',
+                                  content: (
+                                    <>
+                                      {!displayColorFriendly && (
+                                        <span className="text-slate-500">◇</span>
+                                      )}{' '}
+                                      {formatTeacherName(
+                                        {
+                                          teacher_name: temporaryCoverageTeacher.teacher_name,
+                                          teacher_first_name:
+                                            temporaryCoverageTeacher.teacher_first_name,
+                                          teacher_last_name:
+                                            temporaryCoverageTeacher.teacher_last_name,
+                                          teacher_display_name:
+                                            temporaryCoverageTeacher.teacher_display_name,
                                         },
                                         teacherNameFormat
                                       )}

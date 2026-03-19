@@ -146,7 +146,7 @@ export function getClearedScheduleFilters<T extends ScheduleFiltersForClear>(
       belowPreferred: true,
       fullyStaffed: true,
       inactive: true,
-      viewNotes: false,
+      viewNotes: true,
     },
     ...(defaultDisplayMode != null && { displayMode: defaultDisplayMode }),
   }

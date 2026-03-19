@@ -47,6 +47,31 @@ function getWeekStartISO(): string {
   return monday.toISOString().split('T')[0]
 }
 
+function getTodayDayId(
+  availableDays: Array<{
+    id: string
+    name: string
+  }>
+): string | null {
+  const todayIndex = new Date().getDay()
+  const aliasesByDay: Record<number, string[]> = {
+    0: ['sunday', 'sun'],
+    1: ['monday', 'mon'],
+    2: ['tuesday', 'tue', 'tues'],
+    3: ['wednesday', 'wed'],
+    4: ['thursday', 'thu', 'thurs'],
+    5: ['friday', 'fri'],
+    6: ['saturday', 'sat'],
+  }
+
+  const aliases = aliasesByDay[todayIndex] ?? []
+  const match = availableDays.find(day => {
+    const normalized = day.name.trim().toLowerCase()
+    return aliases.some(alias => normalized === alias || normalized.startsWith(`${alias} `))
+  })
+  return match?.id ?? null
+}
+
 export default function WeeklySchedulePage() {
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
@@ -108,6 +133,8 @@ export default function WeeklySchedulePage() {
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
   const [teacherFilterId, setTeacherFilterId] = useState<string | null>(null)
+  const [todayScrollDayId, setTodayScrollDayId] = useState<string | null>(null)
+  const [todayScrollRequestId, setTodayScrollRequestId] = useState(0)
   const prevAvailableClassroomIdsRef = useRef<string[] | null>(null)
   const prevAvailableTimeSlotIdsRef = useRef<string[] | null>(null)
   const previousAvailableClassroomsStorageKey = 'weekly-schedule-available-classroom-ids'
@@ -191,7 +218,7 @@ export default function WeeklySchedulePage() {
           belowPreferred: true,
           fullyStaffed: true,
           inactive: true,
-          viewNotes: false,
+          viewNotes: true,
         },
         displayMode: 'all-scheduled-staff',
         layout: 'days-x-classrooms', // Default layout
@@ -222,7 +249,7 @@ export default function WeeklySchedulePage() {
         belowPreferred: true,
         fullyStaffed: true,
         inactive: true,
-        viewNotes: false,
+        viewNotes: true,
       },
       displayMode: prev?.displayMode ?? 'all-scheduled-staff',
       layout: prev?.layout ?? 'days-x-classrooms',
@@ -587,6 +614,8 @@ export default function WeeklySchedulePage() {
 
   const handleTodayClick = () => {
     setWeekStartISO(getWeekStartISO())
+    setTodayScrollDayId(getTodayDayId(availableDays))
+    setTodayScrollRequestId(value => value + 1)
   }
 
   return (
@@ -709,7 +738,7 @@ export default function WeeklySchedulePage() {
             }
             displayModeCounts={displayModeCounts}
             displayMode={filters?.displayMode ?? 'all-scheduled-staff'}
-            showNotes={filters?.displayFilters?.viewNotes ?? false}
+            showNotes={filters?.displayFilters?.viewNotes ?? true}
             onDisplayModeChange={mode => {
               setFilters(prev => {
                 if (prev) {
@@ -729,7 +758,7 @@ export default function WeeklySchedulePage() {
                     belowPreferred: true,
                     fullyStaffed: true,
                     inactive: true,
-                    viewNotes: false,
+                    viewNotes: true,
                   },
                   displayMode: mode,
                   layout: 'days-x-classrooms' as const,
@@ -750,6 +779,8 @@ export default function WeeklySchedulePage() {
             onClosureMarkOpen={handleClosureMarkOpen}
             onClosureMarkOpenForDay={handleClosureMarkOpenForDay}
             onClosureChangeReason={handleClosureChangeReason}
+            scrollToDayId={todayScrollDayId}
+            scrollToDayRequestId={todayScrollRequestId}
           />
           <FilterPanel
             isOpen={filterPanelOpen}
