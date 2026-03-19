@@ -1,5 +1,15 @@
 Before opening this PR, complete the [Pre-PR checklist](docs/guides/PRE_PR_CHECKLIST.md).
 
+## Summary
+
+List the key changes in this PR.
+
+- [ ]
+- [ ]
+- [ ]
+
+---
+
 ## Risks
 
 What could break or what was riskiest to change?

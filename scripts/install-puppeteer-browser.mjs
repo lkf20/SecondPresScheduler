@@ -4,7 +4,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 
-const cacheRoot = path.join(process.cwd(), '.cache', 'puppeteer', 'chrome')
+const puppeteerCacheDir = path.resolve(process.cwd(), '.cache', 'puppeteer')
+const cacheRoot = path.join(puppeteerCacheDir, 'chrome')
 
 const listVersionDirs = () => {
   try {
@@ -47,15 +48,15 @@ if (alreadyInstalled) {
   process.exit(0)
 }
 
-console.log('[puppeteer-install] installing chrome for testing into .cache/puppeteer ...')
+console.log(`[puppeteer-install] installing chrome for testing into ${puppeteerCacheDir} ...`)
 const installResult = spawnSync(
   process.platform === 'win32' ? 'npx.cmd' : 'npx',
-  ['puppeteer', 'browsers', 'install', 'chrome', '--path', '.cache/puppeteer'],
+  ['puppeteer', 'browsers', 'install', 'chrome', '--path', puppeteerCacheDir],
   {
     stdio: 'inherit',
     env: {
       ...process.env,
-      PUPPETEER_CACHE_DIR: path.join(process.cwd(), '.cache', 'puppeteer'),
+      PUPPETEER_CACHE_DIR: puppeteerCacheDir,
     },
   }
 )
