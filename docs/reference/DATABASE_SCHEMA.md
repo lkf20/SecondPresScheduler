@@ -2,7 +2,7 @@
 
 ## Overview
 
-The database schema has evolved from the initial 17 tables (migration 001) to the current set of tables below. All tables are in the `public` schema and are created or altered by migrations in `supabase/migrations/` (001 through 107).
+The database schema has evolved from the initial 17 tables (migration 001) to the current set of tables below. All tables are in the `public` schema and are created or altered by migrations in `supabase/migrations/` (001 through current, including 118).
 
 ## Tables (current)
 
@@ -57,14 +57,14 @@ The database schema has evolved from the initial 17 tables (migration 001) to th
 
 25. **substitute_contacts** - Per-coverage-request contact status (sub × coverage_request; status, notes, timestamps)
 26. **sub_contact_shift_overrides** - Per-shift overrides for substitute_contacts (e.g. override_availability)
-27. **sub_assignments** - Actual sub assignments (master calendar: sub × date × slot × classroom). Key columns: `is_partial NOT NULL DEFAULT false`, `partial_start_time`, `partial_end_time`. A conditional unique index `idx_sub_assignments_one_active_full_per_shift` prevents two active full assignments for the same `coverage_request_shift_id`. Multiple active partial assignments (up to 4) are allowed per shift.
+27. **sub_assignments** - Actual sub assignments (master calendar: sub × date × slot × classroom). Key columns: `is_partial NOT NULL DEFAULT false`, `partial_start_time`, `partial_end_time`, optional `staffing_event_shift_id` (links reassignment-backed coverage rows). A conditional unique index `idx_sub_assignments_one_active_full_per_shift` prevents two active full assignments for the same `coverage_request_shift_id`. Multiple active partial assignments (up to 4) are allowed per shift.
 
 (Former **sub_contact_overrides** and **sub_contact_log** were removed in migrations 073 and 072.)
 
 ### Temporary Coverage (2)
 
 28. **staffing_events** - Grouping for Temporary Coverage (flex) assignments
-29. **staffing_event_shifts** - Individual shift records for Temporary Coverage
+29. **staffing_event_shifts** - Individual shift records for Temporary Coverage and day-only reassignment (`source_classroom_id`, optional `coverage_request_shift_id`)
 
 ### Calendar & Audit (2)
 
@@ -97,7 +97,7 @@ When writing queries that find or count rows by classroom (e.g. for cleanup or r
 ## Relationships
 
 - Staff have roles (e.g. PERMANENT, FLEXIBLE) via **staff_role_type_assignments**; `is_teacher` is deprecated. Subs are indicated via the `is_sub` flag.
-- Temporary Coverage is handled via **staffing_events** and **staffing_event_shifts**, which link staff to specific classrooms and time slots without requiring a time-off request.
+- Temporary Coverage is handled via **staffing_events** and **staffing_event_shifts**, which link staff to specific classrooms and time slots without requiring a time-off request. Day-only reassignment uses `event_category = 'reassignment'` and `staffing_event_shifts.source_classroom_id` to move baseline staff for specific slots without mutating baseline schedules.
 - Class-to-classroom mapping is expressed by **classroom_allowed_classes** (which class groups are allowed in which classrooms). Required/preferred staff come from **class_groups** (ratios) and **schedule_cells** / **schedule_cell_class_groups** (enrollment and overrides).
 - Sub assignments track both full and partial shifts.
 - Contact tracking uses **substitute_contacts** (per coverage request) and **sub_contact_shift_overrides** (per-shift overrides).

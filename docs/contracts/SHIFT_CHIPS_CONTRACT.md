@@ -85,6 +85,16 @@ Use availability/status tokens from shared color system (`shiftStatusColorValues
   - If UI truncates for space, provide full list in tooltip.
 - When partial time windows exist (`partial_start_time`, `partial_end_time`), prefer rendering them in partial summary surfaces (`CoverageSummary`, shift detail rows) using `HH:mm-HH:mm`. **Assign Sub panel** uses friendly 12-hour time in the partial badge (e.g. "9 am to 10:30 am") and a single badge next to the shift label with yellow styling and Clock icon.
 
+### Reassignment (Day-Only Move) Visual Rule
+
+- Reassignment is not partial coverage. Do not reuse partial yellow semantics for reassignment.
+- If shown on shift chips, use a distinct "Reassigned" treatment (label/icon) defined by the surface legend.
+- Reassignment states must remain distinguishable from:
+  - `covered` / `partial` in coverage mode
+  - `assigned` / `available` / `unavailable` in availability mode
+
+See: [DAY_ONLY_REASSIGNMENT_CONTRACT.md](./DAY_ONLY_REASSIGNMENT_CONTRACT.md).
+
 ---
 
 ### Recommended Indicator Rules
@@ -131,6 +141,15 @@ Use availability/status tokens from shared color system (`shiftStatusColorValues
 - Client mapping layer: carry those two fields through model/hook/component props without dropping them.
 - Chip render layer: call shared sort helper, never ad-hoc alphabetical slot sort.
 - Tests: include at least one dashboard API assertion + one UI ordering assertion for same-date multi-slot shifts.
+
+---
+
+### Coverage Mapping Checklist (Recommended Subs)
+
+- In Recommended Subs coverage strips (`SubFinderCard` with `mode="coverage"`), any shift assigned to the current card sub (`assignment_owner = "this_sub"`) must include `assigned_sub_name` (or `assigned_sub_names`) so the pill renders the sub name instead of generic `Covered`.
+- If multiple assignees exist (for example two partial subs on the same shift), mapping must preserve the full list in `assigned_sub_names` and pass it through to `ShiftChips`; do not collapse to a single `sub_name`.
+- `covered` without assignee name is valid only when assignee identity is genuinely unknown/unavailable in data.
+- Add a regression test at the `SubFinderCard` level to assert this mapping.
 
 ---
 

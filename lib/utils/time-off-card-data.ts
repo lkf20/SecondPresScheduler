@@ -159,6 +159,7 @@ export function transformTimeOffCardData(
     {
       hasFull: boolean
       hasPartial: boolean
+      partialCount: number
       subName: string | null
       subNames: Set<string>
       subId: string | null
@@ -171,6 +172,7 @@ export function transformTimeOffCardData(
     const existing = assignmentMap.get(key) || {
       hasFull: false,
       hasPartial: false,
+      partialCount: 0,
       subName: null,
       subNames: new Set<string>(),
       subId: null,
@@ -181,6 +183,7 @@ export function transformTimeOffCardData(
 
     if (isPartial) {
       existing.hasPartial = true
+      existing.partialCount += 1
     } else {
       existing.hasFull = true
     }
@@ -225,7 +228,13 @@ export function transformTimeOffCardData(
       covered += 1
     } else if (assignment?.hasPartial) {
       status = 'partial'
-      partial += 1
+      // Phase 1 approximation: each partial contributes 0.5 toward coverage.
+      // A shift with two or more partial assignments counts as covered in summary cards.
+      if ((assignment.partialCount || 0) * 0.5 >= 1) {
+        covered += 1
+      } else {
+        partial += 1
+      }
     } else {
       uncovered += 1
     }

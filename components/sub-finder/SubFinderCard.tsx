@@ -30,6 +30,8 @@ type Shift = {
   classroom_name?: string | null
   classroom_color?: string | null
   reason?: string
+  sub_name?: string | null
+  assigned_sub_names?: string[]
   day_display_order?: number | null
   time_slot_display_order?: number | null
 }
@@ -299,12 +301,23 @@ export default function SubFinderCard({
                 const key = `${shift.date}|${shift.time_slot_code}`
                 const assignedToThisSub = thisSubAssignedKeys.has(key)
                 const assignedElsewhere = shift.status !== 'uncovered' && !assignedToThisSub
+                const mappedAssignedSubNames =
+                  Array.isArray(shift.assigned_sub_names) && shift.assigned_sub_names.length > 0
+                    ? shift.assigned_sub_names
+                    : shift.sub_name
+                      ? [shift.sub_name]
+                      : []
                 if (assignedToThisSub) {
                   return {
                     date: shift.date,
                     time_slot_code: shift.time_slot_code,
                     status: 'covered' as const,
                     assignment_owner: 'this_sub' as const,
+                    // Preserve all assignees for partial/multi-sub visibility.
+                    assigned_sub_name:
+                      mappedAssignedSubNames.length > 0 ? mappedAssignedSubNames[0] : name,
+                    assigned_sub_names:
+                      mappedAssignedSubNames.length > 0 ? mappedAssignedSubNames : [name],
                     classroom_name: shift.classroom_name ?? null,
                     class_name: shift.class_name ?? null,
                     classroom_color: shift.classroom_color ?? null,
@@ -320,6 +333,8 @@ export default function SubFinderCard({
                       status: 'partial' as const,
                       assignment_owner: 'other_sub' as const,
                       assigned_sub_name: shift.sub_name ?? null,
+                      assigned_sub_names:
+                        mappedAssignedSubNames.length > 0 ? mappedAssignedSubNames : undefined,
                       classroom_name: shift.classroom_name ?? null,
                       class_name: shift.class_name ?? null,
                       classroom_color: shift.classroom_color ?? null,
@@ -333,6 +348,8 @@ export default function SubFinderCard({
                     status: 'covered' as const,
                     assignment_owner: 'other_sub' as const,
                     assigned_sub_name: shift.sub_name ?? null,
+                    assigned_sub_names:
+                      mappedAssignedSubNames.length > 0 ? mappedAssignedSubNames : undefined,
                     classroom_name: shift.classroom_name ?? null,
                     class_name: shift.class_name ?? null,
                     classroom_color: shift.classroom_color ?? null,
@@ -548,6 +565,12 @@ export default function SubFinderCard({
                         ? ('other_sub' as const)
                         : undefined,
                     assigned_sub_name: assignedToOtherSub ? shift.sub_name || null : null,
+                    assigned_sub_names:
+                      assignedToOtherSub &&
+                      Array.isArray(shift.assigned_sub_names) &&
+                      shift.assigned_sub_names.length > 0
+                        ? shift.assigned_sub_names
+                        : undefined,
                     reason: thisSubCannotCoverReason.get(key),
                     classroom_name: shift.classroom_name || null,
                     class_name: shift.class_name || null,

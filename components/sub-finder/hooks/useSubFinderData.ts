@@ -39,6 +39,16 @@ export interface Absence {
       classroom_color?: string | null
       status: 'uncovered' | 'partially_covered' | 'fully_covered'
       sub_name?: string | null
+      assigned_sub_names?: string[]
+      assigned_subs?: Array<{
+        assignment_id: string
+        sub_id: string
+        sub_name: string
+        is_partial: boolean
+        partial_start_time?: string | null
+        partial_end_time?: string | null
+        non_sub_override?: boolean
+      }>
       sub_id?: string | null
       assignment_id?: string | null
       is_partial?: boolean
@@ -56,6 +66,16 @@ export interface Absence {
       classroom_color?: string | null
       status: 'uncovered' | 'partially_covered' | 'fully_covered'
       sub_name?: string | null
+      assigned_sub_names?: string[]
+      assigned_subs?: Array<{
+        assignment_id: string
+        sub_id: string
+        sub_name: string
+        is_partial: boolean
+        partial_start_time?: string | null
+        partial_end_time?: string | null
+        non_sub_override?: boolean
+      }>
       sub_id?: string | null
       assignment_id?: string | null
       is_partial?: boolean
@@ -211,6 +231,20 @@ export function useSubFinderData({
                 ? 'fully_covered'
                 : 'uncovered',
           sub_name: detail.sub_name || detail.assigned_sub?.name || null,
+          assigned_sub_names: Array.isArray(detail.assigned_sub_names)
+            ? detail.assigned_sub_names
+            : undefined,
+          assigned_subs: Array.isArray(detail.assigned_subs)
+            ? detail.assigned_subs.map(assignment => ({
+                assignment_id: assignment.assignment_id,
+                sub_id: assignment.sub_id,
+                sub_name: assignment.sub_name,
+                is_partial: Boolean(assignment.is_partial),
+                partial_start_time: assignment.partial_start_time ?? null,
+                partial_end_time: assignment.partial_end_time ?? null,
+                non_sub_override: Boolean(assignment.non_sub_override),
+              }))
+            : undefined,
           sub_id: detail.sub_id || null,
           assignment_id: detail.assignment_id || null,
           is_partial: detail.status === 'partial' || detail.status === 'partially_covered',
@@ -233,6 +267,20 @@ export function useSubFinderData({
                 ? 'fully_covered'
                 : 'uncovered',
           sub_name: detail.sub_name || detail.assigned_sub?.name || null,
+          assigned_sub_names: Array.isArray(detail.assigned_sub_names)
+            ? detail.assigned_sub_names
+            : undefined,
+          assigned_subs: Array.isArray(detail.assigned_subs)
+            ? detail.assigned_subs.map(assignment => ({
+                assignment_id: assignment.assignment_id,
+                sub_id: assignment.sub_id,
+                sub_name: assignment.sub_name,
+                is_partial: Boolean(assignment.is_partial),
+                partial_start_time: assignment.partial_start_time ?? null,
+                partial_end_time: assignment.partial_end_time ?? null,
+                non_sub_override: Boolean(assignment.non_sub_override),
+              }))
+            : undefined,
           sub_id: detail.sub_id || null,
           assignment_id: detail.assignment_id || null,
           is_partial: detail.status === 'partial' || detail.status === 'partially_covered',

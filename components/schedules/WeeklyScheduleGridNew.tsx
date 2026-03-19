@@ -102,6 +102,7 @@ type WeeklyScheduleCellData = WeeklyScheduleData & {
     teacher_name: string
     has_sub: boolean
     is_partial: boolean
+    is_reassigned?: boolean
   }>
 }
 
@@ -171,6 +172,7 @@ function ScheduleLegend({
   showLegendTemporaryCoverage = true,
   showSchoolClosed = false,
   showPartialSub = false,
+  showReassigned = false,
   noWrapper = false,
 }: {
   showLegendSubstitutes: boolean
@@ -178,6 +180,8 @@ function ScheduleLegend({
   showSchoolClosed?: boolean
   /** Show "Partial Sub Coverage" legend item when partial assignments exist in the displayed week */
   showPartialSub?: boolean
+  /** Show "Reassigned" legend item when at least one reassigned source chip is present */
+  showReassigned?: boolean
   noWrapper?: boolean
 }) {
   const content = (
@@ -246,6 +250,13 @@ function ScheduleLegend({
               Absent
             </span>
           </div>
+          {showReassigned && (
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-700 border border-gray-400">
+                Reassigned *
+              </span>
+            </div>
+          )}
         </>
       )}
       <div className="flex items-center gap-2">
@@ -298,7 +309,7 @@ export function calculateAssignmentCounts(data: WeeklyScheduleDataByClassroom[])
           subsCount++
         }
 
-        if (slot.absences && slot.absences.length > 0) {
+        if ((slot.absences ?? []).some(absence => absence.is_reassigned !== true)) {
           absencesCount++
         }
 
@@ -787,6 +798,14 @@ export default function WeeklyScheduleGridNew({
       )
     )
   }, [data, showLegendSubstitutes])
+  const hasReassignedInWeek = useMemo(() => {
+    if (!showLegendSubstitutes) return false
+    return data.some(classroom =>
+      classroom.days.some(day =>
+        day.time_slots.some(slot => (slot.absences ?? []).some(a => a.is_reassigned === true))
+      )
+    )
+  }, [data, showLegendSubstitutes])
 
   const daysXClassroomsData = useMemo(() => {
     if (layout !== 'days-x-classrooms') return null
@@ -874,6 +893,7 @@ export default function WeeklyScheduleGridNew({
             showLegendTemporaryCoverage={showLegendTemporaryCoverage}
             showSchoolClosed={schoolClosures.length > 0}
             showPartialSub={hasPartialSubInWeek}
+            showReassigned={hasReassignedInWeek}
             noWrapper
           />
           {contentBelowLegend && (
@@ -1242,6 +1262,7 @@ export default function WeeklyScheduleGridNew({
             showLegendTemporaryCoverage={showLegendTemporaryCoverage}
             showSchoolClosed={schoolClosures.length > 0}
             showPartialSub={hasPartialSubInWeek}
+            showReassigned={hasReassignedInWeek}
             noWrapper
           />
           {contentBelowLegend && (

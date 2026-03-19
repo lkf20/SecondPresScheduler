@@ -118,8 +118,31 @@ export async function GET(request: NextRequest) {
         if (shifts.length > 0) {
           const requestStartDate = request.start_date
           const requestEndDate = request.end_date || request.start_date
-          const assignmentMap = new Map<string, any>()
+          const assignmentMap = new Map<string, any[]>()
+          const seenAssignmentIds = new Set<string>()
           const loggedMissingCoverageLinkKeys = new Set<string>()
+          const upsertAssignment = (shiftKey: string, assignment: any) => {
+            if (!timeOffShiftKeys.has(shiftKey)) return
+            if (assignment.id && seenAssignmentIds.has(assignment.id)) return
+
+            const existing = assignmentMap.get(shiftKey) || []
+            const hasCoverageSource = existing.some(a => a.source === 'coverage_request')
+
+            // Keep coverage-linked rows as source of truth when present for the same shift key.
+            if (assignment.source === 'teacher_date' && hasCoverageSource) return
+
+            if (
+              assignment.source === 'coverage_request' &&
+              existing.some(a => a.source === 'teacher_date')
+            ) {
+              const retained = existing.filter(a => a.source !== 'teacher_date')
+              assignmentMap.set(shiftKey, [...retained, assignment])
+            } else {
+              assignmentMap.set(shiftKey, [...existing, assignment])
+            }
+
+            if (assignment.id) seenAssignmentIds.add(assignment.id)
+          }
 
           const coverageRequestId = (request as { coverage_request_id?: string | null })
             .coverage_request_id
@@ -148,11 +171,13 @@ export async function GET(request: NextRequest) {
                   })
                 }
                 if (timeOffShiftKeys.has(shiftKey)) {
-                  assignmentMap.set(shiftKey, {
+                  upsertAssignment(shiftKey, {
                     id: assignment.id,
                     date: shiftDate,
                     time_slot_id: shiftTimeSlotId,
                     is_partial: assignment.is_partial,
+                    partial_start_time: assignment.partial_start_time ?? null,
+                    partial_end_time: assignment.partial_end_time ?? null,
                     assignment_type: assignment.assignment_type || null,
                     sub: assignment.sub,
                     source: 'coverage_request',
@@ -171,7 +196,7 @@ export async function GET(request: NextRequest) {
           const { data: subAssignments } = await supabase
             .from('sub_assignments')
             .select(
-              'id, coverage_request_shift_id, date, time_slot_id, is_partial, assignment_type, sub:staff!sub_assignments_sub_id_fkey(id, first_name, last_name, display_name)'
+              'id, coverage_request_shift_id, date, time_slot_id, is_partial, partial_start_time, partial_end_time, assignment_type, sub:staff!sub_assignments_sub_id_fkey(id, first_name, last_name, display_name)'
             )
             .eq('teacher_id', request.teacher_id)
             .eq('status', 'active') // Only active assignments
@@ -193,7 +218,7 @@ export async function GET(request: NextRequest) {
                 })
               }
             }
-            if (!assignmentMap.has(shiftKey) && timeOffShiftKeys.has(shiftKey)) {
+            if (timeOffShiftKeys.has(shiftKey)) {
               if (isDev) {
                 console.warn(
                   '[Sub Finder Absences Debug] Using teacher/date fallback assignment for coverage',
@@ -206,18 +231,20 @@ export async function GET(request: NextRequest) {
                   }
                 )
               }
-              assignmentMap.set(shiftKey, {
+              upsertAssignment(shiftKey, {
                 id: assignment.id,
                 date: shiftDate,
                 time_slot_id: shiftTimeSlotId,
                 is_partial: assignment.is_partial,
+                partial_start_time: assignment.partial_start_time ?? null,
+                partial_end_time: assignment.partial_end_time ?? null,
                 assignment_type: assignment.assignment_type || null,
                 sub: assignment.sub,
-                source: 'teacher_date',
+                source: assignment.coverage_request_shift_id ? 'coverage_request' : 'teacher_date',
               })
             }
           })
-          assignments = Array.from(assignmentMap.values())
+          assignments = Array.from(assignmentMap.values()).flat()
         }
 
         if (assignments.length > 0 && timeOffShiftKeys.size > 0) {
@@ -258,6 +285,51 @@ export async function GET(request: NextRequest) {
           if (name === 'Tuesday') return 'Tues'
           return name.slice(0, 3)
         }
+
+        const getSubDisplayName = (sub: any): string => {
+          if (!sub) return 'Unknown Sub'
+          if (sub.display_name && typeof sub.display_name === 'string') return sub.display_name
+          const first = typeof sub.first_name === 'string' ? sub.first_name : ''
+          const last = typeof sub.last_name === 'string' ? sub.last_name : ''
+          const fallback = `${first} ${last}`.trim()
+          return fallback || 'Unknown Sub'
+        }
+
+        const assignmentDetailsByShiftKey = new Map<
+          string,
+          Array<{
+            assignment_id: string
+            sub_id: string
+            sub_name: string
+            is_partial: boolean
+            partial_start_time: string | null
+            partial_end_time: string | null
+            non_sub_override: boolean
+          }>
+        >()
+        assignments.forEach((assignment: any) => {
+          const key = `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`
+          const rows = assignmentDetailsByShiftKey.get(key) || []
+          const subId = assignment.sub?.id || ''
+          if (!subId || !assignment.id) return
+          rows.push({
+            assignment_id: assignment.id,
+            sub_id: subId,
+            sub_name: getSubDisplayName(assignment.sub),
+            is_partial: Boolean(assignment.is_partial),
+            partial_start_time:
+              typeof assignment.partial_start_time === 'string'
+                ? assignment.partial_start_time
+                : null,
+            partial_end_time:
+              typeof assignment.partial_end_time === 'string' ? assignment.partial_end_time : null,
+            non_sub_override: assignment.assignment_type === 'non_sub_override',
+          })
+          assignmentDetailsByShiftKey.set(key, rows)
+        })
+        const shiftKeyById = new Map(
+          shifts.map(shift => [shift.id, `${toDateStringISO(shift.date)}|${shift.time_slot_id}`])
+        )
 
         const transformed = transformTimeOffCardData(
           {
@@ -336,34 +408,65 @@ export async function GET(request: NextRequest) {
           })
         }
 
-        return transformed
+        return {
+          ...transformed,
+          __assignment_details_by_shift_key: Object.fromEntries(assignmentDetailsByShiftKey),
+          __shift_key_by_id: Object.fromEntries(shiftKeyById),
+        }
       })
     )
 
     // Map transformed data to Sub Finder format
     const absencesWithCoverage = transformedRequests.map((transformed: any) => {
       // Map shift details to Sub Finder format
-      const shiftDetails = (transformed.shift_details || []).map((detail: any) => ({
-        id: detail.id || `${detail.date}-${detail.time_slot_code}`,
-        date: detail.date || '',
-        day_name: detail.day_name || '',
-        time_slot_code: detail.time_slot_code || '',
-        class_name: detail.class_name || null,
-        classroom_name: detail.classroom_name || null,
-        classroom_color: detail.classroom_color || null,
-        status:
-          detail.status === 'covered'
-            ? 'fully_covered'
-            : detail.status === 'partial'
-              ? 'partially_covered'
-              : 'uncovered',
-        sub_name: detail.sub_name || null,
-        sub_id: detail.sub_id || null,
-        assignment_id: detail.assignment_id || null,
-        is_partial: detail.is_partial || false,
-        day_display_order: detail.day_display_order ?? null,
-        time_slot_display_order: detail.time_slot_display_order ?? null,
-      }))
+      const assignmentDetailsByShiftKey =
+        (transformed.__assignment_details_by_shift_key as
+          | Record<
+              string,
+              Array<{
+                assignment_id: string
+                sub_id: string
+                sub_name: string
+                is_partial: boolean
+                partial_start_time: string | null
+                partial_end_time: string | null
+                non_sub_override: boolean
+              }>
+            >
+          | undefined) || {}
+      const shiftKeyById =
+        (transformed.__shift_key_by_id as Record<string, string | undefined> | undefined) || {}
+
+      const shiftDetails = (transformed.shift_details || []).map((detail: any) => {
+        const shiftId = detail.id || `${detail.date}-${detail.time_slot_code}`
+        const shiftKey = shiftKeyById[shiftId]
+        const assignedSubs = shiftKey ? assignmentDetailsByShiftKey[shiftKey] || [] : []
+        return {
+          id: shiftId,
+          date: detail.date || '',
+          day_name: detail.day_name || '',
+          time_slot_code: detail.time_slot_code || '',
+          class_name: detail.class_name || null,
+          classroom_name: detail.classroom_name || null,
+          classroom_color: detail.classroom_color || null,
+          status:
+            detail.status === 'covered'
+              ? 'fully_covered'
+              : detail.status === 'partial'
+                ? 'partially_covered'
+                : 'uncovered',
+          sub_name: detail.sub_name || null,
+          assigned_sub_names: Array.isArray(detail.assigned_sub_names)
+            ? detail.assigned_sub_names
+            : undefined,
+          assigned_subs: assignedSubs.length > 0 ? assignedSubs : undefined,
+          sub_id: detail.sub_id || null,
+          assignment_id: detail.assignment_id || null,
+          is_partial: detail.is_partial || false,
+          day_display_order: detail.day_display_order ?? null,
+          time_slot_display_order: detail.time_slot_display_order ?? null,
+        }
+      })
 
       const coverage_status = getCoverageStatus({
         uncovered: transformed.uncovered,

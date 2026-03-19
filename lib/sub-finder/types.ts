@@ -21,6 +21,7 @@ export interface SubFinderShift {
   class_name: string | null
   status: SubFinderCoverageStatus
   sub_name?: string | null
+  assigned_sub_names?: string[]
   sub_id?: string | null
   assignment_id?: string | null
   is_partial?: boolean

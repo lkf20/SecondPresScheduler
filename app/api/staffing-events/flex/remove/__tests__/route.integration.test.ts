@@ -36,6 +36,7 @@ const buildSupabaseMock = (overrides?: {
   shiftSelectResults?: any[]
   shiftUpdateSelectResult?: any
   eventUpdateResult?: any
+  subAssignmentUpdateSelectResult?: any
 }) => {
   const shiftSelectResults = [...(overrides?.shiftSelectResults || [])]
 
@@ -64,6 +65,15 @@ const buildSupabaseMock = (overrides?: {
     makeAwaitableBuilder(shiftSelectResults.shift() ?? { data: [], error: null })
   )
   const staffingShiftUpdate = jest.fn(() => shiftUpdateBuilder)
+
+  const subAssignmentUpdateBuilder = makeAwaitableBuilder({ data: null, error: null })
+  subAssignmentUpdateBuilder.select = jest.fn().mockResolvedValue(
+    overrides?.subAssignmentUpdateSelectResult ?? {
+      data: [],
+      error: null,
+    }
+  )
+  const subAssignmentUpdate = jest.fn(() => subAssignmentUpdateBuilder)
 
   const daySelect = jest.fn(() =>
     makeAwaitableBuilder(
@@ -105,6 +115,11 @@ const buildSupabaseMock = (overrides?: {
       }
       if (table === 'staff') {
         return staffChain
+      }
+      if (table === 'sub_assignments') {
+        return {
+          update: subAssignmentUpdate,
+        }
       }
       throw new Error(`Unexpected table: ${table}`)
     }),
@@ -542,8 +557,46 @@ describe('/api/staffing-events/flex/remove integration', () => {
       success: true,
       removed_count: 2,
       remaining_active_shifts: 3,
+      linked_sub_assignment_cancelled_count: 0,
     })
     expect(staffingEventUpdate).not.toHaveBeenCalled()
+  })
+
+  it('POST cancels linked sub assignments for removed reassignment shifts', async () => {
+    buildSupabaseMock({
+      eventMaybeSingleResult: {
+        data: { id: 'event-1', staff_id: 'staff-1', event_category: 'reassignment' },
+        error: null,
+      },
+      shiftUpdateSelectResult: {
+        data: [{ id: 's1' }],
+        error: null,
+      },
+      shiftSelectResults: [
+        {
+          count: 2,
+          error: null,
+        },
+      ],
+      subAssignmentUpdateSelectResult: {
+        data: [{ id: 'sa-1' }, { id: 'sa-2' }],
+        error: null,
+      },
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/staffing-events/flex/remove',
+      'POST',
+      {
+        event_id: 'event-1',
+        scope: 'all_shifts',
+      }
+    )
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.linked_sub_assignment_cancelled_count).toBe(2)
   })
 
   it('POST cancels parent event when all shifts are removed', async () => {
@@ -576,6 +629,7 @@ describe('/api/staffing-events/flex/remove integration', () => {
       success: true,
       removed_count: 1,
       remaining_active_shifts: 0,
+      linked_sub_assignment_cancelled_count: 0,
     })
     expect(staffingEventUpdate).toHaveBeenCalledTimes(1)
     expect(staffingEventUpdate).toHaveBeenCalledWith({ status: 'cancelled' })
@@ -670,6 +724,7 @@ describe('/api/staffing-events/flex/remove integration', () => {
       success: true,
       removed_count: 1,
       remaining_active_shifts: 2,
+      linked_sub_assignment_cancelled_count: 0,
     })
     expect(shiftUpdateBuilder.eq).toHaveBeenCalledWith('date', '2026-02-09')
     expect(shiftUpdateBuilder.eq).toHaveBeenCalledWith('classroom_id', 'class-1')

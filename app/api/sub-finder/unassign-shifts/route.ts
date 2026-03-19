@@ -18,6 +18,22 @@ type UnassignRequestBody = {
   coverage_request_shift_id?: string
 }
 
+const isMissingStaffingEventShiftIdColumnError = (error: { code?: string; message?: string }) => {
+  return error.code === '42703' || /staffing_event_shift_id/i.test(error.message ?? '')
+}
+
+type ActiveSubAssignmentRow = {
+  id: string
+  teacher_id: string
+  sub_id: string
+  date: string
+  time_slot_id: string
+  coverage_request_shift_id: string | null
+  status: string
+  is_partial?: boolean
+  staffing_event_shift_id?: string | null
+}
+
 export async function POST(request: NextRequest) {
   try {
     const isDev = process.env.NODE_ENV !== 'production'
@@ -129,23 +145,34 @@ export async function POST(request: NextRequest) {
     const timeOffShiftIds = new Set((timeOffShifts || []).map(shift => shift.id))
     const rangeEnd = timeOffRequest.end_date || timeOffRequest.start_date
 
-    const { data: activeAssignments, error: assignmentsError } = await supabase
-      .from('sub_assignments')
-      .select(
+    const baseAssignmentsQuery = (selectClause: string) =>
+      supabase
+        .from('sub_assignments')
+        .select(selectClause)
+        .eq('teacher_id', timeOffRequest.teacher_id)
+        .eq('sub_id', subId)
+        .eq('status', 'active')
+        .gte('date', timeOffRequest.start_date)
+        .lte('date', rangeEnd)
+
+    let { data: activeAssignmentsRaw, error: assignmentsError } = await baseAssignmentsQuery(
+      'id, teacher_id, sub_id, date, time_slot_id, coverage_request_shift_id, status, is_partial, staffing_event_shift_id'
+    )
+    if (assignmentsError && isMissingStaffingEventShiftIdColumnError(assignmentsError as any)) {
+      const fallback = await baseAssignmentsQuery(
         'id, teacher_id, sub_id, date, time_slot_id, coverage_request_shift_id, status, is_partial'
       )
-      .eq('teacher_id', timeOffRequest.teacher_id)
-      .eq('sub_id', subId)
-      .eq('status', 'active')
-      .gte('date', timeOffRequest.start_date)
-      .lte('date', rangeEnd)
+      activeAssignmentsRaw = fallback.data
+      assignmentsError = fallback.error
+    }
 
     if (assignmentsError) {
       console.error('Failed to load active assignments', assignmentsError)
       return NextResponse.json({ error: 'Failed to load active assignments.' }, { status: 500 })
     }
 
-    const matchingAssignments = (activeAssignments || []).filter(assignment => {
+    const activeAssignments = (activeAssignmentsRaw ?? []) as unknown as ActiveSubAssignmentRow[]
+    const matchingAssignments = activeAssignments.filter(assignment => {
       const key = `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`
       return (
         timeOffShiftKeys.has(key) ||
@@ -236,6 +263,97 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to remove sub assignment(s).' }, { status: 500 })
     }
 
+    // If cancelled sub assignments were linked to day-only reassignment shifts,
+    // cancel those shifts too so staff no longer appears as reassigned in weekly schedule.
+    const linkedStaffingEventShiftIds = Array.from(
+      new Set(
+        cancelledAssignments
+          .map((assignment: any) => assignment.staffing_event_shift_id)
+          .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)
+      )
+    )
+    let linkedReassignmentShiftCancelledCount = 0
+    let linkedReassignmentEventCancelledCount = 0
+
+    if (linkedStaffingEventShiftIds.length > 0) {
+      const { data: impactedShifts, error: impactedShiftsError } = await supabase
+        .from('staffing_event_shifts')
+        .select('id, staffing_event_id')
+        .eq('school_id', schoolId)
+        .eq('status', 'active')
+        .in('id', linkedStaffingEventShiftIds)
+
+      if (impactedShiftsError) {
+        console.error('Failed to load linked reassignment shifts', impactedShiftsError)
+        return NextResponse.json(
+          { error: 'Failed to clean up linked reassignment shifts.' },
+          { status: 500 }
+        )
+      }
+
+      const activeShiftIds = (impactedShifts ?? []).map(shift => shift.id).filter(Boolean)
+      const impactedEventIds = Array.from(
+        new Set((impactedShifts ?? []).map(shift => shift.staffing_event_id).filter(Boolean))
+      ) as string[]
+
+      if (activeShiftIds.length > 0) {
+        const { data: cancelledLinkedShifts, error: cancelLinkedShiftsError } = await supabase
+          .from('staffing_event_shifts')
+          .update({ status: 'cancelled' })
+          .eq('school_id', schoolId)
+          .eq('status', 'active')
+          .in('id', activeShiftIds)
+          .select('id')
+
+        if (cancelLinkedShiftsError) {
+          console.error('Failed to cancel linked reassignment shifts', cancelLinkedShiftsError)
+          return NextResponse.json(
+            { error: 'Failed to clean up linked reassignment shifts.' },
+            { status: 500 }
+          )
+        }
+        linkedReassignmentShiftCancelledCount = (cancelledLinkedShifts ?? []).length
+      }
+
+      for (const eventId of impactedEventIds) {
+        const { count: remainingActiveShiftCount, error: remainingShiftCountError } = await supabase
+          .from('staffing_event_shifts')
+          .select('id', { count: 'exact', head: true })
+          .eq('school_id', schoolId)
+          .eq('staffing_event_id', eventId)
+          .eq('status', 'active')
+
+        if (remainingShiftCountError) {
+          console.error(
+            'Failed counting remaining linked reassignment shifts',
+            remainingShiftCountError
+          )
+          return NextResponse.json(
+            { error: 'Failed to complete linked reassignment cleanup.' },
+            { status: 500 }
+          )
+        }
+
+        if ((remainingActiveShiftCount ?? 0) === 0) {
+          const { error: cancelEventError } = await supabase
+            .from('staffing_events')
+            .update({ status: 'cancelled' })
+            .eq('school_id', schoolId)
+            .eq('id', eventId)
+            .eq('status', 'active')
+
+          if (cancelEventError) {
+            console.error('Failed to cancel linked reassignment event', cancelEventError)
+            return NextResponse.json(
+              { error: 'Failed to complete linked reassignment cleanup.' },
+              { status: 500 }
+            )
+          }
+          linkedReassignmentEventCancelledCount += 1
+        }
+      }
+    }
+
     // Reconcile covered_shifts and status after cancellation (safety net for trigger edge cases).
     // For 'single' scope we use the coverage_request_id resolved from the target shift.
     // For 'all_for_absence' we resolve it from the time-off request's coverage request.
@@ -314,6 +432,8 @@ export async function POST(request: NextRequest) {
         removed_count: assignmentIdsToCancel.length,
         was_partial: anyWasPartial,
         remaining_partials_on_shift: remainingPartialsOnShift,
+        linked_reassignment_shift_cancelled_count: linkedReassignmentShiftCancelledCount,
+        linked_reassignment_event_cancelled_count: linkedReassignmentEventCancelledCount,
         time_off_request_id: timeOffRequestId,
         ...(absenceId !== timeOffRequestId && { coverage_request_id: absenceId }),
         target_shift_key: targetShiftKey,
@@ -349,6 +469,8 @@ export async function POST(request: NextRequest) {
       scope,
       target_shift_key: targetShiftKey,
       remaining_active_on_target_shift: remainingActiveOnTargetShift,
+      linked_reassignment_shift_cancelled_count: linkedReassignmentShiftCancelledCount,
+      linked_reassignment_event_cancelled_count: linkedReassignmentEventCancelledCount,
     })
   } catch (error) {
     console.error('Error unassigning sub shifts:', error)

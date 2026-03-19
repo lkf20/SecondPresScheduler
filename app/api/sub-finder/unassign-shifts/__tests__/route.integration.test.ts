@@ -369,4 +369,182 @@ describe('POST /api/sub-finder/unassign-shifts integration', () => {
     expect(updateMock).toHaveBeenCalledWith({ status: 'cancelled' })
     expect(reconcileCoverageRequestCounters).toHaveBeenCalled()
   })
+
+  it('cancels linked reassignment shift/event when removing linked sub assignment', async () => {
+    const assignmentsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'a-1',
+            date: '2099-02-10',
+            time_slot_id: 'slot-1',
+            coverage_request_shift_id: 'crs-1',
+            is_partial: false,
+            staffing_event_shift_id: 'ses-1',
+          },
+        ],
+        error: null,
+      }),
+      update: jest.fn(() => ({
+        in: jest.fn(() => ({
+          eq: jest.fn().mockResolvedValue({ data: null, error: null }),
+        })),
+      })),
+    }
+
+    let staffingEventShiftsCall = 0
+    const staffingEventShiftsFrom = jest.fn(() => {
+      staffingEventShiftsCall += 1
+      if (staffingEventShiftsCall === 1) {
+        // Load active linked shifts
+        return {
+          select: jest.fn().mockReturnThis(),
+          eq: jest.fn().mockReturnThis(),
+          in: jest.fn().mockResolvedValue({
+            data: [{ id: 'ses-1', staffing_event_id: 'event-1' }],
+            error: null,
+          }),
+        }
+      }
+      if (staffingEventShiftsCall === 2) {
+        // Cancel linked shifts
+        return {
+          update: jest.fn(() => ({
+            eq: jest.fn().mockReturnThis(),
+            in: jest.fn().mockReturnThis(),
+            select: jest.fn().mockResolvedValue({
+              data: [{ id: 'ses-1' }],
+              error: null,
+            }),
+          })),
+        }
+      }
+      // Count remaining active shifts for event
+      return {
+        select: jest.fn((_cols?: string, opts?: { head?: boolean; count?: string }) => {
+          if (opts?.head) {
+            return {
+              eq: jest.fn().mockReturnThis(),
+              in: jest.fn().mockReturnThis(),
+              gte: jest.fn().mockReturnThis(),
+              lte: jest.fn().mockResolvedValue({ count: 0, error: null }),
+            }
+          }
+          return {
+            eq: jest.fn().mockReturnThis(),
+          }
+        }),
+      }
+    })
+
+    const staffingEventsUpdate = jest.fn(() => ({
+      eq: jest.fn().mockReturnThis(),
+    }))
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'time_off_requests') return makeTorQuery()
+        if (table === 'time_off_shifts') return makeTosQuery()
+        if (table === 'sub_assignments') return assignmentsQuery
+        if (table === 'staff') return makeStaffQuery()
+        if (table === 'coverage_requests') return makeCoverageRequestsMaybeSingleQuery()
+        if (table === 'coverage_request_shifts') return makeCoverageRequestShiftsQuery()
+        if (table === 'staffing_event_shifts') return staffingEventShiftsFrom()
+        if (table === 'staffing_events') {
+          return {
+            update: staffingEventsUpdate,
+          }
+        }
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/unassign-shifts',
+      'POST',
+      { absence_id: TOR_ID, sub_id: SUB_ID, scope: 'single', assignment_id: 'a-1' }
+    )
+    const response = await POST(request as any)
+
+    expect(response.status).toBe(200)
+    const json = await response.json()
+    expect(json.linked_reassignment_shift_cancelled_count).toBe(1)
+    expect(json.linked_reassignment_event_cancelled_count).toBe(1)
+    expect(staffingEventsUpdate).toHaveBeenCalledWith({ status: 'cancelled' })
+  })
+
+  it('falls back when staffing_event_shift_id column is unavailable', async () => {
+    let nonHeadSelectCall = 0
+    const subAssignmentsQuery: any = {
+      select: jest.fn((_cols?: string, opts?: { head?: boolean; count?: string }) => {
+        if (opts?.head) {
+          return {
+            eq: jest.fn().mockReturnThis(),
+            in: jest.fn().mockReturnThis(),
+            gte: jest.fn().mockReturnThis(),
+            lte: jest.fn().mockResolvedValue({ count: 0, error: null }),
+          }
+        }
+
+        nonHeadSelectCall += 1
+        if (nonHeadSelectCall === 1) {
+          return {
+            eq: jest.fn().mockReturnThis(),
+            gte: jest.fn().mockReturnThis(),
+            lte: jest.fn().mockResolvedValue({
+              data: null,
+              error: { code: '42703', message: 'column staffing_event_shift_id does not exist' },
+            }),
+          }
+        }
+
+        return {
+          eq: jest.fn().mockReturnThis(),
+          gte: jest.fn().mockReturnThis(),
+          lte: jest.fn().mockResolvedValue({
+            data: [
+              {
+                id: 'a-1',
+                date: '2099-02-10',
+                time_slot_id: 'slot-1',
+                coverage_request_shift_id: 'crs-1',
+                is_partial: false,
+              },
+            ],
+            error: null,
+          }),
+        }
+      }),
+      update: jest.fn(() => ({
+        in: jest.fn(() => ({
+          eq: jest.fn().mockResolvedValue({ data: null, error: null }),
+        })),
+      })),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'time_off_requests') return makeTorQuery()
+        if (table === 'time_off_shifts') return makeTosQuery()
+        if (table === 'sub_assignments') return subAssignmentsQuery
+        if (table === 'staff') return makeStaffQuery()
+        if (table === 'coverage_requests') return makeCoverageRequestsMaybeSingleQuery()
+        if (table === 'coverage_request_shifts') return makeCoverageRequestShiftsQuery()
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/unassign-shifts',
+      'POST',
+      { absence_id: TOR_ID, sub_id: SUB_ID, scope: 'single', assignment_id: 'a-1' }
+    )
+    const response = await POST(request as any)
+
+    expect(response.status).toBe(200)
+    expect(nonHeadSelectCall).toBe(2)
+  })
 })

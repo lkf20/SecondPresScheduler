@@ -33,13 +33,13 @@ When `is_floater = true`, a sub can have multiple active `sub_assignments` for t
 
 The Assign Sub panel (`AssignSubPanel.tsx`) and Sub Finder surface several conflict scenarios. Each has a Conflict banner with resolution options. The table below maps conflict type → resolution options → database logic.
 
-| Conflict Type                        | Description                                                                                           | Resolution Options                                                                                             | Database Update Logic                                 |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| **conflict_sub**                     | Sub is already assigned as a sub in another room (another sub shift) for the same date/time.          | Do not assign; Assign as Floater; Move sub here (remove from other room)                                       | See [conflict_sub](#conflict_sub)                     |
-| **conflict_teaching**                | Sub has a teaching schedule (baseline in `teacher_schedules`) in another room for the same date/time. | Do not assign; Assign as Floater; Move sub here (remove from other room)                                       | See [conflict_teaching](#conflict_teaching)           |
-| **Already covered by different sub** | Shift already has an assigned sub (different from the one selected).                                  | Replace with selected sub (remove current sub); Do not assign                                                  | See [replace sub](#replace-sub)                       |
-| **Already covered by selected sub**  | Shift already has an assigned sub (same as selected).                                                 | Remove sub (no assign)                                                                                         | See [remove sub](#remove-sub)                         |
-| **Replace + Conflict (combined)**    | Shift has a different sub (e.g. Victoria) AND selected sub has a conflict (already in another room).  | Do not assign; Remove [current sub] and mark [selected sub] as Floater; Move sub here (remove from other room) | See [replace + conflict](#replace--conflict-combined) |
+| Conflict Type                        | Description                                                                                           | Resolution Options                                                                                                                     | Database Update Logic                                 |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| **conflict_sub**                     | Sub is already assigned as a sub in another room (another sub shift) for the same date/time.          | Do not assign; Assign as Floater; Move sub here (remove from other room)                                                               | See [conflict_sub](#conflict_sub)                     |
+| **conflict_teaching**                | Sub has a teaching schedule (baseline in `teacher_schedules`) in another room for the same date/time. | Do not assign; Assign as Floater; Reassign staff here (remove from baseline room for this shift only)                                  | See [conflict_teaching](#conflict_teaching)           |
+| **Already covered by different sub** | Shift already has an assigned sub (different from the one selected).                                  | Replace with selected sub (remove current sub); Do not assign                                                                          | See [replace sub](#replace-sub)                       |
+| **Already covered by selected sub**  | Shift already has an assigned sub (same as selected).                                                 | Remove sub (no assign)                                                                                                                 | See [remove sub](#remove-sub)                         |
+| **Replace + Conflict (combined)**    | Shift has a different sub (e.g. Victoria) AND selected sub has a conflict (already in another room).  | Do not assign; Remove [current sub] and mark [selected sub] as Floater; choose Move (`conflict_sub`) or Reassign (`conflict_teaching`) | See [replace + conflict](#replace--conflict-combined) |
 
 ---
 
@@ -53,13 +53,18 @@ The Assign Sub panel (`AssignSubPanel.tsx`) and Sub Finder surface several confl
 
 1. **Do not assign this shift** — No DB change.
 2. **Remove [current sub] and mark [selected sub] as Floater (covers both rooms, 0.5 each)** — Cancel current sub; update selected sub's existing assignment to `is_floater = true`; insert new assignment with `is_floater = true`.
-3. **Move sub here (remove sub from other room)** — Cancel current sub; cancel selected sub's assignment in the other room; insert new assignment here (full).
+3. **Move sub here (remove sub from other room)** — Available when selected sub has `conflict_sub`. Cancel current sub; cancel selected sub's assignment in the other room; insert new assignment here (full).
+4. **Reassign staff here (remove from baseline room for this shift only)** — Available when selected sub has `conflict_teaching`. Cancels current sub and creates day-only reassignment overlay.
 
 ### Database Logic
 
-Same as conflict_sub / conflict_teaching; the assign-shifts API (1) cancels existing assignments for the coverage_request_shift_ids being assigned (replace), then (2) applies floater or move resolution for the selected sub's collision. Both operations occur in a single assign-shifts call when `resolutions` includes `floater` or `move` for the relevant shift ids.
+For `conflict_sub`: assign-shifts API (1) cancels existing assignments for the coverage_request_shift_ids being assigned (replace), then (2) applies floater or move resolution in the same assign-shifts call.
+For `conflict_teaching`: replace is followed by day-only reassignment (`POST /api/staffing-events/flex`, `event_category='reassignment'`) rather than `move`.
 
-**UX:** The row is enabled only when the user selects Floater or Move. Plain "Replace" (without conflict resolution) cannot be used when the selected sub has a conflict—the API would reject with 409 (double booking). The panel never shows the simple Replace banner when `hasConflict` is true; it shows the conflict banner with combined copy when both `coveredByOtherSub` and `hasConflict`.
+**UX:** The row is enabled only when the user selects a conflict resolution.
+For `conflict_sub`: Floater or Move.
+For `conflict_teaching`: Floater or Reassign.
+Plain "Replace" (without conflict resolution) cannot be used when the selected sub has a conflict—the API would reject with 409 (double booking). The panel never shows the simple Replace banner when `hasConflict` is true; it shows the conflict banner with combined copy when both `coveredByOtherSub` and `hasConflict`.
 
 ---
 
@@ -97,17 +102,19 @@ Same as conflict_sub / conflict_teaching; the assign-shifts API (1) cancels exis
 
 1. **Do not assign this shift** — No DB change.
 2. **Assign as Floater (sub covers both rooms, 0.5 each)** — Sub keeps their teaching schedule; new sub_assignment is created with `is_floater = true` so they count 0.5 here and their teaching schedule remains.
-3. **Move sub here (remove sub from other room)** — We **cannot** remove the sub from their teaching schedule (that would require editing the baseline). We create a full `sub_assignment` here (`is_floater = false`). The sub will appear in both places (teaching + sub) until baseline is changed manually.
+3. **Reassign staff here (remove from baseline room for this shift only)** — Preferred when the selected person is baseline-teaching elsewhere this slot and the director intends a day-only room move. Creates a day-only reassignment overlay (`staffing_event_shifts.event_category = 'reassignment'`) from source classroom to target classroom; baseline is not mutated.
 
 ### Database Logic
 
-| Resolution    | Action                                                                                                                            |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Do not assign | No API call.                                                                                                                      |
-| Floater       | New `sub_assignment` inserted with `is_floater = true`. No change to `teacher_schedules`.                                         |
-| Move          | New `sub_assignment` inserted with `is_floater = false`. No change to `teacher_schedules`—baseline is not modified by Assign Sub. |
+| Resolution    | Action                                                                                                                                                                                                                                                      |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Do not assign | No API call.                                                                                                                                                                                                                                                |
+| Floater       | New `sub_assignment` inserted with `is_floater = true`. No change to `teacher_schedules`.                                                                                                                                                                   |
+| Reassign      | Insert `staffing_event` + `staffing_event_shift` reassignment row(s) with `source_classroom_id` and target `classroom_id`; if linked to `coverage_request_shift_id`, create `sub_assignment` (`non_sub_override = true`) tied by `staffing_event_shift_id`. |
 
-**Note:** "Move" for conflict_teaching does not literally remove the sub from the other room; it assigns them fully here. The label "Move sub here (remove sub from other room)" reflects user intent. Actual removal from the teaching room requires a baseline schedule edit.
+**Note:** For baseline-teaching conflicts, reassignment is the canonical "remove from other room for this day only" flow. It preserves baseline data and adjusts weekly schedule read output via overlay/exclusion rules.
+
+See: [DAY_ONLY_REASSIGNMENT_CONTRACT.md](./DAY_ONLY_REASSIGNMENT_CONTRACT.md).
 
 ---
 
@@ -145,9 +152,9 @@ Same as conflict_sub / conflict_teaching; the assign-shifts API (1) cancels exis
 
 ### Database Logic
 
-| Resolution | Action                                                                                                                                                                                                |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Remove sub | `POST /api/sub-finder/unassign-shifts` with `absence_id` (time_off_request_id), `sub_id`, `scope: 'single'`, `assignment_id`. API updates `sub_assignments.status = 'cancelled'` for that assignment. |
+| Resolution | Action                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Remove sub | `POST /api/sub-finder/unassign-shifts` with `absence_id` (time_off_request_id), `sub_id`, `scope: 'single'`, `assignment_id`. API updates `sub_assignments.status = 'cancelled'` for that assignment. If the removed assignment is linked to day-only reassignment via `staffing_event_shift_id`, API also cancels the linked `staffing_event_shift`; if no active shifts remain for that event, API cancels `staffing_events.status`. |
 
 **Assign Sub panel:** `handleRemoveSubConfirm` calls unassign-shifts, then `fetchShifts()` to refresh. Row updates: no teacher chip, checkbox re-enabled, gray background removed.
 

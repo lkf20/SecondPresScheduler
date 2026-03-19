@@ -193,6 +193,31 @@ describe('ScheduleCell', () => {
     expect(screen.queryByText('Teacher A.')).not.toBeInTheDocument()
   })
 
+  it('renders reassigned source marker as gray chip with asterisk', () => {
+    render(
+      <ScheduleCell
+        data={{
+          ...baseData,
+          assignments: [],
+          absences: [
+            {
+              teacher_id: 'teacher-1',
+              teacher_name: 'Jenn S.',
+              has_sub: true,
+              is_partial: false,
+              is_reassigned: true,
+            },
+          ],
+        }}
+      />
+    )
+
+    const reassignedChip = screen.getByText('Jenn S.').closest('span[title]')
+    expect(reassignedChip).toHaveAttribute('title', 'Reassigned (not absent)')
+    expect(screen.getByText('*')).toBeInTheDocument()
+    expect(screen.queryByTitle('No sub assigned')).not.toBeInTheDocument()
+  })
+
   it('hides absence/sub chips in permanent-only mode', () => {
     render(
       <ScheduleCell

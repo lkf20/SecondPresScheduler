@@ -130,6 +130,46 @@ describe('WeeklyScheduleGridNew helpers', () => {
     })
   })
 
+  it('does not count reassigned markers as absences in chips', () => {
+    const data: WeeklyScheduleDataByClassroom[] = [
+      {
+        classroom_id: 'class-1',
+        classroom_name: 'Infant Room',
+        classroom_color: '#00AEEF',
+        days: [
+          {
+            day_of_week_id: 'day-mon',
+            day_name: 'Monday',
+            day_number: 1,
+            time_slots: [
+              {
+                time_slot_id: 'slot-am',
+                time_slot_code: 'AM',
+                time_slot_name: 'Morning',
+                time_slot_display_order: 1,
+                time_slot_start_time: null,
+                time_slot_end_time: null,
+                assignments: [],
+                absences: [
+                  {
+                    teacher_id: 'teacher-1',
+                    teacher_name: 'Jenn S.',
+                    has_sub: true,
+                    is_partial: false,
+                    is_reassigned: true,
+                  },
+                ],
+                schedule_cell: null,
+              },
+            ],
+          },
+        ],
+      },
+    ]
+
+    expect(calculateAssignmentCounts(data).absences).toBe(0)
+  })
+
   it('extracts sorted days and time slots for selected days only', () => {
     const data: WeeklyScheduleDataByClassroom[] = [
       {

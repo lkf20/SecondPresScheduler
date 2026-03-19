@@ -170,6 +170,32 @@ describe('transformTimeOffCardData', () => {
       })
     })
 
+    it('counts two partial assignments on one shift as covered in summary counts', () => {
+      const shifts = [makeShift('s1', '2026-02-10', 'slot-1')]
+      const assignments = [
+        makeAssignment('2026-02-10', 'slot-1', {
+          is_partial: true,
+          assignment_type: 'Partial Sub Shift',
+          subName: 'Victoria I.',
+        }),
+        makeAssignment('2026-02-10', 'slot-1', {
+          is_partial: true,
+          assignment_type: 'Partial Sub Shift',
+          subName: 'Laura O.',
+        }),
+      ]
+      const result = transformTimeOffCardData(minimalRequest, shifts, assignments, noClassrooms, {
+        includeDetailedShifts: true,
+      })
+
+      expect(result.covered).toBe(1)
+      expect(result.partial).toBe(0)
+      expect(result.uncovered).toBe(0)
+      expect(result.status).toBe('covered')
+      // Keep detailed shift semantics for chip rendering while summary counts treat as covered.
+      expect(result.shift_details?.[0]?.status).toBe('partial')
+    })
+
     it('invariant: covered + partial + uncovered === total', () => {
       const shifts = [
         makeShift('s1', '2026-02-10', 'slot-1'),

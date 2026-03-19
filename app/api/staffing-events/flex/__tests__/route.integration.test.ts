@@ -44,6 +44,11 @@ describe('POST /api/staffing-events/flex integration', () => {
   const mockEventSelect = jest.fn()
   const mockEventSingle = jest.fn()
   const mockShiftInsert = jest.fn()
+  const mockShiftSelect = jest.fn()
+  const mockCoverageSelect = jest.fn()
+  const mockCoverageIn = jest.fn()
+  const mockSubAssignmentInsert = jest.fn()
+  const mockSubAssignmentSelect = jest.fn()
 
   const mockStaffMaybeSingle = jest.fn().mockResolvedValue({
     data: { first_name: 'Test', last_name: 'Staff', display_name: null },
@@ -78,6 +83,16 @@ describe('POST /api/staffing-events/flex integration', () => {
       if (table === 'staffing_event_shifts') {
         return { insert: mockShiftInsert }
       }
+      if (table === 'coverage_request_shifts') {
+        return {
+          select: mockCoverageSelect,
+        }
+      }
+      if (table === 'sub_assignments') {
+        return {
+          insert: mockSubAssignmentInsert,
+        }
+      }
       if (table === 'staff') {
         return {
           select: jest.fn().mockReturnThis(),
@@ -111,7 +126,25 @@ describe('POST /api/staffing-events/flex integration', () => {
       data: { id: 'event-1' },
       error: null,
     })
-    mockShiftInsert.mockResolvedValue({ error: null })
+    mockShiftInsert.mockReturnValue({ select: mockShiftSelect })
+    mockShiftSelect.mockResolvedValue({
+      data: [
+        {
+          id: 'shift-1',
+          date: '2026-03-02',
+          day_of_week_id: 'day-mon',
+          time_slot_id: 'slot-1',
+          classroom_id: 'class-1',
+          source_classroom_id: null,
+          coverage_request_shift_id: null,
+        },
+      ],
+      error: null,
+    })
+    mockCoverageSelect.mockReturnValue({ in: mockCoverageIn })
+    mockCoverageIn.mockResolvedValue({ data: [], error: null })
+    mockSubAssignmentInsert.mockReturnValue({ select: mockSubAssignmentSelect })
+    mockSubAssignmentSelect.mockResolvedValue({ data: [{ id: 'sa-1' }], error: null })
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getScheduleSettings as jest.Mock).mockResolvedValue({ time_zone: 'UTC' })
     ;(getAuditActorContext as jest.Mock).mockResolvedValue({
@@ -271,8 +304,43 @@ describe('POST /api/staffing-events/flex integration', () => {
     expect(json.error).toMatch(/insert failed/i)
   })
 
+  it('returns 503 with actionable message when reassignment category is blocked by DB check constraint', async () => {
+    mockEventSingle.mockResolvedValue({
+      data: null,
+      error: {
+        code: '23514',
+        message:
+          'new row for relation "staffing_events" violates check constraint "staffing_events_event_category_check"',
+      },
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
+      staff_id: 'staff-1',
+      start_date: '2026-03-02',
+      end_date: '2026-03-02',
+      classroom_ids: ['class-1'],
+      time_slot_ids: ['slot-1'],
+      event_category: 'reassignment',
+      shifts: [
+        {
+          date: '2026-03-02',
+          classroom_id: 'class-1',
+          time_slot_id: 'slot-1',
+          source_classroom_id: 'class-2',
+        },
+      ],
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(503)
+    expect(json.error).toMatch(/including 119_fix_reassignment_event_category_and_linkage\.sql/i)
+  })
+
   it('returns 409 when shift insert conflicts with existing assignment', async () => {
-    mockShiftInsert.mockResolvedValue({
+    mockShiftSelect.mockResolvedValue({
+      data: null,
       error: { code: '23505', message: 'duplicate key value violates unique constraint' },
     })
     const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
@@ -292,7 +360,8 @@ describe('POST /api/staffing-events/flex integration', () => {
   })
 
   it('returns 500 when shift insert fails for non-conflict error', async () => {
-    mockShiftInsert.mockResolvedValue({
+    mockShiftSelect.mockResolvedValue({
+      data: null,
       error: { code: 'PGRST999', message: 'insert shift failed' },
     })
     const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
@@ -347,6 +416,29 @@ describe('POST /api/staffing-events/flex integration', () => {
   })
 
   it('creates flex event with explicit shifts and returns created id + shift count', async () => {
+    mockShiftSelect.mockResolvedValue({
+      data: [
+        {
+          id: 'shift-1',
+          date: '2026-03-02',
+          day_of_week_id: 'day-mon',
+          time_slot_id: 'slot-1',
+          classroom_id: 'class-1',
+          source_classroom_id: null,
+          coverage_request_shift_id: null,
+        },
+        {
+          id: 'shift-2',
+          date: '2026-03-03',
+          day_of_week_id: 'day-tue',
+          time_slot_id: 'slot-1',
+          classroom_id: 'class-1',
+          source_classroom_id: null,
+          coverage_request_shift_id: null,
+        },
+      ],
+      error: null,
+    })
     const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
       staff_id: 'staff-1',
       start_date: '2026-03-02',
@@ -363,7 +455,7 @@ describe('POST /api/staffing-events/flex integration', () => {
     const json = await response.json()
 
     expect(response.status).toBe(200)
-    expect(json).toEqual({ id: 'event-1', shift_count: 2 })
+    expect(json).toEqual({ id: 'event-1', shift_count: 2, linked_sub_assignment_count: 0 })
     expect(mockShiftInsert).toHaveBeenCalledWith([
       expect.objectContaining({
         school_id: 'school-1',
@@ -403,7 +495,7 @@ describe('POST /api/staffing-events/flex integration', () => {
     const json = await response.json()
 
     expect(response.status).toBe(200)
-    expect(json).toEqual({ id: 'event-1', shift_count: 2 })
+    expect(json).toEqual({ id: 'event-1', shift_count: 2, linked_sub_assignment_count: 0 })
     expect(mockEventInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         notes: null,
@@ -429,6 +521,90 @@ describe('POST /api/staffing-events/flex integration', () => {
     ])
   })
 
+  it('requires source_classroom_id for reassignment shifts', async () => {
+    const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
+      staff_id: 'staff-1',
+      start_date: '2026-03-02',
+      end_date: '2026-03-02',
+      classroom_ids: ['class-1'],
+      time_slot_ids: ['slot-1'],
+      shifts: [{ date: '2026-03-02', classroom_id: 'class-1', time_slot_id: 'slot-1' }],
+      event_category: 'reassignment',
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(json.error).toMatch(/source_classroom_id is required/i)
+  })
+
+  it('creates linked sub assignment for reassignment coverage shift', async () => {
+    mockCoverageIn.mockResolvedValue({
+      data: [
+        {
+          id: 'crs-1',
+          school_id: 'school-1',
+          status: 'active',
+          date: '2026-03-02',
+          time_slot_id: 'slot-1',
+          classroom_id: 'class-1',
+          coverage_requests: { teacher_id: 'teacher-1', school_id: 'school-1', status: 'open' },
+        },
+      ],
+      error: null,
+    })
+    mockShiftSelect.mockResolvedValue({
+      data: [
+        {
+          id: 'ses-1',
+          date: '2026-03-02',
+          day_of_week_id: 'day-mon',
+          time_slot_id: 'slot-1',
+          classroom_id: 'class-1',
+          source_classroom_id: 'class-2',
+          coverage_request_shift_id: 'crs-1',
+        },
+      ],
+      error: null,
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
+      staff_id: 'staff-1',
+      start_date: '2026-03-02',
+      end_date: '2026-03-02',
+      classroom_ids: ['class-1'],
+      time_slot_ids: ['slot-1'],
+      event_category: 'reassignment',
+      shifts: [
+        {
+          date: '2026-03-02',
+          classroom_id: 'class-1',
+          source_classroom_id: 'class-2',
+          time_slot_id: 'slot-1',
+          coverage_request_shift_id: 'crs-1',
+        },
+      ],
+    })
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.linked_sub_assignment_count).toBe(1)
+    expect(mockSubAssignmentInsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          staffing_event_shift_id: 'ses-1',
+          coverage_request_shift_id: 'crs-1',
+          sub_id: 'staff-1',
+          teacher_id: 'teacher-1',
+          non_sub_override: true,
+        }),
+      ])
+    )
+  })
+
   // Break Coverage UI is off (BREAK_COVERAGE_ENABLED = false). Backend still accepts break; re-enable test when feature is on.
   it.skip('creates break coverage event with event_category, covered_staff_id, start_time, end_time', async () => {
     const request = createJsonRequest('http://localhost:3000/api/staffing-events/flex', 'POST', {
@@ -448,7 +624,7 @@ describe('POST /api/staffing-events/flex integration', () => {
     const json = await response.json()
 
     expect(response.status).toBe(200)
-    expect(json).toEqual({ id: 'event-1', shift_count: 1 })
+    expect(json).toEqual({ id: 'event-1', shift_count: 1, linked_sub_assignment_count: 0 })
     expect(mockEventInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         school_id: 'school-1',

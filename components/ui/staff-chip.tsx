@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 export type StaffChipVariant =
   | 'absent'
+  | 'reassigned'
   | 'sub'
   | 'permanent'
   | 'flex'
@@ -31,6 +32,7 @@ export interface StaffChipProps {
 
 const VARIANT_CLASSES: Record<StaffChipVariant, string> = {
   absent: 'bg-gray-100 text-gray-700 border border-gray-300',
+  reassigned: 'bg-gray-200 text-gray-700 border border-gray-400',
   sub: 'bg-teal-50 text-teal-600 border border-teal-200',
   permanent: 'bg-blue-100 text-blue-800 border border-blue-300',
   flex: 'bg-blue-50 text-blue-800 border border-blue-500 border-dashed',

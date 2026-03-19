@@ -79,6 +79,7 @@ interface Shift {
   conflict_message?: string
   /** When conflict_teaching: room the sub is already assigned to (from their teaching schedule) */
   conflict_teaching_classroom_name?: string
+  conflict_teaching_classroom_id?: string
   classroom_name?: string | null
   time_slot_code?: string
   day_name?: string
@@ -156,9 +157,9 @@ export default function AssignSubPanel({
   const [changeSubShifts, setChangeSubShifts] = useState<Shift[] | null>(null)
   const [changeSubNewSubId, setChangeSubNewSubId] = useState<string | null>(null)
   const [changeSubSubmitting, setChangeSubSubmitting] = useState(false)
-  /** Per-slot conflict resolution: 'floater' | 'move' (key = slotKey). Absent or undefined = do not assign. */
+  /** Per-slot conflict resolution: 'floater' | 'move' | 'reassign' (key = slotKey). Absent or undefined = do not assign. */
   const [conflictResolutions, setConflictResolutions] = useState<
-    Record<string, 'floater' | 'move'>
+    Record<string, 'floater' | 'move' | 'reassign'>
   >({})
   /** Per-slot: user chose to replace current sub with selected sub (shift already covered by another sub). */
   const [replaceResolutions, setReplaceResolutions] = useState<Record<string, boolean>>({})
@@ -436,6 +437,7 @@ export default function AssignSubPanel({
           status: Shift['status']
           message?: string
           conflict_classroom_name?: string
+          conflict_classroom_id?: string
         }> = await response.json()
         const byKey = new Map(conflictData.map(c => [c.shift_key, c]))
 
@@ -451,6 +453,10 @@ export default function AssignSubPanel({
               conflict_teaching_classroom_name:
                 conflict.status === 'conflict_teaching' && conflict.conflict_classroom_name
                   ? conflict.conflict_classroom_name
+                  : undefined,
+              conflict_teaching_classroom_id:
+                conflict.status === 'conflict_teaching' && conflict.conflict_classroom_id
+                  ? conflict.conflict_classroom_id
                   : undefined,
             }
           })
@@ -820,6 +826,14 @@ export default function AssignSubPanel({
         }> = []
         const isFloaterShiftIds = new Set<string>()
         const resolutionsForRequest: Record<string, 'floater' | 'move' | 'replace'> = {}
+        const reassignmentsForRequest: Array<{
+          coverage_request_shift_id: string
+          date: string
+          time_slot_id: string
+          classroom_id: string
+          source_classroom_id: string
+          time_slot_code?: string
+        }> = []
         for (const s of shiftsInGroup) {
           const keyWithClass = `${s.date}|${s.time_slot_code ?? ''}|${s.classroom_id ?? ''}`
           const keySimple = `${s.date}|${s.time_slot_code ?? ''}`
@@ -830,6 +844,26 @@ export default function AssignSubPanel({
             const isFloaterSlot = group ? group.shifts.length > 1 : false
             const resolution = conflictResolutions[slotKey]
             const isFloaterResolution = resolution === 'floater'
+            if (resolution === 'reassign') {
+              const sourceClassroomId =
+                group?.shifts.find(gs => gs.status === 'conflict_teaching')
+                  ?.conflict_teaching_classroom_id ?? s.conflict_teaching_classroom_id
+              if (!sourceClassroomId) {
+                throw new Error('Missing source classroom for reassignment.')
+              }
+              if (!s.classroom_id) {
+                throw new Error('Missing target classroom for reassignment.')
+              }
+              reassignmentsForRequest.push({
+                coverage_request_shift_id: id,
+                date: s.date,
+                time_slot_id: s.time_slot_id,
+                classroom_id: s.classroom_id,
+                source_classroom_id: sourceClassroomId,
+                time_slot_code: s.time_slot_code,
+              })
+              continue
+            }
             if (resolution) {
               resolutionsForRequest[id] = resolution
             } else if (replaceResolutions[slotKey]) {
@@ -855,7 +889,7 @@ export default function AssignSubPanel({
           ...fullCoverageRequestShiftIds,
           ...partialAssignmentsForRequest.map(p => p.shift_id),
         ]
-        if (coverageRequestShiftIds.length === 0) continue
+        if (coverageRequestShiftIds.length === 0 && reassignmentsForRequest.length === 0) continue
 
         if (subId && coverageRequestId && !selectedSubIsNonSub) {
           const contactResponse = await fetch(
@@ -875,6 +909,70 @@ export default function AssignSubPanel({
               }),
             })
           }
+        }
+
+        if (reassignmentsForRequest.length > 0) {
+          const shiftByCoverageId = new Map<string, Shift>()
+          for (const s of shiftsInGroup) {
+            const keyWithClass = `${s.date}|${s.time_slot_code ?? ''}|${s.classroom_id ?? ''}`
+            const keySimple = `${s.date}|${s.time_slot_code ?? ''}`
+            const mappedId = shiftMap[keyWithClass] ?? shiftMap[keySimple]
+            if (mappedId) shiftByCoverageId.set(mappedId, s)
+          }
+
+          for (const reassignment of reassignmentsForRequest) {
+            const targetShift = shiftByCoverageId.get(reassignment.coverage_request_shift_id)
+            const existing = targetShift?.assigned_subs ?? []
+            for (const assignment of existing) {
+              const unassignRes = await fetch('/api/sub-finder/unassign-shifts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  absence_id: timeOffRequestId,
+                  sub_id: assignment.sub_id,
+                  scope: 'single',
+                  assignment_id: assignment.assignment_id,
+                }),
+              })
+              if (!unassignRes.ok) {
+                const err = await unassignRes.json().catch(() => ({}))
+                throw new Error(
+                  err.error || 'Failed to replace existing assignment before reassignment.'
+                )
+              }
+            }
+          }
+
+          const sortedDates = reassignmentsForRequest.map(r => r.date).sort()
+          const reassignmentRes = await fetch('/api/staffing-events/flex', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              staff_id: subId,
+              start_date: sortedDates[0],
+              end_date: sortedDates[sortedDates.length - 1],
+              classroom_ids: Array.from(new Set(reassignmentsForRequest.map(r => r.classroom_id))),
+              time_slot_ids: Array.from(new Set(reassignmentsForRequest.map(r => r.time_slot_id))),
+              event_category: 'reassignment',
+              notes: 'Created from Assign Sub conflict resolution (day-only reassignment)',
+              shifts: reassignmentsForRequest.map(r => ({
+                date: r.date,
+                time_slot_id: r.time_slot_id,
+                classroom_id: r.classroom_id,
+                source_classroom_id: r.source_classroom_id,
+                coverage_request_shift_id: r.coverage_request_shift_id,
+              })),
+            }),
+          })
+          if (!reassignmentRes.ok) {
+            const err = await reassignmentRes.json().catch(() => ({}))
+            throw new Error(err.error || 'Failed to create reassignment.')
+          }
+          totalAssigned += reassignmentsForRequest.length
+        }
+
+        if (coverageRequestShiftIds.length === 0) {
+          continue
         }
 
         const assignResponse = await fetch('/api/sub-finder/assign-shifts', {
@@ -1379,8 +1477,11 @@ export default function AssignSubPanel({
                     )
                     const resolution = conflictResolutions[slotKey]
                     const conflictResolved =
-                      hasConflict && (resolution === 'floater' || resolution === 'move')
-                    // When coveredByOtherSub AND hasConflict: user must choose Floater or Move (conflictResolved).
+                      hasConflict &&
+                      (resolution === 'floater' ||
+                        resolution === 'move' ||
+                        resolution === 'reassign')
+                    // When coveredByOtherSub AND hasConflict: user must choose a conflict resolution.
                     // Selecting Floater/Move implicitly replaces the current sub, so we don't also require replaceChosen.
                     const anyDisabled =
                       groupShifts.some(s => s.school_closure) ||
@@ -1922,7 +2023,9 @@ export default function AssignSubPanel({
                                 value={resolution ?? ''}
                                 onValueChange={(value: string) => {
                                   const newResolution =
-                                    value === 'floater' || value === 'move' ? value : undefined
+                                    value === 'floater' || value === 'move' || value === 'reassign'
+                                      ? value
+                                      : undefined
                                   setConflictResolutions(prev => {
                                     const next = { ...prev }
                                     if (newResolution) next[slotKey] = newResolution
@@ -1964,7 +2067,7 @@ export default function AssignSubPanel({
                                       : 'Assign as Floater (sub covers both rooms, 0.5 each)'}
                                   </Label>
                                 </div>
-                                {(hasConflictSub || hasConflictTeaching) && (
+                                {hasConflictSub && (
                                   <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="move" id={`${slotKey}-resolve-move`} />
                                     <Label
@@ -1974,6 +2077,22 @@ export default function AssignSubPanel({
                                       {coveredByOtherSub
                                         ? `Remove ${groupShifts.find(s => s.assigned_sub_name)?.assigned_sub_name ?? 'current sub'} and move ${selectedSub ? getDisplayName(selectedSub) : 'selected sub'} here (remove from other room)`
                                         : 'Move sub here (remove sub from other room)'}
+                                    </Label>
+                                  </div>
+                                )}
+                                {hasConflictTeaching && !isFloaterSlot && (
+                                  <div className="flex items-center space-x-2">
+                                    <RadioGroupItem
+                                      value="reassign"
+                                      id={`${slotKey}-resolve-reassign`}
+                                    />
+                                    <Label
+                                      htmlFor={`${slotKey}-resolve-reassign`}
+                                      className="text-sm font-normal cursor-pointer"
+                                    >
+                                      {coveredByOtherSub
+                                        ? `Remove ${groupShifts.find(s => s.assigned_sub_name)?.assigned_sub_name ?? 'current sub'} and reassign ${selectedSub ? getDisplayName(selectedSub) : 'selected staff'} here (remove from baseline room for this shift only)`
+                                        : 'Reassign staff here (staff will be removed from baseline assignment for this shift only)'}
                                     </Label>
                                   </div>
                                 )}

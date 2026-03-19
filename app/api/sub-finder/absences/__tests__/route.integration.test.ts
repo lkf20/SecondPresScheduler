@@ -259,6 +259,135 @@ describe('GET /api/sub-finder/absences integration', () => {
     ).toBe(true)
   })
 
+  it('preserves multiple partial assignment rows in shift_details.assigned_subs', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+
+    const teacherSchedulesQuery = {
+      select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockResolvedValue({ data: [] }),
+    }
+    const subAssignmentsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({ data: [] }),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'teacher_schedules') return teacherSchedulesQuery
+        if (table === 'sub_assignments') return subAssignmentsQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+    ;(getTimeOffRequests as jest.Mock).mockResolvedValue([
+      {
+        id: 'req-1',
+        teacher_id: 'teacher-1',
+        start_date: '2099-03-26',
+        end_date: '2099-03-26',
+        reason: 'Vacation',
+        coverage_request_id: 'cov-1',
+        teacher: {
+          first_name: 'Anne',
+          last_name: 'M',
+          display_name: 'Anne M.',
+        },
+      },
+    ])
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValue([
+      {
+        id: 'shift-1',
+        date: '2099-03-26',
+        day_of_week_id: 'day-1',
+        time_slot_id: 'slot-1',
+        day_of_week: { name: 'Thursday' },
+        time_slot: { code: 'AM' },
+      },
+    ])
+    ;(getActiveSubAssignmentsForTimeOffRequest as jest.Mock).mockResolvedValue([
+      {
+        id: 'assign-1',
+        date: '2099-03-26',
+        time_slot_id: 'slot-1',
+        is_partial: true,
+        partial_start_time: '09:00',
+        partial_end_time: '10:30',
+        assignment_type: 'substitute',
+        sub: { id: 'sub-1', first_name: 'Victoria', last_name: 'I.', display_name: 'Victoria I.' },
+      },
+      {
+        id: 'assign-2',
+        date: '2099-03-26',
+        time_slot_id: 'slot-1',
+        is_partial: true,
+        partial_start_time: '10:30',
+        partial_end_time: '12:00',
+        assignment_type: 'substitute',
+        sub: { id: 'sub-2', first_name: 'Laura', last_name: 'O.', display_name: 'Laura O.' },
+      },
+    ])
+    ;(transformTimeOffCardData as jest.Mock).mockReturnValue({
+      id: 'req-1',
+      teacher_id: 'teacher-1',
+      teacher_name: 'Anne M.',
+      start_date: '2099-03-26',
+      end_date: '2099-03-26',
+      reason: 'Vacation',
+      notes: null,
+      classrooms: [],
+      total: 1,
+      uncovered: 0,
+      partial: 1,
+      covered: 0,
+      shift_details: [
+        {
+          id: 'shift-1',
+          date: '2099-03-26',
+          day_name: 'Thu',
+          time_slot_code: 'AM',
+          class_name: 'Infant',
+          classroom_name: 'Infant Room',
+          assigned_sub_names: ['Victoria I.', 'Laura O.'],
+          status: 'partial',
+        },
+      ],
+    })
+    ;(getCoverageStatus as jest.Mock).mockReturnValue('partially_covered')
+    ;(buildCoverageBadges as jest.Mock).mockReturnValue([{ label: 'Partial', tone: 'warning' }])
+    ;(sortCoverageShifts as jest.Mock).mockImplementation((shifts: any) => shifts)
+    ;(buildCoverageSegments as jest.Mock).mockReturnValue([{ id: 'shift-1', status: 'partial' }])
+
+    const request = {
+      nextUrl: new URL(
+        'http://localhost:3000/api/sub-finder/absences?include_partially_covered=true'
+      ),
+    }
+
+    const response = await GET(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json[0].shifts.shift_details[0].assigned_subs).toEqual([
+      expect.objectContaining({
+        assignment_id: 'assign-1',
+        sub_id: 'sub-1',
+        sub_name: 'Victoria I.',
+        is_partial: true,
+        partial_start_time: '09:00',
+        partial_end_time: '10:30',
+      }),
+      expect.objectContaining({
+        assignment_id: 'assign-2',
+        sub_id: 'sub-2',
+        sub_name: 'Laura O.',
+        is_partial: true,
+        partial_start_time: '10:30',
+        partial_end_time: '12:00',
+      }),
+    ])
+  })
+
   it('respects include_partially_covered flag and keeps no-shift absences', async () => {
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(createClient as jest.Mock).mockResolvedValue({
@@ -552,6 +681,111 @@ describe('GET /api/sub-finder/absences integration', () => {
           sub: { display_name: 'Extra Sub' },
         }),
       ])
+    )
+  })
+
+  it('passes multiple partial assignments on the same shift through to transform layer', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+
+    const teacherSchedulesQuery = {
+      select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockResolvedValue({ data: [] }),
+    }
+
+    const subAssignmentsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({ data: [] }),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'teacher_schedules') return teacherSchedulesQuery
+        if (table === 'sub_assignments') return subAssignmentsQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+    ;(getTimeOffRequests as jest.Mock).mockResolvedValue([
+      {
+        id: 'req-multi-partial',
+        coverage_request_id: 'coverage-1',
+        teacher_id: 'teacher-1',
+        start_date: '2099-03-01',
+        end_date: '2099-03-01',
+        reason: null,
+        notes: null,
+      },
+    ])
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValue([
+      {
+        id: 'shift-1',
+        date: '2099-03-01',
+        day_of_week_id: 'day-1',
+        time_slot_id: 'slot-1',
+        day_of_week: { name: 'Monday' },
+        time_slot: { code: 'AM' },
+      },
+    ])
+    ;(getActiveSubAssignmentsForTimeOffRequest as jest.Mock).mockResolvedValue([
+      {
+        id: 'coverage-assignment-1',
+        date: '2099-03-01',
+        time_slot_id: 'slot-1',
+        is_partial: true,
+        assignment_type: 'Partial Sub Shift',
+        sub: { display_name: 'Victoria I.' },
+        coverage_request_shift: {
+          date: '2099-03-01',
+          time_slot_id: 'slot-1',
+        },
+      },
+      {
+        id: 'coverage-assignment-2',
+        date: '2099-03-01',
+        time_slot_id: 'slot-1',
+        is_partial: true,
+        assignment_type: 'Partial Sub Shift',
+        sub: { display_name: 'Laura O.' },
+        coverage_request_shift: {
+          date: '2099-03-01',
+          time_slot_id: 'slot-1',
+        },
+      },
+    ])
+    ;(transformTimeOffCardData as jest.Mock).mockReturnValue({
+      id: 'req-multi-partial',
+      teacher_id: 'teacher-1',
+      teacher_name: 'Teacher One',
+      start_date: '2099-03-01',
+      end_date: '2099-03-01',
+      reason: null,
+      notes: null,
+      classrooms: [],
+      total: 1,
+      uncovered: 0,
+      partial: 1,
+      covered: 0,
+      shift_details: [],
+    })
+    ;(getCoverageStatus as jest.Mock).mockReturnValue('partial')
+    ;(buildCoverageBadges as jest.Mock).mockReturnValue([])
+    ;(sortCoverageShifts as jest.Mock).mockImplementation((shifts: any) => shifts)
+    ;(buildCoverageSegments as jest.Mock).mockReturnValue([])
+
+    const request = {
+      nextUrl: new URL('http://localhost:3000/api/sub-finder/absences'),
+    }
+
+    const response = await GET(request as any)
+    expect(response.status).toBe(200)
+
+    const transformArgs = (transformTimeOffCardData as jest.Mock).mock.calls.at(-1)
+    expect(transformArgs).toBeDefined()
+    const assignmentRows = transformArgs[2]
+    expect(assignmentRows).toHaveLength(2)
+    expect(assignmentRows.map((a: any) => a.sub?.display_name)).toEqual(
+      expect.arrayContaining(['Victoria I.', 'Laura O.'])
     )
   })
 

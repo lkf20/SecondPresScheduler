@@ -168,6 +168,7 @@ describe('SubFinderCard', () => {
             classroom_name: 'Infant Room',
             status: 'partially_covered',
             sub_name: 'Victoria I.',
+            assigned_sub_names: ['Victoria I.', 'Laura S.'],
             day_display_order: 4,
             time_slot_display_order: 2,
           },
@@ -187,8 +188,64 @@ describe('SubFinderCard', () => {
           time_slot_code: 'AM',
           status: 'partial',
           assigned_sub_name: 'Victoria I.',
+          assigned_sub_names: ['Victoria I.', 'Laura S.'],
           day_display_order: 4,
           time_slot_display_order: 2,
+        }),
+      ])
+    )
+  })
+
+  it('passes current sub name for covered shifts assigned to this sub in recommended strip', () => {
+    render(
+      <SubFinderCard
+        name="Bella W."
+        phone={null}
+        shiftsCovered={1}
+        totalShifts={1}
+        canCover={[]}
+        cannotCover={[]}
+        assigned={[]}
+        recommendedShiftCount={1}
+        allShifts={[
+          {
+            id: 'shift-covered-this-sub',
+            date: '2026-03-26',
+            day_name: 'Thursday',
+            time_slot_code: 'AM',
+            class_name: null,
+            classroom_name: 'Infant Room',
+            status: 'fully_covered',
+            sub_name: null,
+            assigned_sub_names: ['Bella W.', 'Laura S.'],
+            day_display_order: 4,
+            time_slot_display_order: 2,
+          },
+        ]}
+        allAssigned={[
+          {
+            date: '2026-03-26',
+            time_slot_code: 'AM',
+            classroom_name: 'Infant Room',
+          },
+        ]}
+      />
+    )
+
+    const recommendedStripCall = mockShiftChips.mock.calls.find(
+      call => call?.[0]?.mode === 'coverage'
+    )?.[0]
+
+    expect(recommendedStripCall).toBeTruthy()
+    expect(recommendedStripCall.shifts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          date: '2026-03-26',
+          time_slot_code: 'AM',
+          status: 'covered',
+          assignment_owner: 'this_sub',
+          assigned_sub_name: 'Bella W.',
+          assigned_sub_names: ['Bella W.', 'Laura S.'],
         }),
       ])
     )

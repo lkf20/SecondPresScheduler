@@ -533,8 +533,8 @@ export default function WeeklySchedulePage() {
             subs += 1
           }
 
-          // Absences: any absence on the slot
-          if (slot.absences && slot.absences.length > 0) {
+          // Absences: any true absence (exclude reassignment markers)
+          if ((slot.absences ?? []).some(absence => absence.is_reassigned !== true)) {
             absences += 1
           }
 

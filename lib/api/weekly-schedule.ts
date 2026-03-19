@@ -35,6 +35,7 @@ type SubAssignmentRowFromQuery = {
   classroom_id: string
   sub_id: string
   teacher_id: string
+  staffing_event_shift_id?: string | null
   is_floater?: boolean
   non_sub_override?: boolean
   sub?: StaffLite | StaffLite[] | null
@@ -109,12 +110,26 @@ export async function fetchSubAssignmentsForRange({
           classroom_id,
           sub_id,
           teacher_id,
+          staffing_event_shift_id,
           is_floater,
           non_sub_override,
           sub:staff!sub_assignments_sub_id_fkey(id, first_name, last_name, display_name),
           teacher:staff!sub_assignments_teacher_id_fkey(id, first_name, last_name, display_name)
         `
   const selectWithoutOverride = `
+          id,
+          date,
+          day_of_week_id,
+          time_slot_id,
+          classroom_id,
+          sub_id,
+          teacher_id,
+          staffing_event_shift_id,
+          is_floater,
+          sub:staff!sub_assignments_sub_id_fkey(id, first_name, last_name, display_name),
+          teacher:staff!sub_assignments_teacher_id_fkey(id, first_name, last_name, display_name)
+        `
+  const selectLegacy = `
           id,
           date,
           day_of_week_id,
@@ -145,6 +160,16 @@ export async function fetchSubAssignmentsForRange({
       .lte('date', endDateISO)
   }
 
+  if (result.error && /staffing_event_shift_id/i.test(result.error.message || '')) {
+    result = await supabase
+      .from('sub_assignments')
+      .select(selectLegacy)
+      .eq('status', 'active')
+      .eq('school_id', schoolId)
+      .gte('date', startDateISO)
+      .lte('date', endDateISO)
+  }
+
   return result
 }
 
@@ -169,6 +194,7 @@ type WeeklySubAssignment = {
   classroom_id: string
   sub_id: string
   teacher_id: string
+  staffing_event_shift_id?: string | null
   is_floater?: boolean
   non_sub_override?: boolean
   sub_name: string
@@ -190,12 +216,13 @@ type StaffingEventShift = {
   day_of_week_id: string | null
   time_slot_id: string
   classroom_id: string
+  source_classroom_id?: string | null
   staff_id: string
   staff_name: string
   staff_first_name?: string | null
   staff_last_name?: string | null
   staff_display_name?: string | null
-  event_category?: 'standard' | 'break' | null
+  event_category?: 'standard' | 'break' | 'reassignment' | null
   covered_staff_id?: string | null
   start_time?: string | null
   end_time?: string | null
@@ -222,6 +249,80 @@ export const dedupeSubAssignmentsForSlot = (subsForSlot: WeeklySubAssignment[]) 
 
 export const dedupeFlexAssignmentsForSlot = (flexForSlot: StaffingEventShift[]) =>
   Array.from(new Map(flexForSlot.map(shift => [shift.staff_id, shift])).values())
+
+export const excludeReassignmentFlexWhenLinkedSubExists = ({
+  flexForSlot,
+  uniqueSubsForSlot,
+}: {
+  flexForSlot: StaffingEventShift[]
+  uniqueSubsForSlot: Array<{ staffing_event_shift_id?: string | null }>
+}) => {
+  const linkedShiftIds = new Set(
+    uniqueSubsForSlot
+      .map(sub => sub.staffing_event_shift_id)
+      .filter((id): id is string => Boolean(id))
+  )
+
+  if (linkedShiftIds.size === 0) return flexForSlot
+
+  return flexForSlot.filter(
+    shift => !(shift.event_category === 'reassignment' && linkedShiftIds.has(shift.id))
+  )
+}
+
+export const buildReassignmentSourceExclusionKey = ({
+  staffId,
+  date,
+  timeSlotId,
+  sourceClassroomId,
+}: {
+  staffId: string
+  date: string
+  timeSlotId: string
+  sourceClassroomId: string
+}) => `${staffId}|${date}|${timeSlotId}|${sourceClassroomId}`
+
+export const resolveSlotDateISO = ({
+  hasDateRange,
+  startDateISO,
+  endDateISO,
+  dayNumber,
+}: {
+  hasDateRange: boolean
+  startDateISO: string | null | undefined
+  endDateISO: string | null | undefined
+  dayNumber: number | null | undefined
+}) => {
+  if (!hasDateRange || !startDateISO || dayNumber == null) return null
+  // Daily schedule path passes start=end=date. Use that exact date so reassignment/source matching stays correct.
+  if (endDateISO && startDateISO === endDateISO) return startDateISO
+  return getCellDateISO(startDateISO, dayNumber)
+}
+
+export const filterAssignmentsForReassignmentSource = <
+  T extends { teacher_id: string; classroom_id: string },
+>({
+  assignmentsForSlot,
+  exclusionKeySet,
+  date,
+  timeSlotId,
+}: {
+  assignmentsForSlot: T[]
+  exclusionKeySet: Set<string>
+  date: string
+  timeSlotId: string
+}) =>
+  assignmentsForSlot.filter(
+    assignment =>
+      !exclusionKeySet.has(
+        buildReassignmentSourceExclusionKey({
+          staffId: assignment.teacher_id,
+          date,
+          timeSlotId,
+          sourceClassroomId: assignment.classroom_id,
+        })
+      )
+  )
 
 export const getTeachersAssignedToClassroom = ({
   assignmentsForSlot,
@@ -266,7 +367,7 @@ export interface WeeklyScheduleData {
     teacher_display_name?: string | null
     is_flexible?: boolean
     staffing_event_id?: string
-    event_category?: 'standard' | 'break' | null
+    event_category?: 'standard' | 'break' | 'reassignment' | null
     break_start_time?: string | null
     break_end_time?: string | null
     class_group_id?: string // Optional: teachers are assigned to classrooms, not specific class groups
@@ -317,6 +418,7 @@ export interface WeeklyScheduleDataByClassroom {
         teacher_display_name?: string | null
         has_sub: boolean
         is_partial: boolean
+        is_reassigned?: boolean
         time_off_request_id?: string // ID of the time off request this absence belongs to
       }>
       schedule_cell: {
@@ -445,6 +547,7 @@ export async function getScheduleSnapshotData({
           day_of_week_id,
           time_slot_id,
           classroom_id,
+          source_classroom_id,
           staff_id,
           staff:staff!staffing_event_shifts_staff_id_fkey(id, first_name, last_name, display_name),
           staffing_event:staffing_events(event_category, covered_staff_id, start_time, end_time, notes)
@@ -481,12 +584,17 @@ export async function getScheduleSnapshotData({
             day_of_week_id: row.day_of_week_id,
             time_slot_id: row.time_slot_id,
             classroom_id: row.classroom_id,
+            source_classroom_id: row.source_classroom_id ?? null,
             staff_id: row.staff_id,
             staff_name: getStaffDisplayName(normalizedStaff, displayNameFormat),
             staff_first_name: staffParts.first_name,
             staff_last_name: staffParts.last_name,
             staff_display_name: staffParts.display_name,
-            event_category: eventData?.event_category as 'standard' | 'break' | null,
+            event_category: eventData?.event_category as
+              | 'standard'
+              | 'break'
+              | 'reassignment'
+              | null,
             covered_staff_id: eventData?.covered_staff_id,
             start_time: eventData?.start_time,
             end_time: eventData?.end_time,
@@ -498,6 +606,42 @@ export async function getScheduleSnapshotData({
       const errorMessage = err instanceof Error ? err.message : String(err)
       console.warn('Error fetching staffing_event_shifts:', errorMessage)
     }
+  }
+
+  const reassignedFromSourceSlot = new Set(
+    flexAssignments
+      .filter(
+        shift =>
+          shift.event_category === 'reassignment' &&
+          Boolean(shift.source_classroom_id) &&
+          Boolean(shift.date) &&
+          Boolean(shift.time_slot_id) &&
+          Boolean(shift.staff_id)
+      )
+      .map(shift =>
+        buildReassignmentSourceExclusionKey({
+          staffId: shift.staff_id,
+          date: shift.date,
+          timeSlotId: shift.time_slot_id,
+          sourceClassroomId: shift.source_classroom_id as string,
+        })
+      )
+  )
+  const reassignmentBySourceSlot = new Map<string, StaffingEventShift[]>()
+  for (const shift of flexAssignments) {
+    if (
+      shift.event_category !== 'reassignment' ||
+      !shift.source_classroom_id ||
+      !shift.date ||
+      !shift.time_slot_id
+    ) {
+      continue
+    }
+
+    const key = `${shift.date}|${shift.time_slot_id}|${shift.source_classroom_id}`
+    const existing = reassignmentBySourceSlot.get(key)
+    if (existing) existing.push(shift)
+    else reassignmentBySourceSlot.set(key, [shift])
   }
 
   // Get all days of week (reference data - doesn't have school_id, shared across all schools)
@@ -760,6 +904,7 @@ export async function getScheduleSnapshotData({
             classroom_id: sa.classroom_id,
             sub_id: sa.sub_id,
             teacher_id: sa.teacher_id,
+            staffing_event_shift_id: sa.staffing_event_shift_id ?? null,
             is_floater: sa.is_floater ?? false,
             non_sub_override: sa.non_sub_override === true,
             sub_name: getStaffDisplayName(sa.sub, displayNameFormat),
@@ -877,16 +1022,19 @@ export async function getScheduleSnapshotData({
           teacher_display_name?: string | null
           has_sub: boolean
           is_partial: boolean
+          is_reassigned?: boolean
           time_off_request_id?: string
         }> = []
 
         // Build assignments when schedule_cell exists and has class groups and/or we have teacher assignments.
         // Include inactive slots so the UI can display assigned teachers (with gray styling).
         const classGroups = scheduleCell?.class_groups || []
-        const slotDateISO =
-          hasDateRange && startDateISO && day.day_number != null
-            ? getCellDateISO(startDateISO, day.day_number)
-            : null
+        const slotDateISO = resolveSlotDateISO({
+          hasDateRange,
+          startDateISO,
+          endDateISO,
+          dayNumber: day.day_number,
+        })
         const weeklyNoteOverride =
           slotDateISO != null
             ? (weeklyNoteOverrides.get(`${slotDateISO}|${classroom.id}|${timeSlot.id}`) ?? null)
@@ -907,7 +1055,18 @@ export async function getScheduleSnapshotData({
           // Conflict_teaching override: if this teacher has an is_floater sub_assignment
           // for this date/slot in another room, treat their baseline as floater too.
           const cellDate = slotDateISO
-          const teachers = assignmentsForSlot.map(assignment => {
+          const slotDateKey = slotDateISO ? toDateStringISO(slotDateISO) : null
+          const assignmentsForSlotAfterReassignment =
+            hasDateRange && slotDateKey
+              ? filterAssignmentsForReassignmentSource({
+                  assignmentsForSlot,
+                  exclusionKeySet: reassignedFromSourceSlot,
+                  date: slotDateKey,
+                  timeSlotId: timeSlot.id,
+                })
+              : assignmentsForSlot
+
+          const teachers = assignmentsForSlotAfterReassignment.map(assignment => {
             const teacherInfo = assignment.teacher
               ? {
                   first_name: assignment.teacher.first_name ?? '',
@@ -974,6 +1133,10 @@ export async function getScheduleSnapshotData({
               : []
           const uniqueFlexForSlot =
             flexForSlot.length > 0 ? dedupeFlexAssignmentsForSlot(flexForSlot) : []
+          const visibleFlexForSlot = excludeReassignmentFlexWhenLinkedSubExists({
+            flexForSlot: uniqueFlexForSlot,
+            uniqueSubsForSlot,
+          })
 
           // Add teacher assignments for this slot
           for (const teacher of teachers) {
@@ -1003,9 +1166,29 @@ export async function getScheduleSnapshotData({
               teacher_display_name?: string | null
               has_sub: boolean
               is_partial: boolean
+              is_reassigned?: boolean
               time_off_request_id?: string
             }
           >()
+
+          if (slotDateKey) {
+            const sourceKey = `${slotDateKey}|${timeSlot.id}|${classroom.id}`
+            const sourceReassignments = reassignmentBySourceSlot.get(sourceKey) ?? []
+            for (const reassignment of sourceReassignments) {
+              if (!reassignment.staff_id || absentTeachers.has(reassignment.staff_id)) continue
+              absentTeachers.set(reassignment.staff_id, {
+                teacher_id: reassignment.staff_id,
+                teacher_name: reassignment.staff_name,
+                teacher_first_name: reassignment.staff_first_name ?? null,
+                teacher_last_name: reassignment.staff_last_name ?? null,
+                teacher_display_name: reassignment.staff_display_name ?? null,
+                has_sub: true,
+                is_partial: false,
+                is_reassigned: true,
+                time_off_request_id: undefined,
+              })
+            }
+          }
 
           // Add substitute assignments for this day/time/classroom (if date range is provided)
           if (hasDateRange && day.id) {
@@ -1051,13 +1234,13 @@ export async function getScheduleSnapshotData({
                 required_teachers: undefined,
                 preferred_teachers: undefined,
                 assigned_count:
-                  teachers.length + uniqueSubsForSlot.length + uniqueFlexForSlot.length,
+                  teachers.length + uniqueSubsForSlot.length + visibleFlexForSlot.length,
               })
             }
           }
 
           if (hasDateRange && day.id) {
-            for (const flex of uniqueFlexForSlot) {
+            for (const flex of visibleFlexForSlot) {
               assignments.push({
                 id: flex.id,
                 teacher_id: flex.staff_id,
@@ -1079,7 +1262,7 @@ export async function getScheduleSnapshotData({
                 required_teachers: undefined,
                 preferred_teachers: undefined,
                 assigned_count:
-                  teachers.length + uniqueSubsForSlot.length + uniqueFlexForSlot.length,
+                  teachers.length + uniqueSubsForSlot.length + visibleFlexForSlot.length,
               })
             }
           }
@@ -1092,7 +1275,7 @@ export async function getScheduleSnapshotData({
             )
 
             const teachersAssignedToThisClassroom = getTeachersAssignedToClassroom({
-              assignmentsForSlot,
+              assignmentsForSlot: assignmentsForSlotAfterReassignment,
               uniqueSubsForSlot,
               classroomId: classroom.id,
             })
@@ -1164,9 +1347,24 @@ export async function getScheduleSnapshotData({
                     time_off_request_id: timeOff.time_off_request_id, // Include time_off_request_id
                   })
                 } else {
-                  // Update existing absence with time_off_request_id if not already set
+                  // If a real time-off exists, it takes precedence over reassignment marker.
+                  const teacherInfo = teachersMap.get(timeOff.teacher_id)
                   const existing = absentTeachers.get(timeOff.teacher_id)
-                  if (existing && !existing.time_off_request_id) {
+                  if (existing?.is_reassigned) {
+                    absentTeachers.set(timeOff.teacher_id, {
+                      teacher_id: timeOff.teacher_id,
+                      teacher_name: teacherInfo?.name || existing.teacher_name || 'Unknown',
+                      teacher_first_name: teacherInfo?.first_name ?? existing.teacher_first_name,
+                      teacher_last_name: teacherInfo?.last_name ?? existing.teacher_last_name,
+                      teacher_display_name:
+                        teacherInfo?.display_name ?? existing.teacher_display_name,
+                      has_sub: hasSub,
+                      is_partial: false,
+                      is_reassigned: false,
+                      time_off_request_id: timeOff.time_off_request_id,
+                    })
+                  } else if (existing && !existing.time_off_request_id) {
+                    // Update existing absence with time_off_request_id if not already set
                     existing.time_off_request_id = timeOff.time_off_request_id
                   }
                 }

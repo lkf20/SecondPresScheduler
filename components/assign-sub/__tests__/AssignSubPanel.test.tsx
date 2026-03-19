@@ -1025,4 +1025,137 @@ describe('AssignSubPanel', () => {
       ])
     })
   })
+
+  it('uses reassignment flow for conflict_teaching when user selects reassign', async () => {
+    const user = userEvent.setup()
+    const defaultFetch = global.fetch as jest.Mock
+    global.fetch = jest.fn((url: string | URL | globalThis.Request, options?: RequestInit) => {
+      const urlStr = url.toString()
+      if (urlStr.includes('/api/assign-sub/shifts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              shifts: [
+                {
+                  id: '2026-03-10|dow-2|slot-1',
+                  date: '2026-03-10',
+                  day_of_week_id: 'dow-2',
+                  time_slot_id: 'slot-1',
+                  time_slot_code: 'AM',
+                  classroom_id: 'class-target',
+                  has_time_off: true,
+                  time_off_request_id: 'tor-existing',
+                },
+              ],
+            }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/classrooms/class-target')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ name: 'Infant Room' }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/check-conflicts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve([
+              {
+                shift_key: '2026-03-10|slot-1',
+                status: 'conflict_teaching',
+                message: 'Conflict: Assigned to Green Room',
+                conflict_classroom_name: 'Green Room',
+                conflict_classroom_id: 'class-source',
+              },
+            ]),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/coverage-request/tor-existing')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              coverage_request_id: 'cr-1',
+              shift_map: {
+                '2026-03-10|AM|class-target': 'crs-1',
+                '2026-03-10|AM': 'crs-1',
+              },
+            }),
+        }) as Promise<Response>
+      }
+      if (
+        urlStr.includes('/api/sub-finder/substitute-contacts?coverage_request_id=cr-1&sub_id=sub-1')
+      ) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ id: 'contact-1' }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/substitute-contacts') && options?.method === 'PUT') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/staffing-events/flex') && options?.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({ id: 'event-1', shift_count: 1, linked_sub_assignment_count: 1 }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/assign-shifts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ assignments_created: 0 }),
+        }) as Promise<Response>
+      }
+      return defaultFetch(url, options)
+    }) as any
+
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    await fillForm(user)
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Sub is assigned to Green Room during this time\./i)
+      ).toBeInTheDocument()
+    })
+    expect(
+      screen.queryByRole('radio', { name: /Move sub here \(remove sub from other room\)/i })
+    ).not.toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('radio', {
+        name: /Reassign staff here \(staff will be removed from baseline assignment for this shift only\)/i,
+      })
+    )
+
+    await user.click(screen.getByRole('button', { name: /Assign 1 shift/i }))
+
+    await waitFor(() => {
+      const reassignCall = (global.fetch as jest.Mock).mock.calls.find((call: any[]) =>
+        String(call[0]).includes('/api/staffing-events/flex')
+      )
+      expect(reassignCall).toBeTruthy()
+      const payload = JSON.parse(reassignCall[1].body)
+      expect(payload.event_category).toBe('reassignment')
+      expect(payload.shifts).toEqual([
+        expect.objectContaining({
+          date: '2026-03-10',
+          time_slot_id: 'slot-1',
+          classroom_id: 'class-target',
+          source_classroom_id: 'class-source',
+          coverage_request_shift_id: 'crs-1',
+        }),
+      ])
+    })
+
+    const assignShiftCalls = (global.fetch as jest.Mock).mock.calls.filter((call: any[]) =>
+      String(call[0]).includes('/api/sub-finder/assign-shifts')
+    )
+    expect(assignShiftCalls).toHaveLength(0)
+  })
 })

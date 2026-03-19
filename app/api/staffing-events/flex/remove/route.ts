@@ -6,6 +6,11 @@ import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 
 type RemoveScope = 'single_shift' | 'weekday' | 'all_shifts' | 'future_shifts'
 
+const isMissingColumnError = (error: { code?: string; message?: string } | null | undefined) => {
+  if (!error) return false
+  return error.code === '42703' || /staffing_event_shift_id/i.test(error.message ?? '')
+}
+
 export async function GET(request: NextRequest) {
   try {
     const schoolId = await getUserSchoolId()
@@ -177,7 +182,7 @@ export async function POST(request: NextRequest) {
 
     const { data: eventRow, error: eventError } = await supabase
       .from('staffing_events')
-      .select('id, staff_id')
+      .select('id, staff_id, event_category')
       .eq('id', eventId)
       .eq('school_id', schoolId)
       .maybeSingle()
@@ -230,6 +235,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    let linkedSubAssignmentCancelledCount = 0
+    const cancelledShiftIds = cancelledRows.map(row => row.id).filter(Boolean)
+    if (cancelledShiftIds.length > 0) {
+      const { data: linkedSubRows, error: linkedSubCancelError } = await supabase
+        .from('sub_assignments')
+        .update({ status: 'cancelled' })
+        .eq('school_id', schoolId)
+        .eq('status', 'active')
+        .in('staffing_event_shift_id', cancelledShiftIds)
+        .select('id')
+
+      if (linkedSubCancelError && !isMissingColumnError(linkedSubCancelError)) {
+        return NextResponse.json({ error: linkedSubCancelError.message }, { status: 500 })
+      }
+
+      if (!linkedSubCancelError) {
+        linkedSubAssignmentCancelledCount = (linkedSubRows ?? []).length
+      }
+    }
+
     const { count: activeShiftCount, error: remainingError } = await supabase
       .from('staffing_event_shifts')
       .select('id', { count: 'exact', head: true })
@@ -277,9 +302,11 @@ export async function POST(request: NextRequest) {
       details: {
         staff_id: staffId,
         teacher_name: teacherName,
+        event_category: eventRow.event_category ?? 'standard',
         scope,
         removed_count: cancelledRows.length,
         remaining_active_shifts: activeShiftCount ?? 0,
+        linked_sub_assignment_cancelled_count: linkedSubAssignmentCancelledCount,
       },
     })
 
@@ -287,6 +314,7 @@ export async function POST(request: NextRequest) {
       success: true,
       removed_count: cancelledRows.length,
       remaining_active_shifts: activeShiftCount || 0,
+      linked_sub_assignment_cancelled_count: linkedSubAssignmentCancelledCount,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

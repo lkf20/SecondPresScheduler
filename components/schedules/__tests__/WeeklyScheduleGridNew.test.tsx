@@ -263,6 +263,45 @@ describe('WeeklyScheduleGridNew interactions', () => {
     expect(screen.getByText('Temporary Coverage')).toBeInTheDocument()
   })
 
+  it('shows Reassigned legend item when reassigned markers exist in the week', () => {
+    const dataWithReassignment: WeeklyScheduleDataByClassroom[] = [
+      {
+        ...scheduleData[0],
+        days: [
+          {
+            ...scheduleData[0].days[0],
+            time_slots: [
+              {
+                ...scheduleData[0].days[0].time_slots[0],
+                absences: [
+                  {
+                    teacher_id: 'teacher-1',
+                    teacher_name: 'Jenn S.',
+                    has_sub: true,
+                    is_partial: false,
+                    is_reassigned: true,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ]
+
+    render(
+      <WeeklyScheduleGridNew
+        data={dataWithReassignment}
+        selectedDayIds={['day-mon']}
+        layout="days-x-classrooms"
+        showLegendSubstitutes
+        readOnly
+      />
+    )
+
+    expect(screen.getByText('Reassigned *')).toBeInTheDocument()
+  })
+
   it('registers panel manager lifecycle on open and close', async () => {
     render(
       <WeeklyScheduleGridNew

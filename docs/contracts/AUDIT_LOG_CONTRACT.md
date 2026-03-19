@@ -107,6 +107,14 @@ For unassign: `was_partial` (boolean) and `remaining_partials_on_shift` (integer
 | `assign` | `staff_id`, `start_date`, `end_date`, `shift_count`; optionally `classroom_ids` | `teacher_name`, `classroom_name` (or summary) |
 | `cancel` | `staff_id`, `scope`, `removed_count`, `remaining_active_shifts`                 | `teacher_name`                                |
 
+For day-only reassignment (`event_category = 'reassignment'`), `details` must also include:
+
+- `source_classroom_id`, `source_classroom_name`
+- `classroom_id`, `classroom_name` (target)
+- `date`, `time_slot_id`, `time_slot_code` when single-shift scoped
+- `coverage_request_shift_id` when linked to absence coverage
+- `linked_sub_assignment_count` (assign) / `linked_sub_assignment_cancelled_count` (cancel)
+
 ### `school_calendar` + `calendar_settings`
 
 | Action   | Required in `details`                                                             | Human-readable required                      |
