@@ -142,6 +142,7 @@ export default function AssignSubPanel({
   const [subId, setSubId] = useState<string | null>(null)
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
+  const [hasEverSetEndDate, setHasEverSetEndDate] = useState(false)
   const [selectedShiftIds, setSelectedShiftIds] = useState<Set<string>>(new Set())
   const [shifts, setShifts] = useState<Shift[]>([])
   const [loading, setLoading] = useState(false)
@@ -179,6 +180,16 @@ export default function AssignSubPanel({
   const isInitialMountRef = useRef(true)
   const appliedInitialRef = useRef(false)
   const shiftIdsKey = useMemo(() => shifts.map(shift => shift.id).join('|'), [shifts])
+
+  const clearShiftsSection = useCallback(() => {
+    setShifts([])
+    setSelectedShiftIds(new Set())
+    setConflictResolutions({})
+    setReplaceResolutions({})
+    setPartialSlotKeys(new Set())
+    setReplacePartialSlotKeys(new Set())
+    setPartialTimes({})
+  }, [])
 
   // Get display name helper
   const getDisplayName = useCallback(
@@ -257,23 +268,17 @@ export default function AssignSubPanel({
   }, [includeNonSubOverride, subId, subs])
 
   const fetchShifts = useCallback(async () => {
-    const tid = teacherId || initialTeacherIdProp
-    const start =
-      startDate ||
-      (initialStartDateProp ? toDateStringISO(initialStartDateProp) || initialStartDateProp : '')
-    const end =
-      endDate ||
-      (initialEndDateProp ? toDateStringISO(initialEndDateProp) || initialEndDateProp : '')
-    if (!tid || !start) return
+    if (!teacherId || !subId || !startDate) return
+    if (hasEverSetEndDate && !endDate) return
     setLoading(true)
     try {
-      const effectiveEndDate = end || start
+      const effectiveEndDate = endDate || startDate
       const response = await fetch('/api/assign-sub/shifts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          teacher_id: tid,
-          start_date: start,
+          teacher_id: teacherId,
+          start_date: startDate,
           end_date: effectiveEndDate,
         }),
       })
@@ -318,26 +323,26 @@ export default function AssignSubPanel({
     } catch (error) {
       console.error('Error fetching shifts:', error)
       toast.error('Failed to load shifts')
-      setShifts([])
+      clearShiftsSection()
     } finally {
       setLoading(false)
     }
-  }, [
-    teacherId,
-    startDate,
-    endDate,
-    initialTeacherIdProp,
-    initialStartDateProp,
-    initialEndDateProp,
-  ])
+  }, [teacherId, subId, startDate, endDate, hasEverSetEndDate, clearShiftsSection])
 
-  // Fetch shifts when teacher and dates are selected (use state or initial props so we fetch as soon as panel opens with initials)
+  // Track whether the user has explicitly set an end date at least once while panel is open.
   useEffect(() => {
-    const tid = teacherId || initialTeacherIdProp
-    const start =
-      startDate ||
-      (initialStartDateProp ? toDateStringISO(initialStartDateProp) || initialStartDateProp : '')
-    if (!tid || !start) {
+    if (endDate) {
+      setHasEverSetEndDate(true)
+    }
+  }, [endDate])
+
+  // Fetch shifts only when all required fields are selected. If any required field is cleared,
+  // clear the Shifts section immediately to avoid stale selections.
+  useEffect(() => {
+    const missingRequired = !teacherId || !subId || !startDate
+    const endDateWasClearedAfterBeingSet = hasEverSetEndDate && !endDate
+    if (missingRequired || endDateWasClearedAfterBeingSet) {
+      clearShiftsSection()
       isInitialMountRef.current = false
       return
     }
@@ -347,7 +352,16 @@ export default function AssignSubPanel({
     }
     isInitialMountRef.current = false
     fetchShifts()
-  }, [teacherId, startDate, endDate, fetchShifts, initialTeacherIdProp, initialStartDateProp])
+  }, [
+    teacherId,
+    subId,
+    startDate,
+    endDate,
+    hasEverSetEndDate,
+    fetchShifts,
+    clearShiftsSection,
+    initialTeacherIdProp,
+  ])
 
   // Fetch sub qualifications when sub is selected
   useEffect(() => {
@@ -1181,6 +1195,7 @@ export default function AssignSubPanel({
       setIncludeNonSubOverride(false)
       setStartDate('')
       setEndDate('')
+      setHasEverSetEndDate(false)
       setSelectedShiftIds(new Set())
       setShifts([])
       setTimeOffReason('Sick Day')
