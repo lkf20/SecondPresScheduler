@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
 
 type Theme = 'system' | 'accented'
+const DEFAULT_THEME: Theme = 'accented'
+const isTheme = (value: unknown): value is Theme => value === 'system' || value === 'accented'
 
 interface ThemeContextType {
   theme: Theme
@@ -12,6 +14,20 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
+export async function readThemeFromResponse(response: Response): Promise<Theme | null> {
+  const contentType = response.headers.get('content-type')?.toLowerCase() || ''
+  if (!contentType.includes('application/json')) return null
+
+  try {
+    const payload: unknown = await response.json()
+    if (!payload || typeof payload !== 'object') return null
+    const candidate = (payload as { theme?: unknown }).theme
+    return isTheme(candidate) ? candidate : null
+  } catch {
+    return null
+  }
+}
+
 export function ThemeProvider({
   children,
   initialTheme,
@@ -19,17 +35,20 @@ export function ThemeProvider({
   children: React.ReactNode
   initialTheme?: Theme
 }) {
-  const [theme, setThemeState] = useState<Theme>(initialTheme ?? 'accented') // Default to accented
+  const [theme, setThemeState] = useState<Theme>(initialTheme ?? DEFAULT_THEME)
   const [isLoading, setIsLoading] = useState(initialTheme ? false : true)
 
   // Fetch theme from server on mount
   useEffect(() => {
     async function fetchTheme() {
       try {
-        const response = await fetch('/api/user/theme')
+        const response = await fetch('/api/user/theme', {
+          cache: 'no-store',
+          credentials: 'same-origin',
+        })
         if (response.ok) {
-          const data = await response.json()
-          setThemeState(data.theme || 'accented') // Default to accented
+          const serverTheme = await readThemeFromResponse(response)
+          setThemeState(serverTheme ?? DEFAULT_THEME)
         }
       } catch (error) {
         console.error('Error fetching theme:', error)
