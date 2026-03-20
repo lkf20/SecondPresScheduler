@@ -14,6 +14,8 @@ interface ShiftDetail {
   date: string
   day_name: string
   time_slot_code: string
+  /** When set (e.g. multi-room floater), shown instead of formatShiftLabel(date, code) */
+  shift_label?: string | null
   status: 'uncovered' | 'partially_covered' | 'fully_covered'
   sub_name?: string | null
   /** Multiple sub names for partially covered shifts (each partial assignment) */
@@ -202,7 +204,8 @@ export default function CoverageSummary({
             {sortedShifts.map(shift => {
               const isClickable =
                 shift.status === 'fully_covered' || shift.status === 'partially_covered'
-              const baseLabel = formatShiftLabel(shift.date, shift.time_slot_code)
+              const baseLabel =
+                shift.shift_label?.trim() || formatShiftLabel(shift.date, shift.time_slot_code)
               const badgeStyles = getBadgeStyles(shift)
               const isFullyCovered = shift.status === 'fully_covered' && shift.sub_name
 

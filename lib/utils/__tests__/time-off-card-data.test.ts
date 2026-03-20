@@ -278,4 +278,19 @@ describe('transformTimeOffCardData', () => {
       expect(result.teacher_name).toBe('Jane D.')
     })
   })
+
+  describe('multi-room labels (getClassroomsForShift)', () => {
+    it('appends (N rooms: …) to shift detail label when multiple classrooms', () => {
+      const shifts = [makeShift('s1', '2026-02-10', 'slot-1')]
+      const result = transformTimeOffCardData(minimalRequest, shifts, noAssignments, noClassrooms, {
+        includeDetailedShifts: true,
+        getClassroomsForShift: () => [
+          { id: 'c1', name: 'Infant', color: null },
+          { id: 'c2', name: 'Toddler A', color: null },
+        ],
+      })
+      const detail = result.shift_details?.[0]
+      expect(detail?.label).toContain('(2 rooms: Infant, Toddler A)')
+    })
+  })
 })

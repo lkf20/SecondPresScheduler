@@ -2,7 +2,7 @@
 
 ## Overview
 
-The database schema has evolved from the initial 17 tables (migration 001) to the current set of tables below. All tables are in the `public` schema and are created or altered by migrations in `supabase/migrations/` (001 through current, including 118).
+The database schema has evolved from the initial 17 tables (migration 001) to the current set of tables below. All tables are in the `public` schema and are created or altered by migrations in `supabase/migrations/` (001 through current, including 121).
 
 ## Tables (current)
 
@@ -20,8 +20,8 @@ The database schema has evolved from the initial 17 tables (migration 001) to th
 
 ### People & Roles (5)
 
-7. **staff** - All staff members (first_name, last_name, display_name, email, phone, `is_sub`, etc.). Teacher role is indicated via **staff_role_type_assignments** to PERMANENT/FLEXIBLE; `is_teacher` is deprecated.
-8. **staff_role_types** - Role type definitions (e.g. PERMANENT, FLEXIBLE)
+7. **staff** - All staff members (first_name, last_name, display_name, email, phone, `is_sub`, etc.). Teacher role is indicated via **staff_role_type_assignments** to PERMANENT, FLEXIBLE, or ADMIN (office/admin); `is_teacher` is deprecated.
+8. **staff_role_types** - Role type definitions (e.g. PERMANENT, FLEXIBLE, ADMIN). **Per school:** each row has `school_id`; uniqueness is `(school_id, code)` (migration 066). Migration **120** seeds **ADMIN** (and relies on existing per-school rows for other codes). App/API code must filter by the current user’s school — RLS SELECT is `USING (true)` for authenticated users (migration 008), so the database does **not** hide other schools’ rows.
 9. **staff_role_type_assignments** - Staff ↔ staff_role_type (many-to-many)
 10. **qualification_definitions** - Qualification types (e.g. Infant qualified, CPR certified)
 11. **staff_qualifications** - Staff ↔ qualifications with level, expiration, verification
@@ -49,9 +49,9 @@ The database schema has evolved from the initial 17 tables (migration 001) to th
 ### Time Off & Coverage (4)
 
 21. **time_off_requests** - Teacher time off requests (reason, status, notes; link to **coverage_requests**)
-22. **time_off_shifts** - Individual shifts per time off request; trigger (migration 104) creates **coverage_request_shifts** on INSERT and raises if teacher has no scheduled classroom for that day/slot
+22. **time_off_shifts** - Individual shifts per time off request; trigger creates **coverage_request_shifts** on INSERT (one per distinct classroom when the teacher is scheduled in multiple rooms for that day/slot; see migration 121) and raises if the teacher has no scheduled classroom for that day/slot
 23. **coverage_requests** - Coverage abstraction (time_off, manual_coverage, emergency) with counters
-24. **coverage_request_shifts** - Individual shifts needing coverage (date, slot, classroom_id, class_group_id)
+24. **coverage_request_shifts** - Individual shifts needing coverage (date, slot, classroom_id, class_group_id, optional **time_off_shift_id** → `time_off_shifts` for the originating absence shift)
 
 ### Substitute Contact & Assignment (4)
 
@@ -77,9 +77,9 @@ The database schema has evolved from the initial 17 tables (migration 001) to th
 - **Foreign Key Constraints** - Ensures referential integrity
 - **Unique Constraints** - Prevents duplicate data where appropriate
 - **Automatic Timestamps** - `created_at` and `updated_at` managed automatically where applicable
-- **Triggers** - Auto-update `updated_at` on row updates; `auto_create_coverage_request_shift_from_time_off_shift` (migration 104) creates a `coverage_request_shift` on INSERT into `time_off_shifts` and **raises** if the teacher has no scheduled classroom for that day/slot (no "Unknown" fallback). The "Unknown (needs review)" classroom placeholder was removed in migration 105. `update_coverage_request_covered_shifts` (rewritten in migration 117) maintains `covered_shifts` and `status` on `coverage_requests` in a status-transition-aware and count-aware way (increments on first active assignment per shift; decrements when last active assignment is removed).
+- **Triggers** - Auto-update `updated_at` on row updates; `auto_create_coverage_request_shift_from_time_off_shift` creates `coverage_request_shift` row(s) on INSERT into `time_off_shifts` (per classroom for multi-room floaters; migration 121) and **raises** if the teacher has no scheduled classroom for that day/slot (no "Unknown" fallback). The "Unknown (needs review)" classroom placeholder was removed in migration 105. `update_coverage_request_covered_shifts` (rewritten in migration 117) maintains `covered_shifts` and `status` on `coverage_requests` in a status-transition-aware and count-aware way (increments on first active assignment per shift; decrements when last active assignment is removed).
 - **Indexes** - Performance indexes on frequently queried columns
-- **Row Level Security** - RLS policies for data access control (school-scoped where applicable)
+- **Row Level Security** - RLS policies for data access control (school-scoped where applicable). **Exception:** `staff_role_types` SELECT allows all authenticated users to read all rows; queries must include `school_id` when loading types for the UI (see `getStaffRoleTypes` in `lib/api/staff-role-types.ts`).
 
 ## Tables that reference classrooms (classroom_id)
 
@@ -96,7 +96,7 @@ When writing queries that find or count rows by classroom (e.g. for cleanup or r
 
 ## Relationships
 
-- Staff have roles (e.g. PERMANENT, FLEXIBLE) via **staff_role_type_assignments**; `is_teacher` is deprecated. Subs are indicated via the `is_sub` flag.
+- Staff have roles (e.g. PERMANENT, FLEXIBLE, ADMIN) via **staff_role_type_assignments**; at most one of those three per staff (trigger). `is_teacher` is deprecated. Subs are indicated via the `is_sub` flag.
 - Temporary Coverage is handled via **staffing_events** and **staffing_event_shifts**, which link staff to specific classrooms and time slots without requiring a time-off request. Day-only reassignment uses `event_category = 'reassignment'` and `staffing_event_shifts.source_classroom_id` to move baseline staff for specific slots without mutating baseline schedules.
 - Class-to-classroom mapping is expressed by **classroom_allowed_classes** (which class groups are allowed in which classrooms). Required/preferred staff come from **class_groups** (ratios) and **schedule_cells** / **schedule_cell_class_groups** (enrollment and overrides).
 - Sub assignments track both full and partial shifts.

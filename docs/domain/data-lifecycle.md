@@ -22,15 +22,16 @@ write paths.
 ### coverage_request_shifts
 
 - **Owner / Source of Truth:** Derived from coverage_requests (and time_off_shifts when request_type = time_off).
-- **Allowed writers:** `lib/api/time-off.ts`, sub-finder routes.
+- **Allowed writers:** `lib/api/time-off.ts`, sub-finder routes, DB trigger on `time_off_shifts`.
 - **Lifecycle:** `active -> cancelled` (see status transitions below).
+- **Multi-room:** One `time_off_shift` can correspond to **multiple** active `coverage_request_shifts` (same date/slot, different `classroom_id`) when the absent teacher is a floater across rooms. Rows may set `time_off_shift_id` to the originating `time_off_shifts.id`.
 - **Derived vs stored:**
-  - **Stored:** `coverage_request_id`, `school_id`, `status`, `date`, `time_slot_id`, `classroom_id`
+  - **Stored:** `coverage_request_id`, `school_id`, `status`, `date`, `time_slot_id`, `classroom_id`, optional `time_off_shift_id`
   - **Derived:** coverage status / UI labels
 
 ### GET coverage-request by absence_id (sub-finder)
 
-- **Behavior:** When a time off request has no linked coverage request yet, GET `/api/sub-finder/coverage-request/[absence_id]` creates the coverage request and then creates `coverage_request_shifts` from the time off shifts. Classroom is resolved from `teacher_schedules` (same school) only; there is **no** "Unknown (needs review)" or other fallback.
+- **Behavior:** When a time off request has no linked coverage request yet, GET `/api/sub-finder/coverage-request/[absence_id]` creates the coverage request and then creates **one `coverage_request_shift` per classroom** for each time off shift, using `teacher_schedules` (same school) only; there is **no** "Unknown (needs review)" or other fallback. Inserts set `time_off_shift_id` to the source `time_off_shifts` row.
 - **Omitted shifts:** For each (day_of_week_id, time_slot_id), if the teacher has no `teacher_schedules` row in that school with a non-null `classroom_id`, that shift is **omitted** (no row is inserted into `coverage_request_shifts`). The response includes `omitted_shift_count` and `omitted_shifts: Array<{ date, day_of_week_id, time_slot_id }>` so the client can show that some shifts could not be added (e.g. "Add teacher to baseline schedule for those slots").
 - **Rationale:** Aligns with the time-off classroom requirement; avoids creating coverage shifts with "Unknown (needs review)" classroom.
 

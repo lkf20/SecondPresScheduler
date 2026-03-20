@@ -164,6 +164,7 @@ export async function GET(
           start_time: string | null
           end_time: string | null
           school_id: string
+          time_off_shift_id: string
         }> = []
         const omittedForRequest: Array<{
           date: string
@@ -188,6 +189,7 @@ export async function GET(
                 start_time: shift.start_time || null,
                 end_time: shift.end_time || null,
                 school_id: requestSchoolId,
+                time_off_shift_id: shift.id as string,
               })
             }
           } else {

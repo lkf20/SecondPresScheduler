@@ -246,7 +246,21 @@ export async function POST(request: NextRequest) {
         coverage_request_shift_id = fromAssignment
       } else if (shift.time_off_request_id) {
         const map = shiftMapByRequest.get(shift.time_off_request_id)
-        coverage_request_shift_id = (map?.get(keyFull) ?? map?.get(keySimple) ?? null) || null
+        const fromFull = map?.get(keyFull)
+        const fromSimple = map?.get(keySimple)
+        if (!fromFull && fromSimple && keyFull !== keySimple) {
+          console.warn(
+            '[assign-sub/shifts] Used keySimple fallback for coverage_request_shift lookup',
+            {
+              teacher_id,
+              date: dateStr,
+              keyFull,
+              keySimple,
+              time_off_request_id: shift.time_off_request_id,
+            }
+          )
+        }
+        coverage_request_shift_id = (fromFull ?? fromSimple ?? null) || null
       }
       const slotClassKey = `${dateStr}|${shift.time_slot_id}|${shift.classroom_id ?? ''}`
       const assignmentList =

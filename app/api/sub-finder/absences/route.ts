@@ -380,6 +380,16 @@ export async function GET(request: NextRequest) {
               }
               return null
             },
+            getClassroomsForShift: (teacherId, dayOfWeekId, timeSlotId) => {
+              const scheduleKey = `${teacherId}|${dayOfWeekId}|${timeSlotId}`
+              const scheduleEntry = scheduleLookup.get(scheduleKey)
+              if (!scheduleEntry?.classrooms?.size) return []
+              return Array.from(scheduleEntry.classrooms.values()).map(classroom => ({
+                id: classroom.id || classroom.name,
+                name: classroom.name,
+                color: classroom.color,
+              }))
+            },
             getClassNameForShift: (teacherId, dayOfWeekId, timeSlotId) => {
               const scheduleKey = `${teacherId}|${dayOfWeekId}|${timeSlotId}`
               const scheduleEntry = scheduleLookup.get(scheduleKey)
@@ -446,6 +456,8 @@ export async function GET(request: NextRequest) {
           date: detail.date || '',
           day_name: detail.day_name || '',
           time_slot_code: detail.time_slot_code || '',
+          /** Full line label including multi-room suffix, e.g. "Mon AM (2 rooms: A, B) • Jan 2" */
+          shift_label: typeof detail.label === 'string' ? detail.label : undefined,
           class_name: detail.class_name || null,
           classroom_name: detail.classroom_name || null,
           classroom_color: detail.classroom_color || null,

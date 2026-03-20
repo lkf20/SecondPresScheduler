@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,6 +8,7 @@ import { X } from 'lucide-react'
 import { Database } from '@/types/database'
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
+import { useSchoolTeachersQuery } from '@/lib/hooks/use-school-teachers-query'
 
 type Staff = Database['public']['Tables']['staff']['Row']
 
@@ -30,21 +31,13 @@ export default function TeacherSelector({
   selectedTeachers,
   onTeachersChange,
 }: TeacherSelectorProps) {
-  const [teachers, setTeachers] = useState<Staff[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     new Set(selectedTeachers.map(t => t.teacher_id || t.id))
   )
   const { format: displayNameFormat } = useDisplayNameFormat()
-
-  useEffect(() => {
-    fetch('/api/teachers')
-      .then(r => r.json())
-      .then(data => {
-        setTeachers((data as Staff[]).filter(t => t.active))
-      })
-      .catch(console.error)
-  }, [])
+  const { data: teachersRaw = [] } = useSchoolTeachersQuery()
+  const teachers = useMemo(() => (teachersRaw as Staff[]).filter(t => t.active), [teachersRaw])
 
   const filteredTeachers = teachers.filter(teacher => {
     const name = getStaffDisplayName(

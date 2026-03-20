@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,6 +15,7 @@ import { X, CheckCircle2, AlertTriangle, XCircle, ChevronDown, Search } from 'lu
 import { Database } from '@/types/database'
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
+import { useSchoolTeachersQuery } from '@/lib/hooks/use-school-teachers-query'
 
 type Staff = Database['public']['Tables']['staff']['Row']
 
@@ -52,7 +53,6 @@ export default function TeacherMultiSelect({
   disabled = false,
   roleFilter,
 }: TeacherMultiSelectProps) {
-  const [teachers, setTeachers] = useState<StaffWithRole[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [isOpen, setIsOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
@@ -61,16 +61,12 @@ export default function TeacherMultiSelect({
   const dropdownRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const { format: displayNameFormat } = useDisplayNameFormat()
-
-  useEffect(() => {
-    fetch('/api/teachers')
-      .then(r => r.json())
-      .then(data => {
-        // Filter is handled by the API which returns staff with PERMANENT or FLEXIBLE roles
-        setTeachers(Array.isArray(data) ? (data as StaffWithRole[]).filter(t => t.active) : [])
-      })
-      .catch(console.error)
-  }, [])
+  const { data: teachersRaw = [] } = useSchoolTeachersQuery()
+  const teachers = useMemo(
+    () =>
+      Array.isArray(teachersRaw) ? (teachersRaw as StaffWithRole[]).filter(t => t.active) : [],
+    [teachersRaw]
+  )
 
   // Sync selectedIds with prop changes
   useEffect(() => {

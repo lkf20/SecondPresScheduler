@@ -94,6 +94,13 @@ export const coverageColorValues = {
  * RGB color values for contact status (ContactSubPanel, ShiftStatusCard counts, etc.).
  * Use these for pending = sky blue, contacted = slate, declined = rose so the app is consistent.
  */
+/** Staff list / legends: Admin role (office staff), distinct from Permanent/Flex blues */
+export const adminRoleColorValues = {
+  bg: 'rgb(245, 243, 255)', // violet-50
+  border: 'rgb(167, 139, 250)', // violet-400
+  text: 'rgb(109, 40, 217)', // violet-700
+} as const
+
 export const contactStatusColorValues = {
   contacted: {
     circleBg: 'rgb(241, 245, 249)', // slate-100

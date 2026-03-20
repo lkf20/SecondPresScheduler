@@ -27,6 +27,15 @@
 
 When `is_floater = true`, a sub can have multiple active `sub_assignments` for the same `(date, time_slot_id)` but different classrooms. Each counts 0.5 toward coverage. This is the only allowed "double booking" for a sub in the same timeslot.
 
+### Rule 4: Multi-room absence (same slot, two coverage_request_shifts)
+
+When a floater teacher’s absence creates **two** `coverage_request_shift` rows for the same `(date, time_slot_id)` (one per classroom), the Assign Sub panel shows **Coverage for this slot** with:
+
+- **Assign to both rooms (floater)** — both shift ids are included in `selected_shift_ids` (and in conflict/replace resolution as applicable).
+- **Assign to [room] only** — only that shift’s `coverage_request_shift_id` is selected.
+
+**During `conflict_sub` or `conflict_teaching`**, the same room scope applies before choosing Floater / Move / Reassign: the director can assign **one absence room only** plus the conflict resolution. Only selected rows are sent to `POST /api/sub-finder/assign-shifts`. **Reassign** remains available for `conflict_teaching` on multi-room absences (per-room scope is respected in the payload).
+
 ---
 
 ## Conflict Types and Resolution Flows

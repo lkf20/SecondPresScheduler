@@ -1043,6 +1043,229 @@ describe('AssignSubPanel', () => {
     })
   })
 
+  it('multi-room floater: explains partial shift is unavailable under floater option; partial appears under one-room radio', async () => {
+    const user = userEvent.setup()
+    const defaultFetch = global.fetch as jest.Mock
+    global.fetch = jest.fn((url: string | URL | globalThis.Request, options?: RequestInit) => {
+      const urlStr = url.toString()
+      if (urlStr.includes('/api/assign-sub/shifts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              shifts: [
+                {
+                  id: 'shift-infant',
+                  date: '2026-03-10',
+                  day_of_week_id: 'dow-2',
+                  time_slot_id: 'slot-1',
+                  time_slot_code: 'AM',
+                  classroom_id: 'class-infant',
+                  has_time_off: true,
+                  time_off_request_id: 'tor-mr-partial',
+                },
+                {
+                  id: 'shift-toddler',
+                  date: '2026-03-10',
+                  day_of_week_id: 'dow-2',
+                  time_slot_id: 'slot-1',
+                  time_slot_code: 'AM',
+                  classroom_id: 'class-toddler',
+                  has_time_off: true,
+                  time_off_request_id: 'tor-mr-partial',
+                },
+              ],
+            }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/classrooms/class-infant')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ name: 'Infant Room' }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/classrooms/class-toddler')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ name: 'Toddler A Room' }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/check-conflicts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([{ shift_key: '2026-03-10|slot-1', status: 'available' }]),
+        }) as Promise<Response>
+      }
+      return defaultFetch(url, options)
+    }) as jest.Mock
+
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    await fillForm(user)
+
+    const rowCheckbox = await screen.findByRole('checkbox', {
+      name: /Tue Mar 10 • AM • Infant Room, Toddler A Room/i,
+    })
+    await user.click(rowCheckbox)
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          /Partial shift \(time range\) isn'?t available when covering both rooms as a floater/i
+        )
+      ).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('radio', { name: /Assign to Infant Room only/i }))
+    const partialCheckbox = screen.getByRole('checkbox', {
+      name: /Partial shift \(sub covers part of this shift\)/i,
+    })
+    expect(partialCheckbox).toBeInTheDocument()
+    await user.click(partialCheckbox)
+    expect(partialCheckbox).toBeChecked()
+    expect(
+      screen.queryByText(
+        /Partial shift \(time range\) isn'?t available when covering both rooms as a floater/i
+      )
+    ).not.toBeInTheDocument()
+  })
+
+  it('multi-room absence with conflict_teaching: shows per-room coverage, reassign option, and assigns one crs when one room + floater', async () => {
+    const user = userEvent.setup()
+    const defaultFetch = global.fetch as jest.Mock
+    global.fetch = jest.fn((url: string | URL | globalThis.Request, options?: RequestInit) => {
+      const urlStr = url.toString()
+      if (urlStr.includes('/api/assign-sub/shifts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              shifts: [
+                {
+                  id: 'shift-infant',
+                  date: '2026-03-10',
+                  day_of_week_id: 'dow-2',
+                  time_slot_id: 'slot-1',
+                  time_slot_code: 'AM',
+                  classroom_id: 'class-infant',
+                  has_time_off: true,
+                  time_off_request_id: 'tor-multi',
+                },
+                {
+                  id: 'shift-toddler',
+                  date: '2026-03-10',
+                  day_of_week_id: 'dow-2',
+                  time_slot_id: 'slot-1',
+                  time_slot_code: 'AM',
+                  classroom_id: 'class-toddler',
+                  has_time_off: true,
+                  time_off_request_id: 'tor-multi',
+                },
+              ],
+            }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/classrooms/class-infant')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ name: 'Infant Room' }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/classrooms/class-toddler')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ name: 'Toddler A Room' }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/check-conflicts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve([
+              {
+                shift_key: '2026-03-10|slot-1',
+                status: 'conflict_teaching',
+                message: 'Conflict: teaching elsewhere',
+                conflict_classroom_name: 'Green Room',
+                conflict_classroom_id: 'class-green',
+              },
+            ]),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/coverage-request/tor-multi')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              coverage_request_id: 'cr-multi',
+              shift_map: {
+                '2026-03-10|AM|class-infant': 'crs-infant',
+                '2026-03-10|AM|class-toddler': 'crs-toddler',
+              },
+            }),
+        }) as Promise<Response>
+      }
+      if (
+        urlStr.includes(
+          '/api/sub-finder/substitute-contacts?coverage_request_id=cr-multi&sub_id=sub-1'
+        )
+      ) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ id: 'contact-multi' }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/substitute-contacts') && options?.method === 'PUT') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true }),
+        }) as Promise<Response>
+      }
+      if (urlStr.includes('/api/sub-finder/assign-shifts')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ assignments_created: 1, assigned_shifts: [{}] }),
+        }) as Promise<Response>
+      }
+      return defaultFetch(url, options)
+    }) as jest.Mock
+
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    await fillForm(user)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Coverage for this slot/i)).toBeInTheDocument()
+    })
+    expect(screen.getByRole('radio', { name: /Assign to Infant Room only/i })).toBeInTheDocument()
+    expect(
+      screen.getByRole('radio', { name: /Assign to Toddler A Room only/i })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('radio', {
+        name: /Reassign staff here \(staff will be removed from baseline assignment for this shift only\)/i,
+      })
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('radio', { name: /Assign to Infant Room only/i }))
+    await user.click(
+      screen.getByRole('radio', {
+        name: /Assign as Floater \(0\.5 in selected room \+ 0\.5 existing teaching assignment\)/i,
+      })
+    )
+
+    await user.click(screen.getByRole('button', { name: /Assign 1 shift/i }))
+
+    await waitFor(() => {
+      const assignCall = (global.fetch as jest.Mock).mock.calls.find((call: any[]) =>
+        String(call[0]).includes('/api/sub-finder/assign-shifts')
+      )
+      expect(assignCall).toBeTruthy()
+      const payload = JSON.parse(assignCall[1].body)
+      expect(payload.selected_shift_ids).toEqual(['crs-infant'])
+      expect(payload.is_floater_shift_ids).toEqual(['crs-infant'])
+      expect(payload.resolutions).toEqual({ 'crs-infant': 'floater' })
+    })
+  })
+
   it('uses reassignment flow for conflict_teaching when user selects reassign', async () => {
     const user = userEvent.setup()
     const defaultFetch = global.fetch as jest.Mock

@@ -265,6 +265,139 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
     expect(json.omitted_shifts).toEqual([])
   })
 
+  it('creates one coverage_request_shift per classroom with time_off_shift_id for multi-room teacher', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
+      id: 'absence-1',
+      teacher_id: 'teacher-1',
+      start_date: '2099-02-10',
+      end_date: '2099-02-10',
+      coverage_request_id: null,
+    })
+    ;(getTimeOffShifts as jest.Mock).mockResolvedValue([
+      {
+        id: 'tos-1',
+        date: '2099-02-10',
+        day_of_week_id: 'day-1',
+        time_slot_id: 'slot-1',
+      },
+    ])
+
+    const subAssignmentsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({ data: [], error: null }),
+    }
+
+    const profilesQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({ data: { school_id: 'school-1' }, error: null }),
+    }
+
+    const coverageRequestsInsertQuery = {
+      insert: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      single: jest
+        .fn()
+        .mockResolvedValueOnce({ data: { id: 'coverage-new' }, error: null })
+        .mockResolvedValueOnce({ data: { school_id: 'school-1' }, error: null }),
+      eq: jest.fn().mockReturnThis(),
+    }
+
+    const timeOffRequestsQuery = {
+      update: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({ error: null }),
+    }
+
+    const teacherSchedulesMultiQuery: {
+      select: ReturnType<typeof jest.fn>
+      eq: ReturnType<typeof jest.fn>
+    } = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn(),
+    }
+    teacherSchedulesMultiQuery.eq.mockImplementation((key: string) =>
+      key === 'school_id'
+        ? Promise.resolve({
+            data: [
+              {
+                day_of_week_id: 'day-1',
+                time_slot_id: 'slot-1',
+                classroom_id: 'classroom-a',
+                class_group_id: null,
+              },
+              {
+                day_of_week_id: 'day-1',
+                time_slot_id: 'slot-1',
+                classroom_id: 'classroom-b',
+                class_group_id: null,
+              },
+            ],
+            error: null,
+          })
+        : teacherSchedulesMultiQuery
+    )
+
+    const coverageShiftsInsertMock = jest.fn().mockResolvedValue({ error: null })
+    const coverageRequestShiftsInsertQuery = {
+      insert: coverageShiftsInsertMock,
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'crs-a',
+            date: '2099-02-10',
+            classroom_id: 'classroom-a',
+            time_slot: { code: 'EM' },
+          },
+          {
+            id: 'crs-b',
+            date: '2099-02-10',
+            classroom_id: 'classroom-b',
+            time_slot: { code: 'EM' },
+          },
+        ],
+        error: null,
+      }),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'sub_assignments') return subAssignmentsQuery
+        if (table === 'profiles') return profilesQuery
+        if (table === 'coverage_requests') return coverageRequestsInsertQuery
+        if (table === 'time_off_requests') return timeOffRequestsQuery
+        if (table === 'teacher_schedules') return teacherSchedulesMultiQuery
+        if (table === 'coverage_request_shifts') return coverageRequestShiftsInsertQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = {
+      nextUrl: new URL('http://localhost:3000/api/sub-finder/coverage-request/absence-1'),
+    }
+    const response = await GET(request as any, {
+      params: Promise.resolve({ absence_id: 'absence-1' }),
+    })
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(coverageShiftsInsertMock).toHaveBeenCalledTimes(1)
+    const inserted = coverageShiftsInsertMock.mock.calls[0][0] as Array<{
+      classroom_id: string
+      time_off_shift_id: string
+    }>
+    expect(inserted).toHaveLength(2)
+    expect(new Set(inserted.map(r => r.classroom_id))).toEqual(
+      new Set(['classroom-a', 'classroom-b'])
+    )
+    expect(inserted.every(r => r.time_off_shift_id === 'tos-1')).toBe(true)
+    expect(json.shift_map['2099-02-10|EM|classroom-a']).toBeDefined()
+    expect(json.shift_map['2099-02-10|EM|classroom-b']).toBeDefined()
+  })
+
   it('returns 500 when creating a new coverage request fails', async () => {
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({

@@ -117,6 +117,15 @@ export interface TransformOptions {
     timeSlotId: string
   ) => ClassroomInput | null
   /**
+   * All classrooms when the teacher is scheduled in multiple rooms for the same slot (floater).
+   * When provided, shift labels include a "(N rooms: …)" suffix for multi-room slots.
+   */
+  getClassroomsForShift?: (
+    teacherId: string,
+    dayOfWeekId: string | null,
+    timeSlotId: string
+  ) => ClassroomInput[]
+  /**
    * Get class name for a shift (for detailed shifts)
    */
   getClassNameForShift?: (
@@ -148,6 +157,7 @@ export function transformTimeOffCardData(
       return name.slice(0, 3)
     },
     getClassroomForShift,
+    getClassroomsForShift,
     getClassNameForShift,
     displayNameFormat,
   } = options
@@ -249,16 +259,27 @@ export function transformTimeOffCardData(
 
     if (includeDetailedShifts) {
       // Include detailed information
-      const classroom = getClassroomForShift
-        ? getClassroomForShift(request.teacher_id, shift.day_of_week_id, shift.time_slot_id)
-        : null
+      const classroomsList =
+        getClassroomsForShift?.(request.teacher_id, shift.day_of_week_id, shift.time_slot_id) ??
+        (() => {
+          const one = getClassroomForShift
+            ? getClassroomForShift(request.teacher_id, shift.day_of_week_id, shift.time_slot_id)
+            : null
+          return one ? [one] : []
+        })()
+      const classroom = classroomsList[0] ?? null
+      const multiRoomSuffix =
+        classroomsList.length > 1
+          ? ` (${classroomsList.length} rooms: ${classroomsList.map(c => c.name).join(', ')})`
+          : ''
+      const labelWithRooms = `${dayName} ${timeCode}${multiRoomSuffix} • ${month} ${day}`
       const className = getClassNameForShift
         ? getClassNameForShift(request.teacher_id, shift.day_of_week_id, shift.time_slot_id)
         : null
 
       shiftDetails.push({
         id: shift.id,
-        label,
+        label: labelWithRooms,
         status,
         date: shift.date,
         day_name: shift.day_of_week?.name || undefined,

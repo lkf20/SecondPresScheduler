@@ -2,6 +2,9 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { useSchool } from '@/lib/contexts/SchoolContext'
+import { invalidateStaffAssignmentPicklists } from '@/lib/utils/invalidation'
 import StaffForm, { type StaffFormData } from '@/components/staff/StaffForm'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import StaffEditorTabs from '@/components/staff/StaffEditorTabs'
@@ -13,6 +16,8 @@ import { toast } from 'sonner'
 
 export default function NewStaffPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const schoolId = useSchool()
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [roleTypes, setRoleTypes] = useState<
@@ -130,6 +135,7 @@ export default function NewStaffPage() {
       }
 
       const createdStaff = await response.json()
+      await invalidateStaffAssignmentPicklists(queryClient, schoolId)
       setIsOverviewDirty(false)
       const staffNameForToast =
         data.display_name?.trim() ||

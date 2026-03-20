@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -17,6 +17,7 @@ import { Database } from '@/types/database'
 import type { Classroom, TimeSlot } from '@/types/api'
 import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
+import { useSchoolTeachersQuery } from '@/lib/hooks/use-school-teachers-query'
 
 type TeacherSchedule = Database['public']['Tables']['teacher_schedules']['Row']
 
@@ -58,17 +59,17 @@ export default function TeacherScheduleForm({
   onSubmit,
   onCancel,
 }: TeacherScheduleFormProps) {
-  const [teachers, setTeachers] = useState<StaffOption[]>([])
   const [daysOfWeek, setDaysOfWeek] = useState<DayOfWeek[]>([])
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const [classrooms, setClassrooms] = useState<Classroom[]>([])
   const { format: displayNameFormat } = useDisplayNameFormat()
+  const { data: teachersRaw = [] } = useSchoolTeachersQuery()
+  const teachers = useMemo(
+    () => (Array.isArray(teachersRaw) ? (teachersRaw as StaffOption[]) : []),
+    [teachersRaw]
+  )
 
   useEffect(() => {
-    fetch('/api/teachers')
-      .then(r => r.json())
-      .then(data => setTeachers(Array.isArray(data) ? data : []))
-      .catch(console.error)
     fetch('/api/timeslots')
       .then(r => r.json())
       .then(data => setTimeSlots(Array.isArray(data) ? data : []))

@@ -339,6 +339,7 @@ describe('WeeklyScheduleGridNew interactions', () => {
 
     expect(screen.getByText('Key:')).toBeInTheDocument()
     expect(screen.getByText('Flex Teacher')).toBeInTheDocument()
+    expect(screen.getByText('Admin')).toBeInTheDocument()
     expect(screen.getByText('Floater')).toBeInTheDocument()
     expect(screen.queryByText('Temporary Coverage')).not.toBeInTheDocument()
     expect(screen.queryByText('Substitute')).not.toBeInTheDocument()

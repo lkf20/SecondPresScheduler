@@ -696,9 +696,14 @@ export default function RecommendedSubsList({
     { key: 'unavailable', label: 'Unavailable' },
     { key: 'declined', label: 'Declined' },
   ] as const
-  const primaryFilters = sectionFilters.filter(
-    filter => filter.key === 'available' || filter.key === 'contacted' || filter.key === 'assigned'
-  )
+  const primaryFilterOrder: Array<(typeof sectionFilters)[number]['key']> = [
+    'assigned',
+    'contacted',
+    'available',
+  ]
+  const primaryFilters = primaryFilterOrder
+    .map(key => sectionFilters.find(filter => filter.key === key))
+    .filter((filter): filter is (typeof sectionFilters)[number] => Boolean(filter))
   const moreFilters = sectionFilters.filter(
     filter =>
       filter.key === 'availableLimited' || filter.key === 'unavailable' || filter.key === 'declined'
@@ -721,9 +726,7 @@ export default function RecommendedSubsList({
   const activeMoreFilter = moreFilters.find(filter => filter.key === activeFilter) ?? null
   const moreFilterLabel = activeMoreFilter
     ? `${activeMoreFilter.label} (${sectionCounts[activeMoreFilter.key]})`
-    : activeFilter === null
-      ? `All (${allCount})`
-      : 'More filters'
+    : 'More filters'
 
   const toggleFilter = (key: string) => {
     setExpandedSections(prev => ({
@@ -736,7 +739,18 @@ export default function RecommendedSubsList({
   const showSection = (key: string) => (activeFilter ? activeFilter === key : true)
 
   useEffect(() => {
-    if (!activeFilter) return
+    if (activeFilter === null) {
+      setExpandedSections({
+        assigned: true,
+        contacted: true,
+        available: true,
+        availableLimited: true,
+        unavailable: true,
+        declined: true,
+      })
+      return
+    }
+
     setExpandedSections(prev => ({
       ...prev,
       [activeFilter]: true,
@@ -810,6 +824,19 @@ export default function RecommendedSubsList({
                   stickyControls ? 'sticky top-0 z-40 bg-white px-0 pt-10 pb-3' : 'mt-2 pb-3'
                 )}
               >
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setActiveFilter(null)}
+                  className={cn(
+                    'h-auto rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                    activeFilter === null
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-400 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                  )}
+                >
+                  All ({allCount})
+                </Button>
                 {primaryFilters.map(filter => (
                   <Button
                     key={filter.key}
@@ -833,7 +860,7 @@ export default function RecommendedSubsList({
                       variant="ghost"
                       className={cn(
                         'h-auto rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                        activeMoreFilter || activeFilter === null
+                        activeMoreFilter
                           ? 'border-slate-900 bg-slate-900 text-white'
                           : 'border-slate-400 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                       )}
@@ -844,29 +871,6 @@ export default function RecommendedSubsList({
                   </PopoverTrigger>
                   <PopoverContent className="w-56 p-2" align="start">
                     <div className="space-y-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveFilter(null)
-                          setIsMoreFiltersOpen(false)
-                        }}
-                        className={cn(
-                          'flex w-full items-center justify-between rounded px-2 py-1.5 text-sm',
-                          activeFilter === null
-                            ? 'bg-slate-900 text-white'
-                            : 'text-slate-700 hover:bg-slate-100'
-                        )}
-                      >
-                        <span>All</span>
-                        <span
-                          className={cn(
-                            'text-xs',
-                            activeFilter === null ? 'text-white/90' : 'text-slate-500'
-                          )}
-                        >
-                          {allCount}
-                        </span>
-                      </button>
                       {moreFilters.map(filter => {
                         const isActive = activeFilter === filter.key
                         return (

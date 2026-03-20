@@ -10,7 +10,7 @@ import {
   CornerDownRight,
   Pencil,
   Plus,
-  UserSearch,
+  UserPlus,
   XCircle,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -82,6 +82,7 @@ import { BREAK_COVERAGE_ENABLED } from '@/lib/feature-flags'
 import { clearDataHealthCache } from '@/lib/dashboard/data-health-cache'
 import { toast } from 'sonner'
 import { useSchool } from '@/lib/contexts/SchoolContext'
+import { useAssignSubPanel } from '@/lib/contexts/AssignSubPanelContext'
 import { useUnassignSub } from '@/lib/hooks/use-unassign-sub'
 import { RemoveSubDialog } from '@/components/remove-sub/RemoveSubDialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -668,6 +669,7 @@ export default function ScheduleSidePanel({
     time_off_request_id?: string | null
   } | null>(null)
   const schoolId = useSchool()
+  const { requestOpenAssignSub } = useAssignSubPanel()
   const { unassign, isPending: isUnassignPending } = useUnassignSub({
     schoolId,
     onSuccess: async () => {
@@ -791,6 +793,13 @@ export default function ScheduleSidePanel({
   const lastInitializedCellRef = useRef<string | null>(null)
   /** Last enrollment value set by user (input onChange). Used at save so we persist user's edit even if an effect overwrote state. */
   const enrollmentEditedRef = useRef<number | null | undefined>(undefined)
+  /** Prevent inactive cells from auto-activating during async hydration; only auto-activate after explicit user edits. */
+  const hasUserEditedCellDataRef = useRef(false)
+  /**
+   * ClassSelector can auto-select one allowed class group on mount.
+   * Treat class-group changes as user edits only after explicit interaction.
+   */
+  const hasInteractedWithClassSelectorRef = useRef(false)
   /** When cell data effect preserves after conflict, tell teacher fetch effect to skip overwriting this cycle */
   const skipNextTeacherFetchAfterPreserveRef = useRef(false)
   /** After confirming deactivate, save and close the panel (effect runs once state has updated) */
@@ -821,6 +830,7 @@ export default function ScheduleSidePanel({
   }, [allAssignedTeachers])
 
   const handleAssignedTeachersChange = useCallback((teachers: Teacher[]) => {
+    hasUserEditedCellDataRef.current = true
     setSelectedTeachers(teachers.filter(t => !t.is_flexible))
     setSelectedFlexTeachers(teachers.filter(t => t.is_flexible))
   }, [])
@@ -845,23 +855,10 @@ export default function ScheduleSidePanel({
     setPanelMode('timeOff')
   }
 
-  /** Navigate to Sub Finder with this teacher and cell date range pre-selected (single day). */
-  const openFindSub = useCallback(
-    (teacherId: string) => {
-      const dateISO = cellDateISO ?? flexStartDate
-      if (!dateISO) return
-      const params = new URLSearchParams()
-      params.set('mode', 'manual')
-      params.set('teacher_id', teacherId)
-      params.set('start_date', dateISO)
-      params.set('end_date', dateISO)
-      router.push(`/sub-finder?${params.toString()}`)
-    },
-    [cellDateISO, flexStartDate, router]
-  )
-
   useEffect(() => {
     if (!isOpen) return
+    hasUserEditedCellDataRef.current = false
+    hasInteractedWithClassSelectorRef.current = false
     setPanelMode('cell')
     setTimeOffTeacherId(null)
     setTimeOffTeacherName(null)
@@ -889,6 +886,21 @@ export default function ScheduleSidePanel({
   const dayNameDate = useMemo(
     () => calculateDayNameDate(weekStartISO, selectedCellData?.day_number),
     [weekStartISO, selectedCellData?.day_number]
+  )
+
+  /** Open Assign Sub panel with this teacher and selected cell date prefilled. */
+  const openAssignSub = useCallback(
+    (teacherId: string) => {
+      const dateISO = cellDateISO ?? dayNameDate ?? flexStartDate
+      if (!dateISO || !teacherId) return
+      requestOpenAssignSub({
+        teacherId,
+        startDate: dateISO,
+        endDate: dateISO,
+      })
+      onClose()
+    },
+    [cellDateISO, dayNameDate, flexStartDate, onClose, requestOpenAssignSub]
   )
 
   const dayNameDateLabel = useMemo(() => formatDayNameDateLabel(dayNameDate), [dayNameDate])
@@ -1326,6 +1338,8 @@ export default function ScheduleSidePanel({
       initialClassGroupIdsRef.current = mappedClassGroupIds
       previousClassGroupIdsRef.current = mappedClassGroupIds
       preserveTeachersRef.current = false
+      hasUserEditedCellDataRef.current = false
+      hasInteractedWithClassSelectorRef.current = false
       setClassGroupIds(mappedClassGroupIds)
       if (cellData.class_groups && cellData.class_groups.length > 0) {
         const mappedClassGroups = cellData.class_groups.map(cg => normalizeClassGroup(cg))
@@ -1406,6 +1420,8 @@ export default function ScheduleSidePanel({
       pendingFloaterIdsAfterResolutionRef.current = new Set()
       skipNextTeacherFetchAfterPreserveRef.current = false
       assignmentCountWhenPreserveSetRef.current = -1
+      hasUserEditedCellDataRef.current = false
+      hasInteractedWithClassSelectorRef.current = false
       return
     }
 
@@ -1461,6 +1477,8 @@ export default function ScheduleSidePanel({
           initializeFromCell(cellData)
         } else {
           // No cell exists, create default
+          hasUserEditedCellDataRef.current = false
+          hasInteractedWithClassSelectorRef.current = false
           setIsActive(false)
           initialTeacherCountRef.current = 0
           initialClassGroupIdsRef.current = []
@@ -1970,9 +1988,17 @@ export default function ScheduleSidePanel({
 
   // Auto-activate cell when class groups, enrollment, or teachers are added (only if inactive and originally empty)
   useEffect(() => {
-    // If cell is inactive and originally had no data, and user is now adding data, activate it
+    // If cell is inactive and originally had no data, and the user is now adding data, activate it.
+    // Async hydration can update teacher/class data after open; ignore those non-user changes.
     const originalState = originalCellStateRef.current
-    if (originalState && !originalState.isActive && !originalState.hasData && hasData) {
+    if (
+      !isActive &&
+      hasUserEditedCellDataRef.current &&
+      originalState &&
+      !originalState.isActive &&
+      !originalState.hasData &&
+      hasData
+    ) {
       setIsActive(true)
     }
   }, [classGroupIds.length, enrollment, allAssignedTeachers.length, isActive, hasData])
@@ -2056,6 +2082,17 @@ export default function ScheduleSidePanel({
       setHasUnsavedChanges(false)
       return
     }
+    // Parent-inactive cells are non-editable; hydration diffs should not block close.
+    if (isParentEffectivelyInactive && !hasUserEditedCellDataRef.current) {
+      setHasUnsavedChanges(false)
+      return
+    }
+    // Baseline inactive cells can hydrate legacy saved content (e.g. class groups/enrollment metadata)
+    // that differs in shape from editable state without representing a user edit.
+    if (cell?.is_active === false && !isActive && !hasUserEditedCellDataRef.current) {
+      setHasUnsavedChanges(false)
+      return
+    }
 
     const cellClassGroupIds = cell?.class_groups?.map(cg => cg.id) || []
     const classGroupEnrollmentMatch =
@@ -2073,8 +2110,9 @@ export default function ScheduleSidePanel({
             (cg: { enrollment?: number | null }) => cg.enrollment == null
           )
         : classGroupEnrollmentMatch
-    // When cell is inactive, saved teacher count is 0 (inactive slots have no assignments)
-    const savedTeacherCount = isActive ? (initialTeacherCountRef.current ?? 0) : 0
+    // Compare against the initially loaded assignment count so hydrated baseline data
+    // (including legacy/inactive snapshots) does not immediately appear as unsaved.
+    const savedTeacherCount = initialTeacherCountRef.current ?? 0
     const teachersMatch = allAssignedTeachers.length === savedTeacherCount
     const hasChanges =
       cell?.is_active !== isActive ||
@@ -2099,6 +2137,7 @@ export default function ScheduleSidePanel({
     requiredStaffOverride,
     preferredStaffOverride,
     allAssignedTeachers,
+    isParentEffectivelyInactive,
     readOnly,
     panelMode,
   ])
@@ -2618,6 +2657,7 @@ export default function ScheduleSidePanel({
 
   /** Update enrollment state and ref so save uses user's value even if an effect overwrote state */
   const handleEnrollmentChange = useCallback((value: number | null) => {
+    hasUserEditedCellDataRef.current = true
     enrollmentEditedRef.current = value
     setEnrollment(value)
   }, [])
@@ -3379,9 +3419,20 @@ export default function ScheduleSidePanel({
                         <AlertTriangle className="h-3.5 w-3.5" />
                         This slot is inactive
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Turn Slot status to Active below to assign teachers and make changes.
-                      </p>
+                      {readOnly ? (
+                        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                          <Link
+                            href={`/settings/baseline-schedule?classroom_id=${classroomId}&day_of_week_id=${dayId}&time_slot_id=${timeSlotId}&day_name=${encodeURIComponent(dayName)}&time_slot_code=${encodeURIComponent(timeSlotCode)}&classroom_name=${encodeURIComponent(classroomName)}&return_to_weekly=true&open_panel=true`}
+                            className="text-xs font-medium text-amber-800 underline hover:text-amber-900"
+                          >
+                            Go to Baseline Schedule to turn slot status to Active
+                          </Link>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Turn Slot status to Active below to assign teachers and make changes.
+                        </p>
+                      )}
                     </>
                   )}
                 </div>
@@ -4336,6 +4387,18 @@ export default function ScheduleSidePanel({
                                       </span>
                                     </div>
                                     <div className="flex items-center gap-2">
+                                      {!absence.has_sub && (
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          className="h-8 gap-1.5 rounded-md border-0 bg-white px-3 font-medium text-teal-700 shadow-none hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
+                                          onClick={() => openAssignSub(absence.teacher_id)}
+                                          disabled={slotIsInactive}
+                                        >
+                                          <UserPlus className="h-3.5 w-3.5" />
+                                          Assign Sub
+                                        </Button>
+                                      )}
                                       <Button
                                         type="button"
                                         variant="ghost"
@@ -4343,19 +4406,9 @@ export default function ScheduleSidePanel({
                                         onClick={() => router.push('/time-off')}
                                         disabled={slotIsInactive}
                                       >
+                                        <CalendarPlus className="h-3.5 w-3.5" />
                                         Edit Time Off
                                       </Button>
-                                      {!absence.has_sub && (
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          className="h-8 gap-1.5 rounded-md border-0 bg-white px-3 font-medium text-teal-700 shadow-none hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
-                                          onClick={() => router.push(findSubLink)}
-                                          disabled={slotIsInactive}
-                                        >
-                                          Find Sub
-                                        </Button>
-                                      )}
                                     </div>
                                   </div>
                                   {subsForAbsence.length > 0 &&
@@ -4439,11 +4492,11 @@ export default function ScheduleSidePanel({
                                       border: '0',
                                       boxShadow: 'none',
                                     }}
-                                    onClick={() => openFindSub(assignment.teacher_id)}
+                                    onClick={() => openAssignSub(assignment.teacher_id)}
                                     disabled={slotIsInactive}
                                   >
-                                    <UserSearch className="h-3.5 w-3.5" />
-                                    Find Sub
+                                    <UserPlus className="h-3.5 w-3.5" />
+                                    Assign Sub
                                   </Button>
                                 )}
                                 <Button
@@ -4491,11 +4544,11 @@ export default function ScheduleSidePanel({
                                     type="button"
                                     variant="ghost"
                                     className="h-8 gap-1.5 rounded-md bg-white px-3 font-medium text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
-                                    onClick={() => openFindSub(assignment.teacher_id)}
+                                    onClick={() => openAssignSub(assignment.teacher_id)}
                                     disabled={slotIsInactive}
                                   >
-                                    <UserSearch className="h-3.5 w-3.5" />
-                                    Find Sub
+                                    <UserPlus className="h-3.5 w-3.5" />
+                                    Assign Sub
                                   </Button>
                                 )}
                                 <Button
@@ -4583,11 +4636,11 @@ export default function ScheduleSidePanel({
                                     type="button"
                                     variant="ghost"
                                     className="h-8 gap-1.5 rounded-md bg-white px-3 font-medium text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
-                                    onClick={() => openFindSub(assignment.teacher_id)}
+                                    onClick={() => openAssignSub(assignment.teacher_id)}
                                     disabled={slotIsInactive}
                                   >
-                                    <UserSearch className="h-3.5 w-3.5" />
-                                    Find Sub
+                                    <UserPlus className="h-3.5 w-3.5" />
+                                    Assign Sub
                                   </Button>
                                 )}
                                 <Button
@@ -4628,11 +4681,11 @@ export default function ScheduleSidePanel({
                                     type="button"
                                     variant="ghost"
                                     className="h-8 gap-1.5 rounded-md bg-white px-3 font-medium text-teal-700 hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-0"
-                                    onClick={() => openFindSub(assignment.teacher_id)}
+                                    onClick={() => openAssignSub(assignment.teacher_id)}
                                     disabled={slotIsInactive}
                                   >
-                                    <UserSearch className="h-3.5 w-3.5" />
-                                    Find Sub
+                                    <UserPlus className="h-3.5 w-3.5" />
+                                    Assign Sub
                                   </Button>
                                 )}
                                 <Button
@@ -4933,49 +4986,64 @@ export default function ScheduleSidePanel({
                       >
                         Class Groups
                       </Label>
-                      <ClassSelector
-                        selectedClassIds={classGroupIds}
-                        disablePortal
-                        onSelectionChange={newClassGroupIds => {
-                          // Preserve teachers whenever class groups change (added or removed) if we have existing teachers
-                          // This prevents teachers from disappearing when class groups are modified
-                          const hasExistingTeachers = selectedTeachersRef.current.length > 0
-                          const classGroupsChanged =
-                            JSON.stringify([...classGroupIds].sort()) !==
-                            JSON.stringify([...newClassGroupIds].sort())
-                          const shouldPreserve = hasExistingTeachers && classGroupsChanged
-
-                          log('[ScheduleSidePanel] Class groups changed', {
-                            previous: classGroupIds,
-                            new: newClassGroupIds,
-                            hasExistingTeachers,
-                            classGroupsChanged,
-                            shouldPreserve,
-                            currentTeachersCount: selectedTeachers.length,
-                            currentTeachersRefCount: selectedTeachersRef.current.length,
-                            currentTeachers: selectedTeachers.map(t => t.name),
-                            currentTeachersFromRef: selectedTeachersRef.current.map(t => t.name),
-                          })
-
-                          preserveTeachersRef.current = shouldPreserve
-                          log(
-                            '[ScheduleSidePanel] Set preserveTeachersRef to:',
-                            shouldPreserve,
-                            'with',
-                            selectedTeachersRef.current.length,
-                            'teachers in ref'
-                          )
-                          previousClassGroupIdsRef.current = classGroupIds
-                          setClassGroupIds(newClassGroupIds)
+                      <div
+                        onMouseDownCapture={() => {
+                          hasInteractedWithClassSelectorRef.current = true
                         }}
-                        allowedClassGroupIds={
-                          classroomId && allowedClassGroupIdsLoaded
-                            ? allowedClassGroupIds
-                            : undefined
-                        }
-                        includeInactive
-                        disabled={fieldsDisabled}
-                      />
+                        onPointerDownCapture={() => {
+                          hasInteractedWithClassSelectorRef.current = true
+                        }}
+                        onKeyDownCapture={() => {
+                          hasInteractedWithClassSelectorRef.current = true
+                        }}
+                      >
+                        <ClassSelector
+                          selectedClassIds={classGroupIds}
+                          disablePortal
+                          onSelectionChange={newClassGroupIds => {
+                            if (hasInteractedWithClassSelectorRef.current) {
+                              hasUserEditedCellDataRef.current = true
+                            }
+                            // Preserve teachers whenever class groups change (added or removed) if we have existing teachers
+                            // This prevents teachers from disappearing when class groups are modified
+                            const hasExistingTeachers = selectedTeachersRef.current.length > 0
+                            const classGroupsChanged =
+                              JSON.stringify([...classGroupIds].sort()) !==
+                              JSON.stringify([...newClassGroupIds].sort())
+                            const shouldPreserve = hasExistingTeachers && classGroupsChanged
+
+                            log('[ScheduleSidePanel] Class groups changed', {
+                              previous: classGroupIds,
+                              new: newClassGroupIds,
+                              hasExistingTeachers,
+                              classGroupsChanged,
+                              shouldPreserve,
+                              currentTeachersCount: selectedTeachers.length,
+                              currentTeachersRefCount: selectedTeachersRef.current.length,
+                              currentTeachers: selectedTeachers.map(t => t.name),
+                              currentTeachersFromRef: selectedTeachersRef.current.map(t => t.name),
+                            })
+
+                            preserveTeachersRef.current = shouldPreserve
+                            log(
+                              '[ScheduleSidePanel] Set preserveTeachersRef to:',
+                              shouldPreserve,
+                              'with',
+                              selectedTeachersRef.current.length,
+                              'teachers in ref'
+                            )
+                            previousClassGroupIdsRef.current = classGroupIds
+                            setClassGroupIds(newClassGroupIds)
+                          }}
+                          allowedClassGroupIds={
+                            classroomId && allowedClassGroupIdsLoaded
+                              ? allowedClassGroupIds
+                              : undefined
+                          }
+                          includeInactive
+                          disabled={fieldsDisabled}
+                        />
+                      </div>
                       <div className="pt-2 pb-3 border-b border-gray-200"></div>
                       {isActive && classGroupIds.length === 0 && (
                         <p className="text-sm text-yellow-600">
@@ -5098,6 +5166,7 @@ export default function ScheduleSidePanel({
                                       min={0}
                                       value={group.enrollment ?? ''}
                                       onChange={e => {
+                                        hasUserEditedCellDataRef.current = true
                                         const raw = e.target.value
                                         const value =
                                           raw === '' ? null : Math.max(0, parseInt(raw, 10) || 0)

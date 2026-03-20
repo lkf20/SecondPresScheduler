@@ -1275,6 +1275,7 @@ export default function SubFinderPage() {
     setIsAllSubsOpen(true)
     setSelectedShift(null)
     setSelectedSub(null)
+    setRightPanelActiveFilter(null)
     setMobileView('assign')
   }, [])
 
