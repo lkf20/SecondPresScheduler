@@ -163,6 +163,8 @@ describe('GET /api/reports/sub-availability/pdf', () => {
     expect(response.headers.get('content-type')).toBe('application/pdf')
     expect(launchPdfBrowser).toHaveBeenCalled()
     expect(setContentMock).toHaveBeenCalled()
+    const renderedHtml = setContentMock.mock.calls[0]?.[0] as string
+    expect(renderedHtml).toContain('availability-mark-icon')
     expect(pdfMock).toHaveBeenCalled()
   })
 
