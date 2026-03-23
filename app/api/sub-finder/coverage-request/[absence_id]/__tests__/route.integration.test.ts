@@ -70,6 +70,7 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
           {
             id: 'crs-1',
             date: '2099-02-10',
+            time_slot_id: 'slot-1',
             classroom_id: 'classroom-1',
             time_slot: { code: 'EM' },
           },
@@ -97,7 +98,9 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
     expect(json).toMatchObject({
       coverage_request_id: 'coverage-1',
       shift_map: {
+        '2099-02-10|slot-1|classroom-1': 'crs-1',
         '2099-02-10|EM|classroom-1': 'crs-1',
+        '2099-02-10|slot-1': 'crs-1',
         '2099-02-10|EM': 'crs-1',
       },
       needs_classroom_review: false,
@@ -121,6 +124,7 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
           {
             id: 'crs-1',
             date: '2099-02-10',
+            time_slot_id: 'slot-1',
             classroom_id: 'classroom-needs-review',
             classroom: { name: 'Unknown (needs review)' },
             time_slot: { code: 'EM' },
@@ -226,6 +230,7 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
           {
             id: 'crs-1',
             date: '2099-02-10',
+            time_slot_id: 'slot-1',
             classroom_id: 'classroom-1',
             time_slot: { code: 'EM' },
           },
@@ -257,7 +262,9 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
     expect(response.status).toBe(200)
     expect(json.coverage_request_id).toBe('coverage-new')
     expect(json.shift_map).toMatchObject({
+      '2099-02-10|slot-1|classroom-1': 'crs-1',
       '2099-02-10|EM|classroom-1': 'crs-1',
+      '2099-02-10|slot-1': 'crs-1',
     })
     expect(json.needs_classroom_review).toBe(false)
     expect(json.needs_review_shift_count).toBe(0)
@@ -619,6 +626,7 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
           {
             id: 'crs-1',
             date: '2099-02-10',
+            time_slot_id: 'slot-1',
             classroom_id: 'classroom-1',
             time_slot: { code: 'EM' },
           },

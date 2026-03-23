@@ -672,6 +672,62 @@ describe('AssignSubPanel', () => {
     )
   })
 
+  it('resolves coverage shift ids using time_slot_id mapping keys in Assign Sub flow', async () => {
+    const user = userEvent.setup()
+    const baseFetch = global.fetch as jest.Mock
+    global.fetch = jest.fn(
+      async (url: string | URL | globalThis.Request, options?: RequestInit) => {
+        const urlStr = url.toString()
+        if (urlStr.includes('/api/sub-finder/check-conflicts')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve([
+                { shift_key: '2026-03-10|slot-1', status: 'available' },
+                { shift_key: '2026-03-10|slot-2', status: 'available' },
+              ]),
+          }) as Promise<Response>
+        }
+        if (urlStr.includes('/api/sub-finder/coverage-request/')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                coverage_request_id: 'cr-1',
+                shift_map: {
+                  '2026-03-10|slot-1|class-1': 'crs-slot-id-1',
+                  '2026-03-10|slot-1': 'crs-slot-id-1',
+                  '2026-03-10|slot-2|class-1': 'crs-slot-id-2',
+                  '2026-03-10|slot-2': 'crs-slot-id-2',
+                },
+              }),
+          }) as Promise<Response>
+        }
+        return baseFetch(url, options)
+      }
+    ) as jest.Mock
+
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    await fillForm(user)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Tue Mar 10 • AM • Preschool/i)).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('checkbox', { name: /Tue Mar 10 • AM • Preschool/i }))
+    await user.click(screen.getByRole('button', { name: /Create Time Off & Assign Sub/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/sub-finder/assign-shifts',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('"selected_shift_ids":["crs-slot-id-1"]'),
+        })
+      )
+    })
+  })
+
   it('Scenario 3: User selects a shift where the sub is already assigned elsewhere. User should NOT be able to assign that shift.', async () => {
     const user = userEvent.setup()
     renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)

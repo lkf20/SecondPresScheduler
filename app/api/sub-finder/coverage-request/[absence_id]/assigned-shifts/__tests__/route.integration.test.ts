@@ -101,7 +101,6 @@ describe('GET /api/sub-finder/coverage-request/[absence_id]/assigned-shifts inte
     ;(subAssignmentsQuery.eq as jest.Mock)
       .mockReturnValueOnce(subAssignmentsQuery)
       .mockReturnValueOnce(subAssignmentsQuery)
-      .mockReturnValueOnce(subAssignmentsQuery)
       .mockResolvedValueOnce({ data: [], error: null })
     ;(createClient as jest.Mock).mockResolvedValue({
       from: jest.fn((table: string) => {
@@ -152,8 +151,22 @@ describe('GET /api/sub-finder/coverage-request/[absence_id]/assigned-shifts inte
       .mockReturnValueOnce(coverageRequestShiftsQuery)
       .mockResolvedValueOnce({
         data: [
-          { date: '2099-02-10', time_slot_id: 'slot-1', time_slots: { code: 'EM' } },
-          { date: '2099-02-10', time_slot_id: 'slot-2', time_slots: { code: 'PM' } },
+          {
+            id: 'crs-1',
+            date: '2099-02-10',
+            time_slot_id: 'slot-1',
+            classroom_id: 'class-1',
+            classrooms: { name: 'Infant Room' },
+            time_slots: { code: 'EM' },
+          },
+          {
+            id: 'crs-2',
+            date: '2099-02-10',
+            time_slot_id: 'slot-2',
+            classroom_id: 'class-2',
+            classrooms: { name: 'Toddler Room' },
+            time_slots: { code: 'PM' },
+          },
         ],
         error: null,
       })
@@ -170,6 +183,8 @@ describe('GET /api/sub-finder/coverage-request/[absence_id]/assigned-shifts inte
           {
             date: '2099-02-10',
             time_slot_id: 'slot-1',
+            classroom_id: 'class-1',
+            classrooms: { name: 'Infant Room' },
             time_slots: { code: 'EM' },
             days_of_week: { name: 'Monday' },
           },
@@ -208,9 +223,105 @@ describe('GET /api/sub-finder/coverage-request/[absence_id]/assigned-shifts inte
         date: '2099-02-10',
         time_slot_code: 'EM',
         day_name: 'Monday',
+        classroom_id: 'class-1',
+        classroom_name: 'Infant Room',
       },
     ])
-    expect(json.remaining_shift_keys).toEqual(['2099-02-10|PM'])
+    expect(json.remaining_shift_keys).toEqual(['2099-02-10|PM|class-2'])
     expect(json.remaining_shift_count).toBe(1)
+  })
+
+  it('counts same date/time shifts separately by classroom', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
+      id: 'absence-1',
+      coverage_request_id: 'coverage-1',
+    })
+
+    const coverageRequestsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({ data: { teacher_id: 'teacher-1' }, error: null }),
+    }
+
+    const coverageRequestShiftsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+    }
+    ;(coverageRequestShiftsQuery.eq as jest.Mock)
+      .mockReturnValueOnce(coverageRequestShiftsQuery)
+      .mockResolvedValueOnce({
+        data: [
+          {
+            id: 'crs-infant',
+            date: '2099-02-10',
+            time_slot_id: 'slot-1',
+            classroom_id: 'class-infant',
+            classrooms: { name: 'Infant Room' },
+            time_slots: { code: 'EM' },
+          },
+          {
+            id: 'crs-toddler',
+            date: '2099-02-10',
+            time_slot_id: 'slot-1',
+            classroom_id: 'class-toddler',
+            classrooms: { name: 'Toddler Room' },
+            time_slots: { code: 'EM' },
+          },
+        ],
+        error: null,
+      })
+
+    const subAssignmentsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+    }
+    ;(subAssignmentsQuery.eq as jest.Mock)
+      .mockReturnValueOnce(subAssignmentsQuery)
+      .mockReturnValueOnce(subAssignmentsQuery)
+      .mockResolvedValueOnce({
+        data: [
+          {
+            date: '2099-02-10',
+            time_slot_id: 'slot-1',
+            classroom_id: 'class-infant',
+            classrooms: { name: 'Infant Room' },
+            time_slots: { code: 'EM' },
+            days_of_week: { name: 'Monday' },
+          },
+        ],
+        error: null,
+      })
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'coverage_requests') return coverageRequestsQuery
+        if (table === 'coverage_request_shifts') return coverageRequestShiftsQuery
+        if (table === 'sub_assignments') return subAssignmentsQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = {
+      nextUrl: new URL(
+        'http://localhost:3000/api/sub-finder/coverage-request/absence-1/assigned-shifts'
+      ),
+    }
+    const response = await GET(request as any, {
+      params: Promise.resolve({ absence_id: 'absence-1' }),
+    })
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.total_shifts).toBe(2)
+    expect(json.assigned_shifts).toEqual([
+      expect.objectContaining({
+        date: '2099-02-10',
+        time_slot_code: 'EM',
+        classroom_id: 'class-infant',
+        classroom_name: 'Infant Room',
+      }),
+    ])
+    expect(json.remaining_shift_count).toBe(1)
+    expect(json.remaining_shift_keys).toEqual(['2099-02-10|EM|class-toddler'])
   })
 })

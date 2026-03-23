@@ -260,7 +260,7 @@ export async function GET(
     const { data: rawCoverageRequestShifts, error: shiftsError } = await supabase
       .from('coverage_request_shifts')
       .select(
-        'id, date, time_slot_id, classroom_id, time_slot:time_slots(code), classroom:classrooms(name)'
+        'id, date, day_of_week_id, time_slot_id, classroom_id, time_slot:time_slots(code), classroom:classrooms(name)'
       )
       .eq('coverage_request_id', coverageRequestId)
 
@@ -284,19 +284,32 @@ export async function GET(
           )
         : rawCoverageRequestShifts || []
 
-    // Create a map: date|time_slot_code|classroom_id -> coverage_request_shift_id
-    // Also create a simpler map: date|time_slot_code -> coverage_request_shift_id (for backward compatibility)
+    // Create mappings for robust shift-id resolution in clients:
+    // - date|time_slot_id|classroom_id (preferred, id-based)
+    // - date|time_slot_code|classroom_id (legacy fallback)
+    // - date|time_slot_id (legacy/simple fallback)
+    // - date|time_slot_code (legacy/simple fallback)
     const shiftMap = new Map<string, string>()
     const shiftMapSimple = new Map<string, string>()
     if (coverageRequestShifts) {
       coverageRequestShifts.forEach((shift: any) => {
-        const key = `${toDateStringISO(shift.date)}|${shift.time_slot?.code || ''}|${shift.classroom_id || ''}`
-        const simpleKey = `${toDateStringISO(shift.date)}|${shift.time_slot?.code || ''}`
-        shiftMap.set(key, shift.id)
+        const dateISO = toDateStringISO(shift.date)
+        const slotCode = shift.time_slot?.code || ''
+        const slotId = shift.time_slot_id || ''
+        const classroomId = shift.classroom_id || ''
+
+        const keyBySlotId = `${dateISO}|${slotId}|${classroomId}`
+        const keyBySlotCode = `${dateISO}|${slotCode}|${classroomId}`
+        const simpleKeyBySlotId = `${dateISO}|${slotId}`
+        const simpleKeyBySlotCode = `${dateISO}|${slotCode}`
+
+        shiftMap.set(keyBySlotId, shift.id)
+        shiftMap.set(keyBySlotCode, shift.id)
+
         // Use the first shift ID found for the simple key (for backward compatibility)
-        if (!shiftMapSimple.has(simpleKey)) {
-          shiftMapSimple.set(simpleKey, shift.id)
-        }
+        if (!shiftMapSimple.has(simpleKeyBySlotId)) shiftMapSimple.set(simpleKeyBySlotId, shift.id)
+        if (!shiftMapSimple.has(simpleKeyBySlotCode))
+          shiftMapSimple.set(simpleKeyBySlotCode, shift.id)
       })
     }
 
