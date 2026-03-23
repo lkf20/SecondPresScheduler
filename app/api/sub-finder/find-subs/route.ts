@@ -11,6 +11,7 @@ import { buildShiftChips } from '@/lib/server/coverage/shift-chips'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { toDateStringISO } from '@/lib/utils/date'
 import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
+import { getShiftKey } from '@/lib/sub-finder/shift-helpers'
 
 interface Shift {
   date: string
@@ -46,6 +47,7 @@ interface SubMatch {
     day_name: string
     time_slot_code: string
     class_name: string | null
+    classroom_id?: string | null
     classroom_name?: string | null
     classroom_color?: string | null
     diaper_changing_required?: boolean
@@ -56,6 +58,7 @@ interface SubMatch {
     day_name: string
     time_slot_code: string
     reason: string
+    classroom_id?: string | null
     classroom_name?: string | null
     coverage_request_shift_id?: string
   }>
@@ -239,14 +242,20 @@ export async function POST(request: NextRequest) {
     >()
     const shiftIdMap = new Map<string, string>() // key: date|time_slot_code|classroom_id, value: coverage_request_shift_id
     const coverageRequestShiftIds = new Set<string>()
+    let coverageRequestShifts: any[] | null = null
+
+    const allowedSlotKeys = new Set(
+      shiftsOpen.map(shift => `${toDateStringISO(shift.date)}|${shift.time_slot_id}`)
+    )
 
     if (coverageRequestId) {
-      const { data: coverageRequestShifts } = await supabase
+      const { data: crShifts } = await supabase
         .from('coverage_request_shifts')
         .select(
           `
           id,
           date,
+          day_of_week_id,
           time_slot_id,
           classroom_id,
           class_group_id,
@@ -255,12 +264,19 @@ export async function POST(request: NextRequest) {
             diaper_changing_required,
             lifting_children_required
           ),
-          time_slots:time_slot_id (code)
+          time_slots:time_slot_id (code),
+          day_of_week:days_of_week(name),
+          classroom:classrooms(name, color)
         `
         )
         .eq('coverage_request_id', coverageRequestId)
+        .eq('status', 'active')
 
-      if (coverageRequestShifts) {
+      coverageRequestShifts = (crShifts || []).filter((shift: any) =>
+        allowedSlotKeys.has(`${toDateStringISO(shift.date)}|${shift.time_slot_id}`)
+      )
+
+      if (coverageRequestShifts.length > 0) {
         coverageRequestShifts.forEach((shift: any) => {
           const key = `${shift.date}|${shift.time_slots?.code || ''}`
           const classGroup = shift.class_groups
@@ -279,45 +295,83 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Normalize shifts for easier processing (use shiftsOpen to exclude school-closed shifts)
-    const shiftsToCover: Shift[] = shiftsOpen.map((shift: any) => {
-      const key = `${shift.date}|${shift.time_slot?.code || ''}`
-      const classGroupInfo = classGroupInfoMap.get(key) || {
-        diaper_changing_required: false,
-        lifting_children_required: false,
-        class_group_name: null,
-        class_group_id: null,
-      }
-      const scheduleKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
-      const scheduleEntry = scheduleLookup.get(scheduleKey)
-      const classroom_names = scheduleEntry?.classrooms?.size
-        ? Array.from(scheduleEntry.classrooms)
-        : []
-      const classroom_name = classroom_names.length > 0 ? classroom_names.join(', ') : null
-      // Get color from first classroom (or null if multiple)
-      const classroom_color =
-        classroom_names.length === 1 && classroom_names[0]
-          ? classroomColorMap.get(classroom_names[0]) || null
-          : null
-      const class_name = scheduleEntry?.classes?.size
-        ? Array.from(scheduleEntry.classes).join(', ')
-        : classGroupInfo.class_group_name
+    // Build shiftsToCover: use room-level coverage_request_shifts when available so multi-room
+    // (floater) absences have one shift per classroom and remaining_shift_keys align with the
+    // absence list; otherwise UI intersection empties remaining and cards don't show.
+    const coverageShiftsFiltered = (coverageRequestShifts || []).filter(
+      (s: any) =>
+        s.date &&
+        s.time_slot_id &&
+        !isSlotClosedOnDate(toDateStringISO(s.date), s.time_slot_id, closureList)
+    )
+    const useRoomLevelShifts =
+      coverageShiftsFiltered.length > 0 && coverageShiftsFiltered.some((s: any) => s.classroom_id)
 
-      return {
-        date: shift.date,
-        day_of_week_id: shift.day_of_week_id,
-        day_name: shift.day_of_week?.name || '',
-        time_slot_id: shift.time_slot_id,
-        time_slot_code: shift.time_slot?.code || '',
-        class_group_id: classGroupInfo.class_group_id,
-        classroom_id: shift.classroom_id ?? null,
-        classroom_name,
-        classroom_color,
-        diaper_changing_required: classGroupInfo.diaper_changing_required,
-        lifting_children_required: classGroupInfo.lifting_children_required,
-        class_group_name: class_name,
-      }
-    })
+    let shiftsToCover: Shift[]
+    if (useRoomLevelShifts) {
+      const filteredByDate = include_past_shifts
+        ? coverageShiftsFiltered
+        : coverageShiftsFiltered.filter((s: any) => {
+            const shiftDate = parseDateOnly(toDateStringISO(s.date))
+            shiftDate.setHours(0, 0, 0, 0)
+            return shiftDate >= today
+          })
+      shiftsToCover = filteredByDate.map((shift: any) => {
+        const classGroup = shift.class_groups
+        return {
+          date: toDateStringISO(shift.date),
+          day_of_week_id: shift.day_of_week_id,
+          day_name: shift.day_of_week?.name || '',
+          time_slot_id: shift.time_slot_id,
+          time_slot_code: shift.time_slots?.code || '',
+          class_group_id: shift.class_group_id ?? null,
+          classroom_id: shift.classroom_id ?? null,
+          classroom_name: shift.classroom?.name ?? null,
+          classroom_color: shift.classroom?.color ?? null,
+          diaper_changing_required: classGroup?.diaper_changing_required ?? false,
+          lifting_children_required: classGroup?.lifting_children_required ?? false,
+          class_group_name: classGroup?.name || null,
+        }
+      })
+    } else {
+      shiftsToCover = shiftsOpen.map((shift: any) => {
+        const key = `${shift.date}|${shift.time_slot?.code || ''}`
+        const classGroupInfo = classGroupInfoMap.get(key) || {
+          diaper_changing_required: false,
+          lifting_children_required: false,
+          class_group_name: null,
+          class_group_id: null,
+        }
+        const scheduleKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
+        const scheduleEntry = scheduleLookup.get(scheduleKey)
+        const classroom_names = scheduleEntry?.classrooms?.size
+          ? Array.from(scheduleEntry.classrooms)
+          : []
+        const classroom_name = classroom_names.length > 0 ? classroom_names.join(', ') : null
+        const classroom_color =
+          classroom_names.length === 1 && classroom_names[0]
+            ? classroomColorMap.get(classroom_names[0]) || null
+            : null
+        const class_name = scheduleEntry?.classes?.size
+          ? Array.from(scheduleEntry.classes).join(', ')
+          : classGroupInfo.class_group_name
+
+        return {
+          date: shift.date,
+          day_of_week_id: shift.day_of_week_id,
+          day_name: shift.day_of_week?.name || '',
+          time_slot_id: shift.time_slot_id,
+          time_slot_code: shift.time_slot?.code || '',
+          class_group_id: classGroupInfo.class_group_id,
+          classroom_id: shift.classroom_id ?? null,
+          classroom_name,
+          classroom_color,
+          diaper_changing_required: classGroupInfo.diaper_changing_required,
+          lifting_children_required: classGroupInfo.lifting_children_required,
+          class_group_name: class_name,
+        }
+      })
+    }
     const shiftsToCoverByExactKey = new Map<string, Shift>()
     const shiftsToCoverByDateTimeSlot = new Map<string, Shift[]>()
     shiftsToCover.forEach(shift => {
@@ -555,6 +609,7 @@ export async function POST(request: NextRequest) {
             day_name: string
             time_slot_code: string
             class_name: string | null
+            classroom_id?: string | null
             classroom_name?: string | null
             classroom_color?: string | null
             diaper_changing_required?: boolean
@@ -565,6 +620,7 @@ export async function POST(request: NextRequest) {
             day_name: string
             time_slot_code: string
             reason: string
+            classroom_id?: string | null
             classroom_name?: string | null
             coverage_request_shift_id?: string
           }> = []
@@ -667,6 +723,7 @@ export async function POST(request: NextRequest) {
                 day_name: shift.day_name,
                 time_slot_code: shift.time_slot_code,
                 class_name: shift.class_group_name || null,
+                classroom_id: shift.classroom_id ?? null,
                 classroom_name: shift.classroom_name || null,
                 classroom_color: shift.classroom_color || null,
                 diaper_changing_required: shift.diaper_changing_required,
@@ -701,6 +758,7 @@ export async function POST(request: NextRequest) {
                 day_name: shift.day_name,
                 time_slot_code: shift.time_slot_code,
                 reason,
+                classroom_id: shift.classroom_id ?? null,
                 classroom_name: shift.classroom_name || null,
                 coverage_request_shift_id: coverageRequestShiftId,
               })
@@ -807,27 +865,39 @@ export async function POST(request: NextRequest) {
       return a.name.localeCompare(b.name)
     })
 
+    const coverageKey = (shift: {
+      date: string
+      time_slot_code: string
+      classroom_id?: string | null
+      classroom_name?: string | null
+    }) =>
+      getShiftKey({
+        date: shift.date,
+        time_slot_code: shift.time_slot_code,
+        classroom_id: shift.classroom_id ?? null,
+        classroom_name: shift.classroom_name ?? null,
+      })
+
     const allShiftKeys = new Set<string>()
     const assignedShiftKeys = new Set<string>()
     filteredMatches.forEach(match => {
-      match.can_cover?.forEach((shift: { date: string; time_slot_code: string }) => {
-        allShiftKeys.add(`${shift.date}|${shift.time_slot_code}`)
+      match.can_cover?.forEach(shift => {
+        allShiftKeys.add(coverageKey(shift))
       })
-      match.cannot_cover?.forEach((shift: { date: string; time_slot_code: string }) => {
-        allShiftKeys.add(`${shift.date}|${shift.time_slot_code}`)
+      match.cannot_cover?.forEach(shift => {
+        allShiftKeys.add(coverageKey(shift))
       })
-      match.assigned_shifts?.forEach((shift: { date: string; time_slot_code: string }) => {
-        const key = `${shift.date}|${shift.time_slot_code}`
+      match.assigned_shifts?.forEach(shift => {
+        const key = coverageKey(shift)
         allShiftKeys.add(key)
         assignedShiftKeys.add(key)
       })
     })
 
     const remainingShiftKeys = Array.from(allShiftKeys).filter(key => !assignedShiftKeys.has(key))
-    const totalShifts = filteredMatches[0]?.total_shifts || 0
-    const remainingShiftCount = Math.max(0, totalShifts - assignedShiftKeys.size)
+    // Room-level keys (not date|slot alone): must match remaining_shift_keys length for floaters.
+    const remainingShiftCount = remainingShiftKeys.length
     const hasAssignedShifts = assignedShiftKeys.size > 0
-
     const enrichedMatches = filteredMatches.map(match => {
       const shiftChips = buildShiftChips({
         assigned: [],

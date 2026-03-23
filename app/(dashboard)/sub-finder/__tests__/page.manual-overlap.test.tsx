@@ -38,7 +38,22 @@ jest.mock('@/components/sub-finder/RecommendedCombination', () => ({
 }))
 jest.mock('@/components/sub-finder/AbsenceList', () => ({
   __esModule: true,
-  default: () => <div data-testid="absence-list" />,
+  default: ({
+    absences,
+    onSelectAbsence,
+  }: {
+    absences: Array<Record<string, unknown>>
+    onSelectAbsence?: (absence: Record<string, unknown>) => void
+  }) => (
+    <div data-testid="absence-list">
+      <div data-testid="absence-count">{absences.length}</div>
+      {absences.length > 0 && onSelectAbsence ? (
+        <button data-testid="select-first-absence" onClick={() => onSelectAbsence(absences[0])}>
+          Select first absence
+        </button>
+      ) : null}
+    </div>
+  ),
 }))
 
 // Mock DatePickerInput (forwardRef so ref from SubFinderPage doesn't warn)
@@ -143,12 +158,17 @@ jest.mock('@/components/time-off/ShiftSelectionTable', () => {
 })
 
 const mockHandleFindManualSubs = jest.fn()
+let mockAbsences: Array<Record<string, unknown>> = []
+let mockSelectedAbsence: Record<string, unknown> | null = null
+const mockSetSelectedAbsence = jest.fn((absence: Record<string, unknown> | null) => {
+  mockSelectedAbsence = absence
+})
 
 jest.mock('@/components/sub-finder/hooks/useSubFinderData', () => ({
   useSubFinderData: () => ({
-    absences: [],
-    selectedAbsence: null,
-    setSelectedAbsence: jest.fn(),
+    absences: mockAbsences,
+    selectedAbsence: mockSelectedAbsence,
+    setSelectedAbsence: mockSetSelectedAbsence,
     recommendedSubs: [],
     allSubs: [],
     recommendedCombinations: [],
@@ -230,12 +250,46 @@ describe('SubFinderPage - Manual Overlap', () => {
 
   beforeEach(() => {
     mockHandleFindManualSubs.mockClear()
+    mockSetSelectedAbsence.mockClear()
+    mockSelectedAbsence = null
+    mockAbsences = []
     mockPush.mockClear()
     mockReplace.mockClear()
     mockToastSuccess.mockClear()
     mockToastError.mockClear()
     mockToastWarning.mockClear()
     global.fetch = originalFetch
+  })
+
+  it('keeps all absences visible after selecting one absence card unless teacher search was explicitly used', async () => {
+    mockAbsences = [
+      {
+        id: 'absence-1',
+        teacher_id: 'teacher-1',
+        teacher_name: 'Anne M.',
+        start_date: '2026-03-09',
+        end_date: '2026-03-10',
+        shifts: { total: 1, uncovered: 1, partially_covered: 0, covered: 0, shift_details: [] },
+      },
+      {
+        id: 'absence-2',
+        teacher_id: 'teacher-2',
+        teacher_name: 'Bella W.',
+        start_date: '2026-03-11',
+        end_date: '2026-03-11',
+        shifts: { total: 1, uncovered: 1, partially_covered: 0, covered: 0, shift_details: [] },
+      },
+    ]
+
+    renderWithQueryClient(<SubFinderPage />)
+
+    const counts = await screen.findAllByTestId('absence-count')
+    expect(counts[0]).toHaveTextContent('2')
+
+    const selectButtons = screen.getAllByTestId('select-first-absence')
+    fireEvent.click(selectButtons[0])
+
+    expect(screen.getAllByTestId('absence-count')[0]).toHaveTextContent('2')
   })
 
   it('enables Find Subs button for 100% overlap and calls find manual subs with conflict shifts', async () => {

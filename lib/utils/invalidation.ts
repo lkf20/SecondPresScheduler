@@ -1,4 +1,8 @@
 import { QueryClient } from '@tanstack/react-query'
+import {
+  assignSubSubsQueryKeyPrefix,
+  assignSubTeachersQueryKeyPrefix,
+} from '@/lib/utils/staff-picklist-query-keys'
 
 /**
  * Invalidation helpers for React Query
@@ -147,6 +151,17 @@ export function invalidateClassroomOrderChange(queryClient: QueryClient, schoolI
     queryClient.invalidateQueries({ queryKey: ['filterOptions', schoolId] }),
     queryClient.invalidateQueries({ queryKey: ['filterOptions'] }),
     queryClient.invalidateQueries({ queryKey: ['scheduleSettings', schoolId] }),
+  ])
+}
+
+/**
+ * Invalidate cached teacher/sub lists used by Assign Sub after staff settings change
+ * (e.g. is_sub, roles, active). Prefix match invalidates all variants (include_non_sub, etc.).
+ */
+export function invalidateStaffAssignmentPicklists(queryClient: QueryClient, schoolId: string) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: [...assignSubTeachersQueryKeyPrefix, schoolId] }),
+    queryClient.invalidateQueries({ queryKey: [...assignSubSubsQueryKeyPrefix, schoolId] }),
   ])
 }
 

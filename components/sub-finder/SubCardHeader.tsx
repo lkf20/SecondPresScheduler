@@ -53,8 +53,8 @@ export default function SubCardHeader({
 }: SubCardHeaderProps) {
   const coveredSegments = Math.min(shiftsCovered, totalShifts)
   const showBadge = showCoverageBadge && !isDeclined && totalShifts > 0
-  const matchPercent = totalShifts > 0 ? Math.round((shiftsCovered / totalShifts) * 100) : 0
-
+  const matchPercent =
+    totalShifts > 0 ? Math.min(100, Math.round((shiftsCovered / totalShifts) * 100)) : 0
   return (
     <div
       className={

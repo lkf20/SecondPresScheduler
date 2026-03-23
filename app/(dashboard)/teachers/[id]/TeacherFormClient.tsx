@@ -2,6 +2,9 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { useSchool } from '@/lib/contexts/SchoolContext'
+import { invalidateStaffAssignmentPicklists } from '@/lib/utils/invalidation'
 import TeacherForm, { type TeacherFormData } from '@/components/teachers/TeacherForm'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import { Database } from '@/types/database'
@@ -14,6 +17,8 @@ interface TeacherFormClientProps {
 
 export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const schoolId = useSchool()
   const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
 
@@ -55,6 +60,7 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
         throw new Error(errorData.error || 'Failed to update teacher')
       }
 
+      await invalidateStaffAssignmentPicklists(queryClient, schoolId)
       router.push(getReturnUrl())
       router.refresh()
     } catch (err: unknown) {
@@ -76,6 +82,7 @@ export default function TeacherFormClient({ teacher }: TeacherFormClientProps) {
         throw new Error(errorData.error || 'Failed to delete teacher')
       }
 
+      await invalidateStaffAssignmentPicklists(queryClient, schoolId)
       router.push(getReturnUrl())
       router.refresh()
     } catch (err: unknown) {

@@ -2,7 +2,14 @@ import { parseLocalDate } from '@/lib/utils/date'
 import { sortShiftDetailsByDisplayOrder } from '@/lib/utils/shift-display-order'
 import type { SubFinderShift, SubFinderShiftSummary } from '@/lib/sub-finder/types'
 
-export function getShiftKey(shift: Pick<SubFinderShift, 'date' | 'time_slot_code'>): string {
+export function getShiftKey(
+  shift: Pick<SubFinderShift, 'date' | 'time_slot_code'> & {
+    classroom_id?: string | null
+    classroom_name?: string | null
+  }
+): string {
+  if (shift.classroom_id) return `${shift.date}|${shift.time_slot_code}|${shift.classroom_id}`
+  if (shift.classroom_name) return `${shift.date}|${shift.time_slot_code}|${shift.classroom_name}`
   return `${shift.date}|${shift.time_slot_code}`
 }
 

@@ -174,6 +174,7 @@ interface Absence {
       date: string
       day_name?: string
       time_slot_code: string
+      shift_label?: string | null
       status?: 'uncovered' | 'partially_covered' | 'fully_covered'
       sub_name?: string | null
       sub_id?: string | null
@@ -1640,6 +1641,7 @@ export default function ContactSubPanel({
                       date: shift.date,
                       day_name: shift.day_name || '',
                       time_slot_code: shift.time_slot_code,
+                      shift_label: shift.shift_label ?? undefined,
                       status: shift.status || 'uncovered',
                       sub_name: shift.sub_name || null,
                       sub_names:
@@ -1806,6 +1808,11 @@ export default function ContactSubPanel({
                                   ? 'other_sub'
                                   : undefined,
                               assigned_sub_name: assignedElsewhere ? shift.sub_name : null,
+                              classroom_id:
+                                'classroom_id' in shift
+                                  ? ((shift as { classroom_id?: string | null }).classroom_id ??
+                                    null)
+                                  : null,
                               classroom_name: shift.classroom_name ?? null,
                               class_name: shift.class_name ?? null,
                               classroom_color: shift.classroom_color ?? null,

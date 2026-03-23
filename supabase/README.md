@@ -1,6 +1,6 @@
 # Supabase Database Migrations
 
-This directory contains the database schema migrations for the Scheduler App. The current schema is the result of applying all migrations in order (001 through the latest, e.g. 118). **When adding or changing a migration, update this README and [docs/reference/DATABASE_SCHEMA.md](../docs/reference/DATABASE_SCHEMA.md) as needed** (see AGENTS.md → Database migrations). The initial migration (001) created 17 tables; later migrations add, alter, and remove tables and columns. For a full list of current tables and their roles, see [docs/reference/DATABASE_SCHEMA.md](../docs/reference/DATABASE_SCHEMA.md).
+This directory contains the database schema migrations for the Scheduler App. The current schema is the result of applying all migrations in order (001 through the latest, e.g. 121). **When adding or changing a migration, update this README and [docs/reference/DATABASE_SCHEMA.md](../docs/reference/DATABASE_SCHEMA.md) as needed** (see AGENTS.md → Database migrations). The initial migration (001) created 17 tables; later migrations add, alter, and remove tables and columns. For a full list of current tables and their roles, see [docs/reference/DATABASE_SCHEMA.md](../docs/reference/DATABASE_SCHEMA.md).
 
 ## Migration Files
 
@@ -12,6 +12,8 @@ Migrations in `migrations/` are applied in numeric order:
 - **111** – covered_shifts trigger: resolve coverage_request via coverage_request_shift_id (no (date, time_slot_id, teacher_id) lookup)
 - **112** – coverage_requests cap logging: RAISE NOTICE when covered_shifts is capped (for monitoring)
 - **113** through **118** – sub-assignment constraints, baseline notes, non-sub overrides, and class-group ratio precision (one decimal place)
+- **120** – `ADMIN` staff role type; exclusivity trigger: at most one of Permanent, Flexible, or Admin per staff
+- **121** – Multi-classroom absence coverage: `coverage_request_shifts.time_off_shift_id`, per-classroom rows from `time_off_shifts` trigger, additive backfill, counter reconcile
 - **seed.sql** – Optional initial reference data (e.g. time slots and days of week; some reference data is also seeded in migrations such as 007)
 
 **Do not apply only 001–003** and stop; that leaves you with an outdated schema. Use the Supabase CLI to apply the full migration set (see below).

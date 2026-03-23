@@ -11,6 +11,7 @@ import { findTopCombinations } from '@/lib/utils/sub-combination'
 import { buildShiftChips } from '@/lib/server/coverage/shift-chips'
 import { sortShiftDetailsByDisplayOrder } from '@/lib/utils/shift-display-order'
 import { deriveShiftCoverageStatus } from '@/lib/schedules/coverage-weights'
+import { getShiftKey } from '@/lib/sub-finder/shift-helpers'
 
 interface ManualShiftInput {
   date: string
@@ -357,22 +358,42 @@ export async function POST(request: NextRequest) {
     const allShiftKeys = new Set<string>()
     const assignedShiftKeys = new Set<string>()
     filteredMatches.forEach(match => {
-      match.can_cover?.forEach((shift: { date: string; time_slot_code: string }) => {
-        allShiftKeys.add(`${shift.date}|${shift.time_slot_code}`)
-      })
-      match.cannot_cover?.forEach((shift: { date: string; time_slot_code: string }) => {
-        allShiftKeys.add(`${shift.date}|${shift.time_slot_code}`)
-      })
-      match.assigned_shifts?.forEach((shift: { date: string; time_slot_code: string }) => {
-        const key = `${shift.date}|${shift.time_slot_code}`
-        allShiftKeys.add(key)
-        assignedShiftKeys.add(key)
-      })
+      match.can_cover?.forEach(
+        (shift: {
+          date: string
+          time_slot_code: string
+          classroom_id?: string | null
+          classroom_name?: string | null
+        }) => {
+          allShiftKeys.add(getShiftKey(shift))
+        }
+      )
+      match.cannot_cover?.forEach(
+        (shift: {
+          date: string
+          time_slot_code: string
+          classroom_id?: string | null
+          classroom_name?: string | null
+        }) => {
+          allShiftKeys.add(getShiftKey(shift))
+        }
+      )
+      match.assigned_shifts?.forEach(
+        (shift: {
+          date: string
+          time_slot_code: string
+          classroom_id?: string | null
+          classroom_name?: string | null
+        }) => {
+          const key = getShiftKey(shift)
+          allShiftKeys.add(key)
+          assignedShiftKeys.add(key)
+        }
+      )
     })
 
     const remainingShiftKeys = Array.from(allShiftKeys).filter(key => !assignedShiftKeys.has(key))
-    const totalShifts = filteredMatches[0]?.total_shifts || 0
-    const remainingShiftCount = Math.max(0, totalShifts - assignedShiftKeys.size)
+    const remainingShiftCount = remainingShiftKeys.length
     const hasAssignedShifts = assignedShiftKeys.size > 0
 
     const enrichedMatches = filteredMatches.map(match => {

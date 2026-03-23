@@ -31,11 +31,13 @@ jest.mock('@/components/shared/TimeOffCard', () => {
   const MockTimeOffCard = ({
     teacherName,
     isDraft,
+    autoExpandShifts,
   }: {
     teacherName: string
     isDraft?: boolean
+    autoExpandShifts?: boolean
   }) => (
-    <div data-testid="time-off-card">
+    <div data-testid="time-off-card" data-auto-expand-shifts={autoExpandShifts ? 'true' : 'false'}>
       {teacherName}
       {isDraft && <span aria-label="Draft">Draft</span>}
     </div>
@@ -151,5 +153,51 @@ describe('TimeOffListClient', () => {
 
     await user.click(screen.getByRole('button', { name: /^edit$/i }))
     expect(mockReplace).toHaveBeenCalledWith(expect.stringContaining('edit=req-draft-1'))
+  })
+
+  it('opens the Past section when Past filter is selected but keeps cards collapsed by default', () => {
+    const today = new Date()
+    const yesterday = new Date(today)
+    yesterday.setDate(today.getDate() - 1)
+    const iso = yesterday.toISOString().slice(0, 10)
+
+    mockUseTimeOffRequests.mockReturnValue({
+      data: {
+        data: [
+          {
+            id: 'req-past-1',
+            teacher_name: 'Anne M.',
+            start_date: iso,
+            end_date: iso,
+            status: 'covered',
+            request_status: 'active',
+            coverage_status: 'covered',
+            total: 1,
+            covered: 1,
+            partial: 0,
+            uncovered: 0,
+            shift_details: [
+              {
+                label: 'Thu AM',
+                status: 'covered',
+                date: iso,
+                time_slot_code: 'AM',
+              },
+            ],
+            classrooms: [],
+          },
+        ],
+      },
+      isLoading: false,
+      error: null,
+      refetch: jest.fn(),
+      isFetching: false,
+    })
+
+    render(<TimeOffListClient view="past" />)
+
+    const pastSummary = screen.getByText('Past Time Off (last 90 days)')
+    expect(pastSummary.closest('details')).toHaveAttribute('open')
+    expect(screen.getByTestId('time-off-card')).toHaveAttribute('data-auto-expand-shifts', 'false')
   })
 })

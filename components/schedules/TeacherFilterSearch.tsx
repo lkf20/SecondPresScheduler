@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { useDisplayNameFormat } from '@/lib/hooks/use-display-name-format'
 import { getStaffDisplayName } from '@/lib/utils/staff-display-name'
 import { cn } from '@/lib/utils'
 import type { Database } from '@/types/database'
+import { useSchoolTeachersQuery } from '@/lib/hooks/use-school-teachers-query'
 
 type Staff = Database['public']['Tables']['staff']['Row']
 type StaffRoleType = Database['public']['Tables']['staff_role_types']['Row']
@@ -33,20 +34,16 @@ export default function TeacherFilterSearch({
   placeholder = 'Filter by teacher',
   className,
 }: TeacherFilterSearchProps) {
-  const [teachers, setTeachers] = useState<StaffWithRole[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [open, setOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const { format: displayNameFormat } = useDisplayNameFormat()
-
-  useEffect(() => {
-    fetch('/api/teachers')
-      .then(r => r.json())
-      .then(data => {
-        setTeachers(Array.isArray(data) ? (data as StaffWithRole[]).filter(t => t.active) : [])
-      })
-      .catch(console.error)
-  }, [])
+  const { data: teachersRaw = [] } = useSchoolTeachersQuery()
+  const teachers = useMemo(
+    () =>
+      Array.isArray(teachersRaw) ? (teachersRaw as StaffWithRole[]).filter(t => t.active) : [],
+    [teachersRaw]
+  )
 
   const selectedTeacher = value ? teachers.find(t => t.id === value) : null
 
