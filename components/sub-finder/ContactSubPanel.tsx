@@ -1808,6 +1808,11 @@ export default function ContactSubPanel({
                                   ? 'other_sub'
                                   : undefined,
                               assigned_sub_name: assignedElsewhere ? shift.sub_name : null,
+                              classroom_id:
+                                'classroom_id' in shift
+                                  ? ((shift as { classroom_id?: string | null }).classroom_id ??
+                                    null)
+                                  : null,
                               classroom_name: shift.classroom_name ?? null,
                               class_name: shift.class_name ?? null,
                               classroom_color: shift.classroom_color ?? null,

@@ -32,8 +32,11 @@ describe('ShiftChips', () => {
       />
     )
 
-    expect(screen.getByText('Mon EM')).toBeInTheDocument()
-    expect(screen.getByText('Feb 9')).toBeInTheDocument()
+    // Room-level keys: assigned row and generic slot row are distinct; floater group shows both.
+    expect(screen.getByRole('group', { name: /Floater · 2 rooms/i })).toBeInTheDocument()
+    expect(screen.getAllByText('Mon EM')).toHaveLength(2)
+    expect(screen.getAllByText('Feb 9')).toHaveLength(2)
+    expect(screen.getAllByText('Infant Room').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows legend when enabled', () => {

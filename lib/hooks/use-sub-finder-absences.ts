@@ -26,6 +26,7 @@ export type SubFinderAbsence = {
       day_name: string
       time_slot_code: string
       shift_label?: string | null
+      classroom_id?: string | null
       classroom_name: string
       classroom_color: string | null
       id?: string
@@ -56,6 +57,7 @@ export type SubFinderAbsence = {
       day_name: string
       time_slot_code: string
       shift_label?: string | null
+      classroom_id?: string | null
       classroom_name: string
       classroom_color: string | null
       id?: string

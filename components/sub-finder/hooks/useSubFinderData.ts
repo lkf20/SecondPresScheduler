@@ -37,6 +37,7 @@ export interface Absence {
       time_slot_code: string
       shift_label?: string | null
       class_name: string | null
+      classroom_id?: string | null
       classroom_name: string | null
       classroom_color?: string | null
       status: 'uncovered' | 'partially_covered' | 'fully_covered'
@@ -65,6 +66,7 @@ export interface Absence {
       time_slot_code: string
       shift_label?: string | null
       class_name: string | null
+      classroom_id?: string | null
       classroom_name: string | null
       classroom_color?: string | null
       status: 'uncovered' | 'partially_covered' | 'fully_covered'
@@ -116,6 +118,7 @@ export interface SubCandidate {
     date: string
     day_name: string
     time_slot_code: string
+    classroom_id?: string | null
     class_name: string | null
     classroom_name?: string | null
   }>
@@ -123,6 +126,7 @@ export interface SubCandidate {
     date: string
     day_name: string
     time_slot_code: string
+    classroom_id?: string | null
     reason: string
     classroom_name?: string | null
   }>
@@ -130,6 +134,7 @@ export interface SubCandidate {
     date: string
     day_name: string
     time_slot_code: string
+    classroom_id?: string | null
     classroom_name?: string | null
   }>
   remaining_shift_keys?: string[]
@@ -138,6 +143,7 @@ export interface SubCandidate {
   shift_chips?: Array<{
     date: string
     time_slot_code: string
+    classroom_id?: string | null
     status: 'assigned' | 'available' | 'unavailable'
     reason?: string
     classroom_name?: string | null
@@ -225,6 +231,7 @@ export function useSubFinderData({
           time_slot_code: detail.time_slot_code,
           shift_label: detail.shift_label ?? null,
           class_name: detail.class_name || null,
+          classroom_id: (detail as any).classroom_id || null,
           classroom_name: detail.classroom_name || null,
           classroom_color: detail.classroom_color || null,
           status:
@@ -262,6 +269,7 @@ export function useSubFinderData({
           time_slot_code: detail.time_slot_code,
           shift_label: detail.shift_label ?? null,
           class_name: detail.class_name || null,
+          classroom_id: (detail as any).classroom_id || null,
           classroom_name: detail.classroom_name || null,
           classroom_color: detail.classroom_color || null,
           status:

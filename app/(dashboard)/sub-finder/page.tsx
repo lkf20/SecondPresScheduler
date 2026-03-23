@@ -57,6 +57,7 @@ import StaffLink from '@/components/ui/staff-link'
 import ShiftStatusCard from '@/components/sub-finder/ShiftStatusCard'
 import { useSubFinderShifts } from '@/components/sub-finder/hooks/useSubFinderShifts'
 import type { SubFinderShift } from '@/lib/sub-finder/types'
+import { getShiftKey } from '@/lib/sub-finder/shift-helpers'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import AddTimeOffButton from '@/components/time-off/AddTimeOffButton'
 import { CreateTimeOffRequestCard } from '@/components/time-off/CreateTimeOffRequestCard'
@@ -124,7 +125,8 @@ export default function SubFinderPage() {
   const [removeDialogIsConfirmed, setRemoveDialogIsConfirmed] = useState(false)
   const [isAllSubsOpen, setIsAllSubsOpen] = useState(false)
   const [selectedSubIds, setSelectedSubIds] = useState<string[]>([])
-  const [rightPanelActiveFilter, setRightPanelActiveFilter] = useState<string | null>('available')
+  /** Default null = show all buckets; 'available' alone hid flexible/unavailable subs and looked blank. */
+  const [rightPanelActiveFilter, setRightPanelActiveFilter] = useState<string | null>(null)
   const { setActivePanel, previousPanel, restorePreviousPanel, registerPanelCloseHandler } =
     usePanelManager()
   const savedSubRef = useRef<SubCandidate | null>(null)
@@ -580,6 +582,7 @@ export default function SubFinderPage() {
     ).map(name => ({ id: name, name, color: null }))
   }, [selectedAbsence, shiftDetails])
   const visibleShiftSummary = shiftSummary ?? selectedAbsence?.shifts ?? null
+
   const sortedVisibleShifts = useMemo(() => {
     if (!visibleShiftSummary) return visibleShiftDetails
     return visibleShiftSummary.shift_details_sorted ?? visibleShiftDetails
@@ -594,7 +597,7 @@ export default function SubFinderPage() {
         sub.response_status === 'declined_all'
       if (!isContactedForAbsence) return
       ;(sub.can_cover || []).forEach(shift => {
-        const key = `${shift.date}|${shift.time_slot_code}`
+        const key = getShiftKey(shift)
         countMap.set(key, (countMap.get(key) || 0) + 1)
       })
     })
@@ -613,7 +616,7 @@ export default function SubFinderPage() {
     >()
     allSubs.forEach(sub => {
       ;(sub.can_cover || []).forEach(shift => {
-        const key = `${shift.date}|${shift.time_slot_code}`
+        const key = getShiftKey(shift)
         const entry = countsByShift.get(key) || {
           available: 0,
           pending: 0,
@@ -668,7 +671,7 @@ export default function SubFinderPage() {
     allSubs.forEach(sub => {
       const keys = new Set<string>()
       ;(sub.assigned_shifts || []).forEach(s => {
-        keys.add(`${s.date}|${s.time_slot_code}`)
+        keys.add(getShiftKey(s))
       })
       assignedShiftKeysBySub.set(sub.id, keys)
     })
@@ -682,7 +685,7 @@ export default function SubFinderPage() {
       const assignedKeys = assignedShiftKeysBySub.get(sub.id) || new Set<string>()
       const name = getDisplayName(sub)
       ;(sub.can_cover || []).forEach(shift => {
-        const key = `${shift.date}|${shift.time_slot_code}`
+        const key = getShiftKey(shift)
         const isAssignedToThisShift = assignedKeys.has(key)
         let status: 'pending' | 'confirmed' | 'declined'
         if (sub.response_status === 'declined_all') {
@@ -714,7 +717,7 @@ export default function SubFinderPage() {
       } else {
         counts.needs_coverage += 1
       }
-      const shiftKey = `${shift.date}|${shift.time_slot_code}`
+      const shiftKey = getShiftKey(shift)
       const contactedCount = contactedAvailableSubCountByShift.get(shiftKey) || 0
       const responseCounts = responseCountsByShift.get(shiftKey)
       if (contactedCount === 0) {
@@ -738,24 +741,22 @@ export default function SubFinderPage() {
       return baseSubs
     }
 
-    const selectedShiftKey = `${selectedShift.date}|${selectedShift.time_slot_code}`
+    const selectedShiftKey = getShiftKey(selectedShift)
     return baseSubs.filter(sub => {
       const hasMatchingCanCover = (sub.can_cover || []).some(
-        shift => `${shift.date}|${shift.time_slot_code}` === selectedShiftKey
+        shift => getShiftKey(shift) === selectedShiftKey
       )
       const hasMatchingAssignedShift = (sub.assigned_shifts || []).some(
-        shift => `${shift.date}|${shift.time_slot_code}` === selectedShiftKey
+        shift => getShiftKey(shift) === selectedShiftKey
       )
       return hasMatchingCanCover || hasMatchingAssignedShift
     })
   }, [ENABLE_SHIFT_FOCUS_MODE, allSubs, selectedShift, selectedSubIds])
   const selectedShiftMatchCount = useMemo(() => {
     if (!selectedShift) return 0
-    const selectedShiftKey = `${selectedShift.date}|${selectedShift.time_slot_code}`
+    const selectedShiftKey = getShiftKey(selectedShift)
     return allSubs.filter(sub =>
-      (sub.can_cover || []).some(
-        shift => `${shift.date}|${shift.time_slot_code}` === selectedShiftKey
-      )
+      (sub.can_cover || []).some(shift => getShiftKey(shift) === selectedShiftKey)
     ).length
   }, [allSubs, selectedShift])
 
@@ -803,7 +804,7 @@ export default function SubFinderPage() {
     const activeFilter = shiftFilters[0] || 'all'
     if (activeFilter === 'all') return sortedVisibleShifts
     return sortedVisibleShifts.filter(shift => {
-      const shiftKey = `${shift.date}|${shift.time_slot_code}`
+      const shiftKey = getShiftKey(shift)
       const contactedCount = contactedAvailableSubCountByShift.get(shiftKey) || 0
       const responseCounts = responseCountsByShift.get(shiftKey)
       const matches: Array<[string, boolean]> = [
@@ -821,7 +822,8 @@ export default function SubFinderPage() {
     const remaining =
       (visibleShiftSummary.uncovered ?? 0) + (visibleShiftSummary.partially_covered ?? 0)
     const total = visibleShiftSummary.total ?? 0
-    return `${remaining} of ${total} upcoming shifts need coverage`
+    // Not always "upcoming" when past shifts are included in the visible summary.
+    return `${remaining} of ${total} shifts need coverage`
   }, [visibleShiftSummary])
   const absenceForUI = useMemo(() => {
     if (!selectedAbsence) return null
@@ -2418,11 +2420,6 @@ export default function SubFinderPage() {
                 onSelectAbsence={absence => {
                   setSelectedAbsence(absence)
                   setMode('existing')
-                  const teacher = teachers.find(t => t.id === absence.teacher_id)
-                  if (teacher) {
-                    setManualTeacherId(absence.teacher_id)
-                    setManualTeacherSearch(getDisplayName(teacher))
-                  }
                 }}
                 onFindSubs={runFinderForAbsenceAndCollapse}
                 loading={loading}
@@ -2548,7 +2545,35 @@ export default function SubFinderPage() {
                         />
                       </div>
                     </>
-                  ) : null}
+                  ) : (
+                    <>
+                      {!recommendationsError &&
+                        allSubs.length > 0 &&
+                        displayRecommendedCombinations.length === 0 && (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800">
+                            <p className="font-medium text-slate-900">
+                              No ranked recommendation combinations
+                            </p>
+                            <p className="mt-1 text-slate-600">
+                              Find Subs didn&apos;t rank a combination for the remaining shifts. Use{' '}
+                              <span className="font-semibold">Show all subs</span> in the desktop
+                              view or open Assign to browse the full list.
+                            </p>
+                          </div>
+                        )}
+                      {!recommendationsError &&
+                        allSubs.length === 0 &&
+                        selectedAbsence &&
+                        !selectedAbsence.id.startsWith('manual-') && (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
+                            <p className="font-medium">No subs returned for this absence.</p>
+                            <p className="mt-1 text-amber-800">
+                              Try Rerun Finder, or check sub availability and school closures.
+                            </p>
+                          </div>
+                        )}
+                    </>
+                  )}
                 </div>
               )}
               {selectedAbsence && (
@@ -2583,16 +2608,11 @@ export default function SubFinderPage() {
                         shift={shift}
                         teacherName={selectedAbsence.teacher_name}
                         contactedAvailableSubCount={
-                          contactedAvailableSubCountByShift.get(
-                            `${shift.date}|${shift.time_slot_code}`
-                          ) || 0
+                          contactedAvailableSubCountByShift.get(getShiftKey(shift)) || 0
                         }
-                        contactedSubsForShift={
-                          contactedSubsByShift.get(`${shift.date}|${shift.time_slot_code}`) || []
-                        }
+                        contactedSubsForShift={contactedSubsByShift.get(getShiftKey(shift)) || []}
                         responseSummary={
-                          responseSummaryByShift.get(`${shift.date}|${shift.time_slot_code}`) ||
-                          'No response'
+                          responseSummaryByShift.get(getShiftKey(shift)) || 'No response'
                         }
                         onSelectShift={handleSelectShift}
                         onChangeSub={handleOpenChangeDialog}
@@ -3030,7 +3050,36 @@ export default function SubFinderPage() {
                       />
                     </div>
                   </>
-                ) : null}
+                ) : (
+                  <>
+                    {!recommendationsError &&
+                      allSubs.length > 0 &&
+                      displayRecommendedCombinations.length === 0 && (
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800">
+                          <p className="font-medium text-slate-900">
+                            No ranked recommendation combinations
+                          </p>
+                          <p className="mt-1 text-slate-600">
+                            Find Subs didn&apos;t rank a combination for the remaining shifts (subs
+                            may show 0% for what&apos;s left). Use{' '}
+                            <span className="font-semibold">Show all subs</span> to open the full
+                            list, including assigned subs and contact options.
+                          </p>
+                        </div>
+                      )}
+                    {!recommendationsError &&
+                      allSubs.length === 0 &&
+                      selectedAbsence &&
+                      !selectedAbsence.id.startsWith('manual-') && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
+                          <p className="font-medium">No subs returned for this absence.</p>
+                          <p className="mt-1 text-amber-800">
+                            Try Rerun Finder, or check sub availability and school closures.
+                          </p>
+                        </div>
+                      )}
+                  </>
+                )}
 
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <Button
@@ -3047,7 +3096,7 @@ export default function SubFinderPage() {
                       <ChevronDown className="h-3.5 w-3.5" />
                     )}
                   </Button>
-                  {displayRecommendedCombinations.length > 0 && (
+                  {(displayRecommendedCombinations.length > 0 || allSubs.length > 0) && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -3168,16 +3217,11 @@ export default function SubFinderPage() {
                           shift={shift}
                           teacherName={selectedAbsence.teacher_name}
                           contactedAvailableSubCount={
-                            contactedAvailableSubCountByShift.get(
-                              `${shift.date}|${shift.time_slot_code}`
-                            ) || 0
+                            contactedAvailableSubCountByShift.get(getShiftKey(shift)) || 0
                           }
-                          contactedSubsForShift={
-                            contactedSubsByShift.get(`${shift.date}|${shift.time_slot_code}`) || []
-                          }
+                          contactedSubsForShift={contactedSubsByShift.get(getShiftKey(shift)) || []}
                           responseSummary={
-                            responseSummaryByShift.get(`${shift.date}|${shift.time_slot_code}`) ||
-                            'No response'
+                            responseSummaryByShift.get(getShiftKey(shift)) || 'No response'
                           }
                           onSelectShift={handleSelectShift}
                           onChangeSub={handleOpenChangeDialog}
