@@ -260,6 +260,35 @@ describe('ScheduleCell', () => {
     expect(screen.queryByText('Sub A.')).not.toBeInTheDocument()
   })
 
+  it('renders admin assignments with admin chip styling', () => {
+    render(
+      <ScheduleCell
+        data={{
+          ...baseData,
+          assignments: [
+            {
+              id: 'admin-1',
+              teacher_id: 'admin-1',
+              teacher_name: 'Admin A.',
+              classroom_id: 'class-1',
+              classroom_name: 'Infant Room',
+              is_admin: true,
+            },
+          ],
+          absences: [],
+        }}
+      />
+    )
+
+    const adminChip = screen.getByText('Admin A.').closest('span[title]')
+    expect(adminChip).toHaveAttribute('title', 'Admin')
+    expect(adminChip).toHaveStyle({
+      backgroundColor: 'rgb(240, 253, 244)',
+      borderColor: 'rgb(22, 101, 52)',
+      color: 'rgb(21, 128, 61)',
+    })
+  })
+
   it('shows red staffing status when assigned is below required', () => {
     render(
       <ScheduleCell

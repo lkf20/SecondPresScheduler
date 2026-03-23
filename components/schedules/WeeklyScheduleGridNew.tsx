@@ -210,18 +210,6 @@ function ScheduleLegend({
           Flex Teacher
         </span>
       </div>
-      <div className="flex items-center gap-2">
-        <span
-          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border"
-          style={{
-            backgroundColor: adminRoleColorValues.bg,
-            borderColor: adminRoleColorValues.border,
-            color: adminRoleColorValues.text,
-          }}
-        >
-          Admin
-        </span>
-      </div>
       {showLegendTemporaryCoverage && (
         <div className="flex items-center gap-2">
           <span
@@ -241,6 +229,20 @@ function ScheduleLegend({
           Floater
         </span>
       </div>
+      {!showLegendSubstitutes && (
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border"
+            style={{
+              backgroundColor: adminRoleColorValues.bg,
+              borderColor: adminRoleColorValues.border,
+              color: adminRoleColorValues.text,
+            }}
+          >
+            Admin
+          </span>
+        </div>
+      )}
       {showLegendSubstitutes && (
         <>
           <div className="flex items-center gap-2">
@@ -265,6 +267,18 @@ function ScheduleLegend({
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
               Absent
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span
+              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border"
+              style={{
+                backgroundColor: adminRoleColorValues.bg,
+                borderColor: adminRoleColorValues.border,
+                color: adminRoleColorValues.text,
+              }}
+            >
+              Admin
             </span>
           </div>
           {showReassigned && (
