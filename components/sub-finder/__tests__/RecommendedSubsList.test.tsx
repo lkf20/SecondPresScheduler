@@ -164,8 +164,13 @@ describe('RecommendedSubsList', () => {
       />
     )
 
-    expect(screen.getByRole('button', { name: /assigned \(1\)/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /contacted \(1\)/i })).toBeInTheDocument()
+    // Filter pill + section header can both match the same name when "All" is selected.
+    expect(
+      screen.getAllByRole('button', { name: /assigned \(1\)/i }).length
+    ).toBeGreaterThanOrEqual(1)
+    expect(
+      screen.getAllByRole('button', { name: /contacted \(1\)/i }).length
+    ).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByRole('button', { name: /available \(1\)/i }).length).toBeGreaterThan(0)
     await user.click(screen.getByRole('button', { name: /more filters/i }))
     const popover = within(screen.getByRole('dialog'))
