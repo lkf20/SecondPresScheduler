@@ -156,6 +156,64 @@ describe('GET /api/sub-finder/coverage-request/[absence_id] integration', () => 
     expect(json.omitted_shifts).toEqual([])
   })
 
+  it('excludes coverage_request_shifts outside the time off request date range', async () => {
+    ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
+    ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({
+      id: 'absence-1',
+      teacher_id: 'teacher-1',
+      start_date: '2099-02-10',
+      end_date: '2099-02-10',
+      coverage_request_id: 'coverage-1',
+    })
+
+    const coverageRequestShiftsQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'crs-in-range',
+            date: '2099-02-10',
+            time_slot_id: 'slot-1',
+            classroom_id: 'classroom-1',
+            time_slot: { code: 'EM' },
+          },
+          {
+            id: 'crs-out-of-range',
+            date: '2099-02-09',
+            time_slot_id: 'slot-1',
+            classroom_id: 'classroom-1',
+            time_slot: { code: 'EM' },
+          },
+        ],
+        error: null,
+      }),
+    }
+
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'coverage_request_shifts') return coverageRequestShiftsQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = {
+      nextUrl: new URL('http://localhost:3000/api/sub-finder/coverage-request/absence-1'),
+    }
+    const response = await GET(request as any, {
+      params: Promise.resolve({ absence_id: 'absence-1' }),
+    })
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.coverage_request_id).toBe('coverage-1')
+    expect(json.shift_map).toEqual({
+      '2099-02-10|slot-1|classroom-1': 'crs-in-range',
+      '2099-02-10|EM|classroom-1': 'crs-in-range',
+      '2099-02-10|slot-1': 'crs-in-range',
+      '2099-02-10|EM': 'crs-in-range',
+    })
+  })
+
   it('creates coverage request when missing and returns generated shift map', async () => {
     ;(getUserSchoolId as jest.Mock).mockResolvedValue('school-1')
     ;(getTimeOffRequestById as jest.Mock).mockResolvedValue({

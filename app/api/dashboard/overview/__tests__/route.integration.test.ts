@@ -226,4 +226,81 @@ describe('GET /api/dashboard/overview', () => {
     expect(requestItem.shift_details[1].time_slot_display_order).toBe(2)
     expect(requestItem.shift_details[1].day_display_order).toBe(3)
   })
+
+  it('excludes coverage request shifts that fall outside the request date range', async () => {
+    mockSupabaseClient({
+      schedule_settings: [
+        {
+          school_id: 'school-1',
+          default_display_name_format: 'first_last_initial',
+          time_zone: 'America/New_York',
+        },
+      ],
+      coverage_requests: [
+        {
+          id: 'cr-2',
+          teacher_id: 'teacher-2',
+          start_date: '2026-03-24',
+          end_date: '2026-03-26',
+          request_type: 'time_off',
+          source_request_id: 'tor-2',
+          status: 'open',
+          total_shifts: 3,
+          covered_shifts: 0,
+          created_at: '2026-03-20T12:00:00.000Z',
+          teacher: {
+            id: 'teacher-2',
+            first_name: 'Anne',
+            last_name: 'M',
+            display_name: null,
+          },
+          school_id: 'school-1',
+        },
+      ],
+      time_off_requests: [{ id: 'tor-2', reason: 'Vacation', notes: null, status: 'active' }],
+      coverage_request_shifts: [
+        {
+          id: 'shift-outside-range',
+          coverage_request_id: 'cr-2',
+          status: 'active',
+          date: '2026-03-23',
+          time_slot_id: 'slot-em',
+          classroom_id: 'classroom-1',
+          classroom: { id: 'classroom-1', name: 'Infant Room', color: '#abc' },
+          day_of_week: { id: 'dow-mon', name: 'Monday', day_number: 1, display_order: 1 },
+          time_slot: { id: 'slot-em', code: 'EM', name: 'Early Morning', display_order: 1 },
+        },
+        {
+          id: 'shift-in-range',
+          coverage_request_id: 'cr-2',
+          status: 'active',
+          date: '2026-03-24',
+          time_slot_id: 'slot-am',
+          classroom_id: 'classroom-1',
+          classroom: { id: 'classroom-1', name: 'Infant Room', color: '#abc' },
+          day_of_week: { id: 'dow-tue', name: 'Tuesday', day_number: 2, display_order: 2 },
+          time_slot: { id: 'slot-am', code: 'AM', name: 'Morning', display_order: 2 },
+        },
+      ],
+      sub_assignments: [],
+      schedule_cells: [],
+      teacher_schedules: [],
+      staffing_event_shifts: [],
+      classrooms: [],
+    })
+
+    const request = new NextRequest(
+      'http://localhost:3000/api/dashboard/overview?start_date=2026-03-01&end_date=2026-03-31'
+    )
+    const response = await GET(request)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    const item = json.coverage_requests.find((r: any) => r.id === 'cr-2')
+    expect(item).toBeTruthy()
+    expect(item.total_shifts).toBe(1)
+    expect(item.shift_details).toHaveLength(1)
+    expect(item.shift_details[0].date).toBe('2026-03-24')
+    expect(item.shift_details[0].label).toContain('Mar 24')
+  })
 })

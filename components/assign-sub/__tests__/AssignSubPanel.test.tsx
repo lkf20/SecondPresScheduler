@@ -46,6 +46,11 @@ jest.mock('@/lib/hooks/use-display-name-format', () => ({
 
 jest.mock('@/lib/utils/colors', () => ({
   getPanelBackgroundClasses: () => 'bg-white',
+  adminRoleColorValues: {
+    bg: 'rgb(220, 252, 231)',
+    border: 'rgb(134, 239, 172)',
+    text: 'rgb(21, 128, 61)',
+  },
   coverageColorValues: {
     partial: {
       bg: 'rgb(254, 252, 232)',

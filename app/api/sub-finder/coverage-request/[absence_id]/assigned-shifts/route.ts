@@ -35,6 +35,15 @@ export async function GET(
     if (!coverageRequestId) {
       return createErrorResponse('Coverage request not found for this absence', 404)
     }
+    const requestStartDate = toDateStringISO((timeOffRequest as any).start_date)
+    const requestEndDate = toDateStringISO(
+      (timeOffRequest as any).end_date || (timeOffRequest as any).start_date
+    )
+    const isWithinRequestRange = (date: string) => {
+      const dateISO = toDateStringISO(date)
+      if (!requestStartDate || !requestEndDate) return true
+      return dateISO >= requestStartDate && dateISO <= requestEndDate
+    }
 
     // Get teacher_id from coverage_request
     const { data: coverageRequest, error: crError } = await supabase
@@ -61,7 +70,11 @@ export async function GET(
       return createErrorResponse('Failed to fetch coverage request shifts', 500)
     }
 
-    if (!coverageRequestShifts || coverageRequestShifts.length === 0) {
+    const coverageRequestShiftsInRange = (coverageRequestShifts || []).filter((shift: any) =>
+      isWithinRequestRange(shift.date)
+    )
+
+    if (coverageRequestShiftsInRange.length === 0) {
       return NextResponse.json({
         assigned_shifts: [],
         remaining_shift_keys: [],
@@ -71,11 +84,11 @@ export async function GET(
     }
 
     // Exclude shifts on school closed days (e.g. snow day added after assignment)
-    const dateRangeStart = coverageRequestShifts.reduce(
+    const dateRangeStart = coverageRequestShiftsInRange.reduce(
       (min: string, s: any) => (s.date && (!min || s.date < min) ? s.date : min),
       ''
     )
-    const dateRangeEnd = coverageRequestShifts.reduce(
+    const dateRangeEnd = coverageRequestShiftsInRange.reduce(
       (max: string, s: any) => (s.date && (!max || s.date > max) ? s.date : max),
       ''
     )
@@ -87,10 +100,10 @@ export async function GET(
     const closureList = schoolClosures.map(c => ({ date: c.date, time_slot_id: c.time_slot_id }))
     const openShifts =
       closureList.length > 0
-        ? coverageRequestShifts.filter(
+        ? coverageRequestShiftsInRange.filter(
             (s: any) => !isSlotClosedOnDate(toDateStringISO(s.date), s.time_slot_id, closureList)
           )
-        : coverageRequestShifts
+        : coverageRequestShiftsInRange
 
     const buildCoverageShiftKey = (shift: {
       id?: string

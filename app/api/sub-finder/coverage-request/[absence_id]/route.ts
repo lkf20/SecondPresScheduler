@@ -35,6 +35,13 @@ export async function GET(
     let coverageRequestId = (timeOffRequest as any).coverage_request_id
     const startDate = (timeOffRequest as any).start_date
     const endDate = (timeOffRequest as any).end_date || startDate
+    const requestStartDate = toDateStringISO(startDate)
+    const requestEndDate = toDateStringISO(endDate)
+    const isWithinRequestRange = (date: string) => {
+      const dateISO = toDateStringISO(date)
+      if (!requestStartDate || !requestEndDate) return true
+      return dateISO >= requestStartDate && dateISO <= requestEndDate
+    }
     let omittedShiftCount = 0
     let omittedShifts: Array<{ date: string; day_of_week_id: string; time_slot_id: string }> = []
 
@@ -240,10 +247,12 @@ export async function GET(
         .eq('coverage_request_id', coverageRequestId)
 
       const crShiftKeys = new Set(
-        (crShiftsForOmitted || []).map(
-          (r: { date: string; time_slot_id: string }) =>
-            `${toDateStringISO(r.date)}|${r.time_slot_id}`
-        )
+        (crShiftsForOmitted || [])
+          .filter((r: { date: string }) => isWithinRequestRange(r.date))
+          .map(
+            (r: { date: string; time_slot_id: string }) =>
+              `${toDateStringISO(r.date)}|${r.time_slot_id}`
+          )
       )
       const omittedForExisting = shiftsNonClosed.filter(
         (s: any) => !crShiftKeys.has(`${toDateStringISO(s.date)}|${s.time_slot_id}`)
@@ -280,9 +289,13 @@ export async function GET(
       closureListForResponse.length > 0 && rawCoverageRequestShifts
         ? rawCoverageRequestShifts.filter(
             (s: any) =>
-              !isSlotClosedOnDate(toDateStringISO(s.date), s.time_slot_id, closureListForResponse)
+              !isSlotClosedOnDate(
+                toDateStringISO(s.date),
+                s.time_slot_id,
+                closureListForResponse
+              ) && isWithinRequestRange(s.date)
           )
-        : rawCoverageRequestShifts || []
+        : (rawCoverageRequestShifts || []).filter((s: any) => isWithinRequestRange(s.date))
 
     // Create mappings for robust shift-id resolution in clients:
     // - date|time_slot_id|classroom_id (preferred, id-based)
