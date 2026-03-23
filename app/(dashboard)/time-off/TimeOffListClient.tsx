@@ -564,7 +564,10 @@ export default function TimeOffListClient({ view: initialView }: { view: string 
 
       {filteredPastRequests.length > 0 &&
         (view === 'past' || view === 'active' || view === 'all') && (
-          <details className="mt-6 rounded-lg bg-gray-50 border border-gray-200 p-4">
+          <details
+            className="mt-6 rounded-lg bg-gray-50 border border-gray-200 p-4"
+            open={view === 'past'}
+          >
             <summary className="cursor-pointer text-sm font-medium text-slate-700 flex items-center justify-between">
               <span>Past Time Off (last 90 days)</span>
               <span className="text-muted-foreground">{filteredPastRequests.length}</span>

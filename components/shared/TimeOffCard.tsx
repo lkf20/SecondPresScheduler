@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -68,6 +68,8 @@ export interface TimeOffCardProps {
   loading?: boolean
   className?: string
   isDraft?: boolean
+  /** When true, auto-expand the shifts dropdown (used by Time Off Past filter). */
+  autoExpandShifts?: boolean
 }
 
 const formatFullDateLabel = (value: string) => {
@@ -101,6 +103,7 @@ export default function TimeOffCard({
   loading = false,
   className,
   isDraft = false,
+  autoExpandShifts = false,
 }: TimeOffCardProps) {
   const router = useRouter()
   const [isExpanded, setIsExpanded] = useState(false)
@@ -108,6 +111,12 @@ export default function TimeOffCard({
     variant !== 'sub-finder' && totalShifts !== undefined && shiftDetails.length > 0
   // Only show coverage badges for active (non-draft) requests; drafts have no meaningful coverage yet
   const showCoverageBadges = !isDraft
+
+  useEffect(() => {
+    if (autoExpandShifts && hasShiftsDropdown) {
+      setIsExpanded(true)
+    }
+  }, [autoExpandShifts, hasShiftsDropdown])
 
   const startDateLabel = formatFullDateLabel(startDate)
   const endDateLabel = endDate && endDate !== startDate ? formatFullDateLabel(endDate) : null
