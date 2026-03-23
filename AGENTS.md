@@ -224,6 +224,12 @@ Floater weight is 0.5 for now; it may become more sophisticated later—keep log
 - **Helpers:** `lib/utils/school-closures.ts` — `isCellClosed(weekStartISO, dayNumber, timeSlotId, closures)` for weekly grid; `isSlotClosedOnDate(dateISO, timeSlotId, closures)` for daily schedule/PDF. `lib/utils/date.ts` — `getCellDateISO(weekStartISO, dayNumber)` for mapping week + day to date.
 - **Legends:** When closures exist in the displayed week, the Weekly Schedule legend includes “School Closed.” Keep it in sync if closure styling changes.
 
+## Sub Finder: shift rows (CRS) and floater grouping
+
+- **Shift row:** When `coverage_request_shifts` (or equivalent) is present, treat **`date` + `time_slot_code` + classroom** as one shift for counts, chips, filters, and `getShiftKey` — not “one shift per time slot” when a teacher floats two rooms at the same time.
+- **UI:** Use **“X of Y shifts need coverage”**; optional tooltip: _Counts each classroom separately when a teacher floats two rooms at the same time_ (`SHIFT_COUNT_SEMANTICS_TOOLTIP`). Group same-slot multi-room chips in the **Weekly Schedule floater** purple treatment (see `SHIFT_CHIPS_CONTRACT.md` and `lib/sub-finder/floater-shift-groups.ts`).
+- **Weekly grid staffing** still uses **Floater = 0.5** per person in ratio math; that is separate from **Sub Finder shift row** counting (room-level CRS rows).
+
 ## Sub Finder: contact status and per-shift display
 
 - **Do not show declined subs as available.** When a sub’s contact status is “Declined all” (`response_status` / `declined_all`), the Contact Sub panel must not show them as available for any shift: the request summary and shift-assignment cards should show them as unavailable (e.g. gray card border, “Unavailable” chip, no match %). Use the copy “This sub has declined all shifts.” instead of “This sub is available for X of Y remaining shifts.”
