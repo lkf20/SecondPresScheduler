@@ -5,6 +5,7 @@ export type ShiftChipStatus = 'assigned' | 'available' | 'unavailable'
 export type ShiftChip = {
   date: string
   time_slot_code: string
+  classroom_id?: string | null
   status: ShiftChipStatus
   reason?: string
   classroom_name?: string | null
@@ -16,6 +17,7 @@ export type ShiftChip = {
 type ShiftInput = {
   date: string
   time_slot_code: string
+  classroom_id?: string | null
   reason?: string
   classroom_name?: string | null
   class_name?: string | null
@@ -36,18 +38,25 @@ export const buildShiftChips = ({
 }): ShiftChip[] => {
   const allowed = allowedShiftKeys ? new Set(allowedShiftKeys) : null
   const allShiftsMap = new Map<string, ShiftChip>()
+  const buildShiftKey = (shift: Pick<ShiftInput, 'date' | 'time_slot_code' | 'classroom_id'>) =>
+    shift.classroom_id
+      ? `${shift.date}|${shift.time_slot_code}|${shift.classroom_id}`
+      : `${shift.date}|${shift.time_slot_code}`
 
-  const shouldInclude = (date: string, timeSlotCode: string) => {
+  const shouldInclude = (shift: Pick<ShiftInput, 'date' | 'time_slot_code' | 'classroom_id'>) => {
     if (!allowed) return true
-    return allowed.has(`${date}|${timeSlotCode}`)
+    const key = buildShiftKey(shift)
+    const legacyKey = `${shift.date}|${shift.time_slot_code}`
+    return allowed.has(key) || allowed.has(legacyKey)
   }
 
   assigned.forEach(shift => {
-    if (!shouldInclude(shift.date, shift.time_slot_code)) return
-    const key = `${shift.date}|${shift.time_slot_code}`
+    if (!shouldInclude(shift)) return
+    const key = buildShiftKey(shift)
     allShiftsMap.set(key, {
       date: shift.date,
       time_slot_code: shift.time_slot_code,
+      classroom_id: shift.classroom_id ?? null,
       status: 'assigned',
       classroom_name: shift.classroom_name || null,
       class_name: shift.class_name || null,
@@ -57,12 +66,13 @@ export const buildShiftChips = ({
   })
 
   canCover.forEach(shift => {
-    if (!shouldInclude(shift.date, shift.time_slot_code)) return
-    const key = `${shift.date}|${shift.time_slot_code}`
+    if (!shouldInclude(shift)) return
+    const key = buildShiftKey(shift)
     if (!allShiftsMap.has(key)) {
       allShiftsMap.set(key, {
         date: shift.date,
         time_slot_code: shift.time_slot_code,
+        classroom_id: shift.classroom_id ?? null,
         status: 'available',
         classroom_name: shift.classroom_name || null,
         class_name: shift.class_name || null,
@@ -73,12 +83,13 @@ export const buildShiftChips = ({
   })
 
   cannotCover.forEach(shift => {
-    if (!shouldInclude(shift.date, shift.time_slot_code)) return
-    const key = `${shift.date}|${shift.time_slot_code}`
+    if (!shouldInclude(shift)) return
+    const key = buildShiftKey(shift)
     if (!allShiftsMap.has(key)) {
       allShiftsMap.set(key, {
         date: shift.date,
         time_slot_code: shift.time_slot_code,
+        classroom_id: shift.classroom_id ?? null,
         status: 'unavailable',
         reason: shift.reason,
         classroom_name: shift.classroom_name || null,

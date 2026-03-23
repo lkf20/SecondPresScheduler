@@ -16,6 +16,7 @@ export interface SubFinderShift {
   date: string
   day_name: string
   time_slot_code: string
+  classroom_id?: string | null
   classroom_name: string | null
   classroom_color?: string | null
   class_name: string | null
