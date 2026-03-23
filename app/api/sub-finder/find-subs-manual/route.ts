@@ -354,20 +354,35 @@ export async function POST(request: NextRequest) {
       return a.name.localeCompare(b.name)
     })
 
+    const getCoverageShiftKey = (shift: {
+      date: string
+      time_slot_code: string
+      classroom_id?: string | null
+    }) =>
+      shift.classroom_id
+        ? `${shift.date}|${shift.time_slot_code}|${shift.classroom_id}`
+        : `${shift.date}|${shift.time_slot_code}`
+
     const allShiftKeys = new Set<string>()
     const assignedShiftKeys = new Set<string>()
     filteredMatches.forEach(match => {
-      match.can_cover?.forEach((shift: { date: string; time_slot_code: string }) => {
-        allShiftKeys.add(`${shift.date}|${shift.time_slot_code}`)
-      })
-      match.cannot_cover?.forEach((shift: { date: string; time_slot_code: string }) => {
-        allShiftKeys.add(`${shift.date}|${shift.time_slot_code}`)
-      })
-      match.assigned_shifts?.forEach((shift: { date: string; time_slot_code: string }) => {
-        const key = `${shift.date}|${shift.time_slot_code}`
-        allShiftKeys.add(key)
-        assignedShiftKeys.add(key)
-      })
+      match.can_cover?.forEach(
+        (shift: { date: string; time_slot_code: string; classroom_id?: string | null }) => {
+          allShiftKeys.add(getCoverageShiftKey(shift))
+        }
+      )
+      match.cannot_cover?.forEach(
+        (shift: { date: string; time_slot_code: string; classroom_id?: string | null }) => {
+          allShiftKeys.add(getCoverageShiftKey(shift))
+        }
+      )
+      match.assigned_shifts?.forEach(
+        (shift: { date: string; time_slot_code: string; classroom_id?: string | null }) => {
+          const key = getCoverageShiftKey(shift)
+          allShiftKeys.add(key)
+          assignedShiftKeys.add(key)
+        }
+      )
     })
 
     const remainingShiftKeys = Array.from(allShiftKeys).filter(key => !assignedShiftKeys.has(key))

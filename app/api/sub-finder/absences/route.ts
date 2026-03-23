@@ -36,7 +36,6 @@ export async function GET(request: NextRequest) {
       school_id: schoolId,
       statuses: ['active'],
     })
-
     // Fetch school closures for the full date range so we exclude closed-day shifts from counts and display
     const dateRangeStart =
       timeOffRequests.length > 0
@@ -94,27 +93,171 @@ export async function GET(request: NextRequest) {
       timeOffRequests.map(async request => {
         const coverageRequestId = (request as { coverage_request_id?: string | null })
           .coverage_request_id
-        // Get shifts (exclude shifts on school closed days, e.g. snow day added after request was created)
-        let shifts: Awaited<ReturnType<typeof getTimeOffShifts>>
+        const buildShiftKey = ({
+          coverageRequestShiftId,
+          date,
+          timeSlotId,
+          classroomId,
+        }: {
+          coverageRequestShiftId?: string | null
+          date: string
+          timeSlotId: string
+          classroomId?: string | null
+        }) =>
+          coverageRequestShiftId
+            ? `crs:${coverageRequestShiftId}`
+            : classroomId
+              ? `${toDateStringISO(date)}|${timeSlotId}|${classroomId}`
+              : `${toDateStringISO(date)}|${timeSlotId}`
+
+        // Get shifts (exclude shifts on school-closed days). Prefer coverage_request_shifts
+        // when available so multi-room absences are represented per classroom.
+        let shifts: Array<{
+          id: string
+          coverage_request_shift_id?: string | null
+          date: string
+          day_of_week_id: string | null
+          time_slot_id: string
+          classroom_id?: string | null
+          classroom_name?: string | null
+          classroom_color?: string | null
+          day_of_week?: { name: string | null; display_order?: number | null } | null
+          time_slot?: { code: string | null; display_order?: number | null } | null
+          _coverage_key: string
+        }> = []
         try {
-          const allShifts = await getTimeOffShifts(request.id)
-          shifts =
+          const allTimeOffShifts = await getTimeOffShifts(request.id)
+          const normalizedTimeOffShifts = (
             closureList.length > 0
-              ? allShifts.filter(
+              ? allTimeOffShifts.filter(
                   s => !isSlotClosedOnDate(toDateStringISO(s.date), s.time_slot_id, closureList)
                 )
-              : allShifts
+              : allTimeOffShifts
+          ).map(s => ({
+            id: s.id,
+            coverage_request_shift_id: null,
+            date: toDateStringISO(s.date),
+            day_of_week_id: s.day_of_week_id,
+            time_slot_id: s.time_slot_id,
+            classroom_id: null,
+            classroom_name: null,
+            classroom_color: null,
+            day_of_week: s.day_of_week,
+            time_slot: s.time_slot,
+            _coverage_key: buildShiftKey({
+              date: toDateStringISO(s.date),
+              timeSlotId: s.time_slot_id,
+            }),
+          }))
+
+          shifts = normalizedTimeOffShifts
+          if (coverageRequestId) {
+            try {
+              const allowedSlotKeys = new Set(
+                normalizedTimeOffShifts.map(s => `${toDateStringISO(s.date)}|${s.time_slot_id}`)
+              )
+              const { data: coverageShifts } = await supabase
+                .from('coverage_request_shifts')
+                .select(
+                  `
+                  id,
+                  date,
+                  day_of_week_id,
+                  time_slot_id,
+                  classroom_id,
+                  day_of_week:days_of_week(name, display_order),
+                  time_slot:time_slots(code, display_order),
+                  classroom:classrooms(name, color)
+                `
+                )
+                .eq('coverage_request_id', coverageRequestId)
+                .eq('status', 'active')
+
+              const normalizedCoverageShifts = (coverageShifts || [])
+                .filter(
+                  (s: any) =>
+                    !isSlotClosedOnDate(
+                      toDateStringISO(s.date),
+                      s.time_slot_id,
+                      closureList.length > 0 ? closureList : []
+                    )
+                )
+                .filter((s: any) =>
+                  allowedSlotKeys.has(`${toDateStringISO(s.date)}|${s.time_slot_id}`)
+                )
+                .map((s: any) => ({
+                  id: s.id,
+                  coverage_request_shift_id: s.id,
+                  date: toDateStringISO(s.date),
+                  day_of_week_id: s.day_of_week_id,
+                  time_slot_id: s.time_slot_id,
+                  classroom_id: s.classroom_id,
+                  classroom_name: s.classroom?.name ?? null,
+                  classroom_color: s.classroom?.color ?? null,
+                  day_of_week: s.day_of_week || null,
+                  time_slot: s.time_slot || null,
+                  _coverage_key: buildShiftKey({
+                    coverageRequestShiftId: s.id,
+                    date: toDateStringISO(s.date),
+                    timeSlotId: s.time_slot_id,
+                    classroomId: s.classroom_id,
+                  }),
+                }))
+
+              if (normalizedCoverageShifts.length > 0) {
+                shifts = normalizedCoverageShifts
+              }
+            } catch (error) {
+              console.warn('[Sub Finder Absences] Failed to load coverage_request_shifts', {
+                request_id: request.id,
+                coverage_request_id: coverageRequestId,
+                error,
+              })
+            }
+          }
         } catch (error) {
           console.error(`Error fetching shifts for time off request ${request.id}:`, error)
           shifts = []
         }
-        const timeOffShiftKeys = new Set(
-          shifts.map(shift => `${toDateStringISO(shift.date)}|${shift.time_slot_id}`)
+        const shiftKeys = new Set(shifts.map(shift => shift._coverage_key))
+        const shiftKeyBySlot = new Map<string, string[]>()
+        const shiftKeyBySlotAndClassroom = new Map<string, string>()
+        shifts.forEach(shift => {
+          const slotKey = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
+          const keys = shiftKeyBySlot.get(slotKey) || []
+          keys.push(shift._coverage_key)
+          shiftKeyBySlot.set(slotKey, keys)
+          if (shift.classroom_id) {
+            shiftKeyBySlotAndClassroom.set(`${slotKey}|${shift.classroom_id}`, shift._coverage_key)
+          }
+        })
+        const shiftKeyByCoverageShiftId = new Map<string, string>(
+          shifts
+            .filter(shift => Boolean(shift.coverage_request_shift_id))
+            .map(shift => [shift.coverage_request_shift_id as string, shift._coverage_key])
         )
         const loggedMissingShiftKeys = new Set<string>()
 
         // Get assignments
         let assignments: any[] = []
+        const resolveShiftKey = (input: {
+          coverage_request_shift_id?: string | null
+          date: string
+          time_slot_id: string
+          classroom_id?: string | null
+        }): string | null => {
+          if (input.coverage_request_shift_id) {
+            return shiftKeyByCoverageShiftId.get(input.coverage_request_shift_id) || null
+          }
+          const slotKey = `${toDateStringISO(input.date)}|${input.time_slot_id}`
+          if (input.classroom_id) {
+            const byClassroom = shiftKeyBySlotAndClassroom.get(`${slotKey}|${input.classroom_id}`)
+            if (byClassroom) return byClassroom
+          }
+          const candidates = shiftKeyBySlot.get(slotKey) || []
+          if (candidates.length === 1) return candidates[0]
+          return null
+        }
         if (shifts.length > 0) {
           const requestStartDate = request.start_date
           const requestEndDate = request.end_date || request.start_date
@@ -122,7 +265,7 @@ export async function GET(request: NextRequest) {
           const seenAssignmentIds = new Set<string>()
           const loggedMissingCoverageLinkKeys = new Set<string>()
           const upsertAssignment = (shiftKey: string, assignment: any) => {
-            if (!timeOffShiftKeys.has(shiftKey)) return
+            if (!shiftKeys.has(shiftKey)) return
             if (assignment.id && seenAssignmentIds.has(assignment.id)) return
 
             const existing = assignmentMap.get(shiftKey) || []
@@ -153,28 +296,37 @@ export async function GET(request: NextRequest) {
                 const coverageShift = assignment.coverage_request_shift
                 const shiftDate = coverageShift?.date || assignment.date
                 const shiftTimeSlotId = coverageShift?.time_slot_id || assignment.time_slot_id
-                const shiftKey = `${toDateStringISO(shiftDate)}|${shiftTimeSlotId}`
+                const shiftKey = resolveShiftKey({
+                  coverage_request_shift_id:
+                    coverageShift?.id || assignment.coverage_request_shift_id || null,
+                  date: toDateStringISO(shiftDate),
+                  time_slot_id: shiftTimeSlotId,
+                  classroom_id: coverageShift?.classroom_id || null,
+                })
                 if (
                   shiftDate &&
                   shiftTimeSlotId &&
-                  timeOffShiftKeys.size > 0 &&
-                  !timeOffShiftKeys.has(shiftKey) &&
-                  !loggedMissingShiftKeys.has(shiftKey)
+                  !shiftKey &&
+                  !loggedMissingShiftKeys.has(`${toDateStringISO(shiftDate)}|${shiftTimeSlotId}`)
                 ) {
-                  loggedMissingShiftKeys.add(shiftKey)
+                  loggedMissingShiftKeys.add(`${toDateStringISO(shiftDate)}|${shiftTimeSlotId}`)
                   console.warn('[Sub Finder Absences] Coverage assignment missing time_off_shift', {
                     request_id: request.id,
                     coverage_request_id: coverageRequestId,
                     assignment_id: assignment.id,
                     shift_date: shiftDate,
                     time_slot_id: shiftTimeSlotId,
+                    classroom_id: coverageShift?.classroom_id ?? null,
                   })
                 }
-                if (timeOffShiftKeys.has(shiftKey)) {
+                if (shiftKey) {
                   upsertAssignment(shiftKey, {
                     id: assignment.id,
                     date: shiftDate,
                     time_slot_id: shiftTimeSlotId,
+                    classroom_id: coverageShift?.classroom_id ?? null,
+                    coverage_request_shift_id:
+                      coverageShift?.id || assignment.coverage_request_shift_id || null,
                     is_partial: assignment.is_partial,
                     partial_start_time: assignment.partial_start_time ?? null,
                     partial_end_time: assignment.partial_end_time ?? null,
@@ -206,10 +358,15 @@ export async function GET(request: NextRequest) {
           ;(subAssignments || []).forEach(assignment => {
             const shiftDate = assignment.date
             const shiftTimeSlotId = assignment.time_slot_id
-            const shiftKey = `${toDateStringISO(shiftDate)}|${shiftTimeSlotId}`
-            if (!assignment.coverage_request_shift_id && timeOffShiftKeys.has(shiftKey)) {
-              if (!loggedMissingCoverageLinkKeys.has(shiftKey)) {
-                loggedMissingCoverageLinkKeys.add(shiftKey)
+            const fallbackSlotKey = `${toDateStringISO(shiftDate)}|${shiftTimeSlotId}`
+            const shiftKey = resolveShiftKey({
+              coverage_request_shift_id: assignment.coverage_request_shift_id || null,
+              date: toDateStringISO(shiftDate),
+              time_slot_id: shiftTimeSlotId,
+            })
+            if (!assignment.coverage_request_shift_id && shiftKeyBySlot.has(fallbackSlotKey)) {
+              if (!loggedMissingCoverageLinkKeys.has(fallbackSlotKey)) {
+                loggedMissingCoverageLinkKeys.add(fallbackSlotKey)
                 console.warn('[Sub Finder Absences] Assignment missing coverage_request_shift_id', {
                   request_id: request.id,
                   assignment_id: assignment.id,
@@ -218,7 +375,7 @@ export async function GET(request: NextRequest) {
                 })
               }
             }
-            if (timeOffShiftKeys.has(shiftKey)) {
+            if (shiftKey) {
               if (isDev) {
                 console.warn(
                   '[Sub Finder Absences Debug] Using teacher/date fallback assignment for coverage',
@@ -235,6 +392,7 @@ export async function GET(request: NextRequest) {
                 id: assignment.id,
                 date: shiftDate,
                 time_slot_id: shiftTimeSlotId,
+                coverage_request_shift_id: assignment.coverage_request_shift_id || null,
                 is_partial: assignment.is_partial,
                 partial_start_time: assignment.partial_start_time ?? null,
                 partial_end_time: assignment.partial_end_time ?? null,
@@ -247,18 +405,25 @@ export async function GET(request: NextRequest) {
           assignments = Array.from(assignmentMap.values()).flat()
         }
 
-        if (assignments.length > 0 && timeOffShiftKeys.size > 0) {
+        if (assignments.length > 0 && shiftKeys.size > 0) {
           const assignmentKeys = new Set(
             assignments
-              .map(assignment => `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`)
-              .filter(key => Boolean(key))
+              .map((assignment: any) =>
+                resolveShiftKey({
+                  coverage_request_shift_id: assignment.coverage_request_shift_id || null,
+                  date: toDateStringISO(assignment.date),
+                  time_slot_id: assignment.time_slot_id,
+                  classroom_id: assignment.classroom_id || null,
+                })
+              )
+              .filter((key): key is string => Boolean(key))
           )
-          const overlapKeys = Array.from(assignmentKeys).filter(key => timeOffShiftKeys.has(key))
+          const overlapKeys = Array.from(assignmentKeys).filter(key => shiftKeys.has(key))
           if (overlapKeys.length === 0) {
             console.warn('[Sub Finder Absences] Assignments do not match time_off_shifts', {
               request_id: request.id,
               coverage_request_id: coverageRequestId,
-              time_off_shift_keys: Array.from(timeOffShiftKeys).slice(0, 10),
+              time_off_shift_keys: Array.from(shiftKeys).slice(0, 10),
               assignment_keys: Array.from(assignmentKeys).slice(0, 10),
             })
           }
@@ -267,6 +432,13 @@ export async function GET(request: NextRequest) {
         // Build classroom list
         const classroomMap = new Map<string, { id: string; name: string; color: string | null }>()
         shifts.forEach(shift => {
+          if (shift.classroom_id && shift.classroom_name) {
+            classroomMap.set(shift.classroom_id, {
+              id: shift.classroom_id,
+              name: shift.classroom_name,
+              color: shift.classroom_color ?? null,
+            })
+          }
           const scheduleKey = `${request.teacher_id}|${shift.day_of_week_id}|${shift.time_slot_id}`
           const scheduleEntry = scheduleLookup.get(scheduleKey)
           if (scheduleEntry?.classrooms?.size) {
@@ -308,7 +480,13 @@ export async function GET(request: NextRequest) {
           }>
         >()
         assignments.forEach((assignment: any) => {
-          const key = `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`
+          const key =
+            resolveShiftKey({
+              coverage_request_shift_id: assignment.coverage_request_shift_id || null,
+              date: toDateStringISO(assignment.date),
+              time_slot_id: assignment.time_slot_id,
+              classroom_id: assignment.classroom_id || null,
+            }) || `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`
           const rows = assignmentDetailsByShiftKey.get(key) || []
           const subId = assignment.sub?.id || ''
           if (!subId || !assignment.id) return
@@ -327,9 +505,7 @@ export async function GET(request: NextRequest) {
           })
           assignmentDetailsByShiftKey.set(key, rows)
         })
-        const shiftKeyById = new Map(
-          shifts.map(shift => [shift.id, `${toDateStringISO(shift.date)}|${shift.time_slot_id}`])
-        )
+        const shiftKeyById = new Map(shifts.map(shift => [shift.id, shift._coverage_key]))
 
         const transformed = transformTimeOffCardData(
           {
@@ -349,16 +525,20 @@ export async function GET(request: NextRequest) {
           },
           shifts.map(shift => ({
             id: shift.id,
+            coverage_request_shift_id: shift.coverage_request_shift_id ?? null,
             date: shift.date,
             day_of_week_id: shift.day_of_week_id,
             time_slot_id: shift.time_slot_id,
+            classroom_id: shift.classroom_id ?? null,
             day_of_week: shift.day_of_week,
             time_slot: shift.time_slot,
           })),
           assignments.map(assignment => ({
             id: assignment.id,
+            coverage_request_shift_id: assignment.coverage_request_shift_id ?? null,
             date: assignment.date,
             time_slot_id: assignment.time_slot_id,
+            classroom_id: assignment.classroom_id ?? null,
             is_partial: assignment.is_partial,
             assignment_type: assignment.assignment_type || null,
             sub: assignment.sub as any,
@@ -402,17 +582,22 @@ export async function GET(request: NextRequest) {
         )
         const assignmentKeys = new Set(
           assignments
-            .map(assignment => `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`)
-            .filter(key => Boolean(key))
+            .map(assignment =>
+              resolveShiftKey({
+                coverage_request_shift_id: assignment.coverage_request_shift_id || null,
+                date: toDateStringISO(assignment.date),
+                time_slot_id: assignment.time_slot_id,
+                classroom_id: assignment.classroom_id || null,
+              })
+            )
+            .filter((key): key is string => Boolean(key))
         )
-        const hasAssignmentOverlap = Array.from(assignmentKeys).some(key =>
-          timeOffShiftKeys.has(key)
-        )
+        const hasAssignmentOverlap = Array.from(assignmentKeys).some(key => shiftKeys.has(key))
         if (hasAssignmentOverlap && transformed.covered === 0 && transformed.partial === 0) {
           console.warn('[Sub Finder Absences] Assignment overlap but no coverage counted', {
             request_id: request.id,
             coverage_request_id: coverageRequestId,
-            time_off_shift_keys: Array.from(timeOffShiftKeys).slice(0, 10),
+            time_off_shift_keys: Array.from(shiftKeys).slice(0, 10),
             assignment_keys: Array.from(assignmentKeys).slice(0, 10),
             assignments_count: assignments.length,
           })
@@ -459,6 +644,7 @@ export async function GET(request: NextRequest) {
           /** Full line label including multi-room suffix, e.g. "Mon AM (2 rooms: A, B) • Jan 2" */
           shift_label: typeof detail.label === 'string' ? detail.label : undefined,
           class_name: detail.class_name || null,
+          classroom_id: detail.classroom_id || null,
           classroom_name: detail.classroom_name || null,
           classroom_color: detail.classroom_color || null,
           status:
