@@ -26,6 +26,7 @@ function renderWithQueryClient(ui: React.ReactElement) {
 const pushMock = jest.fn()
 const toastSuccessMock = jest.fn()
 const toastErrorMock = jest.fn()
+const requestOpenAssignSubMock = jest.fn()
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -47,6 +48,12 @@ jest.mock('@/lib/hooks/use-display-name-format', () => ({
 
 jest.mock('@/lib/contexts/SchoolContext', () => ({
   useSchool: () => 'school-1',
+}))
+
+jest.mock('@/lib/contexts/AssignSubPanelContext', () => ({
+  useAssignSubPanel: () => ({
+    requestOpenAssignSub: requestOpenAssignSubMock,
+  }),
 }))
 
 jest.mock('@/components/ui/sheet', () => ({
